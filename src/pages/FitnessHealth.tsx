@@ -2,19 +2,50 @@ import React, { useEffect, useMemo, useState } from "react";
 import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/providers/ThemeProvider";
-import { isWhoopConnected, startWhoopAuth, triggerUserSync, fetchCompactMetrics, disconnectWhoop, getWhoopStatus, fetchRecoveryHistory, fetchSleepHistory, fetchCycleHistory, fetchWorkoutsHistory } from "@/services/whoopService";
+import { 
+  startWhoopAuth, 
+  triggerUserSync, 
+  fetchCompactMetrics, 
+  disconnectWhoop, 
+  getWhoopStatus, 
+  fetchRecoveryHistory, 
+  fetchSleepHistory, 
+  fetchCycleHistory, 
+  fetchWorkoutsHistory,
+  generateAiInsights,
+  buildInsightsAggregate
+} from "@/services/whoopService";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { StatusHeader } from "@/components/fitness/StatusHeader";
-import { SleepCard } from "@/components/fitness/cards/SleepCard";
-import { RecoveryCard } from "@/components/fitness/cards/RecoveryCard";
-import { HRVRHRMini } from "@/components/fitness/cards/HRVRHRMini";
-import { StrainCard } from "@/components/fitness/cards/StrainCard";
-import { WorkoutCard } from "@/components/fitness/cards/WorkoutCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { AIInsights } from "@/components/fitness/AIInsights";
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
+import { Card } from "@/components/ui/card";
+import { TopPageSection } from "@/components/fitness/TopPageSection";
+import { AIInsights } from "@/components/fitness/tabs/AIInsights";
+import { SleepTab } from "@/components/fitness/tabs/SleepTab";
+import { RecoveryTab } from "@/components/fitness/tabs/RecoveryTab";
+import { HRVRHRTab } from "@/components/fitness/tabs/HRVRHRTab";
+import { StrainTab } from "@/components/fitness/tabs/StrainTab";
+import { WorkoutsTab } from "@/components/fitness/tabs/WorkoutsTab";
+import { WhoopDetails } from "@/components/fitness/WhoopDetails";
+import { 
+  Activity, 
+  Heart, 
+  Moon, 
+  Zap, 
+  Dumbbell, 
+  Brain, 
+  RefreshCw, 
+  Wifi, 
+  WifiOff,
+  Copy,
+  Download,
+  TrendingUp,
+  TrendingDown,
+  Minus
+} from "lucide-react";
+
+type TimeRange = '1d' | '1w' | '2w' | '1m' | '3m' | '6m';
+type MainTab = 'ai-insights' | 'sleep' | 'recovery' | 'hrv-rhr' | 'strain' | 'workouts';
 
 export default function FitnessHealth() {
   const { language } = useTheme();
@@ -33,8 +64,8 @@ export default function FitnessHealth() {
   const [autoSync, setAutoSync] = useState<boolean>(() => {
     try { return localStorage.getItem('whoop_autosync') !== '0'; } catch { return true; }
   });
-  const [tab, setTab] = useState<'overview'|'ai'>('overview');
-  const [range, setRange] = useState<'day'|'week'>('day');
+  const [activeTab, setActiveTab] = useState<MainTab>('ai-insights');
+  const [timeRange, setTimeRange] = useState<TimeRange>('1w');
 
   useEffect(() => {
     (async () => {
@@ -216,161 +247,490 @@ export default function FitnessHealth() {
     };
   }, [metrics]);
 
-  return (
-    <PageContainer>
-      <div className="max-w-6xl mx-auto p-4 space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold">{language === 'ar' ? 'الصحة واللياقة' : 'Fitness & Health'}</h1>
-          <p className="text-muted-foreground">{language === 'ar' ? 'اتصل بـ WHOOP للاطلاع على رؤى ذكية.' : 'Connect WHOOP to view smart insights.'}</p>
+  // Mini-tabs component
+  const MiniTabs = ({ timeRange, onTimeRangeChange }: { timeRange: TimeRange; onTimeRangeChange: (range: TimeRange) => void }) => (
+    <div className="flex gap-2 mb-6">
+      {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
+        <button
+          key={range}
+          onClick={() => onTimeRangeChange(range)}
+          className={`px-3 py-1 rounded-full text-sm shadow-sm transition-all ${
+            timeRange === range
+              ? 'bg-indigo-500 text-white shadow-md'
+              : 'bg-gray-100 hover:bg-indigo-200 text-gray-700'
+          }`}
+        >
+          {range.toUpperCase()}
+        </button>
+      ))}
+    </div>
+  );
+
+  // WHOOP Details Panel Component
+  const WhoopDetailsPanel = ({ metrics }: { metrics: any }) => (
+    <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
+      <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+        <Heart className="h-5 w-5 text-purple-400" />
+        {language === 'ar' ? 'تفاصيل WHOOP' : 'WHOOP Details'}
+      </h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Recovery */}
+        <div className="p-4 rounded-xl shadow bg-white/5">
+          <h4 className="font-semibold text-emerald-400 mb-3">{language === 'ar' ? 'التعافي' : 'Recovery'}</h4>
+          <ul className="space-y-1 text-sm">
+            <li>Recovery Score: {metrics?.recovery?.score ? `${Math.round(metrics.recovery.score)}%` : '--'}</li>
+            <li>HRV: {metrics?.recovery?.hrv_ms ? `${Math.round(metrics.recovery.hrv_ms)} ms` : '--'}</li>
+            <li>Resting HR: {metrics?.recovery?.rhr_bpm ? `${Math.round(metrics.recovery.rhr_bpm)} bpm` : '--'}</li>
+          </ul>
         </div>
 
-        <StatusHeader
-          connected={connected}
-          lastSyncedAt={status.lastSyncedAt}
-          syncing={syncing}
-          onConnect={onConnect}
-          onSync={onSync}
-          onDisconnect={onDisconnect}
-          autoSyncEnabled={autoSync}
-          onToggleAutoSync={(v)=>{ setAutoSync(v); try { localStorage.setItem('whoop_autosync', v ? '1' : '0'); } catch {} }}
-        />
+        {/* Sleep */}
+        <div className="p-4 rounded-xl shadow bg-white/5">
+          <h4 className="font-semibold text-blue-400 mb-3">{language === 'ar' ? 'النوم' : 'Sleep'}</h4>
+          <ul className="space-y-1 text-sm">
+            <li>Performance: {metrics?.sleep?.performance_pct ? `${Math.round(metrics.sleep.performance_pct)}%` : '--'}</li>
+            <li>Total Duration: {metrics?.sleep?.duration_sec ? `${(metrics.sleep.duration_sec / 3600).toFixed(1)}h` : '--'}</li>
+            <li>Efficiency: {metrics?.sleep?.data?.score?.sleep_efficiency_percentage ? `${Math.round(metrics.sleep.data.score.sleep_efficiency_percentage)}%` : '--'}</li>
+          </ul>
+        </div>
 
-        {loading ? (
-          <div className="text-sm text-muted-foreground">{language === 'ar' ? 'جار التحميل...' : 'Loading...'}</div>
-        ) : connected ? (
-          <Tabs value={tab} onValueChange={(v)=>{ setTab(v as any); setTimeout(()=>window.dispatchEvent(new Event('resize')), 60); setTimeout(()=>window.dispatchEvent(new Event('resize')), 500); }}>
-            <TabsList>
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="ai">AI Insights</TabsTrigger>
-            </TabsList>
-            <TabsContent value="overview" className="space-y-6 mt-4">
-              <div className="flex items-center justify-between">
-                <div className="text-xs text-muted-foreground">View</div>
-                <ToggleGroup type="single" value={range} onValueChange={(v)=>{ if(v) setRange(v as any); setTimeout(()=>window.dispatchEvent(new Event('resize')), 80); }} className="bg-white/40 rounded-xl p-1 border">
-                  <ToggleGroupItem value="day" className="text-xs px-3 py-1">Day</ToggleGroupItem>
-                  <ToggleGroupItem value="week" className="text-xs px-3 py-1">Week</ToggleGroupItem>
-                </ToggleGroup>
-              </div>
-              {/* Today Stats strip */}
-              <div className="flex flex-wrap gap-2 text-[11px]">
-                <span className="px-2 py-[2px] rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Recovery {todayStats.recovery != null ? Math.round(todayStats.recovery) : '--'}%</span>
-                <span className="px-2 py-[2px] rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">HRV {todayStats.hrv != null ? Math.round(todayStats.hrv) : '--'} ms</span>
-                <span className="px-2 py-[2px] rounded-full bg-sky-500/10 text-sky-500 border border-sky-500/20">RHR {todayStats.rhr != null ? Math.round(todayStats.rhr) : '--'} bpm</span>
-                <span className="px-2 py-[2px] rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Strain {todayStats.strain != null ? todayStats.strain.toFixed(1) : '--'}</span>
-                <span className="px-2 py-[2px] rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Load {todayStats.load != null ? Math.round(todayStats.load*10)/10 : '--'}</span>
-                <span className="px-2 py-[2px] rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20">Avg HR {todayStats.avgHr != null ? Math.round(todayStats.avgHr) : '--'} bpm</span>
-                <span className="px-2 py-[2px] rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">Calories {todayStats.kcal != null ? todayStats.kcal : '--'}</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                <SleepCard
-                  hours={range==='day' ? sleepHours : avgSleep7d}
-                  performancePct={metrics?.sleep?.performance_pct ?? null}
-                  stages={sleepStages}
-                  bedtime={metrics?.sleep?.start ?? null}
-                  waketime={metrics?.sleep?.end ?? null}
-                  nap={metrics?.sleep?.data?.nap ?? null}
-                  efficiencyPct={sleepEfficiency}
-                  avgHours7d={avgSleep7d}
-                  miniHours={range==='day' ? avgSleep7d : sleepHours}
-                  miniLabel={range==='day' ? 'avg' : 'today'}
-                />
-                <RecoveryCard
-                  value={range==='day' ? (metrics?.recovery?.score ?? null) : (avgRecovery7d ?? null)}
-                  hrvMs={metrics?.recovery?.hrv_ms ?? null}
-                  rhrBpm={metrics?.recovery?.rhr_bpm ?? null}
-                  avgPct7d={avgRecovery7d}
-                  miniPct={range==='day' ? (avgRecovery7d ?? null) : (metrics?.recovery?.score ?? null)}
-                  miniLabel={range==='day' ? 'avg' : 'today'}
-                />
-                {range==='week' ? (
-                  <HRVRHRMini data={hrHistory} />
-                ) : (
-                  <div className="rounded-2xl p-4 border border-white/10 bg-white/5 backdrop-blur-md shadow-[0_10px_30px_-10px_rgba(0,0,0,0.25)]">
-                    <div className="text-xs text-muted-foreground mb-2">HRV / RHR (Today)</div>
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="px-2 py-[2px] rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">HRV {metrics?.recovery?.hrv_ms != null ? Math.round(metrics?.recovery?.hrv_ms) : '--'} ms</span>
-                      <span className="px-2 py-[2px] rounded-full bg-sky-500/10 text-sky-500 border border-sky-500/20">RHR {metrics?.recovery?.rhr_bpm != null ? Math.round(metrics?.recovery?.rhr_bpm) : '--'} bpm</span>
-                    </div>
-                    <div className="text-[11px] text-muted-foreground mt-2">Hourly curve coming soon.</div>
-                  </div>
-                )}
-                <StrainCard
-                  value={range==='day' ? (metrics?.cycle?.day_strain ?? null) : (avgStrain7d ?? null)}
-                  trainingLoad={metrics?.cycle?.training_load ?? null}
-                  avgHrBpm={metrics?.cycle?.avg_hr_bpm ?? null}
-                  avg7d={avgStrain7d}
-                  miniLabel={range==='day' ? 'avg' : 'today'}
-                />
-              </div>
-              <div className="grid grid-cols-1 gap-4">
-                <WorkoutCard workout={metrics?.workout} history={workoutsHist} range={range} />
-              </div>
-              {/* Sleep hours (7d) chart moved to Overview */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="rounded-2xl p-4 border bg-white/5">
-                  <div className="text-xs text-muted-foreground mb-2">Sleep hours (7d)</div>
-                  <div className="h-44 min-w-0">
-                    <ResponsiveContainer width="99%" height="100%">
-                      <BarChart data={sleepBars}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey="Hours" fill="#7c3aed" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              </div>
-              {/* WHOOP details lightweight block */}
-              <div className="rounded-2xl border bg-white/5 p-4">
-                <div className="text-sm font-medium mb-2">WHOOP Details</div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="rounded-xl border p-3 bg-white/5">
-                    <div className="text-xs text-muted-foreground mb-2">Cycle</div>
-                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-                      <div className="text-muted-foreground">strain</div><div className="font-medium">{metrics?.cycle?.data?.score?.strain ?? '--'}</div>
-                      <div className="text-muted-foreground">avg_hr</div><div className="font-medium">{metrics?.cycle?.avg_hr_bpm ?? metrics?.cycle?.data?.score?.average_heart_rate ?? '--'}</div>
-                      <div className="text-muted-foreground">training_load</div><div className="font-medium">{metrics?.cycle?.training_load ?? '--'}</div>
-                    </div>
-                  </div>
-                  <div className="rounded-xl border p-3 bg-white/5">
-                    <div className="text-xs text-muted-foreground mb-2">Sleep</div>
-                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-                      <div className="text-muted-foreground">performance_%</div><div className="font-medium">{metrics?.sleep?.data?.score?.sleep_performance_percentage ?? metrics?.sleep?.performance_pct ?? '--'}</div>
-                      <div className="text-muted-foreground">nap</div><div className="font-medium">{metrics?.sleep?.data?.nap === false ? 'false' : (metrics?.sleep?.data?.nap ? 'true' : '--')}</div>
-                    </div>
-                  </div>
-                  <div className="rounded-xl border p-3 bg-white/5">
-                    <div className="text-xs text-muted-foreground mb-2">Recovery</div>
-                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-                      <div className="text-muted-foreground">recovery_%</div><div className="font-medium">{metrics?.recovery?.score ?? '--'}</div>
-                      <div className="text-muted-foreground">hrv_ms</div><div className="font-medium">{metrics?.recovery?.hrv_ms ?? '--'}</div>
-                      <div className="text-muted-foreground">rhr_bpm</div><div className="font-medium">{metrics?.recovery?.rhr_bpm ?? '--'}</div>
-                    </div>
-                  </div>
-                  <div className="rounded-xl border p-3 bg-white/5">
-                    <div className="text-xs text-muted-foreground mb-2">Workout</div>
-                    <div className="text-xs text-muted-foreground">{metrics?.workout ? `${metrics?.workout?.sport} — ${metrics?.workout?.durationMin ?? '--'} min, ${metrics?.workout?.kcal ?? '--'} kcal` : '--'}</div>
-                  </div>
-                </div>
-              </div>
-            </TabsContent>
-            <TabsContent value="ai" className="mt-4">
-              <AIInsights />
-            </TabsContent>
-          </Tabs>
-        ) : (
-          <div className="rounded-2xl p-6 border bg-white/5 text-sm text-muted-foreground">
-            {language === 'ar' ? 'قم بتوصيل حسابك في WHOOP لبدء المزامنة.' : 'Connect your WHOOP account to start syncing.'}
-            <div className="mt-3">
-              <Button onClick={onConnect} disabled={connecting}>{connecting ? (language === 'ar' ? 'جار البدء...' : 'Starting...') : (language === 'ar' ? 'اتصال WHOOP' : 'Connect WHOOP')}</Button>
+        {/* Strain */}
+        <div className="p-4 rounded-xl shadow bg-white/5">
+          <h4 className="font-semibold text-orange-400 mb-3">{language === 'ar' ? 'الإجهاد' : 'Strain'}</h4>
+          <ul className="space-y-1 text-sm">
+            <li>Day Strain: {metrics?.cycle?.day_strain ? metrics.cycle.day_strain.toFixed(1) : '--'}</li>
+            <li>Training Load: {metrics?.cycle?.training_load ? metrics.cycle.training_load.toFixed(1) : '--'}</li>
+            <li>Avg Heart Rate: {metrics?.cycle?.avg_hr_bpm ? `${Math.round(metrics.cycle.avg_hr_bpm)} bpm` : '--'}</li>
+          </ul>
+        </div>
+
+        {/* Workout */}
+        <div className="p-4 rounded-xl shadow bg-white/5">
+          <h4 className="font-semibold text-red-400 mb-3">{language === 'ar' ? 'التمرين' : 'Workout'}</h4>
+          <ul className="space-y-1 text-sm">
+            <li>Activity: {metrics?.workout?.sport_name || '--'}</li>
+            <li>Strain: {metrics?.workout?.strain ? metrics.workout.strain.toFixed(1) : '--'}</li>
+            <li>Duration: {metrics?.workout?.start && metrics?.workout?.end ? `${Math.round((new Date(metrics.workout.end).getTime() - new Date(metrics.workout.start).getTime()) / 60000)}min` : '--'}</li>
+          </ul>
+        </div>
+      </div>
+    </Card>
+  );
+
+  // Sleep Tab Content
+  const SleepTabContent = ({ timeRange, onTimeRangeChange, metrics }: { timeRange: TimeRange; onTimeRangeChange: (range: TimeRange) => void; metrics: any }) => (
+    <div className="space-y-6">
+      <MiniTabs timeRange={timeRange} onTimeRangeChange={onTimeRangeChange} />
+      
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Multi-ring Sleep Donut */}
+        <Card className="rounded-2xl p-6 bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/20">
+          <div className="flex items-center gap-3 mb-6">
+            <Moon className="h-6 w-6 text-blue-400" />
+            <div>
+              <h3 className="font-semibold text-lg">{language === 'ar' ? 'تحليل النوم' : 'Sleep Analysis'}</h3>
+              <p className="text-sm text-muted-foreground">{language === 'ar' ? 'الليلة الماضية' : 'Last Night'}</p>
             </div>
           </div>
-        )}
+
+          <div className="relative w-48 h-48 mx-auto mb-6">
+            {/* Outer ring - Duration */}
+            <div 
+              className="absolute inset-0 rounded-full"
+              style={{
+                background: `conic-gradient(from 0deg, #3B82F6 0deg ${(metrics?.sleep?.duration_sec || 0) / 3600 / 8 * 360}deg, rgba(59, 130, 246, 0.1) ${(metrics?.sleep?.duration_sec || 0) / 3600 / 8 * 360}deg 360deg)`
+              }}
+            />
+            
+            {/* Inner ring - Performance */}
+            <div 
+              className="absolute inset-4 rounded-full"
+              style={{
+                background: `conic-gradient(from 0deg, #8B5CF6 0deg ${(metrics?.sleep?.performance_pct || 0) / 100 * 360}deg, rgba(139, 92, 246, 0.1) ${(metrics?.sleep?.performance_pct || 0) / 100 * 360}deg 360deg)`
+              }}
+            />
+
+            {/* Center text */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <div className="text-2xl font-bold">
+                {metrics?.sleep?.duration_sec ? `${(metrics.sleep.duration_sec / 3600).toFixed(1)}h` : '--'}
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {metrics?.sleep?.performance_pct ? `${Math.round(metrics.sleep.performance_pct)}%` : '--'}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-white/5 rounded-xl p-3">
+              <div className="text-sm text-muted-foreground mb-1">{language === 'ar' ? 'وقت النوم' : 'Bedtime'}</div>
+              <div className="font-semibold">
+                {metrics?.sleep?.start ? new Date(metrics.sleep.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--'}
+              </div>
+            </div>
+            <div className="bg-white/5 rounded-xl p-3">
+              <div className="text-sm text-muted-foreground mb-1">{language === 'ar' ? 'وقت الاستيقاظ' : 'Wake Time'}</div>
+              <div className="font-semibold">
+                {metrics?.sleep?.end ? new Date(metrics.sleep.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--'}
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        {/* Sleep Stats */}
+        <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
+          <h3 className="font-semibold text-lg mb-4">{language === 'ar' ? 'إحصائيات النوم' : 'Sleep Stats'}</h3>
+          <div className="space-y-4">
+            <div className="bg-white/5 rounded-xl p-4">
+              <div className="text-sm text-muted-foreground mb-2">{language === 'ar' ? 'الأداء' : 'Performance'}</div>
+              <div className="text-2xl font-bold text-blue-400">
+                {metrics?.sleep?.performance_pct ? `${Math.round(metrics.sleep.performance_pct)}%` : '--'}
+              </div>
+            </div>
+            <div className="bg-white/5 rounded-xl p-4">
+              <div className="text-sm text-muted-foreground mb-2">{language === 'ar' ? 'المدة الإجمالية' : 'Total Duration'}</div>
+              <div className="text-2xl font-bold text-purple-400">
+                {metrics?.sleep?.duration_sec ? `${(metrics.sleep.duration_sec / 3600).toFixed(1)}h` : '--'}
+              </div>
+            </div>
+          </div>
+        </Card>
       </div>
-    </PageContainer>
+    </div>
+  );
+
+  // Recovery Tab Content
+  const RecoveryTabContent = ({ timeRange, onTimeRangeChange, metrics }: { timeRange: TimeRange; onTimeRangeChange: (range: TimeRange) => void; metrics: any }) => {
+    const recoveryScore = metrics?.recovery?.score || 0;
+    const getRecoveryColor = (score: number) => {
+      if (score >= 67) return { color: '#10B981', text: 'Ready to Perform', bg: 'from-emerald-500/10 to-green-500/10' };
+      if (score >= 34) return { color: '#F59E0B', text: 'Moderate Training', bg: 'from-yellow-500/10 to-orange-500/10' };
+      return { color: '#EF4444', text: 'Focus on Recovery', bg: 'from-red-500/10 to-pink-500/10' };
+    };
+    const recoveryColor = getRecoveryColor(recoveryScore);
+
+    return (
+      <div className="space-y-6">
+        <MiniTabs timeRange={timeRange} onTimeRangeChange={onTimeRangeChange} />
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Recovery Gauge */}
+          <Card className={`rounded-2xl p-6 bg-gradient-to-br ${recoveryColor.bg} border-emerald-500/20`}>
+            <div className="flex items-center gap-3 mb-6">
+              <Heart className="h-6 w-6 text-emerald-400" />
+              <div>
+                <h3 className="font-semibold text-lg">{language === 'ar' ? 'التعافي' : 'Recovery'}</h3>
+                <p className="text-sm text-muted-foreground">{language === 'ar' ? 'الاستعداد اليومي' : 'Daily Readiness'}</p>
+              </div>
+            </div>
+
+            <div className="relative w-48 h-48 mx-auto mb-6">
+              <div 
+                className="absolute inset-0 rounded-full"
+                style={{
+                  background: `conic-gradient(from 0deg, ${recoveryColor.color} 0deg ${recoveryScore / 100 * 360}deg, rgba(255, 255, 255, 0.1) ${recoveryScore / 100 * 360}deg 360deg)`
+                }}
+              />
+              <div className="absolute inset-4 rounded-full bg-gray-900 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="text-3xl font-bold" style={{ color: recoveryColor.color }}>{Math.round(recoveryScore)}%</div>
+                  <div className="text-sm text-muted-foreground">{recoveryColor.text}</div>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Recovery Stats */}
+          <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
+            <h3 className="font-semibold text-lg mb-4">{language === 'ar' ? 'إحصائيات التعافي' : 'Recovery Stats'}</h3>
+            <div className="space-y-4">
+              <div className="bg-white/5 rounded-xl p-4">
+                <div className="text-sm text-muted-foreground mb-2">{language === 'ar' ? 'تقلب معدل ضربات القلب' : 'HRV (RMSSD)'}</div>
+                <div className="text-2xl font-bold text-emerald-400">
+                  {metrics?.recovery?.hrv_ms ? `${Math.round(metrics.recovery.hrv_ms)} ms` : '--'}
+                </div>
+              </div>
+              <div className="bg-white/5 rounded-xl p-4">
+                <div className="text-sm text-muted-foreground mb-2">{language === 'ar' ? 'معدل ضربات القلب أثناء الراحة' : 'Resting Heart Rate'}</div>
+                <div className="text-2xl font-bold text-blue-400">
+                  {metrics?.recovery?.rhr_bpm ? `${Math.round(metrics.recovery.rhr_bpm)} bpm` : '--'}
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  };
+
+  // HRV/RHR Tab Content
+  const HRVRHRTabContent = ({ timeRange, onTimeRangeChange, metrics }: { timeRange: TimeRange; onTimeRangeChange: (range: TimeRange) => void; metrics: any }) => (
+    <div className="space-y-6">
+      <MiniTabs timeRange={timeRange} onTimeRangeChange={onTimeRangeChange} />
+      
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* HRV Card */}
+        <Card className="rounded-2xl p-6 bg-gradient-to-br from-teal-500/10 to-cyan-500/10 border-teal-500/20">
+          <div className="flex items-center gap-3 mb-6">
+            <Activity className="h-6 w-6 text-teal-400" />
+            <div>
+              <h3 className="font-semibold text-lg">{language === 'ar' ? 'تقلب معدل ضربات القلب' : 'Heart Rate Variability'}</h3>
+              <p className="text-sm text-muted-foreground">RMSSD (ms)</p>
+            </div>
+          </div>
+          <div className="text-center">
+            <div className="text-4xl font-bold text-teal-400 mb-2">
+              {metrics?.recovery?.hrv_ms ? `${Math.round(metrics.recovery.hrv_ms)}ms` : '--'}
+            </div>
+            <div className="text-sm text-muted-foreground">{language === 'ar' ? 'القراءة الحالية' : 'Current Reading'}</div>
+          </div>
+        </Card>
+
+        {/* RHR Card */}
+        <Card className="rounded-2xl p-6 bg-gradient-to-br from-purple-500/10 to-indigo-500/10 border-purple-500/20">
+          <div className="flex items-center gap-3 mb-6">
+            <Heart className="h-6 w-6 text-purple-400" />
+            <div>
+              <h3 className="font-semibold text-lg">{language === 'ar' ? 'معدل ضربات القلب أثناء الراحة' : 'Resting Heart Rate'}</h3>
+              <p className="text-sm text-muted-foreground">BPM</p>
+            </div>
+          </div>
+          <div className="text-center">
+            <div className="text-4xl font-bold text-purple-400 mb-2">
+              {metrics?.recovery?.rhr_bpm ? `${Math.round(metrics.recovery.rhr_bpm)} bpm` : '--'}
+            </div>
+            <div className="text-sm text-muted-foreground">{language === 'ar' ? 'القراءة الحالية' : 'Current Reading'}</div>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+
+  // Strain Tab Content
+  const StrainTabContent = ({ timeRange, onTimeRangeChange, metrics }: { timeRange: TimeRange; onTimeRangeChange: (range: TimeRange) => void; metrics: any }) => {
+    const strainValue = metrics?.cycle?.day_strain || 0;
+    const getStrainColor = (strain: number) => {
+      if (strain <= 7) return { color: '#3B82F6', text: 'Easy Zone', bg: 'from-blue-500/10 to-cyan-500/10' };
+      if (strain <= 14) return { color: '#F97316', text: 'Moderate Zone', bg: 'from-orange-500/10 to-yellow-500/10' };
+      return { color: '#EF4444', text: 'Overload Zone', bg: 'from-red-500/10 to-pink-500/10' };
+    };
+    const strainColor = getStrainColor(strainValue);
+
+    return (
+      <div className="space-y-6">
+        <MiniTabs timeRange={timeRange} onTimeRangeChange={onTimeRangeChange} />
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Strain Gauge */}
+          <Card className={`rounded-2xl p-6 bg-gradient-to-br ${strainColor.bg} border-orange-500/20`}>
+            <div className="flex items-center gap-3 mb-6">
+              <Zap className="h-6 w-6 text-orange-400" />
+              <div>
+                <h3 className="font-semibold text-lg">{language === 'ar' ? 'إجهاد اليوم' : 'Day Strain'}</h3>
+                <p className="text-sm text-muted-foreground">0-21 Scale</p>
+              </div>
+            </div>
+
+            <div className="relative w-48 h-48 mx-auto mb-6">
+              <div 
+                className="absolute inset-0 rounded-full"
+                style={{
+                  background: `conic-gradient(from 0deg, ${strainColor.color} 0deg ${strainValue / 21 * 360}deg, rgba(255, 255, 255, 0.1) ${strainValue / 21 * 360}deg 360deg)`
+                }}
+              />
+              <div className="absolute inset-4 rounded-full bg-gray-900 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="text-3xl font-bold" style={{ color: strainColor.color }}>{strainValue.toFixed(1)}</div>
+                  <div className="text-sm text-muted-foreground">{strainColor.text}</div>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Strain Stats */}
+          <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
+            <h3 className="font-semibold text-lg mb-4">{language === 'ar' ? 'إحصائيات الإجهاد' : 'Strain Stats'}</h3>
+            <div className="space-y-4">
+              <div className="bg-white/5 rounded-xl p-4">
+                <div className="text-sm text-muted-foreground mb-2">{language === 'ar' ? 'حمل التدريب' : 'Training Load'}</div>
+                <div className="text-2xl font-bold text-purple-400">
+                  {metrics?.cycle?.training_load ? metrics.cycle.training_load.toFixed(1) : '--'}
+                </div>
+              </div>
+              <div className="bg-white/5 rounded-xl p-4">
+                <div className="text-sm text-muted-foreground mb-2">{language === 'ar' ? 'متوسط معدل ضربات القلب' : 'Average Heart Rate'}</div>
+                <div className="text-2xl font-bold text-red-400">
+                  {metrics?.cycle?.avg_hr_bpm ? `${Math.round(metrics.cycle.avg_hr_bpm)} bpm` : '--'}
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  };
+
+  // Workouts Tab Content
+  const WorkoutsTabContent = ({ timeRange, onTimeRangeChange, metrics }: { timeRange: TimeRange; onTimeRangeChange: (range: TimeRange) => void; metrics: any }) => (
+    <div className="space-y-6">
+      <MiniTabs timeRange={timeRange} onTimeRangeChange={onTimeRangeChange} />
+      
+      <Card className="rounded-2xl p-6 bg-gradient-to-br from-red-500/10 to-orange-500/10 border-red-500/20">
+        <div className="flex items-center gap-3 mb-6">
+          <Dumbbell className="h-6 w-6 text-red-400" />
+          <div>
+            <h3 className="font-semibold text-lg">{language === 'ar' ? 'آخر تمرين' : 'Latest Workout'}</h3>
+            <p className="text-sm text-muted-foreground">{language === 'ar' ? 'الجلسة الأخيرة' : 'Most Recent Session'}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="bg-white/5 rounded-xl p-4">
+            <div className="text-sm text-muted-foreground mb-2">{language === 'ar' ? 'نوع التمرين' : 'Activity Type'}</div>
+            <div className="text-xl font-bold text-red-400">
+              {metrics?.workout?.sport_name || '--'}
+            </div>
+          </div>
+          <div className="bg-white/5 rounded-xl p-4">
+            <div className="text-sm text-muted-foreground mb-2">{language === 'ar' ? 'الإجهاد' : 'Strain'}</div>
+            <div className="text-xl font-bold text-orange-400">
+              {metrics?.workout?.strain ? metrics.workout.strain.toFixed(1) : '--'}
+            </div>
+          </div>
+          <div className="bg-white/5 rounded-xl p-4">
+            <div className="text-sm text-muted-foreground mb-2">{language === 'ar' ? 'المدة' : 'Duration'}</div>
+            <div className="text-xl font-bold text-yellow-400">
+              {metrics?.workout?.start && metrics?.workout?.end 
+                ? `${Math.round((new Date(metrics.workout.end).getTime() - new Date(metrics.workout.start).getTime()) / 60000)}min`
+                : '--'
+              }
+            </div>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+
+  return (
+    <div className="max-w-7xl mx-auto p-4 space-y-6">
+      {/* Page Header */}
+      <div className="text-center">
+        <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
+          {language === 'ar' ? 'الصحة واللياقة' : 'Fitness & Health'}
+        </h1>
+        <p className="text-muted-foreground mt-2">
+          {language === 'ar' ? 'تحليل شامل لبياناتك الصحية مع الذكاء الاصطناعي' : 'Comprehensive health data analysis with AI insights'}
+        </p>
+      </div>
+
+      {/* Top Page Section */}
+      <TopPageSection
+        connected={connected}
+        lastSyncedAt={status.lastSyncedAt}
+        syncing={syncing}
+        onConnect={onConnect}
+        onSync={onSync}
+        onDisconnect={onDisconnect}
+        autoSyncEnabled={autoSync}
+        onToggleAutoSync={(v) => {
+          setAutoSync(v);
+          try { localStorage.setItem('whoop_autosync', v ? '1' : '0'); } catch {}
+        }}
+      />
+
+      {loading ? (
+        <Card className="rounded-2xl p-12 bg-white/5 border-white/10 text-center">
+          <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-purple-400" />
+          <p className="text-muted-foreground">
+            {language === 'ar' ? 'جار تحميل البيانات...' : 'Loading health data...'}
+          </p>
+        </Card>
+      ) : connected ? (
+        <>
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as MainTab)}>
+            <TabsList className="grid w-full grid-cols-6 bg-white/10 border-white/20">
+              <TabsTrigger value="ai-insights" className="flex items-center gap-2">
+                <Brain className="h-4 w-4" />
+                <span className="hidden sm:inline">{language === 'ar' ? 'رؤى الذكاء الاصطناعي' : 'AI Insights'}</span>
+                <span className="sm:hidden">AI</span>
+              </TabsTrigger>
+              <TabsTrigger value="sleep" className="flex items-center gap-2">
+                <Moon className="h-4 w-4" />
+                <span className="hidden sm:inline">{language === 'ar' ? 'النوم' : 'Sleep'}</span>
+                <span className="sm:hidden">Sleep</span>
+              </TabsTrigger>
+              <TabsTrigger value="recovery" className="flex items-center gap-2">
+                <Heart className="h-4 w-4" />
+                <span className="hidden sm:inline">{language === 'ar' ? 'التعافي' : 'Recovery'}</span>
+                <span className="sm:hidden">Recovery</span>
+              </TabsTrigger>
+              <TabsTrigger value="hrv-rhr" className="flex items-center gap-2">
+                <Activity className="h-4 w-4" />
+                <span className="hidden sm:inline">HRV/RHR</span>
+                <span className="sm:hidden">HRV</span>
+              </TabsTrigger>
+              <TabsTrigger value="strain" className="flex items-center gap-2">
+                <Zap className="h-4 w-4" />
+                <span className="hidden sm:inline">{language === 'ar' ? 'الإجهاد' : 'Strain'}</span>
+                <span className="sm:hidden">Strain</span>
+              </TabsTrigger>
+              <TabsTrigger value="workouts" className="flex items-center gap-2">
+                <Dumbbell className="h-4 w-4" />
+                <span className="hidden sm:inline">{language === 'ar' ? 'التمارين' : 'Workouts'}</span>
+                <span className="sm:hidden">Workouts</span>
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="ai-insights" className="mt-6 space-y-6">
+              <AIInsights timeRange={timeRange} onTimeRangeChange={setTimeRange} />
+              <WhoopDetailsPanel metrics={metrics} />
+            </TabsContent>
+
+            <TabsContent value="sleep" className="mt-6 space-y-6">
+              <SleepTabContent timeRange={timeRange} onTimeRangeChange={setTimeRange} metrics={metrics} />
+              <WhoopDetailsPanel metrics={metrics} />
+            </TabsContent>
+
+            <TabsContent value="recovery" className="mt-6 space-y-6">
+              <RecoveryTabContent timeRange={timeRange} onTimeRangeChange={setTimeRange} metrics={metrics} />
+              <WhoopDetailsPanel metrics={metrics} />
+            </TabsContent>
+
+            <TabsContent value="hrv-rhr" className="mt-6 space-y-6">
+              <HRVRHRTabContent timeRange={timeRange} onTimeRangeChange={setTimeRange} metrics={metrics} />
+              <WhoopDetailsPanel metrics={metrics} />
+            </TabsContent>
+
+            <TabsContent value="strain" className="mt-6 space-y-6">
+              <StrainTabContent timeRange={timeRange} onTimeRangeChange={setTimeRange} metrics={metrics} />
+              <WhoopDetailsPanel metrics={metrics} />
+            </TabsContent>
+
+            <TabsContent value="workouts" className="mt-6 space-y-6">
+              <WorkoutsTabContent timeRange={timeRange} onTimeRangeChange={setTimeRange} metrics={metrics} />
+              <WhoopDetailsPanel metrics={metrics} />
+            </TabsContent>
+          </Tabs>
+        </>
+      ) : (
+        <Card className="rounded-2xl p-12 bg-gradient-to-br from-red-500/10 to-orange-500/10 border-red-500/20 text-center">
+          <WifiOff className="h-12 w-12 mx-auto mb-4 text-red-400" />
+          <h3 className="text-lg font-semibold mb-2">
+            {language === 'ar' ? 'غير متصل بـ WHOOP' : 'Not Connected to WHOOP'}
+          </h3>
+          <p className="text-muted-foreground mb-6">
+            {language === 'ar' ? 'قم بتوصيل حسابك في WHOOP للوصول إلى التحليل الصحي المتقدم' : 'Connect your WHOOP account to access advanced health analytics'}
+          </p>
+          <Button onClick={onConnect} disabled={connecting} size="lg" className="bg-emerald-500/20 hover:bg-emerald-500/30">
+            <Wifi className="h-4 w-4 mr-2" />
+            {connecting 
+              ? (language === 'ar' ? 'جار الاتصال...' : 'Connecting...') 
+              : (language === 'ar' ? 'اتصال WHOOP' : 'Connect WHOOP')
+            }
+          </Button>
+        </Card>
+      )}
+    </div>
   );
 }
 
