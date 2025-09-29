@@ -142,6 +142,13 @@ export async function generateAiInsights(
   
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData?.session?.access_token;
+  console.log('Calling Edge Function with payload:', {
+    data: Object.keys(data),
+    language,
+    time_of_day: options?.time_of_day || 'general',
+    user_timezone: options?.user_timezone || 'UTC'
+  });
+
   const req = supabase.functions.invoke('whoop-ai-insights', {
     body: { 
       data, 
@@ -151,9 +158,16 @@ export async function generateAiInsights(
     },
     headers: { Authorization: `Bearer ${accessToken}` }
   });
+  
   const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('ai_timeout')), timeoutMs));
   const { data: resp, error } = await Promise.race([req, timeout]) as any;
-  if (error) throw error;
+  
+  console.log('Edge Function response:', { resp, error });
+  
+  if (error) {
+    console.error('Edge Function error:', error);
+    throw error;
+  }
   return resp;
 }
 

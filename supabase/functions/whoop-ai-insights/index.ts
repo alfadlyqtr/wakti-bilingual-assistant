@@ -47,9 +47,9 @@ Context: ${timeOfDay} - ${userTimezone}
 Data: Latest sleep, recovery, strain, and workout metrics
 
 Instructions:
-- Morning (5-11am): Focus on readiness, energy levels, workout planning
-- Midday (12-6pm): Assess current strain, pacing, hydration reminders  
-- Evening (5-11pm): Recovery strategies, sleep preparation, reflection
+- Morning (5:00 AM - 11:00 AM): Focus on readiness, energy levels, workout planning
+- Midday (12:00 PM - 6:00 PM): Assess current strain, pacing, hydration reminders  
+- Evening (5:00 PM - 11:00 PM): Recovery strategies, sleep preparation, reflection
 
 Tone: Supportive, motivational, actionable. Use user's name when available.
 Format: Return ONLY valid JSON with no markdown or extra text.
