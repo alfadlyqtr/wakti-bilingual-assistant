@@ -133,10 +133,10 @@ export function RecoveryTab({
             />
             
             {/* Zone indicators */}
-            <div className="absolute -bottom-2 left-0 right-0 flex justify-between text-xs text-muted-foreground">
-              <span>0</span>
-              <span className="text-red-400">33</span>
-              <span className="text-yellow-400">67</span>
+            <div className="absolute -bottom-6 left-0 right-0 flex justify-between text-xs text-muted-foreground">
+              <span>🔴 0</span>
+              <span className="text-red-400">🟡 33</span>
+              <span className="text-yellow-400">🟢 67</span>
               <span>100</span>
             </div>
           </div>

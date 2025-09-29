@@ -322,27 +322,80 @@ export default function FitnessHealth() {
 
             <TabsContent value="ai-insights" className="mt-6 space-y-6">
               <AIInsights timeRange={timeRange} onTimeRangeChange={setTimeRange} />
-              <WhoopDetails />
+              <WhoopDetails metrics={metrics} />
             </TabsContent>
 
             <TabsContent value="sleep" className="mt-6 space-y-6">
-              <SleepTab timeRange={timeRange} onTimeRangeChange={setTimeRange} />
+              <SleepTab 
+                timeRange={timeRange} 
+                onTimeRangeChange={setTimeRange}
+                sleepData={metrics?.sleep && sleepHours ? {
+                  hours: sleepHours,
+                  goalHours: 8,
+                  performancePct: metrics.sleep.performance_pct || 0,
+                  stages: {
+                    deep: Math.round((sleepStages?.deep || 0) / 60000), // Convert ms to minutes
+                    rem: Math.round((sleepStages?.rem || 0) / 60000),
+                    light: Math.round((sleepStages?.light || 0) / 60000),
+                    awake: 0
+                  },
+                  bedtime: metrics.sleep.start ? new Date(metrics.sleep.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--',
+                  waketime: metrics.sleep.end ? new Date(metrics.sleep.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--',
+                  efficiency: sleepEfficiency || 0
+                } : undefined}
+              />
             </TabsContent>
 
             <TabsContent value="recovery" className="mt-6 space-y-6">
-              <RecoveryTab timeRange={timeRange} onTimeRangeChange={setTimeRange} />
+              <RecoveryTab 
+                timeRange={timeRange} 
+                onTimeRangeChange={setTimeRange}
+                recoveryData={metrics?.recovery ? {
+                  score: metrics.recovery.score || 0,
+                  hrv: metrics.recovery.hrv_ms || 0,
+                  rhr: metrics.recovery.rhr_bpm || 0
+                } : undefined}
+              />
             </TabsContent>
 
             <TabsContent value="hrv-rhr" className="mt-6 space-y-6">
-              <HRVRHRTab timeRange={timeRange} onTimeRangeChange={setTimeRange} />
+              <HRVRHRTab 
+                timeRange={timeRange} 
+                onTimeRangeChange={setTimeRange}
+                currentData={metrics?.recovery ? {
+                  hrv: metrics.recovery.hrv_ms || 0,
+                  rhr: metrics.recovery.rhr_bpm || 0
+                } : undefined}
+              />
             </TabsContent>
 
             <TabsContent value="strain" className="mt-6 space-y-6">
-              <StrainTab timeRange={timeRange} onTimeRangeChange={setTimeRange} />
+              <StrainTab 
+                timeRange={timeRange} 
+                onTimeRangeChange={setTimeRange}
+                strainData={metrics?.cycle ? {
+                  dayStrain: metrics.cycle.day_strain || 0,
+                  trainingLoad: metrics.cycle.training_load || 0,
+                  avgHr: metrics.cycle.avg_hr_bpm || 0,
+                  maxHr: 200 // Default max HR
+                } : undefined}
+              />
             </TabsContent>
 
             <TabsContent value="workouts" className="mt-6 space-y-6">
-              <WorkoutsTab timeRange={timeRange} onTimeRangeChange={setTimeRange} />
+              <WorkoutsTab 
+                timeRange={timeRange} 
+                onTimeRangeChange={setTimeRange}
+                latestWorkout={metrics?.workout ? {
+                  sport: metrics.workout.sport_name || 'Unknown',
+                  duration: metrics.workout.start && metrics.workout.end ? 
+                    Math.round((new Date(metrics.workout.end).getTime() - new Date(metrics.workout.start).getTime()) / 60000) : 0,
+                  strain: metrics.workout.strain || 0,
+                  calories: todayStats.kcal || 0,
+                  avgHr: metrics.workout.data?.score?.average_heart_rate || 0,
+                  maxHr: metrics.workout.data?.score?.max_heart_rate || 200
+                } : undefined}
+              />
             </TabsContent>
           </Tabs>
         </>

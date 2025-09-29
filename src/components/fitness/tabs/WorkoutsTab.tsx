@@ -45,7 +45,7 @@ export function WorkoutsTab({
 
   // Mock data for demonstration
   const mockLatestWorkout = latestWorkout || {
-    sport: 'Running',
+    sport: 'Cycling',
     duration: 45,
     strain: 14.2,
     calories: 520,
@@ -138,18 +138,21 @@ export function WorkoutsTab({
   return (
     <div className="space-y-6">
       {/* Mini-tabs for time range */}
-      <Card className="rounded-2xl p-4 bg-white/5 border-white/10">
-        <Tabs value={timeRange} onValueChange={(value) => onTimeRangeChange(value as TimeRange)}>
-          <TabsList className="grid w-full grid-cols-6 bg-white/10">
-            <TabsTrigger value="1d" className="text-xs">1D</TabsTrigger>
-            <TabsTrigger value="1w" className="text-xs">1W</TabsTrigger>
-            <TabsTrigger value="2w" className="text-xs">2W</TabsTrigger>
-            <TabsTrigger value="1m" className="text-xs">1M</TabsTrigger>
-            <TabsTrigger value="3m" className="text-xs">3M</TabsTrigger>
-            <TabsTrigger value="6m" className="text-xs">6M</TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </Card>
+      <div className="flex gap-2 mb-6 flex-wrap">
+        {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
+          <button
+            key={range}
+            onClick={() => onTimeRangeChange(range)}
+            className={`px-2 py-1 sm:px-3 rounded-full text-xs shadow-sm transition-all ${
+              timeRange === range
+                ? 'bg-indigo-500 text-white shadow-md'
+                : 'bg-gray-100 hover:bg-indigo-200 text-gray-700'
+            }`}
+          >
+            {range.toUpperCase()}
+          </button>
+        ))}
+      </div>
 
       {/* Latest Workout Card */}
       <Card className="rounded-2xl p-6 bg-gradient-to-br from-orange-500/10 to-red-500/10 border-orange-500/20">

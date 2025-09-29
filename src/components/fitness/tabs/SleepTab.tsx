@@ -62,21 +62,35 @@ export function SleepTab({
 }: SleepTabProps) {
   const { language } = useTheme();
 
-  // Mock data for demonstration
-  const mockSleepData = sleepData || {
-    hours: 7.5,
-    goalHours: 8,
-    performancePct: 85,
-    stages: {
-      deep: 90, // minutes
-      rem: 120,
-      light: 240,
-      awake: 30
-    },
-    bedtime: '23:30',
-    waketime: '07:00',
-    efficiency: 92
-  };
+  // Use real WHOOP data - no fallback to mock data
+  if (!sleepData) {
+    return (
+      <div className="space-y-6">
+        <div className="flex gap-2 mb-6 flex-wrap">
+          {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
+            <button
+              key={range}
+              onClick={() => onTimeRangeChange(range)}
+              className={`px-2 py-1 sm:px-3 rounded-full text-xs shadow-sm transition-all ${
+                timeRange === range
+                  ? 'bg-indigo-500 text-white shadow-md'
+                  : 'bg-gray-100 hover:bg-indigo-200 text-gray-700'
+              }`}
+            >
+              {range.toUpperCase()}
+            </button>
+          ))}
+        </div>
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">
+            {language === 'ar' ? 'لا توجد بيانات نوم متاحة' : 'No sleep data available'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const realSleepData = sleepData;
 
   const mockYesterdayData = yesterdayData || {
     hours: 6.8,
@@ -99,13 +113,13 @@ export function SleepTab({
     { date: 'Sun', hours: 7.8, deep: 88, rem: 118, light: 245, awake: 28 }
   ];
 
-  const hoursProgress = (mockSleepData.hours / mockSleepData.goalHours) * 100;
+  const hoursProgress = (realSleepData.hours / realSleepData.goalHours) * 100;
   
   const stageData = [
-    { name: 'Deep', value: mockSleepData.stages.deep, color: SLEEP_COLORS.deep },
-    { name: 'REM', value: mockSleepData.stages.rem, color: SLEEP_COLORS.rem },
-    { name: 'Light', value: mockSleepData.stages.light, color: SLEEP_COLORS.light },
-    { name: 'Awake', value: mockSleepData.stages.awake, color: SLEEP_COLORS.awake }
+    { name: 'Deep', value: realSleepData.stages.deep, color: SLEEP_COLORS.deep },
+    { name: 'REM', value: realSleepData.stages.rem, color: SLEEP_COLORS.rem },
+    { name: 'Light', value: realSleepData.stages.light, color: SLEEP_COLORS.light },
+    { name: 'Awake', value: realSleepData.stages.awake, color: SLEEP_COLORS.awake }
   ];
 
   const totalStageMinutes = stageData.reduce((sum, stage) => sum + stage.value, 0);
@@ -117,8 +131,8 @@ export function SleepTab({
     return { icon: TrendingDown, color: 'text-red-400', text: diff.toFixed(1) };
   };
 
-  const hoursComparison = compareValue(mockSleepData.hours, mockYesterdayData.hours);
-  const performanceComparison = compareValue(mockSleepData.performancePct, mockYesterdayData.performancePct);
+  const hoursComparison = compareValue(realSleepData.hours, mockYesterdayData.hours);
+  const performanceComparison = compareValue(realSleepData.performancePct, mockYesterdayData.performancePct);
 
   return (
     <div className="space-y-6">
@@ -176,8 +190,8 @@ export function SleepTab({
                     data={stageData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={20}
-                    outerRadius={30}
+                    innerRadius={25}
+                    outerRadius={35}
                     paddingAngle={1}
                     dataKey="value"
                   >
@@ -192,7 +206,7 @@ export function SleepTab({
 
             {/* Center text */}
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <div className="text-lg font-bold">{mockSleepData.hours.toFixed(1)}h</div>
+              <div className="text-lg font-bold">{realSleepData.hours.toFixed(1)}h</div>
               <div className="text-xs text-muted-foreground">
                 {Math.round(hoursProgress)}%
               </div>
@@ -206,7 +220,7 @@ export function SleepTab({
                 {language === 'ar' ? 'وقت النوم' : 'Bedtime'}
               </div>
               <div className="text-sm sm:text-base font-bold text-blue-400">
-                {mockSleepData.bedtime}
+                {realSleepData.bedtime}
               </div>
             </div>
             <div className="bg-white/5 rounded-xl p-2 sm:p-3 text-center">
@@ -214,7 +228,7 @@ export function SleepTab({
                 {language === 'ar' ? 'وقت الاستيقاظ' : 'Wake Time'}
               </div>
               <div className="text-sm sm:text-base font-bold text-orange-400">
-                {mockSleepData.waketime}
+                {realSleepData.waketime}
               </div>
             </div>
             <div className="bg-white/5 rounded-xl p-2 sm:p-3 text-center">
@@ -222,7 +236,7 @@ export function SleepTab({
                 {language === 'ar' ? 'الأداء' : 'Performance'}
               </div>
               <div className="text-sm sm:text-base font-bold text-purple-400">
-                {mockSleepData.performancePct}%
+                {realSleepData.performancePct}%
               </div>
             </div>
             <div className="bg-white/5 rounded-xl p-2 sm:p-3 text-center">
@@ -230,7 +244,7 @@ export function SleepTab({
                 {language === 'ar' ? 'الكفاءة' : 'Efficiency'}
               </div>
               <div className="text-sm sm:text-base font-bold text-emerald-400">
-                {mockSleepData.efficiency}%
+                {realSleepData.efficiency}%
               </div>
             </div>
           </div>
@@ -281,8 +295,8 @@ export function SleepTab({
           <div className="mt-6 p-4 bg-blue-500/10 rounded-xl border border-blue-500/20">
             <p className="text-sm text-blue-300">
               {language === 'ar' 
-                ? `حصلت على ${mockSleepData.stages.deep} دقيقة من النوم العميق و ${mockSleepData.stages.rem} دقيقة من نوم الأحلام`
-                : `You got ${mockSleepData.stages.deep} minutes of deep sleep and ${mockSleepData.stages.rem} minutes of REM sleep`
+                ? `حصلت على ${realSleepData.stages.deep} دقيقة من النوم العميق و ${realSleepData.stages.rem} دقيقة من نوم الأحلام`
+                : `You got ${realSleepData.stages.deep} minutes of deep sleep and ${realSleepData.stages.rem} minutes of REM sleep`
               }
             </p>
           </div>
@@ -302,7 +316,7 @@ export function SleepTab({
               {language === 'ar' ? 'ساعات النوم' : 'Sleep Hours'}
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xl font-bold">{mockSleepData.hours.toFixed(1)}h</span>
+              <span className="text-xl font-bold">{realSleepData.hours.toFixed(1)}h</span>
               <div className={`flex items-center gap-1 ${hoursComparison.color}`}>
                 <hoursComparison.icon className="h-4 w-4" />
                 <span className="text-sm">{hoursComparison.text}h</span>
@@ -315,7 +329,7 @@ export function SleepTab({
               {language === 'ar' ? 'الأداء' : 'Performance'}
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xl font-bold">{mockSleepData.performancePct}%</span>
+              <span className="text-xl font-bold">{realSleepData.performancePct}%</span>
               <div className={`flex items-center gap-1 ${performanceComparison.color}`}>
                 <performanceComparison.icon className="h-4 w-4" />
                 <span className="text-sm">{performanceComparison.text}%</span>
@@ -328,18 +342,18 @@ export function SleepTab({
               {language === 'ar' ? 'النوم العميق' : 'Deep Sleep'}
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xl font-bold">{mockSleepData.stages.deep}m</span>
+              <span className="text-xl font-bold">{realSleepData.stages.deep}m</span>
               <div className={`flex items-center gap-1 ${
-                mockSleepData.stages.deep > mockYesterdayData.stages.deep 
+                realSleepData.stages.deep > mockYesterdayData.stages.deep 
                   ? 'text-emerald-400' 
-                  : mockSleepData.stages.deep < mockYesterdayData.stages.deep
+                  : realSleepData.stages.deep < mockYesterdayData.stages.deep
                   ? 'text-red-400'
                   : 'text-gray-400'
               }`}>
-                {mockSleepData.stages.deep > mockYesterdayData.stages.deep ? (
-                  <><TrendingUp className="h-4 w-4" /><span className="text-sm">+{mockSleepData.stages.deep - mockYesterdayData.stages.deep}m</span></>
-                ) : mockSleepData.stages.deep < mockYesterdayData.stages.deep ? (
-                  <><TrendingDown className="h-4 w-4" /><span className="text-sm">{mockSleepData.stages.deep - mockYesterdayData.stages.deep}m</span></>
+                {realSleepData.stages.deep > mockYesterdayData.stages.deep ? (
+                  <><TrendingUp className="h-4 w-4" /><span className="text-sm">+{realSleepData.stages.deep - mockYesterdayData.stages.deep}m</span></>
+                ) : realSleepData.stages.deep < mockYesterdayData.stages.deep ? (
+                  <><TrendingDown className="h-4 w-4" /><span className="text-sm">{realSleepData.stages.deep - mockYesterdayData.stages.deep}m</span></>
                 ) : (
                   <><Minus className="h-4 w-4" /><span className="text-sm">0m</span></>
                 )}
@@ -352,18 +366,18 @@ export function SleepTab({
               {language === 'ar' ? 'نوم الأحلام' : 'REM Sleep'}
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xl font-bold">{mockSleepData.stages.rem}m</span>
+              <span className="text-xl font-bold">{realSleepData.stages.rem}m</span>
               <div className={`flex items-center gap-1 ${
-                mockSleepData.stages.rem > mockYesterdayData.stages.rem 
+                realSleepData.stages.rem > mockYesterdayData.stages.rem 
                   ? 'text-emerald-400' 
-                  : mockSleepData.stages.rem < mockYesterdayData.stages.rem
+                  : realSleepData.stages.rem < mockYesterdayData.stages.rem
                   ? 'text-red-400'
                   : 'text-gray-400'
               }`}>
-                {mockSleepData.stages.rem > mockYesterdayData.stages.rem ? (
-                  <><TrendingUp className="h-4 w-4" /><span className="text-sm">+{mockSleepData.stages.rem - mockYesterdayData.stages.rem}m</span></>
-                ) : mockSleepData.stages.rem < mockYesterdayData.stages.rem ? (
-                  <><TrendingDown className="h-4 w-4" /><span className="text-sm">{mockSleepData.stages.rem - mockYesterdayData.stages.rem}m</span></>
+                {realSleepData.stages.rem > mockYesterdayData.stages.rem ? (
+                  <><TrendingUp className="h-4 w-4" /><span className="text-sm">+{realSleepData.stages.rem - mockYesterdayData.stages.rem}m</span></>
+                ) : realSleepData.stages.rem < mockYesterdayData.stages.rem ? (
+                  <><TrendingDown className="h-4 w-4" /><span className="text-sm">{realSleepData.stages.rem - mockYesterdayData.stages.rem}m</span></>
                 ) : (
                   <><Minus className="h-4 w-4" /><span className="text-sm">0m</span></>
                 )}

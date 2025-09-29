@@ -156,10 +156,10 @@ export function StrainTab({
             />
             
             {/* Zone indicators */}
-            <div className="absolute -bottom-2 left-0 right-0 flex justify-between text-xs text-muted-foreground">
-              <span>0</span>
-              <span className="text-emerald-400">7</span>
-              <span className="text-yellow-400">14</span>
+            <div className="absolute -bottom-6 left-0 right-0 flex justify-between text-xs text-muted-foreground">
+              <span>🟢 0</span>
+              <span className="text-emerald-400">🟡 7</span>
+              <span className="text-yellow-400">🔴 14</span>
               <span>21</span>
             </div>
           </div>
