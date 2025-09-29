@@ -43,22 +43,35 @@ export function WorkoutsTab({
 }: WorkoutsTabProps) {
   const { language } = useTheme();
 
-  // Mock data for demonstration
-  const mockLatestWorkout = latestWorkout || {
-    sport: 'Cycling',
-    duration: 45,
-    strain: 14.2,
-    calories: 520,
-    avgHr: 152,
-    maxHr: 178,
-    zones: {
-      'Zone 1': 300000, // 5 minutes in milliseconds
-      'Zone 2': 900000, // 15 minutes
-      'Zone 3': 1200000, // 20 minutes
-      'Zone 4': 300000, // 5 minutes
-      'Zone 5': 0
-    }
-  };
+  // Use real WHOOP data - no fallback to mock data
+  if (!latestWorkout) {
+    return (
+      <div className="space-y-6">
+        <div className="flex gap-2 mb-6 flex-wrap">
+          {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
+            <button
+              key={range}
+              onClick={() => onTimeRangeChange(range)}
+              className={`px-2 py-1 sm:px-3 rounded-full text-xs shadow-sm transition-all ${
+                timeRange === range
+                  ? 'bg-indigo-500 text-white shadow-md'
+                  : 'bg-gray-100 hover:bg-indigo-200 text-gray-700'
+              }`}
+            >
+              {range.toUpperCase()}
+            </button>
+          ))}
+        </div>
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">
+            {language === 'ar' ? 'لا توجد بيانات تمارين متاحة' : 'No workout data available'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const realLatestWorkout = latestWorkout;
 
   const mockYesterdayWorkout = yesterdayWorkout || {
     duration: 35,
@@ -110,8 +123,8 @@ export function WorkoutsTab({
     }
   };
 
-  const totalZoneTime = Object.values(mockLatestWorkout.zones || {}).reduce((sum, time) => sum + time, 0);
-  const zoneData = Object.entries(mockLatestWorkout.zones || {}).map(([zone, time]) => ({
+  const totalZoneTime = Object.values(realLatestWorkout.zones || {}).reduce((sum, time) => sum + time, 0);
+  const zoneData = Object.entries(realLatestWorkout.zones || {}).map(([zone, time]) => ({
     zone,
     minutes: Math.round(time / 60000),
     percentage: totalZoneTime > 0 ? (time / totalZoneTime) * 100 : 0,
@@ -125,9 +138,9 @@ export function WorkoutsTab({
     return { icon: TrendingDown, color: 'text-red-400', text: `${diff.toFixed(1)}${unit}` };
   };
 
-  const durationComparison = compareValue(mockLatestWorkout.duration, mockYesterdayWorkout.duration, 'min');
-  const strainComparison = compareValue(mockLatestWorkout.strain, mockYesterdayWorkout.strain);
-  const caloriesComparison = compareValue(mockLatestWorkout.calories, mockYesterdayWorkout.calories, 'cal');
+  const durationComparison = compareValue(realLatestWorkout.duration, mockYesterdayWorkout.duration, 'min');
+  const strainComparison = compareValue(realLatestWorkout.strain, mockYesterdayWorkout.strain);
+  const caloriesComparison = compareValue(realLatestWorkout.calories, mockYesterdayWorkout.calories, 'cal');
 
   const strainVsCaloriesData = mockWorkoutHistory.map(w => ({
     strain: w.strain,
@@ -172,13 +185,13 @@ export function WorkoutsTab({
           {/* Workout Overview */}
           <div>
             <div className="flex items-center gap-3 mb-4">
-              <span className="text-3xl">{getSportIcon(mockLatestWorkout.sport)}</span>
+              <span className="text-3xl">{getSportIcon(realLatestWorkout.sport)}</span>
               <div>
-                <h4 className={`text-xl font-bold ${getSportColor(mockLatestWorkout.sport)}`}>
-                  {mockLatestWorkout.sport}
+                <h4 className={`text-xl font-bold ${getSportColor(realLatestWorkout.sport)}`}>
+                  {realLatestWorkout.sport}
                 </h4>
                 <p className="text-sm text-muted-foreground">
-                  {mockLatestWorkout.duration} {language === 'ar' ? 'دقيقة' : 'minutes'}
+                  {realLatestWorkout.duration} {language === 'ar' ? 'دقيقة' : 'minutes'}
                 </p>
               </div>
             </div>
@@ -189,7 +202,7 @@ export function WorkoutsTab({
                   {language === 'ar' ? 'الإجهاد' : 'Strain'}
                 </div>
                 <div className="text-xl font-bold text-purple-400">
-                  {mockLatestWorkout.strain.toFixed(1)}
+                  {realLatestWorkout.strain.toFixed(1)}
                 </div>
               </div>
               <div className="bg-white/5 rounded-xl p-3">
@@ -197,7 +210,7 @@ export function WorkoutsTab({
                   {language === 'ar' ? 'السعرات' : 'Calories'}
                 </div>
                 <div className="text-xl font-bold text-orange-400">
-                  {mockLatestWorkout.calories}
+                  {realLatestWorkout.calories}
                 </div>
               </div>
               <div className="bg-white/5 rounded-xl p-3">
@@ -205,7 +218,7 @@ export function WorkoutsTab({
                   {language === 'ar' ? 'متوسط النبض' : 'Avg HR'}
                 </div>
                 <div className="text-xl font-bold text-red-400">
-                  {mockLatestWorkout.avgHr} bpm
+                  {realLatestWorkout.avgHr} bpm
                 </div>
               </div>
               <div className="bg-white/5 rounded-xl p-3">
@@ -213,7 +226,7 @@ export function WorkoutsTab({
                   {language === 'ar' ? 'أقصى نبض' : 'Max HR'}
                 </div>
                 <div className="text-xl font-bold text-pink-400">
-                  {mockLatestWorkout.maxHr} bpm
+                  {realLatestWorkout.maxHr} bpm
                 </div>
               </div>
             </div>
@@ -262,7 +275,7 @@ export function WorkoutsTab({
               {language === 'ar' ? 'مدة التمرين' : 'Workout Duration'}
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xl font-bold">{mockLatestWorkout.duration}min</span>
+              <span className="text-xl font-bold">{realLatestWorkout.duration}min</span>
               <div className={`flex items-center gap-1 ${durationComparison.color}`}>
                 <durationComparison.icon className="h-4 w-4" />
                 <span className="text-sm">{durationComparison.text}</span>
@@ -275,7 +288,7 @@ export function WorkoutsTab({
               {language === 'ar' ? 'إجهاد التمرين' : 'Workout Strain'}
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xl font-bold">{mockLatestWorkout.strain.toFixed(1)}</span>
+              <span className="text-xl font-bold">{realLatestWorkout.strain.toFixed(1)}</span>
               <div className={`flex items-center gap-1 ${strainComparison.color}`}>
                 <strainComparison.icon className="h-4 w-4" />
                 <span className="text-sm">{strainComparison.text}</span>
@@ -288,7 +301,7 @@ export function WorkoutsTab({
               {language === 'ar' ? 'السعرات المحروقة' : 'Calories Burned'}
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xl font-bold">{mockLatestWorkout.calories}</span>
+              <span className="text-xl font-bold">{realLatestWorkout.calories}</span>
               <div className={`flex items-center gap-1 ${caloriesComparison.color}`}>
                 <caloriesComparison.icon className="h-4 w-4" />
                 <span className="text-sm">{caloriesComparison.text}</span>

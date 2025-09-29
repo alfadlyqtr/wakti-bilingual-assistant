@@ -34,11 +34,35 @@ export function HRVRHRTab({
 }: HRVRHRTabProps) {
   const { language } = useTheme();
 
-  // Mock data for demonstration
-  const mockCurrentData = currentData || {
-    hrv: 42,
-    rhr: 58
-  };
+  // Use real WHOOP data - no fallback to mock data
+  if (!currentData) {
+    return (
+      <div className="space-y-6">
+        <div className="flex gap-2 mb-6 flex-wrap">
+          {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
+            <button
+              key={range}
+              onClick={() => onTimeRangeChange(range)}
+              className={`px-2 py-1 sm:px-3 rounded-full text-xs shadow-sm transition-all ${
+                timeRange === range
+                  ? 'bg-indigo-500 text-white shadow-md'
+                  : 'bg-gray-100 hover:bg-indigo-200 text-gray-700'
+              }`}
+            >
+              {range.toUpperCase()}
+            </button>
+          ))}
+        </div>
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">
+            {language === 'ar' ? 'لا توجد بيانات HRV/RHR متاحة' : 'No HRV/RHR data available'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const realCurrentData = currentData;
 
   const mockYesterdayData = yesterdayData || {
     hrv: 38,
@@ -58,8 +82,8 @@ export function HRVRHRTab({
   const avg7dHRV = Math.round(mockWeeklyData.reduce((sum, d) => sum + d.hrv, 0) / mockWeeklyData.length);
   const avg7dRHR = Math.round(mockWeeklyData.reduce((sum, d) => sum + d.rhr, 0) / mockWeeklyData.length);
   
-  const deltaHRVVsLastWeek = mockCurrentData.hrv - mockYesterdayData.hrv;
-  const deltaRHRVsLastWeek = mockCurrentData.rhr - mockYesterdayData.rhr;
+  const deltaHRVVsLastWeek = realCurrentData.hrv - mockYesterdayData.hrv;
+  const deltaRHRVsLastWeek = realCurrentData.rhr - mockYesterdayData.rhr;
 
   const compareValue = (current: number, yesterday: number, unit: string = '') => {
     const diff = current - yesterday;
@@ -68,8 +92,8 @@ export function HRVRHRTab({
     return { icon: TrendingDown, color: 'text-red-400', text: `${diff.toFixed(1)}${unit}` };
   };
 
-  const hrvComparison = compareValue(mockCurrentData.hrv, mockYesterdayData.hrv, 'ms');
-  const rhrComparison = compareValue(mockCurrentData.rhr, mockYesterdayData.rhr, 'bpm');
+  const hrvComparison = compareValue(realCurrentData.hrv, mockYesterdayData.hrv, 'ms');
+  const rhrComparison = compareValue(realCurrentData.rhr, mockYesterdayData.rhr, 'bpm');
 
   // For RHR, lower is better, so we invert the color logic
   const rhrComparisonAdjusted = {
@@ -116,7 +140,7 @@ export function HRVRHRTab({
 
           <div className="text-center mb-6">
             <div className="text-4xl font-bold text-emerald-400 mb-2">
-              {mockCurrentData.hrv}ms
+              {realCurrentData.hrv}ms
             </div>
             <div className="text-sm text-muted-foreground">
               {language === 'ar' ? 'القراءة الحالية' : 'Current Reading'}
@@ -144,7 +168,7 @@ export function HRVRHRTab({
 
           <div className="mt-4 p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
             <p className="text-sm text-emerald-300">
-              {mockCurrentData.hrv >= 40 
+              {realCurrentData.hrv >= 40 
                 ? (language === 'ar' ? 'تقلب جيد - نظام عصبي متوازن' : 'Good variability - balanced nervous system')
                 : (language === 'ar' ? 'تقلب منخفض - قد تحتاج راحة' : 'Lower variability - may need recovery')
               }
@@ -168,7 +192,7 @@ export function HRVRHRTab({
 
           <div className="text-center mb-6">
             <div className="text-4xl font-bold text-blue-400 mb-2">
-              {mockCurrentData.rhr} bpm
+              {realCurrentData.rhr} bpm
             </div>
             <div className="text-sm text-muted-foreground">
               {language === 'ar' ? 'القراءة الحالية' : 'Current Reading'}
@@ -196,9 +220,9 @@ export function HRVRHRTab({
 
           <div className="mt-4 p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
             <p className="text-sm text-blue-300">
-              {mockCurrentData.rhr <= 60 
+              {realCurrentData.rhr <= 60 
                 ? (language === 'ar' ? 'معدل ممتاز - لياقة جيدة' : 'Excellent rate - good fitness')
-                : mockCurrentData.rhr <= 70
+                : realCurrentData.rhr <= 70
                 ? (language === 'ar' ? 'معدل جيد - ضمن المعدل الطبيعي' : 'Good rate - within normal range')
                 : (language === 'ar' ? 'معدل مرتفع - قد تحتاج تحسين اللياقة' : 'Elevated rate - may need fitness improvement')
               }
@@ -220,7 +244,7 @@ export function HRVRHRTab({
               {language === 'ar' ? 'تقلب معدل ضربات القلب' : 'Heart Rate Variability'}
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold">{mockCurrentData.hrv}ms</span>
+              <span className="text-2xl font-bold">{realCurrentData.hrv}ms</span>
               <div className={`flex items-center gap-1 ${hrvComparison.color}`}>
                 <hrvComparison.icon className="h-4 w-4" />
                 <span className="text-sm">{hrvComparison.text}</span>
@@ -236,7 +260,7 @@ export function HRVRHRTab({
               {language === 'ar' ? 'معدل ضربات القلب أثناء الراحة' : 'Resting Heart Rate'}
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold">{mockCurrentData.rhr} bpm</span>
+              <span className="text-2xl font-bold">{realCurrentData.rhr} bpm</span>
               <div className={`flex items-center gap-1 ${rhrComparisonAdjusted.color}`}>
                 <rhrComparison.icon className="h-4 w-4" />
                 <span className="text-sm">{rhrComparison.text}</span>

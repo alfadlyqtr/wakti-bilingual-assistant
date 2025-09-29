@@ -45,13 +45,35 @@ export function StrainTab({
 }: StrainTabProps) {
   const { language } = useTheme();
 
-  // Mock data for demonstration
-  const mockStrainData = strainData || {
-    dayStrain: 12.5,
-    avgHr: 142,
-    trainingLoad: 8.2,
-    maxHr: 178
-  };
+  // Use real WHOOP data - no fallback to mock data
+  if (!strainData) {
+    return (
+      <div className="space-y-6">
+        <div className="flex gap-2 mb-6 flex-wrap">
+          {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
+            <button
+              key={range}
+              onClick={() => onTimeRangeChange(range)}
+              className={`px-2 py-1 sm:px-3 rounded-full text-xs shadow-sm transition-all ${
+                timeRange === range
+                  ? 'bg-indigo-500 text-white shadow-md'
+                  : 'bg-gray-100 hover:bg-indigo-200 text-gray-700'
+              }`}
+            >
+              {range.toUpperCase()}
+            </button>
+          ))}
+        </div>
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">
+            {language === 'ar' ? 'لا توجد بيانات إجهاد متاحة' : 'No strain data available'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const realStrainData = strainData;
 
   const mockYesterdayData = yesterdayData || {
     dayStrain: 10.8,
@@ -90,8 +112,8 @@ export function StrainTab({
     return { color: '#EF4444', text: 'text-red-400', bg: 'from-red-500/10 to-pink-500/10', border: 'border-red-500/20', zone: 'High' };
   };
 
-  const strainColor = getStrainColor(mockStrainData.dayStrain);
-  const strainProgress = (mockStrainData.dayStrain / 21) * 100;
+  const strainColor = getStrainColor(realStrainData.dayStrain);
+  const strainProgress = (realStrainData.dayStrain / 21) * 100;
   
   const avg7dStrain = Math.round((mockWeeklyData.reduce((sum, d) => sum + d.strain, 0) / mockWeeklyData.length) * 10) / 10;
   const avg7dTrainingLoad = Math.round((mockWeeklyData.reduce((sum, d) => sum + d.trainingLoad, 0) / mockWeeklyData.length) * 10) / 10;
@@ -103,9 +125,9 @@ export function StrainTab({
     return { icon: TrendingDown, color: 'text-red-400', text: `${diff.toFixed(1)}${unit}` };
   };
 
-  const strainComparison = compareValue(mockStrainData.dayStrain, mockYesterdayData.dayStrain);
-  const avgHrComparison = compareValue(mockStrainData.avgHr, mockYesterdayData.avgHr, ' bpm');
-  const trainingLoadComparison = compareValue(mockStrainData.trainingLoad, mockYesterdayData.trainingLoad);
+  const strainComparison = compareValue(realStrainData.dayStrain, mockYesterdayData.dayStrain);
+  const avgHrComparison = compareValue(realStrainData.avgHr, mockYesterdayData.avgHr, ' bpm');
+  const trainingLoadComparison = compareValue(realStrainData.trainingLoad, mockYesterdayData.trainingLoad);
 
   return (
     <div className="space-y-6">
@@ -145,7 +167,7 @@ export function StrainTab({
           <div className="relative h-36 w-36 sm:h-40 sm:w-40 mx-auto mb-6">
             <CircularProgressbar
               value={strainProgress}
-              text={mockStrainData.dayStrain.toFixed(1)}
+              text={realStrainData.dayStrain.toFixed(1)}
               styles={buildStyles({
                 pathColor: strainColor.color,
                 textColor: strainColor.color,
@@ -192,7 +214,7 @@ export function StrainTab({
                 {language === 'ar' ? 'إجهاد اليوم' : 'Today\'s Strain'}
               </div>
               <div className={`text-2xl font-bold ${strainColor.text}`}>
-                {mockStrainData.dayStrain.toFixed(1)}
+                {realStrainData.dayStrain.toFixed(1)}
               </div>
             </div>
 
@@ -202,7 +224,7 @@ export function StrainTab({
                 {language === 'ar' ? 'متوسط معدل ضربات القلب' : 'Average Heart Rate'}
               </div>
               <div className="text-2xl font-bold text-red-400">
-                {mockStrainData.avgHr} bpm
+                {realStrainData.avgHr} bpm
               </div>
             </div>
 
@@ -212,7 +234,7 @@ export function StrainTab({
                 {language === 'ar' ? 'حمل التدريب' : 'Training Load'}
               </div>
               <div className="text-2xl font-bold text-purple-400">
-                {mockStrainData.trainingLoad.toFixed(1)}
+                {realStrainData.trainingLoad.toFixed(1)}
               </div>
             </div>
 
@@ -242,7 +264,7 @@ export function StrainTab({
               {language === 'ar' ? 'إجهاد اليوم' : 'Day Strain'}
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xl font-bold">{mockStrainData.dayStrain.toFixed(1)}</span>
+              <span className="text-xl font-bold">{realStrainData.dayStrain.toFixed(1)}</span>
               <div className={`flex items-center gap-1 ${strainComparison.color}`}>
                 <strainComparison.icon className="h-4 w-4" />
                 <span className="text-sm">{strainComparison.text}</span>
@@ -255,7 +277,7 @@ export function StrainTab({
               {language === 'ar' ? 'متوسط معدل ضربات القلب' : 'Average Heart Rate'}
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xl font-bold">{mockStrainData.avgHr} bpm</span>
+              <span className="text-xl font-bold">{realStrainData.avgHr} bpm</span>
               <div className={`flex items-center gap-1 ${avgHrComparison.color}`}>
                 <avgHrComparison.icon className="h-4 w-4" />
                 <span className="text-sm">{avgHrComparison.text}</span>
@@ -268,7 +290,7 @@ export function StrainTab({
               {language === 'ar' ? 'حمل التدريب' : 'Training Load'}
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xl font-bold">{mockStrainData.trainingLoad.toFixed(1)}</span>
+              <span className="text-xl font-bold">{realStrainData.trainingLoad.toFixed(1)}</span>
               <div className={`flex items-center gap-1 ${trainingLoadComparison.color}`}>
                 <trainingLoadComparison.icon className="h-4 w-4" />
                 <span className="text-sm">{trainingLoadComparison.text}</span>
@@ -356,8 +378,8 @@ export function StrainTab({
       <Card className="rounded-2xl p-4 bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20">
         <p className="text-sm text-purple-300">
           {language === 'ar' 
-            ? `إجهادك اليوم ${mockStrainData.dayStrain.toFixed(1)} في منطقة ${strainColor.zone} مع متوسط معدل ضربات القلب ${mockStrainData.avgHr} bpm`
-            : `Your strain today is ${mockStrainData.dayStrain.toFixed(1)} in the ${strainColor.zone} zone with an average heart rate of ${mockStrainData.avgHr} bpm`
+            ? `إجهادك اليوم ${realStrainData.dayStrain.toFixed(1)} في منطقة ${strainColor.zone} مع متوسط معدل ضربات القلب ${realStrainData.avgHr} bpm`
+            : `Your strain today is ${realStrainData.dayStrain.toFixed(1)} in the ${strainColor.zone} zone with an average heart rate of ${realStrainData.avgHr} bpm`
           }
         </p>
       </Card>

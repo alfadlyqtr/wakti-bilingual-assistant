@@ -39,12 +39,35 @@ export function RecoveryTab({
 }: RecoveryTabProps) {
   const { language } = useTheme();
 
-  // Mock data for demonstration
-  const mockRecoveryData = recoveryData || {
-    score: 75,
-    hrv: 42,
-    rhr: 58
-  };
+  // Use real WHOOP data - no fallback to mock data
+  if (!recoveryData) {
+    return (
+      <div className="space-y-6">
+        <div className="flex gap-2 mb-6 flex-wrap">
+          {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
+            <button
+              key={range}
+              onClick={() => onTimeRangeChange(range)}
+              className={`px-2 py-1 sm:px-3 rounded-full text-xs shadow-sm transition-all ${
+                timeRange === range
+                  ? 'bg-indigo-500 text-white shadow-md'
+                  : 'bg-gray-100 hover:bg-indigo-200 text-gray-700'
+              }`}
+            >
+              {range.toUpperCase()}
+            </button>
+          ))}
+        </div>
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">
+            {language === 'ar' ? 'لا توجد بيانات تعافي متاحة' : 'No recovery data available'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const realRecoveryData = recoveryData;
 
   const mockYesterdayData = yesterdayData || {
     score: 68,
@@ -68,10 +91,10 @@ export function RecoveryTab({
     return { color: '#EF4444', text: 'text-red-400', bg: 'from-red-500/10 to-pink-500/10', border: 'border-red-500/20' };
   };
 
-  const recoveryColor = getRecoveryColor(mockRecoveryData.score);
+  const recoveryColor = getRecoveryColor(realRecoveryData.score);
   const bestThisWeek = Math.max(...mockWeeklyData.map(d => d.recovery));
   const avg7d = Math.round(mockWeeklyData.reduce((sum, d) => sum + d.recovery, 0) / mockWeeklyData.length);
-  const deltaVsLastWeek = mockRecoveryData.score - mockYesterdayData.score;
+  const deltaVsLastWeek = realRecoveryData.score - mockYesterdayData.score;
 
   const compareValue = (current: number, yesterday: number, unit: string = '') => {
     const diff = current - yesterday;
@@ -80,9 +103,9 @@ export function RecoveryTab({
     return { icon: TrendingDown, color: 'text-red-400', text: `${diff.toFixed(1)}${unit}` };
   };
 
-  const recoveryComparison = compareValue(mockRecoveryData.score, mockYesterdayData.score, '%');
-  const hrvComparison = compareValue(mockRecoveryData.hrv, mockYesterdayData.hrv, 'ms');
-  const rhrComparison = compareValue(mockRecoveryData.rhr, mockYesterdayData.rhr, 'bpm');
+  const recoveryComparison = compareValue(realRecoveryData.score, mockYesterdayData.score, '%');
+  const hrvComparison = compareValue(realRecoveryData.hrv, mockYesterdayData.hrv, 'ms');
+  const rhrComparison = compareValue(realRecoveryData.rhr, mockYesterdayData.rhr, 'bpm');
 
   return (
     <div className="space-y-6">
@@ -121,8 +144,8 @@ export function RecoveryTab({
 
           <div className="relative h-36 w-36 sm:h-40 sm:w-40 mx-auto mb-6">
             <CircularProgressbar
-              value={mockRecoveryData.score}
-              text={`${mockRecoveryData.score}%`}
+              value={realRecoveryData.score}
+              text={`${realRecoveryData.score}%`}
               styles={buildStyles({
                 pathColor: recoveryColor.color,
                 textColor: recoveryColor.color,
@@ -143,9 +166,9 @@ export function RecoveryTab({
 
           <div className="text-center">
             <div className={`text-lg font-semibold ${recoveryColor.text} mb-2`}>
-              {mockRecoveryData.score >= 67 
+              {realRecoveryData.score >= 67 
                 ? (language === 'ar' ? 'جاهز للتدريب' : 'Ready to Perform')
-                : mockRecoveryData.score >= 34
+                : realRecoveryData.score >= 34
                 ? (language === 'ar' ? 'تدريب معتدل' : 'Moderate Training')
                 : (language === 'ar' ? 'يحتاج راحة' : 'Focus on Recovery')
               }
@@ -172,7 +195,7 @@ export function RecoveryTab({
                 {language === 'ar' ? 'النتيجة' : 'Score'}
               </div>
               <div className={`text-sm sm:text-base font-bold ${recoveryColor.text}`}>
-                {mockRecoveryData.score}%
+                {realRecoveryData.score}%
               </div>
             </div>
             <div className="bg-white/5 rounded-xl p-2 sm:p-3 text-center">
@@ -180,7 +203,7 @@ export function RecoveryTab({
                 {language === 'ar' ? 'تقلب القلب' : 'HRV'}
               </div>
               <div className="text-sm sm:text-base font-bold text-teal-400">
-                {mockRecoveryData.hrv}ms
+                {realRecoveryData.hrv}ms
               </div>
             </div>
             <div className="bg-white/5 rounded-xl p-2 sm:p-3 text-center">
@@ -188,7 +211,7 @@ export function RecoveryTab({
                 {language === 'ar' ? 'نبضات الراحة' : 'RHR'}
               </div>
               <div className="text-sm sm:text-base font-bold text-purple-400">
-                {mockRecoveryData.rhr} bpm
+                {realRecoveryData.rhr} bpm
               </div>
             </div>
             <div className="bg-white/5 rounded-xl p-2 sm:p-3 text-center">
@@ -216,7 +239,7 @@ export function RecoveryTab({
               {language === 'ar' ? 'نقاط التعافي' : 'Recovery Score'}
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xl font-bold">{mockRecoveryData.score}%</span>
+              <span className="text-xl font-bold">{realRecoveryData.score}%</span>
               <div className={`flex items-center gap-1 ${recoveryComparison.color}`}>
                 <recoveryComparison.icon className="h-4 w-4" />
                 <span className="text-sm">{recoveryComparison.text}</span>
@@ -229,7 +252,7 @@ export function RecoveryTab({
               {language === 'ar' ? 'تقلب معدل ضربات القلب' : 'HRV (RMSSD)'}
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xl font-bold">{mockRecoveryData.hrv}ms</span>
+              <span className="text-xl font-bold">{realRecoveryData.hrv}ms</span>
               <div className={`flex items-center gap-1 ${hrvComparison.color}`}>
                 <hrvComparison.icon className="h-4 w-4" />
                 <span className="text-sm">{hrvComparison.text}</span>
@@ -242,7 +265,7 @@ export function RecoveryTab({
               {language === 'ar' ? 'معدل ضربات القلب أثناء الراحة' : 'Resting Heart Rate'}
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xl font-bold">{mockRecoveryData.rhr} bpm</span>
+              <span className="text-xl font-bold">{realRecoveryData.rhr} bpm</span>
               <div className={`flex items-center gap-1 ${rhrComparison.color}`}>
                 <rhrComparison.icon className="h-4 w-4" />
                 <span className="text-sm">{rhrComparison.text}</span>
