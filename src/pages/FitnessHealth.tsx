@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/providers/ThemeProvider";
-import { isWhoopConnected, startWhoopAuth, triggerUserSync, fetchCompactMetrics, disconnectWhoop, getWhoopStatus, fetchRecoveryHistory, fetchSleepHistory, fetchCycleHistory } from "@/services/whoopService";
+import { isWhoopConnected, startWhoopAuth, triggerUserSync, fetchCompactMetrics, disconnectWhoop, getWhoopStatus, fetchRecoveryHistory, fetchSleepHistory, fetchCycleHistory, fetchWorkoutsHistory } from "@/services/whoopService";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { StatusHeader } from "@/components/fitness/StatusHeader";
@@ -29,6 +29,7 @@ export default function FitnessHealth() {
   const [hrHistory, setHrHistory] = useState<{ date: string; recovery?: number | null; hrv?: number | null; rhr?: number | null }[]>([]);
   const [sleepHist, setSleepHist] = useState<{ start: string; end: string; hours: number | null }[]>([]);
   const [cycleHist, setCycleHist] = useState<{ start: string; day_strain?: number | null; avg_hr_bpm?: number | null; training_load?: number | null }[]>([]);
+  const [workoutsHist, setWorkoutsHist] = useState<{ start: string; strain?: number | null; kcal?: number | null }[]>([]);
   const [autoSync, setAutoSync] = useState<boolean>(() => {
     try { return localStorage.getItem('whoop_autosync') !== '0'; } catch { return true; }
   });
@@ -41,16 +42,18 @@ export default function FitnessHealth() {
       setStatus(st);
       setConnected(st.connected);
       if (st.connected) {
-        const [m, rec, sl, cyc] = await Promise.all([
+        const [m, rec, sl, cyc, wks] = await Promise.all([
           fetchCompactMetrics(),
           fetchRecoveryHistory(7),
           fetchSleepHistory(7),
           fetchCycleHistory(7),
+          fetchWorkoutsHistory(14),
         ]);
         setMetrics(m);
         setHrHistory(rec);
         setSleepHist(sl.map((x:any)=>({ start: x.start, end: x.end, hours: x.hours })));
         setCycleHist(cyc);
+        setWorkoutsHist(wks.map((w:any)=>({ start: w.start, strain: w.strain ?? null, kcal: w.kcal ?? null })));
         // Auto-sync if older than 1 hour and toggle enabled
         if (st.lastSyncedAt && autoSync) {
           const ageMs = Date.now() - new Date(st.lastSyncedAt).getTime();
@@ -59,11 +62,12 @@ export default function FitnessHealth() {
               setSyncing(true);
               const res = await triggerUserSync();
               toast.success(`Synced: ${res?.counts?.cycles||0} cycles, ${res?.counts?.sleeps||0} sleeps, ${res?.counts?.workouts||0} workouts, ${res?.counts?.recoveries||0} recoveries`);
-              const [m2, rec2, sl2, cyc2] = await Promise.all([fetchCompactMetrics(), fetchRecoveryHistory(7), fetchSleepHistory(7), fetchCycleHistory(7)]);
+              const [m2, rec2, sl2, cyc2, wks2] = await Promise.all([fetchCompactMetrics(), fetchRecoveryHistory(7), fetchSleepHistory(7), fetchCycleHistory(7), fetchWorkoutsHistory(14)]);
               setMetrics(m2);
               setHrHistory(rec2);
               setSleepHist(sl2.map((x:any)=>({ start: x.start, end: x.end, hours: x.hours })));
               setCycleHist(cyc2);
+              setWorkoutsHist(wks2.map((w:any)=>({ start: w.start, strain: w.strain ?? null, kcal: w.kcal ?? null })));
               setStatus({ connected: true, lastSyncedAt: new Date().toISOString() });
             } catch (e) {
               console.error('auto sync error', e);
@@ -298,7 +302,7 @@ export default function FitnessHealth() {
                 />
               </div>
               <div className="grid grid-cols-1 gap-4">
-                <WorkoutCard workout={metrics?.workout} />
+                <WorkoutCard workout={metrics?.workout} history={workoutsHist} range={range} />
               </div>
               {/* Sleep hours (7d) chart moved to Overview */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

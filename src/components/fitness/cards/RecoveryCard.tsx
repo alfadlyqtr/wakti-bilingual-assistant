@@ -1,6 +1,7 @@
 import React from "react";
 import { Card } from "@/components/ui/card";
 import { Activity, HeartPulse } from "lucide-react";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { RadialBarChart, RadialBar, PolarAngleAxis, ResponsiveContainer } from "recharts";
 
 export function RecoveryCard({ value, hrvMs, rhrBpm, avgPct7d, miniPct, miniLabel = 'avg' }: { value?: number | null; hrvMs?: number | null; rhrBpm?: number | null; avgPct7d?: number | null; miniPct?: number | null; miniLabel?: string }) {
@@ -45,6 +46,21 @@ export function RecoveryCard({ value, hrvMs, rhrBpm, avgPct7d, miniPct, miniLabe
       <div className="mt-2 flex items-center gap-2 text-xs">
         <span className="px-2 py-[2px] rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 flex items-center gap-1"><Activity className="h-3 w-3" />HRV {hrvMs != null ? Math.round(hrvMs) : "--"} ms</span>
         <span className="px-2 py-[2px] rounded-full bg-sky-500/10 text-sky-500 border border-sky-500/20 flex items-center gap-1"><HeartPulse className="h-3 w-3" />RHR {rhrBpm != null ? Math.round(rhrBpm) : "--"} bpm</span>
+      </div>
+      <div className="pt-2">
+        <Accordion type="single" collapsible>
+          <AccordionItem value="details">
+            <AccordionTrigger className="text-xs">Details</AccordionTrigger>
+            <AccordionContent>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                <div className="text-muted-foreground">recovery_%</div><div className="font-medium">{isNaN(pct)?'--':`${pct}`}</div>
+                <div className="text-muted-foreground">hrv_ms</div><div className="font-medium">{hrvMs != null ? Math.round(hrvMs) : '--'}</div>
+                <div className="text-muted-foreground">rhr_bpm</div><div className="font-medium">{rhrBpm != null ? Math.round(rhrBpm) : '--'}</div>
+                <div className="text-muted-foreground">avg_7d_%</div><div className="font-medium">{avgPct7d != null ? Math.round(avgPct7d) : '--'}</div>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </div>
     </Card>
   );

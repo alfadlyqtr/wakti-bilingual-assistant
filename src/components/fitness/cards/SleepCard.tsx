@@ -1,6 +1,7 @@
 import React from "react";
 import { Card } from "@/components/ui/card";
 import { Bed, AlarmClock, Sparkles } from "lucide-react";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { RadialBar, RadialBarChart, PolarAngleAxis, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 export type SleepStages = { deep: number; rem: number; light: number; total: number };
@@ -96,6 +97,27 @@ export function SleepCard({ hours, performancePct, stages, goalHours = 8, bedtim
             <div className="truncate flex items-center gap-1">{wakeStr ? (<><AlarmClock className="h-3 w-3" />{wakeStr}</>) : ""}</div>
           </div>
           <div className="text-xs text-muted-foreground text-right flex items-center justify-end gap-1">{effStr ? (<><Sparkles className="h-3 w-3" />{`Efficiency ${effStr}`}</>) : (performancePct ? `${Math.round(performancePct)}% perf.` : "")}</div>
+          <div className="mt-2">
+            <Accordion type="single" collapsible>
+              <AccordionItem value="details">
+                <AccordionTrigger className="text-xs">Details</AccordionTrigger>
+                <AccordionContent>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                    <div className="text-muted-foreground">performance_%</div>
+                    <div className="font-medium">{typeof performancePct==='number'? Math.round(performancePct): '--'}</div>
+                    <div className="text-muted-foreground">nap</div>
+                    <div className="font-medium">{nap===false?'false':(nap?'true':'--')}</div>
+                    <div className="text-muted-foreground">deep_min</div>
+                    <div className="font-medium">{stages? Math.round(stages.deep/60000): '--'}</div>
+                    <div className="text-muted-foreground">rem_min</div>
+                    <div className="font-medium">{stages? Math.round(stages.rem/60000): '--'}</div>
+                    <div className="text-muted-foreground">light_min</div>
+                    <div className="font-medium">{stages? Math.round(stages.light/60000): '--'}</div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </div>
         </div>
       </div>
     </Card>
