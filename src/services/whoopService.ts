@@ -97,8 +97,11 @@ export async function triggerUserSync() {
   if (!accessToken) throw new Error("You must be logged in to sync WHOOP data");
   console.log('Triggering WHOOP sync...');
   const { data, error } = await supabase.functions.invoke("whoop-sync", {
-    body: { mode: "user" },
-    headers: { Authorization: `Bearer ${accessToken}` },
+    body: { mode: "user", user_token: accessToken },
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'x-supabase-authorization': `Bearer ${accessToken}`,
+    },
   });
   if (error) {
     console.error('whoop-sync error:', error);
@@ -106,6 +109,21 @@ export async function triggerUserSync() {
   }
   console.log('WHOOP sync complete:', data);
   return data;
+}
+
+export async function disconnectWhoop() {
+  const uid = await getCurrentUserId();
+  if (!uid) throw new Error('You must be logged in');
+  console.log('Disconnecting WHOOP for user', uid);
+  const { error } = await supabase
+    .from('user_whoop_tokens')
+    .delete()
+    .eq('user_id', uid);
+  if (error) {
+    console.error('disconnectWhoop error:', error);
+    throw error;
+  }
+  return { success: true };
 }
 
 export async function fetchCompactMetrics() {

@@ -11,7 +11,7 @@ const TOKEN_URL = "https://api.prod.whoop.com/oauth/oauth2/token";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-supabase-authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
@@ -81,15 +81,24 @@ serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: "missing_whoop_credentials" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const authHeader = req.headers.get("Authorization") || "";
-    const isUserMode = authHeader.startsWith("Bearer ") && !SUPABASE_SERVICE_ROLE_KEY; // fallback check
+    // Accept user token from multiple sources
+    let userAuthHeader =
+      req.headers.get("x-supabase-authorization") ||
+      req.headers.get("Authorization") ||
+      "";
 
     // Admin client for RLS-bypassing writes and bulk reads
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY, {
-      global: SUPABASE_SERVICE_ROLE_KEY ? {} : { headers: { Authorization: authHeader } },
+      global: SUPABASE_SERVICE_ROLE_KEY ? {} : { headers: { Authorization: userAuthHeader } },
     });
 
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({} as any));
+    const bodyToken: string | undefined = (body as any)?.user_token;
+    if (bodyToken && bodyToken.length > 0) {
+      userAuthHeader = `Bearer ${bodyToken}`;
+    }
+    const bareToken = userAuthHeader.startsWith("Bearer ") ? userAuthHeader.substring(7) : userAuthHeader;
+    const isUserMode = !!bareToken && !SUPABASE_SERVICE_ROLE_KEY;
     const mode = (body?.mode as string) || (isUserMode ? "user" : "bulk");
     const startParam = body?.start as string | undefined;
     const endParam = body?.end as string | undefined;
@@ -97,10 +106,16 @@ serve(async (req: Request) => {
     let users: { user_id: string; access_token: string; refresh_token: string; expires_at: string; last_synced_at: string | null }[] = [];
 
     if (mode === "user") {
-      const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { Authorization: authHeader } } });
-      const { data: userData } = await userClient.auth.getUser();
+      const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: {} } });
+      const { data: userData } = await userClient.auth.getUser(bareToken);
       const uid = userData?.user?.id;
-      if (!uid) return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      if (!uid) {
+        console.warn("whoop-sync: no uid from auth.getUser()", {
+          hasAuthHeader: !!userAuthHeader,
+          authHeaderPrefix: userAuthHeader?.substring(0, 20),
+        });
+        return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
       const { data: tokenRow, error: tokenErr } = await admin
         .from("user_whoop_tokens")
         .select("user_id, access_token, refresh_token, expires_at, last_synced_at")

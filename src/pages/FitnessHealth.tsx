@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/providers/ThemeProvider";
-import { isWhoopConnected, startWhoopAuth, triggerUserSync, fetchCompactMetrics } from "@/services/whoopService";
+import { isWhoopConnected, startWhoopAuth, triggerUserSync, fetchCompactMetrics, disconnectWhoop } from "@/services/whoopService";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
@@ -13,6 +13,7 @@ export default function FitnessHealth() {
   const [loading, setLoading] = useState<boolean>(true);
   const [syncing, setSyncing] = useState<boolean>(false);
   const [connecting, setConnecting] = useState<boolean>(false);
+  const [disconnecting, setDisconnecting] = useState<boolean>(false);
   const [metrics, setMetrics] = useState<any>(null);
 
   useEffect(() => {
@@ -69,6 +70,21 @@ export default function FitnessHealth() {
     }
   };
 
+  const onDisconnect = async () => {
+    try {
+      setDisconnecting(true);
+      await disconnectWhoop();
+      setConnected(false);
+      setMetrics(null);
+      toast.success(language === 'ar' ? 'تم فصل WHOOP' : 'WHOOP disconnected');
+    } catch (e) {
+      console.error('whoop disconnect error', e);
+      toast.error(language === 'ar' ? 'تعذر فصل WHOOP' : 'Failed to disconnect WHOOP');
+    } finally {
+      setDisconnecting(false);
+    }
+  };
+
   return (
     <PageContainer>
       <div className="max-w-5xl mx-auto p-4 space-y-6">
@@ -88,6 +104,7 @@ export default function FitnessHealth() {
           <div className="space-y-6">
             <div className="flex items-center gap-3">
               <Button variant="secondary" onClick={onSync} disabled={syncing}>{syncing ? (language === 'ar' ? 'جاري المزامنة...' : 'Syncing...') : (language === 'ar' ? 'مزامنة الآن' : 'Sync Now')}</Button>
+              <Button variant="outline" onClick={onDisconnect} disabled={disconnecting}>{disconnecting ? (language === 'ar' ? 'يجري الفصل...' : 'Disconnecting...') : (language === 'ar' ? 'تسجيل خروج WHOOP' : 'Disconnect WHOOP')}</Button>
             </div>
 
             {/* Overview (Today) */}
