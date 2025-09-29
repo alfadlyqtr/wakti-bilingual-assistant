@@ -39,8 +39,8 @@ export function AIInsights() {
     (agg?.last7Days?.recoveryPct || []).map((r:number, i:number) => ({
       name: `D${i+1}`,
       Recovery: r ?? null,
-      HRV: agg?.last7Days?.hrvMs?.[i] ?? null,
-      RHR: agg?.last7Days?.rhrBpm?.[i] ?? null,
+      HRV: agg?.last7Days?.hrvMs?.[i] != null ? Math.round((agg?.last7Days?.hrvMs?.[i] as number)) : null,
+      RHR: agg?.last7Days?.rhrBpm?.[i] != null ? Math.round((agg?.last7Days?.rhrBpm?.[i] as number)) : null,
     }))
   ), [agg]);
 
@@ -62,6 +62,8 @@ export function AIInsights() {
       console.error("ai error", e);
       if (e?.message?.includes('missing_openai_key')) {
         toast.error('Server missing OPENAI_API_KEY');
+      } else if (e?.message === 'ai_timeout') {
+        toast.error(language==='ar' ? 'انتهت مهلة الذكاء الاصطناعي. حاول مرة أخرى.' : 'AI timed out. Please try again.');
       } else {
         toast.error(language === 'ar' ? 'تعذر إنشاء الرؤى' : 'Failed to generate insights');
       }
@@ -105,7 +107,7 @@ export function AIInsights() {
           </Button>
         </div>
         <div className="text-xs text-muted-foreground mt-1">
-          {language==='ar' ? 'يتم إرسال بيانات موجزة إلى نموذج gpt-4o-mini لتقديم ملخصات ودعم.' : 'A compact, anonymized dataset is sent to gpt-4o-mini to produce summaries and supportive tips.'}
+          {language==='ar' ? 'مدعوم من WAKTI AI — نستخدم بيانات موجزة ومجهولة لإنتاج ملخصات ونصائح داعمة (gpt-4o-mini).' : 'Powered by WAKTI AI — we use a compact, anonymized dataset to generate supportive summaries and tips (gpt-4o-mini).'}
         </div>
       </Card>
 
@@ -188,6 +190,17 @@ export function AIInsights() {
             </div>
           )}
         </Card>
+
+        {/* Raw WHOOP Details */}
+        <Card className="rounded-2xl p-4 shadow-sm bg-white/5 lg:col-span-2">
+          <div className="text-sm font-medium mb-3">{language==='ar'?'تفاصيل WHOOP':'WHOOP Details'}</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <KVTable title="Cycle" rows={cycleRows(agg?.details?.cycle)} />
+            <KVTable title="Sleep" rows={sleepRows(agg?.details?.sleep)} />
+            <KVTable title="Recovery" rows={recoveryRows(agg?.details?.recovery)} />
+            <KVTable title="Workout" rows={workoutRows(agg?.details?.workout)} />
+          </div>
+        </Card>
       </div>
     </div>
   );
@@ -215,4 +228,84 @@ function composeText(ai: any) {
   if (ai?.tips?.length) out += `Tips\n- ${ai.tips.join('\n- ')}\n\n`;
   if (ai?.motivations?.length) out += `Motivations\n- ${ai.motivations.join('\n- ')}`;
   return out || '';
+}
+
+function KVTable({ title, rows }: { title: string; rows: { k: string; v: string | number | null | undefined }[] }) {
+  if (!rows || rows.length === 0) return (
+    <div className="rounded-xl border p-3 bg-white/5">
+      <div className="text-xs text-muted-foreground mb-2">{title}</div>
+      <div className="text-xs text-muted-foreground">--</div>
+    </div>
+  );
+  return (
+    <div className="rounded-xl border p-3 bg-white/5">
+      <div className="text-xs text-muted-foreground mb-2">{title}</div>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+        {rows.map((r, i) => (
+          <React.Fragment key={i}>
+            <div className="text-muted-foreground">{r.k}</div>
+            <div className="font-medium">{r.v as any ?? '--'}</div>
+          </React.Fragment>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function cycleRows(d:any){
+  if(!d) return [] as any[];
+  return [
+    {k:'id', v: d.id},
+    {k:'start', v: d.start},
+    {k:'end', v: d.end},
+    {k:'score_state', v: d.score_state},
+    {k:'strain', v: d.score?.strain},
+    {k:'avg_hr', v: d.score?.average_heart_rate},
+    {k:'max_hr', v: d.score?.max_heart_rate},
+    {k:'kJ', v: d.score?.kilojoule},
+  ];
+}
+function sleepRows(d:any){
+  if(!d) return [] as any[];
+  const st = d?.score || {};
+  const stage = st?.stage_summary || {};
+  return [
+    {k:'id', v: d.id},
+    {k:'start', v: d.start},
+    {k:'end', v: d.end},
+    {k:'nap', v: String(!!d.nap)},
+    {k:'performance_%', v: st?.sleep_performance_percentage ?? st?.performance ?? null},
+    {k:'deep_min', v: stage.deep_sleep_milli ? Math.round(stage.deep_sleep_milli/60000) : null},
+    {k:'rem_min', v: stage.rem_sleep_milli ? Math.round(stage.rem_sleep_milli/60000) : null},
+    {k:'light_min', v: stage.light_sleep_milli ? Math.round(stage.light_sleep_milli/60000) : null},
+  ];
+}
+function recoveryRows(d:any){
+  if(!d) return [] as any[];
+  const s = d?.score || {};
+  return [
+    {k:'sleep_id', v: d.sleep_id},
+    {k:'cycle_id', v: d.cycle_id},
+    {k:'recovery_%', v: s.recovery_score ?? d.recovery_score ?? null},
+    {k:'rhr_bpm', v: s.resting_heart_rate ?? d.resting_heart_rate ?? null},
+    {k:'hrv_ms', v: s.hrv_rmssd_milli ?? d.hrv_rmssd_milli ?? null},
+    {k:'spo2_%', v: s.spo2_percentage ?? null},
+    {k:'skin_temp_c', v: s.skin_temp_celsius ?? null},
+  ];
+}
+function workoutRows(d:any){
+  if(!d) return [] as any[];
+  const s = d?.score || {};
+  return [
+    {k:'id', v: d.id},
+    {k:'sport', v: d.sport_name},
+    {k:'start', v: d.start},
+    {k:'end', v: d.end},
+    {k:'strain', v: s.strain ?? null},
+    {k:'avg_hr', v: s.average_heart_rate ?? d.avg_hr_bpm ?? null},
+    {k:'max_hr', v: s.max_heart_rate ?? null},
+    {k:'kJ', v: s.kilojoule ?? null},
+    {k:'distance_m', v: s.distance_meter ?? null},
+    {k:'percent_recorded', v: s.percent_recorded ?? null},
+  ];
 }

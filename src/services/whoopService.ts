@@ -86,18 +86,26 @@ export async function buildInsightsAggregate() {
       rhrBpm: rec7.map((r:any)=>r.rhr ?? null),
     },
     workouts: w14,
-    weekly: { weeks: weekly }
+    weekly: { weeks: weekly },
+    details: {
+      cycle: compact?.cycle?.data ?? null,
+      sleep: compact?.sleep?.data ?? null,
+      recovery: compact?.recovery?.data ?? null,
+      workout: compact?.workout?.data ?? null,
+    }
   };
 }
 
-export async function generateAiInsights(language: 'en'|'ar' = 'en') {
+export async function generateAiInsights(language: 'en'|'ar' = 'en', timeoutMs = 30000) {
   const data = await buildInsightsAggregate();
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData?.session?.access_token;
-  const { data: resp, error } = await supabase.functions.invoke('whoop-ai-insights', {
+  const req = supabase.functions.invoke('whoop-ai-insights', {
     body: { data, language },
     headers: { Authorization: `Bearer ${accessToken}` }
   });
+  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('ai_timeout')), timeoutMs));
+  const { data: resp, error } = await Promise.race([req, timeout]) as any;
   if (error) throw error;
   return resp;
 }
@@ -238,13 +246,25 @@ export async function fetchCompactMetrics() {
   const userId = await getCurrentUserId();
   if (!userId) return null;
 
+  // Fetch more sleeps to filter naps on client side, include data for details
   const [sleepRes, recRes, cycleRes] = await Promise.all([
-    supabase.from("whoop_sleep").select("start,end,duration_sec,performance_pct,data").eq("user_id", userId).order("start", { ascending: false }).limit(1),
-    supabase.from("whoop_recovery").select("date,score,hrv_ms,rhr_bpm").eq("user_id", userId).order("date", { ascending: false }).limit(1),
-    supabase.from("whoop_cycles").select("start,day_strain,avg_hr_bpm,training_load").eq("user_id", userId).order("start", { ascending: false }).limit(1),
+    supabase.from("whoop_sleep").select("id,start,end,duration_sec,performance_pct,data").eq("user_id", userId).order("start", { ascending: false }).limit(5),
+    supabase.from("whoop_recovery").select("sleep_id,cycle_id,date,score,hrv_ms,rhr_bpm,data,created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(1),
+    supabase.from("whoop_cycles").select("id,start,end,day_strain,avg_hr_bpm,training_load,data").eq("user_id", userId).order("start", { ascending: false }).limit(1),
   ]);
 
-  const sleep = sleepRes.data?.[0] || null;
+  // Choose main sleep: prefer nap=false if present, else longest duration
+  const sleeps = sleepRes.data || [];
+  let sleep = null as any;
+  const nonNaps = sleeps.filter((s: any) => s?.data?.nap === false);
+  if (nonNaps.length > 0) sleep = nonNaps[0];
+  else if (sleeps.length > 0) {
+    sleep = [...sleeps].sort((a: any, b: any) => {
+      const da = (a.duration_sec ?? ((new Date(a.end).getTime()-new Date(a.start).getTime())/1000)) || 0;
+      const db = (b.duration_sec ?? ((new Date(b.end).getTime()-new Date(b.start).getTime())/1000)) || 0;
+      return db - da;
+    })[0];
+  }
   const recovery = recRes.data?.[0] || null;
   const cycle = cycleRes.data?.[0] || null;
   // latest workout
@@ -291,7 +311,7 @@ export async function fetchSleepHistory(days = 7) {
     const deep = stage.deep_sleep_milli ?? stage.deep_milli ?? 0;
     const rem = stage.rem_sleep_milli ?? stage.rem_milli ?? 0;
     const light = stage.light_sleep_milli ?? stage.light_milli ?? 0;
-    const total = (deep + rem + light) || (s.duration_sec ? s.duration_sec * 1000 : 0);
+    const total = (deep + rem + light) || stage.total_in_bed_milli || (s.duration_sec ? s.duration_sec * 1000 : 0);
     return {
       start: s.start,
       end: s.end,

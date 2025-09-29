@@ -145,6 +145,10 @@ export default function FitnessHealth() {
       const total = (st.deep_sleep_milli??0)+(st.rem_sleep_milli??0)+(st.light_sleep_milli??0);
       if (total > 0) return Math.round((total/360000))/10;
     }
+    if (s.start && s.end) {
+      const delta = new Date(s.end).getTime() - new Date(s.start).getTime();
+      if (delta > 0) return Math.round((delta/360000))/10;
+    }
     return null;
   }, [metrics]);
 
