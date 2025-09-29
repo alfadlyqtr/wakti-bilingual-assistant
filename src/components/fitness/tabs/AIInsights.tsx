@@ -36,9 +36,9 @@ interface InsightData {
 }
 
 const TIME_WINDOWS = {
-  morning: { start: '05:00', end: '08:00', label: 'Morning Readiness', icon: Sun },
-  midday: { start: '12:00', end: '15:00', label: 'Performance Check', icon: Clock },
-  evening: { start: '17:00', end: '20:00', label: 'Recovery Focus', icon: Moon }
+  morning: { start: '05:00', end: '11:00', label: 'Morning Readiness', icon: Sun },
+  midday: { start: '12:00', end: '18:00', label: 'Performance Check', icon: Clock },
+  evening: { start: '17:00', end: '23:00', label: 'Recovery Focus', icon: Moon }
 };
 
 export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
@@ -161,7 +161,7 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
           <button
             key={range}
             onClick={() => onTimeRangeChange(range)}
-            className={`px-2 py-1 sm:px-3 rounded-full text-xs sm:text-sm shadow-sm transition-all ${
+            className={`px-2 py-1 sm:px-3 rounded-full text-xs sm:text-sm shadow-sm transition-all flex-shrink-0 ${
               timeRange === range
                 ? 'bg-indigo-500 text-white shadow-md'
                 : 'bg-gray-100 hover:bg-indigo-200 text-gray-700'
@@ -175,12 +175,12 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
       {/* AI Insights Header */}
       <Card className="rounded-2xl p-6 bg-gradient-to-br from-purple-500/10 to-blue-500/10 border-purple-500/20">
         <div className="flex items-center gap-3 mb-6">
-          <Brain className="h-8 w-8 text-purple-400" />
-          <div>
-            <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
+          <Brain className="h-8 w-8 text-purple-400 flex-shrink-0" />
+          <div className="min-w-0 flex-1">
+            <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent break-words">
               {language === 'ar' ? 'رؤى WAKTI AI' : 'WAKTI AI Insights'}
             </h2>
-            <p className="text-muted-foreground">
+            <p className="text-sm sm:text-base text-muted-foreground break-words">
               {language === 'ar' ? 'مدربك الشخصي الذكي' : 'Your intelligent personal coach'}
             </p>
           </div>
@@ -207,8 +207,8 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
                 variant="outline"
               >
                 <Icon className={`h-6 w-6 ${isActive ? 'text-emerald-400' : 'text-gray-400'}`} />
-                <div className="text-center">
-                  <div className={`font-semibold text-sm ${isActive ? 'text-white' : 'text-gray-400'}`}>
+                <div className="text-center min-w-0 flex-1">
+                  <div className={`font-semibold text-xs sm:text-sm ${isActive ? 'text-white' : 'text-gray-400'} break-words`}>
                     {config.label}
                   </div>
                   <div className={`text-xs ${isActive ? 'text-emerald-300' : 'text-gray-500'}`}>
@@ -237,18 +237,18 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
         </div>
 
         {/* Active Window Selector */}
-        <div className="mt-6 flex gap-2">
+        <div className="mt-6 flex gap-2 flex-wrap">
           {(Object.keys(TIME_WINDOWS) as TimeWindow[]).map((window) => (
             <button
               key={window}
               onClick={() => setActiveWindow(window)}
-              className={`px-4 py-2 rounded-lg text-sm transition-all ${
+              className={`px-3 py-2 rounded-lg text-xs sm:text-sm transition-all min-w-0 flex-shrink-0 ${
                 activeWindow === window
                   ? 'bg-purple-500/30 text-purple-200 border border-purple-500/50'
                   : 'bg-white/5 text-gray-400 hover:bg-white/10'
               }`}
             >
-              {TIME_WINDOWS[window].label}
+              <span className="break-words">{TIME_WINDOWS[window].label}</span>
               {insights[window] && <span className="ml-2 text-emerald-400">✓</span>}
             </button>
           ))}
@@ -392,9 +392,9 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
           <div className="text-sm text-muted-foreground">
             {language === 'ar' ? 'المدرب الذكي متاح في:' : 'AI Coach available during:'}
             <div className="mt-2 space-y-1">
-              <div>🌅 {language === 'ar' ? 'الصباح' : 'Morning'}: 05:00 - 08:00</div>
-              <div>☀️ {language === 'ar' ? 'منتصف النهار' : 'Midday'}: 12:00 - 15:00</div>
-              <div>🌙 {language === 'ar' ? 'المساء' : 'Evening'}: 17:00 - 20:00</div>
+              <div>🌅 {language === 'ar' ? 'الصباح' : 'Morning'}: 05:00 - 11:00</div>
+              <div>☀️ {language === 'ar' ? 'منتصف النهار' : 'Midday'}: 12:00 - 18:00</div>
+              <div>🌙 {language === 'ar' ? 'المساء' : 'Evening'}: 17:00 - 23:00</div>
             </div>
           </div>
         </Card>

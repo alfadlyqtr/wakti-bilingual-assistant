@@ -34,9 +34,9 @@ serve(async (req: Request) => {
 البيانات: أحدث مقاييس النوم والتعافي والإجهاد والتمارين
 
 التعليمات:
-- الصباح (5-8 صباحًا): ركز على الاستعداد ومستويات الطاقة وتخطيط التمارين
-- منتصف النهار (12-3 مساءً): قيّم الإجهاد الحالي والوتيرة وتذكيرات الترطيب
-- المساء (5-8 مساءً): استراتيجيات التعافي وإعداد النوم والتأمل
+- الصباح (5-11 صباحًا): ركز على الاستعداد ومستويات الطاقة وتخطيط التمارين
+- منتصف النهار (12-6 مساءً): قيّم الإجهاد الحالي والوتيرة وتذكيرات الترطيب
+- المساء (5-11 مساءً): استراتيجيات التعافي وإعداد النوم والتأمل
 
 النبرة: داعمة ومحفزة وقابلة للتطبيق. استخدم اسم المستخدم عند توفره.
 التنسيق: أرجع JSON صالح فقط بدون markdown أو نص إضافي.
@@ -47,9 +47,9 @@ Context: ${timeOfDay} - ${userTimezone}
 Data: Latest sleep, recovery, strain, and workout metrics
 
 Instructions:
-- Morning (5-8am): Focus on readiness, energy levels, workout planning
-- Midday (12-3pm): Assess current strain, pacing, hydration reminders  
-- Evening (5-8pm): Recovery strategies, sleep preparation, reflection
+- Morning (5-11am): Focus on readiness, energy levels, workout planning
+- Midday (12-6pm): Assess current strain, pacing, hydration reminders  
+- Evening (5-11pm): Recovery strategies, sleep preparation, reflection
 
 Tone: Supportive, motivational, actionable. Use user's name when available.
 Format: Return ONLY valid JSON with no markdown or extra text.
