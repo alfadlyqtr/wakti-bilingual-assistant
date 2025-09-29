@@ -29,6 +29,10 @@ export function AIInsights() {
         setLoading(false);
       }
     })();
+    // Fix charts mis-sizing when tab becomes visible
+    const t1 = setTimeout(() => window.dispatchEvent(new Event('resize')), 120);
+    const t2 = setTimeout(() => window.dispatchEvent(new Event('resize')), 600);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [language]);
 
   const sleepBars = useMemo(() => (
@@ -107,7 +111,7 @@ export function AIInsights() {
           </Button>
         </div>
         <div className="text-xs text-muted-foreground mt-1">
-          {language==='ar' ? 'مدعوم من WAKTI AI — نستخدم بيانات موجزة ومجهولة لإنتاج ملخصات ونصائح داعمة (gpt-4o-mini).' : 'Powered by WAKTI AI — we use a compact, anonymized dataset to generate supportive summaries and tips (gpt-4o-mini).'}
+          {language==='ar' ? 'مدعوم من WAKTI AI — نستخدم بيانات موجزة ومجهولة لإنتاج ملخصات ونصائح داعمة.' : 'Powered by WAKTI AI — we use a compact, anonymized dataset to generate supportive summaries and tips.'}
         </div>
       </Card>
 
@@ -116,7 +120,7 @@ export function AIInsights() {
         <Card className="rounded-2xl p-4 shadow-sm bg-white/5">
           <div className="text-xs text-muted-foreground mb-2">Sleep hours (7d)</div>
           <div className="h-52">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="99%" height="100%">
               <BarChart data={sleepBars}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
@@ -131,8 +135,8 @@ export function AIInsights() {
         <Card className="rounded-2xl p-4 shadow-sm bg-white/5">
           <div className="text-xs text-muted-foreground mb-2">Recovery / HRV / RHR (7d)</div>
           <div className="h-52">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={recLines}>
+            <ResponsiveContainer width="99%" height="100%">
+              <LineChart data={recLines} margin={{ top: 5, right: 12, left: 12, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
                 <YAxis />
@@ -148,8 +152,8 @@ export function AIInsights() {
         <Card className="rounded-2xl p-4 shadow-sm bg-white/5 lg:col-span-2">
           <div className="text-xs text-muted-foreground mb-2">Workouts (strain & calories)</div>
           <div className="h-52">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={workoutsLines}>
+            <ResponsiveContainer width="99%" height="100%">
+              <LineChart data={workoutsLines} margin={{ top: 5, right: 12, left: 12, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
                 <YAxis />
