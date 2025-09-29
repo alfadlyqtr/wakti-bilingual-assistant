@@ -172,13 +172,21 @@ export default function FitnessHealth() {
   };
 
   const sleepStages = useMemo(() => {
-    const s = metrics?.sleep?.data?.score?.stage_summary || null;
-    if (!s) return null;
+    const sleep = metrics?.sleep;
+    if (!sleep) return null;
+    
+    // Use data from our database columns first, then fallback to API data
+    const deep = sleep.total_deep_sleep_ms || sleep.data?.score?.stage_summary?.total_slow_wave_sleep_time_milli || 0;
+    const rem = sleep.total_rem_sleep_ms || sleep.data?.score?.stage_summary?.total_rem_sleep_time_milli || 0;
+    const light = sleep.total_light_sleep_ms || sleep.data?.score?.stage_summary?.total_light_sleep_time_milli || 0;
+    const awake = sleep.total_awake_ms || sleep.data?.score?.stage_summary?.total_awake_time_milli || 0;
+    
     return {
-      deep: s.deep_sleep_milli ?? s.deep_milli ?? 0,
-      rem: s.rem_sleep_milli ?? s.rem_milli ?? 0,
-      light: s.light_sleep_milli ?? s.light_milli ?? 0,
-      total: (s.deep_sleep_milli ?? 0) + (s.rem_sleep_milli ?? 0) + (s.light_sleep_milli ?? 0),
+      deep,
+      rem, 
+      light,
+      awake,
+      total: deep + rem + light + awake,
     };
   }, [metrics]);
 
@@ -205,29 +213,48 @@ export default function FitnessHealth() {
   }, [cycleHist]);
 
   const sleepHours = useMemo(() => {
-    const s = metrics?.sleep;
-    if (!s) return null as number | null;
-    if (typeof s.duration_sec === 'number' && s.duration_sec > 0) return Math.round((s.duration_sec/360))/10;
-    const st = metrics?.sleep?.data?.score?.stage_summary;
-    if (st) {
-      const total = (st.deep_sleep_milli??0)+(st.rem_sleep_milli??0)+(st.light_sleep_milli??0);
-      if (total > 0) return Math.round((total/360000))/10;
+    const sleep = metrics?.sleep;
+    if (!sleep) return null as number | null;
+    
+    // Use stored duration first
+    if (typeof sleep.duration_sec === 'number' && sleep.duration_sec > 0) {
+      return Math.round((sleep.duration_sec/360))/10;
     }
-    if (s.start && s.end) {
-      const delta = new Date(s.end).getTime() - new Date(s.start).getTime();
+    
+    // Use sleep stages total if available
+    const stages = sleepStages;
+    if (stages && stages.total > 0) {
+      return Math.round((stages.total/360000))/10;
+    }
+    
+    // Fallback to time difference
+    if (sleep.start && sleep.end) {
+      const delta = new Date(sleep.end).getTime() - new Date(sleep.start).getTime();
       if (delta > 0) return Math.round((delta/360000))/10;
     }
+    
     return null;
-  }, [metrics]);
+  }, [metrics, sleepStages]);
 
   const sleepEfficiency = useMemo(() => {
-    const st = metrics?.sleep?.data?.score?.stage_summary;
-    if (!st) return null as number | null;
-    const asleep = (st.deep_sleep_milli??0)+(st.rem_sleep_milli??0)+(st.light_sleep_milli??0);
-    const inBed = st.total_in_bed_milli ?? 0;
-    if (!inBed) return null;
-    return Math.round((asleep / inBed) * 100);
-  }, [metrics]);
+    const sleep = metrics?.sleep;
+    if (!sleep) return null as number | null;
+    
+    // Use stored sleep efficiency percentage first
+    if (sleep.sleep_efficiency_pct) {
+      return Math.round(sleep.sleep_efficiency_pct);
+    }
+    
+    // Fallback to calculation if we have the raw data
+    const stages = sleepStages;
+    if (!stages) return null;
+    
+    const asleep = stages.deep + stages.rem + stages.light;
+    const total = stages.total;
+    if (!total || total === 0) return null;
+    
+    return Math.round((asleep / total) * 100);
+  }, [metrics, sleepStages]);
 
   const todayStats = useMemo(() => {
     const rec = metrics?.recovery;
@@ -337,11 +364,17 @@ export default function FitnessHealth() {
                     deep: Math.round((sleepStages?.deep || 0) / 60000), // Convert ms to minutes
                     rem: Math.round((sleepStages?.rem || 0) / 60000),
                     light: Math.round((sleepStages?.light || 0) / 60000),
-                    awake: 0
+                    awake: Math.round((sleepStages?.awake || 0) / 60000)
                   },
                   bedtime: metrics.sleep.start ? new Date(metrics.sleep.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--',
                   waketime: metrics.sleep.end ? new Date(metrics.sleep.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--',
-                  efficiency: sleepEfficiency || 0
+                  efficiency: sleepEfficiency || 0,
+                  // Additional sleep metrics
+                  respiratoryRate: metrics.sleep.respiratory_rate || 0,
+                  sleepConsistency: metrics.sleep.sleep_consistency_pct || 0,
+                  disturbanceCount: metrics.sleep.disturbance_count || 0,
+                  sleepCycleCount: metrics.sleep.sleep_cycle_count || 0,
+                  sleepDebt: metrics.sleep.sleep_debt_ms ? Math.round(metrics.sleep.sleep_debt_ms / 60000) : 0 // Convert to minutes
                 } : undefined}
               />
             </TabsContent>
@@ -353,7 +386,10 @@ export default function FitnessHealth() {
                 recoveryData={metrics?.recovery ? {
                   score: metrics.recovery.score || 0,
                   hrv: metrics.recovery.hrv_ms || 0,
-                  rhr: metrics.recovery.rhr_bpm || 0
+                  rhr: metrics.recovery.rhr_bpm || 0,
+                  // Additional recovery metrics (WHOOP 4.0)
+                  spo2: metrics.recovery.spo2_percentage || 0,
+                  skinTemp: metrics.recovery.skin_temp_celsius || 0
                 } : undefined}
               />
             </TabsContent>

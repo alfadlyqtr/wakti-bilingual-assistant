@@ -25,6 +25,12 @@ interface SleepTabProps {
     bedtime: string;
     waketime: string;
     efficiency: number;
+    // Additional sleep metrics
+    respiratoryRate?: number;
+    sleepConsistency?: number;
+    disturbanceCount?: number;
+    sleepCycleCount?: number;
+    sleepDebt?: number;
   };
   yesterdayData?: {
     hours: number;
@@ -301,6 +307,76 @@ export function SleepTab({
             </p>
           </div>
         </Card>
+
+        {/* Additional Sleep Metrics */}
+        {(realSleepData.respiratoryRate || realSleepData.sleepConsistency || realSleepData.disturbanceCount || realSleepData.sleepCycleCount || realSleepData.sleepDebt) && (
+          <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
+            <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-gradient-to-r from-green-400 to-blue-400"></div>
+              {language === 'ar' ? 'مقاييس النوم المتقدمة' : 'Advanced Sleep Metrics'}
+            </h3>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+              {realSleepData.respiratoryRate && realSleepData.respiratoryRate > 0 && (
+                <div className="bg-white/5 rounded-xl p-3 text-center">
+                  <div className="text-xs text-muted-foreground mb-1">
+                    {language === 'ar' ? 'معدل التنفس' : 'Respiratory Rate'}
+                  </div>
+                  <div className="text-lg font-bold text-cyan-400">
+                    {realSleepData.respiratoryRate.toFixed(1)}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {language === 'ar' ? 'نفس/دقيقة' : 'breaths/min'}
+                  </div>
+                </div>
+              )}
+
+              {realSleepData.sleepConsistency && realSleepData.sleepConsistency > 0 && (
+                <div className="bg-white/5 rounded-xl p-3 text-center">
+                  <div className="text-xs text-muted-foreground mb-1">
+                    {language === 'ar' ? 'ثبات النوم' : 'Sleep Consistency'}
+                  </div>
+                  <div className="text-lg font-bold text-green-400">
+                    {Math.round(realSleepData.sleepConsistency)}%
+                  </div>
+                </div>
+              )}
+
+              {realSleepData.disturbanceCount !== undefined && realSleepData.disturbanceCount >= 0 && (
+                <div className="bg-white/5 rounded-xl p-3 text-center">
+                  <div className="text-xs text-muted-foreground mb-1">
+                    {language === 'ar' ? 'الاضطرابات' : 'Disturbances'}
+                  </div>
+                  <div className="text-lg font-bold text-yellow-400">
+                    {realSleepData.disturbanceCount}
+                  </div>
+                </div>
+              )}
+
+              {realSleepData.sleepCycleCount && realSleepData.sleepCycleCount > 0 && (
+                <div className="bg-white/5 rounded-xl p-3 text-center">
+                  <div className="text-xs text-muted-foreground mb-1">
+                    {language === 'ar' ? 'دورات النوم' : 'Sleep Cycles'}
+                  </div>
+                  <div className="text-lg font-bold text-purple-400">
+                    {realSleepData.sleepCycleCount}
+                  </div>
+                </div>
+              )}
+
+              {realSleepData.sleepDebt !== undefined && realSleepData.sleepDebt !== 0 && (
+                <div className="bg-white/5 rounded-xl p-3 text-center">
+                  <div className="text-xs text-muted-foreground mb-1">
+                    {language === 'ar' ? 'دين النوم' : 'Sleep Debt'}
+                  </div>
+                  <div className={`text-lg font-bold ${realSleepData.sleepDebt > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                    {realSleepData.sleepDebt > 0 ? '+' : ''}{realSleepData.sleepDebt}m
+                  </div>
+                </div>
+              )}
+            </div>
+          </Card>
+        )}
       </div>
 
       {/* Day Statistics - Today vs Yesterday */}

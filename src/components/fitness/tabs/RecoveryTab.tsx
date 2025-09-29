@@ -16,6 +16,9 @@ interface RecoveryTabProps {
     score: number;
     hrv: number;
     rhr: number;
+    // Additional WHOOP 4.0 metrics
+    spo2?: number;
+    skinTemp?: number;
   };
   yesterdayData?: {
     score: number;
@@ -223,6 +226,41 @@ export function RecoveryTab({
               </div>
             </div>
           </div>
+
+          {/* WHOOP 4.0 Additional Metrics */}
+          {(realRecoveryData.spo2 || realRecoveryData.skinTemp) && (
+            <div className="mt-6">
+              <h4 className="font-semibold mb-4 text-sm text-muted-foreground">
+                {language === 'ar' ? 'مقاييس إضافية (WHOOP 4.0)' : 'Additional Metrics (WHOOP 4.0)'}
+              </h4>
+              <div className="grid grid-cols-2 gap-3">
+                {realRecoveryData.spo2 && realRecoveryData.spo2 > 0 && (
+                  <div className="bg-white/5 rounded-xl p-3 text-center">
+                    <div className="text-xs text-muted-foreground mb-1">
+                      {language === 'ar' ? 'أكسجين الدم' : 'Blood Oxygen'}
+                    </div>
+                    <div className="text-lg font-bold text-cyan-400">
+                      {realRecoveryData.spo2.toFixed(1)}%
+                    </div>
+                    <div className="text-xs text-muted-foreground">SpO2</div>
+                  </div>
+                )}
+                {realRecoveryData.skinTemp && realRecoveryData.skinTemp > 0 && (
+                  <div className="bg-white/5 rounded-xl p-3 text-center">
+                    <div className="text-xs text-muted-foreground mb-1">
+                      {language === 'ar' ? 'حرارة الجلد' : 'Skin Temperature'}
+                    </div>
+                    <div className="text-lg font-bold text-orange-400">
+                      {realRecoveryData.skinTemp.toFixed(1)}°C
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {(realRecoveryData.skinTemp * 9/5 + 32).toFixed(1)}°F
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </Card>
       </div>
 
