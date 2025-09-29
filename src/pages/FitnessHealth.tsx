@@ -251,13 +251,13 @@ export default function FitnessHealth() {
 
 
   return (
-    <div className="max-w-7xl mx-auto p-4 space-y-6">
+    <div className="max-w-7xl mx-auto p-3 sm:p-4 space-y-4 sm:space-y-6">
       {/* Page Header */}
-      <div className="text-center">
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
+      <div className="text-center px-2">
+        <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
           {language === 'ar' ? 'الصحة واللياقة' : 'Fitness & Health'}
         </h1>
-        <p className="text-muted-foreground mt-2">
+        <p className="text-muted-foreground mt-2 text-sm sm:text-base px-4">
           {language === 'ar' ? 'تحليل شامل لبياناتك الصحية مع الذكاء الاصطناعي' : 'Comprehensive health data analysis with AI insights'}
         </p>
       </div>
@@ -287,45 +287,45 @@ export default function FitnessHealth() {
       ) : connected ? (
         <>
           <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as MainTab)}>
-            <TabsList className="grid w-full grid-cols-6 bg-white/10 border-white/20">
-              <TabsTrigger value="ai-insights" className="flex items-center gap-2">
-                <Brain className="h-4 w-4" />
+            <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 bg-white/10 border-white/20 gap-1 p-1">
+              <TabsTrigger value="ai-insights" className="flex items-center gap-1 px-2 py-2 text-xs sm:text-sm">
+                <Brain className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden sm:inline">{language === 'ar' ? 'رؤى الذكاء الاصطناعي' : 'AI Insights'}</span>
                 <span className="sm:hidden">AI</span>
               </TabsTrigger>
-              <TabsTrigger value="sleep" className="flex items-center gap-2">
-                <Moon className="h-4 w-4" />
+              <TabsTrigger value="sleep" className="flex items-center gap-1 px-2 py-2 text-xs sm:text-sm">
+                <Moon className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden sm:inline">{language === 'ar' ? 'النوم' : 'Sleep'}</span>
-                <span className="sm:hidden">Sleep</span>
+                <span className="sm:hidden">{language === 'ar' ? 'نوم' : 'Sleep'}</span>
               </TabsTrigger>
-              <TabsTrigger value="recovery" className="flex items-center gap-2">
-                <Heart className="h-4 w-4" />
+              <TabsTrigger value="recovery" className="flex items-center gap-1 px-2 py-2 text-xs sm:text-sm">
+                <Heart className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden sm:inline">{language === 'ar' ? 'التعافي' : 'Recovery'}</span>
-                <span className="sm:hidden">Recovery</span>
+                <span className="sm:hidden">{language === 'ar' ? 'تعافي' : 'Recovery'}</span>
               </TabsTrigger>
-              <TabsTrigger value="hrv-rhr" className="flex items-center gap-2">
-                <Activity className="h-4 w-4" />
+              <TabsTrigger value="hrv-rhr" className="flex items-center gap-1 px-2 py-2 text-xs sm:text-sm">
+                <Activity className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden sm:inline">HRV/RHR</span>
                 <span className="sm:hidden">HRV</span>
               </TabsTrigger>
-              <TabsTrigger value="strain" className="flex items-center gap-2">
-                <Zap className="h-4 w-4" />
+              <TabsTrigger value="strain" className="flex items-center gap-1 px-2 py-2 text-xs sm:text-sm">
+                <Zap className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden sm:inline">{language === 'ar' ? 'الإجهاد' : 'Strain'}</span>
-                <span className="sm:hidden">Strain</span>
+                <span className="sm:hidden">{language === 'ar' ? 'إجهاد' : 'Strain'}</span>
               </TabsTrigger>
-              <TabsTrigger value="workouts" className="flex items-center gap-2">
-                <Dumbbell className="h-4 w-4" />
+              <TabsTrigger value="workouts" className="flex items-center gap-1 px-2 py-2 text-xs sm:text-sm">
+                <Dumbbell className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden sm:inline">{language === 'ar' ? 'التمارين' : 'Workouts'}</span>
-                <span className="sm:hidden">Workouts</span>
+                <span className="sm:hidden">{language === 'ar' ? 'تمارين' : 'Workouts'}</span>
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="ai-insights" className="mt-6 space-y-6">
+            <TabsContent value="ai-insights" className="mt-4 sm:mt-6 space-y-4 sm:space-y-6">
               <AIInsights timeRange={timeRange} onTimeRangeChange={setTimeRange} />
               <WhoopDetails metrics={metrics} />
             </TabsContent>
 
-            <TabsContent value="sleep" className="mt-6 space-y-6">
+            <TabsContent value="sleep" className="mt-4 sm:mt-6 space-y-4 sm:space-y-6">
               <SleepTab 
                 timeRange={timeRange} 
                 onTimeRangeChange={setTimeRange}
@@ -346,7 +346,7 @@ export default function FitnessHealth() {
               />
             </TabsContent>
 
-            <TabsContent value="recovery" className="mt-6 space-y-6">
+            <TabsContent value="recovery" className="mt-4 sm:mt-6 space-y-4 sm:space-y-6">
               <RecoveryTab 
                 timeRange={timeRange} 
                 onTimeRangeChange={setTimeRange}
@@ -358,7 +358,7 @@ export default function FitnessHealth() {
               />
             </TabsContent>
 
-            <TabsContent value="hrv-rhr" className="mt-6 space-y-6">
+            <TabsContent value="hrv-rhr" className="mt-4 sm:mt-6 space-y-4 sm:space-y-6">
               <HRVRHRTab 
                 timeRange={timeRange} 
                 onTimeRangeChange={setTimeRange}
@@ -369,7 +369,7 @@ export default function FitnessHealth() {
               />
             </TabsContent>
 
-            <TabsContent value="strain" className="mt-6 space-y-6">
+            <TabsContent value="strain" className="mt-4 sm:mt-6 space-y-4 sm:space-y-6">
               <StrainTab 
                 timeRange={timeRange} 
                 onTimeRangeChange={setTimeRange}
@@ -377,12 +377,12 @@ export default function FitnessHealth() {
                   dayStrain: metrics.cycle.day_strain || 0,
                   trainingLoad: metrics.cycle.training_load || 0,
                   avgHr: metrics.cycle.avg_hr_bpm || 0,
-                  maxHr: 200 // Default max HR
+                  maxHr: metrics.cycle.max_hr_bpm || 0
                 } : undefined}
               />
             </TabsContent>
 
-            <TabsContent value="workouts" className="mt-6 space-y-6">
+            <TabsContent value="workouts" className="mt-4 sm:mt-6 space-y-4 sm:space-y-6">
               <WorkoutsTab 
                 timeRange={timeRange} 
                 onTimeRangeChange={setTimeRange}
@@ -393,7 +393,7 @@ export default function FitnessHealth() {
                   strain: metrics.workout.strain || 0,
                   calories: todayStats.kcal || 0,
                   avgHr: metrics.workout.data?.score?.average_heart_rate || 0,
-                  maxHr: metrics.workout.data?.score?.max_heart_rate || 200
+                  maxHr: metrics.workout.data?.score?.max_heart_rate || 0
                 } : undefined}
               />
             </TabsContent>
