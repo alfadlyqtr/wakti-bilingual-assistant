@@ -174,16 +174,19 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
   };
 
   const currentInsight = insights[activeWindow];
+  const hasAnyInsight = Object.values(insights).some(insight => insight !== null);
+  const displayInsight = currentInsight || Object.values(insights).find(i => i !== null);
   
   // Debug logging
   console.log('Current active window:', activeWindow);
   console.log('All insights:', insights);
   console.log('Current insight:', currentInsight);
+  console.log('Has any insight:', hasAnyInsight);
+  console.log('Display insight:', displayInsight);
 
   const copyToClipboard = async () => {
-    const insight = currentInsight || Object.values(insights).find(i => i !== null);
-    if (!insight) return;
-    const text = `${insight.daily_summary || ''}\n\n${insight.weekly_summary || ''}\n\nTips:\n${(insight.tips || []).map((t: string) => `• ${t}`).join('\n')}\n\nMotivations:\n${(insight.motivations || []).map((m: string) => `• ${m}`).join('\n')}`;
+    if (!displayInsight) return;
+    const text = `${displayInsight.daily_summary || ''}\n\n${displayInsight.weekly_summary || ''}\n\nTips:\n${(displayInsight.tips || []).map((t: string) => `• ${t}`).join('\n')}\n\nMotivations:\n${(displayInsight.motivations || []).map((m: string) => `• ${m}`).join('\n')}`;
     try {
       await navigator.clipboard.writeText(text);
       toast.success(language === 'ar' ? 'تم النسخ' : 'Copied to clipboard');
@@ -322,8 +325,8 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
       </Card>
 
       {/* Insights Content */}
-      {(currentInsight || Object.values(insights).some(insight => insight !== null)) && (
-        <div ref={printRef} className="space-y-6">
+      {hasAnyInsight && (
+        <div key={`insights-${activeWindow}-${hasAnyInsight}`} ref={printRef} className="space-y-6">
           {/* Daily Summary */}
           <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
             <div className="flex items-center justify-between mb-4">
@@ -343,7 +346,7 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
               </div>
             </div>
             <p className="text-muted-foreground leading-relaxed">
-              {(currentInsight || Object.values(insights).find(i => i !== null))?.daily_summary || (language === 'ar' ? 'لا توجد بيانات كافية للملخص اليومي' : 'Insufficient data for daily summary')}
+              {displayInsight?.daily_summary || (language === 'ar' ? 'لا توجد بيانات كافية للملخص اليومي' : 'Insufficient data for daily summary')}
             </p>
           </Card>
 
@@ -354,7 +357,7 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
               {language === 'ar' ? 'الملخص الأسبوعي' : 'Weekly Summary'}
             </h3>
             <p className="text-muted-foreground leading-relaxed">
-              {(currentInsight || Object.values(insights).find(i => i !== null))?.weekly_summary || (language === 'ar' ? 'لا توجد بيانات كافية للملخص الأسبوعي' : 'Insufficient data for weekly summary')}
+              {displayInsight?.weekly_summary || (language === 'ar' ? 'لا توجد بيانات كافية للملخص الأسبوعي' : 'Insufficient data for weekly summary')}
             </p>
           </Card>
 
@@ -366,7 +369,7 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
                 {language === 'ar' ? 'نصائح' : 'Tips'}
               </h3>
               <ul className="space-y-3">
-                {((currentInsight || Object.values(insights).find(i => i !== null))?.tips || []).map((tip: string, index: number) => (
+                {(displayInsight?.tips || []).map((tip: string, index: number) => (
                   <li key={index} className="flex items-start gap-3 text-sm">
                     <CheckCircle className="h-4 w-4 text-emerald-400 mt-0.5 flex-shrink-0" />
                     <span className="text-muted-foreground">{tip}</span>
@@ -381,7 +384,7 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
                 {language === 'ar' ? 'تحفيز' : 'Motivations'}
               </h3>
               <div className="space-y-3">
-                {((currentInsight || Object.values(insights).find(i => i !== null))?.motivations || []).map((motivation: string, index: number) => (
+                {(displayInsight?.motivations || []).map((motivation: string, index: number) => (
                   <div key={index} className="p-3 bg-orange-500/10 rounded-lg border border-orange-500/20">
                     <p className="text-sm font-medium text-orange-200">{motivation}</p>
                   </div>
@@ -391,14 +394,14 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
           </div>
 
           {/* AI Generated Visuals */}
-          {((currentInsight || Object.values(insights).find(i => i !== null))?.visuals && (currentInsight || Object.values(insights).find(i => i !== null))?.visuals.length > 0) && (
+          {(displayInsight?.visuals && displayInsight.visuals.length > 0) && (
             <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
               <h3 className="font-semibold text-lg mb-6 flex items-center gap-2">
                 <Brain className="h-5 w-5 text-purple-400" />
                 {language === 'ar' ? 'الرسوم البيانية الذكية' : 'Smart Visuals'}
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {((currentInsight || Object.values(insights).find(i => i !== null))?.visuals || []).map((visual, index) => (
+                {(displayInsight?.visuals || []).map((visual, index) => (
                   <Card key={index} className="p-4 bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/20">
                     <h4 className="font-medium mb-4 text-center">{visual.title}</h4>
                     <div className="h-32 flex items-center justify-center">
@@ -443,7 +446,7 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
         </div>
       )}
 
-      {!currentInsight && !Object.values(insights).some(insight => insight !== null) && (
+      {!hasAnyInsight && (
         <Card className="rounded-2xl p-12 bg-white/5 border-white/10 text-center">
           <Brain className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <h3 className="font-semibold text-lg mb-2">
