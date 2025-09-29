@@ -123,6 +123,16 @@ serve(async (req: Request) => {
     const expires_in: number = tokenRes.expires_in;
     const scopeStr: string | undefined = tokenRes.scope;
 
+    // Detailed logging after token exchange
+    console.log('whoop-callback: Token exchange successful', {
+      hasAccessToken: !!access_token,
+      accessTokenLength: access_token?.length,
+      accessTokenPrefix: access_token?.substring(0, 20),
+      hasRefreshToken: !!refresh_token,
+      expiresIn: expires_in,
+      scope: scopeStr
+    });
+
     if (!access_token || !refresh_token || !expires_in) {
       console.error("whoop-callback: incomplete token payload", tokenRes);
       return new Response(JSON.stringify({ error: "invalid_token_response" }), { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -157,6 +167,14 @@ serve(async (req: Request) => {
         return new Response(JSON.stringify({ error: "db_error", detail: `profile_insert_failed: ${profileInsertErr.message}` }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
     }
+
+    // Log prior to storing tokens
+    console.log('whoop-callback: About to store tokens', {
+      userId,
+      accessTokenLength: access_token.length,
+      hasRefreshToken: !!refresh_token,
+      expiresAt: expires_at
+    });
 
     const { error: upsertErr } = await admin
       .from("user_whoop_tokens")

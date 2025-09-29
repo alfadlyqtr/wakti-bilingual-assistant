@@ -39,6 +39,13 @@ async function fetchCollection(url: string, accessToken: string, params: Record<
     const u = new URL(url);
     Object.entries(params).forEach(([k, v]) => u.searchParams.set(k, v));
     if (nextToken) u.searchParams.set("nextToken", nextToken);
+    // Log each page request with safe token prefix and parameters
+    console.log("whoop-sync: requesting", {
+      url: u.toString(),
+      hasToken: !!accessToken,
+      tokenPrefix: accessToken.substring(0, 12),
+      nextToken,
+    });
     const res = await fetch(u.toString(), { headers });
     if (!res.ok) {
       const t = await res.text();
@@ -119,18 +126,48 @@ serve(async (req: Request) => {
         let refreshToken = u.refresh_token;
         const exp = new Date(u.expires_at).getTime();
         const now = Date.now();
+        // Log current token state
+        console.log("whoop-sync: token state", {
+          userId: u.user_id,
+          accessTokenLength: accessToken?.length,
+          accessTokenPrefix: accessToken?.substring(0, 20),
+          expiresAt: u.expires_at,
+          lastSyncedAt: u.last_synced_at,
+        });
         if (isNaN(exp) || exp <= now + 60000) {
           // refresh
+          console.log("whoop-sync: refreshing token", {
+            userId: u.user_id,
+            reason: isNaN(exp) ? "invalid_exp" : "expiring",
+            expiresAt: u.expires_at,
+          });
           const rt = await refreshTokenFn(refreshToken, whoopClientId, whoopClientSecret);
           accessToken = rt.access_token;
           refreshToken = rt.refresh_token || refreshToken;
           const expires_at = new Date(Date.now() + (rt.expires_in || 3600) * 1000).toISOString();
           await admin.from("user_whoop_tokens").update({ access_token: accessToken, refresh_token: refreshToken, expires_at }).eq("user_id", u.user_id);
+          console.log("whoop-sync: refresh complete", {
+            userId: u.user_id,
+            newAccessTokenLength: accessToken?.length,
+            newAccessTokenPrefix: accessToken?.substring(0, 20),
+            newExpiresAt: expires_at,
+          });
         }
 
         const start = startParam || (u.last_synced_at ? new Date(new Date(u.last_synced_at).getTime() - 7 * 86400000).toISOString() : isoDaysAgo(30));
         const end = endParam || new Date().toISOString();
         const commonParams = { start, end } as Record<string, string>;
+        console.log("whoop-sync: fetch ranges", {
+          userId: u.user_id,
+          start,
+          end,
+          endpoints: {
+            cycles: CYCLE_URL,
+            sleep: SLEEP_URL,
+            workout: WORKOUT_URL,
+            recovery: RECOVERY_URL,
+          },
+        });
 
         const [cycles, sleeps, workouts, recoveries] = await Promise.all([
           fetchCollection(CYCLE_URL, accessToken, { ...commonParams }),
