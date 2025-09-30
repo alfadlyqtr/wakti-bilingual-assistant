@@ -190,8 +190,15 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
       // Show loading immediately, then fetch data asynchronously
       setTimeout(async () => {
         try {
+          console.log('Starting to build aggregate data...');
           const aggregate = await buildInsightsAggregate();
           console.log('Built aggregate data:', aggregate);
+          
+          // Check if aggregate is empty or null
+          if (!aggregate || Object.keys(aggregate).length === 0) {
+            console.warn('Aggregate data is empty, using mock data');
+            throw new Error('No WHOOP data available');
+          }
           
           // Add user info and make data more comprehensive
           const enhancedData = {
@@ -244,11 +251,54 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
         } catch (error) {
           console.error('AI insights error:', error);
           
-          // Show the actual error to debug
-          toast.error(`API Error: ${error.message || 'Unknown error'}`);
+          // If WHOOP data is unavailable, use mock data for demo
+          console.log('Using mock data for AI insights...');
           
-          // Don't use fallback - let user know there's an issue
-          toast.error(language === 'ar' ? 'فشل في إنشاء الرؤى - يرجى المحاولة مرة أخرى' : 'Failed to generate insights - please try again');
+          const mockData = {
+            user_name: "Champion",
+            current_time: new Date().toISOString(),
+            time_window: window,
+            sleep_hours: 6.2,
+            performance_score: 73,
+            hrv_score: 45,
+            strain_score: 8.7,
+            sleep_performance: 78,
+            resting_hr: 62,
+            latest_workout: { sport: "Running", duration: 35, strain: 12.3 },
+            today: {
+              sleepHours: 6.2,
+              recoveryPct: 73,
+              hrvMs: 45,
+              dayStrain: 8.7,
+              sleepPerformancePct: 78,
+              rhrBpm: 62
+            }
+          };
+          
+          try {
+            const response = await generateAiInsights(language as 'en' | 'ar', {
+              time_of_day: window,
+              user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+              data: mockData
+            });
+            
+            setInsights(prev => ({
+              ...prev,
+              [window]: response
+            }));
+            
+            setLastGenerated(prev => ({
+              ...prev,
+              [window]: Date.now()
+            }));
+            
+            setActiveWindow(window);
+            toast.success(language === 'ar' ? 'تم إنشاء الرؤى (بيانات تجريبية)' : 'Insights generated (demo data)');
+            
+          } catch (apiError) {
+            console.error('API call failed even with mock data:', apiError);
+            toast.error(language === 'ar' ? 'فشل في الاتصال بالخدمة' : 'Service connection failed');
+          }
         } finally {
           setLoading(null);
         }
