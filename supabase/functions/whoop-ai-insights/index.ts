@@ -155,12 +155,19 @@ Evening Tone:
       if (timeOfDay === 'morning') return morningPrompt;
       if (timeOfDay === 'midday') return middayPrompt;
       if (timeOfDay === 'evening') return eveningPrompt;
-      return morningPrompt; // default
     };
 
     const system = getSystemPrompt(timeOfDay, language);
 
     const getEnhancedUserPrompt = (timeOfDay: string, language: string) => {
+      const userName = payload?.user_name || "Champion";
+      const metrics = payload?.key_metrics || {};
+      const sleepHours = metrics?.sleep_hours || 0;
+      const recoveryScore = metrics?.recovery_score || 0;
+      const hrvMs = metrics?.hrv_ms || 0;
+      const strainScore = metrics?.day_strain || 0;
+      const sleepPerf = metrics?.sleep_performance || 0;
+      const restingHR = metrics?.resting_hr || 0;
       const baseStructure = language === 'ar' ? `
 تحليل بيانات WHOOP التالية والرد بتنسيق JSON صارم:
 

@@ -8,6 +8,7 @@ import { generateAiInsights, buildInsightsAggregate } from "@/services/whoopServ
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import 'react-circular-progressbar/dist/styles.css';
 
 type TimeRange = '1d' | '1w' | '2w' | '1m' | '3m' | '6m';
@@ -44,6 +45,7 @@ const TIME_WINDOWS = {
 
 export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
   const { language } = useTheme();
+  const { user } = useAuth();
   const [loading, setLoading] = useState<TimeWindow | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -200,20 +202,33 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
             throw new Error('No WHOOP data available');
           }
           
-          // Add user info and make data more comprehensive
+          // Get user's real name
+          const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || "Champion";
+          
+          // Extract real WHOOP data properly
+          console.log('Raw aggregate structure:', JSON.stringify(aggregate, null, 2));
+          
+          // Send ALL the real WHOOP data to AI - it's already perfectly structured!
           const enhancedData = {
-            ...aggregate,
-            user_name: "Champion", // Add user name for personalization
+            ...aggregate, // This contains today, last7Days, workouts, weekly, details
+            user_name: userName,
             current_time: new Date().toISOString(),
             time_window: window,
-            // Use actual data structure from buildInsightsAggregate
-            sleep_hours: aggregate?.today?.sleepHours || 5.5,
-            performance_score: aggregate?.today?.recoveryPct || 59,
-            hrv_score: aggregate?.today?.hrvMs || 59,
-            strain_score: aggregate?.today?.dayStrain || 12.4,
-            sleep_performance: aggregate?.today?.sleepPerformancePct || 75,
-            resting_hr: aggregate?.today?.rhrBpm || 65,
-            latest_workout: aggregate?.today?.latestWorkout || null,
+            // Extract key metrics for easy AI access
+            key_metrics: {
+              sleep_hours: aggregate?.today?.sleepHours,
+              sleep_performance: aggregate?.today?.sleepPerformancePct,
+              recovery_score: aggregate?.today?.recoveryPct,
+              hrv_ms: aggregate?.today?.hrvMs,
+              resting_hr: aggregate?.today?.rhrBpm,
+              day_strain: aggregate?.today?.dayStrain,
+              latest_workout: aggregate?.today?.latestWorkout,
+              // 7-day trends
+              sleep_trend: aggregate?.last7Days?.sleepHours,
+              recovery_trend: aggregate?.last7Days?.recoveryPct,
+              hrv_trend: aggregate?.last7Days?.hrvMs,
+              rhr_trend: aggregate?.last7Days?.rhrBpm
+            },
             // Add rich context for AI
             insights_context: {
               time_of_day: window,
@@ -254,8 +269,10 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
           // If WHOOP data is unavailable, use mock data for demo
           console.log('Using mock data for AI insights...');
           
+          const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || "Champion";
+          
           const mockData = {
-            user_name: "Champion",
+            user_name: userName,
             current_time: new Date().toISOString(),
             time_window: window,
             sleep_hours: 6.2,
