@@ -186,11 +186,13 @@ export async function generateAiInsights(
   
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData?.session?.access_token;
+  const userEmail = sessionData?.session?.user?.email;
   console.log('Calling Edge Function with payload:', {
     data: Object.keys(data),
     language,
     time_of_day: options?.time_of_day || 'general',
-    user_timezone: options?.user_timezone || 'UTC'
+    user_timezone: options?.user_timezone || 'UTC',
+    user_email: userEmail
   });
 
   const req = supabase.functions.invoke('whoop-ai-insights', {
@@ -198,7 +200,8 @@ export async function generateAiInsights(
       data, 
       language,
       time_of_day: options?.time_of_day || 'general',
-      user_timezone: options?.user_timezone || 'UTC'
+      user_timezone: options?.user_timezone || 'UTC',
+      user_email: userEmail
     },
     headers: { Authorization: `Bearer ${accessToken}` }
   });

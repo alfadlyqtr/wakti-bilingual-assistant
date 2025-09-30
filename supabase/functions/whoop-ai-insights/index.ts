@@ -159,11 +159,13 @@ Evening Tone:
     const system = getSystemPrompt(timeOfDay, language);
 
     const getEnhancedUserPrompt = (timeOfDay: string, language: string) => {
-      // Get real user name from WHOOP profile data
+      // Get real user name from WHOOP profile data or user email
       const userName = payload?.user?.first_name || 
                       payload?.user?.profile?.first_name ||
                       payload?.details?.profile?.first_name ||
                       payload?.raw?.profile?.first_name ||
+                      // Extract first name from email (alfadlyqatar@gmail.com -> alfadly)
+                      (payload?.user_email ? payload.user_email.split('@')[0].split('.')[0] : null) ||
                       "Abdullah";
       
       // Extract real WHOOP metrics from the comprehensive data
@@ -171,8 +173,17 @@ Evening Tone:
       const recoveryData = payload?.details?.recovery || payload?.raw?.recovery_full;
       const cycleData = payload?.details?.cycle || payload?.raw?.cycle_full;
       
-      const sleepHours = sleepData?.duration_sec ? (sleepData.duration_sec / 3600).toFixed(1) : 
-                        payload?.today?.sleepHours || 0;
+      // Calculate sleep hours EXACTLY like WhoopDetails.tsx does
+      let sleepHours: number | string = 0;
+      if (sleepData?.start && sleepData?.end) {
+        const startTime = new Date(sleepData.start).getTime();
+        const endTime = new Date(sleepData.end).getTime();
+        sleepHours = ((endTime - startTime) / (1000 * 60 * 60)).toFixed(1); // Convert to hours
+      } else if (sleepData?.duration_sec) {
+        sleepHours = (sleepData.duration_sec / 3600).toFixed(1);
+      } else {
+        sleepHours = payload?.today?.sleepHours || 0;
+      }
       const recoveryScore = recoveryData?.data?.score?.recovery_score || 
                            payload?.today?.recoveryScore || 0;
       const hrvMs = recoveryData?.data?.score?.hrv_rmssd_milli || 
