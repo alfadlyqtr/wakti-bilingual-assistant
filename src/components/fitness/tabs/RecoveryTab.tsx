@@ -46,15 +46,15 @@ export function RecoveryTab({
   if (!recoveryData) {
     return (
       <div className="space-y-6">
-        <div className="flex gap-2 mb-6 flex-wrap">
+        <div className="flex gap-1 sm:gap-2 mb-6 flex-wrap justify-center sm:justify-start">
           {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
             <button
               key={range}
               onClick={() => onTimeRangeChange(range)}
-              className={`px-2 py-1 sm:px-3 rounded-full text-xs shadow-sm transition-all ${
+              className={`px-3 py-2 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-medium shadow-sm transition-all min-w-[44px] ${
                 timeRange === range
                   ? 'bg-indigo-500 text-white shadow-md'
-                  : 'bg-gray-100 hover:bg-indigo-200 text-gray-700'
+                  : 'bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20'
               }`}
             >
               {range.toUpperCase()}
@@ -306,15 +306,16 @@ export function RecoveryTab({
         </div>
       </Card>
 
-      {/* Recovery Sparkline */}
-      <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
-        <h3 className="font-semibold text-lg mb-4">
-          {language === 'ar' ? 'اتجاه التعافي (7 أيام)' : 'Recovery Trend (7 Days)'}
-        </h3>
-        
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={realWeeklyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+      {/* Recovery Sparkline - Only show if we have real data */}
+      {realWeeklyData.length > 0 && (
+        <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
+          <h3 className="font-semibold text-lg mb-4">
+            {language === 'ar' ? 'اتجاه التعافي (7 أيام)' : 'Recovery Trend (7 Days)'}
+          </h3>
+          
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={realWeeklyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis dataKey="date" tick={{ fill: '#9CA3AF', fontSize: 12 }} />
               <YAxis domain={[0, 100]} tick={{ fill: '#9CA3AF', fontSize: 12 }} />
@@ -348,6 +349,7 @@ export function RecoveryTab({
           </p>
         </div>
       </Card>
+      )}
     </div>
   );
 }

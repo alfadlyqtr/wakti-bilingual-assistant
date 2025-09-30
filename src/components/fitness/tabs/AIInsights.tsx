@@ -205,17 +205,11 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
     const now = Date.now();
     // Remove generation limits for testing
     
-    // Check if we have cached insights that are still valid
-    if (insights[window] && lastGenerated[window] > 0) {
-      const timeSinceGeneration = now - lastGenerated[window];
-      const nextWindowTime = getNextWindowStartTime();
-      
-      // Cache valid until next window starts
-      if (timeSinceGeneration < nextWindowTime) {
-        setActiveWindow(window);
-        toast.success(language === 'ar' ? 'تم عرض الرؤى المحفوظة' : 'Showing cached insights');
-        return;
-      }
+    // Allow users to generate insights whenever they want (no caching restrictions)
+    if (insights[window] && lastGenerated[window] > 0 && !forceGenerate) {
+      setActiveWindow(window);
+      toast.success(language === 'ar' ? 'تم عرض الرؤى المحفوظة' : 'Showing cached insights');
+      return;
     }
     
     try {
@@ -401,15 +395,15 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
   return (
     <div className="space-y-6">
       {/* Time Range Tabs */}
-      <div className="flex gap-2 mb-6 flex-wrap">
+      <div className="flex gap-1 sm:gap-2 mb-6 flex-wrap justify-center sm:justify-start">
         {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
           <button
             key={range}
             onClick={() => onTimeRangeChange(range)}
-            className={`px-2 py-1 sm:px-3 rounded-full text-xs sm:text-sm shadow-sm transition-all flex-shrink-0 ${
+            className={`px-3 py-2 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-medium shadow-sm transition-all min-w-[44px] flex-shrink-0 ${
               timeRange === range
                 ? 'bg-indigo-500 text-white shadow-md'
-                : 'bg-gray-100 hover:bg-indigo-200 text-gray-700'
+                : 'bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20'
             }`}
           >
             {range.toUpperCase()}

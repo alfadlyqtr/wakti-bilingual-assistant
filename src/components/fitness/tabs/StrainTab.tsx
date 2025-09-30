@@ -49,15 +49,15 @@ export function StrainTab({
   if (!strainData) {
     return (
       <div className="space-y-6">
-        <div className="flex gap-2 mb-6 flex-wrap">
+        <div className="flex gap-1 sm:gap-2 mb-6 flex-wrap justify-center sm:justify-start">
           {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
             <button
               key={range}
               onClick={() => onTimeRangeChange(range)}
-              className={`px-2 py-1 sm:px-3 rounded-full text-xs shadow-sm transition-all ${
+              className={`px-3 py-2 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-medium shadow-sm transition-all min-w-[44px] ${
                 timeRange === range
                   ? 'bg-indigo-500 text-white shadow-md'
-                  : 'bg-gray-100 hover:bg-indigo-200 text-gray-700'
+                  : 'bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20'
               }`}
             >
               {range.toUpperCase()}
@@ -279,17 +279,19 @@ export function StrainTab({
         </div>
       </Card>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Hourly Strain Buildup */}
-        <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
-          <h3 className="font-semibold text-lg mb-4">
-            {language === 'ar' ? 'تراكم الإجهاد اليومي' : 'Today\'s Strain Buildup'}
-          </h3>
-          
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={realHourlyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+      {/* Charts - Only show if we have real data */}
+      {(realWeeklyData.length > 0 || realHourlyData.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Hourly Strain Buildup - Only show if we have hourly data */}
+          {realHourlyData.length > 0 && (
+            <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
+              <h3 className="font-semibold text-lg mb-4">
+                {language === 'ar' ? 'تراكم الإجهاد اليومي' : 'Today\'s Strain Buildup'}
+              </h3>
+              
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={realHourlyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                 <XAxis dataKey="hour" tick={{ fill: '#9CA3AF', fontSize: 11 }} />
                 <YAxis tick={{ fill: '#9CA3AF', fontSize: 12 }} />
@@ -312,46 +314,50 @@ export function StrainTab({
             </ResponsiveContainer>
           </div>
         </Card>
+          )}
 
-        {/* Weekly Strain Trend */}
-        <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
-          <h3 className="font-semibold text-lg mb-4">
-            {language === 'ar' ? 'اتجاه الإجهاد (7 أيام)' : 'Strain Trend (7 Days)'}
-          </h3>
-          
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={realWeeklyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                <defs>
-                  <linearGradient id="strainLineGradient" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="#8B5CF6" stopOpacity={0.8} />
-                    <stop offset="100%" stopColor="#3B82F6" stopOpacity={0.8} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                <XAxis dataKey="date" tick={{ fill: '#9CA3AF', fontSize: 12 }} />
-                <YAxis domain={[0, 21]} tick={{ fill: '#9CA3AF', fontSize: 12 }} />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)', 
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '8px'
-                  }}
-                  formatter={(value: number) => [`${value}`, 'Strain']}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="strain" 
-                  stroke="url(#strainLineGradient)" 
-                  strokeWidth={3}
-                  dot={{ fill: '#8B5CF6', strokeWidth: 2, r: 4 }}
-                  activeDot={{ r: 6, stroke: '#8B5CF6', strokeWidth: 2 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-      </div>
+          {/* Weekly Strain Trend - Only show if we have weekly data */}
+          {realWeeklyData.length > 0 && (
+            <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
+              <h3 className="font-semibold text-lg mb-4">
+                {language === 'ar' ? 'اتجاه الإجهاد (7 أيام)' : 'Strain Trend (7 Days)'}
+              </h3>
+              
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={realWeeklyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                    <defs>
+                      <linearGradient id="strainLineGradient" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#8B5CF6" stopOpacity={0.8} />
+                        <stop offset="100%" stopColor="#3B82F6" stopOpacity={0.8} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                    <XAxis dataKey="date" tick={{ fill: '#9CA3AF', fontSize: 12 }} />
+                    <YAxis domain={[0, 21]} tick={{ fill: '#9CA3AF', fontSize: 12 }} />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)', 
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        borderRadius: '8px'
+                      }}
+                      formatter={(value: number) => [`${value}`, 'Strain']}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="strain" 
+                      stroke="url(#strainLineGradient)" 
+                      strokeWidth={3}
+                      dot={{ fill: '#8B5CF6', strokeWidth: 2, r: 4 }}
+                      activeDot={{ r: 6, stroke: '#8B5CF6', strokeWidth: 2 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
 
       {/* Mini summary */}
       <Card className="rounded-2xl p-4 bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20">
