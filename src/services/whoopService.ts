@@ -129,7 +129,7 @@ export async function generateAiInsights(
     user_timezone?: string;
     data?: any;
   },
-  timeoutMs = 15000
+  timeoutMs = 8000
 ) {
   const dataFull = options?.data || await buildInsightsAggregate();
   // Send a compact payload to AI (exclude heavy raw details)

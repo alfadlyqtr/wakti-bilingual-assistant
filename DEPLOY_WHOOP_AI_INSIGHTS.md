@@ -1,3 +1,15 @@
+# 🚀 URGENT: Deploy DeepSeek Edge Function
+
+## The Issue
+The `whoop-ai-insights` Edge Function is still using OpenAI API instead of DeepSeek.
+
+## Quick Fix - Manual Deployment
+
+1. **Go to Supabase Dashboard**: https://supabase.com/dashboard/project/hxauxozopvpzpdygoqwf/functions
+2. **Click on `whoop-ai-insights` function**
+3. **Replace the entire code** with the corrected version below:
+
+```typescript
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -121,3 +133,16 @@ ${JSON.stringify(payload)}`;
     return new Response(JSON.stringify({ error: "internal_error" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });
+```
+
+4. **Click "Deploy"**
+5. **Verify** the function shows DeepSeek API calls
+
+## Key Changes Made:
+- ✅ Changed `OPENAI_API_KEY` → `DEEPSEEK_API_KEY`
+- ✅ Changed API endpoint to `api.deepseek.com`
+- ✅ Changed model to `deepseek-chat`
+- ✅ Updated error messages to reference DeepSeek
+
+## After Deployment:
+The AI Insights feature will use DeepSeek API (faster & cheaper) instead of OpenAI.
