@@ -162,9 +162,41 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
     }
   }, []);
 
-  const generateInsights = async (window: TimeWindow) => {
-    // Allow generation anytime for testing - remove time restrictions
+  const generateInsights = async (window: TimeWindow, forceGenerate = false) => {
     console.log('Generating insights for window:', window);
+    
+    // Check time restrictions unless forced
+    if (!forceGenerate) {
+      const currentWindow = getCurrentTimeWindow();
+      const currentHour = new Date().getHours();
+      
+      console.log('Current hour:', currentHour, 'Current window:', currentWindow, 'Requested window:', window);
+      
+      if (!currentWindow) {
+        toast.error(language === 'ar' 
+          ? 'المدرب الذكي غير متاح حاليًا (11 مساءً - 5 صباحًا)' 
+          : 'AI Coach not available now (11 PM - 5 AM)'
+        );
+        return;
+      }
+      
+      if (window !== currentWindow) {
+        // Show warning but allow generation with confirmation
+        const windowName = window === 'morning' ? (language === 'ar' ? 'الصباح' : 'Morning') :
+                          window === 'midday' ? (language === 'ar' ? 'منتصف النهار' : 'Midday') :
+                          (language === 'ar' ? 'المساء' : 'Evening');
+        
+        const currentName = currentWindow === 'morning' ? (language === 'ar' ? 'الصباح' : 'Morning') :
+                           currentWindow === 'midday' ? (language === 'ar' ? 'منتصف النهار' : 'Midday') :
+                           (language === 'ar' ? 'المساء' : 'Evening');
+        
+        toast.error(language === 'ar' 
+          ? `الوقت الحالي هو ${currentName}. ${windowName} متاح لاحقًا.` 
+          : `Current time is ${currentName}. ${windowName} available later.`
+        );
+        return;
+      }
+    }
     
     // Prevent double-clicks and check cache (2x per window per day)
     if (loading === window) return;
@@ -413,6 +445,11 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
               <Button
                 key={window}
                 onClick={() => generateInsights(window)}
+                onDoubleClick={() => {
+                  console.log('Force generating for window:', window);
+                  generateInsights(window, true);
+                  toast.info(language === 'ar' ? 'إنشاء قسري للرؤى' : 'Force generating insights');
+                }}
                 disabled={isGenerating}
                 className={`h-20 flex-col gap-2 relative ${
                   isActive 
@@ -420,6 +457,7 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
                     : 'bg-gray-500/10 hover:bg-gray-500/20 border-gray-500/20'
                 }`}
                 variant="outline"
+                title={language === 'ar' ? 'انقر مرتين للإنشاء القسري' : 'Double-click to force generate'}
               >
                 <Icon className={`h-6 w-6 ${isActive ? 'text-emerald-400' : 'text-gray-400'}`} />
                 <div className="text-center min-w-0 flex-1">
