@@ -109,15 +109,8 @@ export function SleepTab({
     }
   };
 
-  const mockWeeklyData = weeklyData.length > 0 ? weeklyData : [
-    { date: 'Mon', hours: 7.2, deep: 85, rem: 110, light: 230, awake: 35 },
-    { date: 'Tue', hours: 6.8, deep: 75, rem: 105, light: 220, awake: 45 },
-    { date: 'Wed', hours: 8.1, deep: 95, rem: 125, light: 260, awake: 25 },
-    { date: 'Thu', hours: 7.5, deep: 90, rem: 120, light: 240, awake: 30 },
-    { date: 'Fri', hours: 6.5, deep: 70, rem: 100, light: 210, awake: 50 },
-    { date: 'Sat', hours: 8.5, deep: 100, rem: 135, light: 275, awake: 20 },
-    { date: 'Sun', hours: 7.8, deep: 88, rem: 118, light: 245, awake: 28 }
-  ];
+  // Only use real data, no mock/dummy data
+  const realWeeklyData = weeklyData && weeklyData.length > 0 ? weeklyData : [];
 
   const hoursProgress = (realSleepData.hours / realSleepData.goalHours) * 100;
   
@@ -463,15 +456,16 @@ export function SleepTab({
         </div>
       </Card>
 
-      {/* 7-Day Sleep Trends */}
-      <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
-        <h3 className="font-semibold text-lg mb-4">
-          {language === 'ar' ? 'اتجاهات النوم (7 أيام)' : 'Sleep Trends (7 Days)'}
-        </h3>
-        
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={mockWeeklyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+      {/* 7-Day Sleep Trends - Only show if we have real data */}
+      {realWeeklyData.length > 0 && (
+        <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
+          <h3 className="font-semibold text-lg mb-4">
+            {language === 'ar' ? 'اتجاهات النوم (7 أيام)' : 'Sleep Trends (7 Days)'}
+          </h3>
+          
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={realWeeklyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis dataKey="date" tick={{ fill: '#9CA3AF', fontSize: 12 }} />
               <YAxis tick={{ fill: '#9CA3AF', fontSize: 12 }} />
@@ -495,6 +489,7 @@ export function SleepTab({
           </ResponsiveContainer>
         </div>
       </Card>
+      )}
     </div>
   );
 }

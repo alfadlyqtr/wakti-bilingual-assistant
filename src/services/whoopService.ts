@@ -181,6 +181,7 @@ export async function generateAiInsights(
     weekly: dataFull.weekly,
     details: dataFull.details,  // Include comprehensive details
     raw: dataFull.raw,          // Include raw comprehensive data
+    user: dataFull.user,        // Include user profile data with first_name
   };
   
   const { data: sessionData } = await supabase.auth.getSession();

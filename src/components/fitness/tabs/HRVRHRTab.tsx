@@ -69,18 +69,11 @@ export function HRVRHRTab({
     rhr: 61
   };
 
-  const mockWeeklyData = weeklyData.length > 0 ? weeklyData : [
-    { date: 'Mon', hrv: 40, rhr: 59 },
-    { date: 'Tue', hrv: 38, rhr: 61 },
-    { date: 'Wed', hrv: 45, rhr: 56 },
-    { date: 'Thu', hrv: 42, rhr: 58 },
-    { date: 'Fri', hrv: 36, rhr: 63 },
-    { date: 'Sat', hrv: 48, rhr: 54 },
-    { date: 'Sun', hrv: 44, rhr: 57 }
-  ];
+  // Only use real data, no mock/dummy data
+  const realWeeklyData = weeklyData && weeklyData.length > 0 ? weeklyData : [];
 
-  const avg7dHRV = Math.round(mockWeeklyData.reduce((sum, d) => sum + d.hrv, 0) / mockWeeklyData.length);
-  const avg7dRHR = Math.round(mockWeeklyData.reduce((sum, d) => sum + d.rhr, 0) / mockWeeklyData.length);
+  const avg7dHRV = realWeeklyData.length > 0 ? Math.round(realWeeklyData.reduce((sum, d) => sum + d.hrv, 0) / realWeeklyData.length) : 0;
+  const avg7dRHR = realWeeklyData.length > 0 ? Math.round(realWeeklyData.reduce((sum, d) => sum + d.rhr, 0) / realWeeklyData.length) : 0;
   
   const deltaHRVVsLastWeek = realCurrentData.hrv - mockYesterdayData.hrv;
   const deltaRHRVsLastWeek = realCurrentData.rhr - mockYesterdayData.rhr;
@@ -281,7 +274,7 @@ export function HRVRHRTab({
         
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={mockWeeklyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+            <LineChart data={realWeeklyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
               <defs>
                 <linearGradient id="hrvGradient" x1="0" y1="0" x2="1" y2="0">
                   <stop offset="0%" stopColor="#10B981" stopOpacity={0.8} />

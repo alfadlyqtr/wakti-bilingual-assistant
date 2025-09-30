@@ -78,15 +78,8 @@ export function RecoveryTab({
     rhr: 61
   };
 
-  const mockWeeklyData = weeklyData.length > 0 ? weeklyData : [
-    { date: 'Mon', recovery: 72, hrv: 40, rhr: 59 },
-    { date: 'Tue', recovery: 68, hrv: 38, rhr: 61 },
-    { date: 'Wed', recovery: 81, hrv: 45, rhr: 56 },
-    { date: 'Thu', recovery: 75, hrv: 42, rhr: 58 },
-    { date: 'Fri', recovery: 65, hrv: 36, rhr: 63 },
-    { date: 'Sat', recovery: 88, hrv: 48, rhr: 54 },
-    { date: 'Sun', recovery: 79, hrv: 44, rhr: 57 }
-  ];
+  // Only use real data, no mock/dummy data
+  const realWeeklyData = weeklyData && weeklyData.length > 0 ? weeklyData : [];
 
   const getRecoveryColor = (score: number) => {
     if (score >= 67) return { color: '#10B981', text: 'text-emerald-400', bg: 'from-emerald-500/10 to-green-500/10', border: 'border-emerald-500/20' };
@@ -95,8 +88,8 @@ export function RecoveryTab({
   };
 
   const recoveryColor = getRecoveryColor(realRecoveryData.score);
-  const bestThisWeek = Math.max(...mockWeeklyData.map(d => d.recovery));
-  const avg7d = Math.round(mockWeeklyData.reduce((sum, d) => sum + d.recovery, 0) / mockWeeklyData.length);
+  const bestThisWeek = realWeeklyData.length > 0 ? Math.max(...realWeeklyData.map(d => d.recovery)) : 0;
+  const avg7d = realWeeklyData.length > 0 ? Math.round(realWeeklyData.reduce((sum, d) => sum + d.recovery, 0) / realWeeklyData.length) : 0;
   const deltaVsLastWeek = realRecoveryData.score - mockYesterdayData.score;
 
   const compareValue = (current: number, yesterday: number, unit: string = '') => {
@@ -321,7 +314,7 @@ export function RecoveryTab({
         
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={mockWeeklyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+            <LineChart data={realWeeklyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis dataKey="date" tick={{ fill: '#9CA3AF', fontSize: 12 }} />
               <YAxis domain={[0, 100]} tick={{ fill: '#9CA3AF', fontSize: 12 }} />

@@ -127,7 +127,16 @@ export function WhoopDetails({ metrics }: WhoopDetailsProps) {
   // Extract comprehensive sleep data
   const sleepStages = metrics?.sleep?.data?.score?.stage_summary;
   const deepSleepMin = sleepStages?.deep_sleep_milli ? Math.round(sleepStages.deep_sleep_milli / 60000) : 0;
-  const totalSleepHours = metrics?.sleep?.duration_sec ? (metrics.sleep.duration_sec / 3600) : 0;
+  
+  // Calculate sleep duration from start/end times OR use duration_sec
+  let totalSleepHours = 0;
+  if (metrics?.sleep?.start && metrics?.sleep?.end) {
+    const startTime = new Date(metrics.sleep.start).getTime();
+    const endTime = new Date(metrics.sleep.end).getTime();
+    totalSleepHours = (endTime - startTime) / (1000 * 60 * 60); // Convert to hours
+  } else if (metrics?.sleep?.duration_sec) {
+    totalSleepHours = metrics.sleep.duration_sec / 3600;
+  }
 
   // Extract comprehensive data
   const strainData = metrics?.cycle?.data?.score;
@@ -152,39 +161,39 @@ export function WhoopDetails({ metrics }: WhoopDetailsProps) {
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'وقت النوم' : 'Bedtime'}</span>
-              <span className="font-medium">{formatTime(metrics?.sleep?.start) || '12:23 AM'}</span>
+              <span className="font-medium">{formatTime(metrics?.sleep?.start) || '--'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'الاستيقاظ' : 'Wake Time'}</span>
-              <span className="font-medium">{formatTime(metrics?.sleep?.end) || '06:05 AM'}</span>
+              <span className="font-medium">{formatTime(metrics?.sleep?.end) || '--'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'المدة' : 'Duration'}</span>
-              <span className="font-medium">{totalSleepHours ? `${totalSleepHours.toFixed(1)}h` : '--'}</span>
+              <span className="font-medium">{totalSleepHours > 0 ? `${totalSleepHours.toFixed(1)}h` : '--'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'الأداء' : 'Performance'}</span>
-              <span className="font-medium">{metrics?.sleep?.performance_pct ? `${Math.round(metrics.sleep.performance_pct)}%` : '59%'}</span>
+              <span className="font-medium">{metrics?.sleep?.performance_pct ? `${Math.round(metrics.sleep.performance_pct)}%` : '--'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'الكفاءة' : 'Efficiency'}</span>
-              <span className="font-medium">{metrics?.sleep?.data?.score?.sleep_efficiency_percentage ? `${Math.round(metrics.sleep.data.score.sleep_efficiency_percentage)}%` : '91%'}</span>
+              <span className="font-medium">{metrics?.sleep?.data?.score?.sleep_efficiency_percentage ? `${Math.round(metrics.sleep.data.score.sleep_efficiency_percentage)}%` : '--'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'الاتساق' : 'Consistency'}</span>
-              <span className="font-medium">{metrics?.sleep?.data?.score?.sleep_consistency_percentage ? `${Math.round(metrics.sleep.data.score.sleep_consistency_percentage)}%` : '90%'}</span>
+              <span className="font-medium">{metrics?.sleep?.data?.score?.sleep_consistency_percentage ? `${Math.round(metrics.sleep.data.score.sleep_consistency_percentage)}%` : '--'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'معدل التنفس' : 'Respiratory Rate'}</span>
-              <span className="font-medium">{metrics?.sleep?.data?.score?.respiratory_rate ? `${metrics.sleep.data.score.respiratory_rate.toFixed(1)} bpm` : '16.1 bpm'}</span>
+              <span className="font-medium">{metrics?.sleep?.data?.score?.respiratory_rate ? `${metrics.sleep.data.score.respiratory_rate.toFixed(1)} bpm` : '--'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'دورات النوم' : 'Sleep Cycles'}</span>
-              <span className="font-medium">{metrics?.sleep?.data?.score?.stage_summary?.sleep_cycle_count || '3'}</span>
+              <span className="font-medium">{metrics?.sleep?.data?.score?.stage_summary?.sleep_cycle_count || '--'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'الاضطرابات' : 'Disturbances'}</span>
-              <span className="font-medium">{metrics?.sleep?.data?.score?.stage_summary?.disturbance_count || '12'}</span>
+              <span className="font-medium">{metrics?.sleep?.data?.score?.stage_summary?.disturbance_count || '--'}</span>
             </div>
           </div>
         </div>
@@ -203,23 +212,23 @@ export function WhoopDetails({ metrics }: WhoopDetailsProps) {
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'نقاط التعافي' : 'Recovery Score'}</span>
-              <span className="font-medium">{metrics?.recovery?.score ? `${Math.round(metrics.recovery.score)}%` : '60%'}</span>
+              <span className="font-medium">{metrics?.recovery?.score ? `${Math.round(metrics.recovery.score)}%` : '--'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'HRV (RMSSD)' : 'HRV (RMSSD)'}</span>
-              <span className="font-medium">{metrics?.recovery?.hrv_ms ? `${Math.round(metrics.recovery.hrv_ms)} ms` : '57 ms'}</span>
+              <span className="font-medium">{metrics?.recovery?.hrv_ms ? `${Math.round(metrics.recovery.hrv_ms)} ms` : '--'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'معدل نبضات الراحة' : 'Resting Heart Rate'}</span>
-              <span className="font-medium">{metrics?.recovery?.rhr_bpm ? `${Math.round(metrics.recovery.rhr_bpm)} bpm` : '66 bpm'}</span>
+              <span className="font-medium">{metrics?.recovery?.rhr_bpm ? `${Math.round(metrics.recovery.rhr_bpm)} bpm` : '--'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'أكسجين الدم' : 'Blood Oxygen'}</span>
-              <span className="font-medium">{metrics?.recovery?.data?.score?.spo2_percentage ? `${metrics.recovery.data.score.spo2_percentage.toFixed(1)}%` : '96.7%'}</span>
+              <span className="font-medium">{metrics?.recovery?.data?.score?.spo2_percentage ? `${metrics.recovery.data.score.spo2_percentage.toFixed(1)}%` : '--'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'درجة حرارة الجلد' : 'Skin Temperature'}</span>
-              <span className="font-medium">{metrics?.recovery?.data?.score?.skin_temp_celsius ? `${metrics.recovery.data.score.skin_temp_celsius.toFixed(1)}°C` : '32.1°C'}</span>
+              <span className="font-medium">{metrics?.recovery?.data?.score?.skin_temp_celsius ? `${metrics.recovery.data.score.skin_temp_celsius.toFixed(1)}°C` : '--'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'حالة المعايرة' : 'Calibrating'}</span>
@@ -242,11 +251,11 @@ export function WhoopDetails({ metrics }: WhoopDetailsProps) {
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'إجهاد اليوم' : 'Day Strain'}</span>
-              <span className="font-medium">{metrics?.cycle?.day_strain ? `${metrics.cycle.day_strain.toFixed(1)}` : '4.3'}</span>
+              <span className="font-medium">{metrics?.cycle?.day_strain ? `${metrics.cycle.day_strain.toFixed(1)}` : '--'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'متوسط معدل النبض' : 'Average Heart Rate'}</span>
-              <span className="font-medium">{metrics?.cycle?.avg_hr_bpm ? `${Math.round(metrics.cycle.avg_hr_bpm)} bpm` : '72 bpm'}</span>
+              <span className="font-medium">{metrics?.cycle?.avg_hr_bpm ? `${Math.round(metrics.cycle.avg_hr_bpm)} bpm` : '--'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'حمل التدريب' : 'Training Load'}</span>
@@ -254,7 +263,7 @@ export function WhoopDetails({ metrics }: WhoopDetailsProps) {
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'الطاقة المحروقة' : 'Energy Burned'}</span>
-              <span className="font-medium">{strainData?.kilojoule ? `${Math.round(strainData.kilojoule / 4.184)} cal` : '774 cal'}</span>
+              <span className="font-medium">{strainData?.kilojoule ? `${Math.round(strainData.kilojoule / 4.184)} cal` : '--'}</span>
             </div>
           </div>
         </div>
@@ -273,48 +282,48 @@ export function WhoopDetails({ metrics }: WhoopDetailsProps) {
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'نوع النشاط' : 'Activity Type'}</span>
-              <span className="font-medium">{metrics?.workout?.sport_name || 'walking'}</span>
+              <span className="font-medium">{metrics?.workout?.sport_name || '--'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'وقت البداية' : 'Start Time'}</span>
-              <span className="font-medium">{formatTime(metrics?.workout?.start) || '08:16 PM'}</span>
+              <span className="font-medium">{formatTime(metrics?.workout?.start) || '--'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'المدة' : 'Duration'}</span>
               <span className="font-medium">
                 {metrics?.workout?.start && metrics?.workout?.end ? 
                   formatDuration((new Date(metrics.workout.end).getTime() - new Date(metrics.workout.start).getTime()) / 1000) : 
-                  '0h 30m'
+                  '--'
                 }
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'الإجهاد' : 'Strain'}</span>
-              <span className="font-medium">{metrics?.workout?.strain ? `${metrics.workout.strain.toFixed(1)}` : '1.3'}</span>
+              <span className="font-medium">{metrics?.workout?.strain ? `${metrics.workout.strain.toFixed(1)}` : '--'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'متوسط النبض' : 'Average HR'}</span>
-              <span className="font-medium">{workoutData?.average_heart_rate ? `${Math.round(workoutData.average_heart_rate)} bpm` : '87 bpm'}</span>
+              <span className="font-medium">{workoutData?.average_heart_rate ? `${Math.round(workoutData.average_heart_rate)} bpm` : '--'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'السعرات' : 'Calories'}</span>
-              <span className="font-medium">{formatCalories(workoutData?.kilojoule) || '39 cal'}</span>
+              <span className="font-medium">{formatCalories(workoutData?.kilojoule) || '--'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'المسافة' : 'Distance'}</span>
-              <span className="font-medium">{workoutData?.distance_meter ? `${(workoutData.distance_meter / 1000).toFixed(2)} km` : '5.04 km'}</span>
+              <span className="font-medium">{workoutData?.distance_meter ? `${(workoutData.distance_meter / 1000).toFixed(2)} km` : '--'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'الارتفاع المكتسب' : 'Elevation Gain'}</span>
-              <span className="font-medium">{workoutData?.altitude_gain_meter ? `${Math.round(workoutData.altitude_gain_meter)} m` : '21 m'}</span>
+              <span className="font-medium">{workoutData?.altitude_gain_meter ? `${Math.round(workoutData.altitude_gain_meter)} m` : '--'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'أقصى نبضة' : 'Max HR'}</span>
-              <span className="font-medium">{workoutData?.max_heart_rate ? `${Math.round(workoutData.max_heart_rate)} bpm` : '103 bpm'}</span>
+              <span className="font-medium">{workoutData?.max_heart_rate ? `${Math.round(workoutData.max_heart_rate)} bpm` : '--'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'جودة التسجيل' : 'Data Quality'}</span>
-              <span className="font-medium">{workoutData?.percent_recorded ? `${(workoutData.percent_recorded * 100).toFixed(1)}%` : '99.96%'}</span>
+              <span className="font-medium">{workoutData?.percent_recorded ? `${(workoutData.percent_recorded * 100).toFixed(1)}%` : '--'}</span>
             </div>
           </div>
         </div>

@@ -81,30 +81,9 @@ export function StrainTab({
     trainingLoad: 7.1
   };
 
-  const mockWeeklyData = weeklyData.length > 0 ? weeklyData : [
-    { date: 'Mon', strain: 11.2, avgHr: 140, trainingLoad: 7.5 },
-    { date: 'Tue', strain: 10.8, avgHr: 138, trainingLoad: 7.1 },
-    { date: 'Wed', strain: 14.5, avgHr: 148, trainingLoad: 9.8 },
-    { date: 'Thu', strain: 12.5, avgHr: 142, trainingLoad: 8.2 },
-    { date: 'Fri', strain: 8.9, avgHr: 132, trainingLoad: 5.9 },
-    { date: 'Sat', strain: 16.2, avgHr: 155, trainingLoad: 11.4 },
-    { date: 'Sun', strain: 9.5, avgHr: 135, trainingLoad: 6.3 }
-  ];
-
-  const mockHourlyData = hourlyData.length > 0 ? hourlyData : [
-    { hour: '6AM', strain: 0.2 },
-    { hour: '7AM', strain: 1.8 },
-    { hour: '8AM', strain: 3.2 },
-    { hour: '9AM', strain: 4.1 },
-    { hour: '10AM', strain: 5.8 },
-    { hour: '11AM', strain: 7.2 },
-    { hour: '12PM', strain: 8.5 },
-    { hour: '1PM', strain: 9.8 },
-    { hour: '2PM', strain: 10.9 },
-    { hour: '3PM', strain: 11.7 },
-    { hour: '4PM', strain: 12.1 },
-    { hour: '5PM', strain: 12.5 }
-  ];
+  // Only use real data, no mock/dummy data
+  const realWeeklyData = weeklyData && weeklyData.length > 0 ? weeklyData : [];
+  const realHourlyData = hourlyData && hourlyData.length > 0 ? hourlyData : [];
 
   const getStrainColor = (strain: number) => {
     if (strain <= 7) return { color: '#10B981', text: 'text-emerald-400', bg: 'from-emerald-500/10 to-green-500/10', border: 'border-emerald-500/20', zone: 'Easy' };
@@ -115,8 +94,8 @@ export function StrainTab({
   const strainColor = getStrainColor(realStrainData.dayStrain);
   const strainProgress = (realStrainData.dayStrain / 21) * 100;
   
-  const avg7dStrain = Math.round((mockWeeklyData.reduce((sum, d) => sum + d.strain, 0) / mockWeeklyData.length) * 10) / 10;
-  const avg7dTrainingLoad = Math.round((mockWeeklyData.reduce((sum, d) => sum + d.trainingLoad, 0) / mockWeeklyData.length) * 10) / 10;
+  const avg7dStrain = realWeeklyData.length > 0 ? Math.round((realWeeklyData.reduce((sum, d) => sum + d.strain, 0) / realWeeklyData.length) * 10) / 10 : 0;
+  const avg7dTrainingLoad = realWeeklyData.length > 0 ? Math.round((realWeeklyData.reduce((sum, d) => sum + d.trainingLoad, 0) / realWeeklyData.length) * 10) / 10 : 0;
 
   const compareValue = (current: number, yesterday: number, unit: string = '') => {
     const diff = current - yesterday;
@@ -310,7 +289,7 @@ export function StrainTab({
           
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={mockHourlyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+              <BarChart data={realHourlyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                 <XAxis dataKey="hour" tick={{ fill: '#9CA3AF', fontSize: 11 }} />
                 <YAxis tick={{ fill: '#9CA3AF', fontSize: 12 }} />
@@ -342,7 +321,7 @@ export function StrainTab({
           
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={mockWeeklyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+              <LineChart data={realWeeklyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                 <defs>
                   <linearGradient id="strainLineGradient" x1="0" y1="0" x2="1" y2="0">
                     <stop offset="0%" stopColor="#8B5CF6" stopOpacity={0.8} />
