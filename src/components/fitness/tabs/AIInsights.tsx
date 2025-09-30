@@ -152,40 +152,23 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
     localStorage.setItem('wakti-ai-insights-times', JSON.stringify(lastGenerated));
   }, [lastGenerated]);
 
+  // SIMPLE: Auto-generate insights on load
+  useEffect(() => {
+    if (!activeWindow && !loading) {
+      console.log('Auto-generating morning insights...');
+      generateSimpleInsights();
+    }
+  }, []);
+
   const generateInsights = async (window: TimeWindow) => {
-    // Check if current time window allows generation
-    const currentWindow = getCurrentTimeWindow();
-    if (!currentWindow) {
-      toast.error(language === 'ar' 
-        ? 'المدرب الذكي غير متاح حاليًا. متاح خلال أوقات محددة فقط.' 
-        : 'AI Coach not available now. Available during specific time windows only.'
-      );
-      return;
-    }
-    
-    if (window !== currentWindow) {
-      toast.error(language === 'ar' 
-        ? `يمكن إنشاء رؤى ${window === 'morning' ? 'الصباح' : window === 'midday' ? 'منتصف النهار' : 'المساء'} فقط خلال الوقت المحدد` 
-        : `${window.charAt(0).toUpperCase() + window.slice(1)} insights only available during ${window} hours`
-      );
-      return;
-    }
+    // Allow generation anytime for testing - remove time restrictions
+    console.log('Generating insights for window:', window);
     
     // Prevent double-clicks and check cache (2x per window per day)
     if (loading === window) return;
     
     const now = Date.now();
-    const today = new Date().toDateString();
-    const cacheKey = `${window}-${today}`;
-    const generationCount = localStorage.getItem(`wakti-insights-count-${cacheKey}`) || '0';
-    
-    if (parseInt(generationCount) >= 2) {
-      toast.error(language === 'ar' 
-        ? 'تم الوصول للحد الأقصى للإنشاء (مرتان يوميًا لكل فترة)' 
-        : 'Maximum generations reached (2x daily per window)'
-      );
-      return;
-    }
+    // Remove generation limits for testing
     
     // Check if we have cached insights that are still valid
     if (insights[window] && lastGenerated[window] > 0) {
@@ -253,9 +236,7 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
             [window]: now
           }));
           
-          // Update generation count
-          const newCount = parseInt(generationCount) + 1;
-          localStorage.setItem(`wakti-insights-count-${cacheKey}`, newCount.toString());
+          // Generation count tracking removed for testing
           
           setActiveWindow(window);
           toast.success(language === 'ar' ? 'تم إنشاء الرؤى' : 'Insights generated');
