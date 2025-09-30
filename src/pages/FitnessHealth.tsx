@@ -378,7 +378,7 @@ export default function FitnessHealth() {
             </TabsList>
 
             <TabsContent value="ai-insights" className="mt-4 sm:mt-6 space-y-4 sm:space-y-6">
-              <AIInsights timeRange={timeRange} onTimeRangeChange={setTimeRange} />
+              <AIInsights timeRange={timeRange} onTimeRangeChange={setTimeRange} metrics={metrics} />
               <WhoopDetails metrics={metrics} />
             </TabsContent>
 

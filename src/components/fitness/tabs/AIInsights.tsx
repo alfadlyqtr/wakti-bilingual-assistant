@@ -16,6 +16,7 @@ type TimeRange = '1d' | '1w' | '2w' | '1m' | '3m' | '6m';
 interface AIInsightsProps {
   timeRange: TimeRange;
   onTimeRangeChange: (range: TimeRange) => void;
+  metrics?: any; // Same metrics data that WhoopDetails uses
 }
 
 type TimeWindow = 'morning' | 'midday' | 'evening';
@@ -43,7 +44,7 @@ const TIME_WINDOWS = {
   evening: { start: '5:00 PM', end: '11:00 PM', label: 'Evening Summary', icon: Moon },
 };
 
-export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
+export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsightsProps) {
   const { language } = useTheme();
   const { user } = useAuth();
   const [loading, setLoading] = useState<TimeWindow | null>(null);
@@ -224,43 +225,57 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
       // Show loading immediately, then fetch data asynchronously
       setTimeout(async () => {
         try {
-          console.log('Starting to build aggregate data...');
-          const aggregate = await buildInsightsAggregate();
-          console.log('Built aggregate data:', aggregate);
-          
-          // Check if aggregate is empty or null
-          if (!aggregate || Object.keys(aggregate).length === 0) {
-            console.warn('Aggregate data is empty, using mock data');
-            throw new Error('No WHOOP data available');
-          }
-          
           // Get user's real name
           const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || "Champion";
           
-          // Extract real WHOOP data properly
-          console.log('Raw aggregate structure:', JSON.stringify(aggregate, null, 2));
+          // Use the SAME metrics data that WhoopDetails uses - this is the real WHOOP data!
+          console.log('Using direct metrics data:', metrics);
+          console.log('Sleep performance:', metrics?.sleep?.performance_pct);
+          console.log('Recovery score:', metrics?.recovery?.score);
+          console.log('HRV ms:', metrics?.recovery?.hrv_ms);
+          console.log('Day strain:', metrics?.cycle?.day_strain);
           
-          // Send ALL the real WHOOP data to AI - it's already perfectly structured!
+          // Check if we have any WHOOP data
+          if (!metrics || (!metrics.sleep && !metrics.recovery && !metrics.cycle)) {
+            console.warn('No WHOOP metrics available, using mock data');
+            throw new Error('No WHOOP data available');
+          }
+          
+          // Extract sleep hours from duration_sec or stage_summary
+          const sleepHours = (() => {
+            if (metrics?.sleep?.duration_sec) {
+              return Math.round((metrics.sleep.duration_sec / 3600) * 10) / 10;
+            }
+            const stages = metrics?.sleep?.data?.score?.stage_summary;
+            if (stages) {
+              const totalMs = (stages.deep_sleep_milli || 0) + (stages.rem_sleep_milli || 0) + (stages.light_sleep_milli || 0);
+              return totalMs ? Math.round((totalMs / 3600000) * 10) / 10 : null;
+            }
+            return null;
+          })();
+          
+          // Create enhanced data using the REAL metrics (same as WhoopDetails)
           const enhancedData = {
-            ...aggregate, // This contains today, last7Days, workouts, weekly, details
             user_name: userName,
             current_time: new Date().toISOString(),
             time_window: window,
-            // Extract key metrics for easy AI access
+            // Use the EXACT same data structure that WhoopDetails displays
             key_metrics: {
-              sleep_hours: aggregate?.today?.sleepHours,
-              sleep_performance: aggregate?.today?.sleepPerformancePct,
-              recovery_score: aggregate?.today?.recoveryPct,
-              hrv_ms: aggregate?.today?.hrvMs,
-              resting_hr: aggregate?.today?.rhrBpm,
-              day_strain: aggregate?.today?.dayStrain,
-              latest_workout: aggregate?.today?.latestWorkout,
-              // 7-day trends
-              sleep_trend: aggregate?.last7Days?.sleepHours,
-              recovery_trend: aggregate?.last7Days?.recoveryPct,
-              hrv_trend: aggregate?.last7Days?.hrvMs,
-              rhr_trend: aggregate?.last7Days?.rhrBpm
+              sleep_hours: sleepHours,
+              sleep_performance: metrics?.sleep?.performance_pct,
+              recovery_score: metrics?.recovery?.score,
+              hrv_ms: metrics?.recovery?.hrv_ms,
+              resting_hr: metrics?.recovery?.rhr_bpm,
+              day_strain: metrics?.cycle?.day_strain,
+              avg_heart_rate: metrics?.cycle?.avg_hr_bpm,
+              workout_sport: metrics?.workout?.sport_name,
+              workout_strain: metrics?.workout?.strain,
+              workout_duration: metrics?.workout?.end && metrics?.workout?.start 
+                ? Math.round((new Date(metrics.workout.end).getTime() - new Date(metrics.workout.start).getTime()) / 60000)
+                : null
             },
+            // Include raw metrics for AI to analyze
+            raw_metrics: metrics,
             // Add rich context for AI
             insights_context: {
               time_of_day: window,
