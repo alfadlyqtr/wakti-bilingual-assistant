@@ -349,11 +349,13 @@ export default function FitnessHealth() {
             <Card className="rounded-2xl p-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-blue-500/20 mb-6">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
-                  {user?.user_metadata?.full_name?.charAt(0) || user?.email?.charAt(0) || 'A'}
+                  {metrics?.profile?.first_name?.charAt(0) || user?.user_metadata?.full_name?.charAt(0) || user?.email?.charAt(0) || 'A'}
                 </div>
                 <div className="flex-1">
                   <h2 className="text-lg font-semibold text-white">
-                    {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Abdullah Alfadky'}
+                    {metrics?.profile?.first_name && metrics?.profile?.last_name 
+                      ? `${metrics.profile.first_name} ${metrics.profile.last_name}`
+                      : user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Abdullah Alfadky'}
                   </h2>
                   <p className="text-sm text-gray-400">
                     {language === 'ar' ? 'متصل بـ WHOOP' : 'Connected to WHOOP'}
@@ -388,6 +390,73 @@ export default function FitnessHealth() {
               </div>
             </Card>
           )}
+
+          {/* Mobile Dashboard Widgets - Only show on mobile */}
+          <div className="block md:hidden mb-6">
+            {metrics && (
+              <div className="grid grid-cols-2 gap-4">
+                {/* Recovery Widget */}
+                <Card className="rounded-2xl p-4 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border-green-500/20">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-green-400 mb-2">
+                      {metrics.recovery?.score || '0'}%
+                    </div>
+                    <div className="text-sm text-gray-400">
+                      {language === 'ar' ? 'التعافي' : 'Recovery'}
+                    </div>
+                    <div className="text-xs text-green-400 mt-1">
+                      HRV: {metrics.recovery?.hrv || '0'}ms
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Sleep Widget */}
+                <Card className="rounded-2xl p-4 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-blue-500/20">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-blue-400 mb-2">
+                      {sleepHours || '0'}h
+                    </div>
+                    <div className="text-sm text-gray-400">
+                      {language === 'ar' ? 'النوم' : 'Sleep'}
+                    </div>
+                    <div className="text-xs text-blue-400 mt-1">
+                      {metrics.sleep?.performance_pct || '0'}% {language === 'ar' ? 'كفاءة' : 'Efficiency'}
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Strain Widget */}
+                <Card className="rounded-2xl p-4 bg-gradient-to-br from-orange-500/10 to-red-500/10 border-orange-500/20">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-orange-400 mb-2">
+                      {metrics.cycle?.strain?.toFixed(1) || '0.0'}
+                    </div>
+                    <div className="text-sm text-gray-400">
+                      {language === 'ar' ? 'الإجهاد' : 'Strain'}
+                    </div>
+                    <div className="text-xs text-orange-400 mt-1">
+                      {language === 'ar' ? 'منطقة سهلة' : 'Easy Zone'}
+                    </div>
+                  </div>
+                </Card>
+
+                {/* HRV Widget */}
+                <Card className="rounded-2xl p-4 bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/20">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-purple-400 mb-2">
+                      {metrics.recovery?.hrv || '0'}
+                    </div>
+                    <div className="text-sm text-gray-400">
+                      HRV (ms)
+                    </div>
+                    <div className="text-xs text-purple-400 mt-1">
+                      RHR: {metrics.recovery?.rhr || '0'} bpm
+                    </div>
+                  </div>
+                </Card>
+              </div>
+            )}
+          </div>
 
           <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as MainTab)}>
             <TabsList className="grid w-full grid-cols-2 sm:grid-cols-6 bg-white/10 border-white/20 gap-1 p-1">

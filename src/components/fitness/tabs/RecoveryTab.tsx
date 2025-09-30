@@ -312,6 +312,58 @@ export function RecoveryTab({
         </div>
       </Card>
 
+      {/* Day Statistics - Like WHOOP */}
+      <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
+        <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+          <TrendingUp className="h-5 w-5 text-emerald-400" />
+          {language === 'ar' ? 'إحصائيات اليوم' : 'Day Statistics'}
+        </h3>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* Recovery Score */}
+          <div className="bg-emerald-500/10 rounded-xl p-4 border border-emerald-500/20">
+            <div className="text-sm text-gray-400 mb-2">
+              {language === 'ar' ? 'نقاط التعافي' : 'Recovery Score'}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-2xl font-bold text-emerald-400">{realRecoveryData.score}%</span>
+              <div className={`flex items-center gap-1 ${recoveryComparison.color}`}>
+                <recoveryComparison.icon className="h-4 w-4" />
+                <span className="text-sm">{recoveryComparison.text}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* HRV */}
+          <div className="bg-blue-500/10 rounded-xl p-4 border border-blue-500/20">
+            <div className="text-sm text-gray-400 mb-2">
+              {language === 'ar' ? 'تقلب معدل ضربات القلب' : 'HRV (RMSSD)'}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-2xl font-bold text-blue-400">{realRecoveryData.hrv}ms</span>
+              <div className={`flex items-center gap-1 ${hrvComparison.color}`}>
+                <hrvComparison.icon className="h-4 w-4" />
+                <span className="text-sm">{hrvComparison.text}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Resting Heart Rate */}
+          <div className="bg-purple-500/10 rounded-xl p-4 border border-purple-500/20">
+            <div className="text-sm text-gray-400 mb-2">
+              {language === 'ar' ? 'معدل ضربات القلب أثناء الراحة' : 'Resting Heart Rate'}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-2xl font-bold text-purple-400">{realRecoveryData.rhr} bpm</span>
+              <div className={`flex items-center gap-1 ${rhrComparison.color}`}>
+                <rhrComparison.icon className="h-4 w-4" />
+                <span className="text-sm">{rhrComparison.text}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+
       {/* Recovery Sparkline - Only show if we have real data */}
       {realWeeklyData.length > 0 && (
         <Card className="rounded-2xl p-6 bg-white/5 border-white/10">

@@ -328,6 +328,15 @@ ${visuals}
 WHOOP DATA:
 ${JSON.stringify(payload)}
 
+DEBUG - EXTRACTED VALUES:
+User Name: ${userName}
+Sleep Hours: ${sleepHours}
+Recovery Score: ${recoveryScore}
+HRV: ${hrvMs}
+Strain: ${strainScore}
+Sleep Performance: ${sleepPerf}
+Resting HR: ${restingHR}
+
 USER PROFILE AND BODY MEASUREMENTS (if available):
 ${JSON.stringify(userProfile)}`;
     };

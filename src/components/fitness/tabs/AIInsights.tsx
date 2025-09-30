@@ -39,9 +39,9 @@ interface InsightData {
 }
 
 const TIME_WINDOWS = {
-  morning: { start: '5:00 AM', end: '11:00 AM', label: 'Morning Summary', icon: Sun },
-  midday: { start: '12:00 PM', end: '6:00 PM', label: 'Midday Summary', icon: Clock },
-  evening: { start: '5:00 PM', end: '11:00 PM', label: 'Evening Summary', icon: Moon },
+  morning: { start: '5:00 AM', end: '11:50 AM', label: 'Morning Summary', icon: Sun },
+  midday: { start: '12:00 PM', end: '5:50 PM', label: 'Midday Summary', icon: Clock },
+  evening: { start: '6:00 PM', end: '12:00 AM', label: 'Evening Summary', icon: Moon },
 };
 
 export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsightsProps) {
@@ -278,11 +278,19 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
           };
           
           console.log('Enhanced data for AI:', enhancedData);
+          console.log('=== DEBUG AI DATA PAYLOAD ===');
+          console.log('User:', user);
+          console.log('Metrics:', metrics);
+          console.log('Time Window:', window);
+          console.log('Language:', language);
           
           const response = await generateAiInsights(language as 'en' | 'ar', {
             time_of_day: window,
             user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
           });
+          
+          console.log('=== AI RESPONSE ===');
+          console.log('Response:', response);
           
           console.log('AI insights response:', response);
           
