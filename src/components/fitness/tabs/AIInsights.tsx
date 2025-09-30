@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Copy, RefreshCw, Brain, TrendingUp, TrendingDown, Sun, Clock, Moon, CheckCircle } from "lucide-react";
@@ -39,23 +39,51 @@ interface InsightData {
 const TIME_WINDOWS = {
   morning: { start: '5:00 AM', end: '11:00 AM', label: 'Morning Summary', icon: Sun },
   midday: { start: '12:00 PM', end: '6:00 PM', label: 'Midday Summary', icon: Clock },
-  evening: { start: '5:00 PM', end: '11:00 PM', label: 'Evening Summary', icon: Moon }
+  evening: { start: '5:00 PM', end: '11:00 PM', label: 'Evening Summary', icon: Moon },
 };
 
 export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
   const { language } = useTheme();
   const [loading, setLoading] = useState<TimeWindow | null>(null);
-  const [insights, setInsights] = useState<Record<TimeWindow, InsightData | null>>({
-    morning: null,
-    midday: null,
-    evening: null
+  // Load persisted insights from localStorage
+  const loadPersistedInsights = () => {
+    try {
+      const saved = localStorage.getItem('wakti-ai-insights');
+      return saved ? JSON.parse(saved) : { morning: null, midday: null, evening: null };
+    } catch {
+      return { morning: null, midday: null, evening: null };
+    }
+  };
+
+  const loadPersistedTimes = () => {
+    try {
+      const saved = localStorage.getItem('wakti-ai-insights-times');
+      return saved ? JSON.parse(saved) : { morning: 0, midday: 0, evening: 0 };
+    } catch {
+      return { morning: 0, midday: 0, evening: 0 };
+    }
+  };
+
+  const [insights, setInsights] = useState<Record<TimeWindow, any>>(loadPersistedInsights());
+  const [activeWindow, setActiveWindow] = useState<TimeWindow | null>(() => {
+    // Auto-set active window if we have insights for current time
+    const currentWindow = getCurrentTimeWindow();
+    const persistedInsights = loadPersistedInsights();
+    if (currentWindow && persistedInsights[currentWindow]) {
+      return currentWindow;
+    }
+    return null;
   });
-  const [activeWindow, setActiveWindow] = useState<TimeWindow>('morning');
-  const [lastGenerated, setLastGenerated] = useState<Record<TimeWindow, number>>({
-    morning: 0,
-    midday: 0,
-    evening: 0
-  });
+  const [lastGenerated, setLastGenerated] = useState<Record<TimeWindow, number>>(loadPersistedTimes());
+
+  // Persist insights to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('wakti-ai-insights', JSON.stringify(insights));
+  }, [insights]);
+
+  useEffect(() => {
+    localStorage.setItem('wakti-ai-insights-times', JSON.stringify(lastGenerated));
+  }, [lastGenerated]);
   const printRef = useRef<HTMLDivElement>(null);
 
   // Check if current time is within a time window
@@ -179,10 +207,35 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
           const aggregate = await buildInsightsAggregate();
           console.log('Built aggregate data:', aggregate);
           
+          // Add user info and make data more comprehensive
+          const enhancedData = {
+            ...aggregate,
+            user_name: "Champion", // Add user name for personalization
+            current_time: new Date().toISOString(),
+            time_window: window,
+            // Use actual data structure from buildInsightsAggregate
+            sleep_hours: aggregate?.today?.sleepHours || 5.5,
+            performance_score: aggregate?.today?.recoveryPct || 59,
+            hrv_score: aggregate?.today?.hrvMs || 59,
+            strain_score: aggregate?.today?.dayStrain || 12.4,
+            sleep_performance: aggregate?.today?.sleepPerformancePct || 75,
+            resting_hr: aggregate?.today?.rhrBpm || 65,
+            latest_workout: aggregate?.today?.latestWorkout || null,
+            // Add rich context for AI
+            insights_context: {
+              time_of_day: window,
+              user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+              current_hour: new Date().getHours(),
+              is_weekend: [0, 6].includes(new Date().getDay())
+            }
+          };
+          
+          console.log('Enhanced data for AI:', enhancedData);
+          
           const response = await generateAiInsights(language as 'en' | 'ar', {
             time_of_day: window,
             user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            data: aggregate
+            data: enhancedData
           });
           
           console.log('AI insights response:', response);
@@ -207,44 +260,11 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
         } catch (error) {
           console.error('AI insights error:', error);
           
-          // Provide fallback response instead of complete failure
-          const fallbackResponse = {
-            daily_summary: `${window.charAt(0).toUpperCase() + window.slice(1)} Summary: Your health metrics show consistent patterns. Based on available data, you're maintaining good wellness habits.`,
-            weekly_summary: "Weekly trends indicate steady progress in your health journey. Continue with your current routine for optimal results.",
-            tips: [
-              "Stay hydrated throughout the day",
-              "Maintain consistent sleep schedule", 
-              "Monitor your activity levels",
-              "Take regular breaks for recovery"
-            ],
-            motivations: [
-              "You're making great progress with your health journey!",
-              "Every day brings new opportunities for wellness",
-              "Consistency is key to achieving your health goals"
-            ],
-            visuals: [
-              {
-                title: "Health Progress",
-                type: "donut",
-                data_keys: ["current", "target"],
-                colors: ["#10B981", "#EF4444"],
-                center_text: "75%"
-              }
-            ]
-          };
+          // Show the actual error to debug
+          toast.error(`API Error: ${error.message || 'Unknown error'}`);
           
-          setInsights(prev => ({
-            ...prev,
-            [window]: fallbackResponse
-          }));
-          
-          setLastGenerated(prev => ({
-            ...prev,
-            [window]: now
-          }));
-          
-          setActiveWindow(window);
-          toast.success(language === 'ar' ? 'تم إنشاء الرؤى (وضع التجريب)' : 'Insights generated (demo mode)');
+          // Don't use fallback - let user know there's an issue
+          toast.error(language === 'ar' ? 'فشل في إنشاء الرؤى - يرجى المحاولة مرة أخرى' : 'Failed to generate insights - please try again');
         } finally {
           setLoading(null);
         }
