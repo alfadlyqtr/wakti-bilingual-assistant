@@ -164,12 +164,14 @@ export async function generateAiInsights(
   timeoutMs = 30000
 ) {
   const dataFull = options?.data || await buildInsightsAggregate();
-  // Send a compact payload to AI (exclude heavy raw details)
+  // Send FULL comprehensive payload to AI - include ALL WHOOP data
   const data = {
     today: dataFull.today,
     last7Days: dataFull.last7Days,
     workouts: (dataFull.workouts || []).slice(-20),
     weekly: dataFull.weekly,
+    details: dataFull.details,  // Include comprehensive details
+    raw: dataFull.raw,          // Include raw comprehensive data
   };
   
   const { data: sessionData } = await supabase.auth.getSession();
