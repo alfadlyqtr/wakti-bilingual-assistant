@@ -45,6 +45,9 @@ const TIME_WINDOWS = {
 export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
   const { language } = useTheme();
   const [loading, setLoading] = useState<TimeWindow | null>(null);
+  const printRef = useRef<HTMLDivElement>(null);
+
+  // Check if current time is within a time window
   // Load persisted insights from localStorage
   const loadPersistedInsights = () => {
     try {
@@ -63,28 +66,6 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
       return { morning: 0, midday: 0, evening: 0 };
     }
   };
-
-  const [insights, setInsights] = useState<Record<TimeWindow, any>>(loadPersistedInsights());
-  const [activeWindow, setActiveWindow] = useState<TimeWindow | null>(() => {
-    // Auto-set active window if we have insights for current time
-    const currentWindow = getCurrentTimeWindow();
-    const persistedInsights = loadPersistedInsights();
-    if (currentWindow && persistedInsights[currentWindow]) {
-      return currentWindow;
-    }
-    return null;
-  });
-  const [lastGenerated, setLastGenerated] = useState<Record<TimeWindow, number>>(loadPersistedTimes());
-
-  // Persist insights to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem('wakti-ai-insights', JSON.stringify(insights));
-  }, [insights]);
-
-  useEffect(() => {
-    localStorage.setItem('wakti-ai-insights-times', JSON.stringify(lastGenerated));
-  }, [lastGenerated]);
-  const printRef = useRef<HTMLDivElement>(null);
 
   // Check if current time is within a time window
   const getCurrentTimeWindow = (): TimeWindow | null => {
@@ -148,6 +129,28 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
     }
     return nextWindow.getTime() - now.getTime();
   };
+
+  // State variables
+  const [insights, setInsights] = useState<Record<TimeWindow, any>>(loadPersistedInsights());
+  const [activeWindow, setActiveWindow] = useState<TimeWindow | null>(() => {
+    // Auto-set active window if we have insights for current time
+    const currentWindow = getCurrentTimeWindow();
+    const persistedInsights = loadPersistedInsights();
+    if (currentWindow && persistedInsights[currentWindow]) {
+      return currentWindow;
+    }
+    return null;
+  });
+  const [lastGenerated, setLastGenerated] = useState<Record<TimeWindow, number>>(loadPersistedTimes());
+
+  // Persist insights to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('wakti-ai-insights', JSON.stringify(insights));
+  }, [insights]);
+
+  useEffect(() => {
+    localStorage.setItem('wakti-ai-insights-times', JSON.stringify(lastGenerated));
+  }, [lastGenerated]);
 
   const generateInsights = async (window: TimeWindow) => {
     // Check if current time window allows generation
