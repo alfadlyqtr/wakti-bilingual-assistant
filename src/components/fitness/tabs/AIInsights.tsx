@@ -205,10 +205,10 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
     const now = Date.now();
     // Remove generation limits for testing
     
-    // Allow users to generate insights whenever they want (no caching restrictions)
-    if (insights[window] && lastGenerated[window] > 0 && !forceGenerate) {
+    // Always allow fresh generation - no caching restrictions
+    if (!forceGenerate && insights[window] && lastGenerated[window] > 0) {
+      // Show cached but allow regeneration
       setActiveWindow(window);
-      toast.success(language === 'ar' ? 'تم عرض الرؤى المحفوظة' : 'Showing cached insights');
       return;
     }
     
@@ -455,8 +455,11 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
                 onClick={() => generateInsights(window)}
                 onDoubleClick={() => {
                   console.log('Force generating for window:', window);
+                  // Clear cache and force regenerate
+                  setInsights(prev => ({ ...prev, [window]: null }));
+                  setLastGenerated(prev => ({ ...prev, [window]: 0 }));
                   generateInsights(window, true);
-                  toast.info(language === 'ar' ? 'إنشاء قسري للرؤى' : 'Force generating insights');
+                  toast.info(language === 'ar' ? 'إنشاء جديد للرؤى...' : 'Generating fresh insights...');
                 }}
                 disabled={isGenerating}
                 className={`h-20 flex-col gap-2 relative ${

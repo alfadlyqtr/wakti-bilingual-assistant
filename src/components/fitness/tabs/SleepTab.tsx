@@ -109,8 +109,15 @@ export function SleepTab({
     }
   };
 
-  // Only use real data, no mock/dummy data
-  const realWeeklyData = weeklyData && weeklyData.length > 0 ? weeklyData : [];
+  // Only use real data with valid values, no mock/dummy data
+  const realWeeklyData = weeklyData && weeklyData.length > 0 
+    ? weeklyData.filter(item => 
+        item.hours !== null && 
+        item.hours !== undefined && 
+        item.hours > 0 &&
+        (item.deep !== null || item.rem !== null || item.light !== null)
+      )
+    : [];
 
   const hoursProgress = (realSleepData.hours / realSleepData.goalHours) * 100;
   
@@ -136,15 +143,15 @@ export function SleepTab({
   return (
     <div className="space-y-6">
       {/* Mini-tabs for time range */}
-      <div className="flex gap-2 mb-6 flex-wrap">
+      <div className="flex gap-1 sm:gap-2 mb-6 flex-wrap justify-center sm:justify-start">
         {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
           <button
             key={range}
             onClick={() => onTimeRangeChange(range)}
-            className={`px-2 py-1 sm:px-3 rounded-full text-xs shadow-sm transition-all ${
+            className={`px-3 py-2 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-medium shadow-sm transition-all min-w-[44px] ${
               timeRange === range
                 ? 'bg-indigo-500 text-white shadow-md'
-                : 'bg-gray-100 hover:bg-indigo-200 text-gray-700'
+                : 'bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20'
             }`}
           >
             {range.toUpperCase()}
