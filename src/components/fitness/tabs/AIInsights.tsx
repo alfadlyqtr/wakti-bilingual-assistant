@@ -156,7 +156,7 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
   useEffect(() => {
     if (!activeWindow && !loading) {
       console.log('Auto-generating morning insights...');
-      generateSimpleInsights();
+      generateInsights('morning');
     }
   }, []);
 
