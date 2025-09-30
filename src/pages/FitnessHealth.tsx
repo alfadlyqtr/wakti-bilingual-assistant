@@ -83,7 +83,7 @@ export default function FitnessHealth() {
         ]);
         setMetrics(m);
         setHrHistory(rec);
-        setSleepHist(sl.map((x:any)=>({ start: x.start, end: x.end, hours: x.hours })));
+        setSleepHist(sl.map((x:any)=>({ start: x.start, end: x.end, hours: x.hours, stages: x.stages })));
         setCycleHist(cyc);
         setWorkoutsHist(wks.map((w:any)=>({ start: w.start, strain: w.strain ?? null, kcal: w.kcal ?? null })));
         // Auto-sync if older than 1 hour and toggle enabled
@@ -97,7 +97,7 @@ export default function FitnessHealth() {
               const [m2, rec2, sl2, cyc2, wks2] = await Promise.all([fetchCompactMetrics(), fetchRecoveryHistory(timeRangeToDays(timeRange)), fetchSleepHistory(timeRangeToDays(timeRange)), fetchCycleHistory(timeRangeToDays(timeRange)), fetchWorkoutsHistory(timeRangeToDays(timeRange))]);
               setMetrics(m2);
               setHrHistory(rec2);
-              setSleepHist(sl2.map((x:any)=>({ start: x.start, end: x.end, hours: x.hours })));
+              setSleepHist(sl2.map((x:any)=>({ start: x.start, end: x.end, hours: x.hours, stages: x.stages })));
               setCycleHist(cyc2);
               setWorkoutsHist(wks2.map((w:any)=>({ start: w.start, strain: w.strain ?? null, kcal: w.kcal ?? null })));
               setStatus({ connected: true, lastSyncedAt: new Date().toISOString() });
@@ -118,13 +118,13 @@ export default function FitnessHealth() {
     if (!connected) return;
     
     (async () => {
-      try {
         const historicalData = await fetchHistoricalData(timeRange);
         setHrHistory(historicalData.recovery);
         setSleepHist(historicalData.sleep.map((x: any) => ({ 
           start: x.start, 
           end: x.end, 
-          hours: x.hours 
+          hours: x.hours,
+          stages: x.stages ? x.stages : { deep: 0, rem: 0, light: 0, awake: 0 }
         })));
         setCycleHist(historicalData.cycles);
         setWorkoutsHist(historicalData.workouts.map((w: any) => ({ 
@@ -408,11 +408,11 @@ export default function FitnessHealth() {
                 } : undefined}
                 weeklyData={sleepHist.map((s: any) => ({
                   date: s.start,
-                  hours: s.hours || 0,
-                  deep: Math.round((s.stages?.deep || 0) / 60000),
-                  rem: Math.round((s.stages?.rem || 0) / 60000),
-                  light: Math.round((s.stages?.light || 0) / 60000),
-                  awake: Math.round((s.stages?.awake || 0) / 60000)
+                  hours: typeof s.hours === 'number' ? s.hours : null,
+                  deep: s.stages?.deep ? Math.round(s.stages.deep / 60000) : null,
+                  rem: s.stages?.rem ? Math.round(s.stages.rem / 60000) : null,
+                  light: s.stages?.light ? Math.round(s.stages.light / 60000) : null,
+                  awake: s.stages?.awake ? Math.round(s.stages.awake / 60000) : null
                 }))}
               />
             </TabsContent>
@@ -431,9 +431,9 @@ export default function FitnessHealth() {
                 } : undefined}
                 weeklyData={hrHistory.map((h: any) => ({
                   date: h.date,
-                  recovery: h.recovery || 0,
-                  hrv: h.hrv || 0,
-                  rhr: h.rhr || 0
+                  recovery: typeof h.recovery === 'number' ? h.recovery : null,
+                  hrv: typeof h.hrv === 'number' ? h.hrv : null,
+                  rhr: typeof h.rhr === 'number' ? h.rhr : null
                 }))}
               />
             </TabsContent>
@@ -448,8 +448,8 @@ export default function FitnessHealth() {
                 } : undefined}
                 weeklyData={hrHistory.map((h: any) => ({
                   date: h.date,
-                  hrv: h.hrv || 0,
-                  rhr: h.rhr || 0
+                  hrv: typeof h.hrv === 'number' ? h.hrv : null,
+                  rhr: typeof h.rhr === 'number' ? h.rhr : null
                 }))}
               />
             </TabsContent>
@@ -466,9 +466,9 @@ export default function FitnessHealth() {
                 } : undefined}
                 weeklyData={cycleHist.map((c: any) => ({
                   date: c.start,
-                  strain: c.day_strain || 0,
-                  avgHr: c.avg_hr_bpm || 0,
-                  trainingLoad: c.training_load || 0
+                  strain: typeof c.day_strain === 'number' ? c.day_strain : null,
+                  avgHr: typeof c.avg_hr_bpm === 'number' ? c.avg_hr_bpm : null,
+                  trainingLoad: typeof c.training_load === 'number' ? c.training_load : null
                 }))}
               />
             </TabsContent>

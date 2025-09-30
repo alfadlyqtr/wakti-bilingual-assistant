@@ -286,11 +286,14 @@ REQUIRED STRUCTURE:
       if (timeOfDay === 'midday') visuals = middayVisuals;
       if (timeOfDay === 'evening') visuals = eveningVisuals;
 
+      const userProfile = payload?.user || {};
+
       return `${baseStructure}
 
 CRITICAL REQUIREMENTS:
+- Address the user by first name: ${userName}. Never use generic words like "Champion".
 - Use ACTUAL data from payload, not generic responses
-- Reference specific numbers (sleep hours, HRV values, performance scores)
+- Reference specific numbers (sleep hours, HRV values, performance scores, body measurements if present)
 - Make insights personal and data-driven
 - Provide actionable recommendations based on current metrics
 - Use timezone: ${userTimezone}
@@ -299,7 +302,10 @@ VISUALS ARRAY:
 ${visuals}
 
 WHOOP DATA:
-${JSON.stringify(payload)}`;
+${JSON.stringify(payload)}
+
+USER PROFILE AND BODY MEASUREMENTS (if available):
+${JSON.stringify(userProfile)}`;
     };
 
     const userPrompt = getEnhancedUserPrompt(timeOfDay, language);

@@ -480,7 +480,8 @@ export async function fetchWorkoutsHistory(days = 14) {
 
 // Fetch all historical data for a specific time range
 export async function fetchHistoricalData(timeRange: TimeRange) {
-  const days = timeRangeToDays(timeRange);
+  // Ensure trends always have multiple points: fetch at least 7 days
+  const days = Math.max(7, timeRangeToDays(timeRange));
   
   const [recovery, sleep, cycles, workouts] = await Promise.all([
     fetchRecoveryHistory(days),

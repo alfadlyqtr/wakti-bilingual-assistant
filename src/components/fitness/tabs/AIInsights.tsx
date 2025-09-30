@@ -289,8 +289,7 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
           
           const response = await generateAiInsights(language as 'en' | 'ar', {
             time_of_day: window,
-            user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            data: enhancedData
+            user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
           });
           
           console.log('AI insights response:', response);
