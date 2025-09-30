@@ -104,20 +104,52 @@ export async function buildInsightsAggregate() {
       rhrBpm: compact?.recovery?.rhr_bpm ?? null,
       dayStrain: compact?.cycle?.day_strain ?? null,
       latestWorkout,
+      // ADD ALL COMPREHENSIVE SLEEP DATA
+      sleepConsistencyPct: compact?.sleep?.data?.score?.sleep_consistency_percentage ?? null,
+      sleepEfficiencyPct: compact?.sleep?.data?.score?.sleep_efficiency_percentage ?? null,
+      respiratoryRate: compact?.sleep?.data?.score?.respiratory_rate ?? null,
+      sleepCycleCount: compact?.sleep?.data?.score?.stage_summary?.sleep_cycle_count ?? null,
+      disturbanceCount: compact?.sleep?.data?.score?.stage_summary?.disturbance_count ?? null,
+      sleepDebtMilli: compact?.sleep?.data?.score?.sleep_needed?.need_from_sleep_debt_milli ?? null,
+      // ADD ALL COMPREHENSIVE RECOVERY DATA
+      spo2Percentage: compact?.recovery?.data?.score?.spo2_percentage ?? null,
+      skinTempCelsius: compact?.recovery?.data?.score?.skin_temp_celsius ?? null,
+      userCalibrating: compact?.recovery?.data?.score?.user_calibrating ?? null,
+      // ADD ALL COMPREHENSIVE CYCLE DATA
+      maxHeartRate: compact?.cycle?.data?.score?.max_heart_rate ?? null,
+      kilojoule: compact?.cycle?.data?.score?.kilojoule ?? null,
     },
     last7Days: {
       sleepHours: sleep7.map((s:any)=>s.hours ?? null),
       recoveryPct: rec7.map((r:any)=>r.recovery ?? null),
       hrvMs: rec7.map((r:any)=>r.hrv ?? null),
       rhrBpm: rec7.map((r:any)=>r.rhr ?? null),
+      // ADD COMPREHENSIVE HISTORICAL DATA
+      sleepConsistency: sleep7.map((s:any)=>s?.data?.score?.sleep_consistency_percentage ?? null),
+      sleepEfficiency: sleep7.map((s:any)=>s?.data?.score?.sleep_efficiency_percentage ?? null),
+      respiratoryRate: sleep7.map((s:any)=>s?.data?.score?.respiratory_rate ?? null),
+      spo2: rec7.map((r:any)=>r?.data?.score?.spo2_percentage ?? null),
+      skinTemp: rec7.map((r:any)=>r?.data?.score?.skin_temp_celsius ?? null),
     },
     workouts: w14,
     weekly: { weeks: weekly },
+    // COMPREHENSIVE DETAILS - NOW INCLUDES ALL DATA
     details: {
-      cycle: compact?.cycle?.data ?? null,
-      sleep: compact?.sleep?.data ?? null,
-      recovery: compact?.recovery?.data ?? null,
-      workout: compact?.workout?.data ?? null,
+      cycle: compact?.cycle ?? null,  // Full cycle object with ALL fields
+      sleep: compact?.sleep ?? null,  // Full sleep object with ALL fields
+      recovery: compact?.recovery ?? null,  // Full recovery object with ALL fields
+      workout: compact?.workout ?? null,  // Full workout object with ALL fields
+    },
+    // ADD RAW COMPREHENSIVE DATA FOR AI
+    raw: {
+      sleep_full: compact?.sleep,
+      recovery_full: compact?.recovery,
+      cycle_full: compact?.cycle,
+      workout_full: compact?.workout,
+      sleep_history: sleep7,
+      recovery_history: rec7,
+      cycle_history: cyc30,
+      workout_history: w14,
     }
   };
 }
@@ -307,11 +339,14 @@ export async function fetchCompactMetrics() {
   const userId = await getCurrentUserId();
   if (!userId) return null;
 
-  // Fetch more sleeps to filter naps on client side, include data for details
+  // Fetch ALL available WHOOP data fields - comprehensive extraction
   const [sleepRes, recRes, cycleRes] = await Promise.all([
-    supabase.from("whoop_sleep").select("id,start,end,duration_sec,performance_pct,data").eq("user_id", userId).order("start", { ascending: false }).limit(5),
-    supabase.from("whoop_recovery").select("sleep_id,cycle_id,date,score,hrv_ms,rhr_bpm,data,created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(1),
-    supabase.from("whoop_cycles").select("id,start,end,day_strain,avg_hr_bpm,training_load,data").eq("user_id", userId).order("start", { ascending: false }).limit(1),
+    // SLEEP: Pull ALL sleep fields including score data
+    supabase.from("whoop_sleep").select("*").eq("user_id", userId).order("start", { ascending: false }).limit(5),
+    // RECOVERY: Pull ALL recovery fields including score data  
+    supabase.from("whoop_recovery").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(1),
+    // CYCLE: Pull ALL cycle fields including score data
+    supabase.from("whoop_cycles").select("*").eq("user_id", userId).order("start", { ascending: false }).limit(1),
   ]);
 
   // Choose main sleep: prefer nap=false if present, else longest duration
@@ -328,9 +363,9 @@ export async function fetchCompactMetrics() {
   }
   const recovery = recRes.data?.[0] || null;
   const cycle = cycleRes.data?.[0] || null;
-  // latest workout
+  // WORKOUT: Pull ALL workout fields including comprehensive score data
   const workoutRes = await supabase.from('whoop_workouts')
-    .select('id,start,end,sport_name,strain,avg_hr_bpm,data')
+    .select('*')
     .eq('user_id', userId)
     .order('start', { ascending: false })
     .limit(1);
@@ -343,7 +378,7 @@ export async function fetchRecoveryHistory(days = 7) {
   if (!userId) return [];
   const { data, error } = await supabase
     .from('whoop_recovery')
-    .select('score,hrv_ms,rhr_bpm,created_at')
+    .select('*')  // Pull ALL recovery fields
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(days);
@@ -362,7 +397,7 @@ export async function fetchSleepHistory(days = 7) {
   if (!userId) return [];
   const { data, error } = await supabase
     .from('whoop_sleep')
-    .select('start,end,duration_sec,data')
+    .select('*')  // Pull ALL sleep fields
     .eq('user_id', userId)
     .order('start', { ascending: false })
     .limit(days);
@@ -393,7 +428,7 @@ export async function fetchCycleHistory(days = 7) {
   if (!userId) return [];
   const { data, error } = await supabase
     .from('whoop_cycles')
-    .select('start,day_strain,avg_hr_bpm,training_load')
+    .select('*')  // Pull ALL cycle fields
     .eq('user_id', userId)
     .order('start', { ascending: false })
     .limit(days);
@@ -406,7 +441,7 @@ export async function fetchWorkoutsHistory(days = 14) {
   if (!userId) return [];
   const { data, error } = await supabase
     .from('whoop_workouts')
-    .select('start,end,strain,avg_hr_bpm,sport_name,data')
+    .select('*')  // Pull ALL workout fields
     .eq('user_id', userId)
     .order('start', { ascending: false })
     .limit(1000);
