@@ -344,6 +344,51 @@ export default function FitnessHealth() {
         </Card>
       ) : connected ? (
         <>
+          {/* User Profile Section - Like WHOOP */}
+          {metrics && (
+            <Card className="rounded-2xl p-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-blue-500/20 mb-6">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
+                  {user?.user_metadata?.full_name?.charAt(0) || user?.email?.charAt(0) || 'A'}
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-lg font-semibold text-white">
+                    {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Abdullah Alfadky'}
+                  </h2>
+                  <p className="text-sm text-gray-400">
+                    {language === 'ar' ? 'متصل بـ WHOOP' : 'Connected to WHOOP'}
+                  </p>
+                </div>
+                <div className="flex gap-4 text-center">
+                  <div>
+                    <div className="text-2xl font-bold text-blue-400">
+                      {metrics.cycle?.strain?.toFixed(1) || '0.0'}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      {language === 'ar' ? 'الإجهاد' : 'Strain'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-yellow-400">
+                      {metrics.recovery?.score || '0'}%
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      {language === 'ar' ? 'التعافي' : 'Recovery'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-green-400">
+                      {sleepHours || '0'}h
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      {language === 'ar' ? 'النوم' : 'Sleep'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
+
           <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as MainTab)}>
             <TabsList className="grid w-full grid-cols-2 sm:grid-cols-6 bg-white/10 border-white/20 gap-1 p-1">
               <TabsTrigger value="ai-insights" className="flex items-center justify-center gap-1 px-1 py-2 text-xs sm:text-sm min-h-[40px]">

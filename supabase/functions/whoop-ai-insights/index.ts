@@ -159,14 +159,30 @@ Evening Tone:
     const system = getSystemPrompt(timeOfDay, language);
 
     const getEnhancedUserPrompt = (timeOfDay: string, language: string) => {
-      const userName = payload?.user?.first_name || payload?.user_name || "Champion";
-      const metrics = payload?.key_metrics || {};
-      const sleepHours = metrics?.sleep_hours || 0;
-      const recoveryScore = metrics?.recovery_score || 0;
-      const hrvMs = metrics?.hrv_ms || 0;
-      const strainScore = metrics?.strain_score || 0;
-      const sleepPerf = metrics?.sleep_performance || 0;
-      const restingHR = metrics?.resting_hr || 0;
+      // Get real user name from WHOOP profile data
+      const userName = payload?.user?.first_name || 
+                      payload?.user?.profile?.first_name ||
+                      payload?.details?.profile?.first_name ||
+                      payload?.raw?.profile?.first_name ||
+                      "Abdullah";
+      
+      // Extract real WHOOP metrics from the comprehensive data
+      const sleepData = payload?.details?.sleep || payload?.raw?.sleep_full;
+      const recoveryData = payload?.details?.recovery || payload?.raw?.recovery_full;
+      const cycleData = payload?.details?.cycle || payload?.raw?.cycle_full;
+      
+      const sleepHours = sleepData?.duration_sec ? (sleepData.duration_sec / 3600).toFixed(1) : 
+                        payload?.today?.sleepHours || 0;
+      const recoveryScore = recoveryData?.data?.score?.recovery_score || 
+                           payload?.today?.recoveryScore || 0;
+      const hrvMs = recoveryData?.data?.score?.hrv_rmssd_milli || 
+                   payload?.today?.hrvMs || 0;
+      const strainScore = cycleData?.data?.score?.strain || 
+                         payload?.today?.strainScore || 0;
+      const sleepPerf = sleepData?.data?.score?.sleep_performance_percentage || 
+                       payload?.today?.sleepPerformance || 0;
+      const restingHR = recoveryData?.data?.score?.resting_heart_rate || 
+                       payload?.today?.restingHR || 0;
       const baseStructure = language === 'ar' ? `
 تحليل بيانات WHOOP التالية والرد بتنسيق JSON صارم:
 
@@ -297,6 +313,14 @@ CRITICAL REQUIREMENTS:
 - Make insights personal and data-driven
 - Provide actionable recommendations based on current metrics
 - Use timezone: ${userTimezone}
+
+CURRENT REAL METRICS TO USE:
+- Sleep Hours: ${sleepHours}h
+- Recovery Score: ${recoveryScore}%
+- HRV: ${hrvMs}ms
+- Strain Score: ${strainScore}
+- Sleep Performance: ${sleepPerf}%
+- Resting HR: ${restingHR} bpm
 
 VISUALS ARRAY:
 ${visuals}

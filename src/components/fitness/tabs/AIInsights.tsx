@@ -205,12 +205,10 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
     const now = Date.now();
     // Remove generation limits for testing
     
-    // Always allow fresh generation - no caching restrictions
-    if (!forceGenerate && insights[window] && lastGenerated[window] > 0) {
-      // Show cached but allow regeneration
-      setActiveWindow(window);
-      return;
-    }
+    // COMPLETELY REMOVE ALL CACHING - ALWAYS GENERATE FRESH
+    // Clear any existing cache for this window
+    setInsights(prev => ({ ...prev, [window]: null }));
+    setLastGenerated(prev => ({ ...prev, [window]: 0 }));
     
     try {
       setLoading(window);
@@ -409,6 +407,21 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
             {range.toUpperCase()}
           </button>
         ))}
+        
+        {/* Clear Cache Button */}
+        <button
+          onClick={() => {
+            // Clear ALL cache
+            setInsights({} as Record<TimeWindow, any>);
+            setLastGenerated({} as Record<TimeWindow, number>);
+            localStorage.removeItem('wakti-ai-insights');
+            localStorage.removeItem('wakti-ai-insights-times');
+            toast.success(language === 'ar' ? 'تم مسح الذاكرة المؤقتة' : 'Cache cleared');
+          }}
+          className="px-3 py-2 rounded-full text-xs font-medium bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 transition-all"
+        >
+          {language === 'ar' ? 'مسح الذاكرة' : 'Clear Cache'}
+        </button>
       </div>
 
       {/* AI Insights Header */}
