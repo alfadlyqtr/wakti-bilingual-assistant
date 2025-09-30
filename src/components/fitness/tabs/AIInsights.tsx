@@ -87,17 +87,86 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
     return TIME_WINDOWS[window].start;
   };
 
+  const getNextWindowStartTime = (): number => {
+    const now = new Date();
+    const currentHour = now.getHours();
+    
+    // Calculate milliseconds until next window starts
+    if (currentHour >= 5 && currentHour < 11) {
+      // Morning window - next is midday (12 PM)
+      const nextWindow = new Date(now);
+      nextWindow.setHours(12, 0, 0, 0);
+      return nextWindow.getTime() - now.getTime();
+    } else if (currentHour >= 12 && currentHour < 17) {
+      // Midday window - next is evening (5 PM)
+      const nextWindow = new Date(now);
+      nextWindow.setHours(17, 0, 0, 0);
+      return nextWindow.getTime() - now.getTime();
+    } else if (currentHour >= 17 && currentHour < 23) {
+      // Evening window - next is tomorrow morning (5 AM)
+      const nextWindow = new Date(now);
+      nextWindow.setDate(nextWindow.getDate() + 1);
+      nextWindow.setHours(5, 0, 0, 0);
+      return nextWindow.getTime() - now.getTime();
+    }
+    
+    // Outside all windows - next is morning (5 AM)
+    const nextWindow = new Date(now);
+    if (currentHour >= 23 || currentHour < 5) {
+      if (currentHour >= 23) {
+        nextWindow.setDate(nextWindow.getDate() + 1);
+      }
+      nextWindow.setHours(5, 0, 0, 0);
+    }
+    return nextWindow.getTime() - now.getTime();
+  };
+
   const generateInsights = async (window: TimeWindow) => {
-    // Prevent double-clicks and check cache (1 hour)
+    // Check if current time window allows generation
+    const currentWindow = getCurrentTimeWindow();
+    if (!currentWindow) {
+      toast.error(language === 'ar' 
+        ? 'المدرب الذكي غير متاح حاليًا. متاح خلال أوقات محددة فقط.' 
+        : 'AI Coach not available now. Available during specific time windows only.'
+      );
+      return;
+    }
+    
+    if (window !== currentWindow) {
+      toast.error(language === 'ar' 
+        ? `يمكن إنشاء رؤى ${window === 'morning' ? 'الصباح' : window === 'midday' ? 'منتصف النهار' : 'المساء'} فقط خلال الوقت المحدد` 
+        : `${window.charAt(0).toUpperCase() + window.slice(1)} insights only available during ${window} hours`
+      );
+      return;
+    }
+    
+    // Prevent double-clicks and check cache (2x per window per day)
     if (loading === window) return;
     
     const now = Date.now();
-    const cacheExpiry = 60 * 60 * 1000; // 1 hour
+    const today = new Date().toDateString();
+    const cacheKey = `${window}-${today}`;
+    const generationCount = localStorage.getItem(`wakti-insights-count-${cacheKey}`) || '0';
     
-    if (insights[window] && (now - lastGenerated[window]) < cacheExpiry) {
-      setActiveWindow(window);
-      toast.success(language === 'ar' ? 'تم عرض الرؤى المحفوظة' : 'Showing cached insights');
+    if (parseInt(generationCount) >= 2) {
+      toast.error(language === 'ar' 
+        ? 'تم الوصول للحد الأقصى للإنشاء (مرتان يوميًا لكل فترة)' 
+        : 'Maximum generations reached (2x daily per window)'
+      );
       return;
+    }
+    
+    // Check if we have cached insights that are still valid
+    if (insights[window] && lastGenerated[window] > 0) {
+      const timeSinceGeneration = now - lastGenerated[window];
+      const nextWindowTime = getNextWindowStartTime();
+      
+      // Cache valid until next window starts
+      if (timeSinceGeneration < nextWindowTime) {
+        setActiveWindow(window);
+        toast.success(language === 'ar' ? 'تم عرض الرؤى المحفوظة' : 'Showing cached insights');
+        return;
+      }
     }
     
     try {
@@ -127,6 +196,10 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
             ...prev,
             [window]: now
           }));
+          
+          // Update generation count
+          const newCount = parseInt(generationCount) + 1;
+          localStorage.setItem(`wakti-insights-count-${cacheKey}`, newCount.toString());
           
           setActiveWindow(window);
           toast.success(language === 'ar' ? 'تم إنشاء الرؤى' : 'Insights generated');
@@ -238,6 +311,22 @@ export function AIInsights({ timeRange, onTimeRangeChange }: AIInsightsProps) {
             <p className="text-sm sm:text-base text-muted-foreground break-words">
               {language === 'ar' ? 'مدربك الشخصي الذكي' : 'Your intelligent personal coach'}
             </p>
+          </div>
+        </div>
+
+        {/* AI Coach Availability */}
+        <div className="bg-black/20 rounded-lg p-3 mb-4">
+          <p className="text-xs text-gray-300 mb-2">{language === 'ar' ? 'المدرب الذكي متاح خلال:' : 'AI Coach available during:'}</p>
+          <div className="flex flex-wrap gap-2 text-xs">
+            <span className="flex items-center gap-1 text-amber-400">
+              🌅 {language === 'ar' ? 'الصباح: 5:00 - 11:00' : 'Morning: 5:00 AM - 11:00 AM'}
+            </span>
+            <span className="flex items-center gap-1 text-orange-400">
+              ☀️ {language === 'ar' ? 'منتصف النهار: 12:00 - 6:00 مساءً' : 'Midday: 12:00 PM - 6:00 PM'}
+            </span>
+            <span className="flex items-center gap-1 text-purple-400">
+              🌙 {language === 'ar' ? 'المساء: 5:00 - 11:00 مساءً' : 'Evening: 5:00 PM - 11:00 PM'}
+            </span>
           </div>
         </div>
 
