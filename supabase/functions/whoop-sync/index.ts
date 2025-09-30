@@ -7,6 +7,8 @@ const SLEEP_URL = `${BASE}/activity/sleep`;
 const WORKOUT_URL = `${BASE}/activity/workout`;
 const CYCLE_URL = `${BASE}/cycle`;
 const RECOVERY_URL = `${BASE}/recovery`;
+const USER_PROFILE_URL = `${BASE}/user/profile/basic`;
+const USER_BODY_URL = `${BASE}/user/measurement/body`;
 const TOKEN_URL = "https://api.prod.whoop.com/oauth/oauth2/token";
 
 const corsHeaders = {
@@ -185,11 +187,14 @@ serve(async (req: Request) => {
           },
         });
 
-        const [cycles, sleeps, workouts, recoveries] = await Promise.all([
+        const [cycles, sleeps, workouts, recoveries, userProfile, userBody] = await Promise.all([
           fetchCollection(CYCLE_URL, accessToken, { ...commonParams }),
           fetchCollection(SLEEP_URL, accessToken, { ...commonParams }),
           fetchCollection(WORKOUT_URL, accessToken, { ...commonParams }),
           fetchCollection(RECOVERY_URL, accessToken, { ...commonParams }),
+          // Fetch user profile and body measurements (no date params needed)
+          fetch(USER_PROFILE_URL, { headers: { Authorization: `Bearer ${accessToken}` } }).then(r => r.ok ? r.json() : null),
+          fetch(USER_BODY_URL, { headers: { Authorization: `Bearer ${accessToken}` } }).then(r => r.ok ? r.json() : null),
         ]);
         totalCycles += cycles.length;
         totalSleeps += sleeps.length;
@@ -293,6 +298,33 @@ serve(async (req: Request) => {
           }));
           const { error: errRec } = await admin.from("whoop_recovery").upsert(rows, { onConflict: "sleep_id" });
           if (errRec) console.error("whoop-sync upsert recovery error", errRec);
+        }
+
+        // Store user profile data
+        if (userProfile) {
+          const profileData = {
+            user_id: u.user_id,
+            whoop_user_id: userProfile.user_id,
+            email: userProfile.email,
+            first_name: userProfile.first_name,
+            last_name: userProfile.last_name,
+            data: userProfile,
+          };
+          const { error: errProfile } = await admin.from("whoop_user_profiles").upsert([profileData], { onConflict: "user_id" });
+          if (errProfile) console.error("whoop-sync upsert profile error", errProfile);
+        }
+
+        // Store user body measurements
+        if (userBody) {
+          const bodyData = {
+            user_id: u.user_id,
+            height_meter: asNumber(userBody.height_meter),
+            weight_kilogram: asNumber(userBody.weight_kilogram),
+            max_heart_rate: asNumber(userBody.max_heart_rate),
+            data: userBody,
+          };
+          const { error: errBody } = await admin.from("whoop_user_body").upsert([bodyData], { onConflict: "user_id" });
+          if (errBody) console.error("whoop-sync upsert body error", errBody);
         }
 
         await admin.from("user_whoop_tokens").update({ last_synced_at: new Date().toISOString() }).eq("user_id", u.user_id);

@@ -150,6 +150,15 @@ export async function buildInsightsAggregate() {
       recovery_history: rec7,
       cycle_history: cyc30,
       workout_history: w14,
+    },
+    // ADD USER PROFILE AND BODY DATA
+    user: {
+      profile: compact?.profile,
+      body: compact?.body,
+      first_name: compact?.profile?.first_name || null,
+      height_meter: compact?.body?.height_meter || null,
+      weight_kilogram: compact?.body?.weight_kilogram || null,
+      max_heart_rate: compact?.body?.max_heart_rate || null,
     }
   };
 }
@@ -342,13 +351,17 @@ export async function fetchCompactMetrics() {
   if (!userId) return null;
 
   // Fetch ALL available WHOOP data fields - comprehensive extraction
-  const [sleepRes, recRes, cycleRes] = await Promise.all([
+  const [sleepRes, recRes, cycleRes, profileRes, bodyRes] = await Promise.all([
     // SLEEP: Pull ALL sleep fields including score data
     supabase.from("whoop_sleep").select("*").eq("user_id", userId).order("start", { ascending: false }).limit(5),
     // RECOVERY: Pull ALL recovery fields including score data  
     supabase.from("whoop_recovery").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(1),
     // CYCLE: Pull ALL cycle fields including score data
     supabase.from("whoop_cycles").select("*").eq("user_id", userId).order("start", { ascending: false }).limit(1),
+    // USER PROFILE: Pull user profile data
+    supabase.from("whoop_user_profiles").select("*").eq("user_id", userId).maybeSingle(),
+    // USER BODY: Pull body measurements
+    supabase.from("whoop_user_body").select("*").eq("user_id", userId).maybeSingle(),
   ]);
 
   // Choose main sleep: prefer nap=false if present, else longest duration
@@ -365,6 +378,8 @@ export async function fetchCompactMetrics() {
   }
   const recovery = recRes.data?.[0] || null;
   const cycle = cycleRes.data?.[0] || null;
+  const profile = profileRes.data || null;
+  const body = bodyRes.data || null;
   // WORKOUT: Pull ALL workout fields including comprehensive score data
   const workoutRes = await supabase.from('whoop_workouts')
     .select('*')
@@ -372,7 +387,7 @@ export async function fetchCompactMetrics() {
     .order('start', { ascending: false })
     .limit(1);
   const workout = workoutRes.data?.[0] || null;
-  return { sleep, recovery, cycle, workout };
+  return { sleep, recovery, cycle, workout, profile, body };
 }
 
 export async function fetchRecoveryHistory(days = 7) {
