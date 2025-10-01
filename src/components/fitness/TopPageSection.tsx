@@ -56,16 +56,18 @@ export function TopPageSection({
         {/* Top Row: User Info */}
         <div className="flex items-start md:items-center gap-3 md:gap-4">
           {/* WHOOP Logo */}
-          <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-white dark:bg-gray-900 flex items-center justify-center p-2 flex-shrink-0">
+          <div className="w-16 h-16 md:w-14 md:h-14 rounded-full bg-white dark:bg-gray-900 flex items-center justify-center p-3 md:p-2 flex-shrink-0">
             <img 
               src="/lovable-uploads/WHOOP Circle Black@2x.png" 
               alt="WHOOP" 
               className="w-full h-full object-contain dark:hidden"
+              style={{ aspectRatio: '1/1' }}
             />
             <img 
               src="/lovable-uploads/WHOOP Circle White@2x.png" 
               alt="WHOOP" 
               className="w-full h-full object-contain hidden dark:block"
+              style={{ aspectRatio: '1/1' }}
             />
           </div>
           

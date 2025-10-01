@@ -338,13 +338,13 @@ export default function FitnessHealth() {
                 <Card className="rounded-2xl p-3 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border-green-500/20">
                   <div className="text-center">
                     <div className="text-2xl font-bold text-green-400 mb-1">
-                      {metrics.recovery?.score || metrics.recovery?.data?.score?.recovery_score || '0'}%
+                      {todayStats.recovery || '0'}%
                     </div>
                     <div className="text-xs text-gray-400">
                       {language === 'ar' ? 'التعافي' : 'Recovery'}
                     </div>
                     <div className="text-xs text-green-400 mt-1">
-                      HRV: {metrics.recovery?.hrv_ms || metrics.recovery?.data?.score?.hrv_rmssd_milli || '0'}ms
+                      HRV: {todayStats.hrv || '0'}ms
                     </div>
                   </div>
                 </Card>
@@ -352,13 +352,13 @@ export default function FitnessHealth() {
                 <Card className="rounded-2xl p-3 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-blue-500/20">
                   <div className="text-center">
                     <div className="text-2xl font-bold text-blue-400 mb-1">
-                      {sleepHours || '0'}h
+                      {sleepHours?.toFixed(1) || '0'}h
                     </div>
                     <div className="text-xs text-gray-400">
                       {language === 'ar' ? 'النوم' : 'Sleep'}
                     </div>
                     <div className="text-xs text-blue-400 mt-1">
-                      {sleepEfficiency || metrics.sleep?.data?.score?.sleep_efficiency_percentage || '0'}% {language === 'ar' ? 'كفاءة' : 'Efficiency'}
+                      {sleepEfficiency || '0'}% {language === 'ar' ? 'كفاءة' : 'Efficiency'}
                     </div>
                   </div>
                 </Card>
@@ -366,7 +366,7 @@ export default function FitnessHealth() {
                 <Card className="rounded-2xl p-3 bg-gradient-to-br from-orange-500/10 to-red-500/10 border-orange-500/20">
                   <div className="text-center">
                     <div className="text-2xl font-bold text-orange-400 mb-1">
-                      {metrics.cycle?.day_strain?.toFixed(1) || metrics.cycle?.data?.score?.strain?.toFixed(1) || '0.0'}
+                      {todayStats.strain?.toFixed(1) || '0.0'}
                     </div>
                     <div className="text-xs text-gray-400">
                       {language === 'ar' ? 'الإجهاد' : 'Strain'}
@@ -380,13 +380,13 @@ export default function FitnessHealth() {
                 <Card className="rounded-2xl p-3 bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/20">
                   <div className="text-center">
                     <div className="text-2xl font-bold text-purple-400 mb-1">
-                      {metrics.recovery?.hrv_ms || metrics.recovery?.data?.score?.hrv_rmssd_milli || '0'}
+                      {todayStats.hrv || '0'}
                     </div>
                     <div className="text-xs text-gray-400">
                       HRV (ms)
                     </div>
                     <div className="text-xs text-purple-400 mt-1">
-                      RHR: {metrics.recovery?.rhr_bpm || metrics.recovery?.data?.score?.resting_heart_rate || '0'} bpm
+                      RHR: {todayStats.rhr || '0'} bpm
                     </div>
                   </div>
                 </Card>
@@ -395,7 +395,7 @@ export default function FitnessHealth() {
           </div>
 
           <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as MainTab)}>
-            <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 bg-white/10 border-white/20 gap-1 p-1 mb-4">
+            <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 bg-white/10 border-white/20 gap-1 p-1 mb-4 rounded-xl">
               <TabsTrigger value="ai-insights" className="flex items-center justify-center gap-1 px-1 py-2 text-xs sm:text-sm min-h-[40px]">
                 <Brain className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden sm:inline">{language === 'ar' ? 'رؤى الذكاء الاصطناعي' : 'AI Insights'}</span>
