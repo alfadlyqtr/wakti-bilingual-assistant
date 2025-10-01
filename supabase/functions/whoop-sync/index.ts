@@ -193,13 +193,36 @@ serve(async (req: Request) => {
           fetchCollection(WORKOUT_URL, accessToken, { ...commonParams }),
           fetchCollection(RECOVERY_URL, accessToken, { ...commonParams }),
           // Fetch user profile and body measurements (no date params needed)
-          fetch(USER_PROFILE_URL, { headers: { Authorization: `Bearer ${accessToken}` } }).then(r => r.ok ? r.json() : null),
-          fetch(USER_BODY_URL, { headers: { Authorization: `Bearer ${accessToken}` } }).then(r => r.ok ? r.json() : null),
+          fetch(USER_PROFILE_URL, { headers: { Authorization: `Bearer ${accessToken}` } }).then(async r => {
+            console.log('USER_PROFILE_URL response status:', r.status);
+            if (r.ok) {
+              const data = await r.json();
+              console.log('USER_PROFILE data:', JSON.stringify(data));
+              return data;
+            }
+            const errorText = await r.text();
+            console.error('USER_PROFILE_URL error:', r.status, errorText);
+            return null;
+          }),
+          fetch(USER_BODY_URL, { headers: { Authorization: `Bearer ${accessToken}` } }).then(async r => {
+            console.log('USER_BODY_URL response status:', r.status);
+            if (r.ok) {
+              const data = await r.json();
+              console.log('USER_BODY data:', JSON.stringify(data));
+              return data;
+            }
+            const errorText = await r.text();
+            console.error('USER_BODY_URL error:', r.status, errorText);
+            return null;
+          }),
         ]);
         totalCycles += cycles.length;
         totalSleeps += sleeps.length;
         totalWorkouts += workouts.length;
         totalRecoveries += recoveries.length;
+        
+        console.log('Fetched data counts:', { cycles: cycles.length, sleeps: sleeps.length, workouts: workouts.length, recoveries: recoveries.length });
+        console.log('User data:', { hasProfile: !!userProfile, hasBody: !!userBody });
 
         // Upserts using admin client (bypass RLS)
         // Helper to safely extract optional fields
