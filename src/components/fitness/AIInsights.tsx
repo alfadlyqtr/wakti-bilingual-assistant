@@ -16,6 +16,7 @@ export function AIInsights() {
   const [ai, setAi] = useState<{ daily_summary?: string; weekly_summary?: string; tips?: string[]; motivations?: string[]; long_summary?: string }>({});
   const printableRef = useRef<HTMLDivElement>(null);
   const [phase, setPhase] = useState<"idle"|"checking"|"contacting"|"analyzing"|"ready"|"error">("idle");
+  const [selectedTimeOfDay, setSelectedTimeOfDay] = useState<'morning'|'midday'|'evening'|'auto'>('auto');
 
   useEffect(() => {
     (async () => {
@@ -44,7 +45,31 @@ export function AIInsights() {
       setPhase('checking');
       await pingAiInsights();
       setPhase('contacting');
-      const resp = await generateAiInsights(language as 'en'|'ar');
+      
+      // Determine time of day based on selection or auto
+      let timeOfDay: string;
+      if (selectedTimeOfDay === 'auto') {
+        const hour = new Date().getHours();
+        // Morning: 5:00 AM - 11:50 AM (5-11)
+        // Midday: 12:00 PM - 5:50 PM (12-17)
+        // Evening: 6:00 PM - 12:00 AM (18-23, 0-4)
+        if (hour >= 5 && hour < 12) {
+          timeOfDay = 'morning';
+        } else if (hour >= 12 && hour < 18) {
+          timeOfDay = 'midday';
+        } else {
+          timeOfDay = 'evening';
+        }
+      } else {
+        timeOfDay = selectedTimeOfDay;
+      }
+      
+      // Pass the actual data to AI
+      const resp = await generateAiInsights(language as 'en'|'ar', {
+        data: agg,
+        time_of_day: timeOfDay,
+        user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      });
       setPhase('analyzing');
       setAi(resp || {});
       setPhase('ready');
@@ -92,12 +117,60 @@ export function AIInsights() {
   return (
     <div className="space-y-6">
       <Card className="rounded-2xl p-4 shadow-sm bg-white/5">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-3">
           <div className="text-sm font-medium">AI Insights</div>
           <Button onClick={onGenerate} disabled={aiLoading || loading}>
             <RefreshCcw className={aiLoading ? 'mr-2 h-4 w-4 animate-spin':'mr-2 h-4 w-4'} /> {aiLoading ? (language==='ar'?'جاري الإنشاء...':'Generating...') : (language==='ar'?'إنشاء الرؤى':'Generate Insights')}
           </Button>
         </div>
+        
+        {/* Time of Day Selector */}
+        <div className="flex gap-2 mb-3">
+          <button
+            onClick={() => setSelectedTimeOfDay('auto')}
+            className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+              selectedTimeOfDay === 'auto' 
+                ? 'bg-purple-500 text-white' 
+                : 'bg-white/10 text-gray-300 hover:bg-white/20'
+            }`}
+          >
+            {language === 'ar' ? 'تلقائي' : 'Auto'}
+          </button>
+          <button
+            onClick={() => setSelectedTimeOfDay('morning')}
+            className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+              selectedTimeOfDay === 'morning' 
+                ? 'bg-amber-500 text-white' 
+                : 'bg-white/10 text-gray-300 hover:bg-white/20'
+            }`}
+          >
+            🌅 {language === 'ar' ? 'صباح' : 'Morning'}
+            <span className="ml-1 text-[10px] opacity-70">5-11:50 AM</span>
+          </button>
+          <button
+            onClick={() => setSelectedTimeOfDay('midday')}
+            className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+              selectedTimeOfDay === 'midday' 
+                ? 'bg-orange-500 text-white' 
+                : 'bg-white/10 text-gray-300 hover:bg-white/20'
+            }`}
+          >
+            ☀️ {language === 'ar' ? 'ظهر' : 'Midday'}
+            <span className="ml-1 text-[10px] opacity-70">12-5:50 PM</span>
+          </button>
+          <button
+            onClick={() => setSelectedTimeOfDay('evening')}
+            className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+              selectedTimeOfDay === 'evening' 
+                ? 'bg-indigo-500 text-white' 
+                : 'bg-white/10 text-gray-300 hover:bg-white/20'
+            }`}
+          >
+            🌙 {language === 'ar' ? 'مساء' : 'Evening'}
+            <span className="ml-1 text-[10px] opacity-70">6 PM-12 AM</span>
+          </button>
+        </div>
+        
         <div className="text-xs text-muted-foreground mt-1">
           {language==='ar' ? 'مدعوم من WAKTI AI — نستخدم بيانات موجزة ومجهولة لإنتاج ملخصات ونصائح داعمة.' : 'Powered by WAKTI AI — we use a compact, anonymized dataset to generate supportive summaries and tips.'}
         </div>
