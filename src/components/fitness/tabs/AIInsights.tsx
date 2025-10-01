@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Copy, RefreshCw, Brain, TrendingUp, TrendingDown, Sun, Clock, Moon, CheckCircle } from "lucide-react";
+import { Copy, RefreshCw, Brain, TrendingUp, TrendingDown, Sun, Clock, Moon, CheckCircle, Volume2 } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { toast } from "sonner";
 import { generateAiInsights, buildInsightsAggregate } from "@/services/whoopService";
@@ -396,6 +396,42 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
     }
   };
 
+  const speakText = async () => {
+    if (!displayInsight) return;
+    
+    const text = `${displayInsight.daily_summary || ''}\n\n${displayInsight.weekly_summary || ''}\n\nTips:\n${(displayInsight.tips || []).map((t: string) => `${t}`).join('\n')}\n\nMotivations:\n${(displayInsight.motivations || []).map((m: string) => `${m}`).join('\n')}`;
+    
+    try {
+      toast.info(language === 'ar' ? 'جاري التحويل إلى صوت...' : 'Converting to speech...');
+      
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      
+      const response = await supabase.functions.invoke('google-tts', {
+        body: { 
+          text,
+          language: language === 'ar' ? 'ar' : 'en'
+        },
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      
+      if (response.error) {
+        throw response.error;
+      }
+      
+      // The response should contain audio data
+      const audioBlob = new Blob([response.data], { type: 'audio/mp3' });
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      audio.play();
+      
+      toast.success(language === 'ar' ? 'جاري التشغيل' : 'Playing audio');
+    } catch (error) {
+      console.error('TTS error:', error);
+      toast.error(language === 'ar' ? 'فشل تحويل النص إلى صوت' : 'Failed to convert text to speech');
+    }
+  };
+
   // PDF feature removed to prevent app freezing
 
   return (
@@ -545,6 +581,10 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
                 {language === 'ar' ? 'الملخص اليومي' : 'Daily Summary'}
               </h3>
               <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={speakText}>
+                  <Volume2 className="h-4 w-4 mr-2" />
+                  {language === 'ar' ? 'استماع' : 'Speak'}
+                </Button>
                 <Button variant="outline" size="sm" onClick={copyToClipboard}>
                   <Copy className="h-4 w-4 mr-2" />
                   {language === 'ar' ? 'نسخ' : 'Copy'}

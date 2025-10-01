@@ -122,10 +122,10 @@ export function SleepTab({
   const hoursProgress = (realSleepData.hours / realSleepData.goalHours) * 100;
   
   const stageData = [
-    { name: 'Deep', value: realSleepData.stages.deep, color: SLEEP_COLORS.deep },
-    { name: 'REM', value: realSleepData.stages.rem, color: SLEEP_COLORS.rem },
-    { name: 'Light', value: realSleepData.stages.light, color: SLEEP_COLORS.light },
-    { name: 'Awake', value: realSleepData.stages.awake, color: SLEEP_COLORS.awake }
+    { name: language === 'ar' ? 'عميق' : 'Deep', value: realSleepData.stages.deep, color: SLEEP_COLORS.deep },
+    { name: language === 'ar' ? 'أحلام' : 'REM', value: realSleepData.stages.rem, color: SLEEP_COLORS.rem },
+    { name: language === 'ar' ? 'خفيف' : 'Light', value: realSleepData.stages.light, color: SLEEP_COLORS.light },
+    { name: language === 'ar' ? 'استيقاظ' : 'Awake', value: realSleepData.stages.awake, color: SLEEP_COLORS.awake }
   ];
 
   const totalStageMinutes = stageData.reduce((sum, stage) => sum + stage.value, 0);
@@ -488,10 +488,10 @@ export function SleepTab({
                 ]}
               />
               <Legend />
-              <Bar dataKey="deep" stackId="stages" fill={SLEEP_COLORS.deep} name="Deep" />
-              <Bar dataKey="rem" stackId="stages" fill={SLEEP_COLORS.rem} name="REM" />
-              <Bar dataKey="light" stackId="stages" fill={SLEEP_COLORS.light} name="Light" />
-              <Bar dataKey="awake" stackId="stages" fill={SLEEP_COLORS.awake} name="Awake" />
+              <Bar dataKey="deep" stackId="stages" fill={SLEEP_COLORS.deep} name={language === 'ar' ? 'عميق' : 'Deep'} />
+              <Bar dataKey="rem" stackId="stages" fill={SLEEP_COLORS.rem} name={language === 'ar' ? 'أحلام' : 'REM'} />
+              <Bar dataKey="light" stackId="stages" fill={SLEEP_COLORS.light} name={language === 'ar' ? 'خفيف' : 'Light'} />
+              <Bar dataKey="awake" stackId="stages" fill={SLEEP_COLORS.awake} name={language === 'ar' ? 'استيقاظ' : 'Awake'} />
             </BarChart>
           </ResponsiveContainer>
         </div>
