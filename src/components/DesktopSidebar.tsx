@@ -48,7 +48,7 @@ export function DesktopSidebar() {
     { icon: CalendarClock, label: "events", path: "/maw3d", badge: maw3dEventCount },
     { icon: ListTodo, label: "tasks", path: "/tr", badge: 0 },
     { icon: Sparkles, label: "wakti_ai", path: "/wakti-ai" },
-    { icon: HeartPulse, label: "fitness_health", path: "/fitness" },
+    { icon: HeartPulse, label: "vitality", path: "/fitness" },
     { icon: Mic, label: "tasjeel", path: "/tasjeel" },
   ];
 

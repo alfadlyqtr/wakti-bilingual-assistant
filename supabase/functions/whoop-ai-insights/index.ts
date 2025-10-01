@@ -234,16 +234,20 @@ Tone: Calm, reviewing, preparatory. "Close today proud — I'll see you in the m
       console.log('payload.today:', payload?.today);
       
       const baseStructure = language === 'ar' ? `
-تحليل بيانات WHOOP التالية والرد بتنسيق JSON صارم:
+⚠️ CRITICAL: You MUST respond in Arabic language ONLY. All text must be in Arabic script.
 
-الهيكل المطلوب:
+تحليل بيانات WHOOP التالية والرد بتنسيق JSON صارم باللغة العربية فقط:
+
+الهيكل المطلوب (جميع النصوص يجب أن تكون بالعربية):
 {
-  "daily_summary": "ملخص يومي مفصل مع تحليل شخصي للبيانات الفعلية",
-  "weekly_summary": "تحليل الاتجاهات الأسبوعية والتقدم مع أرقام محددة", 
+  "daily_summary": "ملخص يومي مفصل مع تحليل شخصي للبيانات الفعلية - باللغة العربية",
+  "weekly_summary": "تحليل الاتجاهات الأسبوعية والتقدم مع أرقام محددة - باللغة العربية", 
   "tips": ["نصيحة قابلة للتنفيذ 1", "نصيحة 2", "نصيحة 3", "نصيحة 4"],
   "motivations": ["رسالة تحفيزية شخصية 1", "رسالة 2"],
-  "visuals": [المرئيات المحسنة]
-}` : `
+  "visuals": []
+}
+
+⚠️ IMPORTANT: All content in daily_summary, weekly_summary, tips, and motivations MUST be in Arabic script. No English allowed.` : `
 Analyze the following WHOOP data and respond with strict JSON format:
 
 REQUIRED STRUCTURE:

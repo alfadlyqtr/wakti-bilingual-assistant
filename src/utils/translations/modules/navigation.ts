@@ -13,5 +13,6 @@ export const navigation = {
   messages: "Messages",
   wakti_ai: "WAKTI AI",
   tasjeel: "Tasjeel",
-  knowledge: "Knowledge"
+  knowledge: "Knowledge",
+  vitality: "Vitality"
 };

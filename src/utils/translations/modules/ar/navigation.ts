@@ -13,5 +13,6 @@ export const navigationAr = {
   messages: "الرسائل",
   wakti_ai: "WAKTI AI",
   tasjeel: "تسجيل",
-  knowledge: "المعرفة"
+  knowledge: "المعرفة",
+  vitality: "حيوية"
 };

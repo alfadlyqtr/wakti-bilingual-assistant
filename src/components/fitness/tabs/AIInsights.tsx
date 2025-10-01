@@ -599,8 +599,8 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
             </Card>
           </div>
 
-          {/* AI Generated Visuals */}
-          {(displayInsight?.visuals && displayInsight.visuals.length > 0) && (
+          {/* AI Generated Visuals - DISABLED until AI generates proper data */}
+          {false && (displayInsight?.visuals && displayInsight.visuals.length > 0) && (
             <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
               <h3 className="font-semibold text-lg mb-6 flex items-center gap-2">
                 <Brain className="h-5 w-5 text-purple-400" />
