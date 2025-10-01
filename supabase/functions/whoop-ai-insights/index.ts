@@ -338,8 +338,6 @@ REQUIRED STRUCTURE:
       if (timeOfDay === 'midday') visuals = middayVisuals;
       if (timeOfDay === 'evening') visuals = eveningVisuals;
 
-      const userProfile = payload?.user || {};
-
       return `${baseStructure}
 
 CRITICAL REQUIREMENTS:
@@ -364,20 +362,17 @@ ${maxHR ? `- Max Heart Rate: ${maxHR} bpm` : ''}
 VISUALS ARRAY:
 ${visuals}
 
-WHOOP DATA:
-${JSON.stringify(payload)}
-
-DEBUG - EXTRACTED VALUES:
+ACTUAL METRICS (use these exact numbers):
 User Name: ${userName}
 Sleep Hours: ${sleepHours}
 Recovery Score: ${recoveryScore}
-HRV: ${hrvMs}
+HRV: ${hrvMs} ms
 Strain: ${strainScore}
-Sleep Performance: ${sleepPerf}
-Resting HR: ${restingHR}
-
-USER PROFILE AND BODY MEASUREMENTS (if available):
-${JSON.stringify(userProfile)}`;
+Sleep Performance: ${sleepPerf}%
+Resting HR: ${restingHR} bpm
+${heightMeter ? `Height: ${heightMeter}m` : ''}
+${weightKg ? `Weight: ${weightKg}kg` : ''}
+${maxHR ? `Max HR: ${maxHR} bpm` : ''}`;
     };
 
     const userPrompt = getEnhancedUserPrompt(timeOfDay, language);
