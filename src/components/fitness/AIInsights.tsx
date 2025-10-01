@@ -44,7 +44,12 @@ export function AIInsights() {
       setAiLoading(true);
       setPhase('checking');
       await pingAiInsights();
+      
+      // CRITICAL: Fetch FRESH data right before generating AI insights
       setPhase('contacting');
+      console.log('Fetching fresh data before AI generation...');
+      const freshData = await buildInsightsAggregate();
+      console.log('Fresh data fetched:', freshData);
       
       // Determine time of day based on selection or auto
       let timeOfDay: string;
@@ -64,9 +69,9 @@ export function AIInsights() {
         timeOfDay = selectedTimeOfDay;
       }
       
-      // Pass the actual data to AI
+      // Pass the FRESH data to AI (not the old cached agg)
       const resp = await generateAiInsights(language as 'en'|'ar', {
-        data: agg,
+        data: freshData,
         time_of_day: timeOfDay,
         user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
       });
