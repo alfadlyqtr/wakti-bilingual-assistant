@@ -285,13 +285,22 @@ export default function FitnessHealth() {
     const w = metrics?.workout;
     const kcal = w?.data?.score?.kilojoule ? Math.round((w.data.score.kilojoule||0)/4.184) : null;
     const wAvgHr = w?.data?.score?.average_heart_rate ?? null;
+    
+    // Extract from nested data.score structure
+    const recoveryScore = rec?.data?.score?.recovery_score ?? rec?.score ?? null;
+    const hrvMs = rec?.data?.score?.hrv_rmssd_milli ?? rec?.hrv_ms ?? null;
+    const rhrBpm = rec?.data?.score?.resting_heart_rate ?? rec?.rhr_bpm ?? null;
+    const dayStrain = cyc?.data?.score?.strain ?? cyc?.day_strain ?? null;
+    const trainingLoad = cyc?.data?.score?.training_load ?? cyc?.training_load ?? null;
+    const avgHrBpm = cyc?.data?.score?.average_heart_rate ?? cyc?.avg_hr_bpm ?? wAvgHr ?? null;
+    
     return {
-      recovery: rec?.score ?? null,
-      hrv: rec?.hrv_ms ?? null,
-      rhr: rec?.rhr_bpm ?? null,
-      strain: cyc?.day_strain ?? null,
-      load: cyc?.training_load ?? null,
-      avgHr: cyc?.avg_hr_bpm ?? wAvgHr ?? null,
+      recovery: recoveryScore,
+      hrv: hrvMs,
+      rhr: rhrBpm,
+      strain: dayStrain,
+      load: trainingLoad,
+      avgHr: avgHrBpm,
       kcal,
     };
   }, [metrics]);
@@ -472,11 +481,11 @@ export default function FitnessHealth() {
                 timeRange={timeRange} 
                 onTimeRangeChange={setTimeRange}
                 recoveryData={metrics?.recovery ? {
-                  score: metrics.recovery.score || 0,
-                  hrv: metrics.recovery.hrv_ms || 0,
-                  rhr: metrics.recovery.rhr_bpm || 0,
-                  spo2: metrics.recovery.spo2_percentage || 0,
-                  skinTemp: metrics.recovery.skin_temp_celsius || 0
+                  score: metrics.recovery.data?.score?.recovery_score || metrics.recovery.score || 0,
+                  hrv: metrics.recovery.data?.score?.hrv_rmssd_milli || metrics.recovery.hrv_ms || 0,
+                  rhr: metrics.recovery.data?.score?.resting_heart_rate || metrics.recovery.rhr_bpm || 0,
+                  spo2: metrics.recovery.data?.score?.spo2_percentage || metrics.recovery.spo2_percentage || 0,
+                  skinTemp: metrics.recovery.data?.score?.skin_temp_celsius || metrics.recovery.skin_temp_celsius || 0
                 } : undefined}
                 weeklyData={hrHistory.map((h: any) => ({
                   date: h.date,
@@ -492,8 +501,8 @@ export default function FitnessHealth() {
                 timeRange={timeRange} 
                 onTimeRangeChange={setTimeRange}
                 currentData={metrics?.recovery ? {
-                  hrv: metrics.recovery.hrv_ms || 0,
-                  rhr: metrics.recovery.rhr_bpm || 0
+                  hrv: metrics.recovery.data?.score?.hrv_rmssd_milli || metrics.recovery.hrv_ms || 0,
+                  rhr: metrics.recovery.data?.score?.resting_heart_rate || metrics.recovery.rhr_bpm || 0
                 } : undefined}
                 weeklyData={hrHistory.map((h: any) => ({
                   date: h.date,
@@ -508,10 +517,10 @@ export default function FitnessHealth() {
                 timeRange={timeRange} 
                 onTimeRangeChange={setTimeRange}
                 strainData={metrics?.cycle ? {
-                  dayStrain: metrics.cycle.day_strain || 0,
-                  trainingLoad: metrics.cycle.training_load || 0,
-                  avgHr: metrics.cycle.avg_hr_bpm || 0,
-                  maxHr: metrics.cycle.max_hr_bpm || 0
+                  dayStrain: metrics.cycle.data?.score?.strain || metrics.cycle.day_strain || 0,
+                  trainingLoad: metrics.cycle.data?.score?.training_load || metrics.cycle.training_load || 0,
+                  avgHr: metrics.cycle.data?.score?.average_heart_rate || metrics.cycle.avg_hr_bpm || 0,
+                  maxHr: metrics.cycle.data?.score?.max_heart_rate || metrics.cycle.max_hr_bpm || 0
                 } : undefined}
                 weeklyData={cycleHist.map((c: any) => ({
                   date: c.start,
