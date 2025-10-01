@@ -86,7 +86,6 @@ export default function FitnessHealth() {
         setSleepHist(sl.map((x:any)=>({ start: x.start, end: x.end, hours: x.hours, stages: x.stages })));
         setCycleHist(cyc);
         setWorkoutsHist(wks.map((w:any)=>({ start: w.start, strain: w.strain ?? null, kcal: w.kcal ?? null })));
-        // Auto-sync if older than 1 hour and toggle enabled
         if (st.lastSyncedAt && autoSync) {
           const ageMs = Date.now() - new Date(st.lastSyncedAt).getTime();
           if (ageMs > 3600_000) {
@@ -103,7 +102,6 @@ export default function FitnessHealth() {
               setStatus({ connected: true, lastSyncedAt: new Date().toISOString() });
             } catch (e: any) {
               console.error('auto sync error', e);
-              // Check if it's a token expiration error
               if (e?.message?.includes('refresh failed') || e?.message?.includes('400')) {
                 toast.info(
                   language === 'ar' 
@@ -122,10 +120,8 @@ export default function FitnessHealth() {
     })();
   }, [autoSync]);
 
-  // Re-fetch historical data when time range changes
   useEffect(() => {
     if (!connected) return;
-    
     (async () => {
       try {
         const historicalData = await fetchHistoricalData(timeRange);
@@ -156,12 +152,10 @@ export default function FitnessHealth() {
       setConnecting(true);
       if (!user) {
         toast.error(language === 'ar' ? 'الرجاء تسجيل الدخول أولاً' : 'Please sign in first');
-        // Remember intent and resume after login
         try { localStorage.setItem('whoop_pending', '1'); } catch {}
         window.location.href = `/login?redirect=/fitness`;
         return;
       }
-      // New service computes and stores the redirect URI internally
       await startWhoopAuth();
     } catch (e) {
       console.error('whoop connect error', e);
@@ -171,7 +165,6 @@ export default function FitnessHealth() {
     }
   };
 
-  // Auto-resume WHOOP connect after successful login if user initiated it before
   useEffect(() => {
     if (user && !loading) {
       const pending = (() => { try { return localStorage.getItem('whoop_pending') === '1'; } catch { return false; } })();
@@ -193,7 +186,6 @@ export default function FitnessHealth() {
       toast.success(`Synced: ${res?.counts?.cycles||0} cycles, ${res?.counts?.sleeps||0} sleeps, ${res?.counts?.workouts||0} workouts, ${res?.counts?.recoveries||0} recoveries`);
     } catch (e: any) {
       console.error('sync error', e);
-      // Check if it's a token expiration error (refresh token expired after 30-90 days)
       if (e?.message?.includes('refresh failed') || e?.message?.includes('400')) {
         toast.error(
           language === 'ar'
@@ -227,20 +219,11 @@ export default function FitnessHealth() {
   const sleepStages = useMemo(() => {
     const sleep = metrics?.sleep;
     if (!sleep) return null;
-    
-    // Use data from our database columns first, then fallback to API data
     const deep = sleep.total_deep_sleep_ms || sleep.data?.score?.stage_summary?.total_slow_wave_sleep_time_milli || 0;
     const rem = sleep.total_rem_sleep_ms || sleep.data?.score?.stage_summary?.total_rem_sleep_time_milli || 0;
     const light = sleep.total_light_sleep_ms || sleep.data?.score?.stage_summary?.total_light_sleep_time_milli || 0;
     const awake = sleep.total_awake_ms || sleep.data?.score?.stage_summary?.total_awake_time_milli || 0;
-    
-    return {
-      deep,
-      rem, 
-      light,
-      awake,
-      total: deep + rem + light + awake,
-    };
+    return { deep, rem, light, awake, total: deep + rem + light + awake };
   }, [metrics]);
 
   const sleepBars = useMemo(() => (
@@ -268,44 +251,31 @@ export default function FitnessHealth() {
   const sleepHours = useMemo(() => {
     const sleep = metrics?.sleep;
     if (!sleep) return null as number | null;
-    
-    // Use stored duration first
     if (typeof sleep.duration_sec === 'number' && sleep.duration_sec > 0) {
       return Math.round((sleep.duration_sec/360))/10;
     }
-    
-    // Use sleep stages total if available
     const stages = sleepStages;
     if (stages && stages.total > 0) {
       return Math.round((stages.total/360000))/10;
     }
-    
-    // Fallback to time difference
     if (sleep.start && sleep.end) {
       const delta = new Date(sleep.end).getTime() - new Date(sleep.start).getTime();
       if (delta > 0) return Math.round((delta/360000))/10;
     }
-    
     return null;
   }, [metrics, sleepStages]);
 
   const sleepEfficiency = useMemo(() => {
     const sleep = metrics?.sleep;
     if (!sleep) return null as number | null;
-    
-    // Use stored sleep efficiency percentage first
     if (sleep.sleep_efficiency_pct) {
       return Math.round(sleep.sleep_efficiency_pct);
     }
-    
-    // Fallback to calculation if we have the raw data
     const stages = sleepStages;
     if (!stages) return null;
-    
     const asleep = stages.deep + stages.rem + stages.light;
     const total = stages.total;
     if (!total || total === 0) return null;
-    
     return Math.round((asleep / total) * 100);
   }, [metrics, sleepStages]);
 
@@ -326,13 +296,8 @@ export default function FitnessHealth() {
     };
   }, [metrics]);
 
-
-
-
-
   return (
     <div className="max-w-7xl mx-auto p-3 sm:p-4 space-y-4 sm:space-y-6">
-      {/* Page Header */}
       <div className="text-center px-2">
         <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
           {language === 'ar' ? 'الصحة واللياقة' : 'Fitness & Health'}
@@ -342,7 +307,6 @@ export default function FitnessHealth() {
         </p>
       </div>
 
-      {/* Top Page Section */}
       <TopPageSection
         connected={connected}
         lastSyncedAt={status.lastSyncedAt}
@@ -355,9 +319,10 @@ export default function FitnessHealth() {
           setAutoSync(v);
           try { localStorage.setItem('whoop_autosync', v ? '1' : '0'); } catch {}
         }}
+        metrics={metrics}
+        sleepHours={sleepHours}
       />
-
-      {loading ? (
+            {loading ? (
         <Card className="rounded-2xl p-12 bg-white/5 border-white/10 text-center">
           <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-purple-400" />
           <p className="text-muted-foreground">
@@ -366,58 +331,10 @@ export default function FitnessHealth() {
         </Card>
       ) : connected ? (
         <>
-          {/* User Profile Section - Like WHOOP */}
-          {metrics && (
-            <Card className="rounded-2xl p-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-blue-500/20 mb-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
-                  {metrics?.profile?.first_name?.charAt(0) || user?.user_metadata?.full_name?.charAt(0) || user?.email?.charAt(0) || 'A'}
-                </div>
-                <div className="flex-1">
-                  <h2 className="text-lg font-semibold text-white">
-                    {metrics?.profile?.first_name && metrics?.profile?.last_name 
-                      ? `${metrics.profile.first_name} ${metrics.profile.last_name}`
-                      : user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Abdullah Alfadky'}
-                  </h2>
-                  <p className="text-sm text-gray-400">
-                    {language === 'ar' ? 'متصل بـ WHOOP' : 'Connected to WHOOP'}
-                  </p>
-                </div>
-                <div className="flex gap-4 text-center">
-                  <div>
-                    <div className="text-2xl font-bold text-blue-400">
-                      {metrics.cycle?.strain?.toFixed(1) || '0.0'}
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      {language === 'ar' ? 'الإجهاد' : 'Strain'}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-yellow-400">
-                      {metrics.recovery?.score || '0'}%
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      {language === 'ar' ? 'التعافي' : 'Recovery'}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-green-400">
-                      {sleepHours || '0'}h
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      {language === 'ar' ? 'النوم' : 'Sleep'}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          )}
-
           {/* Mobile Dashboard Widgets - Only show on mobile */}
           <div className="block md:hidden mb-6">
             {metrics && (
               <div className="grid grid-cols-2 gap-4">
-                {/* Recovery Widget */}
                 <Card className="rounded-2xl p-4 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border-green-500/20">
                   <div className="text-center">
                     <div className="text-3xl font-bold text-green-400 mb-2">
@@ -432,7 +349,6 @@ export default function FitnessHealth() {
                   </div>
                 </Card>
 
-                {/* Sleep Widget */}
                 <Card className="rounded-2xl p-4 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-blue-500/20">
                   <div className="text-center">
                     <div className="text-3xl font-bold text-blue-400 mb-2">
@@ -447,7 +363,6 @@ export default function FitnessHealth() {
                   </div>
                 </Card>
 
-                {/* Strain Widget */}
                 <Card className="rounded-2xl p-4 bg-gradient-to-br from-orange-500/10 to-red-500/10 border-orange-500/20">
                   <div className="text-center">
                     <div className="text-3xl font-bold text-orange-400 mb-2">
@@ -462,7 +377,6 @@ export default function FitnessHealth() {
                   </div>
                 </Card>
 
-                {/* HRV Widget */}
                 <Card className="rounded-2xl p-4 bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/20">
                   <div className="text-center">
                     <div className="text-3xl font-bold text-purple-400 mb-2">
@@ -528,7 +442,7 @@ export default function FitnessHealth() {
                   goalHours: 8,
                   performancePct: metrics.sleep.performance_pct || 0,
                   stages: {
-                    deep: Math.round((sleepStages?.deep || 0) / 60000), // Convert ms to minutes
+                    deep: Math.round((sleepStages?.deep || 0) / 60000),
                     rem: Math.round((sleepStages?.rem || 0) / 60000),
                     light: Math.round((sleepStages?.light || 0) / 60000),
                     awake: Math.round((sleepStages?.awake || 0) / 60000)
@@ -536,12 +450,11 @@ export default function FitnessHealth() {
                   bedtime: metrics.sleep.start ? new Date(metrics.sleep.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--',
                   waketime: metrics.sleep.end ? new Date(metrics.sleep.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--',
                   efficiency: sleepEfficiency || 0,
-                  // Additional sleep metrics
                   respiratoryRate: metrics.sleep.respiratory_rate || 0,
                   sleepConsistency: metrics.sleep.sleep_consistency_pct || 0,
                   disturbanceCount: metrics.sleep.disturbance_count || 0,
                   sleepCycleCount: metrics.sleep.sleep_cycle_count || 0,
-                  sleepDebt: metrics.sleep.sleep_debt_ms ? Math.round(metrics.sleep.sleep_debt_ms / 60000) : 0 // Convert to minutes
+                  sleepDebt: metrics.sleep.sleep_debt_ms ? Math.round(metrics.sleep.sleep_debt_ms / 60000) : 0
                 } : undefined}
                 weeklyData={sleepHist.map((s: any) => ({
                   date: s.start,
@@ -562,7 +475,6 @@ export default function FitnessHealth() {
                   score: metrics.recovery.score || 0,
                   hrv: metrics.recovery.hrv_ms || 0,
                   rhr: metrics.recovery.rhr_bpm || 0,
-                  // Additional recovery metrics (WHOOP 4.0)
                   spo2: metrics.recovery.spo2_percentage || 0,
                   skinTemp: metrics.recovery.skin_temp_celsius || 0
                 } : undefined}
@@ -656,4 +568,3 @@ export default function FitnessHealth() {
     </div>
   );
 }
-
