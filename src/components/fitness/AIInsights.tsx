@@ -92,6 +92,11 @@ export function AIInsights() {
       console.log('Language:', language);
       console.log('Data being sent:', JSON.stringify(freshData?.today, null, 2));
       
+      // SHOW USER EXACTLY WHAT'S BEING SENT
+      const dataPreview = `Sleep: ${freshData?.today?.sleepHours}h | Recovery: ${freshData?.today?.recoveryPct}% | HRV: ${freshData?.today?.hrvMs}ms | Strain: ${freshData?.today?.dayStrain} | RHR: ${freshData?.today?.rhrBpm}bpm`;
+      console.log('SENDING TO AI:', dataPreview);
+      toast.info(`Sending: ${dataPreview}`, { duration: 5000 });
+      
       const resp = await generateAiInsights(language as 'en'|'ar', {
         data: freshData,
         time_of_day: timeOfDay,
@@ -146,20 +151,19 @@ export function AIInsights() {
 
   return (
     <div className="space-y-6">
-      {/* Data Preview Card */}
-      {agg?.today && (
-        <Card className="rounded-2xl p-3 shadow-sm bg-blue-500/10 border-blue-500/20">
-          <div className="text-xs font-medium text-blue-400 mb-2">📊 Current Data (will be sent to AI)</div>
-          <div className="grid grid-cols-3 gap-2 text-[10px]">
-            <div><span className="text-gray-400">Sleep:</span> <span className="text-white font-medium">{agg.today.sleepHours || 0}h</span></div>
-            <div><span className="text-gray-400">Recovery:</span> <span className="text-white font-medium">{agg.today.recoveryPct || 0}%</span></div>
-            <div><span className="text-gray-400">HRV:</span> <span className="text-white font-medium">{agg.today.hrvMs || 0}ms</span></div>
-            <div><span className="text-gray-400">RHR:</span> <span className="text-white font-medium">{agg.today.rhrBpm || 0}bpm</span></div>
-            <div><span className="text-gray-400">Strain:</span> <span className="text-white font-medium">{agg.today.dayStrain || 0}</span></div>
-            <div><span className="text-gray-400">Sleep Perf:</span> <span className="text-white font-medium">{agg.today.sleepPerformancePct || 0}%</span></div>
-          </div>
-        </Card>
-      )}
+      {/* CRITICAL: Data Being Sent to AI - ALWAYS VISIBLE */}
+      <Card className="rounded-2xl p-3 shadow-sm bg-red-500/10 border-red-500/30">
+        <div className="text-xs font-bold text-red-400 mb-2">⚠️ DATA BEING SENT TO AI RIGHT NOW:</div>
+        <div className="grid grid-cols-3 gap-2 text-[10px]">
+          <div><span className="text-gray-400">Sleep:</span> <span className="text-white font-bold">{agg?.today?.sleepHours || 0}h</span></div>
+          <div><span className="text-gray-400">Recovery:</span> <span className="text-white font-bold">{agg?.today?.recoveryPct || 0}%</span></div>
+          <div><span className="text-gray-400">HRV:</span> <span className="text-white font-bold">{agg?.today?.hrvMs || 0}ms</span></div>
+          <div><span className="text-gray-400">RHR:</span> <span className="text-white font-bold">{agg?.today?.rhrBpm || 0}bpm</span></div>
+          <div><span className="text-gray-400">Strain:</span> <span className="text-white font-bold">{agg?.today?.dayStrain || 0}</span></div>
+          <div><span className="text-gray-400">Sleep Perf:</span> <span className="text-white font-bold">{agg?.today?.sleepPerformancePct || 0}%</span></div>
+        </div>
+        <div className="text-[10px] text-gray-400 mt-2">If these numbers are wrong, AI will be wrong. Click Generate to refresh.</div>
+      </Card>
       
       <Card className="rounded-2xl p-4 shadow-sm bg-white/5">
         <div className="flex items-center justify-between mb-3">
@@ -169,10 +173,10 @@ export function AIInsights() {
           </Button>
         </div>
         
-        {/* Time of Day Selector */}
+        {/* Time of Day Selector - AUTO GENERATES when clicked */}
         <div className="flex gap-2 mb-3">
           <button
-            onClick={() => setSelectedTimeOfDay('auto')}
+            onClick={() => { setSelectedTimeOfDay('auto'); setTimeout(() => onGenerate(), 100); }}
             className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
               selectedTimeOfDay === 'auto' 
                 ? 'bg-purple-500 text-white' 
@@ -182,7 +186,7 @@ export function AIInsights() {
             {language === 'ar' ? 'تلقائي' : 'Auto'}
           </button>
           <button
-            onClick={() => setSelectedTimeOfDay('morning')}
+            onClick={() => { setSelectedTimeOfDay('morning'); setTimeout(() => onGenerate(), 100); }}
             className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
               selectedTimeOfDay === 'morning' 
                 ? 'bg-amber-500 text-white' 
@@ -193,7 +197,7 @@ export function AIInsights() {
             <span className="ml-1 text-[10px] opacity-70">5-11:50 AM</span>
           </button>
           <button
-            onClick={() => setSelectedTimeOfDay('midday')}
+            onClick={() => { setSelectedTimeOfDay('midday'); setTimeout(() => onGenerate(), 100); }}
             className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
               selectedTimeOfDay === 'midday' 
                 ? 'bg-orange-500 text-white' 
@@ -204,7 +208,7 @@ export function AIInsights() {
             <span className="ml-1 text-[10px] opacity-70">12-5:50 PM</span>
           </button>
           <button
-            onClick={() => setSelectedTimeOfDay('evening')}
+            onClick={() => { setSelectedTimeOfDay('evening'); setTimeout(() => onGenerate(), 100); }}
             className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
               selectedTimeOfDay === 'evening' 
                 ? 'bg-indigo-500 text-white' 
