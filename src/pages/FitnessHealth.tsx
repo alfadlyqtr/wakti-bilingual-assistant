@@ -332,43 +332,43 @@ export default function FitnessHealth() {
       ) : connected ? (
         <>
           {/* Mobile Dashboard Widgets - Only show on mobile */}
-          <div className="block md:hidden mb-6">
+          <div className="block md:hidden mb-4">
             {metrics && (
-              <div className="grid grid-cols-2 gap-4">
-                <Card className="rounded-2xl p-4 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border-green-500/20">
+              <div className="grid grid-cols-2 gap-3">
+                <Card className="rounded-2xl p-3 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border-green-500/20">
                   <div className="text-center">
-                    <div className="text-3xl font-bold text-green-400 mb-2">
-                      {metrics.recovery?.score || '0'}%
+                    <div className="text-2xl font-bold text-green-400 mb-1">
+                      {metrics.recovery?.score || metrics.recovery?.data?.score?.recovery_score || '0'}%
                     </div>
-                    <div className="text-sm text-gray-400">
+                    <div className="text-xs text-gray-400">
                       {language === 'ar' ? 'التعافي' : 'Recovery'}
                     </div>
                     <div className="text-xs text-green-400 mt-1">
-                      HRV: {metrics.recovery?.hrv || '0'}ms
+                      HRV: {metrics.recovery?.hrv_ms || metrics.recovery?.data?.score?.hrv_rmssd_milli || '0'}ms
                     </div>
                   </div>
                 </Card>
 
-                <Card className="rounded-2xl p-4 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-blue-500/20">
+                <Card className="rounded-2xl p-3 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-blue-500/20">
                   <div className="text-center">
-                    <div className="text-3xl font-bold text-blue-400 mb-2">
+                    <div className="text-2xl font-bold text-blue-400 mb-1">
                       {sleepHours || '0'}h
                     </div>
-                    <div className="text-sm text-gray-400">
+                    <div className="text-xs text-gray-400">
                       {language === 'ar' ? 'النوم' : 'Sleep'}
                     </div>
                     <div className="text-xs text-blue-400 mt-1">
-                      {metrics.sleep?.performance_pct || '0'}% {language === 'ar' ? 'كفاءة' : 'Efficiency'}
+                      {sleepEfficiency || metrics.sleep?.data?.score?.sleep_efficiency_percentage || '0'}% {language === 'ar' ? 'كفاءة' : 'Efficiency'}
                     </div>
                   </div>
                 </Card>
 
-                <Card className="rounded-2xl p-4 bg-gradient-to-br from-orange-500/10 to-red-500/10 border-orange-500/20">
+                <Card className="rounded-2xl p-3 bg-gradient-to-br from-orange-500/10 to-red-500/10 border-orange-500/20">
                   <div className="text-center">
-                    <div className="text-3xl font-bold text-orange-400 mb-2">
-                      {metrics.cycle?.strain?.toFixed(1) || '0.0'}
+                    <div className="text-2xl font-bold text-orange-400 mb-1">
+                      {metrics.cycle?.day_strain?.toFixed(1) || metrics.cycle?.data?.score?.strain?.toFixed(1) || '0.0'}
                     </div>
-                    <div className="text-sm text-gray-400">
+                    <div className="text-xs text-gray-400">
                       {language === 'ar' ? 'الإجهاد' : 'Strain'}
                     </div>
                     <div className="text-xs text-orange-400 mt-1">
@@ -377,16 +377,16 @@ export default function FitnessHealth() {
                   </div>
                 </Card>
 
-                <Card className="rounded-2xl p-4 bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/20">
+                <Card className="rounded-2xl p-3 bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/20">
                   <div className="text-center">
-                    <div className="text-3xl font-bold text-purple-400 mb-2">
-                      {metrics.recovery?.hrv || '0'}
+                    <div className="text-2xl font-bold text-purple-400 mb-1">
+                      {metrics.recovery?.hrv_ms || metrics.recovery?.data?.score?.hrv_rmssd_milli || '0'}
                     </div>
-                    <div className="text-sm text-gray-400">
+                    <div className="text-xs text-gray-400">
                       HRV (ms)
                     </div>
                     <div className="text-xs text-purple-400 mt-1">
-                      RHR: {metrics.recovery?.rhr || '0'} bpm
+                      RHR: {metrics.recovery?.rhr_bpm || metrics.recovery?.data?.score?.resting_heart_rate || '0'} bpm
                     </div>
                   </div>
                 </Card>
