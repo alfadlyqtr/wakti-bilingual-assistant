@@ -191,14 +191,18 @@ Evening Tone:
         sleepHours = payload?.today?.sleepHours || 0;
       }
       const recoveryScore = recoveryData?.data?.score?.recovery_score || 
+                           payload?.today?.recoveryPct || 
                            payload?.today?.recoveryScore || 0;
       const hrvMs = recoveryData?.data?.score?.hrv_rmssd_milli || 
                    payload?.today?.hrvMs || 0;
       const strainScore = cycleData?.data?.score?.strain || 
+                         payload?.today?.dayStrain ||
                          payload?.today?.strainScore || 0;
       const sleepPerf = sleepData?.data?.score?.sleep_performance_percentage || 
+                       payload?.today?.sleepPerformancePct ||
                        payload?.today?.sleepPerformance || 0;
       const restingHR = recoveryData?.data?.score?.resting_heart_rate || 
+                       payload?.today?.rhrBpm ||
                        payload?.today?.restingHR || 0;
       
       // DEBUG: Log what we're actually extracting
