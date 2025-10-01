@@ -21,11 +21,25 @@ serve(async (req: Request) => {
     if (body?.ping) {
       return new Response(JSON.stringify({ ok: true, service: "whoop-ai-insights" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+    
+    // CRITICAL DEBUG: Log EVERYTHING received
+    console.log('========================================');
+    console.log('EDGE FUNCTION RECEIVED BODY');
+    console.log('========================================');
+    console.log('body keys:', Object.keys(body));
+    console.log('body.data type:', typeof body?.data);
+    console.log('body.data:', JSON.stringify(body?.data));
+    console.log('========================================');
+    
     const payload = body?.data ?? {};
     const language = body?.language ?? "en";
     const timeOfDay = body?.time_of_day ?? "general";
     const userTimezone = body?.user_timezone ?? "UTC";
     const userEmail = body?.user_email ?? null;
+    
+    console.log('payload.today:', payload?.today);
+    console.log('payload.today.sleepHours:', payload?.today?.sleepHours);
+    console.log('payload.today.recoveryPct:', payload?.today?.recoveryPct);
 
     // Enhanced system prompt with time-specific coaching
     const getSystemPrompt = (timeOfDay: string, language: string) => {
