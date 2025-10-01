@@ -169,6 +169,11 @@ Evening Tone:
                       (userEmail ? userEmail.split('@')[0].split('.')[0] : null) ||
                       "Abdullah";
       
+      // Get user body measurements
+      const heightMeter = payload?.user?.height_meter || payload?.user?.body?.height_meter || null;
+      const weightKg = payload?.user?.weight_kilogram || payload?.user?.body?.weight_kilogram || null;
+      const maxHR = payload?.user?.max_heart_rate || payload?.user?.body?.max_heart_rate || null;
+      
       // Extract real WHOOP metrics from the comprehensive data
       const sleepData = payload?.details?.sleep || payload?.raw?.sleep_full;
       const recoveryData = payload?.details?.recovery || payload?.raw?.recovery_full;
@@ -200,6 +205,9 @@ Evening Tone:
       console.log('=== AI DATA EXTRACTION DEBUG ===');
       console.log('User Name:', userName);
       console.log('User Email:', userEmail);
+      console.log('Height (m):', heightMeter);
+      console.log('Weight (kg):', weightKg);
+      console.log('Max HR:', maxHR);
       console.log('Sleep Hours:', sleepHours);
       console.log('Recovery Score:', recoveryScore);
       console.log('HRV:', hrvMs);
@@ -350,6 +358,9 @@ CURRENT REAL METRICS TO USE:
 - Strain Score: ${strainScore}
 - Sleep Performance: ${sleepPerf}%
 - Resting HR: ${restingHR} bpm
+${heightMeter ? `- Height: ${heightMeter}m (${(heightMeter * 100).toFixed(0)}cm)` : ''}
+${weightKg ? `- Weight: ${weightKg}kg` : ''}
+${maxHR ? `- Max Heart Rate: ${maxHR} bpm` : ''}
 
 VISUALS ARRAY:
 ${visuals}
