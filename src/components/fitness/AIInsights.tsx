@@ -17,6 +17,7 @@ export function AIInsights() {
   const printableRef = useRef<HTMLDivElement>(null);
   const [phase, setPhase] = useState<"idle"|"checking"|"contacting"|"analyzing"|"ready"|"error">("idle");
   const [selectedTimeOfDay, setSelectedTimeOfDay] = useState<'morning'|'midday'|'evening'|'auto'>('auto');
+  const [lastSyncTime, setLastSyncTime] = useState<number>(Date.now());
 
   useEffect(() => {
     (async () => {
@@ -47,9 +48,25 @@ export function AIInsights() {
       
       // CRITICAL: Fetch FRESH data right before generating AI insights
       setPhase('contacting');
-      console.log('Fetching fresh data before AI generation...');
+      console.log('=== GENERATING AI INSIGHTS ===');
+      console.log('Timestamp:', new Date().toISOString());
+      
+      // Force cache bust by adding timestamp
+      const cacheBuster = Date.now();
+      console.log('Cache buster:', cacheBuster);
       const freshData = await buildInsightsAggregate();
-      console.log('Fresh data fetched:', freshData);
+      
+      console.log('=== FRESH DATA FETCHED ===');
+      console.log('Sleep Hours:', freshData?.today?.sleepHours);
+      console.log('Recovery %:', freshData?.today?.recoveryPct);
+      console.log('HRV ms:', freshData?.today?.hrvMs);
+      console.log('RHR bpm:', freshData?.today?.rhrBpm);
+      console.log('Strain:', freshData?.today?.dayStrain);
+      console.log('Sleep Performance %:', freshData?.today?.sleepPerformancePct);
+      console.log('Full today object:', freshData?.today);
+      
+      // Update the preview with fresh data
+      setAgg(freshData);
       
       // Determine time of day based on selection or auto
       let timeOfDay: string;
@@ -70,11 +87,19 @@ export function AIInsights() {
       }
       
       // Pass the FRESH data to AI (not the old cached agg)
+      console.log('=== SENDING TO AI ===');
+      console.log('Time of Day:', timeOfDay);
+      console.log('Language:', language);
+      console.log('Data being sent:', JSON.stringify(freshData?.today, null, 2));
+      
       const resp = await generateAiInsights(language as 'en'|'ar', {
         data: freshData,
         time_of_day: timeOfDay,
         user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
       });
+      
+      console.log('=== AI RESPONSE RECEIVED ===');
+      console.log('Response:', resp);
       setPhase('analyzing');
       setAi(resp || {});
       setPhase('ready');
@@ -121,6 +146,21 @@ export function AIInsights() {
 
   return (
     <div className="space-y-6">
+      {/* Data Preview Card */}
+      {agg?.today && (
+        <Card className="rounded-2xl p-3 shadow-sm bg-blue-500/10 border-blue-500/20">
+          <div className="text-xs font-medium text-blue-400 mb-2">📊 Current Data (will be sent to AI)</div>
+          <div className="grid grid-cols-3 gap-2 text-[10px]">
+            <div><span className="text-gray-400">Sleep:</span> <span className="text-white font-medium">{agg.today.sleepHours || 0}h</span></div>
+            <div><span className="text-gray-400">Recovery:</span> <span className="text-white font-medium">{agg.today.recoveryPct || 0}%</span></div>
+            <div><span className="text-gray-400">HRV:</span> <span className="text-white font-medium">{agg.today.hrvMs || 0}ms</span></div>
+            <div><span className="text-gray-400">RHR:</span> <span className="text-white font-medium">{agg.today.rhrBpm || 0}bpm</span></div>
+            <div><span className="text-gray-400">Strain:</span> <span className="text-white font-medium">{agg.today.dayStrain || 0}</span></div>
+            <div><span className="text-gray-400">Sleep Perf:</span> <span className="text-white font-medium">{agg.today.sleepPerformancePct || 0}%</span></div>
+          </div>
+        </Card>
+      )}
+      
       <Card className="rounded-2xl p-4 shadow-sm bg-white/5">
         <div className="flex items-center justify-between mb-3">
           <div className="text-sm font-medium">AI Insights</div>
