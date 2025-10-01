@@ -101,8 +101,17 @@ export default function FitnessHealth() {
               setCycleHist(cyc2);
               setWorkoutsHist(wks2.map((w:any)=>({ start: w.start, strain: w.strain ?? null, kcal: w.kcal ?? null })));
               setStatus({ connected: true, lastSyncedAt: new Date().toISOString() });
-            } catch (e) {
+            } catch (e: any) {
               console.error('auto sync error', e);
+              // Check if it's a token expiration error
+              if (e?.message?.includes('refresh failed') || e?.message?.includes('400')) {
+                toast.info(
+                  language === 'ar' 
+                    ? 'يرجى إعادة الاتصال بـ WHOOP لمواصلة المزامنة التلقائية' 
+                    : 'Please reconnect to WHOOP to continue auto-sync',
+                  { duration: 5000 }
+                );
+              }
             } finally {
               setSyncing(false);
             }
@@ -182,6 +191,19 @@ export default function FitnessHealth() {
       setHrHistory(rec);
       setStatus({ connected: true, lastSyncedAt: new Date().toISOString() });
       toast.success(`Synced: ${res?.counts?.cycles||0} cycles, ${res?.counts?.sleeps||0} sleeps, ${res?.counts?.workouts||0} workouts, ${res?.counts?.recoveries||0} recoveries`);
+    } catch (e: any) {
+      console.error('sync error', e);
+      // Check if it's a token expiration error (refresh token expired after 30-90 days)
+      if (e?.message?.includes('refresh failed') || e?.message?.includes('400')) {
+        toast.error(
+          language === 'ar'
+            ? 'انتهت صلاحية اتصال WHOOP. يرجى الضغط على "قطع الاتصال" ثم "الاتصال" مرة أخرى.'
+            : 'WHOOP connection expired. Please disconnect and reconnect.',
+          { duration: 8000 }
+        );
+      } else {
+        toast.error(language === 'ar' ? 'فشلت المزامنة' : 'Sync failed');
+      }
     } finally {
       setSyncing(false);
     }

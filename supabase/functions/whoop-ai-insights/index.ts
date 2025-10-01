@@ -25,6 +25,7 @@ serve(async (req: Request) => {
     const language = body?.language ?? "en";
     const timeOfDay = body?.time_of_day ?? "general";
     const userTimezone = body?.user_timezone ?? "UTC";
+    const userEmail = body?.user_email ?? null;
 
     // Enhanced system prompt with time-specific coaching
     const getSystemPrompt = (timeOfDay: string, language: string) => {
@@ -165,7 +166,7 @@ Evening Tone:
                       payload?.details?.profile?.first_name ||
                       payload?.raw?.profile?.first_name ||
                       // Extract first name from email (alfadlyqatar@gmail.com -> alfadly)
-                      (payload?.user_email ? payload.user_email.split('@')[0].split('.')[0] : null) ||
+                      (userEmail ? userEmail.split('@')[0].split('.')[0] : null) ||
                       "Abdullah";
       
       // Extract real WHOOP metrics from the comprehensive data
@@ -194,6 +195,23 @@ Evening Tone:
                        payload?.today?.sleepPerformance || 0;
       const restingHR = recoveryData?.data?.score?.resting_heart_rate || 
                        payload?.today?.restingHR || 0;
+      
+      // DEBUG: Log what we're actually extracting
+      console.log('=== AI DATA EXTRACTION DEBUG ===');
+      console.log('User Name:', userName);
+      console.log('User Email:', userEmail);
+      console.log('Sleep Hours:', sleepHours);
+      console.log('Recovery Score:', recoveryScore);
+      console.log('HRV:', hrvMs);
+      console.log('Strain:', strainScore);
+      console.log('Sleep Performance:', sleepPerf);
+      console.log('Resting HR:', restingHR);
+      console.log('Has sleepData:', !!sleepData);
+      console.log('Has recoveryData:', !!recoveryData);
+      console.log('Has cycleData:', !!cycleData);
+      console.log('payload.user:', payload?.user);
+      console.log('payload.today:', payload?.today);
+      
       const baseStructure = language === 'ar' ? `
 تحليل بيانات WHOOP التالية والرد بتنسيق JSON صارم:
 
