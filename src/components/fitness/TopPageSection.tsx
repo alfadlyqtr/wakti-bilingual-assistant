@@ -56,9 +56,18 @@ export function TopPageSection({
         {/* Top Row: User Info + Buttons */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            {/* User Avatar */}
-            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-xl">
-              {userInitial}
+            {/* WHOOP Logo */}
+            <div className="w-14 h-14 rounded-full bg-white dark:bg-gray-900 flex items-center justify-center p-2">
+              <img 
+                src="/lovable-uploads/WHOOP Circle Black@2x.png" 
+                alt="WHOOP" 
+                className="w-full h-full object-contain dark:hidden"
+              />
+              <img 
+                src="/lovable-uploads/WHOOP Circle White@2x.png" 
+                alt="WHOOP" 
+                className="w-full h-full object-contain hidden dark:block"
+              />
             </div>
             
             {/* User Details */}
