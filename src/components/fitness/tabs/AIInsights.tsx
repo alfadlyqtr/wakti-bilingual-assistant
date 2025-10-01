@@ -407,20 +407,31 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
       
-      const response = await supabase.functions.invoke('google-tts', {
-        body: { 
-          text,
-          language: language === 'ar' ? 'ar' : 'en'
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      
+      // Select appropriate voice based on language
+      const voiceId = language === 'ar' 
+        ? 'ar-XA-Wavenet-C'  // Arabic female voice
+        : 'en-US-Neural2-F'; // English female voice
+      
+      const response = await fetch(`${supabaseUrl}/functions/v1/voice-tts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
         },
-        headers: { Authorization: `Bearer ${accessToken}` }
+        body: JSON.stringify({ 
+          text,
+          voice_id: voiceId
+        })
       });
       
-      if (response.error) {
-        throw response.error;
+      if (!response.ok) {
+        throw new Error('TTS request failed');
       }
       
-      // The response should contain audio data
-      const audioBlob = new Blob([response.data], { type: 'audio/mp3' });
+      // The response contains audio data
+      const audioBlob = await response.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
       audio.play();
