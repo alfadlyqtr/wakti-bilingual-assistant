@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Copy, RefreshCw, Brain, TrendingUp, TrendingDown, Sun, Clock, Moon, CheckCircle, Volume2 } from "lucide-react";
+import { Copy, RefreshCw, Brain, TrendingUp, TrendingDown, Sun, Clock, Moon, CheckCircle, Volume2, Pause, RotateCcw } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { toast } from "sonner";
 import { generateAiInsights, buildInsightsAggregate } from "@/services/whoopService";
@@ -145,6 +145,20 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
     return null;
   });
   const [lastGenerated, setLastGenerated] = useState<Record<TimeWindow, number>>(loadPersistedTimes());
+  
+  // Audio playback state
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
+  
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.src = '';
+      }
+    };
+  }, [currentAudio]);
 
   // Persist insights to localStorage whenever they change
   useEffect(() => {
@@ -397,6 +411,20 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
   };
 
   const speakText = async () => {
+    // If already playing, pause it
+    if (isPlaying && currentAudio) {
+      currentAudio.pause();
+      setIsPlaying(false);
+      return;
+    }
+    
+    // If paused, resume
+    if (currentAudio && currentAudio.paused) {
+      currentAudio.play();
+      setIsPlaying(true);
+      return;
+    }
+    
     if (!displayInsight) return;
     
     const text = `${displayInsight.daily_summary || ''}\n\n${displayInsight.weekly_summary || ''}\n\nTips:\n${(displayInsight.tips || []).map((t: string) => `${t}`).join('\n')}\n\nMotivations:\n${(displayInsight.motivations || []).map((m: string) => `${m}`).join('\n')}`;
@@ -434,12 +462,29 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
       const audioBlob = await response.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
+      
+      // Set up event listeners
+      audio.addEventListener('play', () => setIsPlaying(true));
+      audio.addEventListener('pause', () => setIsPlaying(false));
+      audio.addEventListener('ended', () => {
+        setIsPlaying(false);
+        setCurrentAudio(null);
+      });
+      
+      setCurrentAudio(audio);
       audio.play();
       
       toast.success(language === 'ar' ? 'جاري التشغيل' : 'Playing audio');
     } catch (error) {
       console.error('TTS error:', error);
       toast.error(language === 'ar' ? 'فشل تحويل النص إلى صوت' : 'Failed to convert text to speech');
+    }
+  };
+  
+  const rewindAudio = () => {
+    if (currentAudio) {
+      currentAudio.currentTime = Math.max(0, currentAudio.currentTime - 10);
+      toast.info(language === 'ar' ? 'تراجع 10 ثواني' : 'Rewound 10 seconds');
     }
   };
 
@@ -592,9 +637,33 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
                 {language === 'ar' ? 'الملخص اليومي' : 'Daily Summary'}
               </h3>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={speakText}>
-                  <Volume2 className="h-4 w-4 mr-2" />
-                  {language === 'ar' ? 'استماع' : 'Speak'}
+                {isPlaying && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={rewindAudio}
+                    className="h-8 w-8 p-0"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                  </Button>
+                )}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={speakText}
+                  className={isPlaying ? "bg-emerald-500/20 border-emerald-500 animate-pulse" : ""}
+                >
+                  {isPlaying ? (
+                    <>
+                      <Pause className="h-4 w-4 mr-2 text-emerald-400" />
+                      {language === 'ar' ? 'إيقاف مؤقت' : 'Pause'}
+                    </>
+                  ) : (
+                    <>
+                      <Volume2 className="h-4 w-4 mr-2" />
+                      {language === 'ar' ? 'استماع' : 'Speak'}
+                    </>
+                  )}
                 </Button>
                 <Button variant="outline" size="sm" onClick={copyToClipboard}>
                   <Copy className="h-4 w-4 mr-2" />
