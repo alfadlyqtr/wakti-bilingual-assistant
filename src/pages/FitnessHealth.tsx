@@ -455,7 +455,7 @@ export default function FitnessHealth() {
           </div>
 
           <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as MainTab)}>
-            <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 bg-white/10 border-white/20 gap-3 sm:gap-2 p-2 mb-8 sm:mb-4 rounded-xl">
+            <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 bg-white/10 border-white/20 gap-x-2 gap-y-3 sm:gap-2 p-2 mb-4 sm:mb-4 rounded-xl">
               <TabsTrigger value="ai-insights" className="flex items-center justify-center gap-1 px-1 py-3 sm:py-2 text-xs sm:text-sm min-h-[44px] sm:min-h-[40px]">
                 <Brain className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden sm:inline">{language === 'ar' ? 'رؤى الذكاء الاصطناعي' : 'AI Insights'}</span>

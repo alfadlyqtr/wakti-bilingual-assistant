@@ -73,7 +73,7 @@ export function TopPageSection({
           
           {/* User Details */}
           <div className="flex-1 min-w-0">
-            <h2 className="text-base md:text-lg font-semibold text-white truncate">{userName}</h2>
+            <h2 className="text-base md:text-lg font-semibold text-gray-900 dark:text-white truncate">{userName}</h2>
             <p className="text-xs md:text-sm text-gray-600 dark:text-gray-400 truncate">{userEmail}</p>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               {connected ? (
@@ -154,21 +154,21 @@ export function TopPageSection({
               <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
                 <Ruler className="h-4 w-4 md:h-5 md:w-5 text-purple-400" />
                 <div>
-                  <div className="text-xs md:text-sm font-semibold text-white">{height.toFixed(2)}m</div>
+                  <div className="text-xs md:text-sm font-semibold text-gray-900 dark:text-white">{height.toFixed(2)}m</div>
                   <div className="text-xs text-gray-700 dark:text-gray-400 font-medium">{language === 'ar' ? 'الطول' : 'Height'}</div>
                 </div>
               </div>
               <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
                 <Weight className="h-4 w-4 md:h-5 md:w-5 text-blue-400" />
                 <div>
-                  <div className="text-xs md:text-sm font-semibold text-white">{weight.toFixed(1)}kg</div>
+                  <div className="text-xs md:text-sm font-semibold text-gray-900 dark:text-white">{weight.toFixed(1)}kg</div>
                   <div className="text-xs text-gray-700 dark:text-gray-400 font-medium">{language === 'ar' ? 'الوزن' : 'Weight'}</div>
                 </div>
               </div>
               <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
                 <Heart className="h-4 w-4 md:h-5 md:w-5 text-red-400" />
                 <div>
-                  <div className="text-xs md:text-sm font-semibold text-white">{maxHR} bpm</div>
+                  <div className="text-xs md:text-sm font-semibold text-gray-900 dark:text-white">{maxHR} bpm</div>
                   <div className="text-xs text-gray-700 dark:text-gray-400 font-medium">{language === 'ar' ? 'أقصى نبض' : 'Max HR'}</div>
                 </div>
               </div>

@@ -522,7 +522,7 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
   return (
     <div className="space-y-6">
       {/* Time Range Tabs */}
-      <div className="flex gap-2 mb-8 flex-wrap justify-center sm:justify-start mt-4">
+      <div className="flex gap-2 mb-4 flex-wrap justify-center sm:justify-start mt-8">
         {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
           <button
             key={range}
