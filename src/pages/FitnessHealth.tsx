@@ -360,7 +360,7 @@ export default function FitnessHealth() {
     <div className="max-w-7xl mx-auto p-3 sm:p-4 space-y-4 sm:space-y-6">
       <div className="text-center px-2">
         <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
-          {language === 'ar' ? 'الصحة واللياقة' : 'Fitness & Health'}
+          {language === 'ar' ? 'الحيوية' : 'Vitality'}
         </h1>
         <p className="text-muted-foreground mt-2 text-sm sm:text-base px-4">
           {language === 'ar' ? 'تحليل شامل لبياناتك الصحية مع الذكاء الاصطناعي' : 'Comprehensive health data analysis with AI insights'}

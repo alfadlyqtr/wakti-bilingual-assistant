@@ -720,14 +720,14 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Tips */}
             <Card className="rounded-2xl p-6 bg-gradient-to-br from-emerald-500/10 to-green-500/10 border-emerald-500/20">
-              <h3 className="font-semibold text-lg mb-4 text-emerald-400">
+              <h3 className="font-semibold text-lg mb-4 text-emerald-700 dark:text-emerald-400">
                 {language === 'ar' ? 'نصائح' : 'Tips'}
               </h3>
               <ul className="space-y-3">
                 {(displayInsight?.tips || []).map((tip: string, index: number) => (
                   <li key={index} className="flex items-start gap-3 text-sm">
-                    <CheckCircle className="h-4 w-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                    <span className="text-muted-foreground">{tip}</span>
+                    <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400 mt-0.5 flex-shrink-0" />
+                    <span className="text-gray-700 dark:text-gray-300 font-medium">{tip}</span>
                   </li>
                 ))}
               </ul>
@@ -735,13 +735,13 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
 
             {/* Motivations */}
             <Card className="rounded-2xl p-6 bg-gradient-to-br from-orange-500/10 to-red-500/10 border-orange-500/20">
-              <h3 className="font-semibold text-lg mb-4 text-orange-400">
+              <h3 className="font-semibold text-lg mb-4 text-orange-600 dark:text-orange-400">
                 {language === 'ar' ? 'تحفيز' : 'Motivations'}
               </h3>
               <div className="space-y-3">
                 {(displayInsight?.motivations || []).map((motivation: string, index: number) => (
-                  <div key={index} className="p-3 bg-orange-500/10 rounded-lg border border-orange-500/20">
-                    <p className="text-sm font-medium text-orange-200">{motivation}</p>
+                  <div key={index} className="p-3 bg-orange-100 dark:bg-orange-500/10 rounded-lg border border-orange-300 dark:border-orange-500/20">
+                    <p className="text-sm font-semibold text-orange-900 dark:text-orange-200">{motivation}</p>
                   </div>
                 ))}
               </div>
