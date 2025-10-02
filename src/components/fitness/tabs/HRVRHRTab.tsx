@@ -123,7 +123,7 @@ export function HRVRHRTab({
       {/* Current HRV & RHR Overview */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* HRV Card */}
-        <Card className="rounded-2xl p-6 bg-gradient-to-br from-emerald-500/10 to-green-500/10 border-emerald-500/20">
+        <Card className="rounded-2xl p-6 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-500/10 dark:to-green-500/10 border-emerald-300 dark:border-emerald-500/20 shadow-lg">
           <div className="flex items-center gap-3 mb-6">
             <Activity className="h-6 w-6 text-emerald-400" />
             <div>
@@ -146,7 +146,7 @@ export function HRVRHRTab({
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white/5 rounded-xl p-3">
+            <div className="bg-white dark:bg-white/10 rounded-xl p-3 shadow-md border border-gray-200 dark:border-white/20">
               <div className="text-sm text-muted-foreground mb-1">
                 {language === 'ar' ? 'متوسط 7 أيام' : '7-Day Avg'}
               </div>
@@ -154,7 +154,7 @@ export function HRVRHRTab({
                 {avg7dHRV}ms
               </div>
             </div>
-            <div className="bg-white/5 rounded-xl p-3">
+            <div className="bg-white dark:bg-white/10 rounded-xl p-3 shadow-md border border-gray-200 dark:border-white/20">
               <div className="text-sm text-muted-foreground mb-1">
                 {language === 'ar' ? 'التغيير' : 'Change'}
               </div>
@@ -175,7 +175,7 @@ export function HRVRHRTab({
         </Card>
 
         {/* RHR Card */}
-        <Card className="rounded-2xl p-6 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-blue-500/20">
+        <Card className="rounded-2xl p-6 bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-500/10 dark:to-cyan-500/10 border-blue-300 dark:border-blue-500/20 shadow-lg">
           <div className="flex items-center gap-3 mb-6">
             <Heart className="h-6 w-6 text-blue-400" />
             <div>
@@ -198,7 +198,7 @@ export function HRVRHRTab({
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white/5 rounded-xl p-3">
+            <div className="bg-white dark:bg-white/10 rounded-xl p-3 shadow-md border border-gray-200 dark:border-white/20">
               <div className="text-sm text-muted-foreground mb-1">
                 {language === 'ar' ? 'متوسط 7 أيام' : '7-Day Avg'}
               </div>
@@ -206,7 +206,7 @@ export function HRVRHRTab({
                 {avg7dRHR} bpm
               </div>
             </div>
-            <div className="bg-white/5 rounded-xl p-3">
+            <div className="bg-white dark:bg-white/10 rounded-xl p-3 shadow-md border border-gray-200 dark:border-white/20">
               <div className="text-sm text-muted-foreground mb-1">
                 {language === 'ar' ? 'التغيير' : 'Change'}
               </div>
@@ -230,7 +230,7 @@ export function HRVRHRTab({
       </div>
 
       {/* Day Statistics - Today vs Yesterday */}
-      <Card className="rounded-2xl p-6 bg-gradient-to-br from-emerald-500/10 to-blue-500/10 border-emerald-500/20">
+      <Card className="rounded-2xl p-6 bg-gradient-to-br from-emerald-50 to-blue-50 dark:from-emerald-500/10 dark:to-blue-500/10 border-emerald-300 dark:border-emerald-500/20 shadow-lg">
         <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
           <TrendingUp className="h-5 w-5 text-emerald-400" />
           {language === 'ar' ? 'إحصائيات اليوم' : 'Day Statistics'}
@@ -273,7 +273,7 @@ export function HRVRHRTab({
 
       {/* Dual-Line Chart - Only show if we have real data */}
       {realWeeklyData.length > 0 && (
-        <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
+        <Card className="rounded-2xl p-6 bg-gradient-to-br from-gray-50 to-slate-50 dark:from-white/5 dark:to-white/5 border-gray-200 dark:border-white/10 shadow-lg">
           <h3 className="font-semibold text-lg mb-4">
             {language === 'ar' ? 'اتجاه HRV و RHR (7 أيام)' : 'HRV & RHR Trend (7 Days)'}
           </h3>

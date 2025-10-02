@@ -554,7 +554,7 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
       </div>
 
       {/* AI Insights Header */}
-      <Card className="rounded-2xl p-6 bg-gradient-to-br from-purple-500/10 to-blue-500/10 border-purple-500/20">
+      <Card className="rounded-2xl p-6 bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-500/10 dark:to-blue-500/10 border-purple-300 dark:border-purple-500/20 shadow-lg">
         <div className="flex items-center gap-3 mb-6">
           <Brain className="h-8 w-8 text-purple-400 flex-shrink-0" />
           <div className="min-w-0 flex-1">
@@ -659,7 +659,7 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
       {hasAnyInsight && (
         <div key={`insights-${activeWindow}-${hasAnyInsight}`} ref={printRef} className="space-y-6">
           {/* Daily Summary */}
-          <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
+          <Card className="rounded-2xl p-6 bg-gradient-to-br from-emerald-50 to-blue-50 dark:from-white/5 dark:to-white/5 border-emerald-200 dark:border-white/10 shadow-lg">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-emerald-400" />
@@ -706,7 +706,7 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
           </Card>
 
           {/* Weekly Summary */}
-          <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
+          <Card className="rounded-2xl p-6 bg-gradient-to-br from-emerald-50 to-blue-50 dark:from-white/5 dark:to-white/5 border-emerald-200 dark:border-white/10 shadow-lg">
             <h3 className="font-semibold text-lg flex items-center gap-2 mb-4">
               <TrendingDown className="h-5 w-5 text-blue-400" />
               {language === 'ar' ? 'الملخص الأسبوعي' : 'Weekly Summary'}
@@ -750,7 +750,7 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
 
           {/* AI Generated Visuals - DISABLED until AI generates proper data */}
           {false && (displayInsight?.visuals && displayInsight.visuals.length > 0) && (
-            <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
+            <Card className="rounded-2xl p-6 bg-gradient-to-br from-emerald-50 to-blue-50 dark:from-white/5 dark:to-white/5 border-emerald-200 dark:border-white/10 shadow-lg">
               <h3 className="font-semibold text-lg mb-6 flex items-center gap-2">
                 <Brain className="h-5 w-5 text-purple-400" />
                 {language === 'ar' ? 'الرسوم البيانية الذكية' : 'Smart Visuals'}
@@ -802,7 +802,7 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
       )}
 
       {!hasAnyInsight && (
-        <Card className="rounded-2xl p-12 bg-white/5 border-white/10 text-center">
+        <Card className="rounded-2xl p-12 bg-gradient-to-br from-gray-50 to-slate-50 dark:from-white/5 dark:to-white/5 border-gray-200 dark:border-white/10 shadow-lg text-center">
           <Brain className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <h3 className="font-semibold text-lg mb-2">
             {language === 'ar' ? 'لا توجد رؤى بعد' : 'No Insights Yet'}

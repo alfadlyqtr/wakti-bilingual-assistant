@@ -88,9 +88,9 @@ export function RecoveryTab({
     : [];
 
   const getRecoveryColor = (score: number) => {
-    if (score >= 67) return { color: '#10B981', text: 'text-emerald-400', bg: 'from-emerald-500/10 to-green-500/10', border: 'border-emerald-500/20' };
-    if (score >= 34) return { color: '#F59E0B', text: 'text-yellow-400', bg: 'from-yellow-500/10 to-orange-500/10', border: 'border-yellow-500/20' };
-    return { color: '#EF4444', text: 'text-red-400', bg: 'from-red-500/10 to-pink-500/10', border: 'border-red-500/20' };
+    if (score >= 67) return { color: '#10B981', text: 'text-emerald-400', bg: 'from-emerald-50 to-green-50 dark:from-emerald-500/10 dark:to-green-500/10', border: 'border-emerald-300 dark:border-emerald-500/20 shadow-lg' };
+    if (score >= 34) return { color: '#F59E0B', text: 'text-yellow-400', bg: 'from-yellow-50 to-orange-50 dark:from-yellow-500/10 dark:to-orange-500/10', border: 'border-yellow-300 dark:border-yellow-500/20 shadow-lg' };
+    return { color: '#EF4444', text: 'text-red-400', bg: 'from-red-50 to-pink-50 dark:from-red-500/10 dark:to-pink-500/10', border: 'border-red-300 dark:border-red-500/20 shadow-lg' };
   };
 
   const recoveryColor = getRecoveryColor(realRecoveryData.score);
@@ -185,42 +185,42 @@ export function RecoveryTab({
         </Card>
 
         {/* Recovery Stats */}
-        <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
+        <Card className="rounded-2xl p-6 bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-white/5 dark:to-white/5 border-yellow-200 dark:border-white/10 shadow-lg">
           <h3 className="font-semibold text-lg mb-6">
             {language === 'ar' ? 'إحصائيات التعافي' : 'Recovery Stats'}
           </h3>
 
           {/* Recovery metrics in one row */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-            <div className="bg-white/5 rounded-xl p-2 sm:p-3 text-center">
-              <div className="text-xs text-muted-foreground mb-1">
+            <div className="bg-white dark:bg-white/10 rounded-xl p-2 sm:p-3 text-center shadow-md border border-gray-200 dark:border-white/20">
+              <div className="text-xs text-gray-600 dark:text-gray-400 font-medium mb-1">
                 {language === 'ar' ? 'النتيجة' : 'Score'}
               </div>
-              <div className={`text-sm sm:text-base font-bold ${recoveryColor.text}`}>
+              <div className={`text-sm sm:text-base font-bold ${recoveryColor.text.replace('text-', 'text-').replace('-400', '-600 dark:text-' + recoveryColor.text.split('-')[1] + '-400')}`}>
                 {realRecoveryData.score}%
               </div>
             </div>
-            <div className="bg-white/5 rounded-xl p-2 sm:p-3 text-center">
-              <div className="text-xs text-muted-foreground mb-1">
+            <div className="bg-white dark:bg-white/10 rounded-xl p-2 sm:p-3 text-center shadow-md border border-gray-200 dark:border-white/20">
+              <div className="text-xs text-gray-600 dark:text-gray-400 font-medium mb-1">
                 {language === 'ar' ? 'تقلب القلب' : 'HRV'}
               </div>
-              <div className="text-sm sm:text-base font-bold text-teal-400">
+              <div className="text-sm sm:text-base font-bold text-teal-600 dark:text-teal-400">
                 {realRecoveryData.hrv}ms
               </div>
             </div>
-            <div className="bg-white/5 rounded-xl p-2 sm:p-3 text-center">
-              <div className="text-xs text-muted-foreground mb-1">
+            <div className="bg-white dark:bg-white/10 rounded-xl p-2 sm:p-3 text-center shadow-md border border-gray-200 dark:border-white/20">
+              <div className="text-xs text-gray-600 dark:text-gray-400 font-medium mb-1">
                 {language === 'ar' ? 'نبضات الراحة' : 'RHR'}
               </div>
-              <div className="text-sm sm:text-base font-bold text-purple-400">
+              <div className="text-sm sm:text-base font-bold text-purple-600 dark:text-purple-400">
                 {realRecoveryData.rhr} bpm
               </div>
             </div>
-            <div className="bg-white/5 rounded-xl p-2 sm:p-3 text-center">
-              <div className="text-xs text-muted-foreground mb-1">
+            <div className="bg-white dark:bg-white/10 rounded-xl p-2 sm:p-3 text-center shadow-md border border-gray-200 dark:border-white/20">
+              <div className="text-xs text-gray-600 dark:text-gray-400 font-medium mb-1">
                 {language === 'ar' ? 'متوسط 7د' : '7d Avg'}
               </div>
-              <div className="text-sm sm:text-base font-bold text-blue-400">
+              <div className="text-sm sm:text-base font-bold text-blue-600 dark:text-blue-400">
                 {avg7d}%
               </div>
             </div>
@@ -229,30 +229,30 @@ export function RecoveryTab({
           {/* WHOOP 4.0 Additional Metrics */}
           {(realRecoveryData.spo2 || realRecoveryData.skinTemp) && (
             <div className="mt-6">
-              <h4 className="font-semibold mb-4 text-sm text-muted-foreground">
+              <h4 className="font-semibold mb-4 text-sm text-gray-700 dark:text-gray-400">
                 {language === 'ar' ? 'مقاييس إضافية (WHOOP 4.0)' : 'Additional Metrics (WHOOP 4.0)'}
               </h4>
               <div className="grid grid-cols-2 gap-3">
                 {realRecoveryData.spo2 && realRecoveryData.spo2 > 0 && (
-                  <div className="bg-white/5 rounded-xl p-3 text-center">
-                    <div className="text-xs text-muted-foreground mb-1">
+                  <div className="bg-white dark:bg-white/10 rounded-xl p-3 text-center shadow-md border border-gray-200 dark:border-white/20">
+                    <div className="text-xs text-gray-600 dark:text-gray-400 font-medium mb-1">
                       {language === 'ar' ? 'أكسجين الدم' : 'Blood Oxygen'}
                     </div>
-                    <div className="text-lg font-bold text-cyan-400">
+                    <div className="text-lg font-bold text-cyan-600 dark:text-cyan-400">
                       {realRecoveryData.spo2.toFixed(1)}%
                     </div>
-                    <div className="text-xs text-muted-foreground">SpO2</div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400">SpO2</div>
                   </div>
                 )}
                 {realRecoveryData.skinTemp && realRecoveryData.skinTemp > 0 && (
-                  <div className="bg-white/5 rounded-xl p-3 text-center">
-                    <div className="text-xs text-muted-foreground mb-1">
+                  <div className="bg-white dark:bg-white/10 rounded-xl p-3 text-center shadow-md border border-gray-200 dark:border-white/20">
+                    <div className="text-xs text-gray-600 dark:text-gray-400 font-medium mb-1">
                       {language === 'ar' ? 'حرارة الجلد' : 'Skin Temperature'}
                     </div>
-                    <div className="text-lg font-bold text-orange-400">
+                    <div className="text-lg font-bold text-orange-600 dark:text-orange-400">
                       {realRecoveryData.skinTemp.toFixed(1)}°C
                     </div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-xs text-gray-600 dark:text-gray-400">
                       {(realRecoveryData.skinTemp * 9/5 + 32).toFixed(1)}°F
                     </div>
                   </div>
@@ -264,7 +264,7 @@ export function RecoveryTab({
       </div>
 
       {/* Day Statistics - Today vs Yesterday */}
-      <Card className="rounded-2xl p-6 bg-gradient-to-br from-emerald-500/10 to-blue-500/10 border-emerald-500/20">
+      <Card className="rounded-2xl p-6 bg-gradient-to-br from-emerald-50 to-blue-50 dark:from-emerald-500/10 dark:to-blue-500/10 border-emerald-300 dark:border-emerald-500/20 shadow-lg">
         <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
           <TrendingUp className="h-5 w-5 text-emerald-400" />
           {language === 'ar' ? 'إحصائيات اليوم' : 'Day Statistics'}
@@ -313,7 +313,7 @@ export function RecoveryTab({
       </Card>
 
       {/* Day Statistics - Like WHOOP */}
-      <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
+      <Card className="rounded-2xl p-6 bg-gradient-to-br from-gray-50 to-slate-50 dark:from-white/5 dark:to-white/5 border-gray-200 dark:border-white/10 shadow-lg">
         <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
           <TrendingUp className="h-5 w-5 text-emerald-400" />
           {language === 'ar' ? 'إحصائيات اليوم' : 'Day Statistics'}

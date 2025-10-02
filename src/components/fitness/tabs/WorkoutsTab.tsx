@@ -108,7 +108,7 @@ export function WorkoutsTab({
       </div>
 
       {/* Latest Workout Card */}
-      <Card className="rounded-2xl p-6 bg-gradient-to-br from-orange-500/10 to-red-500/10 border-orange-500/20">
+      <Card className="rounded-2xl p-6 bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-500/10 dark:to-red-500/10 border-orange-300 dark:border-orange-500/20 shadow-lg">
         <div className="flex items-center gap-3 mb-6">
           <Dumbbell className="h-6 w-6 text-orange-400" />
           <div>
@@ -137,7 +137,7 @@ export function WorkoutsTab({
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="bg-white/5 rounded-xl p-3">
+              <div className="bg-white dark:bg-white/10 rounded-xl p-3 shadow-md border border-gray-200 dark:border-white/20">
                 <div className="text-sm text-muted-foreground mb-1">
                   {language === 'ar' ? 'الإجهاد' : 'Strain'}
                 </div>
@@ -145,7 +145,7 @@ export function WorkoutsTab({
                   {latestWorkout.strain.toFixed(1)}
                 </div>
               </div>
-              <div className="bg-white/5 rounded-xl p-3">
+              <div className="bg-white dark:bg-white/10 rounded-xl p-3 shadow-md border border-gray-200 dark:border-white/20">
                 <div className="text-sm text-muted-foreground mb-1">
                   {language === 'ar' ? 'السعرات' : 'Calories'}
                 </div>
@@ -153,7 +153,7 @@ export function WorkoutsTab({
                   {latestWorkout.calories}
                 </div>
               </div>
-              <div className="bg-white/5 rounded-xl p-3">
+              <div className="bg-white dark:bg-white/10 rounded-xl p-3 shadow-md border border-gray-200 dark:border-white/20">
                 <div className="text-sm text-muted-foreground mb-1">
                   {language === 'ar' ? 'متوسط النبض' : 'Avg HR'}
                 </div>
@@ -161,7 +161,7 @@ export function WorkoutsTab({
                   {latestWorkout.avgHr} bpm
                 </div>
               </div>
-              <div className="bg-white/5 rounded-xl p-3">
+              <div className="bg-white dark:bg-white/10 rounded-xl p-3 shadow-md border border-gray-200 dark:border-white/20">
                 <div className="text-sm text-muted-foreground mb-1">
                   {language === 'ar' ? 'أقصى نبض' : 'Max HR'}
                 </div>

@@ -162,7 +162,7 @@ export function SleepTab({
       {/* Main Sleep Overview */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
         {/* Multi-Ring Sleep Donut */}
-        <Card className="rounded-2xl p-6 bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/20">
+        <Card className="rounded-2xl p-6 bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-500/10 dark:to-purple-500/10 border-blue-300 dark:border-blue-500/20 shadow-lg">
           <div className="flex items-center gap-3 mb-6">
             <Moon className="h-6 w-6 text-blue-400" />
             <div>
@@ -221,7 +221,7 @@ export function SleepTab({
 
           {/* Sleep metrics in one row */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-            <div className="bg-white/5 rounded-xl p-2 sm:p-3 text-center">
+            <div className="bg-white dark:bg-white/10 rounded-xl p-2 sm:p-3 text-center shadow-md border border-gray-200 dark:border-white/20">
               <div className="text-xs text-muted-foreground mb-1">
                 {language === 'ar' ? 'وقت النوم' : 'Bedtime'}
               </div>
@@ -229,7 +229,7 @@ export function SleepTab({
                 {realSleepData.bedtime}
               </div>
             </div>
-            <div className="bg-white/5 rounded-xl p-2 sm:p-3 text-center">
+            <div className="bg-white dark:bg-white/10 rounded-xl p-2 sm:p-3 text-center shadow-md border border-gray-200 dark:border-white/20">
               <div className="text-xs text-muted-foreground mb-1">
                 {language === 'ar' ? 'وقت الاستيقاظ' : 'Wake Time'}
               </div>
@@ -237,7 +237,7 @@ export function SleepTab({
                 {realSleepData.waketime}
               </div>
             </div>
-            <div className="bg-white/5 rounded-xl p-2 sm:p-3 text-center">
+            <div className="bg-white dark:bg-white/10 rounded-xl p-2 sm:p-3 text-center shadow-md border border-gray-200 dark:border-white/20">
               <div className="text-xs text-muted-foreground mb-1">
                 {language === 'ar' ? 'الأداء' : 'Performance'}
               </div>
@@ -245,7 +245,7 @@ export function SleepTab({
                 {realSleepData.performancePct}%
               </div>
             </div>
-            <div className="bg-white/5 rounded-xl p-2 sm:p-3 text-center">
+            <div className="bg-white dark:bg-white/10 rounded-xl p-2 sm:p-3 text-center shadow-md border border-gray-200 dark:border-white/20">
               <div className="text-xs text-muted-foreground mb-1">
                 {language === 'ar' ? 'الكفاءة' : 'Efficiency'}
               </div>
@@ -257,7 +257,7 @@ export function SleepTab({
         </Card>
 
         {/* Sleep Stages Breakdown */}
-        <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
+        <Card className="rounded-2xl p-6 bg-gradient-to-br from-purple-50 to-blue-50 dark:from-white/5 dark:to-white/5 border-purple-200 dark:border-white/10 shadow-lg">
           <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-gradient-to-r from-purple-400 to-blue-400"></div>
             {language === 'ar' ? 'مراحل النوم' : 'Sleep Stages'}
@@ -310,7 +310,7 @@ export function SleepTab({
 
         {/* Additional Sleep Metrics */}
         {(realSleepData.respiratoryRate || realSleepData.sleepConsistency || realSleepData.disturbanceCount || realSleepData.sleepCycleCount || realSleepData.sleepDebt) && (
-          <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
+          <Card className="rounded-2xl p-6 bg-gradient-to-br from-green-50 to-blue-50 dark:from-white/5 dark:to-white/5 border-green-200 dark:border-white/10 shadow-lg">
             <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-gradient-to-r from-green-400 to-blue-400"></div>
               {language === 'ar' ? 'مقاييس النوم المتقدمة' : 'Advanced Sleep Metrics'}
@@ -380,7 +380,7 @@ export function SleepTab({
       </div>
 
       {/* Day Statistics - Today vs Yesterday */}
-      <Card className="rounded-2xl p-6 bg-gradient-to-br from-emerald-500/10 to-blue-500/10 border-emerald-500/20">
+      <Card className="rounded-2xl p-6 bg-gradient-to-br from-emerald-50 to-blue-50 dark:from-emerald-500/10 dark:to-blue-500/10 border-emerald-300 dark:border-emerald-500/20 shadow-lg">
         <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
           <TrendingUp className="h-5 w-5 text-emerald-400" />
           {language === 'ar' ? 'إحصائيات اليوم' : 'Day Statistics'}

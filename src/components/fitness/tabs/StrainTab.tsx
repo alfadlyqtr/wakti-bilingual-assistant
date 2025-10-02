@@ -98,9 +98,9 @@ export function StrainTab({
     : [];
 
   const getStrainColor = (strain: number) => {
-    if (strain <= 7) return { color: '#10B981', text: 'text-emerald-400', bg: 'from-emerald-500/10 to-green-500/10', border: 'border-emerald-500/20', zone: 'Easy' };
-    if (strain <= 14) return { color: '#F59E0B', text: 'text-yellow-400', bg: 'from-yellow-500/10 to-orange-500/10', border: 'border-yellow-500/20', zone: 'Moderate' };
-    return { color: '#EF4444', text: 'text-red-400', bg: 'from-red-500/10 to-pink-500/10', border: 'border-red-500/20', zone: 'High' };
+    if (strain <= 7) return { color: '#10B981', text: 'text-emerald-400', bg: 'from-emerald-50 to-green-50 dark:from-emerald-500/10 dark:to-green-500/10', border: 'border-emerald-300 dark:border-emerald-500/20 shadow-lg', zone: 'Easy' };
+    if (strain <= 14) return { color: '#F59E0B', text: 'text-yellow-400', bg: 'from-yellow-50 to-orange-50 dark:from-yellow-500/10 dark:to-orange-500/10', border: 'border-yellow-300 dark:border-yellow-500/20 shadow-lg', zone: 'Moderate' };
+    return { color: '#EF4444', text: 'text-red-400', bg: 'from-red-50 to-pink-50 dark:from-red-500/10 dark:to-pink-500/10', border: 'border-red-300 dark:border-red-500/20 shadow-lg', zone: 'High' };
   };
 
   const strainColor = getStrainColor(realStrainData.dayStrain);
@@ -193,14 +193,14 @@ export function StrainTab({
         </Card>
 
         {/* Strain Stats */}
-        <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
+        <Card className="rounded-2xl p-6 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-white/5 dark:to-white/5 border-purple-200 dark:border-white/10 shadow-lg">
           <h3 className="font-semibold text-lg mb-6">
             {language === 'ar' ? 'إحصائيات الإجهاد' : 'Strain Stats'}
           </h3>
 
           <div className="space-y-4">
             {/* Today's strain */}
-            <div className="bg-white/5 rounded-xl p-4">
+            <div className="bg-white dark:bg-white/10 rounded-xl p-4 shadow-md border border-gray-200 dark:border-white/20">
               <div className="text-sm text-muted-foreground mb-2">
                 {language === 'ar' ? 'إجهاد اليوم' : 'Today\'s Strain'}
               </div>
@@ -210,7 +210,7 @@ export function StrainTab({
             </div>
 
             {/* Average HR */}
-            <div className="bg-white/5 rounded-xl p-4">
+            <div className="bg-white dark:bg-white/10 rounded-xl p-4 shadow-md border border-gray-200 dark:border-white/20">
               <div className="text-sm text-muted-foreground mb-2">
                 {language === 'ar' ? 'متوسط معدل ضربات القلب' : 'Average Heart Rate'}
               </div>
@@ -220,7 +220,7 @@ export function StrainTab({
             </div>
 
             {/* Training Load */}
-            <div className="bg-white/5 rounded-xl p-4">
+            <div className="bg-white dark:bg-white/10 rounded-xl p-4 shadow-md border border-gray-200 dark:border-white/20">
               <div className="text-sm text-muted-foreground mb-2">
                 {language === 'ar' ? 'حمل التدريب' : 'Training Load'}
               </div>
@@ -230,7 +230,7 @@ export function StrainTab({
             </div>
 
             {/* 7-day average */}
-            <div className="bg-white/5 rounded-xl p-4">
+            <div className="bg-white dark:bg-white/10 rounded-xl p-4 shadow-md border border-gray-200 dark:border-white/20">
               <div className="text-sm text-muted-foreground mb-2">
                 {language === 'ar' ? 'متوسط 7 أيام' : '7-Day Average'}
               </div>
@@ -243,7 +243,7 @@ export function StrainTab({
       </div>
 
       {/* Day Statistics - Today vs Yesterday */}
-      <Card className="rounded-2xl p-6 bg-gradient-to-br from-emerald-500/10 to-blue-500/10 border-emerald-500/20">
+      <Card className="rounded-2xl p-6 bg-gradient-to-br from-emerald-50 to-blue-50 dark:from-emerald-500/10 dark:to-blue-500/10 border-emerald-300 dark:border-emerald-500/20 shadow-lg">
         <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
           <TrendingUp className="h-5 w-5 text-emerald-400" />
           {language === 'ar' ? 'إحصائيات اليوم' : 'Day Statistics'}
@@ -296,7 +296,7 @@ export function StrainTab({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Hourly Strain Buildup - Only show if we have hourly data */}
           {realHourlyData.length > 0 && (
-            <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
+            <Card className="rounded-2xl p-6 bg-gradient-to-br from-gray-50 to-slate-50 dark:from-white/5 dark:to-white/5 border-gray-200 dark:border-white/10 shadow-lg">
               <h3 className="font-semibold text-lg mb-4">
                 {language === 'ar' ? 'تراكم الإجهاد اليومي' : 'Today\'s Strain Buildup'}
               </h3>
@@ -330,7 +330,7 @@ export function StrainTab({
 
           {/* Weekly Strain Trend - Only show if we have weekly data */}
           {realWeeklyData.length > 0 && (
-            <Card className="rounded-2xl p-6 bg-white/5 border-white/10">
+            <Card className="rounded-2xl p-6 bg-gradient-to-br from-gray-50 to-slate-50 dark:from-white/5 dark:to-white/5 border-gray-200 dark:border-white/10 shadow-lg">
               <h3 className="font-semibold text-lg mb-4">
                 {language === 'ar' ? 'اتجاه الإجهاد (7 أيام)' : 'Strain Trend (7 Days)'}
               </h3>
