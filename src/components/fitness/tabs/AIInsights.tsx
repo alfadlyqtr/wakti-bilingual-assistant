@@ -568,16 +568,16 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
         </div>
 
         {/* AI Coach Availability */}
-        <div className="bg-black/20 dark:bg-black/20 rounded-lg p-3 mb-4">
-          <p className="text-xs text-gray-300 dark:text-gray-300 mb-2">{language === 'ar' ? 'المدرب الذكي متاح خلال:' : 'AI Coach available during:'}</p>
-          <div className="flex flex-wrap gap-2 text-xs">
-            <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+        <div className="bg-gray-100 dark:bg-black/20 rounded-lg p-3 mb-4">
+          <p className="text-xs text-gray-700 dark:text-gray-300 mb-2 font-medium">{language === 'ar' ? 'المدرب الذكي متاح خلال:' : 'AI Coach available during:'}</p>
+          <div className="flex flex-wrap gap-2 text-xs font-semibold">
+            <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
               🌅 {language === 'ar' ? 'الصباح: 5:00 - 11:00' : 'Morning: 5:00 AM - 11:00 AM'}
             </span>
-            <span className="flex items-center gap-1 text-orange-600 dark:text-orange-400">
+            <span className="flex items-center gap-1 text-orange-700 dark:text-orange-400">
               ☀️ {language === 'ar' ? 'منتصف النهار: 12:00 - 6:00 مساءً' : 'Midday: 12:00 PM - 6:00 PM'}
             </span>
-            <span className="flex items-center gap-1 text-purple-600 dark:text-purple-400">
+            <span className="flex items-center gap-1 text-purple-700 dark:text-purple-400">
               🌙 {language === 'ar' ? 'المساء: 5:00 - 11:00 مساءً' : 'Evening: 5:00 PM - 11:00 PM'}
             </span>
           </div>
