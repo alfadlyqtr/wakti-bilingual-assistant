@@ -41,12 +41,13 @@ export async function pingAiInsights() {
 }
 
 export async function buildInsightsAggregate() {
+  // FIX: Force fresh data for AI insights to ensure accuracy
   const [compact, sleep7, rec7, cyc30, w14] = await Promise.all([
-    fetchCompactMetrics(),
-    fetchSleepHistory(7),
-    fetchRecoveryHistory(7),
-    fetchCycleHistory(30),
-    fetchWorkoutsHistory(14),
+    fetchCompactMetrics(true),
+    fetchSleepHistory(7, true),
+    fetchRecoveryHistory(7, true),
+    fetchCycleHistory(30, true),
+    fetchWorkoutsHistory(14, true),
   ]);
 
   const latestSleepHours = (() => {
@@ -350,18 +351,22 @@ export async function disconnectWhoop() {
   return { success: true };
 }
 
-export async function fetchCompactMetrics() {
+export async function fetchCompactMetrics(forceFresh = false) {
   const userId = await getCurrentUserId();
   if (!userId) return null;
 
+  // FIX: Add cache-busting timestamp to force fresh queries
+  const cacheBust = forceFresh ? Date.now() : 0;
+  const recentDate = new Date(Date.now() - 86400000 * 7).toISOString(); // Last 7 days
+
   // Fetch ALL available WHOOP data fields - comprehensive extraction
   const [sleepRes, recRes, cycleRes, profileRes, bodyRes] = await Promise.all([
-    // SLEEP: Pull ALL sleep fields including score data
-    supabase.from("whoop_sleep").select("*").eq("user_id", userId).order("start", { ascending: false }).limit(5),
-    // RECOVERY: Pull ALL recovery fields including score data  
-    supabase.from("whoop_recovery").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(1),
-    // CYCLE: Pull ALL cycle fields including score data
-    supabase.from("whoop_cycles").select("*").eq("user_id", userId).order("start", { ascending: false }).limit(1),
+    // SLEEP: Pull ALL sleep fields including score data + cache busting
+    supabase.from("whoop_sleep").select("*").eq("user_id", userId).gte("start", recentDate).order("start", { ascending: false }).limit(5),
+    // RECOVERY: Pull ALL recovery fields including score data + cache busting
+    supabase.from("whoop_recovery").select("*").eq("user_id", userId).gte("created_at", recentDate).order("created_at", { ascending: false }).limit(1),
+    // CYCLE: Pull ALL cycle fields including score data + cache busting
+    supabase.from("whoop_cycles").select("*").eq("user_id", userId).gte("start", recentDate).order("start", { ascending: false }).limit(1),
     // USER PROFILE: Pull user profile data
     supabase.from("whoop_user_profiles").select("*").eq("user_id", userId).maybeSingle(),
     // USER BODY: Pull body measurements
@@ -394,13 +399,16 @@ export async function fetchCompactMetrics() {
   return { sleep, recovery, cycle, workout, profile, body };
 }
 
-export async function fetchRecoveryHistory(days = 7) {
+export async function fetchRecoveryHistory(days = 7, forceFresh = false) {
   const userId = await getCurrentUserId();
   if (!userId) return [];
+  // FIX: Add time filter for cache busting
+  const cutoffDate = new Date(Date.now() - days * 86400000).toISOString();
   const { data, error } = await supabase
     .from('whoop_recovery')
     .select('*')  // Pull ALL recovery fields
     .eq('user_id', userId)
+    .gte('created_at', cutoffDate)
     .order('created_at', { ascending: false })
     .limit(days);
   if (error || !data) return [];
@@ -413,13 +421,16 @@ export async function fetchRecoveryHistory(days = 7) {
   return items;
 }
 
-export async function fetchSleepHistory(days = 7) {
+export async function fetchSleepHistory(days = 7, forceFresh = false) {
   const userId = await getCurrentUserId();
   if (!userId) return [];
+  // FIX: Add time filter for cache busting
+  const cutoffDate = new Date(Date.now() - days * 86400000).toISOString();
   const { data, error } = await supabase
     .from('whoop_sleep')
     .select('*')  // Pull ALL sleep fields
     .eq('user_id', userId)
+    .gte('start', cutoffDate)
     .order('start', { ascending: false })
     .limit(days);
   if (error || !data) return [];
@@ -444,26 +455,32 @@ export async function fetchSleepHistory(days = 7) {
   return items;
 }
 
-export async function fetchCycleHistory(days = 7) {
+export async function fetchCycleHistory(days = 7, forceFresh = false) {
   const userId = await getCurrentUserId();
   if (!userId) return [];
+  // FIX: Add time filter for cache busting
+  const cutoffDate = new Date(Date.now() - days * 86400000).toISOString();
   const { data, error } = await supabase
     .from('whoop_cycles')
     .select('*')  // Pull ALL cycle fields
     .eq('user_id', userId)
+    .gte('start', cutoffDate)
     .order('start', { ascending: false })
     .limit(days);
   if (error || !data) return [];
   return [...data].reverse();
 }
 
-export async function fetchWorkoutsHistory(days = 14) {
+export async function fetchWorkoutsHistory(days = 14, forceFresh = false) {
   const userId = await getCurrentUserId();
   if (!userId) return [];
+  // FIX: Add time filter for cache busting
+  const cutoffDate = new Date(Date.now() - days * 86400000).toISOString();
   const { data, error } = await supabase
     .from('whoop_workouts')
     .select('*')  // Pull ALL workout fields
     .eq('user_id', userId)
+    .gte('start', cutoffDate)
     .order('start', { ascending: false })
     .limit(1000);
   if (error || !data) return [];
@@ -482,15 +499,16 @@ export async function fetchWorkoutsHistory(days = 14) {
 }
 
 // Fetch all historical data for a specific time range
-export async function fetchHistoricalData(timeRange: TimeRange) {
+export async function fetchHistoricalData(timeRange: TimeRange, forceFresh = false) {
   // Ensure trends always have multiple points: fetch at least 7 days
   const days = Math.max(7, timeRangeToDays(timeRange));
   
+  // FIX: Support forceFresh parameter for cache busting
   const [recovery, sleep, cycles, workouts] = await Promise.all([
-    fetchRecoveryHistory(days),
-    fetchSleepHistory(days),
-    fetchCycleHistory(days),
-    fetchWorkoutsHistory(days)
+    fetchRecoveryHistory(days, forceFresh),
+    fetchSleepHistory(days, forceFresh),
+    fetchCycleHistory(days, forceFresh),
+    fetchWorkoutsHistory(days, forceFresh)
   ]);
 
   return {

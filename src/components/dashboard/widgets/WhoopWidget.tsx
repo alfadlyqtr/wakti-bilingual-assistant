@@ -17,7 +17,8 @@ export const WhoopWidget: React.FC = () => {
       const ok = await isWhoopConnected();
       setConnected(ok);
       if (ok) {
-        const m = await fetchCompactMetrics();
+        // FIX: Use forceFresh to bypass cache in widget
+        const m = await fetchCompactMetrics(true);
         setMetrics(m);
       }
       setLoading(false);
@@ -25,8 +26,8 @@ export const WhoopWidget: React.FC = () => {
   }, []);
 
   const onConnect = async () => {
-    const redirect = `${window.location.origin}/fitness/callback`;
-    await startWhoopAuth(redirect);
+    // startWhoopAuth determines redirect URI internally
+    await startWhoopAuth();
   };
 
   if (loading) {

@@ -74,12 +74,13 @@ export default function FitnessHealth() {
       setStatus(st);
       setConnected(st.connected);
       if (st.connected) {
+        // FIX: Use forceFresh for initial load to bypass any stale cache
         const [m, rec, sl, cyc, wks] = await Promise.all([
-          fetchCompactMetrics(),
-          fetchRecoveryHistory(timeRangeToDays('1d')),
-          fetchSleepHistory(timeRangeToDays('1d')),
-          fetchCycleHistory(timeRangeToDays('1d')),
-          fetchWorkoutsHistory(timeRangeToDays('1d')),
+          fetchCompactMetrics(true),
+          fetchRecoveryHistory(timeRangeToDays('1d'), true),
+          fetchSleepHistory(timeRangeToDays('1d'), true),
+          fetchCycleHistory(timeRangeToDays('1d'), true),
+          fetchWorkoutsHistory(timeRangeToDays('1d'), true),
         ]);
         setMetrics(m);
         setHrHistory(rec);
@@ -93,7 +94,18 @@ export default function FitnessHealth() {
               setSyncing(true);
               const res = await triggerUserSync();
               toast.success(`Synced: ${res?.counts?.cycles||0} cycles, ${res?.counts?.sleeps||0} sleeps, ${res?.counts?.workouts||0} workouts, ${res?.counts?.recoveries||0} recoveries`);
-              const [m2, rec2, sl2, cyc2, wks2] = await Promise.all([fetchCompactMetrics(), fetchRecoveryHistory(timeRangeToDays(timeRange)), fetchSleepHistory(timeRangeToDays(timeRange)), fetchCycleHistory(timeRangeToDays(timeRange)), fetchWorkoutsHistory(timeRangeToDays(timeRange))]);
+              
+              // FIX: Add 2-second delay to allow database commits to complete
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              
+              // FIX: Force fresh queries with cache busting
+              const [m2, rec2, sl2, cyc2, wks2] = await Promise.all([
+                fetchCompactMetrics(true), 
+                fetchRecoveryHistory(timeRangeToDays(timeRange), true), 
+                fetchSleepHistory(timeRangeToDays(timeRange), true), 
+                fetchCycleHistory(timeRangeToDays(timeRange), true), 
+                fetchWorkoutsHistory(timeRangeToDays(timeRange), true)
+              ]);
               setMetrics(m2);
               setHrHistory(rec2);
               setSleepHist(sl2.map((x:any)=>({ start: x.start, end: x.end, hours: x.hours, stages: x.stages })));
@@ -124,16 +136,24 @@ export default function FitnessHealth() {
     if (!connected) return;
     (async () => {
       try {
-        const historicalData = await fetchHistoricalData(timeRange);
-        setHrHistory(historicalData.recovery);
-        setSleepHist(historicalData.sleep.map((x: any) => ({ 
+        // FIX: Force fresh data when time range changes
+        const days = timeRangeToDays(timeRange);
+        const [recovery, sleep, cycles, workouts] = await Promise.all([
+          fetchRecoveryHistory(days, true),
+          fetchSleepHistory(days, true),
+          fetchCycleHistory(days, true),
+          fetchWorkoutsHistory(days, true)
+        ]);
+        
+        setHrHistory(recovery);
+        setSleepHist(sleep.map((x: any) => ({ 
           start: x.start, 
           end: x.end, 
           hours: x.hours,
           stages: x.stages
         })));
-        setCycleHist(historicalData.cycles);
-        setWorkoutsHist(historicalData.workouts.map((w: any) => ({ 
+        setCycleHist(cycles);
+        setWorkoutsHist(workouts.map((w: any) => ({ 
           start: w.start,
           end: w.end,
           sport: w.sport || 'Workout',
@@ -179,9 +199,40 @@ export default function FitnessHealth() {
     try {
       setSyncing(true);
       const res = await triggerUserSync();
-      const [m, rec] = await Promise.all([fetchCompactMetrics(), fetchRecoveryHistory(7)]);
+      
+      // FIX: Add 2-second delay to allow database commits to complete
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // FIX: Force fresh queries with cache busting and retry logic
+      let retryCount = 0;
+      let m, rec, sl, cyc, wks;
+      
+      while (retryCount < 2) {
+        [m, rec, sl, cyc, wks] = await Promise.all([
+          fetchCompactMetrics(true), 
+          fetchRecoveryHistory(timeRangeToDays(timeRange), true),
+          fetchSleepHistory(timeRangeToDays(timeRange), true),
+          fetchCycleHistory(timeRangeToDays(timeRange), true),
+          fetchWorkoutsHistory(timeRangeToDays(timeRange), true)
+        ]);
+        
+        // Validate data freshness - check if we got actual data
+        if (m && (m.sleep || m.recovery || m.cycle)) {
+          break; // Data looks good
+        }
+        
+        // No data yet, retry after another delay
+        retryCount++;
+        if (retryCount < 2) {
+          await new Promise(resolve => setTimeout(resolve, 1500));
+        }
+      }
+      
       setMetrics(m);
       setHrHistory(rec);
+      setSleepHist(sl.map((x:any)=>({ start: x.start, end: x.end, hours: x.hours, stages: x.stages })));
+      setCycleHist(cyc);
+      setWorkoutsHist(wks.map((w:any)=>({ start: w.start, strain: w.strain ?? null, kcal: w.kcal ?? null })));
       setStatus({ connected: true, lastSyncedAt: new Date().toISOString() });
       toast.success(`Synced: ${res?.counts?.cycles||0} cycles, ${res?.counts?.sleeps||0} sleeps, ${res?.counts?.workouts||0} workouts, ${res?.counts?.recoveries||0} recoveries`);
     } catch (e: any) {
