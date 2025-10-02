@@ -1,7 +1,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Wifi, WifiOff, RefreshCw, User, Heart, Ruler, Weight } from "lucide-react";
+import { Wifi, WifiOff, RefreshCw, Power, User, Heart, Ruler, Weight } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 
 interface TopPageSectionProps {
@@ -51,7 +51,7 @@ export function TopPageSection({
   const sleep = sleepHours || 0;
 
   return (
-    <Card className="rounded-2xl p-4 md:p-6 border border-white/10 bg-gradient-to-r from-blue-500/10 to-purple-500/10 backdrop-blur-md shadow-lg">
+    <Card className="rounded-2xl p-4 md:p-6 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-500/10 dark:to-purple-500/10 border border-gray-200 dark:border-white/10 backdrop-blur-md shadow-xl">
       <div className="flex flex-col gap-3 md:gap-4">
         {/* Top Row: User Info */}
         <div className="flex items-start md:items-center gap-3 md:gap-4">
@@ -81,7 +81,10 @@ export function TopPageSection({
               ) : (
                 <WifiOff className="h-3 w-3 md:h-4 md:w-4 text-red-500" />
               )}
-              <span className="text-xs text-gray-700 dark:text-gray-400 font-medium">
+              <span className={`text-[10px] md:text-xs font-semibold px-2.5 py-1 rounded-full border shadow-sm ${connected
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20'
+                : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/20'
+              }`}>
                 {connected 
                   ? (language === 'ar' ? 'متصل بـ WHOOP' : 'Connected to WHOOP')
                   : (language === 'ar' ? 'غير متصل' : 'Not Connected')
@@ -98,32 +101,28 @@ export function TopPageSection({
         <div className="flex items-center gap-2">
           {connected ? (
             <>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={onSync} 
+              <Button
+                size="sm"
+                onClick={onSync}
                 disabled={syncing}
-                className="flex-1 md:flex-none bg-white/10 border-white/20 hover:bg-white/20 text-xs md:text-sm"
+                className="flex-1 md:flex-none text-xs md:text-sm rounded-full bg-gradient-to-br from-indigo-500 to-blue-500 text-white border-2 border-indigo-300 shadow-[0_6px_20px_rgba(59,130,246,0.35)] hover:from-indigo-600 hover:to-blue-600 active:scale-95 transition-all"
               >
                 <RefreshCw className={`h-3 w-3 md:h-4 md:w-4 mr-1.5 ${syncing ? 'animate-spin' : ''}`} />
-                {syncing 
-                  ? (language === 'ar' ? 'جار المزامنة...' : 'Syncing...')
-                  : (language === 'ar' ? 'مزامنة الآن' : 'Sync Now')
-                }
+                {syncing ? (language === 'ar' ? 'جار المزامنة...' : 'Syncing...') : (language === 'ar' ? 'مزامنة الآن' : 'Sync Now')}
               </Button>
-              <Button 
-                variant="destructive" 
-                size="sm" 
+              <Button
+                size="sm"
                 onClick={onDisconnect}
-                className="flex-1 md:flex-none bg-red-500/20 border-red-500/30 hover:bg-red-500/30 text-red-400 text-xs md:text-sm"
+                className="flex-1 md:flex-none text-xs md:text-sm rounded-full bg-gradient-to-br from-rose-100 to-red-200 dark:from-red-500/20 dark:to-red-500/10 text-rose-700 dark:text-red-300 border-2 border-rose-300 dark:border-red-500/30 shadow-[0_6px_20px_rgba(244,63,94,0.25)] hover:from-rose-200 hover:to-red-300 active:scale-95 transition-all"
               >
+                <Power className="h-3 w-3 md:h-4 md:w-4 mr-1.5" />
                 {language === 'ar' ? 'قطع الاتصال' : 'Disconnect'}
               </Button>
             </>
           ) : (
             <Button 
               onClick={onConnect}
-              className="w-full md:w-auto bg-emerald-500/20 border-emerald-500/30 hover:bg-emerald-500/30 text-emerald-400"
+              className="w-full md:w-auto rounded-full bg-gradient-to-br from-emerald-400 to-green-500 text-white border-2 border-emerald-300 shadow-[0_6px_20px_rgba(16,185,129,0.35)] hover:from-emerald-500 hover:to-green-600 active:scale-95"
             >
               {language === 'ar' ? 'اتصال WHOOP' : 'Connect WHOOP'}
             </Button>

@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Moon, Bed, AlarmClock, TrendingUp, TrendingDown, Minus } from "lucide-react";
@@ -68,6 +68,15 @@ export function SleepTab({
 }: SleepTabProps) {
   const { language } = useTheme();
 
+  // Load persisted timeRange once on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('wakti:sleep:timeRange') as TimeRange | null;
+      if (saved && saved !== timeRange) onTimeRangeChange(saved);
+    } catch (_) {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Use real WHOOP data - no fallback to mock data
   if (!sleepData) {
     return (
@@ -130,6 +139,15 @@ export function SleepTab({
 
   const totalStageMinutes = stageData.reduce((sum, stage) => sum + stage.value, 0);
 
+  // Prevent rendering numeric 0 in conditionals (React will print 0)
+  const hasAnyAdvancedMetric = (
+    (realSleepData.respiratoryRate !== undefined && realSleepData.respiratoryRate > 0) ||
+    (realSleepData.sleepConsistency !== undefined && realSleepData.sleepConsistency > 0) ||
+    (realSleepData.disturbanceCount !== undefined && realSleepData.disturbanceCount > 0) ||
+    (realSleepData.sleepCycleCount !== undefined && realSleepData.sleepCycleCount > 0) ||
+    (realSleepData.sleepDebt !== undefined && realSleepData.sleepDebt !== 0)
+  );
+
   const compareValue = (current: number, yesterday: number) => {
     const diff = current - yesterday;
     if (Math.abs(diff) < 0.1) return { icon: Minus, color: 'text-gray-400', text: '0' };
@@ -147,7 +165,7 @@ export function SleepTab({
         {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
           <button
             key={range}
-            onClick={() => onTimeRangeChange(range)}
+            onClick={() => { onTimeRangeChange(range); try { localStorage.setItem('wakti:sleep:timeRange', range); } catch (_) {} }}
             className={`px-4 py-2.5 sm:px-5 sm:py-3 rounded-lg text-xs sm:text-sm font-semibold shadow-lg transition-all min-w-[50px] flex-shrink-0 active:scale-95 ${
               timeRange === range
                 ? 'bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-indigo-500/50 border-2 border-indigo-400'
@@ -283,14 +301,19 @@ export function SleepTab({
                       </span>
                     </div>
                   </div>
-                  <div className="w-full bg-white/10 rounded-full h-2">
+                  <div className="relative w-full h-3 rounded-full bg-gradient-to-b from-white to-gray-100 border border-gray-200 shadow-inner overflow-hidden dark:from-white/10 dark:to-white/5 dark:border-white/10">
                     <div
-                      className="h-2 rounded-full transition-all duration-500"
+                      className="relative h-full rounded-full transition-all duration-500 border border-black/10 shadow-[inset_0_-2px_4px_rgba(0,0,0,0.15),0_2px_6px_rgba(0,0,0,0.08)]"
                       style={{ 
                         width: `${percentage}%`,
                         backgroundColor: stage.color
                       }}
-                    />
+                    >
+                      <div
+                        className="absolute inset-0 rounded-full pointer-events-none"
+                        style={{ background: 'linear-gradient(to bottom, rgba(255,255,255,0.55), rgba(255,255,255,0))' }}
+                      />
+                    </div>
                   </div>
                 </div>
               );
@@ -309,7 +332,7 @@ export function SleepTab({
         </Card>
 
         {/* Additional Sleep Metrics */}
-        {(realSleepData.respiratoryRate || realSleepData.sleepConsistency || realSleepData.disturbanceCount || realSleepData.sleepCycleCount || realSleepData.sleepDebt) && (
+        {hasAnyAdvancedMetric && (
           <Card className="rounded-2xl p-6 bg-gradient-to-br from-green-50 to-blue-50 dark:from-white/5 dark:to-white/5 border-green-200 dark:border-white/10 shadow-lg">
             <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-gradient-to-r from-green-400 to-blue-400"></div>
@@ -318,7 +341,7 @@ export function SleepTab({
 
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
               {realSleepData.respiratoryRate && realSleepData.respiratoryRate > 0 && (
-                <div className="bg-white/5 rounded-xl p-3 text-center">
+                <div className="bg-white dark:bg-white/10 rounded-xl p-3 text-center shadow-md border border-gray-200 dark:border-white/20">
                   <div className="text-xs text-muted-foreground mb-1">
                     {language === 'ar' ? 'معدل التنفس' : 'Respiratory Rate'}
                   </div>
@@ -332,7 +355,7 @@ export function SleepTab({
               )}
 
               {realSleepData.sleepConsistency && realSleepData.sleepConsistency > 0 && (
-                <div className="bg-white/5 rounded-xl p-3 text-center">
+                <div className="bg-white dark:bg-white/10 rounded-xl p-3 text-center shadow-md border border-gray-200 dark:border-white/20">
                   <div className="text-xs text-muted-foreground mb-1">
                     {language === 'ar' ? 'ثبات النوم' : 'Sleep Consistency'}
                   </div>
@@ -343,7 +366,7 @@ export function SleepTab({
               )}
 
               {realSleepData.disturbanceCount !== undefined && realSleepData.disturbanceCount >= 0 && (
-                <div className="bg-white/5 rounded-xl p-3 text-center">
+                <div className="bg-white dark:bg-white/10 rounded-xl p-3 text-center shadow-md border border-gray-200 dark:border-white/20">
                   <div className="text-xs text-muted-foreground mb-1">
                     {language === 'ar' ? 'الاضطرابات' : 'Disturbances'}
                   </div>
@@ -354,7 +377,7 @@ export function SleepTab({
               )}
 
               {realSleepData.sleepCycleCount && realSleepData.sleepCycleCount > 0 && (
-                <div className="bg-white/5 rounded-xl p-3 text-center">
+                <div className="bg-white dark:bg-white/10 rounded-xl p-3 text-center shadow-md border border-gray-200 dark:border-white/20">
                   <div className="text-xs text-muted-foreground mb-1">
                     {language === 'ar' ? 'دورات النوم' : 'Sleep Cycles'}
                   </div>
@@ -365,7 +388,7 @@ export function SleepTab({
               )}
 
               {realSleepData.sleepDebt !== undefined && realSleepData.sleepDebt !== 0 && (
-                <div className="bg-white/5 rounded-xl p-3 text-center">
+                <div className="bg-white dark:bg-white/10 rounded-xl p-3 text-center shadow-md border border-gray-200 dark:border-white/20">
                   <div className="text-xs text-muted-foreground mb-1">
                     {language === 'ar' ? 'دين النوم' : 'Sleep Debt'}
                   </div>
@@ -381,13 +404,18 @@ export function SleepTab({
 
       {/* Day Statistics - Today vs Yesterday */}
       <Card className="rounded-2xl p-6 bg-gradient-to-br from-emerald-50 to-blue-50 dark:from-emerald-500/10 dark:to-blue-500/10 border-emerald-300 dark:border-emerald-500/20 shadow-lg">
-        <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-emerald-400" />
-          {language === 'ar' ? 'إحصائيات اليوم' : 'Day Statistics'}
-        </h3>
+        <div className="mb-4">
+          <h3 className="font-semibold text-lg flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-emerald-400" />
+            {language === 'ar' ? 'إحصائيات اليوم' : 'Day Statistics'}
+          </h3>
+          <p className="text-xs text-muted-foreground mt-1 ml-7">
+            {language === 'ar' ? 'مقارنة اليوم مع الأمس' : 'Today vs Yesterday Comparison'}
+          </p>
+        </div>
         
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white/5 rounded-xl p-4">
+          <div className="bg-white dark:bg-white/10 rounded-xl p-4 shadow-md border border-gray-200 dark:border-white/20">
             <div className="text-sm text-muted-foreground mb-2">
               {language === 'ar' ? 'ساعات النوم' : 'Sleep Hours'}
             </div>
@@ -400,7 +428,7 @@ export function SleepTab({
             </div>
           </div>
 
-          <div className="bg-white/5 rounded-xl p-4">
+          <div className="bg-white dark:bg-white/10 rounded-xl p-4 shadow-md border border-gray-200 dark:border-white/20">
             <div className="text-sm text-muted-foreground mb-2">
               {language === 'ar' ? 'الأداء' : 'Performance'}
             </div>
@@ -413,7 +441,7 @@ export function SleepTab({
             </div>
           </div>
 
-          <div className="bg-white/5 rounded-xl p-4">
+          <div className="bg-white dark:bg-white/10 rounded-xl p-4 shadow-md border border-gray-200 dark:border-white/20">
             <div className="text-sm text-muted-foreground mb-2">
               {language === 'ar' ? 'النوم العميق' : 'Deep Sleep'}
             </div>
@@ -437,7 +465,7 @@ export function SleepTab({
             </div>
           </div>
 
-          <div className="bg-white/5 rounded-xl p-4">
+          <div className="bg-white dark:bg-white/10 rounded-xl p-4 shadow-md border border-gray-200 dark:border-white/20">
             <div className="text-sm text-muted-foreground mb-2">
               {language === 'ar' ? 'نوم الأحلام' : 'REM Sleep'}
             </div>

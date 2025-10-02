@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Heart, Activity, TrendingUp, TrendingDown, Minus } from "lucide-react";
@@ -41,6 +41,15 @@ export function RecoveryTab({
   weeklyData = []
 }: RecoveryTabProps) {
   const { language } = useTheme();
+
+  // Load persisted timeRange once on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('wakti:recovery:timeRange') as TimeRange | null;
+      if (saved && saved !== timeRange) onTimeRangeChange(saved);
+    } catch (_) {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Use real WHOOP data - no fallback to mock data
   if (!recoveryData) {
@@ -116,7 +125,7 @@ export function RecoveryTab({
         {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
           <button
             key={range}
-            onClick={() => onTimeRangeChange(range)}
+            onClick={() => { onTimeRangeChange(range); try { localStorage.setItem('wakti:recovery:timeRange', range); } catch (_) {} }}
             className={`px-4 py-2.5 sm:px-5 sm:py-3 rounded-lg text-xs sm:text-sm font-semibold shadow-lg transition-all min-w-[50px] flex-shrink-0 active:scale-95 ${
               timeRange === range
                 ? 'bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-indigo-500/50 border-2 border-indigo-400'
@@ -265,13 +274,18 @@ export function RecoveryTab({
 
       {/* Day Statistics - Today vs Yesterday */}
       <Card className="rounded-2xl p-6 bg-gradient-to-br from-emerald-50 to-blue-50 dark:from-emerald-500/10 dark:to-blue-500/10 border-emerald-300 dark:border-emerald-500/20 shadow-lg">
-        <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-emerald-400" />
-          {language === 'ar' ? 'إحصائيات اليوم' : 'Day Statistics'}
-        </h3>
+        <div className="mb-4">
+          <h3 className="font-semibold text-lg flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-emerald-400" />
+            {language === 'ar' ? 'إحصائيات اليوم' : 'Day Statistics'}
+          </h3>
+          <p className="text-xs text-muted-foreground mt-1 ml-7">
+            {language === 'ar' ? 'مقارنة اليوم مع الأمس' : 'Today vs Yesterday Comparison'}
+          </p>
+        </div>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white/5 rounded-xl p-4">
+          <div className="bg-white dark:bg-white/10 rounded-xl p-4 shadow-md border border-gray-200 dark:border-white/20">
             <div className="text-sm text-muted-foreground mb-2">
               {language === 'ar' ? 'نقاط التعافي' : 'Recovery Score'}
             </div>
@@ -284,7 +298,7 @@ export function RecoveryTab({
             </div>
           </div>
 
-          <div className="bg-white/5 rounded-xl p-4">
+          <div className="bg-white dark:bg-white/10 rounded-xl p-4 shadow-md border border-gray-200 dark:border-white/20">
             <div className="text-sm text-muted-foreground mb-2">
               {language === 'ar' ? 'تقلب معدل ضربات القلب' : 'HRV (RMSSD)'}
             </div>
@@ -297,7 +311,7 @@ export function RecoveryTab({
             </div>
           </div>
 
-          <div className="bg-white/5 rounded-xl p-4">
+          <div className="bg-white dark:bg-white/10 rounded-xl p-4 shadow-md border border-gray-200 dark:border-white/20">
             <div className="text-sm text-muted-foreground mb-2">
               {language === 'ar' ? 'معدل ضربات القلب أثناء الراحة' : 'Resting Heart Rate'}
             </div>
@@ -312,57 +326,7 @@ export function RecoveryTab({
         </div>
       </Card>
 
-      {/* Day Statistics - Like WHOOP */}
-      <Card className="rounded-2xl p-6 bg-gradient-to-br from-gray-50 to-slate-50 dark:from-white/5 dark:to-white/5 border-gray-200 dark:border-white/10 shadow-lg">
-        <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-emerald-400" />
-          {language === 'ar' ? 'إحصائيات اليوم' : 'Day Statistics'}
-        </h3>
-        
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {/* Recovery Score */}
-          <div className="bg-emerald-500/10 rounded-xl p-4 border border-emerald-500/20">
-            <div className="text-sm text-gray-400 mb-2">
-              {language === 'ar' ? 'نقاط التعافي' : 'Recovery Score'}
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold text-emerald-400">{realRecoveryData.score}%</span>
-              <div className={`flex items-center gap-1 ${recoveryComparison.color}`}>
-                <recoveryComparison.icon className="h-4 w-4" />
-                <span className="text-sm">{recoveryComparison.text}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* HRV */}
-          <div className="bg-blue-500/10 rounded-xl p-4 border border-blue-500/20">
-            <div className="text-sm text-gray-400 mb-2">
-              {language === 'ar' ? 'تقلب معدل ضربات القلب' : 'HRV (RMSSD)'}
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold text-blue-400">{realRecoveryData.hrv}ms</span>
-              <div className={`flex items-center gap-1 ${hrvComparison.color}`}>
-                <hrvComparison.icon className="h-4 w-4" />
-                <span className="text-sm">{hrvComparison.text}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Resting Heart Rate */}
-          <div className="bg-purple-500/10 rounded-xl p-4 border border-purple-500/20">
-            <div className="text-sm text-gray-400 mb-2">
-              {language === 'ar' ? 'معدل ضربات القلب أثناء الراحة' : 'Resting Heart Rate'}
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold text-purple-400">{realRecoveryData.rhr} bpm</span>
-              <div className={`flex items-center gap-1 ${rhrComparison.color}`}>
-                <rhrComparison.icon className="h-4 w-4" />
-                <span className="text-sm">{rhrComparison.text}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Card>
+      {/* Removed duplicate Day Statistics block (Like WHOOP) */}
 
       {/* Recovery Sparkline - Only show if we have real data */}
       {realWeeklyData.length > 0 && (

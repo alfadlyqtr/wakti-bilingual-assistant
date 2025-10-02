@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Activity, Heart, TrendingUp, TrendingDown, Minus } from "lucide-react";
@@ -33,6 +33,15 @@ export function HRVRHRTab({
   weeklyData = []
 }: HRVRHRTabProps) {
   const { language } = useTheme();
+
+  // Load persisted timeRange once on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('wakti:hrvrhr:timeRange') as TimeRange | null;
+      if (saved && saved !== timeRange) onTimeRangeChange(saved);
+    } catch (_) {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Use real WHOOP data - no fallback to mock data
   if (!currentData) {
@@ -108,7 +117,7 @@ export function HRVRHRTab({
         {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
           <button
             key={range}
-            onClick={() => onTimeRangeChange(range)}
+            onClick={() => { onTimeRangeChange(range); try { localStorage.setItem('wakti:hrvrhr:timeRange', range); } catch (_) {} }}
             className={`px-4 py-2.5 sm:px-5 sm:py-3 rounded-lg text-xs sm:text-sm font-semibold shadow-lg transition-all min-w-[50px] flex-shrink-0 active:scale-95 ${
               timeRange === range
                 ? 'bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-indigo-500/50 border-2 border-indigo-400'
@@ -231,13 +240,18 @@ export function HRVRHRTab({
 
       {/* Day Statistics - Today vs Yesterday */}
       <Card className="rounded-2xl p-6 bg-gradient-to-br from-emerald-50 to-blue-50 dark:from-emerald-500/10 dark:to-blue-500/10 border-emerald-300 dark:border-emerald-500/20 shadow-lg">
-        <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-emerald-400" />
-          {language === 'ar' ? 'إحصائيات اليوم' : 'Day Statistics'}
-        </h3>
+        <div className="mb-4">
+          <h3 className="font-semibold text-lg flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-emerald-400" />
+            {language === 'ar' ? 'إحصائيات اليوم' : 'Day Statistics'}
+          </h3>
+          <p className="text-xs text-muted-foreground mt-1 ml-7">
+            {language === 'ar' ? 'مقارنة اليوم مع الأمس' : 'Today vs Yesterday Comparison'}
+          </p>
+        </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-white/5 rounded-xl p-4">
+          <div className="bg-white dark:bg-white/10 rounded-xl p-4 shadow-md border border-gray-200 dark:border-white/20">
             <div className="text-sm text-muted-foreground mb-2">
               {language === 'ar' ? 'تقلب معدل ضربات القلب' : 'Heart Rate Variability'}
             </div>
@@ -253,7 +267,7 @@ export function HRVRHRTab({
             </div>
           </div>
 
-          <div className="bg-white/5 rounded-xl p-4">
+          <div className="bg-white dark:bg-white/10 rounded-xl p-4 shadow-md border border-gray-200 dark:border-white/20">
             <div className="text-sm text-muted-foreground mb-2">
               {language === 'ar' ? 'معدل ضربات القلب أثناء الراحة' : 'Resting Heart Rate'}
             </div>

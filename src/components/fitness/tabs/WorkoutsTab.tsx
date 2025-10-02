@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Dumbbell } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -34,6 +34,15 @@ export function WorkoutsTab({
   workoutHistory = []
 }: WorkoutsTabProps) {
   const { language } = useTheme();
+
+  // Load persisted timeRange once on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('wakti:workouts:timeRange') as TimeRange | null;
+      if (saved && saved !== timeRange) onTimeRangeChange(saved);
+    } catch (_) {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Use real WHOOP data - no fallback to mock data
   if (!latestWorkout) {
@@ -95,7 +104,7 @@ export function WorkoutsTab({
         {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
           <button
             key={range}
-            onClick={() => onTimeRangeChange(range)}
+            onClick={() => { onTimeRangeChange(range); try { localStorage.setItem('wakti:workouts:timeRange', range); } catch (_) {} }}
             className={`px-4 py-2.5 sm:px-5 sm:py-3 rounded-lg text-xs sm:text-sm font-semibold shadow-lg transition-all min-w-[50px] flex-shrink-0 active:scale-95 ${
               timeRange === range
                 ? 'bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-indigo-500/50 border-2 border-indigo-400'

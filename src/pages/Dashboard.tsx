@@ -14,6 +14,14 @@ export default function Dashboard() {
   const [isDragging, setIsDragging] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // Add a body class while on Dashboard so CSS can hide the scrollbar for this page only
+  useEffect(() => {
+    document.body.classList.add('dashboard-page');
+    return () => {
+      document.body.classList.remove('dashboard-page');
+    };
+  }, []);
+
   // Extract display name or fallback to email/first char
   let displayName = '';
   if (user?.user_metadata) {
