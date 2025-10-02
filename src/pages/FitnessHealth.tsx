@@ -455,33 +455,33 @@ export default function FitnessHealth() {
           </div>
 
           <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as MainTab)}>
-            <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 bg-white/10 border-white/20 gap-1 p-1 mb-8 sm:mb-4 rounded-xl">
-              <TabsTrigger value="ai-insights" className="flex items-center justify-center gap-1 px-1 py-2 text-xs sm:text-sm min-h-[40px]">
+            <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 bg-white/10 border-white/20 gap-2 sm:gap-1 p-1 sm:p-1.5 mb-8 sm:mb-4 rounded-xl">
+              <TabsTrigger value="ai-insights" className="flex items-center justify-center gap-1 px-1 py-3 sm:py-2 text-xs sm:text-sm min-h-[44px] sm:min-h-[40px]">
                 <Brain className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden sm:inline">{language === 'ar' ? 'رؤى الذكاء الاصطناعي' : 'AI Insights'}</span>
                 <span className="sm:hidden text-center">AI</span>
               </TabsTrigger>
-              <TabsTrigger value="sleep" className="flex items-center justify-center gap-1 px-1 py-2 text-xs sm:text-sm min-h-[40px]">
+              <TabsTrigger value="sleep" className="flex items-center justify-center gap-1 px-1 py-3 sm:py-2 text-xs sm:text-sm min-h-[44px] sm:min-h-[40px]">
                 <Moon className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden sm:inline">{language === 'ar' ? 'النوم' : 'Sleep'}</span>
                 <span className="sm:hidden text-center">{language === 'ar' ? 'نوم' : 'Sleep'}</span>
               </TabsTrigger>
-              <TabsTrigger value="recovery" className="flex items-center justify-center gap-1 px-1 py-2 text-xs sm:text-sm min-h-[40px]">
+              <TabsTrigger value="recovery" className="flex items-center justify-center gap-1 px-1 py-3 sm:py-2 text-xs sm:text-sm min-h-[44px] sm:min-h-[40px]">
                 <Heart className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden sm:inline">{language === 'ar' ? 'التعافي' : 'Recovery'}</span>
                 <span className="sm:hidden text-center">{language === 'ar' ? 'تعافي' : 'Recovery'}</span>
               </TabsTrigger>
-              <TabsTrigger value="hrv-rhr" className="flex items-center justify-center gap-1 px-1 py-2 text-xs sm:text-sm min-h-[40px]">
+              <TabsTrigger value="hrv-rhr" className="flex items-center justify-center gap-1 px-1 py-3 sm:py-2 text-xs sm:text-sm min-h-[44px] sm:min-h-[40px]">
                 <Activity className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden sm:inline">HRV/RHR</span>
                 <span className="sm:hidden text-center">HRV</span>
               </TabsTrigger>
-              <TabsTrigger value="strain" className="flex items-center justify-center gap-1 px-1 py-2 text-xs sm:text-sm min-h-[40px]">
+              <TabsTrigger value="strain" className="flex items-center justify-center gap-1 px-1 py-3 sm:py-2 text-xs sm:text-sm min-h-[44px] sm:min-h-[40px]">
                 <Zap className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden sm:inline">{language === 'ar' ? 'الإجهاد' : 'Strain'}</span>
                 <span className="sm:hidden text-center">{language === 'ar' ? 'إجهاد' : 'Strain'}</span>
               </TabsTrigger>
-              <TabsTrigger value="workouts" className="flex items-center justify-center gap-1 px-1 py-2 text-xs sm:text-sm min-h-[40px]">
+              <TabsTrigger value="workouts" className="flex items-center justify-center gap-1 px-1 py-3 sm:py-2 text-xs sm:text-sm min-h-[44px] sm:min-h-[40px]">
                 <Dumbbell className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden sm:inline">{language === 'ar' ? 'التمارين' : 'Workouts'}</span>
                 <span className="sm:hidden text-center">{language === 'ar' ? 'تمارين' : 'Workouts'}</span>

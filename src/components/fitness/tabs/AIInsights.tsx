@@ -146,9 +146,10 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
   });
   const [lastGenerated, setLastGenerated] = useState<Record<TimeWindow, number>>(loadPersistedTimes());
   
-  // Audio playback state
+  // Audio playback state with caching
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
+  const [audioCache, setAudioCache] = useState<Map<string, string>>(new Map());
   
   // Cleanup audio on unmount
   useEffect(() => {
@@ -429,7 +430,30 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
     
     const text = `${displayInsight.daily_summary || ''}\n\n${displayInsight.weekly_summary || ''}\n\nTips:\n${(displayInsight.tips || []).map((t: string) => `${t}`).join('\n')}\n\nMotivations:\n${(displayInsight.motivations || []).map((m: string) => `${m}`).join('\n')}`;
     
+    // Create cache key from text and language
+    const cacheKey = `${language}-${text.substring(0, 100)}`;
+    
     try {
+      // Check if audio is cached
+      if (audioCache.has(cacheKey)) {
+        console.log('Using cached TTS audio');
+        const cachedUrl = audioCache.get(cacheKey)!;
+        const audio = new Audio(cachedUrl);
+        
+        // Set up event listeners
+        audio.addEventListener('play', () => setIsPlaying(true));
+        audio.addEventListener('pause', () => setIsPlaying(false));
+        audio.addEventListener('ended', () => {
+          setIsPlaying(false);
+          setCurrentAudio(null);
+        });
+        
+        setCurrentAudio(audio);
+        audio.play();
+        toast.success(language === 'ar' ? 'جاري التشغيل' : 'Playing audio');
+        return;
+      }
+      
       toast.info(language === 'ar' ? 'جاري التحويل إلى صوت...' : 'Converting to speech...');
       
       const { data: sessionData } = await supabase.auth.getSession();
@@ -461,6 +485,11 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
       // The response contains audio data
       const audioBlob = await response.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
+      
+      // Cache the audio URL
+      setAudioCache(prev => new Map(prev).set(cacheKey, audioUrl));
+      console.log('Cached TTS audio for key:', cacheKey);
+      
       const audio = new Audio(audioUrl);
       
       // Set up event listeners
@@ -539,23 +568,23 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
         </div>
 
         {/* AI Coach Availability */}
-        <div className="bg-black/20 rounded-lg p-3 mb-4">
-          <p className="text-xs text-gray-300 mb-2">{language === 'ar' ? 'المدرب الذكي متاح خلال:' : 'AI Coach available during:'}</p>
+        <div className="bg-black/20 dark:bg-black/20 rounded-lg p-3 mb-4">
+          <p className="text-xs text-gray-300 dark:text-gray-300 mb-2">{language === 'ar' ? 'المدرب الذكي متاح خلال:' : 'AI Coach available during:'}</p>
           <div className="flex flex-wrap gap-2 text-xs">
-            <span className="flex items-center gap-1 text-amber-400">
+            <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
               🌅 {language === 'ar' ? 'الصباح: 5:00 - 11:00' : 'Morning: 5:00 AM - 11:00 AM'}
             </span>
-            <span className="flex items-center gap-1 text-orange-400">
+            <span className="flex items-center gap-1 text-orange-600 dark:text-orange-400">
               ☀️ {language === 'ar' ? 'منتصف النهار: 12:00 - 6:00 مساءً' : 'Midday: 12:00 PM - 6:00 PM'}
             </span>
-            <span className="flex items-center gap-1 text-purple-400">
+            <span className="flex items-center gap-1 text-purple-600 dark:text-purple-400">
               🌙 {language === 'ar' ? 'المساء: 5:00 - 11:00 مساءً' : 'Evening: 5:00 PM - 11:00 PM'}
             </span>
           </div>
         </div>
 
         {/* Time Window Generation Buttons */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
           {(Object.entries(TIME_WINDOWS) as [TimeWindow, typeof TIME_WINDOWS[TimeWindow]][]).map(([window, config]) => {
             const Icon = config.icon;
             const isActive = isWindowActive(window);
@@ -608,7 +637,7 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
         </div>
 
         {/* Active Window Selector */}
-        <div className="mt-6 flex gap-2 flex-wrap">
+        <div className="mt-6 flex gap-2 sm:gap-3 flex-wrap">
           {(Object.keys(TIME_WINDOWS) as TimeWindow[]).map((window) => (
             <button
               key={window}
@@ -651,17 +680,17 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
                   variant="outline" 
                   size="sm" 
                   onClick={speakText}
-                  className={isPlaying ? "bg-emerald-500/20 border-emerald-500 animate-pulse" : ""}
+                  className={`h-8 px-2 text-xs ${isPlaying ? "bg-emerald-500/20 border-emerald-500 animate-pulse" : ""}`}
                 >
                   {isPlaying ? (
                     <>
-                      <Pause className="h-4 w-4 mr-2 text-emerald-400" />
-                      {language === 'ar' ? 'إيقاف مؤقت' : 'Pause'}
+                      <Pause className="h-3 w-3 mr-1 text-emerald-400" />
+                      <span className="hidden sm:inline">{language === 'ar' ? 'إيقاف' : 'Pause'}</span>
                     </>
                   ) : (
                     <>
-                      <Volume2 className="h-4 w-4 mr-2" />
-                      {language === 'ar' ? 'استماع' : 'Speak'}
+                      <Volume2 className="h-3 w-3 mr-1" />
+                      <span className="hidden sm:inline">{language === 'ar' ? 'استماع' : 'Speak'}</span>
                     </>
                   )}
                 </Button>
