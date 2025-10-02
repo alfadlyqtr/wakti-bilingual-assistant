@@ -104,7 +104,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
       colorClass: 'nav-icon-ai',
     },
     {
-      name: language === 'ar' ? 'الصحة واللياقة' : 'Fitness & Health',
+      name: language === 'ar' ? 'الحيوية' : 'Vitality',
       path: '/fitness',
       icon: 'heart-pulse',
       colorClass: 'text-rose-500',
