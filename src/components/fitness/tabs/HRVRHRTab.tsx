@@ -38,7 +38,7 @@ export function HRVRHRTab({
   if (!currentData) {
     return (
       <div className="space-y-6">
-        <div className="flex gap-1 sm:gap-2 mb-6 flex-wrap justify-center sm:justify-start">
+        <div className="flex gap-2 mb-4 flex-wrap justify-center sm:justify-start mt-8">
           {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
             <button
               key={range}
@@ -104,15 +104,15 @@ export function HRVRHRTab({
   return (
     <div className="space-y-4 md:space-y-6">
       {/* Mini-tabs for time range */}
-      <div className="flex gap-2 mb-4 flex-wrap justify-center sm:justify-start">
+      <div className="flex gap-3 mb-6 flex-wrap justify-center sm:justify-start mt-16">
         {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
           <button
             key={range}
             onClick={() => onTimeRangeChange(range)}
-            className={`px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-medium shadow-sm transition-all min-w-[44px] flex-shrink-0 ${
+            className={`px-4 py-2.5 sm:px-5 sm:py-3 rounded-lg text-xs sm:text-sm font-semibold shadow-lg transition-all min-w-[50px] flex-shrink-0 active:scale-95 ${
               timeRange === range
-                ? 'bg-indigo-500 text-white shadow-md'
-                : 'bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20'
+                ? 'bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-indigo-500/50 border-2 border-indigo-400'
+                : 'bg-gradient-to-br from-gray-100 to-gray-200 dark:from-white/10 dark:to-white/5 hover:from-gray-200 hover:to-gray-300 dark:hover:from-white/20 dark:hover:to-white/10 text-gray-800 dark:text-gray-300 border-2 border-gray-300 dark:border-white/20 shadow-gray-400/30 dark:shadow-none'
             }`}
           >
             {range.toUpperCase()}

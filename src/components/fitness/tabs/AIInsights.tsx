@@ -522,15 +522,15 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
   return (
     <div className="space-y-6">
       {/* Time Range Tabs */}
-      <div className="flex gap-2 mb-4 flex-wrap justify-center sm:justify-start mt-8">
+      <div className="flex gap-3 mb-6 flex-wrap justify-center sm:justify-start mt-16">
         {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
           <button
             key={range}
             onClick={() => onTimeRangeChange(range)}
-            className={`px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-medium shadow-sm transition-all min-w-[40px] sm:min-w-[44px] flex-shrink-0 ${
+            className={`px-4 py-2.5 sm:px-5 sm:py-3 rounded-lg text-xs sm:text-sm font-semibold shadow-lg transition-all min-w-[50px] flex-shrink-0 active:scale-95 ${
               timeRange === range
-                ? 'bg-indigo-500 text-white shadow-md'
-                : 'bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20'
+                ? 'bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-indigo-500/50 border-2 border-indigo-400'
+                : 'bg-gradient-to-br from-gray-100 to-gray-200 dark:from-white/10 dark:to-white/5 hover:from-gray-200 hover:to-gray-300 dark:hover:from-white/20 dark:hover:to-white/10 text-gray-800 dark:text-gray-300 border-2 border-gray-300 dark:border-white/20 shadow-gray-400/30 dark:shadow-none'
             }`}
           >
             {range.toUpperCase()}
@@ -547,9 +547,9 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
             localStorage.removeItem('wakti-ai-insights-times');
             toast.success(language === 'ar' ? 'تم مسح الذاكرة المؤقتة' : 'Cache cleared');
           }}
-          className="px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-full text-xs font-medium bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 transition-all flex-shrink-0"
+          className="px-4 py-2.5 rounded-lg text-xs font-semibold bg-gradient-to-br from-red-100 to-red-200 dark:from-red-500/20 dark:to-red-500/10 hover:from-red-200 hover:to-red-300 dark:hover:from-red-500/30 dark:hover:to-red-500/20 text-red-700 dark:text-red-400 border-2 border-red-300 dark:border-red-500/30 shadow-lg shadow-red-400/30 dark:shadow-none transition-all flex-shrink-0 active:scale-95"
         >
-          {language === 'ar' ? 'مسح' : 'Clear'}
+          {language === 'ar' ? 'مسح الذاكرة' : 'Clear Cache'}
         </button>
       </div>
 

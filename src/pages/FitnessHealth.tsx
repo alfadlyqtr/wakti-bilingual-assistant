@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/providers/ThemeProvider";
+import { filterByTimeRange, getMostRecent } from "@/utils/timeRangeFilter";
 import { 
   startWhoopAuth, 
   triggerUserSync, 
@@ -58,15 +59,23 @@ export default function FitnessHealth() {
   const [disconnecting, setDisconnecting] = useState<boolean>(false);
   const [metrics, setMetrics] = useState<any>(null);
   const [status, setStatus] = useState<{ connected: boolean; lastSyncedAt: string | null }>({ connected: false, lastSyncedAt: null });
-  const [hrHistory, setHrHistory] = useState<{ date: string; recovery?: number | null; hrv?: number | null; rhr?: number | null }[]>([]);
-  const [sleepHist, setSleepHist] = useState<{ start: string; end: string; hours: number | null }[]>([]);
-  const [cycleHist, setCycleHist] = useState<{ start: string; day_strain?: number | null; avg_hr_bpm?: number | null; training_load?: number | null }[]>([]);
-  const [workoutsHist, setWorkoutsHist] = useState<{ start: string; strain?: number | null; kcal?: number | null }[]>([]);
+  const [activeTab, setActiveTab] = useState<MainTab>('ai-insights');
+  const [timeRange, setTimeRange] = useState<TimeRange>('1d');
   const [autoSync, setAutoSync] = useState<boolean>(() => {
     try { return localStorage.getItem('whoop_autosync') !== '0'; } catch { return true; }
   });
-  const [activeTab, setActiveTab] = useState<MainTab>('ai-insights');
-  const [timeRange, setTimeRange] = useState<TimeRange>('1d');
+  
+  // Store ALL fetched data (6 months)
+  const [allHrHistory, setAllHrHistory] = useState<{ date: string; recovery?: number | null; hrv?: number | null; rhr?: number | null }[]>([]);
+  const [allSleepHist, setAllSleepHist] = useState<{ start: string; end: string; hours: number | null }[]>([]);
+  const [allCycleHist, setAllCycleHist] = useState<{ start: string; day_strain?: number | null; avg_hr_bpm?: number | null; training_load?: number | null }[]>([]);
+  const [allWorkoutsHist, setAllWorkoutsHist] = useState<{ start: string; strain?: number | null; kcal?: number | null }[]>([]);
+  
+  // Filtered data based on time range
+  const hrHistory = useMemo(() => filterByTimeRange(allHrHistory, timeRange), [allHrHistory, timeRange]);
+  const sleepHist = useMemo(() => filterByTimeRange(allSleepHist, timeRange), [allSleepHist, timeRange]);
+  const cycleHist = useMemo(() => filterByTimeRange(allCycleHist, timeRange), [allCycleHist, timeRange]);
+  const workoutsHist = useMemo(() => filterByTimeRange(allWorkoutsHist, timeRange), [allWorkoutsHist, timeRange]);
 
   useEffect(() => {
     (async () => {
@@ -74,19 +83,19 @@ export default function FitnessHealth() {
       setStatus(st);
       setConnected(st.connected);
       if (st.connected) {
-        // FIX: Use forceFresh for initial load to bypass any stale cache
+        // FIX: Fetch ALL data (6 months) once, filter locally
         const [m, rec, sl, cyc, wks] = await Promise.all([
           fetchCompactMetrics(true),
-          fetchRecoveryHistory(timeRangeToDays('1d'), true),
-          fetchSleepHistory(timeRangeToDays('1d'), true),
-          fetchCycleHistory(timeRangeToDays('1d'), true),
-          fetchWorkoutsHistory(timeRangeToDays('1d'), true),
+          fetchRecoveryHistory(180, true), // 6 months
+          fetchSleepHistory(180, true),     // 6 months
+          fetchCycleHistory(180, true),     // 6 months
+          fetchWorkoutsHistory(180, true),  // 6 months
         ]);
         setMetrics(m);
-        setHrHistory(rec);
-        setSleepHist(sl.map((x:any)=>({ start: x.start, end: x.end, hours: x.hours, stages: x.stages })));
-        setCycleHist(cyc);
-        setWorkoutsHist(wks.map((w:any)=>({ start: w.start, strain: w.strain ?? null, kcal: w.kcal ?? null })));
+        setAllHrHistory(rec);
+        setAllSleepHist(sl.map((x:any)=>({ start: x.start, end: x.end, hours: x.hours, stages: x.stages })));
+        setAllCycleHist(cyc);
+        setAllWorkoutsHist(wks.map((w:any)=>({ start: w.start, strain: w.strain ?? null, kcal: w.kcal ?? null })));
         if (st.lastSyncedAt && autoSync) {
           const ageMs = Date.now() - new Date(st.lastSyncedAt).getTime();
           if (ageMs > 3600_000) {
@@ -98,19 +107,19 @@ export default function FitnessHealth() {
               // FIX: Add 2-second delay to allow database commits to complete
               await new Promise(resolve => setTimeout(resolve, 2000));
               
-              // FIX: Force fresh queries with cache busting
+              // FIX: Fetch ALL data (6 months) after sync
               const [m2, rec2, sl2, cyc2, wks2] = await Promise.all([
                 fetchCompactMetrics(true), 
-                fetchRecoveryHistory(timeRangeToDays(timeRange), true), 
-                fetchSleepHistory(timeRangeToDays(timeRange), true), 
-                fetchCycleHistory(timeRangeToDays(timeRange), true), 
-                fetchWorkoutsHistory(timeRangeToDays(timeRange), true)
+                fetchRecoveryHistory(180, true), 
+                fetchSleepHistory(180, true), 
+                fetchCycleHistory(180, true), 
+                fetchWorkoutsHistory(180, true)
               ]);
               setMetrics(m2);
-              setHrHistory(rec2);
-              setSleepHist(sl2.map((x:any)=>({ start: x.start, end: x.end, hours: x.hours, stages: x.stages })));
-              setCycleHist(cyc2);
-              setWorkoutsHist(wks2.map((w:any)=>({ start: w.start, strain: w.strain ?? null, kcal: w.kcal ?? null })));
+              setAllHrHistory(rec2);
+              setAllSleepHist(sl2.map((x:any)=>({ start: x.start, end: x.end, hours: x.hours, stages: x.stages })));
+              setAllCycleHist(cyc2);
+              setAllWorkoutsHist(wks2.map((w:any)=>({ start: w.start, strain: w.strain ?? null, kcal: w.kcal ?? null })));
               setStatus({ connected: true, lastSyncedAt: new Date().toISOString() });
             } catch (e: any) {
               console.error('auto sync error', e);
@@ -132,40 +141,9 @@ export default function FitnessHealth() {
     })();
   }, [autoSync]);
 
-  useEffect(() => {
-    if (!connected) return;
-    (async () => {
-      try {
-        // FIX: Force fresh data when time range changes
-        const days = timeRangeToDays(timeRange);
-        const [recovery, sleep, cycles, workouts] = await Promise.all([
-          fetchRecoveryHistory(days, true),
-          fetchSleepHistory(days, true),
-          fetchCycleHistory(days, true),
-          fetchWorkoutsHistory(days, true)
-        ]);
-        
-        setHrHistory(recovery);
-        setSleepHist(sleep.map((x: any) => ({ 
-          start: x.start, 
-          end: x.end, 
-          hours: x.hours,
-          stages: x.stages
-        })));
-        setCycleHist(cycles);
-        setWorkoutsHist(workouts.map((w: any) => ({ 
-          start: w.start,
-          end: w.end,
-          sport: w.sport || 'Workout',
-          strain: w.strain ?? null, 
-          kcal: w.kcal ?? null,
-          avg_hr_bpm: w.avg_hr_bpm ?? null
-        })));
-      } catch (e) {
-        console.error('Error fetching historical data for time range:', e);
-      }
-    })();
-  }, [timeRange, connected]);
+  // Time range filtering is now done via useMemo - no need to re-fetch data
+  // Old approach: Re-fetch data from API on every time range change
+  // New approach: Fetch 6 months once, filter locally with useMemo
 
   const onConnect = async () => {
     try {
@@ -229,10 +207,10 @@ export default function FitnessHealth() {
       }
       
       setMetrics(m);
-      setHrHistory(rec);
-      setSleepHist(sl.map((x:any)=>({ start: x.start, end: x.end, hours: x.hours, stages: x.stages })));
-      setCycleHist(cyc);
-      setWorkoutsHist(wks.map((w:any)=>({ start: w.start, strain: w.strain ?? null, kcal: w.kcal ?? null })));
+      setAllHrHistory(rec);
+      setAllSleepHist(sl.map((x:any)=>({ start: x.start, end: x.end, hours: x.hours, stages: x.stages })));
+      setAllCycleHist(cyc);
+      setAllWorkoutsHist(wks.map((w:any)=>({ start: w.start, strain: w.strain ?? null, kcal: w.kcal ?? null })));
       setStatus({ connected: true, lastSyncedAt: new Date().toISOString() });
       toast.success(`Synced: ${res?.counts?.cycles||0} cycles, ${res?.counts?.sleeps||0} sleeps, ${res?.counts?.workouts||0} workouts, ${res?.counts?.recoveries||0} recoveries`);
     } catch (e: any) {

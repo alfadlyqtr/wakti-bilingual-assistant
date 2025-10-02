@@ -172,7 +172,8 @@ serve(async (req: Request) => {
           });
         }
 
-        const start = startParam || (u.last_synced_at ? new Date(new Date(u.last_synced_at).getTime() - 7 * 86400000).toISOString() : isoDaysAgo(180));
+        // Always fetch last 6 months to support time range filtering in UI
+        const start = startParam || isoDaysAgo(180);
         const end = endParam || new Date().toISOString();
         const commonParams = { start, end } as Record<string, string>;
         console.log("whoop-sync: fetch ranges", {
