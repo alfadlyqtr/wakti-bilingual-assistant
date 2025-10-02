@@ -245,6 +245,7 @@ serve(async (req: Request) => {
         }
 
         if (sleeps.length) {
+          // FIX: Only write to columns that exist in schema. All data stored in 'data' JSONB column.
           const rows = sleeps.map((item: any) => ({
             id: item.id,
             user_id: u.user_id,
@@ -252,29 +253,17 @@ serve(async (req: Request) => {
             end: toDate(item.end),
             duration_sec: asNumber(item.duration ?? item.duration_sec ?? item.score?.stage_summary?.total_in_bed_milli ? Math.round(item.score.stage_summary.total_in_bed_milli / 1000) : null),
             performance_pct: asNumber(item.score?.sleep_performance_percentage ?? item.performance_pct),
-            // Additional sleep metrics
-            respiratory_rate: asNumber(item.score?.respiratory_rate),
-            sleep_consistency_pct: asNumber(item.score?.sleep_consistency_percentage),
-            sleep_efficiency_pct: asNumber(item.score?.sleep_efficiency_percentage),
-            disturbance_count: asNumber(item.score?.stage_summary?.disturbance_count),
-            sleep_cycle_count: asNumber(item.score?.stage_summary?.sleep_cycle_count),
-            // Sleep stages in milliseconds
-            total_light_sleep_ms: asNumber(item.score?.stage_summary?.total_light_sleep_time_milli),
-            total_deep_sleep_ms: asNumber(item.score?.stage_summary?.total_slow_wave_sleep_time_milli),
-            total_rem_sleep_ms: asNumber(item.score?.stage_summary?.total_rem_sleep_time_milli),
-            total_awake_ms: asNumber(item.score?.stage_summary?.total_awake_time_milli),
-            // Sleep debt tracking
-            baseline_sleep_need_ms: asNumber(item.score?.sleep_needed?.baseline_milli),
-            sleep_debt_ms: asNumber(item.score?.sleep_needed?.need_from_sleep_debt_milli),
-            strain_sleep_need_ms: asNumber(item.score?.sleep_needed?.need_from_recent_strain_milli),
-            nap_sleep_adjustment_ms: asNumber(item.score?.sleep_needed?.need_from_recent_nap_milli),
-            data: item,
+            data: item, // All WHOOP data stored here - frontend reads from this
           }));
           const { error: errSleep } = await admin.from("whoop_sleep").upsert(rows, { onConflict: "id" });
-          if (errSleep) console.error("whoop-sync upsert sleep error", errSleep);
+          if (errSleep) {
+            console.error("whoop-sync upsert sleep error", errSleep);
+            console.error("Failed sleep IDs:", rows.map(r => r.id));
+          }
         }
 
         if (workouts.length) {
+          // FIX: Only write to columns that exist in schema. All data stored in 'data' JSONB column.
           const rows = workouts.map((item: any) => ({
             id: item.id,
             user_id: u.user_id,
@@ -283,28 +272,17 @@ serve(async (req: Request) => {
             sport_name: item.sport_name ?? null,
             strain: asNumber(item.score?.strain ?? item.strain),
             avg_hr_bpm: asNumber(item.score?.average_heart_rate ?? item.avg_hr_bpm),
-            // Additional workout metrics
-            max_hr_bpm: asNumber(item.score?.max_heart_rate),
-            kilojoule: asNumber(item.score?.kilojoule),
-            percent_recorded: asNumber(item.score?.percent_recorded),
-            distance_meter: asNumber(item.score?.distance_meter),
-            altitude_gain_meter: asNumber(item.score?.altitude_gain_meter),
-            altitude_change_meter: asNumber(item.score?.altitude_change_meter),
-            // Heart rate zones in milliseconds
-            zone_zero_ms: asNumber(item.score?.zone_durations?.zone_zero_milli),
-            zone_one_ms: asNumber(item.score?.zone_durations?.zone_one_milli),
-            zone_two_ms: asNumber(item.score?.zone_durations?.zone_two_milli),
-            zone_three_ms: asNumber(item.score?.zone_durations?.zone_three_milli),
-            zone_four_ms: asNumber(item.score?.zone_durations?.zone_four_milli),
-            zone_five_ms: asNumber(item.score?.zone_durations?.zone_five_milli),
-            sport_id: asNumber(item.sport_id),
-            data: item,
+            data: item, // All WHOOP data stored here - frontend reads from this
           }));
           const { error: errWork } = await admin.from("whoop_workouts").upsert(rows, { onConflict: "id" });
-          if (errWork) console.error("whoop-sync upsert workouts error", errWork);
+          if (errWork) {
+            console.error("whoop-sync upsert workouts error", errWork);
+            console.error("Failed workout IDs:", rows.map(r => r.id));
+          }
         }
 
         if (recoveries.length) {
+          // FIX: Only write to columns that exist in schema. All data stored in 'data' JSONB column.
           const rows = recoveries.map((item: any) => ({
             sleep_id: item.sleep_id, // v2 UUID
             cycle_id: typeof item.cycle_id === 'number' ? item.cycle_id : (item.cycle_id ? Number(item.cycle_id) : null),
@@ -313,14 +291,13 @@ serve(async (req: Request) => {
             score: asNumber(item.score?.recovery_score ?? item.recovery_score ?? item.score),
             hrv_ms: asNumber(item.score?.hrv_rmssd_milli ?? item.hrv_rmssd_milli ?? item.heart_rate_variability_rmssd_milli),
             rhr_bpm: asNumber(item.score?.resting_heart_rate ?? item.resting_heart_rate ?? item.rhr_bpm ?? item.rhr),
-            // Additional recovery metrics (WHOOP 4.0)
-            spo2_percentage: asNumber(item.score?.spo2_percentage),
-            skin_temp_celsius: asNumber(item.score?.skin_temp_celsius),
-            user_calibrating: item.score?.user_calibrating ?? false,
-            data: item,
+            data: item, // All WHOOP data stored here - frontend reads from this
           }));
           const { error: errRec } = await admin.from("whoop_recovery").upsert(rows, { onConflict: "sleep_id" });
-          if (errRec) console.error("whoop-sync upsert recovery error", errRec);
+          if (errRec) {
+            console.error("whoop-sync upsert recovery error", errRec);
+            console.error("Failed recovery sleep_ids:", rows.map(r => r.sleep_id));
+          }
         }
 
         // Store user profile data
