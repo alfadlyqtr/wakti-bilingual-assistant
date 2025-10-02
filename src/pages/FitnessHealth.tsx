@@ -72,10 +72,29 @@ export default function FitnessHealth() {
   const [allWorkoutsHist, setAllWorkoutsHist] = useState<{ start: string; strain?: number | null; kcal?: number | null }[]>([]);
   
   // Filtered data based on time range
-  const hrHistory = useMemo(() => filterByTimeRange(allHrHistory, timeRange), [allHrHistory, timeRange]);
-  const sleepHist = useMemo(() => filterByTimeRange(allSleepHist, timeRange), [allSleepHist, timeRange]);
-  const cycleHist = useMemo(() => filterByTimeRange(allCycleHist, timeRange), [allCycleHist, timeRange]);
-  const workoutsHist = useMemo(() => filterByTimeRange(allWorkoutsHist, timeRange), [allWorkoutsHist, timeRange]);
+  const hrHistory = useMemo(() => {
+    const filtered = filterByTimeRange(allHrHistory, timeRange);
+    console.log(`[TimeRange Filter] ${timeRange}: HR History - Total: ${allHrHistory.length}, Filtered: ${filtered.length}`);
+    return filtered;
+  }, [allHrHistory, timeRange]);
+  
+  const sleepHist = useMemo(() => {
+    const filtered = filterByTimeRange(allSleepHist, timeRange);
+    console.log(`[TimeRange Filter] ${timeRange}: Sleep History - Total: ${allSleepHist.length}, Filtered: ${filtered.length}`);
+    return filtered;
+  }, [allSleepHist, timeRange]);
+  
+  const cycleHist = useMemo(() => {
+    const filtered = filterByTimeRange(allCycleHist, timeRange);
+    console.log(`[TimeRange Filter] ${timeRange}: Cycle History - Total: ${allCycleHist.length}, Filtered: ${filtered.length}`);
+    return filtered;
+  }, [allCycleHist, timeRange]);
+  
+  const workoutsHist = useMemo(() => {
+    const filtered = filterByTimeRange(allWorkoutsHist, timeRange);
+    console.log(`[TimeRange Filter] ${timeRange}: Workouts History - Total: ${allWorkoutsHist.length}, Filtered: ${filtered.length}`);
+    return filtered;
+  }, [allWorkoutsHist, timeRange]);
 
   useEffect(() => {
     (async () => {
