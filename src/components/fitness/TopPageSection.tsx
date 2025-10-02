@@ -74,21 +74,21 @@ export function TopPageSection({
           {/* User Details */}
           <div className="flex-1 min-w-0">
             <h2 className="text-base md:text-lg font-semibold text-white truncate">{userName}</h2>
-            <p className="text-xs md:text-sm text-gray-400 truncate">{userEmail}</p>
+            <p className="text-xs md:text-sm text-gray-600 dark:text-gray-400 truncate">{userEmail}</p>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               {connected ? (
                 <Wifi className="h-3 w-3 md:h-4 md:w-4 text-emerald-500" />
               ) : (
                 <WifiOff className="h-3 w-3 md:h-4 md:w-4 text-red-500" />
               )}
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-gray-700 dark:text-gray-400 font-medium">
                 {connected 
                   ? (language === 'ar' ? 'متصل بـ WHOOP' : 'Connected to WHOOP')
                   : (language === 'ar' ? 'غير متصل' : 'Not Connected')
                 }
               </span>
             </div>
-            <div className="text-xs text-gray-400 mt-0.5">
+            <div className="text-xs text-gray-700 dark:text-gray-400 font-medium mt-0.5">
               {language === 'ar' ? 'آخر مزامنة:' : 'Last sync:'} {lastSyncText}
             </div>
           </div>
@@ -155,21 +155,21 @@ export function TopPageSection({
                 <Ruler className="h-4 w-4 md:h-5 md:w-5 text-purple-400" />
                 <div>
                   <div className="text-xs md:text-sm font-semibold text-white">{height.toFixed(2)}m</div>
-                  <div className="text-xs text-gray-400">{language === 'ar' ? 'الطول' : 'Height'}</div>
+                  <div className="text-xs text-gray-700 dark:text-gray-400 font-medium">{language === 'ar' ? 'الطول' : 'Height'}</div>
                 </div>
               </div>
               <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
                 <Weight className="h-4 w-4 md:h-5 md:w-5 text-blue-400" />
                 <div>
                   <div className="text-xs md:text-sm font-semibold text-white">{weight.toFixed(1)}kg</div>
-                  <div className="text-xs text-gray-400">{language === 'ar' ? 'الوزن' : 'Weight'}</div>
+                  <div className="text-xs text-gray-700 dark:text-gray-400 font-medium">{language === 'ar' ? 'الوزن' : 'Weight'}</div>
                 </div>
               </div>
               <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
                 <Heart className="h-4 w-4 md:h-5 md:w-5 text-red-400" />
                 <div>
                   <div className="text-xs md:text-sm font-semibold text-white">{maxHR} bpm</div>
-                  <div className="text-xs text-gray-400">{language === 'ar' ? 'أقصى نبض' : 'Max HR'}</div>
+                  <div className="text-xs text-gray-700 dark:text-gray-400 font-medium">{language === 'ar' ? 'أقصى نبض' : 'Max HR'}</div>
                 </div>
               </div>
             </div>
