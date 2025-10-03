@@ -120,7 +120,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
   // Quick action items (tools)
   const quickItems = [
     {
-      name: language === 'ar' ? 'مولد النصوص' : 'Text Generator',
+      name: language === 'ar' ? 'نص' : 'Text',
       path: '/tools/text',
       icon: 'pen',
       colorClass: 'text-purple-500',
@@ -132,7 +132,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
       colorClass: 'text-pink-500',
     },
     {
-      name: language === 'ar' ? 'وضع الألعاب' : 'Game Mode',
+      name: language === 'ar' ? 'لعبة' : 'Game',
       path: '/tools/game',
       icon: 'gamepad',
       colorClass: 'text-red-500',

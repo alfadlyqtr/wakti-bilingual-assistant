@@ -64,6 +64,13 @@ export default function FitnessHealth() {
   const [autoSync, setAutoSync] = useState<boolean>(() => {
     try { return localStorage.getItem('whoop_autosync') !== '0'; } catch { return true; }
   });
+
+  // Ensure charts re-measure when switching tabs (Recharts in hidden containers can mis-measure)
+  useEffect(() => {
+    const t1 = setTimeout(() => window.dispatchEvent(new Event('resize')), 100);
+    const t2 = setTimeout(() => window.dispatchEvent(new Event('resize')), 600);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [activeTab]);
   
   // Store ALL fetched data (6 months)
   const [allHrHistory, setAllHrHistory] = useState<{ date: string; recovery?: number | null; hrv?: number | null; rhr?: number | null }[]>([]);
@@ -112,7 +119,22 @@ export default function FitnessHealth() {
         ]);
         setMetrics(m);
         setAllHrHistory(rec);
-        setAllSleepHist(sl.map((x:any)=>({ start: x.start, end: x.end, hours: x.hours, stages: x.stages })));
+        setAllSleepHist(sl.map((x:any)=>{
+          const deep = x.total_deep_sleep_ms ?? x.data?.score?.stage_summary?.total_slow_wave_sleep_time_milli ?? 0;
+          const rem = x.total_rem_sleep_ms ?? x.data?.score?.stage_summary?.total_rem_sleep_time_milli ?? 0;
+          const light = x.total_light_sleep_ms ?? x.data?.score?.stage_summary?.total_light_sleep_time_milli ?? 0;
+          const awake = x.total_awake_ms ?? x.data?.score?.stage_summary?.total_awake_time_milli ?? 0;
+          const durationSec = typeof x.duration_sec === 'number' ? x.duration_sec : (typeof x.data?.score?.sleep_duration_milli === 'number' ? x.data.score.sleep_duration_milli/1000 : undefined);
+          let hours: number | null = null;
+          // Convert to hours with 0.1 precision
+          if (typeof durationSec === 'number' && durationSec > 0) hours = Math.round((durationSec / 3600) * 10) / 10; // sec → hours
+          else if (deep+rem+light+awake > 0) hours = Math.round(((deep+rem+light+awake) / 3600000) * 10) / 10; // ms → hours
+          else if (x.start && x.end) {
+            const delta = new Date(x.end).getTime() - new Date(x.start).getTime();
+            if (delta > 0) hours = Math.round((delta / 3600000) * 10) / 10; // ms → hours
+          }
+          return { start: x.start, end: x.end, hours, stages: { deep, rem, light, awake } };
+        }));
         setAllCycleHist(cyc);
         setAllWorkoutsHist(wks.map((w:any)=>({ start: w.start, strain: w.strain ?? null, kcal: w.kcal ?? null })));
         if (st.lastSyncedAt && autoSync) {
@@ -136,7 +158,21 @@ export default function FitnessHealth() {
               ]);
               setMetrics(m2);
               setAllHrHistory(rec2);
-              setAllSleepHist(sl2.map((x:any)=>({ start: x.start, end: x.end, hours: x.hours, stages: x.stages })));
+              setAllSleepHist(sl2.map((x:any)=>{
+                const deep = x.total_deep_sleep_ms ?? x.data?.score?.stage_summary?.total_slow_wave_sleep_time_milli ?? 0;
+                const rem = x.total_rem_sleep_ms ?? x.data?.score?.stage_summary?.total_rem_sleep_time_milli ?? 0;
+                const light = x.total_light_sleep_ms ?? x.data?.score?.stage_summary?.total_light_sleep_time_milli ?? 0;
+                const awake = x.total_awake_ms ?? x.data?.score?.stage_summary?.total_awake_time_milli ?? 0;
+                const durationSec = typeof x.duration_sec === 'number' ? x.duration_sec : (typeof x.data?.score?.sleep_duration_milli === 'number' ? x.data.score.sleep_duration_milli/1000 : undefined);
+                let hours: number | null = null;
+                if (typeof durationSec === 'number' && durationSec > 0) hours = Math.round((durationSec/360))*0.1;
+                else if (deep+rem+light+awake > 0) hours = Math.round(((deep+rem+light+awake)/360000))*0.1;
+                else if (x.start && x.end) {
+                  const delta = new Date(x.end).getTime() - new Date(x.start).getTime();
+                  if (delta > 0) hours = Math.round((delta/360000))*0.1;
+                }
+                return { start: x.start, end: x.end, hours, stages: { deep, rem, light, awake } };
+              }));
               setAllCycleHist(cyc2);
               setAllWorkoutsHist(wks2.map((w:any)=>({ start: w.start, strain: w.strain ?? null, kcal: w.kcal ?? null })));
               setStatus({ connected: true, lastSyncedAt: new Date().toISOString() });
@@ -295,6 +331,82 @@ export default function FitnessHealth() {
     if (!vals.length) return null as number | null;
     return Math.round((vals.reduce((a,b)=>a+b,0)/vals.length)*10)/10;
   }, [cycleHist]);
+
+  // Range-aware aggregates for tabs
+  const rangeIs1d = timeRange === '1d';
+
+  const sleepAgg = useMemo(() => {
+    if (!sleepHist || sleepHist.length === 0) return null as any;
+    const latest = sleepHist[sleepHist.length - 1];
+    // Average hours across available
+    const hourVals = sleepHist.map(s => s.hours).filter((n): n is number => typeof n === 'number');
+    const avgHours = hourVals.length ? Math.round((hourVals.reduce((a,b)=>a+b,0)/hourVals.length)*10)/10 : null;
+    // Aggregate stages if present
+    let deep=0, rem=0, light=0, awake=0, count=0;
+    for (const s of sleepHist) {
+      if ((s as any).stages) {
+        deep += ((s as any).stages.deep||0);
+        rem += ((s as any).stages.rem||0);
+        light += ((s as any).stages.light||0);
+        awake += ((s as any).stages.awake||0);
+        count++;
+      }
+    }
+    const total = deep+rem+light+awake;
+    const efficiency = total>0 ? Math.round(((deep+rem+light)/total)*100) : null;
+    return {
+      hours: rangeIs1d ? (latest.hours ?? null) : avgHours,
+      stages: count>0 ? {
+        deep: Math.round((deep/count)/60000),
+        rem: Math.round((rem/count)/60000),
+        light: Math.round((light/count)/60000),
+        awake: Math.round((awake/count)/60000),
+      } : undefined,
+      efficiency,
+      latestStart: latest.start,
+      latestEnd: (latest as any).end
+    };
+  }, [sleepHist, rangeIs1d]);
+
+  const recoveryAgg = useMemo(() => {
+    if (!hrHistory || hrHistory.length === 0) return null as any;
+    const latest = hrHistory[hrHistory.length-1];
+    const nums = (key: 'recovery'|'hrv'|'rhr') => hrHistory.map(h=>h[key]).filter((n): n is number => typeof n === 'number');
+    const avg = (arr:number[]) => arr.length ? Math.round((arr.reduce((a,b)=>a+b,0)/arr.length)*10)/10 : null;
+    return {
+      recovery: rangeIs1d ? (latest.recovery ?? null) : (avg(nums('recovery')) ? Math.round(avg(nums('recovery'))!) : null),
+      hrv: rangeIs1d ? (latest.hrv ?? null) : avg(nums('hrv')),
+      rhr: rangeIs1d ? (latest.rhr ?? null) : avg(nums('rhr')),
+    };
+  }, [hrHistory, rangeIs1d]);
+
+  const strainAgg = useMemo(() => {
+    if (!cycleHist || cycleHist.length === 0) return null as any;
+    const latest = cycleHist[cycleHist.length-1] as any;
+    const nums = (key: 'day_strain'|'avg_hr_bpm'|'training_load') => cycleHist.map((c:any)=>c[key]).filter((n): n is number => typeof n === 'number');
+    const avg = (arr:number[]) => arr.length ? Math.round((arr.reduce((a,b)=>a+b,0)/arr.length)*10)/10 : null;
+    return {
+      dayStrain: rangeIs1d ? (latest.day_strain ?? null) : avg(nums('day_strain')),
+      avgHr: rangeIs1d ? (latest.avg_hr_bpm ?? null) : avg(nums('avg_hr_bpm')),
+      trainingLoad: rangeIs1d ? (latest.training_load ?? null) : avg(nums('training_load')),
+    };
+  }, [cycleHist, rangeIs1d]);
+
+  const latestWorkoutInRange = useMemo(() => {
+    if (!workoutsHist || workoutsHist.length === 0) return null as any;
+    const w = workoutsHist[workoutsHist.length - 1] as any;
+    const full = (allWorkoutsHist.find(x=>x.start===w.start) as any) || {};
+    const duration = w.start && (full as any).end ? Math.round((new Date((full as any).end).getTime() - new Date(w.start).getTime())/60000) : 0;
+    return {
+      start: w.start,
+      end: (full as any).end || null,
+      sport: (w as any).sport || (full as any).sport || 'Workout',
+      duration,
+      strain: w.strain || (full as any).strain || 0,
+      calories: w.kcal || (full as any).kcal || 0,
+      avgHr: (w as any).avg_hr_bpm || (full as any).avg_hr_bpm || 0,
+    };
+  }, [workoutsHist, allWorkoutsHist]);
 
   const sleepHours = useMemo(() => {
     const sleep = metrics?.sleep;
@@ -486,33 +598,140 @@ export default function FitnessHealth() {
             </TabsList>
 
             <TabsContent value="ai-insights" className="mt-4 sm:mt-6 space-y-4 sm:space-y-6">
-              <AIInsights timeRange={timeRange} onTimeRangeChange={setTimeRange} metrics={metrics} />
-              <WhoopDetails metrics={metrics} />
+              <AIInsights 
+                timeRange={timeRange} 
+                onTimeRangeChange={setTimeRange} 
+                metrics={metrics}
+                aiData={{
+                  today: {
+                    sleepHours: sleepHours ?? null,
+                    sleepPerformancePct: metrics?.sleep?.performance_pct ?? null,
+                    recoveryPct: metrics?.recovery?.score ?? metrics?.recovery?.data?.score?.recovery_score ?? null,
+                    hrvMs: metrics?.recovery?.hrv_ms ?? metrics?.recovery?.data?.score?.hrv_rmssd_milli ?? null,
+                    rhrBpm: metrics?.recovery?.rhr_bpm ?? metrics?.recovery?.data?.score?.resting_heart_rate ?? null,
+                    dayStrain: metrics?.cycle?.day_strain ?? metrics?.cycle?.data?.score?.strain ?? null,
+                    latestWorkout: metrics?.workout ? {
+                      sport: metrics.workout.sport_name || 'Workout',
+                      durationMin: metrics.workout.start && metrics.workout.end ? Math.round((new Date(metrics.workout.end).getTime() - new Date(metrics.workout.start).getTime()) / 60000) : null,
+                      strain: metrics.workout.strain ?? metrics.workout?.data?.score?.strain ?? null,
+                      kcal: metrics?.workout?.data?.score?.kilojoule ? Math.round((metrics.workout.data.score.kilojoule || 0) / 4.184) : null,
+                    } : null,
+                    avg_heart_rate: metrics?.cycle?.avg_hr_bpm ?? metrics?.cycle?.data?.score?.average_heart_rate ?? null,
+                  },
+                  last7Days: {
+                    sleepHours: sleepHist.map(s => s.hours ?? null),
+                    recoveryPct: hrHistory.map(h => h.recovery ?? null),
+                    hrvMs: hrHistory.map(h => h.hrv ?? null),
+                    rhrBpm: hrHistory.map(h => h.rhr ?? null),
+                  },
+                  workouts: workoutsHist.map(w => ({
+                    start: w.start,
+                    end: (allWorkoutsHist.find(x=>x.start===w.start) as any)?.end ?? null,
+                    sport: (w as any).sport || 'Workout',
+                    strain: w.strain ?? null,
+                    kcal: w.kcal ?? null,
+                    avg_hr_bpm: (w as any).avgHr ?? (w as any).avg_hr_bpm ?? null,
+                  })),
+                  weekly: {
+                    weeks: (() => {
+                      // Approximate weekly buckets from cycleHist filtered range
+                      const byWeek = new Map<string, { load: number; hr: number[] }>();
+                      for (const c of allCycleHist) {
+                        const dt = new Date(c.start);
+                        const key = `${dt.getFullYear()}-W${((d: Date)=>{const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));const n=t.getUTCDay()||7; t.setUTCDate(t.getUTCDate()+4-n); const y=new Date(Date.UTC(t.getUTCFullYear(),0,1)); return Math.ceil((((t as any)-(y as any))/86400000+1)/7);})(dt)}`;
+                        const prev = byWeek.get(key) || { load: 0, hr: [] };
+                        const tl = (c as any).training_load; const ds = (c as any).day_strain; const ah = (c as any).avg_hr_bpm;
+                        prev.load += (typeof tl === 'number' ? tl : (typeof ds === 'number' ? ds : 0));
+                        if (typeof ah === 'number') prev.hr.push(ah);
+                        byWeek.set(key, prev);
+                      }
+                      const keys = Array.from(byWeek.keys()).sort();
+                      const avg = (arr:number[])=> arr.length? Math.round(arr.reduce((a,b)=>a+b,0)/arr.length): null;
+                      return keys.map(k=>({ label: k, load: Math.round(byWeek.get(k)!.load*10)/10, avgHr: avg(byWeek.get(k)!.hr) }));
+                    })()
+                  },
+                  details: {
+                    cycle: metrics?.cycle ?? null,
+                    sleep: metrics?.sleep ?? null,
+                    recovery: metrics?.recovery ?? null,
+                    workout: metrics?.workout ?? null,
+                  },
+                  raw: {
+                    sleep_full: metrics?.sleep ?? null,
+                    recovery_full: metrics?.recovery ?? null,
+                    cycle_full: metrics?.cycle ?? null,
+                    workout_full: metrics?.workout ?? null,
+                    sleep_history: allSleepHist,
+                    recovery_history: allHrHistory,
+                    cycle_history: allCycleHist,
+                    workout_history: allWorkoutsHist,
+                  },
+                  user: {
+                    profile: metrics?.profile ?? null,
+                    body: metrics?.body ?? null,
+                    first_name: metrics?.profile?.first_name || null,
+                    height_meter: metrics?.body?.height_meter || null,
+                    weight_kilogram: metrics?.body?.weight_kilogram || null,
+                    max_heart_rate: metrics?.body?.max_heart_rate || null,
+                  }
+                }}
+              />
+              <WhoopDetails metrics={metrics} lastUpdated={status.lastSyncedAt} />
             </TabsContent>
 
             <TabsContent value="sleep" className="mt-4 sm:mt-6 space-y-4 sm:space-y-6">
               <SleepTab 
                 timeRange={timeRange} 
                 onTimeRangeChange={setTimeRange}
-                sleepData={metrics?.sleep && sleepHours ? {
-                  hours: sleepHours,
-                  goalHours: 8,
-                  performancePct: metrics.sleep.performance_pct || 0,
-                  stages: {
-                    deep: Math.round((sleepStages?.deep || 0) / 60000),
-                    rem: Math.round((sleepStages?.rem || 0) / 60000),
-                    light: Math.round((sleepStages?.light || 0) / 60000),
-                    awake: Math.round((sleepStages?.awake || 0) / 60000)
-                  },
-                  bedtime: metrics.sleep.start ? new Date(metrics.sleep.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--',
-                  waketime: metrics.sleep.end ? new Date(metrics.sleep.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--',
-                  efficiency: sleepEfficiency || 0,
-                  respiratoryRate: metrics.sleep.respiratory_rate || 0,
-                  sleepConsistency: metrics.sleep.sleep_consistency_pct || 0,
-                  disturbanceCount: metrics.sleep.disturbance_count || 0,
-                  sleepCycleCount: metrics.sleep.sleep_cycle_count || 0,
-                  sleepDebt: metrics.sleep.sleep_debt_ms ? Math.round(metrics.sleep.sleep_debt_ms / 60000) : 0
-                } : undefined}
+                sleepData={(() => {
+                  if (rangeIs1d && metrics?.sleep) {
+                    // 1D: mirror card exactly using metrics.sleep
+                    const bed = metrics.sleep.start ? new Date(metrics.sleep.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--';
+                    const wake = metrics.sleep.end ? new Date(metrics.sleep.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--';
+                    return {
+                      hours: sleepHours ?? 0,
+                      goalHours: 8,
+                      performancePct: metrics.sleep.performance_pct || 0,
+                      stages: {
+                        deep: Math.round((sleepStages?.deep || 0) / 60000),
+                        rem: Math.round((sleepStages?.rem || 0) / 60000),
+                        light: Math.round((sleepStages?.light || 0) / 60000),
+                        awake: Math.round((sleepStages?.awake || 0) / 60000)
+                      },
+                      bedtime: bed,
+                      waketime: wake,
+                      efficiency: (sleepEfficiency || 0) as number,
+                      respiratoryRate: metrics.sleep.respiratory_rate ?? undefined,
+                      sleepConsistency: (metrics.sleep.sleep_consistency_pct ?? metrics.sleep.data?.score?.sleep_consistency_pct) ?? undefined,
+                      disturbanceCount: (metrics.sleep.disturbance_count ?? metrics.sleep.data?.score?.disturbance_count) ?? undefined,
+                      sleepCycleCount: (metrics.sleep.sleep_cycle_count ?? metrics.sleep.data?.score?.sleep_cycle_count) ?? undefined,
+                      sleepDebt: metrics.sleep.sleep_debt_ms ? Math.round(metrics.sleep.sleep_debt_ms / 60000) : 0
+                    };
+                  }
+                  // Other ranges: use aggregates
+                  if (sleepAgg && sleepAgg.hours != null) {
+                    return {
+                      hours: sleepAgg.hours,
+                      goalHours: 8,
+                      performancePct: metrics?.sleep?.performance_pct || 0,
+                      stages: {
+                        deep: sleepAgg.stages?.deep ?? Math.round((sleepStages?.deep || 0) / 60000),
+                        rem: sleepAgg.stages?.rem ?? Math.round((sleepStages?.rem || 0) / 60000),
+                        light: sleepAgg.stages?.light ?? Math.round((sleepStages?.light || 0) / 60000),
+                        awake: sleepAgg.stages?.awake ?? Math.round((sleepStages?.awake || 0) / 60000)
+                      },
+                      bedtime: sleepAgg.latestStart ? new Date(sleepAgg.latestStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--',
+                      waketime: sleepAgg.latestEnd ? new Date(sleepAgg.latestEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--',
+                      efficiency: (sleepAgg.efficiency ?? sleepEfficiency) || 0,
+                      respiratoryRate: metrics?.sleep?.respiratory_rate ?? undefined,
+                      sleepConsistency: (metrics?.sleep?.sleep_consistency_pct ?? metrics?.sleep?.data?.score?.sleep_consistency_pct) ?? undefined,
+                      disturbanceCount: (metrics?.sleep?.disturbance_count ?? metrics?.sleep?.data?.score?.disturbance_count) ?? undefined,
+                      sleepCycleCount: (metrics?.sleep?.sleep_cycle_count ?? metrics?.sleep?.data?.score?.sleep_cycle_count) ?? undefined,
+                      sleepDebt: metrics?.sleep?.sleep_debt_ms ? Math.round(metrics.sleep.sleep_debt_ms / 60000) : 0
+                    };
+                  }
+                  return undefined;
+                })()}
                 weeklyData={sleepHist.map((s: any) => ({
                   date: s.start,
                   hours: typeof s.hours === 'number' ? s.hours : null,
@@ -564,11 +783,12 @@ export default function FitnessHealth() {
               <StrainTab 
                 timeRange={timeRange} 
                 onTimeRangeChange={setTimeRange}
-                strainData={metrics?.cycle ? {
-                  dayStrain: metrics.cycle.day_strain || metrics.cycle.data?.score?.strain || 0,
-                  trainingLoad: metrics.cycle.training_load || metrics.cycle.data?.score?.training_load || 0,
-                  avgHr: metrics.cycle.avg_hr_bpm || metrics.cycle.data?.score?.average_heart_rate || 0,
-                  maxHr: metrics.cycle.max_hr_bpm || metrics.cycle.data?.score?.max_heart_rate || 0
+                strainData={(strainAgg) ? {
+                  dayStrain: (strainAgg.dayStrain ?? 0) as number,
+                  trainingLoad: (strainAgg.trainingLoad ?? 0) as number,
+                  avgHr: (strainAgg.avgHr ?? 0) as number,
+                  maxHr: metrics?.cycle?.max_hr_bpm || metrics?.cycle?.data?.score?.max_heart_rate || 0,
+                  energyBurned: todayStats.kcal || (metrics?.workout?.data?.score?.kilojoule ? Math.round((metrics.workout.data.score.kilojoule || 0) / 4.184) : 0)
                 } : undefined}
                 weeklyData={cycleHist.map((c: any) => ({
                   date: c.start,
@@ -583,14 +803,17 @@ export default function FitnessHealth() {
               <WorkoutsTab 
                 timeRange={timeRange} 
                 onTimeRangeChange={setTimeRange}
-                latestWorkout={metrics?.workout ? {
-                  sport: metrics.workout.sport_name || 'Unknown',
-                  duration: metrics.workout.start && metrics.workout.end ? 
-                    Math.round((new Date(metrics.workout.end).getTime() - new Date(metrics.workout.start).getTime()) / 60000) : 0,
-                  strain: metrics.workout.strain || 0,
-                  calories: todayStats.kcal || 0,
-                  avgHr: metrics.workout.data?.score?.average_heart_rate || 0,
-                  maxHr: metrics.workout.data?.score?.max_heart_rate || 0
+                latestWorkout={latestWorkoutInRange ? {
+                  sport: latestWorkoutInRange.sport || 'Unknown',
+                  duration: latestWorkoutInRange.duration || 0,
+                  strain: latestWorkoutInRange.strain || 0,
+                  calories: latestWorkoutInRange.calories || 0,
+                  avgHr: latestWorkoutInRange.avgHr || 0,
+                  maxHr: metrics?.workout?.data?.score?.max_heart_rate || 0,
+                  // New fields to match WhoopDetails (enrich from metrics if current workout matches)
+                  distanceKm: metrics?.workout?.data?.score?.distance_meter ? Math.round((metrics.workout.data.score.distance_meter / 1000) * 100) / 100 : (metrics?.workout?.distance_meter ? Math.round((metrics.workout.distance_meter/1000)*100)/100 : 0),
+                  elevationGainM: metrics?.workout?.data?.score?.elevation_gain_meter ?? metrics?.workout?.elevation_gain_meter ?? 0,
+                  dataQualityPct: typeof (metrics?.workout as any)?.data_quality === 'number' ? (metrics!.workout as any).data_quality : (typeof (metrics?.workout as any)?.data_quality_percentage === 'number' ? (metrics!.workout as any).data_quality_percentage : 100)
                 } : undefined}
                 workoutHistory={workoutsHist.map((w: any) => ({
                   date: w.start,

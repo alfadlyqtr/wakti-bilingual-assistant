@@ -165,6 +165,7 @@ Tone: Calm, reviewing, preparatory. "Close today proud — I'll see you in the m
                     (userEmail ? userEmail.split('@')[0].split('.')[0] : null) ||
                     'friend';
     
+    console.log('Selected timeOfDay:', timeOfDay, 'language:', language);
     const systemPrompt = getSystemPrompt(timeOfDay, language);
     const system = systemPrompt.replace(/{USER_NAME}/g, userName);
 
@@ -233,6 +234,79 @@ Tone: Calm, reviewing, preparatory. "Close today proud — I'll see you in the m
       console.log('payload.user:', payload?.user);
       console.log('payload.today:', payload?.today);
       
+      // Tone packs + light variability (daily, deterministic per user + day)
+      const seedStr = `${userEmail || userName}-${timeOfDay}-${new Date().toDateString()}`;
+      const hash = (s: string) => {
+        let h = 0; for (let i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; }
+        return Math.abs(h);
+      };
+      const pick = <T,>(arr: T[]): T => arr[hash(seedStr) % arr.length];
+
+      const tonePacksEn = [
+        { name: 'Coach', style: 'warm, energetic, encouraging', opening: [
+            'Quick huddle — here’s the game plan for today.',
+            'You’ve got a solid base today — let’s play this smart.',
+            'Coach check-in: a steady tempo will win the day.'
+          ], closing: [
+            'Small wins stack — I’m with you till lights out.',
+            'Lock in the routine tonight, wake up greener tomorrow.',
+            'Finish strong and sleep on purpose — I’ll see you in the AM.'
+          ] },
+        { name: 'Scientist', style: 'precise, calm, data-forward', opening: [
+            'Here’s what your signals are saying right now.',
+            'Let’s translate the numbers into decisions.',
+            'Signal scan complete — here’s the summary.'
+          ], closing: [
+            'We’ll re-test tomorrow — today’s inputs set the outcome.',
+            'Maintain variables, reduce noise, and protect sleep.',
+            'Consistent inputs tonight will move HRV in the right direction.'
+          ] },
+        { name: 'Buddy', style: 'friendly, casual, motivating', opening: [
+            'Alright, here’s the vibe for today.',
+            'Quick pulse check — you’re in a good spot.',
+            'Nothing crazy today — steady and smooth.'
+          ], closing: [
+            'Let’s bank a calm evening and wake up sharp.',
+            'We keep it simple tonight — your morning self will thank you.',
+            'Easy rhythm, early lights — greener bars tomorrow.'
+          ] },
+      ];
+
+      const tonePacksAr = [
+        { name: 'Coach', style: 'دافئ ومشجع', opening: [
+            'اجتماع سريع — هذه خطة اليوم.',
+            'أرقامك جيدة — نلعبها بذكاء اليوم.',
+            'تشيك المدرب: إيقاع ثابت يفوز باليوم.'
+          ], closing: [
+            'الانتصارات الصغيرة تتراكم — أنا معك حتى إطفاء الأنوار.',
+            'ثبّت الروتين الليلة وتصحى أقوى بكرة.',
+            'اختم اليوم بهدوء ونوم مقصود — أشوفك الصبح بلون أخضر.'
+          ] },
+        { name: 'Scientist', style: 'هادئ ودقيق', opening: [
+            'هذه قراءة الإشارات الحالية.',
+            'خلّينا نترجم الأرقام إلى قرارات.',
+            'فحص الإشارات اكتمل — هذا الملخص.'
+          ], closing: [
+            'نعيد القياس غدًا — إدخالات اليوم تحدد النتيجة.',
+            'ثبّت العوامل وقلل الضجيج وادعم النوم.',
+            'ثبات عادات الليلة يرفع HRV بالاتجاه الصحيح.'
+          ] },
+        { name: 'Buddy', style: 'ودود وبسيط', opening: [
+            'خلّينا نشوف اليوم ماشي كيف.',
+            'نبضة سريعة — وضعك ممتاز.',
+            'ما في ضغط اليوم — نمشيها بهدوء.'
+          ], closing: [
+            'نقفل اليوم بهدوء ونصحى أنشط.',
+            'بساطة وروتين — بكرة راح تشكر نفسك.',
+            'إيقاع سهل وإضاءة منخفضة — أرقام أفضل بانتظارك.'
+          ] },
+      ];
+
+      const packs = language === 'ar' ? tonePacksAr : tonePacksEn;
+      const chosen = packs[hash(seedStr + '-pack') % packs.length];
+      const openingLine = pick(chosen.opening);
+      const closingLine = pick(chosen.closing);
+
       const baseStructure = language === 'ar' ? `
 ⚠️ CRITICAL: You MUST respond in Arabic language ONLY. All text must be in Arabic script.
 
@@ -365,6 +439,15 @@ CRITICAL REQUIREMENTS:
 - Make insights personal and data-driven
 - Provide actionable recommendations based on current metrics
 - Use timezone: ${userTimezone}
+- Voice Pack: ${chosen.name} (${chosen.style}). Start with: "${openingLine}". End with: "${closingLine}".
+- Style: conversational, varied sentence lengths, avoid repetitive phrasing. 0–2 tasteful emojis allowed if it improves clarity.
+- daily_summary MUST START with the opening line above and MUST END with the closing line above.
+- Prepend daily_summary with a WINDOW TAG exactly as one of: "MORNING — ", "MIDDAY — ", or "EVENING — " matching time_of_day.
+- daily_summary MUST embed at least 3 numeric facts inline (e.g., 61% recovery, 50 ms HRV, 7.6h sleep, 6.4 strain, 1418 cal, 30 min).
+- Include exactly 3 MICRO-ACTIONS for today with specific time or quantity (e.g., "15-min easy walk after dinner", "lights down 11:30 PM", "300–400 ml water 60 min before bed").
+- weekly_summary MUST have: (1) one trend sentence with 1–2 numbers; (2) one focus sentence for the next 24–72 hours. No generic copy.
+- tips MUST NOT duplicate the micro-actions in daily_summary; keep them distinct and implementable.
+- BANNED PHRASES: "Tonight is your chance to reset", "Focus on improving X", "Be predictive". Use natural alternatives.
 
 CURRENT REAL METRICS TO USE:
 - Sleep Hours: ${sleepHours}h
@@ -403,7 +486,8 @@ ${maxHR ? `Max HR: ${maxHR} bpm` : ''}`;
       },
       body: JSON.stringify({
         model: "deepseek-chat",
-        temperature: 0.7,
+        temperature: 0.85,
+        top_p: 0.9,
         messages: [
           { role: "system", content: system },
           { role: "user", content: userPrompt },

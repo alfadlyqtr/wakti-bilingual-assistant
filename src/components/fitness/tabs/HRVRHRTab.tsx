@@ -80,14 +80,12 @@ export function HRVRHRTab({
 
   // Only use real data with valid values, no mock/dummy data
   const realWeeklyData = weeklyData && weeklyData.length > 0 
-    ? weeklyData.filter(item => 
-        (item.hrv !== null && item.hrv !== undefined && item.hrv > 0) ||
-        (item.rhr !== null && item.rhr !== undefined && item.rhr > 0)
-      )
+    ? weeklyData.filter(item => Number.isFinite(item.hrv) || Number.isFinite(item.rhr))
     : [];
 
   const avg7dHRV = realWeeklyData.length > 0 ? Math.round(realWeeklyData.reduce((sum, d) => sum + d.hrv, 0) / realWeeklyData.length) : 0;
   const avg7dRHR = realWeeklyData.length > 0 ? Math.round(realWeeklyData.reduce((sum, d) => sum + d.rhr, 0) / realWeeklyData.length) : 0;
+  const hasTrend = realWeeklyData.length >= 2;
   
   const deltaHRVVsLastWeek = realCurrentData.hrv - mockYesterdayData.hrv;
   const deltaRHRVsLastWeek = realCurrentData.rhr - mockYesterdayData.rhr;
@@ -323,11 +321,13 @@ export function HRVRHRTab({
               <Legend 
                 wrapperStyle={{ paddingTop: '20px' }}
                 formatter={(value) => (
-                  <span className={`px-3 py-1 rounded-full text-sm ${
-                    value === 'hrv' 
-                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
-                      : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                  }`}>
+                  <span
+                    className={`px-3 py-1 rounded-full text-sm ${
+                      value === 'hrv'
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                    }`}
+                  >
                     {value === 'hrv' ? 'HRV (ms)' : 'RHR (bpm)'}
                   </span>
                 )}
@@ -337,8 +337,9 @@ export function HRVRHRTab({
                 type="monotone" 
                 dataKey="hrv" 
                 stroke="#10B981" 
-                strokeWidth={4}
-                dot={{ fill: '#10B981', strokeWidth: 2, r: 5 }}
+                strokeWidth={hasTrend ? 4 : 0}
+                isAnimationActive={false}
+                dot={{ fill: '#10B981', strokeWidth: 2, r: hasTrend ? 5 : 8 }}
                 activeDot={{ r: 8, stroke: '#10B981', strokeWidth: 3 }}
               />
               <Line 
@@ -346,15 +347,22 @@ export function HRVRHRTab({
                 type="monotone" 
                 dataKey="rhr" 
                 stroke="#3B82F6" 
-                strokeWidth={4}
-                dot={{ fill: '#3B82F6', strokeWidth: 2, r: 5 }}
+                strokeWidth={hasTrend ? 4 : 0}
+                isAnimationActive={false}
+                dot={{ fill: '#3B82F6', strokeWidth: 2, r: hasTrend ? 5 : 8 }}
                 activeDot={{ r: 8, stroke: '#3B82F6', strokeWidth: 3 }}
               />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
 
-        {/* Mini summary */}
+          {!hasTrend && (
+            <div className="mt-3 text-xs text-muted-foreground">
+              {language === 'ar' ? 'نقطة بيانات واحدة اليوم — غيّر النطاق إلى 1W أو أكثر لعرض الاتجاه.' : 'Only one data point today — switch to 1W or longer to see a trend.'}
+            </div>
+          )}
+
+          {/* Mini summary */}
         <div className="mt-4 p-4 bg-gradient-to-r from-emerald-500/10 to-blue-500/10 rounded-xl border border-emerald-500/20">
           <p className="text-sm text-muted-foreground">
             {language === 'ar' 

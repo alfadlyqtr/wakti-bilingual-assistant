@@ -17,6 +17,7 @@ interface AIInsightsProps {
   timeRange: TimeRange;
   onTimeRangeChange: (range: TimeRange) => void;
   metrics?: any; // Same metrics data that WhoopDetails uses
+  aiData?: any;  // Aggregate built by the page from the exact data shown
 }
 
 type TimeWindow = 'morning' | 'midday' | 'evening';
@@ -39,12 +40,13 @@ interface InsightData {
 }
 
 const TIME_WINDOWS = {
-  morning: { start: '5:00 AM', end: '11:50 AM', label: 'Morning Summary', icon: Sun },
-  midday: { start: '12:00 PM', end: '5:50 PM', label: 'Midday Summary', icon: Clock },
-  evening: { start: '6:00 PM', end: '12:00 AM', label: 'Evening Summary', icon: Moon },
+  // Equal 8-hour splits starting at 4:00 AM local time
+  morning: { start: '4:00 AM', end: '12:00 PM', label: 'Morning Summary', icon: Sun },
+  midday: { start: '12:00 PM', end: '8:00 PM', label: 'Midday Summary', icon: Clock },
+  evening: { start: '8:00 PM', end: '4:00 AM', label: 'Evening Summary', icon: Moon },
 };
 
-export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsightsProps) {
+export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AIInsightsProps) {
   const { language } = useTheme();
   const { user } = useAuth();
   const [loading, setLoading] = useState<TimeWindow | null>(null);
@@ -70,25 +72,13 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
     }
   };
 
-  // Check if current time is within a time window
+  // Check if current time is within a time window (equal 8-hour buckets starting 4 AM)
   const getCurrentTimeWindow = (): TimeWindow | null => {
-    const now = new Date();
-    const currentHour = now.getHours();
-    
-    // Morning: 5 AM - 11 AM
-    if (currentHour >= 5 && currentHour <= 11) {
-      return 'morning';
-    }
-    // Midday: 12 PM - 6 PM (12-18)
-    if (currentHour >= 12 && currentHour <= 18) {
-      return 'midday';
-    }
-    // Evening: 5 PM - 11 PM (17-23)
-    if (currentHour >= 17 && currentHour <= 23) {
-      return 'evening';
-    }
-    
-    return null;
+    const currentHour = new Date().getHours();
+    if (currentHour >= 4 && currentHour < 12) return 'morning';
+    if (currentHour >= 12 && currentHour < 20) return 'midday';
+    // 8 PM - 4 AM wraps past midnight
+    return 'evening';
   };
 
   const isWindowActive = (window: TimeWindow): boolean => {
@@ -102,35 +92,19 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
   const getNextWindowStartTime = (): number => {
     const now = new Date();
     const currentHour = now.getHours();
-    
-    // Calculate milliseconds until next window starts
-    if (currentHour >= 5 && currentHour < 11) {
-      // Morning window - next is midday (12 PM)
-      const nextWindow = new Date(now);
-      nextWindow.setHours(12, 0, 0, 0);
-      return nextWindow.getTime() - now.getTime();
-    } else if (currentHour >= 12 && currentHour < 17) {
-      // Midday window - next is evening (5 PM)
-      const nextWindow = new Date(now);
-      nextWindow.setHours(17, 0, 0, 0);
-      return nextWindow.getTime() - now.getTime();
-    } else if (currentHour >= 17 && currentHour < 23) {
-      // Evening window - next is tomorrow morning (5 AM)
-      const nextWindow = new Date(now);
-      nextWindow.setDate(nextWindow.getDate() + 1);
-      nextWindow.setHours(5, 0, 0, 0);
-      return nextWindow.getTime() - now.getTime();
+    const next = new Date(now);
+    if (currentHour < 4) {
+      next.setHours(4, 0, 0, 0); // next is morning 4 AM
+    } else if (currentHour < 12) {
+      next.setHours(12, 0, 0, 0); // next is midday 12 PM
+    } else if (currentHour < 20) {
+      next.setHours(20, 0, 0, 0); // next is evening 8 PM
+    } else {
+      // after 8 PM → next is tomorrow 4 AM
+      next.setDate(next.getDate() + 1);
+      next.setHours(4, 0, 0, 0);
     }
-    
-    // Outside all windows - next is morning (5 AM)
-    const nextWindow = new Date(now);
-    if (currentHour >= 23 || currentHour < 5) {
-      if (currentHour >= 23) {
-        nextWindow.setDate(nextWindow.getDate() + 1);
-      }
-      nextWindow.setHours(5, 0, 0, 0);
-    }
-    return nextWindow.getTime() - now.getTime();
+    return next.getTime() - now.getTime();
   };
 
   // State variables
@@ -301,7 +275,8 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
           
           const response = await generateAiInsights(language as 'en' | 'ar', {
             time_of_day: window,
-            user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            data: aiData || undefined
           });
           
           console.log('=== AI RESPONSE ===');
@@ -571,15 +546,9 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
         <div className="bg-gray-100 dark:bg-black/20 rounded-lg p-3 mb-4">
           <p className="text-xs text-gray-700 dark:text-gray-300 mb-2 font-medium">{language === 'ar' ? 'المدرب الذكي متاح خلال:' : 'AI Coach available during:'}</p>
           <div className="flex flex-wrap gap-2 text-xs font-semibold">
-            <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
-              🌅 {language === 'ar' ? 'الصباح: 5:00 - 11:00' : 'Morning: 5:00 AM - 11:00 AM'}
-            </span>
-            <span className="flex items-center gap-1 text-orange-700 dark:text-orange-400">
-              ☀️ {language === 'ar' ? 'منتصف النهار: 12:00 - 6:00 مساءً' : 'Midday: 12:00 PM - 6:00 PM'}
-            </span>
-            <span className="flex items-center gap-1 text-purple-700 dark:text-purple-400">
-              🌙 {language === 'ar' ? 'المساء: 5:00 - 11:00 مساءً' : 'Evening: 5:00 PM - 11:00 PM'}
-            </span>
+            <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400">🌅 {language === 'ar' ? 'الصباح: 4:00 ص - 12:00 م' : 'Morning: 4:00 AM - 12:00 PM'}</span>
+            <span className="flex items-center gap-1 text-orange-700 dark:text-orange-400">☀️ {language === 'ar' ? 'منتصف النهار: 12:00 م - 8:00 م' : 'Midday: 12:00 PM - 8:00 PM'}</span>
+            <span className="flex items-center gap-1 text-purple-700 dark:text-purple-400">🌙 {language === 'ar' ? 'المساء: 8:00 م - 4:00 ص' : 'Evening: 8:00 PM - 4:00 AM'}</span>
           </div>
         </div>
 
@@ -606,18 +575,18 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
                 disabled={isGenerating}
                 className={`h-20 flex-col gap-2 relative ${
                   isActive 
-                    ? 'bg-gradient-to-r from-emerald-500/20 to-blue-500/20 hover:from-emerald-500/30 hover:to-blue-500/30 border-emerald-500/30' 
-                    : 'bg-gray-500/10 hover:bg-gray-500/20 border-gray-500/20'
-                }`}
+                    ? 'bg-white border-emerald-300 shadow-md hover:shadow-lg hover:border-emerald-400'
+                    : 'bg-gray-100 hover:bg-gray-200 border-gray-300'
+                } text-gray-900`}
                 variant="outline"
                 title={language === 'ar' ? 'انقر مرتين للإنشاء القسري' : 'Double-click to force generate'}
               >
-                <Icon className={`h-6 w-6 ${isActive ? 'text-emerald-400' : 'text-gray-400'}`} />
+                <Icon className={`h-6 w-6 ${isActive ? 'text-emerald-600' : 'text-gray-500'}`} />
                 <div className="text-center min-w-0 flex-1">
-                  <div className={`font-semibold text-xs sm:text-sm ${isActive ? 'text-white' : 'text-gray-400'} break-words`}>
+                  <div className={`font-semibold text-xs sm:text-sm ${isActive ? 'text-gray-900' : 'text-gray-700'} break-words`}>
                     {config.label}
                   </div>
-                  <div className={`text-xs ${isActive ? 'text-emerald-300' : 'text-gray-500'}`}>
+                  <div className={`text-xs ${isActive ? 'text-emerald-700' : 'text-gray-500'}`}>
                     {config.start} - {config.end}
                   </div>
                 </div>
@@ -644,12 +613,12 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics }: AIInsights
               onClick={() => setActiveWindow(window)}
               className={`px-3 py-2 rounded-lg text-xs sm:text-sm transition-all min-w-0 flex-shrink-0 ${
                 activeWindow === window
-                  ? 'bg-purple-500/30 text-purple-200 border border-purple-500/50'
-                  : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                  ? 'bg-white text-gray-900 border border-purple-300 shadow-sm'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
               }`}
             >
               <span className="break-words">{TIME_WINDOWS[window].label}</span>
-              {insights[window] && <span className="ml-2 text-emerald-400">✓</span>}
+              {insights[window] && <span className="ml-2 text-emerald-600">✓</span>}
             </button>
           ))}
         </div>

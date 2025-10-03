@@ -68,14 +68,7 @@ export function SleepTab({
 }: SleepTabProps) {
   const { language } = useTheme();
 
-  // Load persisted timeRange once on mount
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('wakti:sleep:timeRange') as TimeRange | null;
-      if (saved && saved !== timeRange) onTimeRangeChange(saved);
-    } catch (_) {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Always use parent-managed timeRange (default 1D). No local persistence.
 
   // Use real WHOOP data - no fallback to mock data
   if (!sleepData) {
@@ -165,7 +158,7 @@ export function SleepTab({
         {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
           <button
             key={range}
-            onClick={() => { onTimeRangeChange(range); try { localStorage.setItem('wakti:sleep:timeRange', range); } catch (_) {} }}
+            onClick={() => { onTimeRangeChange(range); }}
             className={`px-4 py-2.5 sm:px-5 sm:py-3 rounded-lg text-xs sm:text-sm font-semibold shadow-lg transition-all min-w-[50px] flex-shrink-0 active:scale-95 ${
               timeRange === range
                 ? 'bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-indigo-500/50 border-2 border-indigo-400'
@@ -193,7 +186,7 @@ export function SleepTab({
             </div>
           </div>
 
-          <div className="relative h-36 w-36 sm:h-40 sm:w-40 mx-auto mb-6">
+          <div className="gauge-3d relative h-36 w-36 sm:h-40 sm:w-40 mx-auto mb-6 rounded-full shadow-2xl bg-gradient-to-br from-white to-gray-100 border border-gray-200 dark:from-white/10 dark:to-white/5 dark:border-white/10">
             {/* Outer ring - Total hours vs goal */}
             <div className="absolute inset-0">
               <CircularProgressbar
@@ -206,6 +199,9 @@ export function SleepTab({
               />
             </div>
             
+            {/* Inner solid circle to restore the classic donut center */}
+            <div className="absolute inset-6 rounded-full bg-white/90 dark:bg-white/10 shadow-inner ring-1 ring-black/5 dark:ring-white/10" />
+
             {/* Inner ring - Stage distribution */}
             <div className="absolute inset-4">
               <ResponsiveContainer width="100%" height="100%">
@@ -229,16 +225,26 @@ export function SleepTab({
             </div>
 
             {/* Center text */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <div className="text-lg font-bold">{realSleepData.hours.toFixed(1)}h</div>
-              <div className="text-xs text-muted-foreground">
-                {Math.round(hoursProgress)}%
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="flex flex-col items-center justify-center px-3 py-2 rounded-full bg-white/70 dark:bg-white/5 shadow-inner ring-1 ring-white/60 dark:ring-white/10 backdrop-blur-sm">
+                <div className="text-lg font-bold text-gray-800 dark:text-white">{realSleepData.hours.toFixed(1)}h</div>
+                <div className="text-xs text-gray-600 dark:text-gray-300">
+                  {Math.round(hoursProgress)}%
+                </div>
               </div>
             </div>
           </div>
 
           {/* Sleep metrics in one row */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3">
+            <div className="bg-white dark:bg-white/10 rounded-xl p-2 sm:p-3 text-center shadow-md border border-gray-200 dark:border-white/20">
+              <div className="text-xs text-muted-foreground mb-1">
+                {language === 'ar' ? 'المدة' : 'Duration'}
+              </div>
+              <div className="text-sm sm:text-base font-bold text-indigo-400">
+                {realSleepData.hours.toFixed(1)}h
+              </div>
+            </div>
             <div className="bg-white dark:bg-white/10 rounded-xl p-2 sm:p-3 text-center shadow-md border border-gray-200 dark:border-white/20">
               <div className="text-xs text-muted-foreground mb-1">
                 {language === 'ar' ? 'وقت النوم' : 'Bedtime'}
@@ -272,6 +278,39 @@ export function SleepTab({
               </div>
             </div>
           </div>
+
+          {/* Extra metrics inline (to match card). Always show in 1D when values are available (>=0). */}
+          {(
+            timeRange === '1d' ||
+            (realSleepData.sleepConsistency || realSleepData.respiratoryRate || realSleepData.sleepCycleCount || realSleepData.disturbanceCount !== undefined)
+          ) && (
+            <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+              {typeof realSleepData.sleepConsistency === 'number' && realSleepData.sleepConsistency >= 0 && (
+                <div className="bg-white dark:bg-white/10 rounded-xl p-2 sm:p-3 text-center shadow-md border border-gray-200 dark:border-white/20">
+                  <div className="text-xs text-muted-foreground mb-1">{language === 'ar' ? 'الثبات' : 'Consistency'}</div>
+                  <div className="text-sm sm:text-base font-bold text-emerald-500">{Math.round(realSleepData.sleepConsistency)}%</div>
+                </div>
+              )}
+              {typeof realSleepData.respiratoryRate === 'number' && realSleepData.respiratoryRate > 0 && (
+                <div className="bg-white dark:bg-white/10 rounded-xl p-2 sm:p-3 text-center shadow-md border border-gray-200 dark:border-white/20">
+                  <div className="text-xs text-muted-foreground mb-1">{language === 'ar' ? 'معدل التنفس' : 'Respiratory Rate'}</div>
+                  <div className="text-sm sm:text-base font-bold text-cyan-500">{realSleepData.respiratoryRate.toFixed(1)} <span className="text-xs">{language === 'ar' ? 'ن/د' : 'bpm'}</span></div>
+                </div>
+              )}
+              {typeof realSleepData.sleepCycleCount === 'number' && realSleepData.sleepCycleCount >= 0 && (
+                <div className="bg-white dark:bg-white/10 rounded-xl p-2 sm:p-3 text-center shadow-md border border-gray-200 dark:border-white/20">
+                  <div className="text-xs text-muted-foreground mb-1">{language === 'ar' ? 'دورات النوم' : 'Sleep Cycles'}</div>
+                  <div className="text-sm sm:text-base font-bold text-purple-500">{realSleepData.sleepCycleCount}</div>
+                </div>
+              )}
+              {typeof realSleepData.disturbanceCount === 'number' && realSleepData.disturbanceCount >= 0 && (
+                <div className="bg-white dark:bg-white/10 rounded-xl p-2 sm:p-3 text-center shadow-md border border-gray-200 dark:border-white/20">
+                  <div className="text-xs text-muted-foreground mb-1">{language === 'ar' ? 'الاضطرابات' : 'Disturbances'}</div>
+                  <div className="text-sm sm:text-base font-bold text-yellow-500">{realSleepData.disturbanceCount}</div>
+                </div>
+              )}
+            </div>
+          )}
         </Card>
 
         {/* Sleep Stages Breakdown */}

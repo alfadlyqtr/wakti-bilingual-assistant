@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Moon, HeartPulse, Zap } from "lucide-react";
+import { Moon, HeartPulse, Zap, Hand } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { startWhoopAuth, isWhoopConnected, fetchCompactMetrics } from "@/services/whoopService";
 import { useNavigate } from "react-router-dom";
@@ -86,7 +86,11 @@ export const WhoopWidget: React.FC = () => {
   return (
     <div className="p-4">
       {/* Gradient container to match other widgets */}
-      <div className="rounded-3xl border bg-gradient-to-br from-rose-500/10 via-pink-500/10 to-purple-500/10 dark:from-white/5 dark:via-white/5 dark:to-white/5 border-white/10 shadow-2xl overflow-hidden">
+      <div className="relative rounded-3xl border bg-gradient-to-br from-rose-500/10 via-pink-500/10 to-purple-500/10 dark:from-white/5 dark:via-white/5 dark:to-white/5 border-white/10 shadow-2xl overflow-hidden">
+        {/* Drag handle to match TRWidget style */}
+        <div className={`absolute top-2 z-20 p-2 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 bg-primary/20 border-primary/30 transition-all duration-300 cursor-grab active:cursor-grabbing scale-110 ${language === 'ar' ? 'right-2' : 'left-2'}`}>
+          <Hand className="h-3 w-3 text-primary/70" />
+        </div>
         <CardHeader className="px-5 pt-5 pb-2">
           <CardTitle className="flex items-center gap-2">
             <span className="inline-block w-2.5 h-2.5 rounded-full bg-gradient-to-r from-rose-400 to-pink-400"></span>

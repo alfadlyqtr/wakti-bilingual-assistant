@@ -19,6 +19,7 @@ interface RecoveryTabProps {
     // Additional WHOOP 4.0 metrics
     spo2?: number;
     skinTemp?: number;
+    calibrating?: boolean;
   };
   yesterdayData?: {
     score: number;
@@ -89,12 +90,9 @@ export function RecoveryTab({
 
   // Only use real data with valid values, no mock/dummy data
   const realWeeklyData = weeklyData && weeklyData.length > 0 
-    ? weeklyData.filter(item => 
-        item.recovery !== null && 
-        item.recovery !== undefined && 
-        item.recovery > 0
-      )
+    ? weeklyData.filter(item => Number.isFinite(item.recovery))
     : [];
+  const hasTrend = realWeeklyData.length >= 2;
 
   const getRecoveryColor = (score: number) => {
     if (score >= 67) return { color: '#10B981', text: 'text-emerald-400', bg: 'from-emerald-50 to-green-50 dark:from-emerald-500/10 dark:to-green-500/10', border: 'border-emerald-300 dark:border-emerald-500/20 shadow-lg' };
@@ -153,7 +151,7 @@ export function RecoveryTab({
             </div>
           </div>
 
-          <div className="relative h-36 w-36 sm:h-40 sm:w-40 mx-auto mb-6">
+          <div className="gauge-3d relative h-36 w-36 sm:h-40 sm:w-40 mx-auto mb-6 rounded-full shadow-2xl bg-gradient-to-br from-white to-gray-100 border border-gray-200 dark:from-white/10 dark:to-white/5 dark:border-white/10">
             <CircularProgressbar
               value={realRecoveryData.score}
               text={`${realRecoveryData.score}%`}
@@ -236,12 +234,12 @@ export function RecoveryTab({
           </div>
 
           {/* WHOOP 4.0 Additional Metrics */}
-          {(realRecoveryData.spo2 || realRecoveryData.skinTemp) && (
+          {(realRecoveryData.spo2 || realRecoveryData.skinTemp || typeof realRecoveryData.calibrating === 'boolean') && (
             <div className="mt-6">
               <h4 className="font-semibold mb-4 text-sm text-gray-700 dark:text-gray-400">
                 {language === 'ar' ? 'مقاييس إضافية (WHOOP 4.0)' : 'Additional Metrics (WHOOP 4.0)'}
               </h4>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {realRecoveryData.spo2 && realRecoveryData.spo2 > 0 && (
                   <div className="bg-white dark:bg-white/10 rounded-xl p-3 text-center shadow-md border border-gray-200 dark:border-white/20">
                     <div className="text-xs text-gray-600 dark:text-gray-400 font-medium mb-1">
@@ -263,6 +261,16 @@ export function RecoveryTab({
                     </div>
                     <div className="text-xs text-gray-600 dark:text-gray-400">
                       {(realRecoveryData.skinTemp * 9/5 + 32).toFixed(1)}°F
+                    </div>
+                  </div>
+                )}
+                {typeof realRecoveryData.calibrating === 'boolean' && (
+                  <div className="bg-white dark:bg-white/10 rounded-xl p-3 text-center shadow-md border border-gray-200 dark:border-white/20">
+                    <div className="text-xs text-gray-600 dark:text-gray-400 font-medium mb-1">
+                      {language === 'ar' ? 'المعايرة' : 'Calibrating'}
+                    </div>
+                    <div className={`text-lg font-bold ${realRecoveryData.calibrating ? 'text-yellow-600' : 'text-emerald-600'} dark:${realRecoveryData.calibrating ? 'text-yellow-400' : 'text-emerald-400'}`}>
+                      {realRecoveryData.calibrating ? (language === 'ar' ? 'نعم' : 'Yes') : (language === 'ar' ? 'لا' : 'No')}
                     </div>
                   </div>
                 )}
@@ -353,13 +361,20 @@ export function RecoveryTab({
                 type="monotone" 
                 dataKey="recovery" 
                 stroke="#10B981" 
-                strokeWidth={3}
-                dot={{ fill: '#10B981', strokeWidth: 2, r: 4 }}
+                strokeWidth={hasTrend ? 3 : 0}
+                isAnimationActive={false}
+                dot={{ fill: '#10B981', strokeWidth: 2, r: hasTrend ? 4 : 7 }}
                 activeDot={{ r: 6, stroke: '#10B981', strokeWidth: 2 }}
               />
             </LineChart>
           </ResponsiveContainer>
         </div>
+
+        {!hasTrend && (
+          <div className="mt-3 text-xs text-muted-foreground">
+            {language === 'ar' ? 'نقطة بيانات واحدة اليوم — غيّر النطاق إلى 1W أو أكثر لعرض الاتجاه.' : 'Only one data point today — switch to 1W or longer to see a trend.'}
+          </div>
+        )}
 
         {/* Mini summary */}
         <div className="mt-4 p-4 bg-emerald-500/10 rounded-xl border border-emerald-500/20">

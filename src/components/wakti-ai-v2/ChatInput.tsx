@@ -631,7 +631,7 @@ export function ChatInput({
       if (searchSubmode === 'youtube') {
         return language === 'ar' ? 'ابحث على يوتيوب: عنوان، موضوع، أو قناة' : 'search youtube,  song title + artist  or vedio title';
       }
-      return language === 'ar' ? 'ابحث في الويب: موضوع أو سؤال' : 'search the wen !! News, sport reaults, topics and more.';
+      return language === 'ar' ? 'ابحث في الويب: موضوع أو سؤال' : 'search the web !! News, sport reaults, topics and more.';
     }
     // Image mode: adapt helper example to the selected imageMode when empty
     if (activeTrigger === 'image' && message.trim() === '') {

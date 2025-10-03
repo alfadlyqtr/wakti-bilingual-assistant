@@ -93,9 +93,10 @@ interface WhoopDetailsProps {
       };
     };
   };
+  lastUpdated?: string | null;
 }
 
-export function WhoopDetails({ metrics }: WhoopDetailsProps) {
+export function WhoopDetails({ metrics, lastUpdated }: WhoopDetailsProps) {
   const { language } = useTheme();
 
   const formatTime = (isoString?: string) => {
@@ -383,7 +384,8 @@ export function WhoopDetails({ metrics }: WhoopDetailsProps) {
 
       {/* Last Updated */}
       <div className="text-center text-xs text-muted-foreground mt-6">
-        📅 Last updated: 9/30/2025, 3:08:12 PM
+        {language === 'ar' ? '📅 آخر تحديث: ' : '📅 Last updated: '} 
+        {lastUpdated ? new Date(lastUpdated).toLocaleString() : '--'}
       </div>
     </Card>
   );

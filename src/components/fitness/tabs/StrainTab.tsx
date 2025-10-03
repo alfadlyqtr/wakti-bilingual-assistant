@@ -17,6 +17,7 @@ interface StrainTabProps {
     avgHr: number;
     trainingLoad: number;
     maxHr: number;
+    energyBurned?: number; // kcal
   };
   yesterdayData?: {
     dayStrain: number;
@@ -92,18 +93,10 @@ export function StrainTab({
 
   // Only use real data with valid values, no mock/dummy data
   const realWeeklyData = weeklyData && weeklyData.length > 0 
-    ? weeklyData.filter(item => 
-        item.strain !== null && 
-        item.strain !== undefined && 
-        item.strain > 0
-      )
+    ? weeklyData.filter(item => Number.isFinite(item.strain))
     : [];
   const realHourlyData = hourlyData && hourlyData.length > 0 
-    ? hourlyData.filter(item => 
-        item.strain !== null && 
-        item.strain !== undefined && 
-        item.strain > 0
-      )
+    ? hourlyData.filter(item => Number.isFinite(item.strain))
     : [];
 
   const getStrainColor = (strain: number) => {
@@ -164,7 +157,7 @@ export function StrainTab({
             </div>
           </div>
 
-          <div className="relative h-36 w-36 sm:h-40 sm:w-40 mx-auto mb-6">
+          <div className="gauge-3d relative h-36 w-36 sm:h-40 sm:w-40 mx-auto mb-6">
             <CircularProgressbar
               value={strainProgress}
               text={realStrainData.dayStrain.toFixed(1)}
@@ -247,6 +240,18 @@ export function StrainTab({
                 {avg7dStrain}
               </div>
             </div>
+
+            {/* Energy Burned */}
+            {typeof realStrainData.energyBurned === 'number' && (
+              <div className="bg-white dark:bg-white/10 rounded-xl p-4 shadow-md border border-gray-200 dark:border-white/20">
+                <div className="text-sm text-muted-foreground mb-2">
+                  {language === 'ar' ? 'السعرات المحروقة' : 'Energy Burned'}
+                </div>
+                <div className="text-2xl font-bold text-orange-400">
+                  {realStrainData.energyBurned} cal
+                </div>
+              </div>
+            )}
           </div>
         </Card>
       </div>

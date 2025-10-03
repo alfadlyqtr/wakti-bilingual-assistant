@@ -22,7 +22,7 @@ export function QuickActionsPanel({
   const quickActions = useMemo(() => [{
     id: 'text',
     icon: <PenTool />,
-    label: language === 'ar' ? 'مولد النصوص' : 'Text Generator',
+    label: language === 'ar' ? 'نص' : 'Text',
     action: () => onOpenTool && onOpenTool('text'),
     color: 'text-purple-500',
     path: '/tools/text'
@@ -36,7 +36,7 @@ export function QuickActionsPanel({
   }, {
     id: 'game',
     icon: <Gamepad2 />,
-    label: language === 'ar' ? 'وضع الألعاب' : 'Game Mode',
+    label: language === 'ar' ? 'لعبة' : 'Game',
     action: () => onOpenTool && onOpenTool('game'),
     color: 'text-red-500',
     path: '/tools/game'

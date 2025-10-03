@@ -6,14 +6,13 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { TicTacToeGame } from './games/TicTacToeGame';
 import { ChessGame } from './games/ChessGame';
 import { SolitaireGame } from './games/SolitaireGame';
-import { LudoGame } from './games/LudoGame';
 
 interface GameModeModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-type GameType = 'selection' | 'tic-tac-toe' | 'chess' | 'solitaire' | 'ludo';
+type GameType = 'selection' | 'tic-tac-toe' | 'chess' | 'solitaire';
 
 export function GameModeModal({ open, onOpenChange }: GameModeModalProps) {
   const { language } = useTheme();
@@ -40,16 +39,6 @@ export function GameModeModal({ open, onOpenChange }: GameModeModalProps) {
       </div>
       
       <div className="grid gap-4">
-        <Button
-          onClick={() => setCurrentGame('ludo')}
-          className="h-20 text-lg bg-purple-600 hover:bg-purple-700 text-white"
-        >
-          <div className="flex items-center space-x-3">
-            <span className="text-2xl">🎲</span>
-            <span>{language === 'ar' ? 'العب لودو' : 'Play Ludo'}</span>
-          </div>
-        </Button>
-        
         <Button
           onClick={() => setCurrentGame('tic-tac-toe')}
           className="h-20 text-lg bg-blue-500 hover:bg-blue-600 text-white"
@@ -85,8 +74,6 @@ export function GameModeModal({ open, onOpenChange }: GameModeModalProps) {
 
   const renderCurrentGame = () => {
     switch (currentGame) {
-      case 'ludo':
-        return <LudoGame onBack={handleBack} />;
       case 'tic-tac-toe':
         return <TicTacToeGame onBack={handleBack} />;
       case 'chess':
@@ -108,8 +95,6 @@ export function GameModeModal({ open, onOpenChange }: GameModeModalProps) {
           <DialogTitle>
             {currentGame === 'selection' 
               ? (language === 'ar' ? 'وضع الألعاب' : 'Game Mode')
-              : currentGame === 'ludo'
-              ? (language === 'ar' ? 'لودو' : 'Ludo')
               : currentGame === 'tic-tac-toe'
               ? (language === 'ar' ? 'إكس أو' : 'Tic-Tac-Toe')
               : currentGame === 'chess'

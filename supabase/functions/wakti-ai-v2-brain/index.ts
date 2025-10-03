@@ -361,21 +361,9 @@ serve(async (req) => {
             if (imageFile && imageFile.data) {
               seedImage = `data:${imageFile.type};base64,${imageFile.data}`;
               imageOptions.seedImage = seedImage;
-              // Background removal (Option 1): send base64 as inputImage and enable backgroundRemoval mode
+              // Background removal flags: do not override user's prompt
               imageOptions.backgroundRemoval = true;
-              imageOptions.inputImage = seedImage;
-              // For background removal, we'll use a special prompt
-              promptForImage = promptForImage || 'Remove the background from this image, make it transparent';
-            }
-          }
-        }
-
-        // Map imageQuality to Runware model override
-        let mappedModel: string | undefined = undefined;
-        if (imageQuality === 'fast') {
-          mappedModel = 'runware:100@1';
-        } else if (imageQuality === 'best_fast') {
-          mappedModel = 'runware:107@1';
+              // Keep user's prompt as-is; backend will remove background based on flags
         }
         if (mappedModel) {
           imageOptions.model = mappedModel;

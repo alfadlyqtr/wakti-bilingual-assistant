@@ -433,6 +433,16 @@ textarea::placeholder {
     transform: scale(1.1);
   }
 
+  /* 3D look for circular progress gauges */
+  .gauge-3d .CircularProgressbar-path {
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.15));
+    stroke-linecap: round;
+  }
+  .gauge-3d .CircularProgressbar-trail {
+    filter: drop-shadow(0 1px 3px rgba(0,0,0,0.08));
+    opacity: 0.9;
+  }
+
   /* Ensure anchor jumps and scrollIntoView land below the fixed header */
   html {
     scroll-padding-top: calc(var(--app-header-h) + var(--app-content-gap));

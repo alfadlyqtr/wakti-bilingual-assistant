@@ -16,6 +16,10 @@ interface WorkoutsTabProps {
     avgHr: number;
     maxHr: number;
     zones?: { [key: string]: number };
+    // Extra fields to match WhoopDetails
+    distanceKm?: number;
+    elevationGainM?: number;
+    dataQualityPct?: number;
   };
   workoutHistory?: Array<{
     date: string;
@@ -145,7 +149,7 @@ export function WorkoutsTab({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div className="bg-white dark:bg-white/10 rounded-xl p-3 shadow-md border border-gray-200 dark:border-white/20">
                 <div className="text-sm text-muted-foreground mb-1">
                   {language === 'ar' ? 'الإجهاد' : 'Strain'}
@@ -176,6 +180,30 @@ export function WorkoutsTab({
                 </div>
                 <div className="text-xl font-bold text-pink-400">
                   {latestWorkout.maxHr} bpm
+                </div>
+              </div>
+              <div className="bg-white dark:bg-white/10 rounded-xl p-3 shadow-md border border-gray-200 dark:border-white/20">
+                <div className="text-sm text-muted-foreground mb-1">
+                  {language === 'ar' ? 'المسافة' : 'Distance'}
+                </div>
+                <div className="text-xl font-bold text-blue-500">
+                  {typeof latestWorkout.distanceKm === 'number' ? `${latestWorkout.distanceKm} km` : '--'}
+                </div>
+              </div>
+              <div className="bg-white dark:bg-white/10 rounded-xl p-3 shadow-md border border-gray-200 dark:border-white/20">
+                <div className="text-sm text-muted-foreground mb-1">
+                  {language === 'ar' ? 'الارتفاع المكتسب' : 'Elevation Gain'}
+                </div>
+                <div className="text-xl font-bold text-emerald-500">
+                  {typeof latestWorkout.elevationGainM === 'number' ? `${latestWorkout.elevationGainM} m` : '--'}
+                </div>
+              </div>
+              <div className="bg-white dark:bg-white/10 rounded-xl p-3 shadow-md border border-gray-200 dark:border-white/20">
+                <div className="text-sm text-muted-foreground mb-1">
+                  {language === 'ar' ? 'جودة البيانات' : 'Data Quality'}
+                </div>
+                <div className="text-xl font-bold text-teal-500">
+                  {typeof latestWorkout.dataQualityPct === 'number' ? `${latestWorkout.dataQualityPct}%` : '--'}
                 </div>
               </div>
             </div>
