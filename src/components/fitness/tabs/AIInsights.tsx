@@ -76,45 +76,6 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
       const firstName = user?.user_metadata?.full_name?.split(' ')?.[0] || user?.email?.split('@')[0] || null;
       const userEmail = user?.email || null;
       
-      // Calculate sleep hours - EXACT same buggy logic as FitnessHealth.tsx line 415 (has bug but matches screen)
-      const sleepHours = (() => {
-        const sleep = metrics?.sleep;
-        console.log('=== PDF SLEEP CALCULATION START ===', { sleep });
-        if (!sleep) {
-          console.log('No sleep data');
-          return null;
-        }
-        // Use the BUGGY calculation that the screen uses (divides by 360 instead of 3600)
-        if (typeof sleep.duration_sec === 'number' && sleep.duration_sec > 0) {
-          const hours = Math.round((sleep.duration_sec / 3600) * 10) / 10;
-          console.log('PDF Sleep from duration_sec (buggy):', { duration_sec: sleep.duration_sec, calculation: `${sleep.duration_sec} / 360 = ${sleep.duration_sec/360}, rounded = ${Math.round(sleep.duration_sec/360)}, /10 = ${hours}` });
-          return hours;
-        }
-        // Fallback to stages with same bug
-        const stages = sleep.data?.score?.stage_summary;
-        if (stages) {
-          const deep = stages.deep_sleep_milli || 0;
-          const rem = stages.rem_sleep_milli || 0;
-          const light = stages.light_sleep_milli || 0;
-          const awake = stages.total_awake_time_milli || 0;
-          const totalMs = deep + rem + light + awake;
-          if (totalMs > 0) {
-            const hours = Math.round((totalMs / 360000)) / 10;
-            console.log('PDF Sleep from stages (buggy):', { totalMs, hours });
-            return hours;
-          }
-        }
-        // Fallback to start/end with same bug
-        if (sleep.start && sleep.end) {
-          const delta = new Date(sleep.end).getTime() - new Date(sleep.start).getTime();
-          if (delta > 0) {
-            const hours = Math.round((delta / 360000)) / 10;
-            console.log('PDF Sleep from start/end (buggy):', { delta, hours });
-            return hours;
-          }
-        }
-        return null;
-      })();
       
       const formatTime = (isoString: string | null) => {
         if (!isoString) return null;
@@ -127,18 +88,18 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
       };
 
       const today: InsightsPDFData['today'] = {
-        recoveryPct: metrics?.recovery?.score ?? null,
-        hrvMs: metrics?.recovery?.hrv_ms ?? null,
-        rhrBpm: metrics?.recovery?.rhr_bpm ?? null,
+        recoveryPct: metrics?.recovery?.score ?? metrics?.recovery?.data?.score?.recovery_score ?? null,
+        hrvMs: metrics?.recovery?.hrv_ms ?? metrics?.recovery?.data?.score?.hrv_rmssd_milli ?? null,
+        rhrBpm: metrics?.recovery?.rhr_bpm ?? metrics?.recovery?.data?.score?.resting_heart_rate ?? null,
         spo2Pct: metrics?.recovery?.data?.score?.spo2_percentage ?? null,
         skinTempC: metrics?.recovery?.data?.score?.skin_temp_celsius ?? null,
-        sleepHours,
-        sleepPerformancePct: metrics?.sleep?.performance_pct ?? null,
-        efficiencyPct: metrics?.sleep?.data?.score?.sleep_efficiency_percentage ?? null,
-        consistencyPct: metrics?.sleep?.data?.score?.sleep_consistency_percentage ?? null,
-        respiratoryRate: metrics?.sleep?.data?.score?.respiratory_rate ?? null,
-        sleepCycles: metrics?.sleep?.data?.score?.stage_summary?.sleep_cycle_count ?? null,
-        disturbances: metrics?.sleep?.data?.score?.stage_summary?.disturbance_count ?? null,
+        sleepHours: aiData?.today?.sleepHours ?? (metrics?.sleep?.duration_sec ? Math.round((metrics.sleep.duration_sec / 3600) * 10) / 10 : null),
+        sleepPerformancePct: metrics?.sleep?.performance_pct ?? metrics?.sleep?.data?.score?.sleep_performance_percentage ?? null,
+        efficiencyPct: metrics?.sleep?.data?.score?.sleep_efficiency_percentage ?? metrics?.sleep?.sleep_efficiency_pct ?? null,
+        consistencyPct: metrics?.sleep?.data?.score?.sleep_consistency_percentage ?? metrics?.sleep?.sleep_consistency_pct ?? null,
+        respiratoryRate: metrics?.sleep?.data?.score?.respiratory_rate ?? metrics?.sleep?.respiratory_rate ?? null,
+        sleepCycles: metrics?.sleep?.data?.score?.stage_summary?.sleep_cycle_count ?? metrics?.sleep?.sleep_cycle_count ?? null,
+        disturbances: metrics?.sleep?.data?.score?.stage_summary?.disturbance_count ?? metrics?.sleep?.disturbance_count ?? null,
         sleepDetail: {
           bedtime: formatTime(metrics?.sleep?.start ?? null),
           waketime: formatTime(metrics?.sleep?.end ?? null),
@@ -147,13 +108,13 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
           lightMin: metrics?.sleep?.data?.score?.stage_summary?.light_sleep_milli ? Math.round(metrics.sleep.data.score.stage_summary.light_sleep_milli/60000) : null,
           awakeMin: metrics?.sleep?.data?.score?.stage_summary?.total_awake_time_milli ? Math.round(metrics.sleep.data.score.stage_summary.total_awake_time_milli/60000) : null,
         },
-        dayStrain: metrics?.cycle?.day_strain ?? null,
+        dayStrain: metrics?.cycle?.day_strain ?? metrics?.cycle?.data?.score?.strain ?? null,
         workout: metrics?.workout ? {
           sport: metrics.workout.sport_name ?? null,
           start: formatTime(metrics.workout.start ?? null),
           end: formatTime(metrics.workout.end ?? null),
           durationMin: (metrics.workout.end && metrics.workout.start) ? Math.round((new Date(metrics.workout.end).getTime() - new Date(metrics.workout.start).getTime())/60000) : null,
-          strain: metrics.workout.strain ?? null,
+          strain: metrics.workout.strain ?? metrics.workout?.data?.score?.strain ?? null,
           avgHr: metrics.workout.data?.score?.average_heart_rate ?? null,
           maxHr: metrics.workout.data?.score?.max_heart_rate ?? null,
           calories: metrics.workout.data?.score?.kilojoule ? Math.round(metrics.workout.data.score.kilojoule/4.184) : null,
@@ -262,6 +223,16 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
       }
     };
   }, [currentAudio]);
+
+  // Handle global Clear Cache button from TopPageSection
+  useEffect(() => {
+    const handleClear = () => {
+      setInsights({} as Record<TimeWindow, any>);
+      setLastGenerated({} as Record<TimeWindow, number>);
+    };
+    window.addEventListener('wakti:clear-insights', handleClear);
+    return () => window.removeEventListener('wakti:clear-insights', handleClear);
+  }, []);
 
   // Persist insights to localStorage whenever they change
   useEffect(() => {
@@ -740,38 +711,6 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
             }}
           />
         )}
-      </div>
-      
-      {/* Time Range Tabs */}
-      <div className="flex gap-3 mb-6 flex-wrap justify-center sm:justify-start mt-32">
-        {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
-          <button
-            key={range}
-            onClick={() => onTimeRangeChange(range)}
-            className={`px-4 py-2.5 sm:px-5 sm:py-3 rounded-lg text-xs sm:text-sm font-semibold shadow-lg transition-all min-w-[50px] flex-shrink-0 active:scale-95 ${
-              timeRange === range
-                ? 'bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-indigo-500/50 border-2 border-indigo-400'
-                : 'bg-gradient-to-br from-gray-100 to-gray-200 dark:from-white/10 dark:to-white/5 hover:from-gray-200 hover:to-gray-300 dark:hover:from-white/20 dark:hover:to-white/10 text-gray-800 dark:text-gray-300 border-2 border-gray-300 dark:border-white/20 shadow-gray-400/30 dark:shadow-none'
-            }`}
-          >
-            {range.toUpperCase()}
-          </button>
-        ))}
-        
-        {/* Clear Cache Button */}
-        <button
-          onClick={() => {
-            // Clear ALL cache
-            setInsights({} as Record<TimeWindow, any>);
-            setLastGenerated({} as Record<TimeWindow, number>);
-            localStorage.removeItem('wakti-ai-insights');
-            localStorage.removeItem('wakti-ai-insights-times');
-            toast.success(language === 'ar' ? 'تم مسح الذاكرة المؤقتة' : 'Cache cleared');
-          }}
-          className="px-4 py-2.5 rounded-lg text-xs font-semibold bg-gradient-to-br from-red-100 to-red-200 dark:from-red-500/20 dark:to-red-500/10 hover:from-red-200 hover:to-red-300 dark:hover:from-red-500/30 dark:hover:to-red-500/20 text-red-700 dark:text-red-400 border-2 border-red-300 dark:border-red-500/30 shadow-lg shadow-red-400/30 dark:shadow-none transition-all flex-shrink-0 active:scale-95"
-        >
-          {language === 'ar' ? 'مسح الذاكرة' : 'Clear Cache'}
-        </button>
       </div>
 
       {/* AI Insights Header */}

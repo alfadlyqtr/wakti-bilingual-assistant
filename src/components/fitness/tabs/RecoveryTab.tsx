@@ -56,21 +56,6 @@ export function RecoveryTab({
   if (!recoveryData) {
     return (
       <div className="space-y-6">
-        <div className="flex gap-2 mb-4 flex-wrap justify-center sm:justify-start mt-8">
-          {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
-            <button
-              key={range}
-              onClick={() => onTimeRangeChange(range)}
-              className={`px-3 py-2 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-medium shadow-sm transition-all min-w-[44px] ${
-                timeRange === range
-                  ? 'bg-indigo-500 text-white shadow-md'
-                  : 'bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20'
-              }`}
-            >
-              {range.toUpperCase()}
-            </button>
-          ))}
-        </div>
         <div className="text-center py-12">
           <p className="text-muted-foreground">
             {language === 'ar' ? 'لا توجد بيانات تعافي متاحة' : 'No recovery data available'}
@@ -118,22 +103,7 @@ export function RecoveryTab({
 
   return (
     <div className="space-y-4 md:space-y-6">
-      {/* Mini-tabs for time range */}
-      <div className="flex gap-3 mb-6 flex-wrap justify-center sm:justify-start mt-16">
-        {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
-          <button
-            key={range}
-            onClick={() => { onTimeRangeChange(range); try { localStorage.setItem('wakti:recovery:timeRange', range); } catch (_) {} }}
-            className={`px-4 py-2.5 sm:px-5 sm:py-3 rounded-lg text-xs sm:text-sm font-semibold shadow-lg transition-all min-w-[50px] flex-shrink-0 active:scale-95 ${
-              timeRange === range
-                ? 'bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-indigo-500/50 border-2 border-indigo-400'
-                : 'bg-gradient-to-br from-gray-100 to-gray-200 dark:from-white/10 dark:to-white/5 hover:from-gray-200 hover:to-gray-300 dark:hover:from-white/20 dark:hover:to-white/10 text-gray-800 dark:text-gray-300 border-2 border-gray-300 dark:border-white/20 shadow-gray-400/30 dark:shadow-none'
-            }`}
-          >
-            {range.toUpperCase()}
-          </button>
-        ))}
-      </div>
+      {/* Time range buttons removed as requested */}
 
       {/* Main Recovery Overview */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

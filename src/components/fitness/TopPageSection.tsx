@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Wifi, WifiOff, RefreshCw, Power, User, Heart, Ruler, Weight } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
+import { toast } from "sonner";
 
 interface TopPageSectionProps {
   connected: boolean;
@@ -117,6 +118,20 @@ export function TopPageSection({
               >
                 <Power className="h-3 w-3 md:h-4 md:w-4 mr-1.5" />
                 {language === 'ar' ? 'قطع الاتصال' : 'Disconnect'}
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => {
+                  try {
+                    localStorage.removeItem('wakti-ai-insights');
+                    localStorage.removeItem('wakti-ai-insights-times');
+                  } catch (_) {}
+                  window.dispatchEvent(new Event('wakti:clear-insights'));
+                  toast.success(language === 'ar' ? 'تم مسح الذاكرة' : 'Cache cleared');
+                }}
+                className="flex-1 md:flex-none text-xs md:text-sm rounded-full bg-gradient-to-br from-amber-100 to-yellow-200 dark:from-amber-500/20 dark:to-amber-500/10 text-amber-700 dark:text-amber-300 border-2 border-amber-300 dark:border-amber-500/30 shadow-[0_6px_20px_rgba(245,158,11,0.25)] hover:from-amber-200 hover:to-yellow-300 active:scale-95 transition-all"
+              >
+                {language === 'ar' ? 'مسح الذاكرة' : 'Clear Cache'}
               </Button>
             </>
           ) : (
