@@ -128,6 +128,11 @@ export function WhoopDetails({ metrics, lastUpdated }: WhoopDetailsProps) {
   // Extract comprehensive sleep data
   const sleepStages = metrics?.sleep?.data?.score?.stage_summary;
   const deepSleepMin = sleepStages?.deep_sleep_milli ? Math.round(sleepStages.deep_sleep_milli / 60000) : 0;
+  const remSleepMin = sleepStages?.rem_sleep_milli ? Math.round(sleepStages.rem_sleep_milli / 60000) : 0;
+  const lightSleepMin = sleepStages?.light_sleep_milli ? Math.round(sleepStages.light_sleep_milli / 60000) : 0;
+  const awakeMin = sleepStages?.total_awake_time_milli ? Math.round(sleepStages.total_awake_time_milli / 60000) : 0;
+  const totalStageMin = Math.max(1, deepSleepMin + remSleepMin + lightSleepMin + awakeMin);
+  const pct = (v:number) => Math.round((v / totalStageMin) * 100);
   
   // Calculate sleep duration from start/end times OR use duration_sec
   let totalSleepHours = 0;
@@ -144,7 +149,7 @@ export function WhoopDetails({ metrics, lastUpdated }: WhoopDetailsProps) {
   const workoutData = metrics?.workout?.data?.score;
 
   return (
-    <Card className="rounded-2xl p-6 bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-pink-500/10 border-indigo-500/20 shadow-xl">
+    <Card id="whoop-details" className="rounded-2xl p-6 bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-pink-500/10 border-indigo-500/20 shadow-xl">
       {/* Compact Summary Cards - Exactly Like Your Screenshot */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         
@@ -158,6 +163,8 @@ export function WhoopDetails({ metrics, lastUpdated }: WhoopDetailsProps) {
               {language === 'ar' ? 'ملخص النوم' : 'Sleep Summary'}
             </h4>
           </div>
+
+          
           
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
@@ -209,6 +216,8 @@ export function WhoopDetails({ metrics, lastUpdated }: WhoopDetailsProps) {
               {language === 'ar' ? 'التعافي' : 'Recovery'}
             </h4>
           </div>
+
+          
           
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
@@ -248,6 +257,8 @@ export function WhoopDetails({ metrics, lastUpdated }: WhoopDetailsProps) {
               {language === 'ar' ? 'الإجهاد' : 'Strain'}
             </h4>
           </div>
+
+          
           
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
@@ -279,6 +290,8 @@ export function WhoopDetails({ metrics, lastUpdated }: WhoopDetailsProps) {
               {language === 'ar' ? 'التمرين' : 'Workout'}
             </h4>
           </div>
+
+          
           
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">

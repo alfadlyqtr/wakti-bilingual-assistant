@@ -173,7 +173,7 @@ export function SleepTab({
       {/* Main Sleep Overview */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
         {/* Multi-Ring Sleep Donut */}
-        <Card className="rounded-2xl p-6 bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-500/10 dark:to-purple-500/10 border-blue-300 dark:border-blue-500/20 shadow-lg">
+        <Card id="pdf-sleep" className="rounded-2xl p-6 bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-500/10 dark:to-purple-500/10 border-blue-300 dark:border-blue-500/20 shadow-lg">
           <div className="flex items-center gap-3 mb-6">
             <Moon className="h-6 w-6 text-blue-400" />
             <div>

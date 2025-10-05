@@ -144,7 +144,7 @@ export function StrainTab({
       {/* Main Strain Overview */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Strain Gauge */}
-        <Card className={`rounded-2xl p-6 bg-gradient-to-br ${strainColor.bg} ${strainColor.border}`}>
+        <Card id="pdf-strain" className={`rounded-2xl p-6 bg-gradient-to-br ${strainColor.bg} ${strainColor.border}`}>
           <div className="flex items-center gap-3 mb-6">
             <Zap className={`h-6 w-6 ${strainColor.text}`} />
             <div>

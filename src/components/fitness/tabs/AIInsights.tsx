@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Copy, RefreshCw, Brain, TrendingUp, TrendingDown, Sun, Clock, Moon, CheckCircle, Volume2, Pause, RotateCcw } from "lucide-react";
+import { Copy, RefreshCw, Brain, TrendingUp, TrendingDown, Sun, Clock, Moon, CheckCircle, Volume2, Pause, RotateCcw, FileText } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { toast } from "sonner";
 import { generateAiInsights, buildInsightsAggregate } from "@/services/whoopService";
@@ -10,6 +10,13 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tool
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import 'react-circular-progressbar/dist/styles.css';
+import { generateInsightsPDF, InsightsPDFData, generateInsightsPDFFromDOM } from '@/utils/pdfUtils';
+import { Logo3D } from '@/components/Logo3D';
+import { SleepTab } from './SleepTab';
+import { RecoveryTab } from './RecoveryTab';
+import { HRVRHRTab } from './HRVRHRTab';
+import { StrainTab } from './StrainTab';
+import { WorkoutsTab } from './WorkoutsTab';
 
 type TimeRange = '1d' | '1w' | '2w' | '1m' | '3m' | '6m';
 
@@ -60,6 +67,122 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
       return saved ? JSON.parse(saved) : { morning: null, midday: null, evening: null };
     } catch {
       return { morning: null, midday: null, evening: null };
+    }
+  };
+
+  const exportPDF = async () => {
+    try {
+      // Build compact data payload
+      const firstName = user?.user_metadata?.full_name?.split(' ')?.[0] || user?.email?.split('@')[0] || null;
+      const userEmail = user?.email || null;
+      
+      // Calculate sleep hours - EXACT same buggy logic as FitnessHealth.tsx line 415 (has bug but matches screen)
+      const sleepHours = (() => {
+        const sleep = metrics?.sleep;
+        if (!sleep) return null;
+        // Use the BUGGY calculation that the screen uses (divides by 360 instead of 3600)
+        if (typeof sleep.duration_sec === 'number' && sleep.duration_sec > 0) {
+          const hours = Math.round((sleep.duration_sec / 360)) / 10;
+          console.log('PDF Sleep from duration_sec (buggy):', { duration_sec: sleep.duration_sec, hours });
+          return hours;
+        }
+        // Fallback to stages with same bug
+        const stages = sleep.data?.score?.stage_summary;
+        if (stages) {
+          const deep = stages.deep_sleep_milli || 0;
+          const rem = stages.rem_sleep_milli || 0;
+          const light = stages.light_sleep_milli || 0;
+          const awake = stages.total_awake_time_milli || 0;
+          const totalMs = deep + rem + light + awake;
+          if (totalMs > 0) {
+            const hours = Math.round((totalMs / 360000)) / 10;
+            console.log('PDF Sleep from stages (buggy):', { totalMs, hours });
+            return hours;
+          }
+        }
+        // Fallback to start/end with same bug
+        if (sleep.start && sleep.end) {
+          const delta = new Date(sleep.end).getTime() - new Date(sleep.start).getTime();
+          if (delta > 0) {
+            const hours = Math.round((delta / 360000)) / 10;
+            console.log('PDF Sleep from start/end (buggy):', { delta, hours });
+            return hours;
+          }
+        }
+        return null;
+      })();
+      
+      const formatTime = (isoString: string | null) => {
+        if (!isoString) return null;
+        try {
+          const date = new Date(isoString);
+          return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+        } catch {
+          return null;
+        }
+      };
+
+      const today: InsightsPDFData['today'] = {
+        recoveryPct: metrics?.recovery?.score ?? null,
+        hrvMs: metrics?.recovery?.hrv_ms ?? null,
+        rhrBpm: metrics?.recovery?.rhr_bpm ?? null,
+        spo2Pct: metrics?.recovery?.data?.score?.spo2_percentage ?? null,
+        skinTempC: metrics?.recovery?.data?.score?.skin_temp_celsius ?? null,
+        sleepHours,
+        sleepPerformancePct: metrics?.sleep?.performance_pct ?? null,
+        efficiencyPct: metrics?.sleep?.data?.score?.sleep_efficiency_percentage ?? null,
+        consistencyPct: metrics?.sleep?.data?.score?.sleep_consistency_percentage ?? null,
+        respiratoryRate: metrics?.sleep?.data?.score?.respiratory_rate ?? null,
+        sleepCycles: metrics?.sleep?.data?.score?.stage_summary?.sleep_cycle_count ?? null,
+        disturbances: metrics?.sleep?.data?.score?.stage_summary?.disturbance_count ?? null,
+        sleepDetail: {
+          bedtime: formatTime(metrics?.sleep?.start ?? null),
+          waketime: formatTime(metrics?.sleep?.end ?? null),
+          deepMin: metrics?.sleep?.data?.score?.stage_summary?.deep_sleep_milli ? Math.round(metrics.sleep.data.score.stage_summary.deep_sleep_milli/60000) : null,
+          remMin: metrics?.sleep?.data?.score?.stage_summary?.rem_sleep_milli ? Math.round(metrics.sleep.data.score.stage_summary.rem_sleep_milli/60000) : null,
+          lightMin: metrics?.sleep?.data?.score?.stage_summary?.light_sleep_milli ? Math.round(metrics.sleep.data.score.stage_summary.light_sleep_milli/60000) : null,
+          awakeMin: metrics?.sleep?.data?.score?.stage_summary?.total_awake_time_milli ? Math.round(metrics.sleep.data.score.stage_summary.total_awake_time_milli/60000) : null,
+        },
+        dayStrain: metrics?.cycle?.day_strain ?? null,
+        workout: metrics?.workout ? {
+          sport: metrics.workout.sport_name ?? null,
+          start: formatTime(metrics.workout.start ?? null),
+          end: formatTime(metrics.workout.end ?? null),
+          durationMin: (metrics.workout.end && metrics.workout.start) ? Math.round((new Date(metrics.workout.end).getTime() - new Date(metrics.workout.start).getTime())/60000) : null,
+          strain: metrics.workout.strain ?? null,
+          avgHr: metrics.workout.data?.score?.average_heart_rate ?? null,
+          maxHr: metrics.workout.data?.score?.max_heart_rate ?? null,
+          calories: metrics.workout.data?.score?.kilojoule ? Math.round(metrics.workout.data.score.kilojoule/4.184) : null,
+          distanceKm: metrics.workout.data?.score?.distance_meter ? +(metrics.workout.data.score.distance_meter/1000).toFixed(2) : null,
+          elevationM: metrics.workout.data?.score?.altitude_gain_meter ?? null,
+          dataQualityPct: metrics.workout.data?.score?.percent_recorded ? +(metrics.workout.data.score.percent_recorded*100).toFixed(1) : null,
+        } : null,
+      };
+
+      const blob = await generateInsightsPDF({
+        language: (language === 'ar' ? 'ar' : 'en'),
+        userName: firstName,
+        userEmail,
+        lastSyncedAt: aiData?.lastSyncedAt || null,
+        logoUrl: 'https://raw.githubusercontent.com/alfadlyqtr/wakti-bilingual-assistant/main/public/lovable-uploads/4ed7b33a-201e-4f05-94de-bac892155c01.png',
+        today,
+        yesterday: null,
+        ai: {
+          daily_summary: displayInsight?.daily_summary || '',
+          tips: (displayInsight?.tips || [])
+        }
+      });
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `wakti-ai-insights-${Date.now()}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(language === 'ar' ? 'تم تصدير PDF' : 'PDF exported');
+    } catch (e) {
+      console.error('Export PDF error:', e);
+      toast.error(language === 'ar' ? 'فشل تصدير PDF' : 'Failed to export PDF');
     }
   };
 
@@ -122,6 +245,7 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
   
   // Audio playback state with caching
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isTtsLoading, setIsTtsLoading] = useState(false);
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
   const [audioCache, setAudioCache] = useState<Map<string, string>>(new Map());
   
@@ -404,9 +528,27 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
     if (!displayInsight) return;
     
     const text = `${displayInsight.daily_summary || ''}\n\n${displayInsight.weekly_summary || ''}\n\nTips:\n${(displayInsight.tips || []).map((t: string) => `${t}`).join('\n')}\n\nMotivations:\n${(displayInsight.motivations || []).map((m: string) => `${m}`).join('\n')}`;
+
+    // Prepare TTS-friendly text: pronounce decimals and percentages correctly (speech only)
+    const prepareForTTS = (s: string) => {
+      if (language === 'ar') {
+        return s
+          // 7.7 -> 7 نقطة 7
+          .replace(/(\d+)\.(\d+)/g, '$1 نقطة $2')
+          // 77% -> 77 بالمئة
+          .replace(/(\d+)\s*%/g, '$1 بالمئة');
+      }
+      return s
+        // 7.7 -> 7 point 7
+        .replace(/(\d+)\.(\d+)/g, '$1 point $2')
+        // 77% -> 77 percent
+        .replace(/(\d+)\s*%/g, '$1 percent');
+    };
+
+    const speechText = prepareForTTS(text);
     
     // Create cache key from text and language
-    const cacheKey = `${language}-${text.substring(0, 100)}`;
+    const cacheKey = `${language}-${speechText.substring(0, 100)}`;
     
     try {
       // Check if audio is cached
@@ -416,7 +558,10 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
         const audio = new Audio(cachedUrl);
         
         // Set up event listeners
-        audio.addEventListener('play', () => setIsPlaying(true));
+        audio.addEventListener('play', () => {
+          setIsPlaying(true);
+          setIsTtsLoading(false);
+        });
         audio.addEventListener('pause', () => setIsPlaying(false));
         audio.addEventListener('ended', () => {
           setIsPlaying(false);
@@ -429,6 +574,7 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
         return;
       }
       
+      setIsTtsLoading(true);
       toast.info(language === 'ar' ? 'جاري التحويل إلى صوت...' : 'Converting to speech...');
       
       const { data: sessionData } = await supabase.auth.getSession();
@@ -448,7 +594,7 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
           'Authorization': `Bearer ${accessToken}`
         },
         body: JSON.stringify({ 
-          text,
+          text: speechText,
           voice_id: voiceId
         })
       });
@@ -468,7 +614,10 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
       const audio = new Audio(audioUrl);
       
       // Set up event listeners
-      audio.addEventListener('play', () => setIsPlaying(true));
+      audio.addEventListener('play', () => {
+        setIsPlaying(true);
+        setIsTtsLoading(false);
+      });
       audio.addEventListener('pause', () => setIsPlaying(false));
       audio.addEventListener('ended', () => {
         setIsPlaying(false);
@@ -482,6 +631,7 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
     } catch (error) {
       console.error('TTS error:', error);
       toast.error(language === 'ar' ? 'فشل تحويل النص إلى صوت' : 'Failed to convert text to speech');
+      setIsTtsLoading(false);
     }
   };
   
@@ -496,6 +646,98 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
 
   return (
     <div className="space-y-6">
+      {/* Off-screen logo for PDF header capture */}
+      <div id="pdf-logo3d" style={{ position: 'absolute', top: -10000, left: -10000, width: '10%' }}>
+        <div className="flex items-center gap-2 p-2 rounded-xl bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-white/5 dark:to-white/5 border border-white/10">
+          <Logo3D size="sm" />
+          <div>
+            <div className="text-xs font-bold">WAKTI AI</div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Hidden blocks for PDF export - mounted with real data */}
+      <div style={{ position: 'absolute', top: -10000, left: -10000, width: '100%' }}>
+        {metrics?.sleep && (
+          <SleepTab 
+            timeRange="1d" 
+            onTimeRangeChange={() => {}} 
+            sleepData={{
+              hours: metrics.sleep.duration_sec ? metrics.sleep.duration_sec / 3600 : 0,
+              goalHours: 8,
+              performancePct: metrics.sleep.performance_pct || 0,
+              stages: {
+                deep: metrics.sleep.data?.score?.stage_summary?.deep_sleep_milli ? Math.round(metrics.sleep.data.score.stage_summary.deep_sleep_milli / 60000) : 0,
+                rem: metrics.sleep.data?.score?.stage_summary?.rem_sleep_milli ? Math.round(metrics.sleep.data.score.stage_summary.rem_sleep_milli / 60000) : 0,
+                light: metrics.sleep.data?.score?.stage_summary?.light_sleep_milli ? Math.round(metrics.sleep.data.score.stage_summary.light_sleep_milli / 60000) : 0,
+                awake: metrics.sleep.data?.score?.stage_summary?.total_awake_time_milli ? Math.round(metrics.sleep.data.score.stage_summary.total_awake_time_milli / 60000) : 0
+              },
+              bedtime: metrics.sleep.start ? new Date(metrics.sleep.start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '--',
+              waketime: metrics.sleep.end ? new Date(metrics.sleep.end).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '--',
+              efficiency: metrics.sleep.data?.score?.sleep_efficiency_percentage || 0,
+              respiratoryRate: metrics.sleep.data?.score?.respiratory_rate,
+              sleepConsistency: metrics.sleep.data?.score?.sleep_consistency_percentage,
+              disturbanceCount: metrics.sleep.data?.score?.stage_summary?.disturbance_count,
+              sleepCycleCount: metrics.sleep.data?.score?.stage_summary?.sleep_cycle_count
+            }}
+          />
+        )}
+        {metrics?.recovery && (
+          <RecoveryTab 
+            timeRange="1d" 
+            onTimeRangeChange={() => {}} 
+            recoveryData={{
+              score: metrics.recovery.score || 0,
+              hrv: metrics.recovery.hrv_ms || 0,
+              rhr: metrics.recovery.rhr_bpm || 0,
+              spo2: metrics.recovery.data?.score?.spo2_percentage,
+              skinTemp: metrics.recovery.data?.score?.skin_temp_celsius,
+              calibrating: metrics.recovery.data?.score?.calibrating
+            }}
+          />
+        )}
+        {metrics?.recovery && (
+          <HRVRHRTab 
+            timeRange="1d" 
+            onTimeRangeChange={() => {}} 
+            currentData={{
+              hrv: metrics.recovery.hrv_ms || 0,
+              rhr: metrics.recovery.rhr_bpm || 0
+            }}
+          />
+        )}
+        {metrics?.cycle && (
+          <StrainTab 
+            timeRange="1d" 
+            onTimeRangeChange={() => {}} 
+            strainData={{
+              dayStrain: metrics.cycle.day_strain || 0,
+              avgHr: metrics.cycle.avg_hr_bpm || 0,
+              trainingLoad: 0,
+              maxHr: 0,
+              energyBurned: metrics.cycle.data?.score?.kilojoule ? Math.round(metrics.cycle.data.score.kilojoule / 4.184) : undefined
+            }}
+          />
+        )}
+        {metrics?.workout && (
+          <WorkoutsTab 
+            timeRange="1d" 
+            onTimeRangeChange={() => {}} 
+            latestWorkout={{
+              sport: metrics.workout.sport_name || 'Unknown',
+              duration: metrics.workout.end && metrics.workout.start ? Math.round((new Date(metrics.workout.end).getTime() - new Date(metrics.workout.start).getTime()) / 60000) : 0,
+              strain: metrics.workout.strain || 0,
+              calories: metrics.workout.data?.score?.kilojoule ? Math.round(metrics.workout.data.score.kilojoule / 4.184) : 0,
+              avgHr: metrics.workout.data?.score?.average_heart_rate || 0,
+              maxHr: metrics.workout.data?.score?.max_heart_rate || 0,
+              distanceKm: metrics.workout.data?.score?.distance_meter ? +(metrics.workout.data.score.distance_meter / 1000).toFixed(2) : undefined,
+              elevationGainM: metrics.workout.data?.score?.altitude_gain_meter,
+              dataQualityPct: metrics.workout.data?.score?.percent_recorded ? +(metrics.workout.data.score.percent_recorded * 100).toFixed(1) : undefined
+            }}
+          />
+        )}
+      </div>
+      
       {/* Time Range Tabs */}
       <div className="flex gap-3 mb-6 flex-wrap justify-center sm:justify-start mt-16">
         {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
@@ -627,6 +869,8 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
       {/* Insights Content */}
       {hasAnyInsight && (
         <div key={`insights-${activeWindow}-${hasAnyInsight}`} ref={printRef} className="space-y-6">
+          {/* Daily Summary + Tips/Motivations wrapper for export */}
+          <div id="ai-daily" className="space-y-6">
           {/* Daily Summary */}
           <Card className="rounded-2xl p-6 bg-gradient-to-br from-emerald-50 to-blue-50 dark:from-white/5 dark:to-white/5 border-emerald-200 dark:border-white/10 shadow-lg">
             <div className="flex items-center justify-between mb-4">
@@ -649,9 +893,21 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
                   variant="outline" 
                   size="sm" 
                   onClick={speakText}
-                  className={`h-8 px-2 text-xs ${isPlaying ? "bg-emerald-500/20 border-emerald-500 animate-pulse" : ""}`}
+                  disabled={isTtsLoading}
+                  className={`h-8 px-2 text-xs transition-all ${
+                    isPlaying
+                      ? "bg-emerald-500/20 border-emerald-500 ring-2 ring-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.45)] animate-pulse"
+                      : isTtsLoading
+                        ? "bg-gray-100 border-gray-300 opacity-80"
+                        : ""
+                  }`}
                 >
-                  {isPlaying ? (
+                  {isTtsLoading ? (
+                    <>
+                      <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                      <span className="hidden sm:inline">{language === 'ar' ? 'جاري التحويل' : 'Converting'}</span>
+                    </>
+                  ) : isPlaying ? (
                     <>
                       <Pause className="h-3 w-3 mr-1 text-emerald-400" />
                       <span className="hidden sm:inline">{language === 'ar' ? 'إيقاف' : 'Pause'}</span>
@@ -667,28 +923,21 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
                   <Copy className="h-4 w-4 mr-2" />
                   {language === 'ar' ? 'نسخ' : 'Copy'}
                 </Button>
+                <Button variant="outline" size="sm" onClick={exportPDF}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  {language === 'ar' ? 'تصدير PDF' : 'Export PDF'}
+                </Button>
               </div>
             </div>
-            <p className="text-muted-foreground leading-relaxed">
+            <p id="pdf-ai-summary" className="text-muted-foreground leading-relaxed">
               {displayInsight?.daily_summary || (language === 'ar' ? 'لا توجد بيانات كافية للملخص اليومي' : 'Insufficient data for daily summary')}
-            </p>
-          </Card>
-
-          {/* Weekly Summary */}
-          <Card className="rounded-2xl p-6 bg-gradient-to-br from-emerald-50 to-blue-50 dark:from-white/5 dark:to-white/5 border-emerald-200 dark:border-white/10 shadow-lg">
-            <h3 className="font-semibold text-lg flex items-center gap-2 mb-4">
-              <TrendingDown className="h-5 w-5 text-blue-400" />
-              {language === 'ar' ? 'الملخص الأسبوعي' : 'Weekly Summary'}
-            </h3>
-            <p className="text-muted-foreground leading-relaxed">
-              {displayInsight?.weekly_summary || (language === 'ar' ? 'لا توجد بيانات كافية للملخص الأسبوعي' : 'Insufficient data for weekly summary')}
             </p>
           </Card>
 
           {/* Tips & Motivations */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Tips */}
-            <Card className="rounded-2xl p-6 bg-gradient-to-br from-emerald-500/10 to-green-500/10 border-emerald-500/20">
+            <Card id="pdf-ai-tips" className="rounded-2xl p-6 bg-gradient-to-br from-emerald-500/10 to-green-500/10 border-emerald-500/20">
               <h3 className="font-semibold text-lg mb-4 text-emerald-700 dark:text-emerald-400">
                 {language === 'ar' ? 'نصائح' : 'Tips'}
               </h3>
@@ -703,7 +952,7 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
             </Card>
 
             {/* Motivations */}
-            <Card className="rounded-2xl p-6 bg-gradient-to-br from-orange-500/10 to-red-500/10 border-orange-500/20">
+            <Card id="pdf-ai-motivations" className="rounded-2xl p-6 bg-gradient-to-br from-orange-500/10 to-red-500/10 border-orange-500/20">
               <h3 className="font-semibold text-lg mb-4 text-orange-600 dark:text-orange-400">
                 {language === 'ar' ? 'تحفيز' : 'Motivations'}
               </h3>
@@ -716,6 +965,18 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
               </div>
             </Card>
           </div>
+          </div>
+
+          {/* Weekly Summary (kept on screen, excluded from export) */}
+          <Card className="rounded-2xl p-6 bg-gradient-to-br from-emerald-50 to-blue-50 dark:from-white/5 dark:to-white/5 border-emerald-200 dark:border-white/10 shadow-lg">
+            <h3 className="font-semibold text-lg flex items-center gap-2 mb-4">
+              <TrendingDown className="h-5 w-5 text-blue-400" />
+              {language === 'ar' ? 'الملخص الأسبوعي' : 'Weekly Summary'}
+            </h3>
+            <p className="text-muted-foreground leading-relaxed">
+              {displayInsight?.weekly_summary || (language === 'ar' ? 'لا توجد بيانات كافية للملخص الأسبوعي' : 'Insufficient data for weekly summary')}
+            </p>
+          </Card>
 
           {/* AI Generated Visuals - DISABLED until AI generates proper data */}
           {false && (displayInsight?.visuals && displayInsight.visuals.length > 0) && (

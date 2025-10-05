@@ -138,7 +138,7 @@ export function RecoveryTab({
       {/* Main Recovery Overview */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Large Recovery Gauge */}
-        <Card className={`rounded-2xl p-6 bg-gradient-to-br ${recoveryColor.bg} ${recoveryColor.border}`}>
+        <Card id="pdf-recovery" className={`rounded-2xl p-6 bg-gradient-to-br ${recoveryColor.bg} ${recoveryColor.border}`}>
           <div className="flex items-center gap-3 mb-6">
             <Heart className={`h-6 w-6 ${recoveryColor.text}`} />
             <div>

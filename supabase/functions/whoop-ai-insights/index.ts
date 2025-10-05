@@ -169,7 +169,7 @@ Tone: Calm, reviewing, preparatory. "Close today proud — I'll see you in the m
     const systemPrompt = getSystemPrompt(timeOfDay, language);
     const system = systemPrompt.replace(/{USER_NAME}/g, userName);
 
-    const getEnhancedUserPrompt = (timeOfDay: string, language: string) => {
+    const getEnhancedUserPrompt = (timeOfDay: string, language: string): string => {
       // Get real user name from WHOOP profile data or user email
       const userName = payload?.user?.first_name || 
                       payload?.user?.profile?.first_name ||
@@ -321,7 +321,15 @@ Tone: Calm, reviewing, preparatory. "Close today proud — I'll see you in the m
   "visuals": []
 }
 
-⚠️ IMPORTANT: All content in daily_summary, weekly_summary, tips, and motivations MUST be in Arabic script. No English allowed.` : `
+⚠️ IMPORTANT: All content in daily_summary, weekly_summary, tips, and motivations MUST be in Arabic script. No English allowed.
+
+قواعد تفسير الدرجات (مهم جدًا — لهجة داعمة):
+- 0–49%: مستوى منخفض اليوم — نصيحة لطيفة لحماية الطاقة.
+- 50–69%: متوسط/مقبول — نُبقي الإيقاع مستقرًا.
+- 70–84%: جيد/متماسك — لغة داعمة (تجنب: "فقط 77%", "منخفض").
+- 85–100%: ممتاز/جاهز — إيجابي مع خيارات مدروسة.
+- تجنّب كلمات تقلّل من الأرقام الجيدة (مثل: "فقط", "مجرد") مع القيم ≥ 70%.
+- دائمًا اربط كل رقم بخطوة عملية بنبرة مشجعة.` : `
 Analyze the following WHOOP data and respond with strict JSON format:
 
 REQUIRED STRUCTURE:
@@ -448,6 +456,7 @@ CRITICAL REQUIREMENTS:
 - weekly_summary MUST have: (1) one trend sentence with 1–2 numbers; (2) one focus sentence for the next 24–72 hours. No generic copy.
 - tips MUST NOT duplicate the micro-actions in daily_summary; keep them distinct and implementable.
 - BANNED PHRASES: "Tonight is your chance to reset", "Focus on improving X", "Be predictive". Use natural alternatives.
+- INTERPRETATION RULES ENFORCEMENT: For metrics in 70–84% range, frame as "good" or "solid"; avoid negative framing like "only 77%". For ≥85% use clearly positive tone; for 50–69% neutral/stable; for 0–49% gentle and protective. When referencing numbers, use phrases like "a solid 77%" or "a good 82%" to reinforce the supportive tone.
 
 CURRENT REAL METRICS TO USE:
 - Sleep Hours: ${sleepHours}h
@@ -474,9 +483,10 @@ Resting HR: ${restingHR} bpm
 ${heightMeter ? `Height: ${heightMeter}m` : ''}
 ${weightKg ? `Weight: ${weightKg}kg` : ''}
 ${maxHR ? `Max HR: ${maxHR} bpm` : ''}`;
+
     };
 
-    const userPrompt = getEnhancedUserPrompt(timeOfDay, language);
+    const userPrompt: string = getEnhancedUserPrompt(timeOfDay, language);
 
     const resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
       method: "POST",

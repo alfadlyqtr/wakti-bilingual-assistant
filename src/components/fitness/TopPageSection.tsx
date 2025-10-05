@@ -51,7 +51,7 @@ export function TopPageSection({
   const sleep = sleepHours || 0;
 
   return (
-    <Card className="rounded-2xl p-4 md:p-6 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-500/10 dark:to-purple-500/10 border border-gray-200 dark:border-white/10 backdrop-blur-md shadow-xl">
+    <Card id="fitness-header" className="rounded-2xl p-4 md:p-6 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-500/10 dark:to-purple-500/10 border border-gray-200 dark:border-white/10 backdrop-blur-md shadow-xl">
       <div className="flex flex-col gap-3 md:gap-4">
         {/* Top Row: User Info */}
         <div className="flex items-start md:items-center gap-3 md:gap-4">
