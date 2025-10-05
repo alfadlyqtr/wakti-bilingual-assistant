@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Copy, RefreshCw, Brain, TrendingUp, TrendingDown, Sun, Clock, Moon, CheckCircle, Volume2, Pause, RotateCcw, FileText } from "lucide-react";
+import { Copy, RefreshCw, Brain, TrendingUp, TrendingDown, Sun, Clock, Moon, CheckCircle, Volume2, Pause, RotateCcw, FileText, Send, MessageCircle, AlertCircle } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { toast } from "sonner";
-import { generateAiInsights, buildInsightsAggregate } from "@/services/whoopService";
+import { generateAiInsights, buildInsightsAggregate, triggerUserSync } from "@/services/whoopService";
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
@@ -619,6 +619,171 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
 
   // PDF feature removed to prevent app freezing
 
+  // ====== Inline Q&A (simple, local UI; answers via Edge Function proxy) ======
+  const [qaQuestion, setQaQuestion] = useState("");
+  const [qaLoading, setQaLoading] = useState(false);
+  const [qaError, setQaError] = useState<string | null>(null);
+  const [qaAnswer, setQaAnswer] = useState<string>("");
+  const [qaFollowup, setQaFollowup] = useState<string | undefined>(undefined);
+  const [qaTopic, setQaTopic] = useState<'sleep'|'recovery'|'strain'|'general'>('general');
+
+  const formatTimeShort = (iso?: string | null) => {
+    if (!iso) return null;
+    try { return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }); } catch { return null; }
+  };
+
+  const buildQAContext = () => {
+    const sleepDurationH = metrics?.sleep?.duration_sec ? Math.round((metrics.sleep.duration_sec / 360) ) / 10 : (aiData?.today?.sleepHours ?? null);
+    return {
+      sleep: {
+        duration_hours: sleepDurationH ?? null,
+        performance_pct: metrics?.sleep?.performance_pct ?? null,
+        efficiency_pct: metrics?.sleep?.data?.score?.sleep_efficiency_percentage ?? metrics?.sleep?.sleep_efficiency_pct ?? null,
+        respiratory_rate: metrics?.sleep?.data?.score?.respiratory_rate ?? metrics?.sleep?.respiratory_rate ?? null,
+        consistency_pct: metrics?.sleep?.data?.score?.sleep_consistency_percentage ?? metrics?.sleep?.sleep_consistency_pct ?? null,
+        cycles: metrics?.sleep?.data?.score?.stage_summary?.sleep_cycle_count ?? metrics?.sleep?.sleep_cycle_count ?? null,
+        disturbances: metrics?.sleep?.data?.score?.stage_summary?.disturbance_count ?? metrics?.sleep?.disturbance_count ?? null,
+        bedtime: formatTimeShort(metrics?.sleep?.start ?? null),
+        waketime: formatTimeShort(metrics?.sleep?.end ?? null),
+      },
+      recovery: {
+        score_pct: metrics?.recovery?.score ?? metrics?.recovery?.data?.score?.recovery_score ?? null,
+        hrv_ms: metrics?.recovery?.hrv_ms ?? metrics?.recovery?.data?.score?.hrv_rmssd_milli ?? null,
+        rhr_bpm: metrics?.recovery?.rhr_bpm ?? metrics?.recovery?.data?.score?.resting_heart_rate ?? null,
+        spo2_pct: metrics?.recovery?.data?.score?.spo2_percentage ?? null,
+        skin_temp_c: metrics?.recovery?.data?.score?.skin_temp_celsius ?? null,
+      },
+      strain: {
+        day_strain: metrics?.cycle?.day_strain ?? metrics?.cycle?.data?.score?.strain ?? null,
+        avg_hr_bpm: metrics?.cycle?.avg_hr_bpm ?? metrics?.cycle?.data?.score?.average_heart_rate ?? null,
+        energy_burned_cal: metrics?.cycle?.data?.score?.kilojoule ? Math.round((metrics.cycle.data.score.kilojoule || 0) / 4.184) : null,
+      },
+      workout: metrics?.workout ? {
+        sport: metrics.workout.sport_name ?? null,
+        start: formatTimeShort(metrics.workout.start ?? null),
+        end: formatTimeShort(metrics.workout.end ?? null),
+        duration_min: (metrics.workout.end && metrics.workout.start) ? Math.round((new Date(metrics.workout.end).getTime() - new Date(metrics.workout.start).getTime())/60000) : null,
+        strain: metrics.workout.strain ?? metrics.workout?.data?.score?.strain ?? null,
+        avg_hr_bpm: metrics.workout.data?.score?.average_heart_rate ?? null,
+        max_hr_bpm: metrics.workout.data?.score?.max_heart_rate ?? null,
+        calories: metrics.workout.data?.score?.kilojoule ? Math.round(metrics.workout.data.score.kilojoule/4.184) : null,
+        distance_km: metrics.workout.data?.score?.distance_meter ? +(metrics.workout.data.score.distance_meter/1000).toFixed(2) : null,
+      } : null,
+    };
+  };
+
+  const classifyTopic = (q: string): 'sleep'|'recovery'|'strain'|'general' => {
+    const s = q.toLowerCase();
+    if (/(sleep|bed|wake|hours|efficiency)/.test(s)) return 'sleep';
+    if (/(recovery|hrv|rhr|readiness)/.test(s)) return 'recovery';
+    if (/(strain|effort|load|fatigue)/.test(s)) return 'strain';
+    return 'general';
+  };
+
+  const buildLocalFallbackAnswer = (q: string, topic: 'sleep'|'recovery'|'strain'|'general', ctx: ReturnType<typeof buildQAContext>) => {
+    const t = (en: string, ar: string) => language === 'ar' ? ar : en;
+    const lines: string[] = [];
+    if (topic === 'sleep') {
+      const perf = ctx.sleep.performance_pct ?? '—';
+      const dur = ctx.sleep.duration_hours ?? '—';
+      const eff = ctx.sleep.efficiency_pct ?? '—';
+      lines.push(t(`Sleep today: performance ${perf}%, duration ${dur}h, efficiency ${eff}%.`, `النوم اليوم: الأداء ${perf}%، المدة ${dur}س، الكفاءة ${eff}%.`));
+      if (typeof ctx.sleep.performance_pct === 'number' && ctx.sleep.performance_pct < 80) {
+        lines.push(t('Aim for a consistent bedtime and add 30–60 minutes tonight.', 'حافظ على وقت نوم ثابت وزِد 30–60 دقيقة الليلة.'));
+      }
+      if (typeof ctx.recovery.score_pct === 'number' && ctx.recovery.score_pct < 67) {
+        lines.push(t('Keep strain light today to protect recovery.', 'خفّف الإجهاد اليوم لحماية التعافي.'));
+      }
+    } else if (topic === 'recovery') {
+      const rec = ctx.recovery.score_pct ?? '—';
+      const hrv = ctx.recovery.hrv_ms ?? '—';
+      const rhr = ctx.recovery.rhr_bpm ?? '—';
+      lines.push(t(`Recovery: ${rec}%. HRV ${hrv} ms, RHR ${rhr} bpm.`, `التعافي: ${rec}%. تقلب نبض ${hrv} مللي، نبض الراحة ${rhr} نبضة/د.`));
+      if (typeof ctx.recovery.score_pct === 'number' && ctx.recovery.score_pct < 67) {
+        lines.push(t('Hydrate, sleep 7.5–8h, and keep activity easy.', 'اشرب ماءً كافيًا، نم 7.5–8 ساعات، وحافظ على نشاط خفيف.'));
+      }
+    } else if (topic === 'strain') {
+      const ds = ctx.strain.day_strain ?? '—';
+      const ahr = ctx.strain.avg_hr_bpm ?? '—';
+      lines.push(t(`Day strain: ${ds}. Avg HR ${ahr} bpm.`, `إجهاد اليوم: ${ds}. متوسط النبض ${ahr} نبضة/د.`));
+      if (typeof ctx.strain.day_strain === 'number' && ctx.strain.day_strain < 7) {
+        if (typeof ctx.recovery.score_pct === 'number' && ctx.recovery.score_pct >= 67) {
+          lines.push(t('Consider a moderate 20–30 min session to build load.', 'يمكنك ممارسة جلسة متوسطة 20–30 دقيقة لرفع الحمل.'));
+        } else {
+          lines.push(t('Low strain is fine when recovery is low—focus on rest.', 'انخفاض الإجهاد مناسب عند انخفاض التعافي—ركّز على الراحة.'));
+        }
+      }
+    } else {
+      lines.push(t('Ask about your sleep, recovery, or strain for tailored tips.', 'اسأل عن نومك أو تعافيك أو إجهادك للحصول على نصائح مخصصة.'));
+    }
+    return lines.join('\n• ');
+  };
+
+  const askQA = async () => {
+    const q = qaQuestion.trim();
+    if (!q) return;
+    setQaError(null);
+    setQaLoading(true);
+    setQaFollowup(undefined);
+    const topic = classifyTopic(q);
+    setQaTopic(topic);
+    const context = buildQAContext();
+    // Immediate local draft to ensure user sees feedback instantly
+    const localDraft = buildLocalFallbackAnswer(q, topic, context);
+    setQaAnswer(localDraft);
+    try {
+      console.log('[QA] asking:', { q, topic, context });
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+      // Ensure fresh WHOOP data
+      try { await triggerUserSync(); } catch (syncErr) { console.warn('WHOOP sync skipped', syncErr); }
+      const dataFull = await buildInsightsAggregate();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      const call = supabase.functions.invoke('whoop-ai-qa', {
+        body: {
+          mode: 'qa',
+          language: (language === 'ar' ? 'ar' : 'en'),
+          question: q,
+          user_timezone: tz,
+          data: dataFull,
+          context // normalized, matches the cards above
+        },
+        headers: { 
+          Authorization: `Bearer ${accessToken}`,
+          'x-supabase-authorization': `Bearer ${accessToken}`
+        }
+      });
+      const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('qa_timeout')), 25000));
+      const { data: resp, error }: any = await Promise.race([call, timeout]);
+      if (error) throw error;
+      console.log('[QA] response:', resp);
+      let answer = '';
+      if (resp) {
+        // Try common fields
+        answer = resp.answer || resp.message || resp.text || resp.content || '';
+        // If nested
+        if (!answer && resp.data) {
+          answer = resp.data.answer || resp.data.message || '';
+        }
+      }
+      const follow = resp?.clarifying_question || resp?.data?.clarifying_question || undefined;
+      if (!answer) answer = localDraft;
+      setQaAnswer(answer);
+      setQaFollowup(follow);
+    } catch (e: any) {
+      console.error('[QA] error:', e?.message || e, e);
+      // Local fallback to ensure user sees something helpful
+      try {
+        setQaAnswer(localDraft);
+        setQaError(null);
+      } catch {
+        setQaError(language === 'ar' ? 'تعذر الحصول على إجابة الآن' : 'Could not get an answer right now');
+      }
+    } finally {
+      setQaLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Off-screen logo for PDF header capture */}
@@ -919,6 +1084,43 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
             <p className="text-muted-foreground leading-relaxed">
               {displayInsight?.weekly_summary || (language === 'ar' ? 'لا توجد بيانات كافية للملخص الأسبوعي' : 'Insufficient data for weekly summary')}
             </p>
+          </Card>
+
+          {/* Simple Q&A (inline, under Weekly Summary) */}
+          <Card className="rounded-2xl p-4 md:p-6 bg-gradient-to-br from-gray-50 to-slate-50 dark:from-white/5 dark:to-white/5 border-gray-200 dark:border-white/10 shadow-lg">
+            <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
+              <MessageCircle className="h-5 w-5 text-purple-400" />
+              {language === 'ar' ? 'سؤال وجواب سريع' : 'Quick Q&A'}
+            </h3>
+            {(qaAnswer || qaFollowup) && (
+              <div className={`mb-4 p-4 rounded-xl border ${qaTopic==='sleep' ? 'border-purple-300 bg-purple-50/60 dark:bg-purple-500/10' : qaTopic==='recovery' ? 'border-emerald-300 bg-emerald-50/60 dark:bg-emerald-500/10' : qaTopic==='strain' ? 'border-amber-300 bg-amber-50/60 dark:bg-amber-500/10' : 'border-gray-200 bg-white/60 dark:bg-white/5'}`}>
+                {qaFollowup && (
+                  <div className="mb-2 text-xs text-muted-foreground">
+                    {qaFollowup}
+                  </div>
+                )}
+                {qaAnswer && (
+                  <div className="text-sm whitespace-pre-wrap leading-relaxed text-gray-800 dark:text-gray-200">{qaAnswer}</div>
+                )}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <input
+                value={qaQuestion}
+                onChange={(e) => setQaQuestion(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') askQA(); }}
+                placeholder={language === 'ar' ? 'اسأل عن نومك أو تعافيك أو الإجهاد...' : 'Ask about your sleep, recovery, or strain...'}
+                className="flex-1 rounded-lg border border-gray-300 dark:border-white/10 bg-white/90 dark:bg-white/5 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-purple-400"
+              />
+              <Button onClick={askQA} disabled={qaLoading} className="rounded-lg px-4">
+                {qaLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </Button>
+            </div>
+            {qaError && (
+              <div className="mt-3 text-sm text-red-600 flex items-center gap-2">
+                <AlertCircle className="h-4 w-4" /> {qaError}
+              </div>
+            )}
           </Card>
 
           {/* AI Generated Visuals - DISABLED until AI generates proper data */}
