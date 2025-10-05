@@ -157,36 +157,42 @@ export async function generateInsightsPDF(data: InsightsPDFData): Promise<Blob> 
   const kpiLabel = (en: string, ar: string) => (isRtl ? ar : en);
 
   // CSS with conic-gradient donut and simple gauges that html2canvas can render
+  const now = new Date();
+  const reportTime = isRtl 
+    ? `${format(now, "yyyy/MM/dd")} الساعة ${format(now, "HH:mm")}`
+    : format(now, "MMMM d, yyyy 'at' h:mm a");
+
   container.innerHTML = `
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
-    .header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-radius:10px; background: linear-gradient(90deg, #f1f5ff, #f3e8ff); margin-bottom:10px; }
-    .brand { display:flex; align-items:center; gap:10px; }
-    .logo { width:32px; height:32px; object-fit:contain; }
-    .title { font-size:16px; font-weight:700; color:#111827; }
-    .meta { font-size:11px; color:#6b7280; }
-    .kpis { display:grid; grid-template-columns: repeat(5, 1fr); gap:6px; margin: 6px 0 8px 0; }
-    .kpi { border:1px solid #e5e7eb; border-radius:6px; padding:6px; background:#fafafa; }
-    .kpi .label { font-size:9px; color:#6b7280; }
-    .kpi .value { font-size:13px; font-weight:700; color:#111827; }
-    .grid { display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-bottom:8px; }
-    .card { border:1px solid #e5e7eb; border-radius:8px; padding:8px; }
-    .card.sleep { background: linear-gradient(135deg, #ede9fe, #ddd6fe); }
-    .card.recovery { background: linear-gradient(135deg, #d1fae5, #a7f3d0); }
-    .card.strain { background: linear-gradient(135deg, #fecaca, #fca5a5); }
-    .card.workout { background: linear-gradient(135deg, #fce7f3, #fbcfe8); }
-    .card h3 { margin:0 0 6px 0; font-size:11px; color:#111827; font-weight:600; }
-    .rows { display:grid; grid-template-columns: auto 1fr; gap:3px 8px; font-size:9px; }
-    .rows .k { color:#6b7280; }
-    .rows .v { color:#111827; font-weight:600; }
-    .donut { width:80px; height:80px; border-radius:50%; margin:auto; position:relative; background:conic-gradient(#10b981 var(--p), #e5e7eb 0); }
-    .donut::after { content: attr(data-center); position:absolute; inset:10px; background:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:#111827; }
-    .ai { background: linear-gradient(135deg, #fef3c7, #fde68a); border:1px solid #fbbf24; border-radius:8px; padding:8px; margin-top:8px; }
-    .ai h3 { font-size:11px; margin-bottom:4px; color:#92400e; }
-    .ai p { font-size:9px; color:#111827; line-height:1.4; }
-    .tips { margin-top:6px; font-size:9px; color:#111827; padding-left:12px; }
-    .tips li { margin:2px 0; }
-    .footer { margin-top:8px; text-align:center; font-size:9px; color:#6b7280; }
+    body { background:white; }
+    .header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-radius:12px; background: linear-gradient(90deg, #f0f2ff, #f5f0ff); margin-bottom:12px; border:1px solid #e0e7ff; }
+    .brand { display:flex; align-items:center; gap:12px; }
+    .logo { width:40px; height:40px; object-fit:contain; }
+    .title { font-size:20px; font-weight:700; color:#111827; }
+    .meta { font-size:12px; color:#6b7280; }
+    .kpis { display:grid; grid-template-columns: repeat(5, 1fr); gap:8px; margin-bottom:12px; }
+    .kpi { border:1px solid #e5e7eb; border-radius:8px; padding:8px; text-align:center; background:#fafafa; }
+    .kpi .label { font-size:10px; color:#6b7280; margin-bottom:2px; }
+    .kpi .value { font-size:16px; font-weight:700; color:#111827; }
+    .grid-2x2 { display:grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; gap:12px; margin-bottom:12px; }
+    .card { border:1px solid #e5e7eb; border-radius:12px; padding:12px; display: flex; flex-direction: column; }
+    .card.sleep { background: linear-gradient(135deg, #eef2ff, #e0e7ff); border-color:#c7d2fe; }
+    .card.recovery { background: linear-gradient(135deg, #ecfdf5, #d1fae5); border-color:#a7f3d0; }
+    .card.strain { background: linear-gradient(135deg, #fff1f2, #ffe4e6); border-color:#fecdd3; }
+    .card.workout { background: linear-gradient(135deg, #fdf4ff, #fae8ff); border-color:#f5d0fe; }
+    .card h3 { margin:0 0 8px 0; font-size:14px; color:#111827; font-weight:600; }
+    .rows { display:grid; grid-template-columns: auto 1fr; gap:4px 10px; font-size:11px; }
+    .rows .k { color:#4b5563; }
+    .rows .v { color:#111827; font-weight:600; text-align:${isRtl ? 'left' : 'right'}; }
+    .donut { width:90px; height:90px; border-radius:50%; margin:12px auto; position:relative; background:conic-gradient(#10b981 var(--p), #e5e7eb 0); }
+    .donut::after { content: attr(data-center); position:absolute; inset:12px; background:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:700; color:#111827; }
+    .ai { background: linear-gradient(135deg, #fefce8, #fef9c3); border:1px solid #fde047; border-radius:12px; padding:12px; margin-top:0; }
+    .ai h3 { font-size:14px; margin-bottom:6px; color:#a16207; }
+    .ai p { font-size:11px; color:#111827; line-height:1.5; }
+    .tips { margin-top:8px; font-size:11px; color:#111827; padding-${isRtl ? 'right' : 'left'}:16px; }
+    .tips li { margin:3px 0; }
+    .footer { margin-top:12px; text-align:center; font-size:10px; color:#9ca3af; }
   </style>
   <div class="header">
     <div class="brand">
@@ -196,18 +202,18 @@ export async function generateInsightsPDF(data: InsightsPDFData): Promise<Blob> 
         <div class="meta">${userName || ''} ${data.userEmail ? '· ' + data.userEmail : ''}</div>
       </div>
     </div>
-    <div class="meta">${isRtl ? 'تقرير اليوم' : 'Today Report'}</div>
+    <div class="meta" style="text-align: ${isRtl ? 'left' : 'right'}">${reportTime}</div>
   </div>
 
   <div class="kpis">
-    <div class="kpi"><div class="label">${kpiLabel('Recovery','التعافي')}</div><div class="value">${pct(today.recoveryPct)}</div><div class="delta">${delta(today.recoveryPct, yesterday?.recoveryPct as any)}</div></div>
-    <div class="kpi"><div class="label">${kpiLabel('Sleep','النوم')}</div><div class="value">${h(today.sleepHours)}</div><div class="delta">${delta(today.sleepHours as any, yesterday?.sleepHours as any)}</div></div>
-    <div class="kpi"><div class="label">${kpiLabel('HRV','تقلب معدل ضربات القلب')}</div><div class="value">${ms(today.hrvMs)}</div><div class="delta">${delta(today.hrvMs as any, yesterday?.hrvMs as any)}</div></div>
-    <div class="kpi"><div class="label">${kpiLabel('Strain','الإجهاد')}</div><div class="value">${num(today.dayStrain)}</div><div class="delta">${delta(today.dayStrain as any, yesterday?.dayStrain as any)}</div></div>
-    <div class="kpi"><div class="label">${kpiLabel('Resting HR','النبض أثناء الراحة')}</div><div class="value">${bpm(today.rhrBpm)}</div><div class="delta">${delta(today.rhrBpm as any, yesterday?.rhrBpm as any)}</div></div>
+    <div class="kpi"><div class="label">${kpiLabel('Recovery','التعافي')}</div><div class="value">${pct(today.recoveryPct)}</div></div>
+    <div class="kpi"><div class="label">${kpiLabel('Sleep','النوم')}</div><div class="value">${h(today.sleepHours)}</div></div>
+    <div class="kpi"><div class="label">${kpiLabel('HRV','تقلب معدل ضربات القلب')}</div><div class="value">${ms(today.hrvMs)}</div></div>
+    <div class="kpi"><div class="label">${kpiLabel('Strain','الإجهاد')}</div><div class="value">${num(today.dayStrain)}</div></div>
+    <div class="kpi"><div class="label">${kpiLabel('Resting HR','النبض أثناء الراحة')}</div><div class="value">${bpm(today.rhrBpm)}</div></div>
   </div>
 
-  <div class="grid">
+  <div class="grid-2x2">
     <div class="card sleep">
       <h3>${kpiLabel('Sleep Summary','ملخص النوم')}</h3>
       <div class="rows">
@@ -220,21 +226,16 @@ export async function generateInsightsPDF(data: InsightsPDFData): Promise<Blob> 
         <div class="k">${kpiLabel('Respiratory Rate','معدل التنفس')}</div><div class="v">${today.respiratoryRate ? today.respiratoryRate.toFixed(1) + ' bpm' : '--'}</div>
         <div class="k">${kpiLabel('Sleep Cycles','دورات النوم')}</div><div class="v">${num(today.sleepCycles)}</div>
         <div class="k">${kpiLabel('Disturbances','الاضطرابات')}</div><div class="v">${num(today.disturbances)}</div>
-        ${today.sleepDetail?.deepMin ? `<div class="k">${kpiLabel('Deep','عميق')}</div><div class="v">${num(today.sleepDetail.deepMin)} min</div>` : ''}
-        ${today.sleepDetail?.remMin ? `<div class="k">${kpiLabel('REM','ريم')}</div><div class="v">${num(today.sleepDetail.remMin)} min</div>` : ''}
-        ${today.sleepDetail?.lightMin ? `<div class="k">${kpiLabel('Light','خفيف')}</div><div class="v">${num(today.sleepDetail.lightMin)} min</div>` : ''}
-        ${today.sleepDetail?.awakeMin ? `<div class="k">${kpiLabel('Awake','يقظة')}</div><div class="v">${num(today.sleepDetail.awakeMin)} min</div>` : ''}
       </div>
     </div>
     <div class="card recovery">
       <h3>${kpiLabel('Recovery','التعافي')}</h3>
       <div class="donut" style="--p:${Math.max(0, Math.min(100, today.recoveryPct ?? 0))}%;" data-center="${today.recoveryPct ?? '--'}%"></div>
-      <div class="rows" style="margin-top:6px;">
+      <div class="rows" style="margin-top:auto;">
         <div class="k">${kpiLabel('HRV (RMSSD)','HRV')}</div><div class="v">${ms(today.hrvMs)}</div>
         <div class="k">${kpiLabel('Resting HR','النبض أثناء الراحة')}</div><div class="v">${bpm(today.rhrBpm)}</div>
         <div class="k">${kpiLabel('Blood Oxygen','الأكسجين')}</div><div class="v">${pct(today.spo2Pct)}</div>
         <div class="k">${kpiLabel('Skin Temp','حرارة الجلد')}</div><div class="v">${today.skinTempC ? today.skinTempC.toFixed(1) + '°C' : '--'}</div>
-        <div class="k">${kpiLabel('Calibrating','المعايرة')}</div><div class="v">${today.calibrating ? (isRtl?'نعم':'Yes') : (today.calibrating===false ? (isRtl?'لا':'No') : '--')}</div>
       </div>
     </div>
     <div class="card strain">
@@ -242,7 +243,6 @@ export async function generateInsightsPDF(data: InsightsPDFData): Promise<Blob> 
       <div class="rows">
         <div class="k">${kpiLabel('Day Strain','إجهاد اليوم')}</div><div class="v">${num(today.dayStrain)}</div>
         <div class="k">${kpiLabel('Avg HR','متوسط النبض')}</div><div class="v">${bpm(today.workout?.avgHr)}</div>
-        <div class="k">${kpiLabel('Training Load','حمل التدريب')}</div><div class="v">--</div>
         <div class="k">${kpiLabel('Energy Burned','الطاقة المحروقة')}</div><div class="v">${cal(today.workout?.calories)}</div>
       </div>
     </div>
@@ -258,8 +258,6 @@ export async function generateInsightsPDF(data: InsightsPDFData): Promise<Blob> 
         <div class="k">${kpiLabel('Max HR','الحد الأقصى')}</div><div class="v">${bpm(today.workout.maxHr)}</div>
         <div class="k">${kpiLabel('Calories','السعرات')}</div><div class="v">${cal(today.workout.calories)}</div>
         <div class="k">${kpiLabel('Distance','المسافة')}</div><div class="v">${km(today.workout.distanceKm)}</div>
-        <div class="k">${kpiLabel('Elevation Gain','الارتفاع المكتسب')}</div><div class="v">${num(today.workout.elevationM)} m</div>
-        <div class="k">${kpiLabel('Data Quality','جودة البيانات')}</div><div class="v">${pct(today.workout.dataQualityPct)}</div>
       </div>
       ` : `<div class="rows"><div class="k">${kpiLabel('Status','الحالة')}</div><div class="v">${kpiLabel('No workout data available','لا توجد بيانات تمارين متاحة')}</div></div>`}
     </div>
@@ -267,8 +265,8 @@ export async function generateInsightsPDF(data: InsightsPDFData): Promise<Blob> 
 
   <div class="ai">
     <h3>${kpiLabel('AI Daily Summary','ملخص اليوم (الذكاء الاصطناعي)')}</h3>
-    <div style="font-size:12px; color:#111827; white-space:pre-wrap;">${ai?.daily_summary ?? (isRtl ? '—' : '—')}</div>
-    ${ai?.tips && ai.tips.length ? `<ul class="tips">${ai.tips.slice(0,3).map(t=>`<li>• ${t}</li>`).join('')}</ul>` : ''}
+    <p>${ai?.daily_summary ?? (isRtl ? '—' : '—')}</p>
+    ${ai?.tips && ai.tips.length ? `<ul class="tips">${ai.tips.slice(0,3).map(t=>`<li>${t}</li>`).join('')}</ul>` : ''}
   </div>
   <div class="footer">WAKTI © 2025</div>
   `;
@@ -277,21 +275,31 @@ export async function generateInsightsPDF(data: InsightsPDFData): Promise<Blob> 
 
   try {
     const canvas = await html2canvas(container, { backgroundColor: 'white', scale: 2, useCORS: true, allowTaint: true });
-    const img = canvas.toDataURL('image/png');
-
+    const imgData = canvas.toDataURL('image/png');
+    
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 6;
-
-    const imgWidth = pageWidth - margin * 2;
+    const margin = 10;
+    const contentWidth = pageWidth - margin * 2;
+    
+    const imgWidth = contentWidth;
     const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    const y = (pageHeight - imgHeight) > margin ? margin : 0; // keep within page
-    doc.addImage(img, 'PNG', margin, y, imgWidth, Math.min(imgHeight, pageHeight - margin * 2));
 
+    // Ensure the image fits on one page, if not, scale it down
+    let finalImgHeight = imgHeight;
+    if (imgHeight > (pageHeight - margin * 2)) {
+      finalImgHeight = pageHeight - margin * 2;
+    }
+
+    doc.addImage(imgData, 'PNG', margin, margin, imgWidth, finalImgHeight);
+    
     return doc.output('blob');
+
   } finally {
-    if (document.body.contains(container)) document.body.removeChild(container);
+    if (document.body.contains(container)) {
+      document.body.removeChild(container);
+    }
   }
 }
 export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {

@@ -86,7 +86,7 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
         }
         // Use the BUGGY calculation that the screen uses (divides by 360 instead of 3600)
         if (typeof sleep.duration_sec === 'number' && sleep.duration_sec > 0) {
-          const hours = Math.round((sleep.duration_sec / 360)) / 10;
+          const hours = Math.round((sleep.duration_sec / 3600) * 10) / 10;
           console.log('PDF Sleep from duration_sec (buggy):', { duration_sec: sleep.duration_sec, calculation: `${sleep.duration_sec} / 360 = ${sleep.duration_sec/360}, rounded = ${Math.round(sleep.duration_sec/360)}, /10 = ${hours}` });
           return hours;
         }
@@ -743,7 +743,7 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
       </div>
       
       {/* Time Range Tabs */}
-      <div className="flex gap-3 mb-6 flex-wrap justify-center sm:justify-start mt-16">
+      <div className="flex gap-3 mb-6 flex-wrap justify-center sm:justify-start mt-32">
         {(['1d', '1w', '2w', '1m', '3m', '6m'] as TimeRange[]).map((range) => (
           <button
             key={range}
@@ -923,13 +923,13 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
                     </>
                   )}
                 </Button>
-                <Button variant="outline" size="sm" onClick={copyToClipboard}>
-                  <Copy className="h-4 w-4 mr-2" />
+                <Button variant="outline" size="sm" className="h-8 px-2 text-xs" onClick={copyToClipboard}>
+                  <Copy className="h-3 w-3 mr-1" />
                   {language === 'ar' ? 'نسخ' : 'Copy'}
                 </Button>
-                <Button variant="outline" size="sm" onClick={exportPDF}>
-                  <FileText className="h-4 w-4 mr-2" />
-                  {language === 'ar' ? 'تصدير PDF' : 'Export PDF'}
+                <Button variant="outline" size="sm" className="h-8 px-2 text-xs" onClick={exportPDF}>
+                  <FileText className="h-3 w-3 mr-1" />
+                  {language === 'ar' ? 'PDF' : 'PDF'}
                 </Button>
               </div>
             </div>
