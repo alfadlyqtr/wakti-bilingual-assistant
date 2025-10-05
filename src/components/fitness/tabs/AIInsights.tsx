@@ -79,11 +79,15 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
       // Calculate sleep hours - EXACT same buggy logic as FitnessHealth.tsx line 415 (has bug but matches screen)
       const sleepHours = (() => {
         const sleep = metrics?.sleep;
-        if (!sleep) return null;
+        console.log('=== PDF SLEEP CALCULATION START ===', { sleep });
+        if (!sleep) {
+          console.log('No sleep data');
+          return null;
+        }
         // Use the BUGGY calculation that the screen uses (divides by 360 instead of 3600)
         if (typeof sleep.duration_sec === 'number' && sleep.duration_sec > 0) {
           const hours = Math.round((sleep.duration_sec / 360)) / 10;
-          console.log('PDF Sleep from duration_sec (buggy):', { duration_sec: sleep.duration_sec, hours });
+          console.log('PDF Sleep from duration_sec (buggy):', { duration_sec: sleep.duration_sec, calculation: `${sleep.duration_sec} / 360 = ${sleep.duration_sec/360}, rounded = ${Math.round(sleep.duration_sec/360)}, /10 = ${hours}` });
           return hours;
         }
         // Fallback to stages with same bug
