@@ -38,15 +38,7 @@ export const TimelineTab: React.FC = () => {
     })();
   }, []);
 
-  if (loading) return <div className="text-muted-foreground">{language === 'ar' ? 'جارٍ التحميل...' : 'Loading...'}</div>;
-
-  if (!days.length && !checkins.length) return (
-    <div className="journal-card p-6 text-center text-muted-foreground">
-      {language === 'ar' ? 'لا توجد إدخالات بعد' : 'No entries yet'}
-    </div>
-  );
-
-  // Build maps for fast lookup
+  // Build maps for fast lookup (hooks must run every render)
   const dayByDate: Record<string, JournalDay> = useMemo(() => {
     const map: Record<string, JournalDay> = {};
     for (const d of days) map[d.date] = d;
@@ -68,6 +60,14 @@ export const TimelineTab: React.FC = () => {
     const set = new Set<string>([...Object.keys(dayByDate), ...Object.keys(checkinsByDate)]);
     return Array.from(set).sort((a, b) => (a < b ? 1 : -1));
   }, [dayByDate, checkinsByDate]);
+
+  if (loading) return <div className="text-muted-foreground">{language === 'ar' ? 'جارٍ التحميل...' : 'Loading...'}</div>;
+
+  if (!days.length && !checkins.length) return (
+    <div className="journal-card p-6 text-center text-muted-foreground">
+      {language === 'ar' ? 'لا توجد إدخالات بعد' : 'No entries yet'}
+    </div>
+  );
 
   const todayDay = dayByDate[today] || null;
   const todayCheckins = checkinsByDate[today] || [];
@@ -128,7 +128,12 @@ export const TimelineTab: React.FC = () => {
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
                       <MoodFace value={c.mood_value as MoodValue} size={24} />
-                      <div className="text-xs opacity-70">{new Date(c.occurred_at).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})}</div>
+                      {(() => {
+                        const d = c.occurred_at ? new Date(c.occurred_at) : null;
+                        const ok = d && !isNaN(d.getTime());
+                        const timeStr = ok ? d!.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}) : '';
+                        return <div className="text-xs opacity-70">{timeStr}</div>;
+                      })()}
                     </div>
                   </div>
                   {c.tags?.length > 0 && (

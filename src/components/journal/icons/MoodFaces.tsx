@@ -51,21 +51,13 @@ export function MoodFace({ value, active = false, size = 52 }: { value: MoodValu
           <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
         </linearGradient>
       </defs>
-      {/* Outer soft ring */}
-      <circle cx={cx} cy={cy} r={r + 1.5} fill="none" stroke={stroke} strokeOpacity="0.35" strokeWidth="1.5" />
-      {/* Face base */}
-      <circle cx={cx} cy={cy} r={r} fill={`url(#g-${stroke.replace('#','')})`} stroke={stroke} strokeWidth="2" />
-      {/* Inner ring */}
-      <circle cx={cx} cy={cy} r={r - 4} fill="none" stroke={stroke} strokeOpacity="0.25" strokeWidth="1" />
+      {/* Face base - no stroke ring */}
+      <circle cx={cx} cy={cy} r={r} fill={`url(#g-${stroke.replace('#','')})`} stroke="none" />
       {/* Gloss highlight (top arc) */}
-      <path d={`M ${cx - r + 6} ${cy - r + 10} A ${r - 6} ${r - 10} 0 0 1 ${cx + r - 6} ${cy - r + 10}`} stroke="url(#gloss-${stroke.replace('#','')})" strokeWidth="2" fill="none" strokeLinecap="round" />
+      <path d={`M ${cx - r + 6} ${cy - r + 10} A ${r - 6} ${r - 10} 0 0 1 ${cx + r - 6} ${cy - r + 10}`} stroke={`url(#gloss-${stroke.replace('#','')})`} strokeWidth="2" fill="none" strokeLinecap="round" />
       <circle cx={cx - eyeXOff} cy={eyeY} r={size * 0.04} fill={stroke} />
       <circle cx={cx + eyeXOff} cy={eyeY} r={size * 0.04} fill={stroke} />
       <path d={mouth} stroke={stroke} strokeWidth="2" fill="none" strokeLinecap="round" />
-      {/* Active glow overlay */}
-      {active && (
-        <circle cx={cx} cy={cy} r={r + 2} fill="none" stroke={stroke} strokeOpacity="0.25" strokeWidth="2" />
-      )}
     </svg>
   );
 }

@@ -47,6 +47,21 @@ export const JournalService = {
     return data;
   },
 
+  async updateCheckinNote(id: string, note: string | null) {
+    const { data: userData } = await supabase.auth.getUser();
+    const user = userData?.user;
+    if (!user) throw new Error("not_authenticated");
+    const { data, error } = await supabase
+      .from("journal_checkins")
+      .update({ note })
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    return data as JournalCheckin;
+  },
+
   async getCheckinsForDay(date: string) {
     const { data, error } = await supabase
       .from("journal_checkins")
@@ -80,7 +95,7 @@ export const JournalService = {
     if (!user) throw new Error("not_authenticated");
     const { data, error } = await supabase
       .from("journal_checkins")
-      .insert({ user_id: user.id, ...payload })
+      .insert({ user_id: user.id, occurred_at: new Date().toISOString(), ...payload })
       .select("*")
       .single();
     if (error) throw error;
