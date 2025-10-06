@@ -47,6 +47,33 @@ export const JournalService = {
     return data;
   },
 
+  async getCheckinsForDay(date: string) {
+    const { data, error } = await supabase
+      .from("journal_checkins")
+      .select("*")
+      .eq("date", date)
+      .order("occurred_at", { ascending: false });
+    if (error) throw error;
+    return (data || []) as JournalCheckin[];
+  },
+
+  async getCheckinsSince(lastNDays = 60) {
+    const since = new Date();
+    since.setDate(since.getDate() - lastNDays);
+    const yyyy = since.getFullYear();
+    const mm = String(since.getMonth() + 1).padStart(2, "0");
+    const dd = String(since.getDate()).padStart(2, "0");
+    const sinceStr = `${yyyy}-${mm}-${dd}`;
+    const { data, error } = await supabase
+      .from("journal_checkins")
+      .select("*")
+      .gte("date", sinceStr)
+      .order("date", { ascending: false })
+      .order("occurred_at", { ascending: false });
+    if (error) throw error;
+    return (data || []) as JournalCheckin[];
+  },
+
   async addCheckin(payload: Omit<JournalCheckin, "id" | "user_id" | "occurred_at">) {
     const { data: userData } = await supabase.auth.getUser();
     const user = userData?.user;

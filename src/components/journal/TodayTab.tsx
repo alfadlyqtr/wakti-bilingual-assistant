@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { JournalService } from "@/services/journalService";
+import { JournalService, JournalCheckin } from "@/services/journalService";
 import { toast } from "sonner";
 import { MoodFace, moodLabels, MoodValue } from "./icons/MoodFaces";
 import { TagIcon, TagId } from "@/components/journal/TagIcon";
@@ -32,6 +33,7 @@ const faces: { value: MoodValue; color: string }[] = [
 
 export const TodayTab: React.FC = () => {
   const { language } = useTheme();
+  const location = useLocation();
   const [date] = useState(getLocalDayString());
   const [mood, setMood] = useState<MoodValue | null>(null);
   const [tags, setTags] = useState<TagId[]>([]);
@@ -41,6 +43,17 @@ export const TodayTab: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [isCustomOpen, setCustomOpen] = useState(false);
   const [customValue, setCustomValue] = useState("");
+  const eveningRef = useRef<HTMLTextAreaElement | null>(null);
+  const [eveningOpen, setEveningOpen] = useState(false);
+  const [morningOpen, setMorningOpen] = useState(true);
+  // Check-ins state
+  const [checkins, setCheckins] = useState<JournalCheckin[]>([]);
+  const [checkinMood, setCheckinMood] = useState<MoodValue | null>(null);
+  const [checkinTags, setCheckinTags] = useState<TagId[]>([]);
+  const [checkinNote, setCheckinNote] = useState("");
+  const checkinSectionRef = useRef<HTMLDivElement | null>(null);
+  const checkinNoteRef = useRef<HTMLTextAreaElement | null>(null);
+  
 
   const tagList = useMemo(() => DEFAULT_TAGS, []);
 
@@ -68,6 +81,101 @@ export const TodayTab: React.FC = () => {
     walk: "مشي",
     socialize: "اجتماع",
     coffee: "قهوة",
+  };
+
+  // Frequency counters for today
+  const moodCounts = useMemo(() => {
+    const counts: Record<MoodValue, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    if (mood) counts[mood] += 1; // base mood
+    for (const c of checkins) counts[c.mood_value as MoodValue] += 1;
+    return counts;
+  }, [mood, checkins]);
+
+  const tagCounts = useMemo(() => {
+    const map: Record<TagId, number> = {} as any;
+    for (const t of tags) map[t] = (map[t] || 0) + 1; // base tags
+    for (const c of checkins) {
+      if (Array.isArray(c.tags)) {
+        for (const t of c.tags) map[t as TagId] = (map[t as TagId] || 0) + 1;
+      }
+    }
+    return map;
+  }, [tags, checkins]);
+
+  const notesToday = useMemo(() => checkins.filter(c => (c.note || '').trim().length > 0), [checkins]);
+
+  // Auto-focus Evening textarea when navigating with ?focus=evening
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('focus') === 'evening') {
+      setEveningOpen(true);
+      setTimeout(() => {
+        eveningRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        eveningRef.current?.focus();
+      }, 120);
+    }
+    if (params.get('focus') === 'checkin') {
+      setTimeout(() => {
+        checkinSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        checkinNoteRef.current?.focus();
+      }, 120);
+    }
+  }, [location.search]);
+
+  // If evening content appears (loaded or typed), keep section open
+  useEffect(() => {
+    if (evening && evening.trim().length > 0) {
+      setEveningOpen(true);
+    }
+  }, [evening]);
+
+  // Load today's saved entry on mount and when date changes
+  useEffect(() => {
+    (async () => {
+      try {
+        const d = await JournalService.getDay(date);
+        if (d) {
+          setMood((d.mood_value as MoodValue) ?? null);
+          setTags(Array.isArray(d.tags) ? d.tags : []);
+          setNote(d.note || "");
+          setMorning(d.morning_reflection || "");
+          setEvening(d.evening_reflection || "");
+        }
+        const list = await JournalService.getCheckinsForDay(date);
+        setCheckins(list);
+        // Prefill quick check-in mood using last checkin or base mood
+        const lastMood = (list?.[0]?.mood_value as MoodValue | null) ?? ((d?.mood_value as MoodValue) ?? null);
+        setCheckinMood(lastMood);
+      } catch (e) {
+        // Silent; Today remains editable if nothing saved yet
+      }
+    })();
+  }, [date]);
+
+  const toggleCheckinTag = (tag: TagId) => {
+    setCheckinTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
+  };
+
+  const onAddCheckin = async () => {
+    if (!checkinMood) return;
+    try {
+      await JournalService.addCheckin({
+        date,
+        mood_value: checkinMood,
+        tags: checkinTags,
+        note: checkinNote || null,
+      });
+      setCheckinNote("");
+      setCheckinTags([]);
+      const list = await JournalService.getCheckinsForDay(date);
+      setCheckins(list);
+      // Keep prefill to last mood
+      const lastMood = list?.[0]?.mood_value ?? checkinMood;
+      setCheckinMood(lastMood as MoodValue);
+      toast.success(language === 'ar' ? 'تمت الإضافة' : 'Entry added');
+    } catch (e: any) {
+      toast.error(e?.message || 'Error');
+    }
   };
 
   const moodAr: Record<MoodValue, string> = { 1: "سيئ جداً", 2: "سيئ", 3: "عادي", 4: "جيد", 5: "ممتاز" };
@@ -135,6 +243,8 @@ export const TodayTab: React.FC = () => {
         evening_reflection: evening || null
       });
       toast.success(language === 'ar' ? 'تم الحفظ' : 'Saved');
+      // Collapse morning after save
+      setMorningOpen(false);
     } catch (e: any) {
       toast.error(e?.message || 'Error');
     } finally {
@@ -146,12 +256,45 @@ export const TodayTab: React.FC = () => {
     <div className="space-y-4">
       <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 relative shadow-md card-3d inner-bevel edge-liquid">
         {saving && <div className="reveal-wipe" />}
-        <div className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
-          <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />
-          {language === 'ar' ? 'تحضير الصباح' : 'Morning Preparation'}
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-sm text-muted-foreground flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />
+            {language === 'ar' ? 'تحضير الصباح' : 'Morning Preparation'}
+          </div>
+          <button
+            type="button"
+            onClick={() => setMorningOpen(v => !v)}
+            className="text-xs text-muted-foreground hover:text-foreground underline"
+          >
+            {morningOpen ? (language === 'ar' ? 'إخفاء' : 'Hide') : (language === 'ar' ? 'تعديل الصباح' : 'Edit morning')}
+          </button>
         </div>
-        <Textarea value={morning} onChange={e => setMorning(e.target.value)} placeholder={language === 'ar' ? 'ما الأهم اليوم؟' : "What matters most today?"} />
+        {morningOpen ? (
+          <Textarea value={morning} onChange={e => setMorning(e.target.value)} placeholder={language === 'ar' ? 'ما الأهم اليوم؟' : "What matters most today?"} />
+        ) : (
+          <div className="text-sm text-muted-foreground">
+            {morning ? <span className="line-clamp-2">{morning}</span> : <span className="opacity-70">{language === 'ar' ? 'لم تتم إضافته بعد' : 'Not added yet'}</span>}
+          </div>
+        )}
       </div>
+
+      {/* Composer (flattened, elements removed by request) */}
+      <div ref={checkinSectionRef} style={{height:0}} aria-hidden="true"></div>
+      {notesToday.length > 0 && (
+        <div className="mt-3 rounded-2xl border border-dotted border-border/60 bg-gradient-to-b from-card to-background p-3">
+          <div className="space-y-2">
+            {notesToday.map(n => (
+              <div key={n.id} className="text-xs">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <span>{new Date(n.occurred_at).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})}</span>
+                  <span className="h-px flex-1 border-t border-dotted border-border/60" />
+                </div>
+                <div className="mt-1 text-sm">{n.note}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
         <div className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
@@ -175,10 +318,6 @@ export const TodayTab: React.FC = () => {
       </div>
 
       <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
-        <div className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
-          <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />
-          {language === 'ar' ? 'أنشطة' : 'Activities'}
-        </div>
         <div className="grid grid-cols-6 gap-2">
           {tagList.map(tag => (
             <button
@@ -207,13 +346,25 @@ export const TodayTab: React.FC = () => {
       </div>
 
       <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
-        <div className="text-sm text-muted-foreground mb-2 flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />{language === 'ar' ? 'ملاحظة' : 'Note'}</div>
+        <div className="text-xs text-muted-foreground mb-2">
+          {language === 'ar' ? 'ملاحظة' : 'Note'}
+        </div>
         <Textarea value={note} onChange={e => setNote(e.target.value)} placeholder={language === 'ar' ? 'ملاحظة قصيرة (اختياري)' : 'Short note (optional)'} />
       </div>
 
       <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
-        <div className="text-sm text-muted-foreground mb-2 flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />{language === 'ar' ? 'مراجعة المساء' : 'Evening Reflection'}</div>
-        <Textarea value={evening} onChange={e => setEvening(e.target.value)} placeholder={language === 'ar' ? 'أفضل لحظة؟ ماذا تعلمت؟' : 'Best moment? What did you learn?'} />
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-sm text-muted-foreground flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />
+            {language === 'ar' ? 'مراجعة المساء' : 'Evening Reflection'}
+            {!evening && (
+              <span className="ml-2 px-2 py-0.5 text-[10px] rounded-full bg-amber-500/15 text-amber-600 border border-amber-500/30">
+                {language === 'ar' ? 'معلّق حتى المساء' : 'Pending tonight'}
+              </span>
+            )}
+          </div>
+        </div>
+        <Textarea ref={eveningRef} value={evening} onChange={e => setEvening(e.target.value)} placeholder={language === 'ar' ? 'أفضل لحظة؟ ماذا تعلمت؟' : 'Best moment? What did you learn?'} />
       </div>
 
       <div className="flex justify-end">

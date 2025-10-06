@@ -24,6 +24,7 @@ export const useWidgetManager = (
       showMaw3dWidget: true,
       showQuoteWidget: true,
       showWhoopWidget: true,
+      showJournalWidget: true,
     });
 
   // Load widget settings from database - optimized with error handling
@@ -46,6 +47,7 @@ export const useWidgetManager = (
           showMaw3dWidget: dbSettings.showMaw3dWidget !== false,
           showQuoteWidget: dbSettings.showQuoteWidget !== false,
           showWhoopWidget: dbSettings.showWhoopWidget !== false,
+          showJournalWidget: dbSettings.showJournalWidget !== false,
         });
       }
     } catch (error) {
@@ -65,7 +67,7 @@ export const useWidgetManager = (
       const currentOrder = getWidgetOrder();
       
       // Import components - using dynamic imports for better performance
-      const { CalendarWidget, TRWidget, Maw3dWidget, WhoopWidget } = await import(
+      const { CalendarWidget, TRWidget, Maw3dWidget, WhoopWidget, JournalWidget } = await import(
         "@/components/dashboard/widgets"
       );
       const { QuoteWidget } = await import(
@@ -81,6 +83,14 @@ export const useWidgetManager = (
           component: React.createElement(CalendarWidget, {
             language,
             key: `calendar-${language}` // Add key for proper re-rendering
+          }),
+        },
+        journal: {
+          id: "journal",
+          title: "journal" as TranslationKey,
+          visible: widgetSettings.showJournalWidget,
+          component: React.createElement(JournalWidget, {
+            key: `journal-${language}`
           }),
         },
         tr: {
@@ -129,7 +139,7 @@ export const useWidgetManager = (
     };
 
     initializeWidgets();
-  }, [language, user, widgetSettings.showCalendarWidget, widgetSettings.showTasksWidget, widgetSettings.showTRWidget, widgetSettings.showMaw3dWidget, widgetSettings.showQuoteWidget, widgetSettings.showWhoopWidget]);
+  }, [language, user, widgetSettings.showCalendarWidget, widgetSettings.showTasksWidget, widgetSettings.showTRWidget, widgetSettings.showMaw3dWidget, widgetSettings.showQuoteWidget, widgetSettings.showWhoopWidget, widgetSettings.showJournalWidget]);
 
   // Load widget settings on mount and user change - debounced
   useEffect(() => {
@@ -146,9 +156,9 @@ export const useWidgetManager = (
   const getWidgetOrder = () => {
     try {
       const stored = localStorage.getItem('widgetOrder');
-      return stored ? JSON.parse(stored) : ['calendar', 'tr', 'whoop', 'maw3d', 'quote'];
+      return stored ? JSON.parse(stored) : ['calendar', 'journal', 'tr', 'whoop', 'maw3d', 'quote'];
     } catch {
-      return ['calendar', 'tr', 'whoop', 'maw3d', 'quote'];
+      return ['calendar', 'journal', 'tr', 'whoop', 'maw3d', 'quote'];
     }
   };
 
