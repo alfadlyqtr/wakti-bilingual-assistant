@@ -626,6 +626,7 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
   const [qaAnswer, setQaAnswer] = useState<string>("");
   const [qaFollowup, setQaFollowup] = useState<string | undefined>(undefined);
   const [qaTopic, setQaTopic] = useState<'sleep'|'recovery'|'strain'|'general'>('general');
+  const [qaLastQuestion, setQaLastQuestion] = useState<string | null>(null);
 
   const formatTimeShort = (iso?: string | null) => {
     if (!iso) return null;
@@ -727,6 +728,8 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
     setQaFollowup(undefined);
     const topic = classifyTopic(q);
     setQaTopic(topic);
+    setQaLastQuestion(q); // display user's input above answer
+    setQaQuestion(""); // clear textarea immediately
     const context = buildQAContext();
     // Immediate local draft to ensure user sees feedback instantly
     const localDraft = buildLocalFallbackAnswer(q, topic, context);
@@ -757,18 +760,53 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
       const { data: resp, error }: any = await Promise.race([call, timeout]);
       if (error) throw error;
       console.log('[QA] response:', resp);
-      let answer = '';
+      let answer: any = '';
       if (resp) {
         // Try common fields
-        answer = resp.answer || resp.message || resp.text || resp.content || '';
+        answer = resp.answer ?? resp.message ?? resp.text ?? resp.content ?? '';
         // If nested
         if (!answer && resp.data) {
-          answer = resp.data.answer || resp.data.message || '';
+          answer = resp.data.answer ?? resp.data.message ?? '';
         }
       }
+      // Normalize to a clean string without JSON braces
+      const normalizeAnswer = (input: any): string => {
+        try {
+          if (!input) return '';
+          if (typeof input === 'string') {
+            const s = input.trim();
+            if (s.startsWith('{') && s.endsWith('}')) {
+              const parsed = JSON.parse(s);
+              return normalizeAnswer(parsed);
+            }
+            return s;
+          }
+          if (typeof input === 'object') {
+            // If object has WHY/Today/Tonight keys, format lines
+            const obj = input as Record<string, any>;
+            if (obj.WHY || obj.Today || obj.Tonight) {
+              const lines: string[] = [];
+              if (obj.WHY) lines.push(`WHY: ${obj.WHY}`);
+              if (obj.Today) lines.push(`Today: ${obj.Today}`);
+              if (obj.Tonight) lines.push(`Tonight: ${obj.Tonight}`);
+              return lines.join('\n');
+            }
+            // If object has 'answer' that is string or object
+            if (obj.answer) return normalizeAnswer(obj.answer);
+            // Fallback: join values that are short strings
+            const vals = Object.values(obj).filter(v => typeof v === 'string' && (v as string).length < 500) as string[];
+            if (vals.length) return vals.join('\n');
+            return '';
+          }
+          return String(input);
+        } catch {
+          return '';
+        }
+      };
+
+      const answerStr = normalizeAnswer(answer);
       const follow = resp?.clarifying_question || resp?.data?.clarifying_question || undefined;
-      if (!answer) answer = localDraft;
-      setQaAnswer(answer);
+      setQaAnswer(answerStr || localDraft);
       setQaFollowup(follow);
     } catch (e: any) {
       console.error('[QA] error:', e?.message || e, e);
@@ -782,6 +820,48 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
     } finally {
       setQaLoading(false);
     }
+  };
+
+  // Highlight key metrics (numbers with common units/percent) inside the answer
+  // Be robust to non-string inputs (objects/arrays/numbers) from various sources
+  const renderHighlightedAnswer = (input: unknown) => {
+    if (input == null) return null;
+    let text: string = '';
+    if (typeof input === 'string') {
+      text = input;
+    } else if (typeof input === 'number' || typeof input === 'boolean') {
+      text = String(input);
+    } else if (Array.isArray(input)) {
+      text = input.map((x) => (typeof x === 'string' ? x : typeof x === 'number' ? String(x) : '')).join(' ').trim();
+    } else if (typeof input === 'object') {
+      const o = input as Record<string, unknown>;
+      const candidate = o['answer'] ?? o['daily_summary'] ?? o['weekly_summary'] ?? o['text'] ?? o['message'] ?? o['content'];
+      if (typeof candidate === 'string') text = candidate;
+      else text = JSON.stringify(o);
+    } else {
+      text = String(input);
+    }
+
+    const parts = text.split(/(\b\d+(?:\.\d+)?\s?(?:h|hours?|%|bpm|kcal|km|ms)\b|\d+(?:\.\d+)?\s?°C|\b\d+(?:\.\d+)?\s?breaths(?:\s*per\s*minute|\/\s*min)?\b|\b\d+\.?\d*\b)/gi);
+    return (
+      <span>
+        {parts.map((p, i) => {
+          if (!p) return null;
+          const trimmed = p.trim();
+          const isMetric = /^(?:\d+(?:\.\d+)?\s?(?:h|hours?|%|bpm|kcal|km|ms)|\d+(?:\.\d+)?\s?°C|\d+(?:\.\d+)?\s?breaths(?:\s*per\s*minute|\/\s*min)?|\d+\.?\d*)$/i.test(trimmed);
+          return (
+            <span key={i} className={isMetric ? 'font-semibold text-purple-600 dark:text-purple-300' : undefined}>{p}</span>
+          );
+        })}
+      </span>
+    );
+  };
+
+  const topicName = (t?: string) => {
+    if (t === 'sleep') return language === 'ar' ? 'نوم' : 'Sleep';
+    if (t === 'recovery') return language === 'ar' ? 'تعافٍ' : 'Recovery';
+    if (t === 'strain') return language === 'ar' ? 'إجهاد' : 'Strain';
+    return null;
   };
 
   return (
@@ -1092,15 +1172,41 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
               <MessageCircle className="h-5 w-5 text-purple-400" />
               {language === 'ar' ? 'سؤال وجواب سريع' : 'Quick Q&A'}
             </h3>
-            {(qaAnswer || qaFollowup) && (
+            {(qaLoading || qaAnswer || qaFollowup) && (
               <div className={`mb-4 p-4 rounded-xl border ${qaTopic==='sleep' ? 'border-purple-300 bg-purple-50/60 dark:bg-purple-500/10' : qaTopic==='recovery' ? 'border-emerald-300 bg-emerald-50/60 dark:bg-emerald-500/10' : qaTopic==='strain' ? 'border-amber-300 bg-amber-50/60 dark:bg-amber-500/10' : 'border-gray-200 bg-white/60 dark:bg-white/5'}`}>
+                {/* Topic chip */}
+                {topicName(qaTopic) && (
+                  <div className="mb-2 text-[10px] md:text-xs">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full ${qaTopic==='sleep' ? 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300' : qaTopic==='recovery' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300' : qaTopic==='strain' ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300' : 'bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-200'}`}>
+                      {topicName(qaTopic) as string}
+                    </span>
+                  </div>
+                )}
+                {/* User question chip */}
+                {qaLastQuestion && (
+                  <div className="mb-2 text-xs">
+                    <span className="inline-block px-2 py-1 rounded-md bg-purple-600/10 text-purple-700 dark:text-purple-300 border border-purple-300/50">
+                      {qaLastQuestion}
+                    </span>
+                  </div>
+                )}
                 {qaFollowup && (
                   <div className="mb-2 text-xs text-muted-foreground">
+                    <span className="font-medium">{language === 'ar' ? 'سؤال إيضاحي: ' : 'Follow-up question: '}</span>
                     {qaFollowup}
                   </div>
                 )}
-                {qaAnswer && (
-                  <div className="text-sm whitespace-pre-wrap leading-relaxed text-gray-800 dark:text-gray-200">{qaAnswer}</div>
+                {qaLoading && (
+                  <div className="text-sm leading-relaxed text-gray-800 dark:text-gray-200">
+                    <span className="inline-flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce [animation-delay:-0.2s]"></span>
+                      <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce [animation-delay:0s]"></span>
+                      <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+                    </span>
+                  </div>
+                )}
+                {!qaLoading && qaAnswer && (
+                  <div className="text-sm whitespace-pre-wrap leading-relaxed text-gray-800 dark:text-gray-200">{renderHighlightedAnswer(qaAnswer)}</div>
                 )}
               </div>
             )}
@@ -1112,8 +1218,15 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
                 placeholder={language === 'ar' ? 'اسأل عن نومك أو تعافيك أو الإجهاد...' : 'Ask about your sleep, recovery, or strain...'}
                 className="flex-1 rounded-lg border border-gray-300 dark:border-white/10 bg-white/90 dark:bg-white/5 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-purple-400"
               />
-              <Button onClick={askQA} disabled={qaLoading} className="rounded-lg px-4">
-                {qaLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              <Button onClick={askQA} disabled={qaLoading} className={`rounded-lg px-4 ${qaLoading ? 'animate-pulse' : ''}`}>
+                {qaLoading ? (
+                  <div className="flex items-center gap-2">
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    <span className="text-xs">{language === 'ar' ? 'يكتب...' : 'Typing...'}</span>
+                  </div>
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
               </Button>
             </div>
             {qaError && (
