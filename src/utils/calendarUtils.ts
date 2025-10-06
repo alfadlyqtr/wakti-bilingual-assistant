@@ -9,7 +9,8 @@ export enum EntryType {
   MANUAL_NOTE = 'manual_note',
   MAW3D_EVENT = 'maw3d_event',
   TASK = 'task',
-  REMINDER = 'reminder'
+  REMINDER = 'reminder',
+  JOURNAL = 'journal'
 }
 
 export type CalendarView = 'month' | 'week' | 'year';
@@ -32,14 +33,16 @@ export const getCalendarEntries = async (
   legacyEvents: any[] = [],
   maw3dEvents: Maw3dEvent[] = [],
   tasks: TRTask[] = [],
-  reminders: TRReminder[] = []
+  reminders: TRReminder[] = [],
+  journalOverlay: { date: string; mood_value: number | null }[] = []
 ): Promise<CalendarEntry[]> => {
   console.log('Getting calendar entries:', {
     manualEntries: manualEntries.length,
     legacyEvents: legacyEvents.length,
     maw3dEvents: maw3dEvents.length,
     tasks: tasks.length,
-    reminders: reminders.length
+    reminders: reminders.length,
+    journalDays: journalOverlay.length
   });
 
   const entries: CalendarEntry[] = [];
@@ -92,6 +95,18 @@ export const getCalendarEntries = async (
     }));
 
   entries.push(...reminderEntries);
+
+  // Add journal overlay entries (one per day)
+  if (journalOverlay && journalOverlay.length > 0) {
+    const journalEntries: CalendarEntry[] = journalOverlay.map((row, idx) => ({
+      id: `journal-${row.date}-${idx}`,
+      title: 'Journal',
+      date: row.date,
+      type: EntryType.JOURNAL,
+      isAllDay: true
+    }));
+    entries.push(...journalEntries);
+  }
 
   console.log('Total calendar entries:', entries.length);
   return entries;

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { cn } from "@/lib/utils";
-import { Calendar, CalendarClock, Mic, Sparkles, ListTodo, LayoutDashboard, PenTool, Gamepad2, HeartPulse } from "lucide-react";
+import { Calendar, CalendarClock, Mic, Sparkles, ListTodo, LayoutDashboard, PenTool, Gamepad2, HeartPulse, NotebookPen } from "lucide-react";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { waktiBadges } from "@/services/waktiBadges";
 import { motion } from "framer-motion";
@@ -84,6 +84,12 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
       badgeType: 'event',
     },
     {
+      name: language === 'ar' ? 'المذكرات' : 'Journal',
+      path: '/journal',
+      icon: 'notebook-pen',
+      colorClass: 'text-pink-500',
+    },
+    {
       name: language === 'ar' ? 'مواعيد' : 'Maw3d', 
       path: '/maw3d',
       icon: 'calendar-clock',
@@ -149,6 +155,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
     pen: PenTool,
     gamepad: Gamepad2,
     'heart-pulse': HeartPulse,
+    'notebook-pen': NotebookPen,
   };
 
   const handleNavigation = (path: string, badgeType?: string) => {

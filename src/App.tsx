@@ -56,6 +56,7 @@ import TextGenerator from "./pages/TextGenerator";
 import GameMode from "./pages/GameMode";
 import FitnessHealth from "./pages/FitnessHealth";
 import FitnessWhoopCallback from "./pages/FitnessWhoopCallback";
+import Journal from "./pages/Journal";
 
 import "./App.css";
 
@@ -160,6 +161,11 @@ function App() {
                 <Route path="/calendar" element={
                   <GiftNotificationProvider>
                     <AppLayout><Calendar /></AppLayout>
+                  </GiftNotificationProvider>
+                } />
+                <Route path="/journal" element={
+                  <GiftNotificationProvider>
+                    <AppLayout><Journal /></AppLayout>
                   </GiftNotificationProvider>
                 } />
                 <Route path="/contacts" element={

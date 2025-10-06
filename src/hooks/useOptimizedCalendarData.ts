@@ -4,6 +4,7 @@ import { getCalendarEntries, CalendarEntry } from "@/utils/calendarUtils";
 import { Maw3dService } from "@/services/maw3dService";
 import { TRService, TRTask, TRReminder } from "@/services/trService";
 import { useDebounced } from "./useDebounced";
+import { JournalService } from "@/services/journalService";
 
 const MANUAL_ENTRIES_KEY = "calendarManualEntries";
 
@@ -12,6 +13,7 @@ let calendarCache: {
   maw3dEvents: any[];
   tasks: TRTask[];
   reminders: TRReminder[];
+  journalOverlay: { date: string; mood_value: number | null }[];
   timestamp: number;
 } | null = null;
 
@@ -22,6 +24,7 @@ export function useOptimizedCalendarData() {
   const [maw3dEvents, setMaw3dEvents] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [reminders, setReminders] = useState([]);
+  const [journalOverlay, setJournalOverlay] = useState<{ date: string; mood_value: number | null }[]>([]);
   const [entries, setEntries] = useState<CalendarEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const mountedRef = useRef(true);
@@ -64,6 +67,7 @@ export function useOptimizedCalendarData() {
       setMaw3dEvents(calendarCache.maw3dEvents);
       setTasks(calendarCache.tasks);
       setReminders(calendarCache.reminders);
+      setJournalOverlay(calendarCache.journalOverlay || []);
       setLoading(false);
       return;
     }
@@ -73,10 +77,11 @@ export function useOptimizedCalendarData() {
       setLoading(true);
       
       console.log('🔄 Fetching fresh calendar data from API');
-      const [maw3d, tasksData, reminderData] = await Promise.all([
+      const [maw3d, tasksData, reminderData, journalDays] = await Promise.all([
         Maw3dService.getUserEvents(),
         TRService.getTasks(),
-        TRService.getReminders()
+        TRService.getReminders(),
+        JournalService.getCalendarOverlay(60)
       ]);
       
       if (!mountedRef.current) return;
@@ -86,12 +91,14 @@ export function useOptimizedCalendarData() {
         maw3dEvents: maw3d || [],
         tasks: tasksData || [],
         reminders: reminderData || [],
+        journalOverlay: journalDays || [],
         timestamp: now
       };
 
       setMaw3dEvents(maw3d || []);
       setTasks(tasksData || []);
       setReminders(reminderData || []);
+      setJournalOverlay(journalDays || []);
       
       console.log('✅ Calendar data fetched and cached');
     } catch (error) {
@@ -125,10 +132,10 @@ export function useOptimizedCalendarData() {
 
   // Recompute entries when data changes
   useEffect(() => {
-    getCalendarEntries(manualEntries, [], maw3dEvents, tasks, reminders)
+    getCalendarEntries(manualEntries, [], maw3dEvents, tasks, reminders, journalOverlay)
       .then(setEntries)
       .catch(() => setEntries([]));
-  }, [manualEntries, maw3dEvents, tasks, reminders]);
+  }, [manualEntries, maw3dEvents, tasks, reminders, journalOverlay]);
 
   // Safe manual entries setter with localStorage persistence
   const updateManualEntries = useCallback((newEntries: CalendarEntry[]) => {
@@ -148,6 +155,7 @@ export function useOptimizedCalendarData() {
     maw3dEvents,
     tasks,
     reminders,
+    journalOverlay,
     refresh,
     debouncedRefresh,
     setManualEntries: updateManualEntries

@@ -22,7 +22,7 @@ import { arSA, enUS, Locale } from "date-fns/locale";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { CalendarEntry, CalendarView, EntryType } from "@/utils/calendarUtils";
-import { Circle, CalendarCheck, CalendarHeart, CalendarPlus } from "lucide-react";
+import { Circle, CalendarCheck, CalendarHeart, CalendarPlus, NotebookPen } from "lucide-react";
 
 interface CalendarGridProps {
   currentDate: Date;
@@ -100,7 +100,8 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
       [EntryType.MANUAL_NOTE]: 0,
       [EntryType.MAW3D_EVENT]: 0,
       [EntryType.TASK]: 0,
-      [EntryType.REMINDER]: 0
+      [EntryType.REMINDER]: 0,
+      [EntryType.JOURNAL]: 0
     };
     
     entries.forEach(entry => {

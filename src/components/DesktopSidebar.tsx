@@ -11,6 +11,7 @@ import {
   HeartPulse,
   Sparkles,
   ListTodo,
+  NotebookPen,
   ChevronLeft,
   ChevronRight,
   Home,
@@ -45,6 +46,7 @@ export function DesktopSidebar() {
   const navItems: NavItemProps[] = [
     { icon: Home, label: "dashboard", path: "/dashboard" },
     { icon: Calendar, label: "calendar", path: "/calendar" },
+    { icon: NotebookPen as unknown as IconComponent, label: "journal", path: "/journal" },
     { icon: CalendarClock, label: "events", path: "/maw3d", badge: maw3dEventCount },
     { icon: ListTodo, label: "tasks", path: "/tr", badge: 0 },
     { icon: Sparkles, label: "wakti_ai", path: "/wakti-ai" },
@@ -196,6 +198,7 @@ export function DesktopSidebar() {
               const getColorClass = (path: string) => {
                 switch (path) {
                   case '/calendar': return 'nav-icon-calendar text-blue-500';
+                  case '/journal': return 'text-pink-500';
                   case '/maw3d': return 'nav-icon-maw3d text-purple-500';
                   case '/tr': return 'nav-icon-tr text-emerald-500';
                   case '/wakti-ai': return 'nav-icon-ai text-amber-500';
@@ -207,6 +210,7 @@ export function DesktopSidebar() {
               const getGlowColor = (path: string) => {
                 switch (path) {
                   case '/calendar': return 'shadow-[0_0_15px_rgba(59,130,246,0.7)]';
+                  case '/journal': return 'shadow-[0_0_15px_rgba(236,72,153,0.7)]';
                   case '/maw3d': return 'shadow-[0_0_15px_rgba(168,85,247,0.7)]';
                   case '/tr': return 'shadow-[0_0_15px_rgba(16,185,129,0.7)]';
                   case '/wakti-ai': return 'shadow-[0_0_15px_rgba(245,158,11,0.7)]';
@@ -218,6 +222,7 @@ export function DesktopSidebar() {
               const getBorderClass = (path: string) => {
                 switch (path) {
                   case '/calendar': return 'border-blue-500/40';
+                  case '/journal': return 'border-pink-500/40';
                   case '/maw3d': return 'border-purple-500/40';
                   case '/tr': return 'border-emerald-500/40';
                   case '/wakti-ai': return 'border-amber-500/40';
