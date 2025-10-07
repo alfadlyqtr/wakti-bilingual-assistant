@@ -9,7 +9,8 @@ import { MoodFace, moodLabels, MoodValue } from "./icons/MoodFaces";
 import { TagIcon, TagId } from "@/components/journal/TagIcon";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Plus } from "lucide-react";
+import { Plus, Undo2 } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const DEFAULT_TAGS: TagId[] = [
   "family","friends","date","exercise","sport","relax","movies","gaming","reading","cleaning",
@@ -34,6 +35,7 @@ const faces: { value: MoodValue; color: string }[] = [
 export const TodayTab: React.FC = () => {
   const { language } = useTheme();
   const location = useLocation();
+  const { isMobile } = useIsMobile();
   const [date] = useState(getLocalDayString());
   const [mood, setMood] = useState<MoodValue | null>(null);
   const [tags, setTags] = useState<TagId[]>([]);
@@ -52,6 +54,13 @@ export const TodayTab: React.FC = () => {
   const [dayUpdatedAt, setDayUpdatedAt] = useState<string | null>(null);
   const lastMoodTapAtRef = useRef<number | null>(null);
   const lastCheckinIdRef = useRef<string | null>(null);
+  // In-UI tag tap counters (so tags can have ×N even without a mood tap)
+  const [tagTapCounts, setTagTapCounts] = useState<Record<TagId, number>>({} as any);
+  // Stub de-duplication
+  const lastStubTextRef = useRef<string | null>(null);
+  const lastStubAtRef = useRef<number>(0);
+  // Per-tag throttle to avoid double appends on fast duplicate clicks
+  const lastTagTapAtRef = useRef<Record<TagId, number>>({} as any);
   
 
   const tagList = useMemo(() => DEFAULT_TAGS, []);
@@ -82,15 +91,56 @@ export const TodayTab: React.FC = () => {
     coffee: "قهوة",
   };
 
+  // Undo the most recent occurrence of a specific tag
+  const undoLastTag = async (tag: TagId) => {
+    try {
+      // 1) Remove the most recent line in Note that has this #tag
+      setNote(prev => {
+        if (!prev) return prev;
+        const label = (language === 'ar' ? (arTagLabels[tag] || tag.replace('_',' ')) : tag.replace('_',' '));
+        const pat = new RegExp(`#${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`);
+        const lines = prev.split('\n');
+        let i = lines.length - 1;
+        while (i >= 0) {
+          const line = lines[i];
+          if (/^\[[^\]]+\]/.test(line) && pat.test(line)) { lines.splice(i,1); break; }
+          i--;
+        }
+        return lines.join('\n');
+      });
+
+      // 2) If there is a recent mood check-in, remove this tag from that check-in
+      const recent = lastMoodTapAtRef.current && (Date.now() - (lastMoodTapAtRef.current as number) < 2*60*1000);
+      const id = lastCheckinIdRef.current;
+      if (recent && id) {
+        const updated = tags.filter(t => t !== tag);
+        await JournalService.updateCheckinTags(id, updated);
+        const list = await JournalService.getCheckinsForDay(date);
+        setCheckins(list);
+      } else {
+        // Otherwise, decrement UI-only counter
+        setTagTapCounts(prev => ({ ...prev, [tag]: Math.max(0, (prev[tag] || 0) - 1) } as any));
+      }
+      toast.success(language === 'ar' ? 'تم التراجع' : 'Undone');
+    } catch (e: any) {
+      toast.error(e?.message || 'Error');
+    }
+  };
+
   // When tags change shortly after a mood tap:
-  // 1) append/update tags on the latest stub line in the note
+  // 1) ensure tokens for selected tags exist on the latest timestamp line in the note (pipe-separated)
   // 2) update tags on the latest created check-in in the DB, then refresh check-ins (so tag ×N updates)
   useEffect(() => {
     const lastTap = lastMoodTapAtRef.current;
     if (!lastTap) return;
     if (Date.now() - lastTap > 2 * 60 * 1000) return; // only within 2 minutes
     const tagLabel = (t: TagId) => (language === 'ar' ? (arTagLabels[t] || t.replace('_',' ')) : t.replace('_',' '));
-    const tagsPart = tags.length ? ` [${tags.map(tagLabel).join(', ')}]` : '';
+    const tagEmoji: Partial<Record<TagId, string>> = {
+      family: '👨\u200d👩\u200d👧', friends: '🤝', date: '💘', exercise: '🏋️', sport: '🏆', relax: '😌',
+      movies: '🎬', gaming: '🎮', reading: '📖', cleaning: '🧹', sleep: '😴', eat_healthy: '🥗',
+      shopping: '🛍️', study: '🧠', work: '💼', music: '🎵', meditation: '🧘', nature: '🌿', travel: '✈️',
+      cooking: '🍳', walk: '🚶', socialize: '🗣️', coffee: '☕'
+    };
     setNote(prev => {
       if (!prev) return prev;
       const lines = prev.split('\n');
@@ -98,14 +148,21 @@ export const TodayTab: React.FC = () => {
       let idx = lines.length - 1;
       while (idx >= 0 && !/^\[[^\]]+\]/.test(lines[idx])) idx--;
       if (idx < 0) return prev;
-      const line = lines[idx];
-      let updated = line;
-      if (/\s\[[^\]]*\]/.test(line)) {
-        updated = line.replace(/\s\[[^\]]*\]/, tagsPart ? ` ${tagsPart}` : '');
-      } else if (tagsPart) {
-        updated = line.replace(/^(\[[^\]]+\]\s+\S+)/, `$1${tagsPart}`);
+      let updated = lines[idx];
+      // Append any missing tokens as pipes
+      for (const t of tags) {
+        const label = tagLabel(t);
+        const icon = tagEmoji[t] || '🏷️';
+        const token = `${icon} ${label}`;
+        const tokenRe = new RegExp(`(?:\\s|\|)${token.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}(?=\\s|$)`);
+        if (!tokenRe.test(updated)) {
+          // if line already has clock/mood, just append with pipe
+          updated = `${updated} | ${token} `;
+        }
       }
-      if (updated === line) return prev;
+      // Ensure a single trailing placeholder ' | ' exists once at the end
+      updated = updated.replace(/\s*\|\s*$/, '').trimEnd() + ' | ';
+      if (updated === lines[idx]) return prev;
       lines[idx] = updated;
       return lines.join('\n');
     });
@@ -146,16 +203,33 @@ export const TodayTab: React.FC = () => {
   // Tag counts from check-ins only (not base selection)
   const tagCounts = useMemo(() => {
     const map: Record<TagId, number> = {} as any;
+    // From persisted check-ins
     for (const c of checkins) {
       if (Array.isArray(c.tags)) {
         for (const t of c.tags) map[t as TagId] = (map[t as TagId] || 0) + 1;
       }
     }
+    // Plus from on-screen selections (not persisted)
+    for (const k in tagTapCounts) {
+      const key = k as TagId;
+      map[key] = (map[key] || 0) + (tagTapCounts[key] || 0);
+    }
     return map;
-  }, [checkins]);
+  }, [checkins, tagTapCounts]);
 
   const notesToday = useMemo(() => checkins.filter(c => (c.note || '').trim().length > 0), [checkins]);
-  const latestTaggedCheckin = useMemo(() => checkins.find(c => Array.isArray(c.tags) && c.tags.length > 0), [checkins]);
+  // Show current selected tags under the Note (with icons)
+  const selectedTagsForPreview = tags;
+
+  // Clear everything: selected mood, selected tags, counters, and Note text
+  const clearSelections = () => {
+    setMood(null);
+    setTags([]);
+    setTagTapCounts({} as any);
+    setNote("");
+    lastMoodTapAtRef.current = null;
+    lastCheckinIdRef.current = null;
+  };
 
   // Auto-scroll Evening textarea when navigating with ?focus=evening
   useEffect(() => {
@@ -211,11 +285,35 @@ export const TodayTab: React.FC = () => {
       const emoji: Record<MoodValue, string> = { 1: '😖', 2: '🙁', 3: '😐', 4: '🙂', 5: '😄' };
       const now = new Date();
       const timeStr = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-      // Localize tag labels
-      const tagLabel = (t: TagId) => (language === 'ar' ? (arTagLabels[t] || t.replace('_',' ')) : t.replace('_',' '));
-      const tagsPart = tags.length ? ` [${tags.map(tagLabel).join(', ')}]` : '';
-      const stub = `[${timeStr}] ${emoji[value]}${tagsPart} `;
-      setNote(prev => (prev && prev.trim().length > 0) ? `${prev}\n${stub}` : stub);
+      // Initial line with clock + mood, pipe-separated, plus trailing pipe placeholder
+      const stub = `[${timeStr}] 🕒 | ${emoji[value]} | `;
+      setNote(prev => {
+        const prevText = prev || '';
+        const lastLine = prevText.split('\n').pop() || '';
+        // If last line already begins with the same timestamp, append mood to it instead of creating new line
+        const sameTimeRe = new RegExp(`^\\[${timeStr.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$&')}\\]`);
+        if (sameTimeRe.test(lastLine)) {
+          // if mood token not present, append with pipe
+          if (!new RegExp(`(?:\\s|\|)${emoji[value].replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}(?=\\s|$)`).test(lastLine)) {
+            let combined = `${lastLine} | ${emoji[value]} `;
+            combined = combined.replace(/\s*\|\s*$/, '').trimEnd() + ' | ';
+            const base = prevText.split('\n'); base[base.length-1] = combined;
+            lastStubTextRef.current = combined; lastStubAtRef.current = Date.now();
+            return base.join('\n');
+          }
+          // ensure placeholder at end even if mood already present
+          const base = prevText.split('\n');
+          base[base.length-1] = (lastLine.replace(/\s*\|\s*$/, '').trimEnd() + ' | ');
+          return base.join('\n');
+        }
+        // Otherwise start a new line
+        // de-dupe only if exact same stub was just added
+        if (lastLine === stub && Date.now() - lastStubAtRef.current < 1200) return prevText;
+        const next = prevText && prevText.trim().length > 0 ? `${prevText}\n${stub}` : stub;
+        lastStubTextRef.current = stub;
+        lastStubAtRef.current = Date.now();
+        return next;
+      });
       lastMoodTapAtRef.current = Date.now();
       // Focus textarea and place cursor at end
       setTimeout(() => {
@@ -269,7 +367,102 @@ export const TodayTab: React.FC = () => {
   };
 
   const toggleTag = (tag: TagId) => {
-    setTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
+    setTags(prev => {
+      const on = prev.includes(tag);
+      // throttle only for selecting (avoid blocking deselect/undo)
+      if (!on) {
+        const lastAt = lastTagTapAtRef.current[tag] || 0;
+        const nowTs = Date.now();
+        if (nowTs - lastAt < 600) return prev;
+        lastTagTapAtRef.current[tag] = nowTs;
+      }
+      // Update xN counters in UI
+      setTagTapCounts(c => {
+        const next = { ...c } as Record<TagId, number>;
+        if (!on) next[tag] = (next[tag] || 0) + 1; // selecting → increment
+        else if (next[tag] && next[tag] > 0) next[tag] = next[tag] - 1; // deselecting → decrement
+        return next;
+      });
+      // Append/remove stub inside Note for tag actions (text + emoji icon substitute)
+      const tagEmoji: Partial<Record<TagId, string>> = {
+        family: '👨\u200d👩\u200d👧', friends: '🤝', date: '💘', exercise: '🏋️', sport: '🏆', relax: '😌',
+        movies: '🎬', gaming: '🎮', reading: '📖', cleaning: '🧹', sleep: '😴', eat_healthy: '🥗',
+        shopping: '🛍️', study: '🧠', work: '💼', music: '🎵', meditation: '🧘', nature: '🌿', travel: '✈️',
+        cooking: '🍳', walk: '🚶', socialize: '🗣️', coffee: '☕'
+      };
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+      const label = (language === 'ar' ? (arTagLabels[tag] || tag.replace('_',' ')) : tag.replace('_',' '));
+      const icon = tagEmoji[tag] || '🏷️';
+      const token = `${icon} ${label}`;
+      if (!on) {
+        setNote(prevText => {
+          const prevVal = prevText || '';
+          const lines = prevVal.length ? prevVal.split('\n') : [];
+          const lastIdx = lines.length - 1;
+          if (lastIdx >= 0 && /^\[[^\]]+\]/.test(lines[lastIdx])) {
+            // operate on existing last timestamp line
+            const sameTime = new RegExp(`^\\[${timeStr.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$&')}\\]`);
+            const alreadyHas = new RegExp(`(?:\\s|\|)${token.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}(?=\\s|$)`);
+            if (alreadyHas.test(lines[lastIdx])) return prevVal; // avoid duplicate tag on same line
+            if (sameTime.test(lines[lastIdx]) || true) {
+              // append to same line (one timestamp)
+              lines[lastIdx] = `${lines[lastIdx]} | ${token}`.trimEnd();
+              const next = lines.join('\n');
+              lastStubTextRef.current = token;
+              lastStubAtRef.current = Date.now();
+              return next;
+            }
+          }
+          // otherwise create a new timestamp line
+          const stub = `[${timeStr}] 🕒 | ${token}`;
+          if (lines.length === 0) return stub;
+          lines.push(stub);
+          const next = lines.join('\n');
+          lastStubTextRef.current = stub;
+          lastStubAtRef.current = Date.now();
+          return next;
+        });
+        // Focus textarea and place cursor at end so the user sees the appended tag line immediately
+        setTimeout(() => {
+          const el = noteRef.current;
+          if (el) {
+            el.focus();
+            const len = el.value.length;
+            el.setSelectionRange(len, len);
+          }
+        }, 0);
+      } else {
+        // Deselect: remove token from most recent timestamp line containing it.
+        setNote(prevText => {
+          if (!prevText) return prevText;
+          const lines = prevText.split('\n');
+          let i = lines.length - 1;
+          const tagPattern = new RegExp(`(?:\\s|\|)${token.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}(?=\\s|$)`);
+          while (i >= 0) {
+            const line = lines[i];
+            if (/^\[[^\]]+\]/.test(line) && tagPattern.test(line)) {
+              let updated = line.replace(tagPattern, '').replace(/\s*\|\s*\|/g,' | ').replace(/^\[([^\]]+)\]\s*\|\s*$/,'[$1] ').trimEnd();
+              // Keep single placeholder when content remains
+              if (!/^\[[^\]]+\]\s*$/.test(updated) && !/^\[[^\]]+\]\s*🕒\s*$/.test(updated)) {
+                updated = updated.replace(/\s*\|\s*$/, '').trimEnd() + ' | ';
+              }
+              // If line is only a timestamp after cleanup, drop the line
+              if (/^\[[^\]]+\]\s*$/.test(updated) || /^\[[^\]]+\]\s*🕒\s*$/.test(updated)) {
+                lines.splice(i,1);
+              } else {
+                lines[i] = updated;
+              }
+              break;
+            }
+            i--;
+          }
+          return lines.join('\n');
+        });
+      }
+      // Toggle selection
+      return on ? prev.filter(t => t !== tag) : [...prev, tag];
+    });
   };
 
   const handleAddCustom = () => {
@@ -297,6 +490,26 @@ export const TodayTab: React.FC = () => {
         evening_reflection: evening || null
       });
       setDayUpdatedAt(new Date().toISOString());
+      // After saving, add a dotted separator so the next entry is underneath
+      setNote(prev => {
+        const sep = '................................'; // dotted line
+        const prevText = prev || '';
+        const lines = prevText.split('\n');
+        const lastLine = (lines[lines.length - 1] || '').trimEnd();
+        const isSep = /^\.{8,}$/.test(lastLine);
+        if (isSep) return prevText; // already has a separator at the end
+        const next = (prevText.endsWith('\n') ? prevText : prevText + '\n') + sep + '\n';
+        return next;
+      });
+      // Keep cursor at end
+      setTimeout(() => {
+        const el = noteRef.current;
+        if (el) {
+          el.focus();
+          const len = el.value.length;
+          el.setSelectionRange(len, len);
+        }
+      }, 0);
       toast.success(language === 'ar' ? 'تم الحفظ' : 'Saved');
       // Collapse morning after save
       setMorningOpen(false);
@@ -364,47 +577,19 @@ export const TodayTab: React.FC = () => {
             <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />
             {language === 'ar' ? 'المزاج' : 'Mood'}
           </div>
-          {mood && (
-            <button
-              type="button"
-              onClick={() => {
-                setMood(null);
-                // Remove the most recent stub line anywhere (keep user's text on that line if present after stub)
-                setNote(prev => {
-                  if (!prev) return prev;
-                  const lines = prev.split('\n');
-                  let idx = lines.length - 1;
-                  while (idx >= 0 && !/^\[[^\]]+\]/.test(lines[idx])) idx--;
-                  if (idx < 0) return prev;
-                  const line = lines[idx];
-                  const stripped = line.replace(/^\[[^\]]+\]\s+\S+(?:\s+\[[^\]]*\])?\s*/, '');
-                  if (stripped.trim().length === 0) {
-                    lines.splice(idx, 1);
-                  } else {
-                    lines[idx] = stripped;
-                  }
-                  return lines.join('\n');
-                });
-                lastMoodTapAtRef.current = null;
-                lastCheckinIdRef.current = null;
-              }}
-              className="text-[11px] px-2 py-0.5 rounded-md bg-muted hover:bg-muted/70 text-muted-foreground"
-            >
-              {language === 'ar' ? 'مسح الاختيار' : 'Clear'}
-            </button>
-          )}
+          {/* Clear moved to Note header */}
         </div>
-        <div className="grid grid-cols-5 gap-3 items-start">
+        <div className={`grid grid-cols-5 ${isMobile ? 'gap-2' : 'gap-3'} items-start`}>
           {faces.map(({ value, color }) => (
             <div key={value} className="flex flex-col items-center">
               <button
                 onClick={() => { setMood(value); addQuickCheckin(value); }}
                 aria-pressed={mood === value}
-                className={`group relative flex flex-col items-center gap-1 rounded-2xl px-3 py-3 transition-all cursor-pointer select-none focus:outline-none
+                className={`group relative flex flex-col items-center gap-1 rounded-2xl ${isMobile ? 'px-2 py-2' : 'px-3 py-3'} transition-all cursor-pointer select-none focus:outline-none
                 border border-border bg-card shadow-sm hover:shadow-md hover:-translate-y-[1px]
                 ${mood === value ? 'border-primary shadow-lg bg-card' : ''}`}
               >
-                <MoodFace value={value} active={mood === value} size={56} className="transition-transform duration-150 group-hover:scale-[1.03]" />
+                <MoodFace value={value} active={mood === value} size={isMobile ? 44 : 56} className="transition-transform duration-150 group-hover:scale-[1.03]" />
                 <span className={`text-xs ${color}`}>{language === 'ar' ? moodAr[value] : moodLabels[value]}</span>
               </button>
               {moodCounts[value] >= 1 && (
@@ -413,11 +598,12 @@ export const TodayTab: React.FC = () => {
                   <button
                     type="button"
                     aria-label={language === 'ar' ? 'تراجع' : 'Undo'}
-                    className="h-7 px-3 rounded-md border border-border bg-card text-foreground/80 leading-none flex items-center justify-center shadow-sm hover:shadow-md active:scale-[0.98]"
+                    className="h-6 w-6 rounded-md border border-border bg-card text-foreground/80 leading-none flex items-center justify-center shadow-sm hover:shadow-md active:scale-[0.98]"
                     onClick={() => undoLastCheckin(value)}
                     title={language === 'ar' ? 'تراجع عن آخر اختيار' : 'Undo last pick'}
                   >
-                    {language === 'ar' ? 'تراجع' : 'Undo'}
+                    <Undo2 className="h-3.5 w-3.5" />
+                    <span className="sr-only">{language === 'ar' ? 'تراجع' : 'Undo'}</span>
                   </button>
                 </div>
               )}
@@ -427,21 +613,37 @@ export const TodayTab: React.FC = () => {
       </div>
 
       <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
-        <div className="grid grid-cols-6 gap-2">
+        <div className="grid grid-cols-6 gap-2 items-start">
           {tagList.map(tag => (
-            <button
-              key={tag}
-              onClick={() => toggleTag(tag)}
-              aria-pressed={tags.includes(tag)}
-              className={`group relative flex flex-col items-center gap-1 rounded-2xl px-3 py-2 transition-all cursor-pointer select-none focus:outline-none border border-border bg-card shadow-sm hover:shadow-md hover:-translate-y-[1px] ${tags.includes(tag) ? 'border-primary bg-primary/5' : ''}`}
-            >
-              <div
-                className={`h-9 w-9 rounded-full flex items-center justify-center bg-gradient-to-br from-white/70 to-muted shadow-sm ${tags.includes(tag) ? 'text-primary' : (tagColor[tag] || 'text-muted-foreground')}`}
+            <div key={tag} className="flex flex-col items-center w-[104px]">
+              <button
+                onClick={() => toggleTag(tag)}
+                aria-pressed={tags.includes(tag)}
+                className={`group relative flex flex-col items-center justify-center gap-1 rounded-2xl px-3 py-2 h-[78px] w-full transition-all cursor-pointer select-none focus:outline-none border border-border bg-card shadow-sm hover:shadow-md hover:-translate-y-[1px] ${tags.includes(tag) ? 'border-primary bg-primary/5' : ''}`}
               >
-                <TagIcon id={tag} className="h-4 w-4" />
+                {(tagCounts[tag] ?? 0) >= 1 && (
+                  <span className="absolute top-1 right-1 text-[10px] px-1 py-0.5 rounded bg-muted/80 border border-border/60">×{tagCounts[tag]}</span>
+                )}
+                <div
+                  className={`h-9 w-9 rounded-full flex items-center justify-center bg-gradient-to-br from-white/70 to-muted shadow-sm ${tags.includes(tag) ? 'text-primary' : (tagColor[tag] || 'text-muted-foreground')}`}
+                >
+                  <TagIcon id={tag} className="h-4 w-4" />
+                </div>
+                <span className="text-[10px] leading-none opacity-80">{language === 'ar' ? (arTagLabels[tag] || tag.replace('_',' ')) : tag.replace('_',' ')}</span>
+              </button>
+              <div className="mt-1 h-6 flex items-center gap-2">
+                <span className={`text-[11px] px-1.5 py-0.5 rounded bg-muted/80 border border-border/60 ${((tagCounts[tag] ?? 0) >= 1) ? '' : 'opacity-0'}`}>×{tagCounts[tag] ?? 0}</span>
+                <button
+                  type="button"
+                  aria-label={language === 'ar' ? 'تراجع' : 'Undo'}
+                  className={`h-6 w-6 rounded-md border border-border bg-card text-foreground/80 leading-none flex items-center justify-center shadow-sm hover:shadow-md active:scale-[0.98] ${((tagCounts[tag] ?? 0) >= 1) ? '' : 'opacity-0 pointer-events-none'}`}
+                  onClick={() => undoLastTag(tag)}
+                >
+                  <Undo2 className="h-3.5 w-3.5" />
+                  <span className="sr-only">{language === 'ar' ? 'تراجع' : 'Undo'}</span>
+                </button>
               </div>
-              <span className="text-[10px] leading-none opacity-80">{language === 'ar' ? (arTagLabels[tag] || tag.replace('_',' ')) : tag.replace('_',' ')}{(tagCounts[tag] ?? 0) >= 1 ? ` ×${tagCounts[tag]}` : ''}</span>
-            </button>
+            </div>
           ))}
           {/* Custom tag chip */}
           <button
@@ -463,18 +665,25 @@ export const TodayTab: React.FC = () => {
             {language === 'ar' ? 'ملاحظة' : 'Note'}
           </div>
           <div className="flex items-center gap-2">
-            {dayUpdatedAt && (
-              <span className="text-[10px] text-muted-foreground">
-                {new Date(dayUpdatedAt).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})}
-              </span>
-            )}
-          </div>
+          {dayUpdatedAt && (
+            <span className="text-[10px] text-muted-foreground">
+              {new Date(dayUpdatedAt).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={clearSelections}
+            className="text-[11px] px-2 py-0.5 rounded-md bg-muted hover:bg-muted/70 text-muted-foreground"
+          >
+            {language === 'ar' ? 'مسح' : 'Clear'}
+          </button>
+        </div>
         </div>
         <Textarea ref={noteRef} value={note} onChange={e => setNote(e.target.value)} placeholder={language === 'ar' ? 'ملاحظة قصيرة (اختياري)' : 'Short note (optional)'} />
-        {latestTaggedCheckin && Array.isArray(latestTaggedCheckin.tags) && latestTaggedCheckin.tags.length > 0 && (
+        {selectedTagsForPreview.length > 0 && (
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span className="opacity-80">{language === 'ar' ? 'الوسوم:' : 'Tags:'}</span>
-            {latestTaggedCheckin.tags.map((t) => (
+            {selectedTagsForPreview.map((t) => (
               <span key={t} className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2 py-0.5 shadow-sm">
                 <TagIcon id={t as TagId} className="h-3.5 w-3.5" />
                 <span>{language === 'ar' ? (arTagLabels[t as TagId] || String(t).replace('_',' ')) : String(t).replace('_',' ')}</span>
@@ -489,11 +698,6 @@ export const TodayTab: React.FC = () => {
           <div className="text-sm text-muted-foreground flex items-center gap-2">
             <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />
             {language === 'ar' ? 'مراجعة المساء' : 'Evening Reflection'}
-            {!evening && (
-              <span className="ml-2 px-2 py-0.5 text-[10px] rounded-full bg-amber-500/15 text-amber-600 border border-amber-500/30">
-                {language === 'ar' ? 'معلّق حتى المساء' : 'Pending tonight'}
-              </span>
-            )}
           </div>
         </div>
         <Textarea ref={eveningRef} value={evening} onChange={e => setEvening(e.target.value)} placeholder={language === 'ar' ? 'أفضل لحظة؟ ماذا تعلمت؟' : 'Best moment? What did you learn?'} />
