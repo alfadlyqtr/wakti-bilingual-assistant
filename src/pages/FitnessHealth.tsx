@@ -564,7 +564,7 @@ export default function FitnessHealth() {
           </div>
 
           <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as MainTab)} className="flex flex-col gap-4">
-            <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 bg-transparent gap-x-2 gap-y-3 sm:gap-2 p-2 rounded-xl">
+            <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 bg-transparent gap-x-2 gap-y-3 sm:gap-2 p-2 rounded-xl mb-4 md:mb-6">
               <TabsTrigger value="ai-insights" className="flex items-center justify-center gap-1 px-3 py-3 sm:py-2 text-xs sm:text-sm min-h-[44px] sm:min-h-[40px] rounded-full border-2 shadow-md bg-gradient-to-br from-gray-50 to-white dark:from-gray-800/60 dark:to-gray-700/50 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-white/10 hover:from-gray-100 hover:to-white dark:hover:from-gray-700 dark:hover:to-gray-600 hover:shadow-lg transition-all data-[state=active]:from-purple-600 data-[state=active]:to-blue-700 data-[state=active]:text-white data-[state=active]:border-purple-300 data-[state=active]:shadow-[0_6px_20px_rgba(147,51,234,0.35)] dark:data-[state=active]:from-purple-700 dark:data-[state=active]:to-blue-700 dark:data-[state=active]:border-purple-400 dark:data-[state=active]:shadow-[0_0_24px_rgba(139,92,246,0.55)] active:scale-95">
                 <Brain className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span className="hidden sm:inline">{language === 'ar' ? 'رؤى الذكاء الاصطناعي' : 'AI Insights'}</span>

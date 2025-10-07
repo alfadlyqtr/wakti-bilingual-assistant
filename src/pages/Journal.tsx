@@ -1,4 +1,5 @@
 import React from "react";
+import { useLocation } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTheme } from "@/providers/ThemeProvider";
 import { TodayTab } from "@/components/journal/TodayTab";
@@ -9,6 +10,9 @@ import { NotebookPen } from "lucide-react";
 
 export default function Journal() {
   const { language } = useTheme();
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const initialTab = (params.get('tab') || 'today') as 'today' | 'timeline' | 'charts' | 'ask';
   return (
     <div className="container mx-auto p-3 max-w-3xl">
       <div className="glass-hero px-5 py-4 mb-4 flex items-center gap-3">
@@ -17,8 +21,8 @@ export default function Journal() {
         </div>
         <h1 className="text-xl font-semibold tracking-tight">{language === 'ar' ? 'دفتر وقطي' : 'WAKTI Journal'}</h1>
       </div>
-      <Tabs defaultValue="today" className="w-full">
-        <TabsList className="journal-tabs w-full justify-between">
+      <Tabs defaultValue={initialTab} className="w-full">
+        <TabsList className="w-full flex justify-start gap-3">
           <TabsTrigger value="today">{language === 'ar' ? 'اليوم' : 'Today'}</TabsTrigger>
           <TabsTrigger value="timeline">{language === 'ar' ? 'الخط الزمني' : 'Timeline'}</TabsTrigger>
           <TabsTrigger value="charts">{language === 'ar' ? 'الرسوم' : 'Charts'}</TabsTrigger>

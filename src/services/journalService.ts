@@ -34,6 +34,21 @@ export const JournalService = {
     return data || null;
   },
 
+  async updateCheckinTags(id: string, tags: string[]) {
+    const { data: userData } = await supabase.auth.getUser();
+    const user = userData?.user;
+    if (!user) throw new Error("not_authenticated");
+    const { data, error } = await supabase
+      .from("journal_checkins")
+      .update({ tags })
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    return data as JournalCheckin;
+  },
+
   async upsertDay(payload: Omit<JournalDay, "id" | "created_at" | "updated_at" | "user_id">) {
     const { data: userData } = await supabase.auth.getUser();
     const user = userData?.user;
@@ -45,6 +60,31 @@ export const JournalService = {
       .single();
     if (error) throw error;
     return data;
+  },
+
+  async deleteLastCheckin(date: string, mood_value: number) {
+    const { data: userData } = await supabase.auth.getUser();
+    const user = userData?.user;
+    if (!user) throw new Error("not_authenticated");
+    // Find latest checkin id for this date + mood
+    const { data: found, error: findErr } = await supabase
+      .from("journal_checkins")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("date", date)
+      .eq("mood_value", mood_value)
+      .order("occurred_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (findErr) throw findErr;
+    if (!found?.id) return false;
+    const { error: delErr } = await supabase
+      .from("journal_checkins")
+      .delete()
+      .eq("id", found.id)
+      .eq("user_id", user.id);
+    if (delErr) throw delErr;
+    return true;
   },
 
   async updateCheckinNote(id: string, note: string | null) {

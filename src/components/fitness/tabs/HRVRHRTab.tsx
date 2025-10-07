@@ -100,7 +100,7 @@ export function HRVRHRTab({
       {/* Current HRV & RHR Overview */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* HRV Card */}
-        <Card id="pdf-hrv" className="rounded-2xl p-6 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-500/10 dark:to-green-500/10 border-emerald-300 dark:border-emerald-500/20 shadow-lg">
+        <Card id="pdf-hrv" className="mt-4 md:mt-6 rounded-2xl p-6 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-500/10 dark:to-green-500/10 border-emerald-300 dark:border-emerald-500/20 shadow-lg">
           <div className="flex items-center gap-3 mb-6">
             <Activity className="h-6 w-6 text-emerald-400" />
             <div>

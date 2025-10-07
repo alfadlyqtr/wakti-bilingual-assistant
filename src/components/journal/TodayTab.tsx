@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -41,6 +41,7 @@ export const TodayTab: React.FC = () => {
   const [morning, setMorning] = useState("");
   const [evening, setEvening] = useState("");
   const [saving, setSaving] = useState(false);
+  const noteRef = useRef<HTMLTextAreaElement | null>(null);
   const [isCustomOpen, setCustomOpen] = useState(false);
   const [customValue, setCustomValue] = useState("");
   const eveningRef = useRef<HTMLTextAreaElement | null>(null);
@@ -48,13 +49,9 @@ export const TodayTab: React.FC = () => {
   // Check-ins state
   const [checkins, setCheckins] = useState<JournalCheckin[]>([]);
   const checkinSectionRef = useRef<HTMLDivElement | null>(null);
-  // Quick-note state after mood tap
-  const [lastCreatedCheckinId, setLastCreatedCheckinId] = useState<string | null>(null);
-  const [showQuickNote, setShowQuickNote] = useState(false);
-  const [quickNoteText, setQuickNoteText] = useState("");
-  const quickNoteTimerRef = useRef<number | null>(null);
-  const lastNoteLoggedRef = useRef<string | null>(null);
   const [dayUpdatedAt, setDayUpdatedAt] = useState<string | null>(null);
+  const lastMoodTapAtRef = useRef<number | null>(null);
+  const lastCheckinIdRef = useRef<string | null>(null);
   
 
   const tagList = useMemo(() => DEFAULT_TAGS, []);
@@ -85,26 +82,80 @@ export const TodayTab: React.FC = () => {
     coffee: "قهوة",
   };
 
-  // Frequency counters for today
+  // When tags change shortly after a mood tap:
+  // 1) append/update tags on the latest stub line in the note
+  // 2) update tags on the latest created check-in in the DB, then refresh check-ins (so tag ×N updates)
+  useEffect(() => {
+    const lastTap = lastMoodTapAtRef.current;
+    if (!lastTap) return;
+    if (Date.now() - lastTap > 2 * 60 * 1000) return; // only within 2 minutes
+    const tagLabel = (t: TagId) => (language === 'ar' ? (arTagLabels[t] || t.replace('_',' ')) : t.replace('_',' '));
+    const tagsPart = tags.length ? ` [${tags.map(tagLabel).join(', ')}]` : '';
+    setNote(prev => {
+      if (!prev) return prev;
+      const lines = prev.split('\n');
+      // find the most recent stub line ([time] …)
+      let idx = lines.length - 1;
+      while (idx >= 0 && !/^\[[^\]]+\]/.test(lines[idx])) idx--;
+      if (idx < 0) return prev;
+      const line = lines[idx];
+      let updated = line;
+      if (/\s\[[^\]]*\]/.test(line)) {
+        updated = line.replace(/\s\[[^\]]*\]/, tagsPart ? ` ${tagsPart}` : '');
+      } else if (tagsPart) {
+        updated = line.replace(/^(\[[^\]]+\]\s+\S+)/, `$1${tagsPart}`);
+      }
+      if (updated === line) return prev;
+      lines[idx] = updated;
+      return lines.join('\n');
+    });
+
+    // Update DB check-in tags for the latest created check-in
+    const id = lastCheckinIdRef.current;
+    if (id) {
+      JournalService.updateCheckinTags(id, tags)
+        .then(() => JournalService.getCheckinsForDay(date))
+        .then(list => setCheckins(list))
+        .catch(() => {});
+    }
+  }, [tags]);
+
+  // Undo latest check-in for a specific mood
+  const undoLastCheckin = async (value: MoodValue) => {
+    try {
+      const ok = await JournalService.deleteLastCheckin(date, value);
+      if (!ok) {
+        toast.info(language === 'ar' ? 'لا يوجد شيء للتراجع عنه' : 'Nothing to undo');
+        return;
+      }
+      const list = await JournalService.getCheckinsForDay(date);
+      setCheckins(list);
+      toast.success(language === 'ar' ? 'تم التراجع' : 'Undone');
+    } catch (e: any) {
+      toast.error(e?.message || 'Error');
+    }
+  };
+
+  // Frequency counters for today (only check-ins, not base mood)
   const moodCounts = useMemo(() => {
     const counts: Record<MoodValue, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-    if (mood) counts[mood] += 1; // base mood
     for (const c of checkins) counts[c.mood_value as MoodValue] += 1;
     return counts;
-  }, [mood, checkins]);
+  }, [checkins]);
 
+  // Tag counts from check-ins only (not base selection)
   const tagCounts = useMemo(() => {
     const map: Record<TagId, number> = {} as any;
-    for (const t of tags) map[t] = (map[t] || 0) + 1; // base tags
     for (const c of checkins) {
       if (Array.isArray(c.tags)) {
         for (const t of c.tags) map[t as TagId] = (map[t as TagId] || 0) + 1;
       }
     }
     return map;
-  }, [tags, checkins]);
+  }, [checkins]);
 
   const notesToday = useMemo(() => checkins.filter(c => (c.note || '').trim().length > 0), [checkins]);
+  const latestTaggedCheckin = useMemo(() => checkins.find(c => Array.isArray(c.tags) && c.tags.length > 0), [checkins]);
 
   // Auto-scroll Evening textarea when navigating with ?focus=evening
   useEffect(() => {
@@ -122,14 +173,7 @@ export const TodayTab: React.FC = () => {
     }
   }, [location.search]);
 
-  // Cleanup quick-note timer
-  useEffect(() => {
-    return () => {
-      if (quickNoteTimerRef.current) {
-        window.clearTimeout(quickNoteTimerRef.current);
-      }
-    };
-  }, []);
+  const navigate = useNavigate();
 
   // Load today's saved entry on mount and when date changes
   useEffect(() => {
@@ -161,34 +205,28 @@ export const TodayTab: React.FC = () => {
         tags,
         note: null,
       });
-      setLastCreatedCheckinId(created.id);
-      setShowQuickNote(true);
-      setQuickNoteText("");
-      if (quickNoteTimerRef.current) window.clearTimeout(quickNoteTimerRef.current);
-      quickNoteTimerRef.current = window.setTimeout(() => setShowQuickNote(false), 10000);
       const list = await JournalService.getCheckinsForDay(date);
       setCheckins(list);
-      // Scroll to notes timeline
-      setTimeout(() => checkinSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
+      // Append a stub line to the note textarea with time + mood emoji
+      const emoji: Record<MoodValue, string> = { 1: '😖', 2: '🙁', 3: '😐', 4: '🙂', 5: '😄' };
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+      // Localize tag labels
+      const tagLabel = (t: TagId) => (language === 'ar' ? (arTagLabels[t] || t.replace('_',' ')) : t.replace('_',' '));
+      const tagsPart = tags.length ? ` [${tags.map(tagLabel).join(', ')}]` : '';
+      const stub = `[${timeStr}] ${emoji[value]}${tagsPart} `;
+      setNote(prev => (prev && prev.trim().length > 0) ? `${prev}\n${stub}` : stub);
+      lastMoodTapAtRef.current = Date.now();
+      // Focus textarea and place cursor at end
+      setTimeout(() => {
+        const el = noteRef.current;
+        if (el) {
+          el.focus();
+          const len = el.value.length;
+          el.setSelectionRange(len, len);
+        }
+      }, 0);
       toast.success(language === 'ar' ? 'تمت الإضافة' : 'Entry added');
-    } catch (e: any) {
-      toast.error(e?.message || 'Error');
-    }
-  };
-
-  const submitQuickNote = async () => {
-    try {
-      if (!lastCreatedCheckinId || !quickNoteText.trim()) {
-        setShowQuickNote(false);
-        return;
-      }
-      await JournalService.updateCheckinNote(lastCreatedCheckinId, quickNoteText.trim());
-      const list = await JournalService.getCheckinsForDay(date);
-      setCheckins(list);
-      setShowQuickNote(false);
-      // Scroll to notes timeline
-      setTimeout(() => checkinSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
-      toast.success(language === 'ar' ? 'تم التحديث' : 'Note added');
     } catch (e: any) {
       toast.error(e?.message || 'Error');
     }
@@ -259,15 +297,6 @@ export const TodayTab: React.FC = () => {
         evening_reflection: evening || null
       });
       setDayUpdatedAt(new Date().toISOString());
-      // If user wrote a note, also log it as a timestamped entry so it appears in the notes timeline
-      const trimmed = (note || '').trim();
-      if (trimmed && lastNoteLoggedRef.current !== trimmed) {
-        const mv: MoodValue = (mood as MoodValue) ?? ((checkins[0]?.mood_value as MoodValue) ?? 3);
-        await JournalService.addCheckin({ date, mood_value: mv, tags, note: trimmed });
-        lastNoteLoggedRef.current = trimmed;
-        const list = await JournalService.getCheckinsForDay(date);
-        setCheckins(list);
-      }
       toast.success(language === 'ar' ? 'تم الحفظ' : 'Saved');
       // Collapse morning after save
       setMorningOpen(false);
@@ -317,7 +346,6 @@ export const TodayTab: React.FC = () => {
                   const timeStr = ok ? d!.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '';
                   return (
                     <div className="flex items-center gap-2 text-muted-foreground">
-                      <MoodFace value={n.mood_value as MoodValue} size={18} />
                       <span>{timeStr}</span>
                       <span className="h-px flex-1 border-t border-dotted border-border/60" />
                     </div>
@@ -331,40 +359,71 @@ export const TodayTab: React.FC = () => {
       )}
 
       <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
-        <div className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
-          <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />
-          {language === 'ar' ? 'المزاج' : 'Mood'}
-        </div>
-        <div className="grid grid-cols-5 gap-2 items-center">
-          {faces.map(({ value, color }) => (
+        <div className="text-sm text-muted-foreground mb-2 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />
+            {language === 'ar' ? 'المزاج' : 'Mood'}
+          </div>
+          {mood && (
             <button
-              key={value}
-              onClick={() => { setMood(value); addQuickCheckin(value); }}
-              aria-pressed={mood === value}
-              className={`relative flex flex-col items-center gap-1 rounded-xl py-2 transition-all cursor-pointer select-none active:scale-[0.98] hover:bg-muted/60 focus:outline-none ${mood === value ? 'bg-muted' : ''}`}
+              type="button"
+              onClick={() => {
+                setMood(null);
+                // Remove the most recent stub line anywhere (keep user's text on that line if present after stub)
+                setNote(prev => {
+                  if (!prev) return prev;
+                  const lines = prev.split('\n');
+                  let idx = lines.length - 1;
+                  while (idx >= 0 && !/^\[[^\]]+\]/.test(lines[idx])) idx--;
+                  if (idx < 0) return prev;
+                  const line = lines[idx];
+                  const stripped = line.replace(/^\[[^\]]+\]\s+\S+(?:\s+\[[^\]]*\])?\s*/, '');
+                  if (stripped.trim().length === 0) {
+                    lines.splice(idx, 1);
+                  } else {
+                    lines[idx] = stripped;
+                  }
+                  return lines.join('\n');
+                });
+                lastMoodTapAtRef.current = null;
+                lastCheckinIdRef.current = null;
+              }}
+              className="text-[11px] px-2 py-0.5 rounded-md bg-muted hover:bg-muted/70 text-muted-foreground"
             >
-              {moodCounts[value] >= 1 && (
-                <span className="absolute top-1 right-1 text-[10px] px-1 py-0.5 rounded bg-muted/80 border border-border/60">×{moodCounts[value]}</span>
-              )}
-              <MoodFace value={value} active={mood === value} size={56} />
-              <span className={`text-xs ${color}`}>{language === 'ar' ? moodAr[value] : moodLabels[value]}</span>
+              {language === 'ar' ? 'مسح الاختيار' : 'Clear'}
             </button>
+          )}
+        </div>
+        <div className="grid grid-cols-5 gap-3 items-start">
+          {faces.map(({ value, color }) => (
+            <div key={value} className="flex flex-col items-center">
+              <button
+                onClick={() => { setMood(value); addQuickCheckin(value); }}
+                aria-pressed={mood === value}
+                className={`group relative flex flex-col items-center gap-1 rounded-2xl px-3 py-3 transition-all cursor-pointer select-none focus:outline-none
+                border border-border bg-card shadow-sm hover:shadow-md hover:-translate-y-[1px]
+                ${mood === value ? 'border-primary shadow-lg bg-card' : ''}`}
+              >
+                <MoodFace value={value} active={mood === value} size={56} className="transition-transform duration-150 group-hover:scale-[1.03]" />
+                <span className={`text-xs ${color}`}>{language === 'ar' ? moodAr[value] : moodLabels[value]}</span>
+              </button>
+              {moodCounts[value] >= 1 && (
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="text-[11px] px-1.5 py-0.5 rounded bg-muted/80 border border-border/60">×{moodCounts[value]}</span>
+                  <button
+                    type="button"
+                    aria-label={language === 'ar' ? 'تراجع' : 'Undo'}
+                    className="h-7 px-3 rounded-md border border-border bg-card text-foreground/80 leading-none flex items-center justify-center shadow-sm hover:shadow-md active:scale-[0.98]"
+                    onClick={() => undoLastCheckin(value)}
+                    title={language === 'ar' ? 'تراجع عن آخر اختيار' : 'Undo last pick'}
+                  >
+                    {language === 'ar' ? 'تراجع' : 'Undo'}
+                  </button>
+                </div>
+              )}
+            </div>
           ))}
         </div>
-        {showQuickNote && (
-          <div className="mt-2 flex items-center gap-2">
-            <Input
-              value={quickNoteText}
-              onChange={(e) => setQuickNoteText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') submitQuickNote(); }}
-              placeholder={language === 'ar' ? 'ملاحظة سريعة...' : 'Quick note...'}
-            />
-            <Button size="sm" onClick={submitQuickNote}>{language === 'ar' ? 'إضافة' : 'Add'}</Button>
-            <button type="button" className="text-xs text-muted-foreground underline" onClick={() => setShowQuickNote(false)}>
-              {language === 'ar' ? 'إلغاء' : 'Dismiss'}
-            </button>
-          </div>
-        )}
       </div>
 
       <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
@@ -374,15 +433,14 @@ export const TodayTab: React.FC = () => {
               key={tag}
               onClick={() => toggleTag(tag)}
               aria-pressed={tags.includes(tag)}
-              className={`chip-3d relative flex flex-col items-center gap-1 p-2 rounded-xl border transition-all cursor-pointer select-none active:scale-[0.98] hover:-translate-y-[1px] ${tags.includes(tag) ? 'active bg-primary/5 border-primary' : 'border-border hover:bg-muted/50'}`}
+              className={`group relative flex flex-col items-center gap-1 rounded-2xl px-3 py-2 transition-all cursor-pointer select-none focus:outline-none border border-border bg-card shadow-sm hover:shadow-md hover:-translate-y-[1px] ${tags.includes(tag) ? 'border-primary bg-primary/5' : ''}`}
             >
               <div
-                className={`h-8 w-8 rounded-full flex items-center justify-center ${tags.includes(tag) ? 'bg-primary/10 text-primary' : `bg-muted ${tagColor[tag] || 'text-muted-foreground'}`}`}
-                style={(tagCounts[tag] ?? 0) > 1 ? { boxShadow: `0 0 0 ${Math.min(8, Math.max(2, (tagCounts[tag]-1)*2))}px rgba(59,130,246,.35)` } : undefined}
+                className={`h-9 w-9 rounded-full flex items-center justify-center bg-gradient-to-br from-white/70 to-muted shadow-sm ${tags.includes(tag) ? 'text-primary' : (tagColor[tag] || 'text-muted-foreground')}`}
               >
                 <TagIcon id={tag} className="h-4 w-4" />
               </div>
-              <span className="text-[10px] leading-none opacity-80">{language === 'ar' ? (arTagLabels[tag] || tag.replace('_',' ')) : tag.replace('_',' ')}{(tagCounts[tag] ?? 0) > 1 ? ` ×${tagCounts[tag]}` : ''}</span>
+              <span className="text-[10px] leading-none opacity-80">{language === 'ar' ? (arTagLabels[tag] || tag.replace('_',' ')) : tag.replace('_',' ')}{(tagCounts[tag] ?? 0) >= 1 ? ` ×${tagCounts[tag]}` : ''}</span>
             </button>
           ))}
           {/* Custom tag chip */}
@@ -405,7 +463,6 @@ export const TodayTab: React.FC = () => {
             {language === 'ar' ? 'ملاحظة' : 'Note'}
           </div>
           <div className="flex items-center gap-2">
-            {mood && <MoodFace value={mood} size={18} />}
             {dayUpdatedAt && (
               <span className="text-[10px] text-muted-foreground">
                 {new Date(dayUpdatedAt).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})}
@@ -413,7 +470,18 @@ export const TodayTab: React.FC = () => {
             )}
           </div>
         </div>
-        <Textarea value={note} onChange={e => setNote(e.target.value)} placeholder={language === 'ar' ? 'ملاحظة قصيرة (اختياري)' : 'Short note (optional)'} />
+        <Textarea ref={noteRef} value={note} onChange={e => setNote(e.target.value)} placeholder={language === 'ar' ? 'ملاحظة قصيرة (اختياري)' : 'Short note (optional)'} />
+        {latestTaggedCheckin && Array.isArray(latestTaggedCheckin.tags) && latestTaggedCheckin.tags.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="opacity-80">{language === 'ar' ? 'الوسوم:' : 'Tags:'}</span>
+            {latestTaggedCheckin.tags.map((t) => (
+              <span key={t} className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2 py-0.5 shadow-sm">
+                <TagIcon id={t as TagId} className="h-3.5 w-3.5" />
+                <span>{language === 'ar' ? (arTagLabels[t as TagId] || String(t).replace('_',' ')) : String(t).replace('_',' ')}</span>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
@@ -448,6 +516,7 @@ export const TodayTab: React.FC = () => {
               evening_reflection: finalEvening,
             });
             toast.success(language === 'ar' ? 'تم إنهاء اليوم' : 'Day ended');
+            navigate('/journal?tab=timeline');
           } catch (e: any) {
             toast.error(e?.message || 'Error');
           } finally {

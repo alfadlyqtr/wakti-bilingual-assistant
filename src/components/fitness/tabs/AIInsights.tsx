@@ -213,6 +213,8 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
   const [isTtsLoading, setIsTtsLoading] = useState(false);
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
   const [audioCache, setAudioCache] = useState<Map<string, string>>(new Map());
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const audioUnlockedRef = useRef<boolean>(false);
   
   // Cleanup audio on unmount
   useEffect(() => {
@@ -221,8 +223,21 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
         currentAudio.pause();
         currentAudio.src = '';
       }
+      if (audioRef.current) {
+        try { audioRef.current.pause(); } catch {}
+      }
     };
   }, [currentAudio]);
+
+  // Invalidate insights cache when language changes so answers refresh in the selected language
+  useEffect(() => {
+    try {
+      setInsights({} as Record<TimeWindow, any>);
+      setLastGenerated({} as Record<TimeWindow, number>);
+      // If a generation was in progress for the previous language, stop its loading flag
+      setLoading(null);
+    } catch {}
+  }, [language]);
 
   // Handle global Clear Cache button from TopPageSection
   useEffect(() => {
@@ -486,122 +501,96 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
   };
 
   const speakText = async () => {
-    // If already playing, pause it
-    if (isPlaying && currentAudio) {
-      currentAudio.pause();
+    const el = audioRef.current;
+    if (!el) return;
+
+    // Toggle pause if currently playing
+    if (isPlaying) {
+      try { el.pause(); } catch {}
       setIsPlaying(false);
       return;
     }
-    
-    // If paused, resume
-    if (currentAudio && currentAudio.paused) {
-      currentAudio.play();
-      setIsPlaying(true);
+
+    // Resume if paused with existing source
+    if (el.src && el.paused && el.currentTime > 0) {
+      try { await el.play(); setIsPlaying(true); } catch {}
       return;
     }
-    
+
     if (!displayInsight) return;
-    
+
     const text = `${displayInsight.daily_summary || ''}\n\n${displayInsight.weekly_summary || ''}\n\nTips:\n${(displayInsight.tips || []).map((t: string) => `${t}`).join('\n')}\n\nMotivations:\n${(displayInsight.motivations || []).map((m: string) => `${m}`).join('\n')}`;
 
     // Prepare TTS-friendly text: pronounce decimals and percentages correctly (speech only)
     const prepareForTTS = (s: string) => {
       if (language === 'ar') {
         return s
-          // 7.7 -> 7 نقطة 7
           .replace(/(\d+)\.(\d+)/g, '$1 نقطة $2')
-          // 77% -> 77 بالمئة
           .replace(/(\d+)\s*%/g, '$1 بالمئة');
       }
       return s
-        // 7.7 -> 7 point 7
         .replace(/(\d+)\.(\d+)/g, '$1 point $2')
-        // 77% -> 77 percent
         .replace(/(\d+)\s*%/g, '$1 percent');
     };
 
     const speechText = prepareForTTS(text);
-    
-    // Create cache key from text and language
     const cacheKey = `${language}-${speechText.substring(0, 100)}`;
-    
+
+    // Helper to wire listeners on the persistent element
+    const wire = () => {
+      el.onplay = () => { setIsPlaying(true); setIsTtsLoading(false); setCurrentAudio(el); };
+      el.onpause = () => setIsPlaying(false);
+      el.onended = () => { setIsPlaying(false); setCurrentAudio(null); };
+    };
+
+    // Mobile unlock: play a tiny silent audio within the same gesture once
+    const SILENT_MP3 = 'data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+    if (!audioUnlockedRef.current) {
+      try {
+        el.src = SILENT_MP3;
+        await el.play();
+        await new Promise(r => setTimeout(r, 50));
+        el.pause();
+        el.currentTime = 0;
+        audioUnlockedRef.current = true;
+      } catch (_) {
+        // swallow; we will still attempt normal flow
+      }
+    }
+
     try {
-      // Check if audio is cached
+      // Cached path
       if (audioCache.has(cacheKey)) {
-        console.log('Using cached TTS audio');
-        const cachedUrl = audioCache.get(cacheKey)!;
-        const audio = new Audio(cachedUrl);
-        
-        // Set up event listeners
-        audio.addEventListener('play', () => {
-          setIsPlaying(true);
-          setIsTtsLoading(false);
-        });
-        audio.addEventListener('pause', () => setIsPlaying(false));
-        audio.addEventListener('ended', () => {
-          setIsPlaying(false);
-          setCurrentAudio(null);
-        });
-        
-        setCurrentAudio(audio);
-        audio.play();
+        el.src = audioCache.get(cacheKey)!;
+        wire();
+        await el.play();
         toast.success(language === 'ar' ? 'جاري التشغيل' : 'Playing audio');
         return;
       }
-      
+
       setIsTtsLoading(true);
       toast.info(language === 'ar' ? 'جاري التحويل إلى صوت...' : 'Converting to speech...');
-      
+
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
-      
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      
-      // Select appropriate voice based on language
-      const voiceId = language === 'ar' 
-        ? 'ar-XA-Wavenet-C'  // Arabic female voice
-        : 'en-US-Neural2-F'; // English female voice
-      
+      const voiceId = language === 'ar' ? 'ar-XA-Wavenet-C' : 'en-US-Neural2-F';
+
       const response = await fetch(`${supabaseUrl}/functions/v1/voice-tts`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`
-        },
-        body: JSON.stringify({ 
-          text: speechText,
-          voice_id: voiceId
-        })
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+        body: JSON.stringify({ text: speechText, voice_id: voiceId })
       });
-      
-      if (!response.ok) {
-        throw new Error('TTS request failed');
-      }
-      
-      // The response contains audio data
+
+      if (!response.ok) throw new Error('TTS request failed');
+
       const audioBlob = await response.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
-      
-      // Cache the audio URL
       setAudioCache(prev => new Map(prev).set(cacheKey, audioUrl));
-      console.log('Cached TTS audio for key:', cacheKey);
-      
-      const audio = new Audio(audioUrl);
-      
-      // Set up event listeners
-      audio.addEventListener('play', () => {
-        setIsPlaying(true);
-        setIsTtsLoading(false);
-      });
-      audio.addEventListener('pause', () => setIsPlaying(false));
-      audio.addEventListener('ended', () => {
-        setIsPlaying(false);
-        setCurrentAudio(null);
-      });
-      
-      setCurrentAudio(audio);
-      audio.play();
-      
+
+      el.src = audioUrl;
+      wire();
+      await el.play();
       toast.success(language === 'ar' ? 'جاري التشغيل' : 'Playing audio');
     } catch (error) {
       console.error('TTS error:', error);
@@ -611,8 +600,9 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
   };
   
   const rewindAudio = () => {
-    if (currentAudio) {
-      currentAudio.currentTime = Math.max(0, currentAudio.currentTime - 10);
+    const el = audioRef.current;
+    if (el) {
+      el.currentTime = Math.max(0, el.currentTime - 10);
       toast.info(language === 'ar' ? 'تراجع 10 ثواني' : 'Rewound 10 seconds');
     }
   };
@@ -774,7 +764,10 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
         try {
           if (!input) return '';
           if (typeof input === 'string') {
-            const s = input.trim();
+            const s = input.trim()
+              .replace(/\bWHY\s*:\s*/gi, '')
+              .replace(/\bToday\s*:\s*/gi, '')
+              .replace(/\bTonight\s*:\s*/gi, '');
             if (s.startsWith('{') && s.endsWith('}')) {
               const parsed = JSON.parse(s);
               return normalizeAnswer(parsed);
@@ -785,17 +778,17 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
             // If object has WHY/Today/Tonight keys, format lines
             const obj = input as Record<string, any>;
             if (obj.WHY || obj.Today || obj.Tonight) {
-              const lines: string[] = [];
-              if (obj.WHY) lines.push(`WHY: ${obj.WHY}`);
-              if (obj.Today) lines.push(`Today: ${obj.Today}`);
-              if (obj.Tonight) lines.push(`Tonight: ${obj.Tonight}`);
-              return lines.join('\n');
+              const parts: string[] = [];
+              if (obj.WHY) parts.push(String(obj.WHY).replace(/\bWHY\s*:\s*/i, '').trim());
+              if (obj.Today) parts.push(String(obj.Today).replace(/\bToday\s*:\s*/i, '').trim());
+              if (obj.Tonight) parts.push(String(obj.Tonight).replace(/\bTonight\s*:\s*/i, '').trim());
+              return parts.join(' ');
             }
             // If object has 'answer' that is string or object
             if (obj.answer) return normalizeAnswer(obj.answer);
             // Fallback: join values that are short strings
             const vals = Object.values(obj).filter(v => typeof v === 'string' && (v as string).length < 500) as string[];
-            if (vals.length) return vals.join('\n');
+            if (vals.length) return vals.join(' ');
             return '';
           }
           return String(input);
@@ -866,6 +859,7 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
 
   return (
     <div className="space-y-6">
+      <audio ref={audioRef} className="hidden" preload="none" playsInline />
       {/* Off-screen logo for PDF header capture */}
       <div id="pdf-logo3d" style={{ position: 'absolute', top: -10000, left: -10000, width: '10%' }}>
         <div className="flex items-center gap-2 p-2 rounded-xl bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-white/5 dark:to-white/5 border border-white/10">
@@ -993,6 +987,7 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
             return (
               <Button
                 key={window}
+                type="button"
                 onClick={() => generateInsights(window)}
                 onDoubleClick={() => {
                   console.log('Force generating for window:', window);
@@ -1080,6 +1075,7 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
                 <Button 
                   variant="outline" 
                   size="sm" 
+                  type="button"
                   onClick={speakText}
                   disabled={isTtsLoading}
                   className={`h-8 px-2 text-xs transition-all ${
@@ -1107,11 +1103,11 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
                     </>
                   )}
                 </Button>
-                <Button variant="outline" size="sm" className="h-8 px-2 text-xs" onClick={copyToClipboard}>
+                <Button variant="outline" size="sm" type="button" className="h-8 px-2 text-xs" onClick={copyToClipboard}>
                   <Copy className="h-3 w-3 mr-1" />
                   {language === 'ar' ? 'نسخ' : 'Copy'}
                 </Button>
-                <Button variant="outline" size="sm" className="h-8 px-2 text-xs" onClick={exportPDF}>
+                <Button variant="outline" size="sm" type="button" className="h-8 px-2 text-xs" onClick={exportPDF}>
                   <FileText className="h-3 w-3 mr-1" />
                   {language === 'ar' ? 'PDF' : 'PDF'}
                 </Button>
@@ -1218,7 +1214,7 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
                 placeholder={language === 'ar' ? 'اسأل عن نومك أو تعافيك أو الإجهاد...' : 'Ask about your sleep, recovery, or strain...'}
                 className="flex-1 rounded-lg border border-gray-300 dark:border-white/10 bg-white/90 dark:bg-white/5 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-purple-400"
               />
-              <Button onClick={askQA} disabled={qaLoading} className={`rounded-lg px-4 ${qaLoading ? 'animate-pulse' : ''}`}>
+              <Button type="button" onClick={askQA} disabled={qaLoading} className={`rounded-lg px-4 ${qaLoading ? 'animate-pulse' : ''}`}>
                 {qaLoading ? (
                   <div className="flex items-center gap-2">
                     <RefreshCw className="h-4 w-4 animate-spin" />

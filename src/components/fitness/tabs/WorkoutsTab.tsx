@@ -90,7 +90,7 @@ export function WorkoutsTab({
       {/* Time range buttons removed as requested */}
 
       {/* Latest Workout Card */}
-      <Card id="pdf-workouts" className="rounded-2xl p-6 bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-500/10 dark:to-red-500/10 border-orange-300 dark:border-orange-500/20 shadow-lg">
+      <Card id="pdf-workouts" className="mt-10 md:mt-12 rounded-2xl p-6 bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-500/10 dark:to-red-500/10 border-orange-300 dark:border-orange-500/20 shadow-lg">
         <div className="flex items-center gap-3 mb-6">
           <Dumbbell className="h-6 w-6 text-orange-400" />
           <div>
