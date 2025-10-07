@@ -19,13 +19,13 @@ export default function Journal() {
         <div className="h-9 w-9 rounded-xl flex items-center justify-center bg-gradient-to-br from-pink-500/30 to-purple-500/30 text-pink-400 shadow-md">
           <NotebookPen className="h-5 w-5" />
         </div>
-        <h1 className="text-xl font-semibold tracking-tight">{language === 'ar' ? 'دفتر وقطي' : 'WAKTI Journal'}</h1>
+        <h1 className="text-xl font-semibold tracking-tight">{language === 'ar' ? 'دفتر اليوميات' : 'WAKTI Journal'}</h1>
       </div>
       <Tabs defaultValue={initialTab} className="w-full">
         <TabsList className="w-full flex justify-start gap-3">
           <TabsTrigger value="today">{language === 'ar' ? 'اليوم' : 'Today'}</TabsTrigger>
-          <TabsTrigger value="timeline">{language === 'ar' ? 'الخط الزمني' : 'Timeline'}</TabsTrigger>
-          <TabsTrigger value="charts">{language === 'ar' ? 'الرسوم' : 'Charts'}</TabsTrigger>
+          <TabsTrigger value="timeline">{language === 'ar' ? 'السجل' : 'Timeline'}</TabsTrigger>
+          <TabsTrigger value="charts">{language === 'ar' ? 'الإحصائيات' : 'Charts'}</TabsTrigger>
           <TabsTrigger value="ask">{language === 'ar' ? 'اسأل' : 'Ask Journal'}</TabsTrigger>
         </TabsList>
         <TabsContent value="today" className="mt-4"><TodayTab /></TabsContent>

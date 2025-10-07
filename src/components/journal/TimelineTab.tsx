@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { MoodFace, MoodValue } from "./icons/MoodFaces";
 import { TagIcon } from "@/components/journal/TagIcon";
+import { formatTime } from "@/utils/datetime";
 
 function getLocalDayString(d = new Date()) {
   const y = d.getFullYear();
@@ -131,7 +132,7 @@ export const TimelineTab: React.FC = () => {
                       {(() => {
                         const d = c.occurred_at ? new Date(c.occurred_at) : null;
                         const ok = d && !isNaN(d.getTime());
-                        const timeStr = ok ? d!.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}) : '';
+                        const timeStr = ok ? formatTime(d as Date, language as any, { hour: '2-digit', minute: '2-digit' }) : '';
                         return <div className="text-xs opacity-70">{timeStr}</div>;
                       })()}
                     </div>
