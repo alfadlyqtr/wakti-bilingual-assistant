@@ -45,6 +45,8 @@ export const TodayTab: React.FC = () => {
   const [morning, setMorning] = useState("");
   const [evening, setEvening] = useState("");
   const [saving, setSaving] = useState(false);
+  // Note editing session control (editor is only typable after Add note)
+  const [isNoteEditing, setIsNoteEditing] = useState(false);
   const noteRef = useRef<HTMLTextAreaElement | null>(null);
   const noteCERef = useRef<HTMLDivElement | null>(null);
   const editorFocusedRef = useRef(false);
@@ -70,6 +72,9 @@ export const TodayTab: React.FC = () => {
   const [dayUpdatedAt, setDayUpdatedAt] = useState<string | null>(null);
   const lastMoodTapAtRef = useRef<number | null>(null);
   const lastCheckinIdRef = useRef<string | null>(null);
+  // Pending (pre-save) mood taps buffer
+  const [pendingMoodCounts, setPendingMoodCounts] = useState<Record<MoodValue, number>>({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+  const [pendingActions, setPendingActions] = useState<Array<{ mood: MoodValue; at: string }>>([]);
   // In-UI tag tap counters (so tags can have ×N even without a mood tap)
   const [tagTapCounts, setTagTapCounts] = useState<Record<TagId, number>>({} as any);
   // Stub de-duplication
@@ -96,7 +101,7 @@ export const TodayTab: React.FC = () => {
     return '';
   };
 
-  // Helpers: ensure a separator + fresh stub at the end and place caret
+  // Helpers: ensure a fresh timestamp stub at the end and place caret (no separators)
   const ensureEndStub = useCallback(() => {
     const now = new Date();
     const stubTime = formatTime(now, language as any, { hour: '2-digit', minute: '2-digit' });
@@ -104,16 +109,33 @@ export const TodayTab: React.FC = () => {
       const cur = prev || '';
       const last = getLastNonEmptyLine(cur);
       if (isTimestampLine(last)) {
-        // ensure single trailing placeholder
+        // Check if last line already has the same timestamp
+        const sameTimeRe = new RegExp(`^\\[${stubTime.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$&')}\\]`);
+        if (sameTimeRe.test(last)) {
+          // Same timestamp: just ensure trailing placeholder and add __FREE__ marker if not present
+          const lines = cur.split('\n');
+          let idx = lines.length - 1;
+          while (idx >= 0 && !isTimestampLine(lines[idx])) idx--;
+          if (idx >= 0) {
+            let line = lines[idx];
+            // Remove __UNSAVED__ marker if present (we're now editing this line)
+            line = line.replace(/\s*__UNSAVED__\s*/g, '');
+            if (!line.includes('__FREE__')) {
+              line = line.replace(/\s*\|\s*$/, '').trimEnd() + ' | __FREE____END__ | ';
+            }
+            lines[idx] = line;
+          }
+          return lines.join('\n');
+        }
+        // Different timestamp: ensure trailing placeholder on existing line
         const lines = cur.split('\n');
-        let idx = lines.length - 1; while (idx >= 0 && !isTimestampLine(lines[idx])) idx--;
+        let idx = lines.length - 1;
+        while (idx >= 0 && !isTimestampLine(lines[idx])) idx--;
         if (idx >= 0) lines[idx] = lines[idx].replace(/\s*\|\s*$/, '').trimEnd() + ' | ';
         return lines.join('\n');
       }
-      const sep = '............';
       const base = cur.endsWith('\n') || cur.length === 0 ? cur : cur + '\n';
-      const withSep = base.length ? `${base}${sep}\n` : '';
-      return `${withSep}[${stubTime}] 🕒  | `;
+      return `${base}[${stubTime}] 🕒  | __FREE____END__ | `;
     });
     // Focus caret to end of editor on next paint
     requestAnimationFrame(() => {
@@ -125,6 +147,46 @@ export const TodayTab: React.FC = () => {
       const sel = window.getSelection();
       sel?.removeAllRanges();
       sel?.addRange(range);
+    });
+  }, [language, setNote]);
+
+  // Helper: mutate the free-text (last segment) of the most recent timestamp line
+  const mutateFreeText = useCallback((transform: (s: string) => string) => {
+    setNote(prev => {
+      const cur = prev || '';
+      const lines = cur.split('\n');
+      // find last timestamp line, or create one
+      let i = lines.length - 1;
+      while (i >= 0 && !/^\[[^\]]+\]/.test(lines[i])) i--;
+      if (i < 0) {
+        const now = new Date();
+        const t = formatTime(now, language as any, { hour: '2-digit', minute: '2-digit' });
+        lines.push(`[${t}] 🕒  | `);
+        i = lines.length - 1;
+      }
+      const line = lines[i];
+      const bar = line.indexOf('|');
+      if (bar < 0) {
+        lines[i] = `${line} | `;
+      } else {
+        const before = line.slice(0, bar);
+        const afterBar = line.slice(bar);
+        // Extract existing free text from marker
+        const markerRe = /__FREE__(.*?)__END__/;
+        const match = afterBar.match(markerRe);
+        const currentFree = match ? match[1] : '';
+        // Remove marker from line to get clean tokens
+        const cleanAfter = afterBar.replace(markerRe, '').trim();
+        const parts = cleanAfter.split('|').map(s => s.trim()).filter(Boolean);
+        const tokens = parts.filter(t => t !== '🕒');
+        const newFree = transform(currentFree);
+        const tokensJoined = tokens.length > 0 ? tokens.join(' | ') : '';
+        const rebuilt = `${before}| ${tokensJoined}${tokensJoined ? ' | ' : ''}__FREE__${newFree}__END__ | `;
+        lines[i] = rebuilt;
+      }
+      const next = lines.join('\n');
+      try { const el = noteCERef.current; if (el) el.innerHTML = renderNoteHtml(next); } catch {}
+      return next;
     });
   }, [language, setNote]);
   
@@ -187,6 +249,7 @@ export const TodayTab: React.FC = () => {
   };
 
   // Render note with chips inside a contentEditable div. Chips are the tokens after the first '|'
+  // Wrap saved entries (without __FREE__ marker) in outer pill; keep editing line flat
   const renderNoteHtml = (text: string) => {
     const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const lines = (text || '').split('\n');
@@ -207,11 +270,20 @@ export const TodayTab: React.FC = () => {
       const before = esc(rawLine.slice(0, i));
       const after = rawLine.slice(i); // includes the first pipe
       const parts = after.split('|').map(s => s.trim());
-      const tokens = parts.slice(0, Math.max(parts.length - 1, 0)).filter(Boolean);
-      const noteFreeText = (parts.length > 0 ? parts[parts.length - 1] : '').trim();
+      const markerRe = /^__FREE__(.*)__END__$/;
+      let noteFreeText = '';
+      const tokensRaw: string[] = [];
+      for (const p of parts) {
+        if (!p) continue;
+        const m = p.match(markerRe);
+        if (m) { noteFreeText = m[1]; continue; }
+        tokensRaw.push(p);
+      }
+      const tokens = tokensRaw.filter(Boolean);
       let chips = '';
       tokens.forEach((tok) => {
         if (tok === '🕒') return; // hide the clock token
+        if (tok === '__UNSAVED__') return; // hide the unsaved marker
         // Further split segments like "✈️ travel 🍳 cooking" into individual chips
         // Split on 2+ spaces OR a space before an emoji block
         const subParts = tok
@@ -221,11 +293,23 @@ export const TodayTab: React.FC = () => {
         if (subParts.length === 0) return;
         subParts.forEach((part) => {
           const safe = esc(part);
-          chips += `<span class="sr-only"> | </span><span contenteditable="false" class="pointer-events-none select-none inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 shadow-sm">${safe}</span> `;
+          // Use explicit border color for strong contrast across themes
+          chips += `<span class="sr-only"> | </span><span contenteditable="false" class="pointer-events-none select-none inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2 py-0.5 shadow">${safe}</span> `;
         });
       });
-      const free = noteFreeText ? `<span> ${esc(noteFreeText)}</span>` : '';
-      htmlLines.push(`<div>${before}${chips}${free}</div>`);
+      const free = noteFreeText
+        ? `<span class="sr-only"> | </span><span contenteditable="false" class="pointer-events-none select-none inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2 py-0.5 shadow">${esc(noteFreeText)}</span> `
+        : '';
+      const innerContent = `${before}${chips}${free}`;
+      // Wrap in outer pill ONLY if this line is saved (no __UNSAVED__ or __FREE__ marker)
+      const isUnsaved = rawLine.includes('__UNSAVED__') || rawLine.includes('__FREE__');
+      if (!isUnsaved) {
+        // Saved entry: wrap in outer pill
+        htmlLines.push(`<div class="my-2 p-3 rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 shadow-sm">${innerContent}</div>`);
+      } else {
+        // Unsaved entry: keep flat
+        htmlLines.push(`<div>${innerContent}</div>`);
+      }
     }
     return htmlLines.join('');
   };
@@ -371,13 +455,42 @@ export const TodayTab: React.FC = () => {
   // Undo latest check-in for a specific mood
   const undoLastCheckin = async (value: MoodValue) => {
     try {
-      const ok = await JournalService.deleteLastCheckin(date, value);
-      if (!ok) {
-        toast.info(language === 'ar' ? 'لا يوجد شيء للتراجع عنه' : 'Nothing to undo');
-        return;
-      }
-      const list = await JournalService.getCheckinsForDay(date);
-      setCheckins(list);
+      // Operate on pending (pre-save) actions only
+      setPendingActions(prev => {
+        const idx = [...prev].reverse().findIndex(a => a.mood === value);
+        if (idx === -1) return prev; // nothing to undo
+        const realIdx = prev.length - 1 - idx;
+        const next = prev.slice(0, realIdx).concat(prev.slice(realIdx + 1));
+        return next;
+      });
+      setPendingMoodCounts(prev => ({ ...prev, [value]: Math.max(0, (prev[value] || 0) - 1) }));
+      // Update the last timestamp line counts in the note editor
+      const emoji: Record<MoodValue, string> = { 1: '😖', 2: '🙁', 3: '😐', 4: '🙂', 5: '😄' };
+      const now = new Date();
+      const timeStr = formatTime(now, language as any, { hour: '2-digit', minute: '2-digit' });
+      setNote(prev => {
+        const prevText = prev || '';
+        const lines = prevText.split('\n');
+        if (lines.length === 0) return prevText;
+        const lastLine = lines[lines.length - 1];
+        const sameTimeRe = new RegExp(`^\\[${timeStr.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$&')}\\]`);
+        const emojiEsc = emoji[value].replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+        if (sameTimeRe.test(lastLine)) {
+          // Compute total count after undo
+          const totalCountAfter = (moodCounts[value] || 0) + Math.max(0, (pendingMoodCounts[value] || 0) - 1);
+          let updated = lastLine;
+          if (totalCountAfter <= 1) {
+            // remove ×N if present, keep the emoji once
+            updated = updated.replace(new RegExp(`(${emojiEsc})(?:\\s*×\\d+)?`), `$1`);
+          } else {
+            updated = updated.replace(new RegExp(`(${emojiEsc})(?:\\s*×\\d+)?`), `$1 ×${totalCountAfter}`);
+          }
+          updated = updated.replace(/\s*\|\s*$/, '').trimEnd() + ' | ';
+          lines[lines.length - 1] = updated;
+          return lines.join('\n');
+        }
+        return prevText;
+      });
       toast.success(language === 'ar' ? 'تم التراجع' : 'Undone');
     } catch (e: any) {
       toast.error(e?.message || 'Error');
@@ -407,17 +520,35 @@ export const TodayTab: React.FC = () => {
   // Show current selected tags under the Note (with icons)
   const selectedTagsForPreview = tags;
 
-  // Clear everything: selected mood, selected tags, counters, and Note text
+  // Clear only unsaved changes (keep saved entries)
   const clearSelections = () => {
-    // Revert to last saved snapshots only (do not wipe saved content)
-    setMood(savedMood);
-    setTags(savedTags);
-    setNote(savedNote);
-    setMorning(savedMorning);
-    setEvening(savedEvening);
+    // Clear mood/tags/morning/evening selections
+    setMood(null);
+    setTags([]);
+    setMorning("");
+    setEvening("");
     setTagTapCounts({} as any);
     lastMoodTapAtRef.current = null;
     lastCheckinIdRef.current = null;
+    // Clear pending buffers
+    setPendingActions([]);
+    setPendingMoodCounts({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+    // Keep saved entries in note (lines without __FREE__ or __UNSAVED__ markers); remove unsaved lines
+    const lines = (note || '').split('\n');
+    const savedLines = lines.filter(line => {
+      const trimmed = line.trim();
+      return trimmed && !line.includes('__FREE__') && !line.includes('__UNSAVED__');
+    });
+    const cleanedNote = savedLines.join('\n');
+    setNote(cleanedNote);
+    // Force re-render of contentEditable
+    requestAnimationFrame(() => {
+      if (noteCERef.current) {
+        noteCERef.current.innerHTML = renderNoteHtml(cleanedNote);
+      }
+    });
+    // End editing session
+    setIsNoteEditing(false);
   };
 
   // Auto-scroll Evening textarea when navigating with ?focus=evening
@@ -468,57 +599,26 @@ export const TodayTab: React.FC = () => {
 
   const addQuickCheckin = async (value: MoodValue) => {
     try {
-      const created = await JournalService.addCheckin({
-        date,
-        mood_value: value,
-        tags,
-        note: null,
-      });
-      const list = await JournalService.getCheckinsForDay(date);
-      setCheckins(list);
+      // Buffer the tap locally (no DB write yet)
+      setPendingMoodCounts(prev => ({ ...prev, [value]: (prev[value] || 0) + 1 }));
+      const now = new Date();
+      setPendingActions(prev => ([ ...prev, { mood: value, at: now.toISOString() } ]));
       // Append a stub line to the note textarea with time + mood emoji
       const emoji: Record<MoodValue, string> = { 1: '😖', 2: '🙁', 3: '😐', 4: '🙂', 5: '😄' };
-      const now = new Date();
       const timeStr = formatTime(now, language as any, { hour: '2-digit', minute: '2-digit' });
       // Initial line with clock + mood, pipe-separated, plus trailing pipe placeholder
-      const stub = `[${timeStr}] 🕒 | ${emoji[value]} | `;
+      // Mark as unsaved with __UNSAVED__ so renderer knows not to wrap in outer pill
+      const stub = `[${timeStr}] 🕒 | ${emoji[value]} | __UNSAVED__`;
       setNote(prev => {
         const prevText = prev || '';
-        const lastLine = prevText.split('\n').pop() || '';
-        // If last line already begins with the same timestamp, append mood to it instead of creating new line
-        const sameTimeRe = new RegExp(`^\\[${timeStr.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$&')}\\]`);
-        if (sameTimeRe.test(lastLine)) {
-          // if mood token not present, append with pipe
-          if (!new RegExp(`(?:\\s|\|)${emoji[value].replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}(?=\\s|$)`).test(lastLine)) {
-            let combined = `${lastLine} | ${emoji[value]} `;
-            combined = combined.replace(/\s*\|\s*$/, '').trimEnd() + ' | ';
-            const base = prevText.split('\n'); base[base.length-1] = combined;
-            lastStubTextRef.current = combined; lastStubAtRef.current = Date.now();
-            return base.join('\n');
-          }
-          // ensure placeholder at end even if mood already present
-          const base = prevText.split('\n');
-          base[base.length-1] = (lastLine.replace(/\s*\|\s*$/, '').trimEnd() + ' | ');
-          return base.join('\n');
-        }
-        // Otherwise start a new line
-        // de-dupe only if exact same stub was just added
-        if (lastLine === stub && Date.now() - lastStubAtRef.current < 1200) return prevText;
+        // Always start a new timestamp line for each mood tap (new entry)
         const next = prevText && prevText.trim().length > 0 ? `${prevText}\n${stub}` : stub;
         lastStubTextRef.current = stub;
         lastStubAtRef.current = Date.now();
+        try { noteCERef.current && (noteCERef.current.innerHTML = renderNoteHtml(next)); } catch {}
         return next;
       });
       lastMoodTapAtRef.current = Date.now();
-      // Focus textarea and place cursor at end
-      setTimeout(() => {
-        const el = noteRef.current;
-        if (el) {
-          el.focus();
-          const len = el.value.length;
-          el.setSelectionRange(len, len);
-        }
-      }, 0);
       toast.success(language === 'ar' ? 'تمت الإضافة' : 'Entry added');
     } catch (e: any) {
       toast.error(e?.message || 'Error');
@@ -593,40 +693,16 @@ export const TodayTab: React.FC = () => {
       if (!on) {
         setNote(prevText => {
           const prevVal = prevText || '';
-          const lines = prevVal.length ? prevVal.split('\n') : [];
-          const lastIdx = lines.length - 1;
-          if (lastIdx >= 0 && /^\[[^\]]+\]/.test(lines[lastIdx])) {
-            // operate on existing last timestamp line
-            const sameTime = new RegExp(`^\\[${timeStr.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$&')}\\]`);
-            const alreadyHas = new RegExp(`(?:\\s|\|)${token.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}(?=\\s|$)`);
-            if (alreadyHas.test(lines[lastIdx])) return prevVal; // avoid duplicate tag on same line
-            if (sameTime.test(lines[lastIdx]) || true) {
-              // append to same line (one timestamp)
-              lines[lastIdx] = `${lines[lastIdx]} | ${token}`.trimEnd();
-              const next = lines.join('\n');
-              lastStubTextRef.current = token;
-              lastStubAtRef.current = Date.now();
-              return next;
-            }
-          }
-          // otherwise create a new timestamp line
-          const stub = `[${timeStr}] 🕒 | ${token}`;
-          if (lines.length === 0) return stub;
-          lines.push(stub);
-          const next = lines.join('\n');
+          // Always create a new timestamp line for each tag tap (new entry)
+          // Mark as unsaved with __UNSAVED__ so renderer knows not to wrap in outer pill
+          const stub = `[${timeStr}] 🕒 | ${token} | __UNSAVED__`;
+          const next = prevVal && prevVal.trim().length > 0 ? `${prevVal}\n${stub}` : stub;
           lastStubTextRef.current = stub;
           lastStubAtRef.current = Date.now();
+          try { noteCERef.current && (noteCERef.current.innerHTML = renderNoteHtml(next)); } catch {}
           return next;
         });
-        // Focus textarea and place cursor at end so the user sees the appended tag line immediately
-        setTimeout(() => {
-          const el = noteRef.current;
-          if (el) {
-            el.focus();
-            const len = el.value.length;
-            el.setSelectionRange(len, len);
-          }
-        }, 0);
+        // Do not auto-focus the note; user may continue selecting other tags/moods
       } else {
         // Deselect: remove token from most recent timestamp line containing it.
         setNote(prevText => {
@@ -716,24 +792,35 @@ export const TodayTab: React.FC = () => {
   const onSave = async () => {
     try {
       setSaving(true);
+      // Strip __FREE__...__END__ and __UNSAVED__ markers before saving
+      let cleanNote = (note || '').replace(/__FREE__(.*?)__END__/g, '$1');
+      cleanNote = cleanNote.replace(/\s*__UNSAVED__\s*/g, '');
       await JournalService.upsertDay({
         date,
         mood_value: mood,
         tags,
-        note: note || null,
+        note: cleanNote || null,
         morning_reflection: morning || null,
         evening_reflection: evening || null
       });
+      // Flush pending mood taps to DB
+      for (const action of pendingActions) {
+        await JournalService.addCheckin({
+          date,
+          mood_value: action.mood,
+          tags,
+          note: null,
+        });
+      }
+      // Refresh check-ins from DB after flush
+      const refreshed = await JournalService.getCheckinsForDay(date);
+      setCheckins(refreshed);
+      // Reset pending state
+      setPendingActions([]);
+      setPendingMoodCounts({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
       setDayUpdatedAt(new Date().toISOString());
-      // After saving, add a dotted separator AND start a fresh timestamp stub on a new line
-      const now = new Date();
-      const stubTime = formatTime(now, language as any, { hour: '2-digit', minute: '2-digit' });
-      const sep = '............';
-      setNote(prev => {
-        const prevText = prev || '';
-        const ensureNL = prevText.endsWith('\n') ? prevText : prevText + '\n';
-        return `${ensureNL}${sep}\n[${stubTime}] 🕒  | `;
-      });
+      // Do not insert separators after save; end editing session
+      setIsNoteEditing(false);
       // Update saved snapshots to current saved state
       setSavedMood(mood);
       setSavedTags(tags);
@@ -834,19 +921,21 @@ export const TodayTab: React.FC = () => {
                 <MoodFace value={value} active={mood === value} size={isMobile ? 44 : 56} className="transition-transform duration-150 group-hover:scale-[1.03]" />
                 <span className={`text-xs ${color}`}>{language === 'ar' ? moodAr[value] : moodLabels[value]}</span>
               </button>
-              {moodCounts[value] >= 1 && (
+              {((moodCounts[value] || 0) + (pendingMoodCounts[value] || 0)) >= 1 && (
                 <div className="mt-1 flex items-center gap-2">
-                  <span className="text-[11px] px-1.5 py-0.5 rounded bg-muted/80 border border-border/60">×{moodCounts[value]}</span>
-                  <button
-                    type="button"
-                    aria-label={language === 'ar' ? 'تراجع' : 'Undo'}
-                    className="h-6 w-6 rounded-md border border-border bg-card text-foreground/80 leading-none flex items-center justify-center shadow-sm hover:shadow-md active:scale-[0.98]"
-                    onClick={() => undoLastCheckin(value)}
-                    title={language === 'ar' ? 'تراجع عن آخر اختيار' : 'Undo last pick'}
-                  >
-                    <Undo2 className="h-3.5 w-3.5" />
-                    <span className="sr-only">{language === 'ar' ? 'تراجع' : 'Undo'}</span>
-                  </button>
+                  <span className="text-[11px] px-1.5 py-0.5 rounded bg-muted/80 border border-border/60">×{(moodCounts[value] || 0) + (pendingMoodCounts[value] || 0)}</span>
+                  {(pendingMoodCounts[value] || 0) > 0 && (
+                    <button
+                      type="button"
+                      aria-label={language === 'ar' ? 'تراجع' : 'Undo'}
+                      className="h-6 w-6 rounded-md border border-border bg-card text-foreground/80 leading-none flex items-center justify-center shadow-sm hover:shadow-md active:scale-[0.98]"
+                      onClick={() => undoLastCheckin(value)}
+                      title={language === 'ar' ? 'تراجع عن آخر اختيار' : 'Undo last pick'}
+                    >
+                      <Undo2 className="h-3.5 w-3.5" />
+                      <span className="sr-only">{language === 'ar' ? 'تراجع' : 'Undo'}</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -931,7 +1020,7 @@ export const TodayTab: React.FC = () => {
           )}
           <button
             type="button"
-            onClick={() => { ensureEndStub(); noteCERef.current?.focus(); }}
+            onClick={() => { setIsNoteEditing(true); ensureEndStub(); noteCERef.current?.focus(); }}
             className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border border-border bg-gradient-to-b from-card to-background text-foreground/80 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-inner transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Plus className="h-3.5 w-3.5" /> {language === 'ar' ? 'أضف ملاحظة' : 'Add note'}
@@ -950,22 +1039,52 @@ export const TodayTab: React.FC = () => {
         </div>
         <div
           ref={noteCERef}
-          contentEditable
+          contentEditable={isNoteEditing}
           suppressContentEditableWarning
-          className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 min-h-[96px] overflow-y-auto"
-          onFocus={() => { editorFocusedRef.current = true; ensureEndStub(); }}
+          className="flex w-full rounded-md border-0 bg-transparent px-0 py-2 text-sm min-h-[96px] overflow-y-auto focus-visible:outline-none"
+          spellCheck={false}
+          onFocus={() => { editorFocusedRef.current = true; if (isNoteEditing) ensureEndStub(); }}
           onBlur={() => { editorFocusedRef.current = false; }}
           onKeyDown={(e) => {
+            if (!isNoteEditing) { e.preventDefault(); return; }
             if (e.key === 'Enter') {
               e.preventDefault();
+              return;
+            }
+            // Controlled typing: append to free-text pill; handle Backspace
+            const printable = e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
+            if (printable) {
+              e.preventDefault();
+              mutateFreeText(prev => (prev + e.key).slice(0, 512));
+              return;
+            }
+            if (e.key === 'Backspace') {
+              e.preventDefault();
+              mutateFreeText(prev => prev.slice(0, Math.max(0, prev.length - 1)));
+              return;
             }
           }}
+          onMouseDown={(e) => {
+            // Prevent placing caret inside chips; always set caret to end
+            try {
+              e.preventDefault();
+              const el = noteCERef.current;
+              if (!el) return;
+              const range = document.createRange();
+              range.selectNodeContents(el);
+              range.collapse(false);
+              const sel = window.getSelection();
+              sel?.removeAllRanges();
+              sel?.addRange(range);
+            } catch {}
+          }}
+          onDrop={(e) => { e.preventDefault(); }}
           onInput={(e) => {
+            // In controlled typing mode we already updated note via key handlers; ignore browser input
+            if (isNoteEditing) return;
             const el = e.currentTarget as HTMLDivElement;
-            // Use innerText to get the raw text representation with pipes and tokens
             const raw = el.innerText.replace(/\r\n/g, '\n');
             setNote(raw);
-            // Force caret to end to avoid caret inside a chip
             requestAnimationFrame(() => {
               try {
                 const range = document.createRange();
@@ -979,8 +1098,9 @@ export const TodayTab: React.FC = () => {
           }}
           onPaste={(e) => {
             e.preventDefault();
+            if (!isNoteEditing) return;
             const text = e.clipboardData.getData('text/plain').replace(/\r?\n+/g, ' ');
-            document.execCommand('insertText', false, text);
+            mutateFreeText(prev => (prev + text).slice(0, 2000));
           }}
           aria-label={language === 'ar' ? 'ملاحظة' : 'Note'}
         />
@@ -1005,19 +1125,56 @@ export const TodayTab: React.FC = () => {
         <Button variant="secondary" disabled={saving} onClick={async () => {
           try {
             setSaving(true);
+            // Strip markers before saving
+            let cleanNote = (note || '').replace(/__FREE__(.*?)__END__/g, '$1');
+            cleanNote = cleanNote.replace(/\s*__UNSAVED__\s*/g, '');
             const finalEvening = (evening && evening.trim().length > 0) ? evening : (language === 'ar' ? 'المساء مفقود' : 'Evening missing');
+            
+            // Save main day entry
             await JournalService.upsertDay({
               date,
               mood_value: mood,
               tags,
-              note: note || null,
+              note: cleanNote || null,
               morning_reflection: morning || null,
               evening_reflection: finalEvening,
             });
-            toast.success(language === 'ar' ? 'تم إنهاء اليوم' : 'Day ended');
-            navigate('/journal?tab=timeline');
+            
+            // Flush pending mood taps
+            for (const action of pendingActions) {
+              await JournalService.addCheckin({
+                date,
+                mood_value: action.mood,
+                tags,
+                note: null,
+              });
+            }
+            
+            // Refresh check-ins from DB to confirm save
+            const refreshed = await JournalService.getCheckinsForDay(date);
+            setCheckins(refreshed);
+            
+            // Reset pending state
+            setPendingActions([]);
+            setPendingMoodCounts({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+            
+            // Update saved snapshots
+            setSavedMood(mood);
+            setSavedTags(tags);
+            setSavedNote(cleanNote || "");
+            setSavedMorning(morning);
+            setSavedEvening(finalEvening);
+            
+            toast.success(language === 'ar' ? 'تم إنهاء اليوم وحفظه' : 'Day ended and saved');
+            
+            // Trigger Timeline refresh and navigate
+            window.dispatchEvent(new Event('refreshTimeline'));
+            setTimeout(() => {
+              navigate('/journal?tab=timeline');
+            }, 300);
           } catch (e: any) {
-            toast.error(e?.message || 'Error');
+            console.error('End Day error:', e);
+            toast.error(e?.message || 'Failed to end day');
           } finally {
             setSaving(false);
           }

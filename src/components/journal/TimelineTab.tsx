@@ -22,9 +22,11 @@ export const TimelineTab: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const today = useMemo(() => getLocalDayString(), []);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({}); // per-date expand for check-ins
+  const [refreshKey, setRefreshKey] = useState(0);
 
+  // Refresh data when tab becomes active or refreshKey changes
   useEffect(() => {
-    (async () => {
+    const loadData = async () => {
       try {
         setLoading(true);
         const [d, cis] = await Promise.all([
@@ -36,7 +38,15 @@ export const TimelineTab: React.FC = () => {
       } finally {
         setLoading(false);
       }
-    })();
+    };
+    loadData();
+  }, [refreshKey]);
+  
+  // Listen for custom refresh event from Today tab
+  useEffect(() => {
+    const handleRefresh = () => setRefreshKey(k => k + 1);
+    window.addEventListener('refreshTimeline', handleRefresh);
+    return () => window.removeEventListener('refreshTimeline', handleRefresh);
   }, []);
 
   // Build maps for fast lookup (hooks must run every render)
@@ -93,8 +103,8 @@ export const TimelineTab: React.FC = () => {
         </div>
         {(((d?.tags?.length) || 0) + ((cis[0]?.tags?.length) || 0)) > 0 ? (
           <div className="flex flex-wrap gap-2 mb-2">
-            {[...(d?.tags || []), ...((cis[0]?.tags)||[])].slice(0,8).map(t => (
-              <span key={t} className="chip-3d flex items-center gap-1 px-2 py-1 rounded-lg text-xs border">
+            {Array.from(new Set([...(d?.tags || []), ...((cis[0]?.tags)||[])])).slice(0,8).map((t, idx) => (
+              <span key={`${dateStr}-${t}-${idx}`} className="chip-3d flex items-center gap-1 px-2 py-1 rounded-lg text-xs border">
                 <TagIcon id={t} className="h-3.5 w-3.5" />
                 {t.replace('_',' ')}
               </span>
