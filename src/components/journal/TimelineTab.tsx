@@ -24,6 +24,86 @@ export const TimelineTab: React.FC = () => {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({}); // per-date expand for check-ins
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // Render a saved note string as outer pill(s) with inner chips, like TodayTab
+  const renderNotePills = (text?: string | null) => {
+    if (!text) return null;
+    const lines = (text || '').split('\n');
+    return (
+      <div className="mt-2">
+        {lines.map((rawLine, idx) => {
+          const i = rawLine.indexOf('|');
+          if (i < 0) return <div key={`note-line-${idx}`} className="text-sm">{rawLine}</div>;
+          const before = rawLine.slice(0, i); // e.g., "[09:31 AM] 🕒  "
+          const after = rawLine.slice(i);
+          const parts = after.split('|').map(s => s.trim());
+          const markerRe = /^__FREE__(.*)__END__$/;
+          const timeTokenRe = /^\[[^\]]+\]$/; // e.g., [10:29 AM]
+          let noteFreeText = '';
+          const tokensRaw: string[] = [];
+          for (const p of parts) {
+            if (!p) continue;
+            const m = p.match(markerRe);
+            if (m) { noteFreeText = m[1]; continue; }
+            // Strip any leading timestamp + optional clock from token
+            let q = p.replace(/^\[[^\]]+\]\s*/,'').trim();
+            if (q === '🕒') continue;
+            if (q === '__UNSAVED__') continue;
+            if (timeTokenRe.test(q)) continue; // token is still a pure time label
+            if (!q) continue;
+            tokensRaw.push(q);
+          }
+          const chips = (
+            <>
+              {tokensRaw.map((tok, k) => (
+                <span key={`tok-${k}`} className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white text-slate-800 px-2 py-0.5 shadow text-xs">{tok}</span>
+              ))}
+              {noteFreeText && (
+                <span key={`free-${idx}`} className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white text-slate-800 px-2 py-0.5 shadow text-xs">{noteFreeText}</span>
+              )}
+            </>
+          );
+          return (
+            <div key={`pill-${idx}`} className="my-2 p-3 rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 text-slate-800 shadow-sm">
+              <span className="text-xs text-slate-600 mr-1">{before.match(/\[[^\]]+\]/)?.[0] || before}</span>
+              <span className="sr-only"> | </span>
+              <span className="inline-flex flex-wrap gap-2 align-middle">{chips}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // Collect mood counts from check-ins and/or the saved day note
+  const getDayMoodCounts = (d: JournalDay | null, cis: JournalCheckin[]) => {
+    const counts: Record<number, number> = {};
+    // Prefer authoritative check-ins when present
+    if (cis.length > 0) {
+      cis.forEach(c => { counts[c.mood_value] = (counts[c.mood_value] || 0) + 1; });
+      return counts;
+    }
+    // Fall back to parsing saved day note (historical data without check-ins)
+    const note = d?.note || '';
+    if (!note) return counts;
+    const lines = note.split('\n');
+    const moodEmoji: Record<number, string> = { 1: '😖', 2: '🙁', 3: '😐', 4: '🙂', 5: '😄' };
+    const emojiToMood: Record<string, number> = Object.fromEntries(Object.entries(moodEmoji).map(([k,v]) => [v, Number(k)]));
+    for (const rawLine of lines) {
+      const i = rawLine.indexOf('|');
+      if (i < 0) continue;
+      const after = rawLine.slice(i);
+      const parts = after.split('|').map(s => s.trim()).filter(Boolean);
+      for (const p of parts) {
+        const found = Object.keys(emojiToMood).find(e => p.includes(e));
+        if (found) {
+          const mv = emojiToMood[found];
+          counts[mv] = (counts[mv] || 0) + 1;
+        }
+      }
+    }
+    return counts;
+  };
+
   // Refresh data when tab becomes active or refreshKey changes
   useEffect(() => {
     const loadData = async () => {
@@ -83,10 +163,100 @@ export const TimelineTab: React.FC = () => {
   const todayDay = dayByDate[today] || null;
   const todayCheckins = checkinsByDate[today] || [];
   const todayHasContent = Boolean(todayDay || todayCheckins.length > 0);
-  // Per product decision: Do not show Today on Timeline until evening is saved or after midnight
-  const showPinnedToday = false;
+  // Show Today on Timeline only after End Day (evening_reflection exists)
+  const showPinnedToday = Boolean(todayDay?.evening_reflection);
 
   const pastDates = allDatesDesc.filter(d => d !== today).slice(0, 3);
+  
+  const todayCard = showPinnedToday ? (
+    (() => {
+      const dateStr = today;
+      const d = todayDay;
+      const cis = todayCheckins;
+      const lastMood: MoodValue | null = (cis[0]?.mood_value as MoodValue | undefined) ?? (d?.mood_value as MoodValue | undefined) ?? null;
+      return (
+        <div key={`today-${dateStr}`} className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-sm font-medium flex items-center gap-3 group">
+              <span>{dateStr}</span>
+              {(() => {
+                const counts = getDayMoodCounts(d, cis);
+                const keys = Object.keys(counts);
+                if (keys.length === 0) return null;
+                return (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {keys.map(m => (
+                      <div key={`${dateStr}-hdr-mood-${m}`} className="flex items-center gap-1">
+                        <MoodFace value={parseInt(m) as MoodValue} size={56} active className="transition-transform duration-150 group-hover:scale-[1.03]" />
+                        {counts[parseInt(m)]>1 && <span className="text-[11px] opacity-70">×{counts[parseInt(m)]}</span>}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+          {(((d?.tags?.length) || 0) + ((cis[0]?.tags?.length) || 0)) > 0 ? (
+            <div className="flex flex-wrap gap-2 mb-2">
+              {Array.from(new Set([...(d?.tags || []), ...((cis[0]?.tags)||[])])).slice(0,8).map((t, idx) => (
+                <span key={`${dateStr}-${t}-${idx}`} className="chip-3d flex items-center gap-1 px-2 py-1 rounded-lg text-xs border">
+                  <TagIcon id={t} className="h-3.5 w-3.5" />
+                  {t.replace('_',' ')}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          {d?.morning_reflection && <div className="text-sm">{d.morning_reflection}</div>}
+          <div className="mt-2">
+            {d?.evening_reflection ? (
+              <>
+                <button className="text-xs text-muted-foreground underline" onClick={() => setExpanded(prev => ({...prev, [dateStr]: !prev[dateStr]}))}>
+                  {expanded[dateStr] ? (language === 'ar' ? 'إخفاء المساء' : 'Hide evening') : (language === 'ar' ? 'إظهار المساء' : 'Show evening')}
+                </button>
+                {expanded[dateStr] && (
+                  <div className="text-sm mt-1">{d?.evening_reflection}</div>
+                )}
+              </>
+            ) : (
+              <div className="text-xs text-muted-foreground">{language === 'ar' ? 'لا يوجد انعكاس مسائي' : 'No evening reflection'}</div>
+            )}
+          </div>
+          {expanded[dateStr+':cis'] && renderNotePills(d?.note)}
+          <div className="mt-2">
+            <button className="text-xs text-muted-foreground underline" onClick={() => setExpanded(prev => ({...prev, [dateStr+':cis']: !prev[dateStr+':cis']}))}>
+              {expanded[dateStr+':cis'] ? (language==='ar'?'إخفاء المدخلات':'Hide entries') : (language==='ar'?'إظهار المدخلات':'Show entries')} ({cis.length})
+            </button>
+            {expanded[dateStr+':cis'] && !Boolean(d?.note) && (() => {
+              const fc = cis.filter(c => (c.tags?.length||0) > 0 || (c.note && c.note.trim().length>0));
+              return (
+              <div className="space-y-2 mt-1">
+                {fc.length === 0 && <div className="text-xs text-muted-foreground">{language==='ar'?'لا توجد مدخلات':'No entries'}</div>}
+                {fc.map(c => (
+                  <div key={c.id} className="my-2 p-3 rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 text-slate-800 shadow-sm">
+                    <div className="flex items-center flex-wrap gap-2">
+                      {(() => {
+                        const d2 = c.occurred_at ? new Date(c.occurred_at) : null;
+                        const ok = d2 && !isNaN(d2.getTime());
+                        const timeStr = ok ? formatTime(d2 as Date, language as any, { hour: '2-digit', minute: '2-digit' }) : '';
+                        return <span className="text-xs text-slate-600 mr-1">[{timeStr}]</span>;
+                      })()}
+                      {c.tags?.map(t => (
+                        <span key={t} className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white text-slate-800 px-2 py-0.5 shadow text-xs"><TagIcon id={t} className="h-3 w-3" />{t.replace('_',' ')}</span>
+                      ))}
+                      {c.note && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white text-slate-800 px-2 py-0.5 shadow text-xs">{c.note}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ); })()}
+          </div>
+          {/* Open in Calendar button removed as requested */}
+        </div>
+      );
+    })()
+  ) : null;
   const pastCards = pastDates.map((dateStr) => {
     const d = dayByDate[dateStr] || null;
     const cis = checkinsByDate[dateStr] || [];
@@ -95,11 +265,25 @@ export const TimelineTab: React.FC = () => {
     return (
       <div key={dateStr} className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
         <div className="flex items-center justify-between mb-2">
-          <div className="text-sm font-medium flex items-center gap-2">
+          <div className="text-sm font-medium flex items-center gap-3 group">
             <span>{dateStr}</span>
-            {missingEvening && <span className="px-2 py-0.5 text-[10px] rounded-full bg-amber-500/15 text-amber-600 border border-amber-500/30">{language==='ar'?'المساء مفقود':'Evening missing'}</span>}
+            {(() => {
+              const counts = getDayMoodCounts(d, cis);
+              const keys = Object.keys(counts);
+              if (keys.length === 0) return null;
+              return (
+                <div className="flex flex-wrap items-center gap-2">
+                  {keys.map(m => (
+                    <div key={`${dateStr}-hdr-mood-${m}`} className="flex items-center gap-1">
+                      <MoodFace value={parseInt(m) as MoodValue} size={56} active className="transition-transform duration-150 group-hover:scale-[1.03]" />
+                      {counts[parseInt(m)]>1 && <span className="text-[11px] opacity-70">×{counts[parseInt(m)]}</span>}
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+            {missingEvening && <span className="px-2 py-0.5 text-[10px] rounded-full bg-amber-500/15 text-amber-600 border border-amber-500/30">{language==='ar'?"المساء مفقود":"Evening missing"}</span>}
           </div>
-          {lastMood && <MoodFace value={lastMood} active size={36} />}
         </div>
         {(((d?.tags?.length) || 0) + ((cis[0]?.tags?.length) || 0)) > 0 ? (
           <div className="flex flex-wrap gap-2 mb-2">
@@ -160,17 +344,14 @@ export const TimelineTab: React.FC = () => {
             </div>
           )}
         </div>
-        <div className="flex justify-end gap-2 mt-3">
-          <Button variant="secondary" size="sm" onClick={() => navigate(`/calendar?date=${dateStr}#journal`)}>
-            {language === 'ar' ? 'افتح في التقويم' : 'Open in Calendar'}
-          </Button>
-        </div>
+        {/* Open in Calendar button removed as requested */}
       </div>
     );
   });
 
   return (
     <div className="space-y-4">
+      {todayCard}
       {pastCards}
     </div>
   );

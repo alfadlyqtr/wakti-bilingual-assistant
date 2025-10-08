@@ -293,19 +293,19 @@ export const TodayTab: React.FC = () => {
         if (subParts.length === 0) return;
         subParts.forEach((part) => {
           const safe = esc(part);
-          // Use explicit border color for strong contrast across themes
-          chips += `<span class="sr-only"> | </span><span contenteditable="false" class="pointer-events-none select-none inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2 py-0.5 shadow">${safe}</span> `;
+          // Use explicit border color for strong contrast across themes and force dark text on white bg for dark mode
+          chips += `<span class="sr-only"> | </span><span contenteditable="false" class="pointer-events-none select-none inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white text-slate-800 px-2 py-0.5 shadow">${safe}</span> `;
         });
       });
       const free = noteFreeText
-        ? `<span class="sr-only"> | </span><span contenteditable="false" class="pointer-events-none select-none inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2 py-0.5 shadow">${esc(noteFreeText)}</span> `
+        ? `<span class="sr-only"> | </span><span contenteditable="false" class="pointer-events-none select-none inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white text-slate-800 px-2 py-0.5 shadow">${esc(noteFreeText)}</span> `
         : '';
       const innerContent = `${before}${chips}${free}`;
       // Wrap in outer pill ONLY if this line is saved (no __UNSAVED__ or __FREE__ marker)
       const isUnsaved = rawLine.includes('__UNSAVED__') || rawLine.includes('__FREE__');
       if (!isUnsaved) {
         // Saved entry: wrap in outer pill
-        htmlLines.push(`<div class="my-2 p-3 rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 shadow-sm">${innerContent}</div>`);
+        htmlLines.push(`<div class="my-2 p-3 rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 text-slate-800 shadow-sm">${innerContent}</div>`);
       } else {
         // Unsaved entry: keep flat
         htmlLines.push(`<div>${innerContent}</div>`);
@@ -571,25 +571,61 @@ export const TodayTab: React.FC = () => {
 
   // Load today's saved entry on mount and when date changes
   useEffect(() => {
+    // Immediately clear transient state to avoid showing stale xN while loading
+    setCheckins([]);
+    setPendingActions([]);
+    setPendingMoodCounts({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+    setTagTapCounts({} as any);
     (async () => {
       try {
         const d = await JournalService.getDay(date);
         if (d) {
-          setMood((d.mood_value as MoodValue) ?? null);
-          setTags(Array.isArray(d.tags) ? d.tags : []);
-          setNote(d.note || "");
-          setMorning(d.morning_reflection || "");
-          setEvening(d.evening_reflection || "");
-          setDayUpdatedAt(d.updated_at || null);
-          // Initialize saved snapshots from loaded day
-          setSavedMood((d.mood_value as MoodValue) ?? null);
-          setSavedTags(Array.isArray(d.tags) ? d.tags : []);
-          setSavedNote(d.note || "");
-          setSavedMorning(d.morning_reflection || "");
-          setSavedEvening(d.evening_reflection || "");
+          const dayEnded = Boolean(d.evening_reflection);
+          if (dayEnded) {
+            // Day is ended: present a fresh, empty Today tab
+            setMood(null);
+            setTags([]);
+            setNote("");
+            setMorning("");
+            setEvening("");
+            setDayUpdatedAt(d.updated_at || null);
+            setSavedMood((d.mood_value as MoodValue) ?? null);
+            setSavedTags(Array.isArray(d.tags) ? d.tags : []);
+            setSavedNote(d.note || "");
+            setSavedMorning(d.morning_reflection || "");
+            setSavedEvening(d.evening_reflection || "");
+            // Also clear all counters and check-ins so no xN shows after End Day
+            setCheckins([]);
+            setPendingMoodCounts({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+            setPendingActions([]);
+            setTagTapCounts({} as any);
+            // Clear editor DOM
+            requestAnimationFrame(() => {
+              if (noteCERef.current) noteCERef.current.innerHTML = "";
+            });
+          } else {
+            // Day not ended: load current state
+            setMood((d.mood_value as MoodValue) ?? null);
+            setTags(Array.isArray(d.tags) ? d.tags : []);
+            setNote(d.note || "");
+            setMorning(d.morning_reflection || "");
+            setEvening(d.evening_reflection || "");
+            setDayUpdatedAt(d.updated_at || null);
+            // Initialize saved snapshots from loaded day
+            setSavedMood((d.mood_value as MoodValue) ?? null);
+            setSavedTags(Array.isArray(d.tags) ? d.tags : []);
+            setSavedNote(d.note || "");
+            setSavedMorning(d.morning_reflection || "");
+            setSavedEvening(d.evening_reflection || "");
+          }
         }
-        const list = await JournalService.getCheckinsForDay(date);
-        setCheckins(list);
+        // Only load check-ins if the day is NOT ended. If ended, keep Today clean (no ×N badges)
+        if (!d?.evening_reflection) {
+          const list = await JournalService.getCheckinsForDay(date);
+          setCheckins(list);
+        } else {
+          setCheckins([]);
+        }
         // nothing else
       } catch (e) {
         // Silent; Today remains editable if nothing saved yet
@@ -1169,6 +1205,21 @@ export const TodayTab: React.FC = () => {
             
             // Trigger Timeline refresh and navigate
             window.dispatchEvent(new Event('refreshTimeline'));
+            // Immediately clear Today UI for a fresh start
+            setMood(null);
+            setTags([]);
+            setNote("");
+            setMorning("");
+            setEvening("");
+            setIsNoteEditing(false);
+            // Clear check-ins and counters so badges are reset
+            setCheckins([]);
+            setPendingMoodCounts({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+            setPendingActions([]);
+            setTagTapCounts({} as any);
+            requestAnimationFrame(() => {
+              if (noteCERef.current) noteCERef.current.innerHTML = "";
+            });
             setTimeout(() => {
               navigate('/journal?tab=timeline');
             }, 300);
