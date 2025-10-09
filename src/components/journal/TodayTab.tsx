@@ -1415,58 +1415,58 @@ export const TodayTab: React.FC = () => {
               )}
               
               {/* Gratitude Line 1 */}
-              <div className="flex items-start gap-3">
-                <span className="text-purple-500 dark:text-purple-400 font-medium text-sm mt-2.5 flex-shrink-0">1.</span>
-                <div className="flex-1">
-                  <label className="text-xs text-muted-foreground mb-1.5 block">
+              <div className="flex items-start gap-3 group">
+                <span className="text-purple-500 dark:text-purple-400 font-bold text-lg mt-2 flex-shrink-0 animate-fade-in">1.</span>
+                <div className="flex-1 animate-fade-in" style={{ animationDelay: '0.1s' }}>
+                  <label className="text-sm font-semibold mb-2 block bg-gradient-to-r from-purple-600 via-purple-500 to-pink-500 dark:from-purple-400 dark:via-purple-300 dark:to-pink-400 bg-clip-text text-transparent group-hover:scale-105 transition-transform">
                     {language === 'ar' 
-                      ? `${displayName || '[اسم المستخدم]'} ممتن لـ` 
-                      : `${displayName || '[username]'} is grateful for`}
+                      ? `✨ ${displayName || '[اسم المستخدم]'} ممتن لـ` 
+                      : `✨ ${displayName || '[username]'} is grateful for`}
                   </label>
                   <Input
                     value={gratitude1}
                     onChange={(e) => setGratitude1(e.target.value)}
                     placeholder={language === 'ar' ? 'اكتب هنا...' : 'Type here...'}
                     maxLength={100}
-                    className="bg-white/60 dark:bg-black/20 border-purple-200 dark:border-purple-800/50 focus:border-purple-400 dark:focus:border-purple-600 text-sm"
+                    className="bg-gradient-to-r from-purple-50/80 to-pink-50/80 dark:from-purple-950/30 dark:to-pink-950/30 border-purple-300 dark:border-purple-700/50 focus:border-purple-500 dark:focus:border-purple-500 text-sm shadow-sm hover:shadow-md transition-all"
                   />
                 </div>
               </div>
 
               {/* Gratitude Line 2 */}
-              <div className="flex items-start gap-3">
-                <span className="text-pink-500 dark:text-pink-400 font-medium text-sm mt-2.5 flex-shrink-0">2.</span>
-                <div className="flex-1">
-                  <label className="text-xs text-muted-foreground mb-1.5 block">
+              <div className="flex items-start gap-3 group">
+                <span className="text-pink-500 dark:text-pink-400 font-bold text-lg mt-2 flex-shrink-0 animate-fade-in" style={{ animationDelay: '0.2s' }}>2.</span>
+                <div className="flex-1 animate-fade-in" style={{ animationDelay: '0.3s' }}>
+                  <label className="text-sm font-semibold mb-2 block bg-gradient-to-r from-pink-600 via-rose-500 to-purple-500 dark:from-pink-400 dark:via-rose-300 dark:to-purple-400 bg-clip-text text-transparent group-hover:scale-105 transition-transform">
                     {language === 'ar' 
-                      ? `${displayName || '[اسم المستخدم]'} ممتن لـ` 
-                      : `${displayName || '[username]'} is grateful for`}
+                      ? `💖 ${displayName || '[اسم المستخدم]'} ممتن لـ` 
+                      : `💖 ${displayName || '[username]'} is grateful for`}
                   </label>
                   <Input
                     value={gratitude2}
                     onChange={(e) => setGratitude2(e.target.value)}
                     placeholder={language === 'ar' ? 'اكتب هنا...' : 'Type here...'}
                     maxLength={100}
-                    className="bg-white/60 dark:bg-black/20 border-pink-200 dark:border-pink-800/50 focus:border-pink-400 dark:focus:border-pink-600 text-sm"
+                    className="bg-gradient-to-r from-pink-50/80 to-rose-50/80 dark:from-pink-950/30 dark:to-rose-950/30 border-pink-300 dark:border-pink-700/50 focus:border-pink-500 dark:focus:border-pink-500 text-sm shadow-sm hover:shadow-md transition-all"
                   />
                 </div>
               </div>
 
               {/* Gratitude Line 3 */}
-              <div className="flex items-start gap-3">
-                <span className="text-purple-600 dark:text-purple-300 font-medium text-sm mt-2.5 flex-shrink-0">3.</span>
-                <div className="flex-1">
-                  <label className="text-xs text-muted-foreground mb-1.5 block">
+              <div className="flex items-start gap-3 group">
+                <span className="text-purple-600 dark:text-purple-300 font-bold text-lg mt-2 flex-shrink-0 animate-fade-in" style={{ animationDelay: '0.4s' }}>3.</span>
+                <div className="flex-1 animate-fade-in" style={{ animationDelay: '0.5s' }}>
+                  <label className="text-sm font-semibold mb-2 block bg-gradient-to-r from-purple-600 via-indigo-500 to-blue-500 dark:from-purple-400 dark:via-indigo-300 dark:to-blue-400 bg-clip-text text-transparent group-hover:scale-105 transition-transform">
                     {language === 'ar' 
-                      ? `${displayName || '[اسم المستخدم]'} ممتن لـ` 
-                      : `${displayName || '[username]'} is grateful for`}
+                      ? `🌟 ${displayName || '[اسم المستخدم]'} ممتن لـ` 
+                      : `🌟 ${displayName || '[username]'} is grateful for`}
                   </label>
                   <Input
                     value={gratitude3}
                     onChange={(e) => setGratitude3(e.target.value)}
                     placeholder={language === 'ar' ? 'اكتب هنا...' : 'Type here...'}
                     maxLength={100}
-                    className="bg-white/60 dark:bg-black/20 border-purple-200 dark:border-purple-800/50 focus:border-purple-400 dark:focus:border-purple-600 text-sm"
+                    className="bg-gradient-to-r from-purple-50/80 to-indigo-50/80 dark:from-purple-950/30 dark:to-indigo-950/30 border-purple-300 dark:border-purple-700/50 focus:border-indigo-500 dark:focus:border-indigo-500 text-sm shadow-sm hover:shadow-md transition-all"
                   />
                 </div>
               </div>
