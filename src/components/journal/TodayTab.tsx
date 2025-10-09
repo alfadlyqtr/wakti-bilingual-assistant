@@ -1387,8 +1387,14 @@ export const TodayTab: React.FC = () => {
                   <h3 className="text-base font-semibold bg-gradient-to-r from-purple-600 to-pink-600 dark:from-purple-400 dark:to-pink-400 bg-clip-text text-transparent">
                     {language === 'ar' ? 'الامتنان' : 'Being Grateful'}
                   </h3>
-                  <p className="text-xs text-muted-foreground">
-                    {language === 'ar' ? 'اذكر ثلاثة أشياء تشعر بالامتنان لها' : 'List three things you\'re grateful for'}
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs text-muted-foreground">
+                      {language === 'ar' ? 'اذكر ثلاثة أشياء تشعر بالامتنان لها' : 'List three things you\'re grateful for'}
+                    </p>
+                    <span className="text-xs text-purple-600 dark:text-purple-400 font-medium">✨</span>
+                  </div>
+                  <p className="text-xs text-purple-600/80 dark:text-purple-400/80 font-medium mt-0.5">
+                    {language === 'ar' ? 'الامتنان مجزٍ' : 'Being grateful is rewarding'}
                   </p>
                 </div>
               </div>
