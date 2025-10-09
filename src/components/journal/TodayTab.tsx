@@ -138,16 +138,25 @@ export const TodayTab: React.FC = () => {
       const base = cur.endsWith('\n') || cur.length === 0 ? cur : cur + '\n';
       return `${base}[${stubTime}] 🕒  | __FREE____END__ | `;
     });
-    // Focus caret to end of editor on next paint
+    // Focus caret to the free-text pill on next paint
     requestAnimationFrame(() => {
       const el = noteCERef.current;
       if (!el) return;
-      const range = document.createRange();
-      range.selectNodeContents(el);
-      range.collapse(false);
-      const sel = window.getSelection();
-      sel?.removeAllRanges();
-      sel?.addRange(range);
+      try {
+        const pills = el.querySelectorAll('span[data-free-pill="1"]');
+        const target = pills.length ? pills[pills.length - 1] : null;
+        const range = document.createRange();
+        const sel = window.getSelection();
+        if (target) {
+          range.selectNodeContents(target);
+          range.collapse(false);
+        } else {
+          range.selectNodeContents(el);
+          range.collapse(false);
+        }
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      } catch {}
     });
   }, [language, setNote]);
 
@@ -303,8 +312,8 @@ export const TodayTab: React.FC = () => {
           chips += `<span class="sr-only"> | </span><span contenteditable="false" class="pointer-events-none select-none inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white text-slate-800 px-2 py-0.5 shadow">${safe}</span> `;
         });
       });
-      const free = noteFreeText
-        ? `<span class="sr-only"> | </span><span contenteditable="false" class="pointer-events-none select-none inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white text-slate-800 px-2 py-0.5 shadow">${esc(noteFreeText)}</span> `
+      const free = noteFreeText !== undefined
+        ? `<span class="sr-only"> | </span><span data-free-pill="1" contenteditable="true" class="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white text-slate-800 px-2 py-0.5 shadow">${noteFreeText ? esc(noteFreeText) : "&#8203;"}</span> `
         : '';
       const innerContent = `${before}${chips}${free}`;
       // ALWAYS wrap timestamp lines in outer pill (whether saved or unsaved)
@@ -330,9 +339,16 @@ export const TodayTab: React.FC = () => {
         requestAnimationFrame(() => {
           try {
             const range = document.createRange();
-            range.selectNodeContents(el);
-            range.collapse(false);
             const sel = window.getSelection();
+            const pills = el.querySelectorAll('span[data-free-pill="1"]');
+            const target = pills.length ? pills[pills.length - 1] : null;
+            if (target) {
+              range.selectNodeContents(target);
+              range.collapse(false);
+            } else {
+              range.selectNodeContents(el);
+              range.collapse(false);
+            }
             sel?.removeAllRanges();
             sel?.addRange(range);
           } catch {}
