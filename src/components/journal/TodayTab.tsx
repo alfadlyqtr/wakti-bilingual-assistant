@@ -1137,7 +1137,7 @@ export const TodayTab: React.FC = () => {
             </div>
           </CollapsibleTrigger>
           <CollapsibleContent>
-        <div className={`grid grid-cols-5 ${isMobile ? 'gap-2' : 'gap-3'} items-start`}>
+        <div className={`grid grid-cols-5 ${isMobile ? 'gap-3' : 'gap-4'} items-start`}>
           {faces.map(({ value, color }) => (
             <div key={value} className="flex flex-col items-center">
               <button
