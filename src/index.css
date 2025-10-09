@@ -76,8 +76,16 @@
     height: 0 !important;
   }
 
+  /* Force hide any inner scrollbars on Dashboard descendants */
+  body.dashboard-page * {
+    scrollbar-width: none !important;
+  }
+  body.dashboard-page *::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
 
-/* Global layout offsets */
   body, html {
     --app-header-h: calc(64px + env(safe-area-inset-top, 0px));
     --app-bottom-tabs-h: calc(64px + env(safe-area-inset-bottom, 0px));
