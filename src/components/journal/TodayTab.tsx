@@ -1219,7 +1219,7 @@ export const TodayTab: React.FC = () => {
                 <div
                   className={`h-9 w-9 rounded-full flex items-center justify-center bg-gradient-to-br from-white/70 to-muted shadow-sm ${tags.includes(tag) ? 'text-primary' : (tagColor[tag] || 'text-muted-foreground')}`}
                 >
-                  <TagIcon id={tag} className="h-8 w-8" />
+                  <TagIcon id={tag} className="h-9 w-9" />
                 </div>
                 <span className="text-[10px] leading-none opacity-80">{language === 'ar' ? (arTagLabels[tag] || tag.replace('_',' ')) : tag.replace('_',' ')}</span>
               </button>
