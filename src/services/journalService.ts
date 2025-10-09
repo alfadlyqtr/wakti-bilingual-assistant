@@ -9,6 +9,9 @@ export type JournalDay = {
   note: string | null;
   morning_reflection: string | null;
   evening_reflection: string | null;
+  gratitude_1: string | null;
+  gratitude_2: string | null;
+  gratitude_3: string | null;
   created_at?: string;
   updated_at?: string;
 };

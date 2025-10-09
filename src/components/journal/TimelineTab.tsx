@@ -200,13 +200,31 @@ export const TimelineTab: React.FC = () => {
             <div className="flex flex-wrap gap-2 mb-2">
               {Array.from(new Set([...(d?.tags || []), ...((cis[0]?.tags)||[])])).slice(0,8).map((t, idx) => (
                 <span key={`${dateStr}-${t}-${idx}`} className="chip-3d flex items-center gap-1 px-2 py-1 rounded-lg text-xs border">
-                  <TagIcon id={t} className="h-3.5 w-3.5" />
+                  <TagIcon id={t} className="h-5 w-5" />
                   {t.replace('_',' ')}
                 </span>
               ))}
             </div>
           ) : null}
           {d?.morning_reflection && <div className="text-sm">{d.morning_reflection}</div>}
+          
+          {/* Gratitude Display */}
+          {(d?.gratitude_1 || d?.gratitude_2 || d?.gratitude_3) && (
+            <div className="mt-3 p-3 rounded-xl bg-gradient-to-br from-purple-50/50 to-pink-50/50 dark:from-purple-950/20 dark:to-pink-950/20 border border-purple-200/30 dark:border-purple-800/30">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-lg">🙏</span>
+                <span className="text-xs font-medium text-purple-600 dark:text-purple-400">
+                  {language === 'ar' ? 'الامتنان' : 'Gratitude'}
+                </span>
+              </div>
+              <div className="space-y-1.5 text-sm">
+                {d.gratitude_1 && (<div className="flex gap-2"><span className="text-purple-500 dark:text-purple-400">1.</span><span>{d.gratitude_1}</span></div>)}
+                {d.gratitude_2 && (<div className="flex gap-2"><span className="text-pink-500 dark:text-pink-400">2.</span><span>{d.gratitude_2}</span></div>)}
+                {d.gratitude_3 && (<div className="flex gap-2"><span className="text-purple-600 dark:text-purple-300">3.</span><span>{d.gratitude_3}</span></div>)}
+              </div>
+            </div>
+          )}
+          
           <div className="mt-2">
             {d?.evening_reflection ? (
               <>
@@ -241,7 +259,7 @@ export const TimelineTab: React.FC = () => {
                         return <span className="text-xs text-slate-600 mr-1">[{timeStr}]</span>;
                       })()}
                       {c.tags?.map(t => (
-                        <span key={t} className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white text-slate-800 px-2 py-0.5 shadow text-xs"><TagIcon id={t} className="h-3 w-3" />{t.replace('_',' ')}</span>
+                        <span key={t} className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white text-slate-800 px-2 py-0.5 shadow text-xs"><TagIcon id={t} className="h-4 w-4" />{t.replace('_',' ')}</span>
                       ))}
                       {c.note && (
                         <span className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white text-slate-800 px-2 py-0.5 shadow text-xs">{c.note}</span>
@@ -295,8 +313,26 @@ export const TimelineTab: React.FC = () => {
             ))}
           </div>
         ) : null}
-        {d?.morning_reflection && <div className="text-sm">{d.morning_reflection}</div>}
-        <div className="mt-2">
+            {d?.morning_reflection && <div className="text-sm">{d.morning_reflection}</div>}
+            
+            {/* Gratitude Display */}
+            {(d?.gratitude_1 || d?.gratitude_2 || d?.gratitude_3) && (
+              <div className="mt-3 p-3 rounded-xl bg-gradient-to-br from-purple-50/50 to-pink-50/50 dark:from-purple-950/20 dark:to-pink-950/20 border border-purple-200/30 dark:border-purple-800/30">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-lg">🙏</span>
+                  <span className="text-xs font-medium text-purple-600 dark:text-purple-400">
+                    {language === 'ar' ? 'الامتنان' : 'Gratitude'}
+                  </span>
+                </div>
+                <div className="space-y-1.5 text-sm">
+                  {d.gratitude_1 && (<div className="flex gap-2"><span className="text-purple-500 dark:text-purple-400">1.</span><span>{d.gratitude_1}</span></div>)}
+                  {d.gratitude_2 && (<div className="flex gap-2"><span className="text-pink-500 dark:text-pink-400">2.</span><span>{d.gratitude_2}</span></div>)}
+                  {d.gratitude_3 && (<div className="flex gap-2"><span className="text-purple-600 dark:text-purple-300">3.</span><span>{d.gratitude_3}</span></div>)}
+                </div>
+              </div>
+            )}
+            
+            <div className="mt-2">
           {d?.evening_reflection ? (
             <>
               <button className="text-xs text-muted-foreground underline" onClick={() => setExpanded(prev => ({...prev, [dateStr]: !prev[dateStr]}))}>

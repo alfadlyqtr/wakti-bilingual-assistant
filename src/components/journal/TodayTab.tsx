@@ -9,10 +9,11 @@ import { MoodFace, moodLabels, MoodValue } from "./icons/MoodFaces";
 import { TagIcon, TagId } from "@/components/journal/TagIcon";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Plus, Undo2 } from "lucide-react";
+import { Plus, Undo2, ChevronDown } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { formatTime } from "@/utils/datetime";
 import { supabase } from "@/integrations/supabase/client";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 const DEFAULT_TAGS: TagId[] = [
   "family","friends","date","exercise","sport","relax","movies","gaming","reading","cleaning",
@@ -46,6 +47,11 @@ export const TodayTab: React.FC = () => {
   const [morning, setMorning] = useState("");
   const [evening, setEvening] = useState("");
   const [saving, setSaving] = useState(false);
+  // Gratitude state
+  const [gratitude1, setGratitude1] = useState("");
+  const [gratitude2, setGratitude2] = useState("");
+  const [gratitude3, setGratitude3] = useState("");
+  const [displayName, setDisplayName] = useState<string | null>(null);
   // Note editing session control (editor is only typable after Add note)
   const [isNoteEditing, setIsNoteEditing] = useState(false);
   const noteRef = useRef<HTMLTextAreaElement | null>(null);
@@ -54,13 +60,22 @@ export const TodayTab: React.FC = () => {
   const [isCustomOpen, setCustomOpen] = useState(false);
   const [customValue, setCustomValue] = useState("");
   const eveningRef = useRef<HTMLTextAreaElement | null>(null);
+  // Collapsible states for all sections
   const [morningOpen, setMorningOpen] = useState(true);
+  const [moodOpen, setMoodOpen] = useState(true);
+  const [tagsOpen, setTagsOpen] = useState(true);
+  const [notesOpen, setNotesOpen] = useState(true);
+  const [gratitudeOpen, setGratitudeOpen] = useState(true);
+  const [eveningOpen, setEveningOpen] = useState(true);
   // Snapshots of last saved values (used for Clear to only clear unsaved changes)
   const [savedMood, setSavedMood] = useState<MoodValue | null>(null);
   const [savedTags, setSavedTags] = useState<TagId[]>([]);
   const [savedNote, setSavedNote] = useState("");
   const [savedMorning, setSavedMorning] = useState("");
   const [savedEvening, setSavedEvening] = useState("");
+  const [savedGratitude1, setSavedGratitude1] = useState("");
+  const [savedGratitude2, setSavedGratitude2] = useState("");
+  const [savedGratitude3, setSavedGratitude3] = useState("");
   // Force re-render for tag list updates
   const [customVersion, setCustomVersion] = useState(0);
   // Persisted custom tags (per-user) and merged list used by UI
@@ -87,8 +102,10 @@ export const TodayTab: React.FC = () => {
   // Unsaved detection for controls visibility
   const hasUnsaved = useMemo(() => {
     const tagsChanged = savedTags.join('|') !== tags.join('|');
-    return tagsChanged || savedMood !== mood || savedNote !== note || savedMorning !== morning || savedEvening !== evening;
-  }, [savedTags, tags, savedMood, mood, savedNote, note, savedMorning, morning, savedEvening, evening]);
+    return tagsChanged || savedMood !== mood || savedNote !== note || savedMorning !== morning || savedEvening !== evening ||
+           savedGratitude1 !== gratitude1 || savedGratitude2 !== gratitude2 || savedGratitude3 !== gratitude3;
+  }, [savedTags, tags, savedMood, mood, savedNote, note, savedMorning, morning, savedEvening, evening, 
+      savedGratitude1, gratitude1, savedGratitude2, gratitude2, savedGratitude3, gratitude3]);
   
   // Helpers to keep clean structure
   const isSeparatorLine = (line: string) => /^\s*\.{6,}\s*$/.test(line);
@@ -213,24 +230,33 @@ export const TodayTab: React.FC = () => {
       if (!uid) return;
       const { data, error } = await supabase
         .from('profiles')
-        .select('custom_tags')
+        .select('custom_tags, display_name')
         .eq('id', uid)
         .maybeSingle();
-      if (!error && data && Array.isArray(data.custom_tags)) {
-        const cleaned = (data.custom_tags as string[])
-          .map(s => (s || '').toString().toLowerCase().replace(/\s+/g,'_'))
-          .filter(Boolean) as TagId[];
-        // Remove any custom tags that are now default tags
-        const validCustomTags = cleaned.filter(t => !defaultTagSet.has(t));
-        // Update DB if we filtered any out
-        if (validCustomTags.length !== cleaned.length) {
-          await supabase.from('profiles').update({ custom_tags: validCustomTags }).eq('id', uid);
+      if (!error && data) {
+        // Set display name
+        if (data.display_name) {
+          setDisplayName(data.display_name);
         }
-        setCustomTags(validCustomTags);
-        setAllTags([...
-          DEFAULT_TAGS,
-          ...validCustomTags
-        ] as TagId[]);
+        // Handle custom tags
+        if (Array.isArray(data.custom_tags)) {
+          const cleaned = (data.custom_tags as string[])
+            .map(s => (s || '').toString().toLowerCase().replace(/\s+/g,'_'))
+            .filter(Boolean) as TagId[];
+          // Remove any custom tags that are now default tags
+          const validCustomTags = cleaned.filter(t => !defaultTagSet.has(t));
+          // Update DB if we filtered any out
+          if (validCustomTags.length !== cleaned.length) {
+            await supabase.from('profiles').update({ custom_tags: validCustomTags }).eq('id', uid);
+          }
+          setCustomTags(validCustomTags);
+          setAllTags([...
+            DEFAULT_TAGS,
+            ...validCustomTags
+          ] as TagId[]);
+        } else {
+          setAllTags([ ...DEFAULT_TAGS ]);
+        }
       } else {
         setAllTags([ ...DEFAULT_TAGS ]);
       }
@@ -576,11 +602,14 @@ export const TodayTab: React.FC = () => {
 
   // Clear only unsaved changes (keep saved entries)
   const clearSelections = () => {
-    // Clear mood/tags/morning/evening selections
-    setMood(null);
-    setTags([]);
-    setMorning("");
-    setEvening("");
+    // Clear mood/tags/morning/evening/gratitude selections
+    setMood(savedMood);
+    setTags([...savedTags]);
+    setMorning(savedMorning);
+    setEvening(savedEvening);
+    setGratitude1(savedGratitude1);
+    setGratitude2(savedGratitude2);
+    setGratitude3(savedGratitude3);
     setTagTapCounts({} as any);
     lastMoodTapAtRef.current = null;
     lastCheckinIdRef.current = null;
@@ -642,12 +671,18 @@ export const TodayTab: React.FC = () => {
             setNote("");
             setMorning("");
             setEvening("");
+            setGratitude1("");
+            setGratitude2("");
+            setGratitude3("");
             setDayUpdatedAt(d.updated_at || null);
             setSavedMood((d.mood_value as MoodValue) ?? null);
             setSavedTags(Array.isArray(d.tags) ? d.tags : []);
             setSavedNote(d.note || "");
             setSavedMorning(d.morning_reflection || "");
             setSavedEvening(d.evening_reflection || "");
+            setSavedGratitude1(d.gratitude_1 || "");
+            setSavedGratitude2(d.gratitude_2 || "");
+            setSavedGratitude3(d.gratitude_3 || "");
             // Also clear all counters and check-ins so no xN shows after End Day
             setCheckins([]);
             setPendingMoodCounts({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
@@ -664,6 +699,9 @@ export const TodayTab: React.FC = () => {
             setNote(d.note || "");
             setMorning(d.morning_reflection || "");
             setEvening(d.evening_reflection || "");
+            setGratitude1(d.gratitude_1 || "");
+            setGratitude2(d.gratitude_2 || "");
+            setGratitude3(d.gratitude_3 || "");
             setDayUpdatedAt(d.updated_at || null);
             // Initialize saved snapshots from loaded day
             setSavedMood((d.mood_value as MoodValue) ?? null);
@@ -671,6 +709,9 @@ export const TodayTab: React.FC = () => {
             setSavedNote(d.note || "");
             setSavedMorning(d.morning_reflection || "");
             setSavedEvening(d.evening_reflection || "");
+            setSavedGratitude1(d.gratitude_1 || "");
+            setSavedGratitude2(d.gratitude_2 || "");
+            setSavedGratitude3(d.gratitude_3 || "");
           }
         }
         // Only load check-ins if the day is NOT ended. If ended, keep Today clean (no ×N badges)
@@ -971,7 +1012,10 @@ export const TodayTab: React.FC = () => {
         tags,
         note: cleanNote || null,
         morning_reflection: morning || null,
-        evening_reflection: evening || null
+        evening_reflection: evening || null,
+        gratitude_1: gratitude1 || null,
+        gratitude_2: gratitude2 || null,
+        gratitude_3: gratitude3 || null,
       });
       // Flush pending mood taps to DB - ONE check-in per unique timestamp
       const timestamps = Object.keys(pendingActions);
@@ -998,6 +1042,9 @@ export const TodayTab: React.FC = () => {
       setSavedTags(tags);
       setSavedMorning(morning);
       setSavedEvening(evening);
+      setSavedGratitude1(gratitude1);
+      setSavedGratitude2(gratitude2);
+      setSavedGratitude3(gratitude3);
       // Note is updated via setNote above; read from ref shortly after to capture final string
       setTimeout(() => {
         setSavedNote(noteRef.current?.value || savedNote);
@@ -1072,14 +1119,18 @@ export const TodayTab: React.FC = () => {
         </div>
       )}
 
-      <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
-        <div className="text-sm text-muted-foreground mb-2 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />
-            {language === 'ar' ? 'المزاج' : 'Mood'}
-          </div>
-          {/* Clear moved to Note header */}
-        </div>
+      <Collapsible open={moodOpen} onOpenChange={setMoodOpen}>
+        <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
+          <CollapsibleTrigger className="w-full">
+            <div className="text-sm text-muted-foreground mb-2 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />
+                {language === 'ar' ? 'المزاج' : 'Mood'}
+              </div>
+              <ChevronDown className={`h-5 w-5 transition-transform ${moodOpen ? 'rotate-180' : ''}`} />
+            </div>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
         <div className={`grid grid-cols-5 ${isMobile ? 'gap-2' : 'gap-3'} items-start`}>
           {faces.map(({ value, color }) => (
             <div key={value} className="flex flex-col items-center">
@@ -1113,9 +1164,22 @@ export const TodayTab: React.FC = () => {
             </div>
           ))}
         </div>
+        </CollapsibleContent>
       </div>
+      </Collapsible>
 
-      <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
+      <Collapsible open={tagsOpen} onOpenChange={setTagsOpen}>
+        <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
+          <CollapsibleTrigger className="w-full mb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />
+                <span className="text-sm text-muted-foreground">{language === 'ar' ? 'الوسوم' : 'Tags'}</span>
+              </div>
+              <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${tagsOpen ? 'rotate-180' : ''}`} />
+            </div>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
         <div className="grid [grid-template-columns:repeat(auto-fit,_minmax(104px,_1fr))] gap-2 items-start">
           {allTags.map(tag => (
             <div key={tag + ':' + customVersion} className="flex flex-col items-center w-full">
@@ -1147,7 +1211,7 @@ export const TodayTab: React.FC = () => {
                 <div
                   className={`h-9 w-9 rounded-full flex items-center justify-center bg-gradient-to-br from-white/70 to-muted shadow-sm ${tags.includes(tag) ? 'text-primary' : (tagColor[tag] || 'text-muted-foreground')}`}
                 >
-                  <TagIcon id={tag} className="h-4 w-4" />
+                  <TagIcon id={tag} className="h-6 w-6" />
                 </div>
                 <span className="text-[10px] leading-none opacity-80">{language === 'ar' ? (arTagLabels[tag] || tag.replace('_',' ')) : tag.replace('_',' ')}</span>
               </button>
@@ -1181,13 +1245,18 @@ export const TodayTab: React.FC = () => {
             <span className="absolute bottom-1 right-1 text-[10px] px-1 py-0.5 rounded bg-muted/70 border border-border/60">{customCount}/3</span>
           </button>
         </div>
+        </CollapsibleContent>
       </div>
+      </Collapsible>
 
+      <Collapsible open={notesOpen} onOpenChange={setNotesOpen}>
       <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
+        <CollapsibleTrigger className="w-full">
         <div className="flex items-center justify-between mb-2">
           <div className="text-xs text-muted-foreground flex items-center gap-2">
             <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />
             {language === 'ar' ? 'ملاحظاتي اليومية' : 'My daily notes'}
+            <ChevronDown className={`h-5 w-5 transition-transform ${notesOpen ? 'rotate-180' : ''}`} />
           </div>
           <div className="flex items-center gap-2">
           {dayUpdatedAt && (
@@ -1218,8 +1287,10 @@ export const TodayTab: React.FC = () => {
             {language === 'ar' ? 'مسح' : 'Clear'}
           </button>
           )}
+          </div>
         </div>
-        </div>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
         <div
           ref={noteCERef}
           contentEditable={isNoteEditing}
@@ -1293,17 +1364,105 @@ export const TodayTab: React.FC = () => {
         />
         {/* Hidden textarea to preserve existing save flows that read from noteRef */}
         <textarea ref={noteRef} value={note} onChange={(e)=>setNote(e.target.value)} className="sr-only" aria-hidden="true" tabIndex={-1} />
+        </CollapsibleContent>
       </div>
+      </Collapsible>
 
-      <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-sm text-muted-foreground flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />
-            {language === 'ar' ? 'مراجعة المساء' : 'Evening Reflection'}
-          </div>
+      {/* Gratitude Section */}
+      <Collapsible open={gratitudeOpen} onOpenChange={setGratitudeOpen}>
+        <div className="rounded-2xl border border-border/50 bg-gradient-to-br from-purple-50/80 via-pink-50/60 to-card dark:from-purple-950/20 dark:via-pink-950/20 dark:to-card p-5 shadow-lg card-3d inner-bevel edge-liquid backdrop-blur-sm">
+          <CollapsibleTrigger className="w-full">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center shadow-md">
+                  <span className="text-2xl">🙏</span>
+                </div>
+                <div className="text-left">
+                  <h3 className="text-base font-semibold bg-gradient-to-r from-purple-600 to-pink-600 dark:from-purple-400 dark:to-pink-400 bg-clip-text text-transparent">
+                    {language === 'ar' ? 'الامتنان' : 'Being Grateful'}
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    {language === 'ar' ? 'اذكر ثلاثة أشياء تشعر بالامتنان لها' : 'List three things you\'re grateful for'}
+                  </p>
+                </div>
+              </div>
+              <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${gratitudeOpen ? 'rotate-180' : ''}`} />
+            </div>
+          </CollapsibleTrigger>
+          
+          <CollapsibleContent>
+            <div className="space-y-3 mt-2">
+              {/* Gratitude Line 1 */}
+              <div className="flex items-start gap-3">
+                <span className="text-purple-500 dark:text-purple-400 font-medium text-sm mt-2.5 flex-shrink-0">1.</span>
+                <div className="flex-1">
+                  <label className="text-xs text-muted-foreground mb-1.5 block">
+                    {language === 'ar' ? `${displayName || 'أنا'} ممتن لـ` : `${displayName || 'I am'} grateful for`}
+                  </label>
+                  <Input
+                    value={gratitude1}
+                    onChange={(e) => setGratitude1(e.target.value)}
+                    placeholder={language === 'ar' ? 'اكتب هنا...' : 'Type here...'}
+                    maxLength={100}
+                    className="bg-white/60 dark:bg-black/20 border-purple-200 dark:border-purple-800/50 focus:border-purple-400 dark:focus:border-purple-600 text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Gratitude Line 2 */}
+              <div className="flex items-start gap-3">
+                <span className="text-pink-500 dark:text-pink-400 font-medium text-sm mt-2.5 flex-shrink-0">2.</span>
+                <div className="flex-1">
+                  <label className="text-xs text-muted-foreground mb-1.5 block">
+                    {language === 'ar' ? `${displayName || 'أنا'} ممتن لـ` : `${displayName || 'I am'} grateful for`}
+                  </label>
+                  <Input
+                    value={gratitude2}
+                    onChange={(e) => setGratitude2(e.target.value)}
+                    placeholder={language === 'ar' ? 'اكتب هنا...' : 'Type here...'}
+                    maxLength={100}
+                    className="bg-white/60 dark:bg-black/20 border-pink-200 dark:border-pink-800/50 focus:border-pink-400 dark:focus:border-pink-600 text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Gratitude Line 3 */}
+              <div className="flex items-start gap-3">
+                <span className="text-purple-600 dark:text-purple-300 font-medium text-sm mt-2.5 flex-shrink-0">3.</span>
+                <div className="flex-1">
+                  <label className="text-xs text-muted-foreground mb-1.5 block">
+                    {language === 'ar' ? `${displayName || 'أنا'} ممتن لـ` : `${displayName || 'I am'} grateful for`}
+                  </label>
+                  <Input
+                    value={gratitude3}
+                    onChange={(e) => setGratitude3(e.target.value)}
+                    placeholder={language === 'ar' ? 'اكتب هنا...' : 'Type here...'}
+                    maxLength={100}
+                    className="bg-white/60 dark:bg-black/20 border-purple-200 dark:border-purple-800/50 focus:border-purple-400 dark:focus:border-purple-600 text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+          </CollapsibleContent>
         </div>
-        <Textarea ref={eveningRef} value={evening} onChange={e => setEvening(e.target.value)} placeholder={language === 'ar' ? 'أفضل لحظة؟ ماذا تعلمت؟' : 'Best moment? What did you learn?'} />
-      </div>
+      </Collapsible>
+
+      <Collapsible open={eveningOpen} onOpenChange={setEveningOpen}>
+        <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
+          <CollapsibleTrigger className="w-full">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-sm text-muted-foreground flex items-center gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />
+                {language === 'ar' ? 'مراجعة المساء' : 'Evening Reflection'}
+              </div>
+              <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${eveningOpen ? 'rotate-180' : ''}`} />
+            </div>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <Textarea ref={eveningRef} value={evening} onChange={e => setEvening(e.target.value)} placeholder={language === 'ar' ? 'أفضل لحظة؟ ماذا تعلمت؟' : 'Best moment? What did you learn?'} />
+          </CollapsibleContent>
+        </div>
+      </Collapsible>
 
       <div className="flex justify-end gap-2">
         <Button onClick={onSave} disabled={saving} className="btn-shine" data-saving={saving ? 'true' : 'false'}>
@@ -1325,6 +1484,9 @@ export const TodayTab: React.FC = () => {
               note: cleanNote || null,
               morning_reflection: morning || null,
               evening_reflection: finalEvening,
+              gratitude_1: gratitude1 || null,
+              gratitude_2: gratitude2 || null,
+              gratitude_3: gratitude3 || null,
             });
             
             // Flush pending mood taps
@@ -1353,6 +1515,9 @@ export const TodayTab: React.FC = () => {
             setSavedNote(cleanNote || "");
             setSavedMorning(morning);
             setSavedEvening(finalEvening);
+            setSavedGratitude1(gratitude1);
+            setSavedGratitude2(gratitude2);
+            setSavedGratitude3(gratitude3);
             
             toast.success(language === 'ar' ? 'تم إنهاء اليوم وحفظه' : 'Day ended and saved');
             
@@ -1364,6 +1529,9 @@ export const TodayTab: React.FC = () => {
             setNote("");
             setMorning("");
             setEvening("");
+            setGratitude1("");
+            setGratitude2("");
+            setGratitude3("");
             setIsNoteEditing(false);
             // Clear check-ins and counters so badges are reset
             setCheckins([]);

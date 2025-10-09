@@ -879,6 +879,9 @@ export type Database = {
           created_at: string
           date: string
           evening_reflection: string | null
+          gratitude_1: string | null
+          gratitude_2: string | null
+          gratitude_3: string | null
           id: string
           mood_value: number | null
           morning_reflection: string | null
@@ -891,6 +894,9 @@ export type Database = {
           created_at?: string
           date: string
           evening_reflection?: string | null
+          gratitude_1?: string | null
+          gratitude_2?: string | null
+          gratitude_3?: string | null
           id?: string
           mood_value?: number | null
           morning_reflection?: string | null
@@ -903,6 +909,9 @@ export type Database = {
           created_at?: string
           date?: string
           evening_reflection?: string | null
+          gratitude_1?: string | null
+          gratitude_2?: string | null
+          gratitude_3?: string | null
           id?: string
           mood_value?: number | null
           morning_reflection?: string | null
