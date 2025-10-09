@@ -22,11 +22,11 @@ export default function Journal() {
         <h1 className="text-xl font-semibold tracking-tight">{language === 'ar' ? 'دفتر اليوميات' : 'WAKTI Journal'}</h1>
       </div>
       <Tabs defaultValue={initialTab} className="w-full">
-        <TabsList className="w-full flex justify-start gap-3">
-          <TabsTrigger value="today">{language === 'ar' ? 'اليوم' : 'Today'}</TabsTrigger>
-          <TabsTrigger value="timeline">{language === 'ar' ? 'السجل' : 'Timeline'}</TabsTrigger>
-          <TabsTrigger value="charts">{language === 'ar' ? 'الإحصائيات' : 'Charts'}</TabsTrigger>
-          <TabsTrigger value="ask">{language === 'ar' ? 'اسأل' : 'Ask Journal'}</TabsTrigger>
+        <TabsList className="w-full flex justify-start gap-2 overflow-x-auto px-1">
+          <TabsTrigger value="today" className="flex-shrink-0 text-xs sm:text-sm px-3 sm:px-4">{language === 'ar' ? 'اليوم' : 'Today'}</TabsTrigger>
+          <TabsTrigger value="timeline" className="flex-shrink-0 text-xs sm:text-sm px-3 sm:px-4">{language === 'ar' ? 'السجل' : 'Timeline'}</TabsTrigger>
+          <TabsTrigger value="charts" className="flex-shrink-0 text-xs sm:text-sm px-3 sm:px-4">{language === 'ar' ? 'الإحصائيات' : 'Charts'}</TabsTrigger>
+          <TabsTrigger value="ask" className="flex-shrink-0 text-xs sm:text-sm px-3 sm:px-4">{language === 'ar' ? 'اسأل' : 'Ask Journal'}</TabsTrigger>
         </TabsList>
         <TabsContent value="today" className="mt-4"><TodayTab /></TabsContent>
         <TabsContent value="timeline" className="mt-4"><TimelineTab /></TabsContent>
