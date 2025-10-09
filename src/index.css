@@ -52,6 +52,13 @@
   }
 
   /* Page-specific: hide scrollbars but keep scrolling (Dashboard, Wakti AI) */
+  /* Ensure body itself never shows a scrollbar on Dashboard */
+  body.dashboard-page {
+    overflow: hidden !important;
+  }
+
+  /* Hide scrollbar on the actual scroll container */
+  .app-main,
   body.dashboard-page .app-main,
   body.wakti-ai-page .app-main,
   body.dashboard-page main,
@@ -59,6 +66,7 @@
     -ms-overflow-style: none !important; /* IE/Edge legacy */
     scrollbar-width: none !important;    /* Firefox */
   }
+  .app-main::-webkit-scrollbar,
   body.dashboard-page .app-main::-webkit-scrollbar,
   body.wakti-ai-page .app-main::-webkit-scrollbar,
   body.dashboard-page main::-webkit-scrollbar,
