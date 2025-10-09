@@ -782,7 +782,6 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                   disabled={sendMessageMutation.isPending || isUploading}
                 >
                   <Image className="h-4 w-4" />
-                  <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelected} />
                 </Button>
                 <Button
                   variant="ghost"
@@ -792,10 +791,13 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                   disabled={sendMessageMutation.isPending || isUploading}
                 >
                   <FileText className="h-4 w-4" />
-                  <input ref={pdfInputRef} type="file" accept=".pdf" className="hidden" onChange={handlePDFSelected} />
                 </Button>
                 <VoiceRecorder onRecordingComplete={handleVoiceRecording} disabled={sendMessageMutation.isPending || isUploading} />
               </div>
+
+              {/* Hidden file inputs */}
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelected} />
+              <input ref={pdfInputRef} type="file" accept=".pdf" className="hidden" onChange={handlePDFSelected} />
 
               {/* Bottom: text input + send button */}
               <div className="flex items-center gap-2">
