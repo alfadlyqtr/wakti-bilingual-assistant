@@ -46,47 +46,56 @@ export const JournalWidget: React.FC = () => {
     return `${displayHours}:${minutes} ${ampm}`;
   };
 
-  if (loading || !lastCheckin) {
+  if (loading) {
     return (
-      <div 
-        className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid cursor-pointer hover:shadow-lg transition-shadow"
-        onClick={() => navigate('/journal')}
-      >
-        <div className="text-sm text-muted-foreground text-center">
-          {loading ? (language === 'ar' ? 'جاري التحميل...' : 'Loading...') : (language === 'ar' ? 'لا توجد إدخالات' : 'No entries yet')}
+      <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-sm font-semibold">{language === 'ar' ? 'آخر دخول' : 'Last Entry'}</div>
         </div>
+        <div className="text-sm text-muted-foreground">{language === 'ar' ? 'جاري التحميل...' : 'Loading...'}</div>
+      </div>
+    );
+  }
+
+  if (!lastCheckin) {
+    return (
+      <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-sm font-semibold">{language === 'ar' ? 'آخر دخول' : 'Last Entry'}</div>
+        </div>
+        <div className="text-sm text-muted-foreground mb-4">{language === 'ar' ? 'لا توجد إدخالات' : 'No entries yet'}</div>
+        <Button size="sm" onClick={() => navigate('/journal')} className="w-full">{language === 'ar' ? 'ابدأ الكتابة' : 'Start Writing'}</Button>
       </div>
     );
   }
 
   return (
-    <div 
-      className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background px-4 py-3 shadow-md card-3d inner-bevel edge-liquid cursor-pointer hover:shadow-lg transition-shadow"
-      onClick={() => navigate('/journal')}
-    >
-      <div className="flex items-center justify-center gap-2 flex-wrap">
-        {/* Time pill */}
+    <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-sm font-semibold">{language === 'ar' ? 'آخر دخول' : 'Last Entry'}</div>
         {time && (
-          <span className="px-3 py-1.5 rounded-full bg-muted/50 text-xs font-medium flex items-center gap-1.5">
-            <span>[{formatTime(time)}]</span>
-          </span>
+          <div className="text-xs opacity-70">[{formatTime(time)}]</div>
         )}
-        
-        {/* Mood emoji pill */}
-        {mood && (
-          <span className="px-2 py-1 rounded-full bg-muted/50 flex items-center">
-            <MoodFace value={mood} size={24} />
-          </span>
-        )}
-
-        {/* Tags pills */}
-        {tags.slice(0, 3).map((tag: string) => (
-          <span key={tag} className="px-3 py-1.5 rounded-full bg-primary/10 text-xs font-medium flex items-center gap-1.5">
-            <TagIcon id={tag} className="h-3.5 w-3.5" />
-            {tag.replace(/_/g, ' ')}
-          </span>
-        ))}
       </div>
+
+      <div className="flex items-center gap-3 mb-3">
+        {mood && <MoodFace value={mood} active size={36} />}
+      </div>
+
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          {tags.slice(0, 4).map((tag: string) => (
+            <span key={tag} className="chip-3d flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border">
+              <TagIcon id={tag} className="h-4 w-4" />
+              {tag.replace(/_/g, ' ')}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <Button size="sm" onClick={() => navigate('/journal')} className="w-full">
+        {language === 'ar' ? 'فتح الدفتر' : 'Open Journal'}
+      </Button>
     </div>
   );
 };

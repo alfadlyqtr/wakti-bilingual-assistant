@@ -231,7 +231,7 @@ export const TimelineTab: React.FC = () => {
             <div className="flex flex-wrap gap-2 mb-2">
               {Array.from(new Set([...(d?.tags || []), ...((cis[0]?.tags)||[])])).slice(0,8).map((t, idx) => (
                 <span key={`${dateStr}-${t}-${idx}`} className="chip-3d flex items-center gap-1 px-2 py-1 rounded-lg text-xs border">
-                  <TagIcon id={t} className="h-5 w-5" />
+                  <TagIcon id={t} className="h-6 w-6" />
                   {t.replace('_',' ')}
                 </span>
               ))}
@@ -290,7 +290,7 @@ export const TimelineTab: React.FC = () => {
                         return <span className="text-xs text-slate-600 mr-1">[{timeStr}]</span>;
                       })()}
                       {c.tags?.map(t => (
-                        <span key={t} className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white text-slate-800 px-2 py-0.5 shadow text-xs"><TagIcon id={t} className="h-4 w-4" />{t.replace('_',' ')}</span>
+                        <span key={t} className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white text-slate-800 px-2 py-0.5 shadow text-xs"><TagIcon id={t} className="h-5 w-5" />{t.replace('_',' ')}</span>
                       ))}
                       {c.note && (
                         <span className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white text-slate-800 px-2 py-0.5 shadow text-xs">{c.note}</span>
@@ -345,7 +345,7 @@ export const TimelineTab: React.FC = () => {
           <div className="flex flex-wrap gap-2 mb-2">
             {Array.from(new Set([...(d?.tags || []), ...((cis[0]?.tags)||[])])).slice(0,8).map((t, idx) => (
               <span key={`${dateStr}-${t}-${idx}`} className="chip-3d flex items-center gap-1 px-2 py-1 rounded-lg text-xs border">
-                <TagIcon id={t} className="h-3.5 w-3.5" />
+                <TagIcon id={t} className="h-5 w-5" />
                 {t.replace('_',' ')}
               </span>
             ))}
@@ -408,7 +408,7 @@ export const TimelineTab: React.FC = () => {
                   {c.tags?.length > 0 && (
                     <div className="flex flex-wrap gap-1 mb-1">
                       {c.tags.map(t => (
-                        <span key={t} className="chip-3d flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] border"><TagIcon id={t} className="h-3 w-3" />{t.replace('_',' ')}</span>
+                        <span key={t} className="chip-3d flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] border"><TagIcon id={t} className="h-4 w-4" />{t.replace('_',' ')}</span>
                       ))}
                     </div>
                   )}
