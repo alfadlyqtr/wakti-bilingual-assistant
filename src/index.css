@@ -52,28 +52,22 @@
   }
 
   /* Page-specific: hide scrollbars but keep scrolling (Dashboard, Wakti AI) */
+  body.dashboard-page .app-main,
+  body.wakti-ai-page .app-main,
   body.dashboard-page main,
   body.wakti-ai-page main {
     -ms-overflow-style: none !important; /* IE/Edge legacy */
     scrollbar-width: none !important;    /* Firefox */
   }
+  body.dashboard-page .app-main::-webkit-scrollbar,
+  body.wakti-ai-page .app-main::-webkit-scrollbar,
   body.dashboard-page main::-webkit-scrollbar,
   body.wakti-ai-page main::-webkit-scrollbar {
     display: none !important;            /* Chrome/Safari/Edge (Chromium) */
     width: 0 !important;
     height: 0 !important;
   }
-  
-  /* Also hide on the dashboard container itself */
-  .dashboard-container {
-    -ms-overflow-style: none !important;
-    scrollbar-width: none !important;
-  }
-  .dashboard-container::-webkit-scrollbar {
-    display: none !important;
-    width: 0 !important;
-    height: 0 !important;
-  }
+
 
 /* Global layout offsets */
   body, html {

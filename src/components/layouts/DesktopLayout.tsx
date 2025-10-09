@@ -27,7 +27,7 @@ export function DesktopLayout({ children }: DesktopLayoutProps) {
             <DesktopHeader />
           </header>
           {/* Scrollable content area - account for elevated header */}
-          <main className="flex-1 overflow-auto w-full p-4 md:p-6 pt-[calc(var(--desktop-header-h,60px)+1rem)]">
+          <main className="app-main flex-1 overflow-auto w-full p-4 md:p-6 pt-[calc(var(--desktop-header-h,60px)+1rem)]">
             <div className="w-full max-w-full">
               {children}
             </div>
