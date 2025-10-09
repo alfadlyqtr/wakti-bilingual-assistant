@@ -373,7 +373,7 @@ export function ChatMessages({
         }
       }
 
-      const full = chunks.length ? new Blob(chunks, { type: 'audio/mpeg' }) : await resp.blob();
+      const full = chunks.length ? new Blob(chunks as BlobPart[], { type: 'audio/mpeg' }) : await resp.blob();
       const buf = await full.arrayBuffer();
       const b64 = bufferToBase64(buf);
       setPersisted(messageId, b64, cleanText.length);
