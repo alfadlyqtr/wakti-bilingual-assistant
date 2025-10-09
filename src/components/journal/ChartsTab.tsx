@@ -172,36 +172,23 @@ export const ChartsTab: React.FC = () => {
             ))}
           </div>
         </div>
-        <div className="h-64 relative">
+        <div className="h-64 relative pl-8">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={trendData} margin={{ top: 20, right: 20, left: 10, bottom: 30 }}>
               <defs>
-                {/* Multi-color gradient based on mood */}
-                <linearGradient id="moodGradient1" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#22c55e" stopOpacity={0.4}/>
-                  <stop offset="100%" stopColor="#22c55e" stopOpacity={0.05}/>
-                </linearGradient>
-                <linearGradient id="moodGradient2" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.4}/>
-                  <stop offset="100%" stopColor="#10b981" stopOpacity={0.05}/>
-                </linearGradient>
-                <linearGradient id="moodGradient3" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#eab308" stopOpacity={0.4}/>
-                  <stop offset="100%" stopColor="#eab308" stopOpacity={0.05}/>
-                </linearGradient>
-                <linearGradient id="moodGradient4" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#f97316" stopOpacity={0.4}/>
-                  <stop offset="100%" stopColor="#f97316" stopOpacity={0.05}/>
-                </linearGradient>
-                <linearGradient id="moodGradient5" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#ef4444" stopOpacity={0.4}/>
-                  <stop offset="100%" stopColor="#ef4444" stopOpacity={0.05}/>
+                {/* Gradient fill that transitions through mood colors */}
+                <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#22c55e" stopOpacity={0.3}/>
+                  <stop offset="25%" stopColor="#10b981" stopOpacity={0.25}/>
+                  <stop offset="50%" stopColor="#eab308" stopOpacity={0.2}/>
+                  <stop offset="75%" stopColor="#f97316" stopOpacity={0.15}/>
+                  <stop offset="100%" stopColor="#ef4444" stopOpacity={0.1}/>
                 </linearGradient>
               </defs>
               <CartesianGrid 
                 strokeDasharray="3 3" 
                 stroke="hsl(var(--border))" 
-                opacity={0.3}
+                opacity={0.2}
                 vertical={false}
               />
               <XAxis 
@@ -213,10 +200,10 @@ export const ChartsTab: React.FC = () => {
                 }}
                 stroke="hsl(var(--border))"
                 tickLine={false}
-                axisLine={false}
+                axisLine={{ stroke: 'hsl(var(--border))', strokeWidth: 1 }}
               />
               <YAxis 
-                domain={[0.5, 5.5]} 
+                domain={[1, 5]} 
                 ticks={[1, 2, 3, 4, 5]} 
                 tick={false}
                 width={0}
@@ -241,8 +228,8 @@ export const ChartsTab: React.FC = () => {
                 type="monotone"
                 dataKey="value"
                 stroke="none"
-                fill="url(#moodGradient2)"
-                fillOpacity={0.6}
+                fill="url(#areaGradient)"
+                fillOpacity={0.8}
                 connectNulls
                 isAnimationActive={true}
                 animationDuration={800}
@@ -250,38 +237,37 @@ export const ChartsTab: React.FC = () => {
               <Line
                 type="monotone"
                 dataKey="value"
-                strokeWidth={2.5}
+                strokeWidth={3}
                 connectNulls
                 isAnimationActive={true}
                 animationDuration={1000}
                 stroke="#10b981"
-                activeDot={{ r: 6, strokeWidth: 2, fill: '#fff' }}
+                activeDot={{ r: 7, strokeWidth: 2, fill: '#fff' }}
                 dot={(props: any) => {
                   const { cx, cy, payload } = props;
                   if (payload?.value == null) return null;
                   const mood = Number(payload.value) as MoodValue;
                   const color = moodColors[mood];
                   return (
-                    <g>
-                      <circle 
-                        cx={cx} 
-                        cy={cy} 
-                        r={6} 
-                        fill={color}
-                        stroke="#fff"
-                        strokeWidth={2}
-                      />
-                    </g>
+                    <circle 
+                      cx={cx} 
+                      cy={cy} 
+                      r={8} 
+                      fill={color}
+                      stroke="#fff"
+                      strokeWidth={2.5}
+                      style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))' }}
+                    />
                   );
                 }}
               />
             </LineChart>
           </ResponsiveContainer>
-          {/* Mood legend on left */}
-          <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-2">
-            {[5,4,3,2,1].map(m => (
-              <div key={`legend-${m}`} style={{ width: 24, height: 24 }}>
-                <MoodFace value={m as MoodValue} size={24} />
+          {/* Mood legend on left - aligned with Y-axis positions */}
+          <div className="absolute left-0 top-0 h-full flex flex-col justify-between py-5">
+            {[5, 4, 3, 2, 1].map(m => (
+              <div key={`legend-${m}`} className="flex items-center justify-center" style={{ width: 28, height: 28 }}>
+                <MoodFace value={m as MoodValue} size={28} />
               </div>
             ))}
           </div>
