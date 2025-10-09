@@ -771,9 +771,9 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
               {language === 'ar' ? 'الرسائل غير المحفوظة تُحذف بعد 72 ساعة' : 'Messages not saved are deleted after 72 hours'}
             </div>
 
-            <div className="flex items-center gap-2">
-              {/* Left: attach icons */}
-              <div className="flex items-center gap-1 text-gray-500">
+            <div className="space-y-2">
+              {/* Top: attachment buttons */}
+              <div className="flex items-center gap-1 text-gray-500 px-1">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -797,41 +797,42 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                 <VoiceRecorder onRecordingComplete={handleVoiceRecording} disabled={sendMessageMutation.isPending || isUploading} />
               </div>
 
-              {/* Middle: auto-expanding textarea */}
-              <div className="flex-1 flex items-start">
-                <Textarea
-                  value={messageText}
-                  onChange={(e) => {
-                    // auto-expand
-                    e.currentTarget.style.height = 'auto';
-                    const nextH = Math.min(e.currentTarget.scrollHeight, 140);
-                    e.currentTarget.style.height = `${nextH}px`;
-                    handleInputChange(e as any);
-                  }}
-                  placeholder={t('typeMessage', language)}
-                  maxLength={MAX_CHARS}
-                  className={`min-h-[32px] max-h-[140px] h-auto px-2 py-1 text-sm rounded-md border border-gray-200 flex-1 resize-none overflow-y-auto ${isDark ? 'bg-transparent text-white placeholder:text-gray-400' : 'bg-white text-light-primary placeholder:text-gray-500'} focus-visible:ring-0 focus-visible:ring-offset-0`}
-                  disabled={sendMessageMutation.isPending || isUploading}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      sendTextMessage();
-                    }
-                  }}
-                  onFocus={() => setUserTyping(true)}
-                  onBlur={() => {
-                    if (typingTimeoutRef.current) {
-                      clearTimeout(typingTimeoutRef.current);
-                    }
-                    setUserTyping(false);
-                  }}
-                />
-                {/* Inline tiny counter */}
-                <span className={`ml-2 mt-1 text-[10px] ${isOverLimit ? 'text-red-500' : isDark ? 'text-gray-400' : 'text-gray-500'}`}>{charCount}/{MAX_CHARS}</span>
-              </div>
+              {/* Bottom: text input + send button */}
+              <div className="flex items-center gap-2">
+                {/* Text input area with character counter */}
+                <div className="flex-1 flex items-start">
+                  <Textarea
+                    value={messageText}
+                    onChange={(e) => {
+                      // auto-expand
+                      e.currentTarget.style.height = 'auto';
+                      const nextH = Math.min(e.currentTarget.scrollHeight, 140);
+                      e.currentTarget.style.height = `${nextH}px`;
+                      handleInputChange(e as any);
+                    }}
+                    placeholder={t('typeMessage', language)}
+                    maxLength={MAX_CHARS}
+                    className={`min-h-[32px] max-h-[140px] h-auto px-2 py-1 text-sm rounded-md border border-gray-200 flex-1 resize-none overflow-y-auto ${isDark ? 'bg-transparent text-white placeholder:text-gray-400' : 'bg-white text-light-primary placeholder:text-gray-500'} focus-visible:ring-0 focus-visible:ring-offset-0`}
+                    disabled={sendMessageMutation.isPending || isUploading}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        sendTextMessage();
+                      }
+                    }}
+                    onFocus={() => setUserTyping(true)}
+                    onBlur={() => {
+                      if (typingTimeoutRef.current) {
+                        clearTimeout(typingTimeoutRef.current);
+                      }
+                      setUserTyping(false);
+                    }}
+                  />
+                  {/* Inline tiny counter */}
+                  <span className={`ml-2 mt-1 text-[10px] ${isOverLimit ? 'text-red-500' : isDark ? 'text-gray-400' : 'text-gray-500'}`}>{charCount}/{MAX_CHARS}</span>
+                </div>
 
-              {/* Right: send */}
-              <div className="flex items-center">
+                {/* Send button on the right */}
                 <Button
                   type="button"
                   size="icon"
