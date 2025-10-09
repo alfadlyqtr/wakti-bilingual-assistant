@@ -28,10 +28,11 @@ const emojiMap: Record<string, string> = {
   walk: "👟",
   socialize: "💬",
   coffee: "☕",
-  prayer: "🙏",
   love: "❤️",
   romance: "💕",
   spouse: "💑",
+  prayer: "🙏",
+  writing: "✍️",
 };
 
 // Intelligent custom tag emoji mapping

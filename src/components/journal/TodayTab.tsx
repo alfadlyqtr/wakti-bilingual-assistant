@@ -17,7 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 const DEFAULT_TAGS: TagId[] = [
   "family","friends","date","exercise","sport","relax","movies","gaming","reading","cleaning",
   "sleep","eat_healthy","shopping","study","work","music","meditation","nature","travel","cooking","walk","socialize","coffee",
-  "love","romance","spouse","prayer"
+  "love","romance","spouse","prayer","writing"
 ];
 
 function getLocalDayString(d = new Date()) {
@@ -260,6 +260,7 @@ export const TodayTab: React.FC = () => {
     romance: "رومانسية",
     spouse: "زوج/زوجة",
     prayer: "صلاة",
+    writing: "كتابة",
   };
 
   // Render note with chips inside a contentEditable div. Chips are the tokens after the first '|'
@@ -369,7 +370,7 @@ export const TodayTab: React.FC = () => {
         family: '👨\u200d👩\u200d👧', friends: '🤝', date: '💘', exercise: '🏋️', sport: '🏆', relax: '😌',
         movies: '🎬', gaming: '🎮', reading: '📖', cleaning: '🧹', sleep: '😴', eat_healthy: '🥗',
         shopping: '🛍️', study: '🧠', work: '💼', music: '🎵', meditation: '🧘', nature: '🌿', travel: '✈️',
-        cooking: '🍳', walk: '🚶', socialize: '🗣️', coffee: '☕', love: '❤️', romance: '💕', spouse: '💑', prayer: '🙏'
+        cooking: '🍳', walk: '🚶', socialize: '🗣️', coffee: '☕', love: '❤️', romance: '💕', spouse: '💑', prayer: '🙏', writing: '✍️'
       };
       const customTagEmojis: Record<string, string> = {
         wife: "👰", husband: "🤵", partner: "💑", kids: "👶", children: "👨‍👩‍👧‍👦",
@@ -1080,6 +1081,12 @@ export const TodayTab: React.FC = () => {
                 aria-pressed={tags.includes(tag)}
                 className={`group relative flex flex-col items-center justify-center gap-1 rounded-2xl px-3 py-2 h-[78px] w-full transition-all cursor-pointer select-none focus:outline-none border border-border bg-card shadow-sm hover:shadow-md hover:-translate-y-[1px] ${tags.includes(tag) ? 'border-primary bg-primary/5' : ''}`}
               >
+                {/* Custom tag marker */}
+                {!defaultTagSet.has(tag) && (
+                  <div className="absolute top-1 right-1 h-4 w-4 rounded-full bg-amber-500/90 text-white flex items-center justify-center text-[9px] font-bold border border-amber-600/50 shadow-sm">
+                    ★
+                  </div>
+                )}
                 {/* Delete for custom tags */}
                 {!defaultTagSet.has(tag) && (
                   <div
