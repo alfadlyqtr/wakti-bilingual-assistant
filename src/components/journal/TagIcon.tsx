@@ -198,5 +198,5 @@ function getSmartEmoji(id: string): string {
 
 export function TagIcon({ id, className }: { id: string; className?: string }) {
   const emoji = emojiMap[id] || getSmartEmoji(id);
-  return <span className={className} style={{ fontSize: '1.75rem', lineHeight: '1' }}>{emoji}</span>;
+  return <span className={className} style={{ fontSize: '1.1rem', lineHeight: '1' }}>{emoji}</span>;
 }
