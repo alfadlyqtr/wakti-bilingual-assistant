@@ -29,9 +29,32 @@ const emojiMap: Record<string, string> = {
   socialize: "💬",
   coffee: "☕",
   prayer: "🙏",
+  love: "❤️",
+  romance: "💕",
+  spouse: "💑",
+};
+
+// Intelligent custom tag emoji mapping
+const customTagEmojis: Record<string, string> = {
+  wife: "👰",
+  husband: "🤵",
+  partner: "💑",
+  kids: "👶",
+  children: "👨‍👩‍👧‍👦",
+  pet: "🐾",
+  dog: "🐕",
+  cat: "🐈",
+  baby: "👶",
+  gym: "💪",
+  health: "❤️‍🩹",
+  car: "🚗",
+  bike: "🚴",
+  run: "🏃",
+  swim: "🏊",
+  yoga: "🧘‍♀️",
 };
 
 export function TagIcon({ id, className }: { id: string; className?: string }) {
-  const emoji = emojiMap[id] || "✨";
+  const emoji = emojiMap[id] || customTagEmojis[id] || "🏷️";
   return <span className={className}>{emoji}</span>;
 }

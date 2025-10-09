@@ -16,7 +16,8 @@ import { supabase } from "@/integrations/supabase/client";
 
 const DEFAULT_TAGS: TagId[] = [
   "family","friends","date","exercise","sport","relax","movies","gaming","reading","cleaning",
-  "sleep","eat_healthy","shopping","study","work","music","meditation","nature","travel","cooking","walk","socialize","coffee"
+  "sleep","eat_healthy","shopping","study","work","music","meditation","nature","travel","cooking","walk","socialize","coffee",
+  "love","romance","spouse","prayer"
 ];
 
 function getLocalDayString(d = new Date()) {
@@ -246,6 +247,10 @@ export const TodayTab: React.FC = () => {
     walk: "مشي",
     socialize: "اجتماع",
     coffee: "قهوة",
+    love: "حب",
+    romance: "رومانسية",
+    spouse: "زوج/زوجة",
+    prayer: "صلاة",
   };
 
   // Render note with chips inside a contentEditable div. Chips are the tokens after the first '|'
@@ -279,7 +284,8 @@ export const TodayTab: React.FC = () => {
         if (m) { noteFreeText = m[1]; continue; }
         tokensRaw.push(p);
       }
-      const tokens = tokensRaw.filter(Boolean);
+      // Deduplicate tokens within a single check-in
+      const tokens = Array.from(new Set(tokensRaw.filter(Boolean)));
       let chips = '';
       tokens.forEach((tok) => {
         if (tok === '🕒') return; // hide the clock token
@@ -347,9 +353,14 @@ export const TodayTab: React.FC = () => {
         family: '👨\u200d👩\u200d👧', friends: '🤝', date: '💘', exercise: '🏋️', sport: '🏆', relax: '😌',
         movies: '🎬', gaming: '🎮', reading: '📖', cleaning: '🧹', sleep: '😴', eat_healthy: '🥗',
         shopping: '🛍️', study: '🧠', work: '💼', music: '🎵', meditation: '🧘', nature: '🌿', travel: '✈️',
-        cooking: '🍳', walk: '🚶', socialize: '🗣️', coffee: '☕'
+        cooking: '🍳', walk: '🚶', socialize: '🗣️', coffee: '☕', love: '❤️', romance: '💕', spouse: '💑', prayer: '🙏'
       };
-      const icon = tagEmoji[tag] || '🏷️';
+      const customTagEmojis: Record<string, string> = {
+        wife: "👰", husband: "🤵", partner: "💑", kids: "👶", children: "👨‍👩‍👧‍👦",
+        pet: "🐾", dog: "🐕", cat: "🐈", baby: "👶", gym: "💪", health: "❤️‍🩹", 
+        car: "🚗", bike: "🚴", run: "🏃", swim: "🏊", yoga: "🧘‍♀️"
+      };
+      const icon = tagEmoji[tag] || customTagEmojis[tag] || '🏷️';
       const token = `${icon} ${label}`;
 
       // 1) Remove the token from the most recent timestamp line in the Note text
@@ -822,6 +833,11 @@ export const TodayTab: React.FC = () => {
   const handleAddCustom = async () => {
     const raw = customValue.trim();
     if (!raw) return;
+    // Enforce single-word validation
+    if (/\s/.test(raw)) {
+      toast.error(language === 'ar' ? 'الوسوم المخصصة يجب أن تكون كلمة واحدة فقط' : 'Custom tags must be a single word');
+      return;
+    }
     const id = (raw.toLowerCase().replace(/\s+/g, '_') as TagId);
     // Enforce a maximum of 3 custom tags (non-default)
     if (!defaultTagSet.has(id) && !allTags.includes(id) && customTags.length >= 3) {
@@ -1102,13 +1118,19 @@ export const TodayTab: React.FC = () => {
               {formatTime(new Date(dayUpdatedAt), language as any, { hour: '2-digit', minute: '2-digit' })}
             </span>
           )}
-          <button
-            type="button"
-            onClick={() => { setIsNoteEditing(true); ensureEndStub(); noteCERef.current?.focus(); }}
-            className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border border-border bg-gradient-to-b from-card to-background text-foreground/80 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-inner transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <Plus className="h-3.5 w-3.5" /> {language === 'ar' ? 'أضف ملاحظة' : 'Add note'}
-          </button>
+          {!isNoteEditing ? (
+            <button
+              type="button"
+              onClick={() => { setIsNoteEditing(true); ensureEndStub(); setTimeout(() => noteCERef.current?.focus(), 50); }}
+              className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border border-border bg-gradient-to-b from-card to-background text-foreground/80 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-inner transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Plus className="h-3.5 w-3.5" /> {language === 'ar' ? 'أضف ملاحظة' : 'Add note'}
+            </button>
+          ) : (
+            <span className="text-[11px] text-primary font-medium">
+              {language === 'ar' ? '✍️ اكتب هنا...' : '✍️ Type here...'}
+            </span>
+          )}
           {hasUnsaved && (
           <button
             type="button"
@@ -1125,7 +1147,11 @@ export const TodayTab: React.FC = () => {
           ref={noteCERef}
           contentEditable={isNoteEditing}
           suppressContentEditableWarning
-          className="flex w-full rounded-md border-0 bg-transparent px-0 py-2 text-sm min-h-[96px] overflow-y-auto focus-visible:outline-none"
+          className={`flex w-full rounded-md px-3 py-2 text-sm min-h-[96px] overflow-y-auto focus-visible:outline-none transition-all ${
+            isNoteEditing 
+              ? 'border-2 border-primary bg-primary/5 shadow-inner' 
+              : 'border-0 bg-transparent'
+          }`}
           spellCheck={false}
           onFocus={() => { editorFocusedRef.current = true; if (isNoteEditing) ensureEndStub(); }}
           onBlur={() => { editorFocusedRef.current = false; }}
