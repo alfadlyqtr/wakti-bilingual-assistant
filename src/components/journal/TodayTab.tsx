@@ -162,13 +162,13 @@ export const TodayTab: React.FC = () => {
       if (i < 0) {
         const now = new Date();
         const t = formatTime(now, language as any, { hour: '2-digit', minute: '2-digit' });
-        lines.push(`[${t}] 🕒  | `);
+        lines.push(`[${t}] 🕒  | __FREE____END__ | `);
         i = lines.length - 1;
       }
       const line = lines[i];
       const bar = line.indexOf('|');
       if (bar < 0) {
-        lines[i] = `${line} | `;
+        lines[i] = `${line} | __FREE____END__ | `;
       } else {
         const before = line.slice(0, bar);
         const afterBar = line.slice(bar);
@@ -176,10 +176,10 @@ export const TodayTab: React.FC = () => {
         const markerRe = /__FREE__(.*?)__END__/;
         const match = afterBar.match(markerRe);
         const currentFree = match ? match[1] : '';
-        // Remove marker from line to get clean tokens
-        const cleanAfter = afterBar.replace(markerRe, '').trim();
+        // Remove marker and __UNSAVED__ from line to get clean tokens
+        const cleanAfter = afterBar.replace(markerRe, '').replace(/__UNSAVED__/g, '').trim();
         const parts = cleanAfter.split('|').map(s => s.trim()).filter(Boolean);
-        const tokens = parts.filter(t => t !== '🕒');
+        const tokens = parts.filter(t => t !== '🕒' && t !== '__UNSAVED__');
         const newFree = transform(currentFree);
         const tokensJoined = tokens.length > 0 ? tokens.join(' | ') : '';
         const rebuilt = `${before}| ${tokensJoined}${tokensJoined ? ' | ' : ''}__FREE__${newFree}__END__ | `;
@@ -780,8 +780,19 @@ export const TodayTab: React.FC = () => {
             let line = lines[existingLineIdx];
             // Remove __UNSAVED__ temporarily
             line = line.replace(/\s*__UNSAVED__\s*/g, '');
-            // Add the token before the trailing pipe
-            line = line.replace(/\s*\|\s*$/, '').trimEnd() + ` | ${token} | __UNSAVED__`;
+            // Extract free text if present to preserve it
+            const freeMatch = line.match(/__FREE__(.*?)__END__/);
+            const freeText = freeMatch ? freeMatch[0] : '';
+            // Remove free text temporarily
+            if (freeText) {
+              line = line.replace(/__FREE__.*?__END__/, '').replace(/\s*\|\s*\|\s*/g, ' | ').trim();
+            }
+            // Add the new token, then restore free text, then add __UNSAVED__
+            line = line.replace(/\s*\|\s*$/, '').trimEnd() + ` | ${token}`;
+            if (freeText) {
+              line += ` | ${freeText}`;
+            }
+            line += ' | __UNSAVED__';
             lines[existingLineIdx] = line;
             const next = lines.join('\n');
             try { noteCERef.current && (noteCERef.current.innerHTML = renderNoteHtml(next)); } catch {}
