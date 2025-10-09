@@ -38,7 +38,9 @@ export function MoodTrendWidget({ language }: MoodTrendWidgetProps) {
   const moods: MoodValue[] = [5, 4, 3, 2, 1];
   const minScore = 5.5;
   const maxScore = 7.5;
-  const chartWidth = 220;
+  const chartWidth = 240;
+  const rowHeight = 48;
+  const chartHeight = moods.length * rowHeight;
   
   const getXPosition = (score: number) => {
     return ((score - minScore) / (maxScore - minScore)) * chartWidth;
@@ -67,98 +69,135 @@ export function MoodTrendWidget({ language }: MoodTrendWidgetProps) {
           ))}
         </div>
       </CardHeader>
-      <CardContent className="pt-6">
-        <div className="relative">
-          {/* Chart area */}
-          <div className="flex flex-col gap-6">
-            {moods.map((mood) => {
-              const moodData = data[mood];
-              const isRange = typeof moodData === "object" && "start" in moodData;
-              
-              return (
-                <div key={mood} className="flex items-center gap-4">
-                  {/* Y-axis label (mood emoji) */}
-                  <div className="w-10 flex items-center justify-center shrink-0">
-                    <MoodFace value={mood} size={36} />
-                  </div>
-                  
-                  {/* Chart line */}
-                  <div className="relative flex-1" style={{ height: 36 }}>
-                    <svg width={chartWidth} height={36} className="overflow-visible">
-                      {/* Vertical grid lines */}
-                      <line
-                        x1={getXPosition(6)}
-                        y1={0}
-                        x2={getXPosition(6)}
-                        y2={36}
-                        stroke="currentColor"
-                        strokeWidth="1"
-                        className="text-border/30"
-                      />
-                      <line
-                        x1={getXPosition(7)}
-                        y1={0}
-                        x2={getXPosition(7)}
-                        y2={36}
-                        stroke="currentColor"
-                        strokeWidth="1"
-                        className="text-border/30"
-                      />
-                      
-                      {isRange ? (
-                        // Range line with dots
-                        <>
-                          <line
-                            x1={getXPosition(moodData.start)}
-                            y1={18}
-                            x2={getXPosition(moodData.end)}
-                            y2={18}
-                            stroke={moodColors[mood]}
-                            strokeWidth="4"
-                            strokeLinecap="round"
-                          />
-                          <circle
-                            cx={getXPosition(moodData.start)}
-                            cy={18}
-                            r={6}
-                            fill={moodColors[mood]}
-                          />
-                          <circle
-                            cx={getXPosition(moodData.end)}
-                            cy={18}
-                            r={6}
-                            fill={moodColors[mood]}
-                          />
-                        </>
-                      ) : (
-                        // Single dot
+      <CardContent className="pt-8 pb-8">
+        <div className="relative pl-2 pr-4">
+          {/* Chart area with perfect alignment */}
+          <div className="flex items-start gap-5">
+            {/* Y-axis emojis */}
+            <div className="flex flex-col shrink-0">
+              {moods.map((mood) => (
+                <div
+                  key={mood}
+                  className="flex items-center justify-center"
+                  style={{ height: rowHeight }}
+                >
+                  <MoodFace value={mood} size={38} />
+                </div>
+              ))}
+            </div>
+
+            {/* Chart area */}
+            <div className="relative flex-1">
+              <svg
+                width={chartWidth}
+                height={chartHeight}
+                className="overflow-visible"
+              >
+                {/* Horizontal grid lines for each mood */}
+                {moods.map((mood, index) => {
+                  const y = index * rowHeight + rowHeight / 2;
+                  return (
+                    <line
+                      key={`grid-${mood}`}
+                      x1={0}
+                      y1={y}
+                      x2={chartWidth}
+                      y2={y}
+                      stroke="currentColor"
+                      strokeWidth="1"
+                      className="text-border/20"
+                      strokeDasharray="2,3"
+                    />
+                  );
+                })}
+
+                {/* Vertical grid lines for scores */}
+                <line
+                  x1={getXPosition(6)}
+                  y1={0}
+                  x2={getXPosition(6)}
+                  y2={chartHeight}
+                  stroke="currentColor"
+                  strokeWidth="1"
+                  className="text-border/30"
+                />
+                <line
+                  x1={getXPosition(7)}
+                  y1={0}
+                  x2={getXPosition(7)}
+                  y2={chartHeight}
+                  stroke="currentColor"
+                  strokeWidth="1"
+                  className="text-border/30"
+                />
+
+                {/* Data points and lines */}
+                {moods.map((mood, index) => {
+                  const moodData = data[mood];
+                  const isRange = typeof moodData === "object" && "start" in moodData;
+                  const y = index * rowHeight + rowHeight / 2;
+
+                  if (isRange) {
+                    return (
+                      <g key={`data-${mood}`}>
+                        <line
+                          x1={getXPosition(moodData.start)}
+                          y1={y}
+                          x2={getXPosition(moodData.end)}
+                          y2={y}
+                          stroke={moodColors[mood]}
+                          strokeWidth="5"
+                          strokeLinecap="round"
+                        />
                         <circle
-                          cx={getXPosition(moodData as number)}
-                          cy={18}
+                          cx={getXPosition(moodData.start)}
+                          cy={y}
                           r={6}
                           fill={moodColors[mood]}
                         />
-                      )}
-                    </svg>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          
-          {/* X-axis labels */}
-          <div className="flex items-center gap-4 mt-2">
-            <div className="w-10 shrink-0"></div>
-            <div className="relative flex-1">
-              <div className="relative" style={{ width: chartWidth }}>
+                        <circle
+                          cx={getXPosition(moodData.end)}
+                          cy={y}
+                          r={6}
+                          fill={moodColors[mood]}
+                        />
+                      </g>
+                    );
+                  } else {
+                    return (
+                      <circle
+                        key={`data-${mood}`}
+                        cx={getXPosition(moodData as number)}
+                        cy={y}
+                        r={6}
+                        fill={moodColors[mood]}
+                      />
+                    );
+                  }
+                })}
+
+                {/* X-axis line */}
+                <line
+                  x1={0}
+                  y1={chartHeight}
+                  x2={chartWidth}
+                  y2={chartHeight}
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  className="text-border/40"
+                />
+              </svg>
+
+              {/* X-axis labels */}
+              <div className="relative mt-2" style={{ width: chartWidth }}>
                 <span
-                  className="absolute text-xs text-muted-foreground"
+                  className="absolute text-xs font-medium text-muted-foreground"
                   style={{ left: getXPosition(6) - 6 }}
                 >
                   6
                 </span>
                 <span
-                  className="absolute text-xs text-muted-foreground"
+                  className="absolute text-xs font-medium text-muted-foreground"
                   style={{ left: getXPosition(7) - 6 }}
                 >
                   7
