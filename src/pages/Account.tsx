@@ -122,11 +122,12 @@ export default function Account() {
         setDateOfBirth(dobDate);
         setDobInputValue(format(dobDate, "yyyy-MM-dd"));
       }
-      // Set username from metadata or user id
-      setUsername(user.user_metadata?.username || user.email?.split('@')[0] || '');
+      // Prioritize profile username/display_name over email fallback
+      const profileUsername = userProfile?.username || userProfile?.display_name;
+      setUsername(profileUsername || user.user_metadata?.username || user.email?.split('@')[0] || '');
       setLoadingUserData(false);
     }
-  }, [user]);
+  }, [user, userProfile]);
   
   // Handle date input change
   const handleDobInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -316,7 +317,7 @@ export default function Account() {
     try {
       const { data, error } = await supabase.functions.invoke('submit-contact-form', {
         body: {
-          name: user?.user_metadata?.display_name || user?.email?.split('@')[0] || 'Anonymous',
+          name: username || user?.user_metadata?.full_name || user?.user_metadata?.display_name || user?.email?.split('@')[0] || 'Anonymous',
           email: user?.email || '',
           subject: `${feedbackType === 'bug' ? 'Bug Report' : feedbackType === 'feature' ? 'Feature Request' : 'General Feedback'}: ${feedbackTitle}`,
           message: feedbackMessage,
