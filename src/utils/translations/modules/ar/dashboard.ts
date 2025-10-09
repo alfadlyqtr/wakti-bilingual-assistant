@@ -14,5 +14,6 @@ export const dashboardAr = {
   createEvent: "إنشاء حدث",
   organizeWidgets: "تنظيم الأدوات",
   exitDragMode: "إيقاف السحب",
-  welcome: "مرحبًا"
+  welcome: "مرحبًا",
+  moodTrend: "اتجاه المزاج"
 };

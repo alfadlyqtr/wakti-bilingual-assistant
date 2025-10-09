@@ -14,5 +14,6 @@ export const dashboard = {
   createEvent: "Create Event",
   organizeWidgets: "Organize Widgets",
   exitDragMode: "Exit Drag Mode",
-  welcome: "Welcome"
+  welcome: "Welcome",
+  moodTrend: "Mood Trend"
 };
