@@ -37,6 +37,17 @@ export const TimelineTab: React.FC = () => {
     }
   };
 
+  const handleDeleteDayCard = async (date: string) => {
+    try {
+      await JournalService.deleteDayCheckins(date);
+      toast.success(language === 'ar' ? 'تم حذف اليوم' : 'Day deleted');
+      setRefreshKey(k => k + 1);
+    } catch (error) {
+      console.error('Error deleting day:', error);
+      toast.error(language === 'ar' ? 'فشل حذف اليوم' : 'Failed to delete day');
+    }
+  };
+
   // Render a saved note string as outer pill(s) with inner chips, like TodayTab
   const renderNotePills = (text?: string | null) => {
     if (!text) return null;
@@ -188,7 +199,7 @@ export const TimelineTab: React.FC = () => {
       const cis = todayCheckins;
       const lastMood: MoodValue | null = (cis[0]?.mood_value as MoodValue | undefined) ?? (d?.mood_value as MoodValue | undefined) ?? null;
       return (
-        <div key={`today-${dateStr}`} className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
+        <div key={`today-${dateStr}`} className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid group/card">
           <div className="flex items-center justify-between mb-2">
             <div className="text-sm font-medium flex items-center gap-3 group">
               <span>{dateStr}</span>
@@ -208,6 +219,13 @@ export const TimelineTab: React.FC = () => {
                 );
               })()}
             </div>
+            <button
+              onClick={() => handleDeleteDayCard(dateStr)}
+              className="opacity-0 group-hover/card:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400"
+              title={language === 'ar' ? 'حذف اليوم' : 'Delete day'}
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
           </div>
           {(((d?.tags?.length) || 0) + ((cis[0]?.tags?.length) || 0)) > 0 ? (
             <div className="flex flex-wrap gap-2 mb-2">
@@ -301,7 +319,7 @@ export const TimelineTab: React.FC = () => {
     const lastMood: MoodValue | null = (cis[0]?.mood_value as MoodValue | undefined) ?? (d?.mood_value as MoodValue | undefined) ?? null;
     const missingEvening = dateStr < today && (!d || !d.evening_reflection);
     return (
-      <div key={dateStr} className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
+      <div key={dateStr} className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid group/card">
         <div className="flex items-center justify-between mb-2">
           <div className="text-sm font-medium flex items-center gap-3 group">
             <span>{dateStr}</span>
@@ -322,6 +340,13 @@ export const TimelineTab: React.FC = () => {
             })()}
             {missingEvening && <span className="px-2 py-0.5 text-[10px] rounded-full bg-amber-500/15 text-amber-600 border border-amber-500/30">{language==='ar'?"المساء مفقود":"Evening missing"}</span>}
           </div>
+          <button
+            onClick={() => handleDeleteDayCard(dateStr)}
+            className="opacity-0 group-hover/card:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400"
+            title={language === 'ar' ? 'حذف اليوم' : 'Delete day'}
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
         </div>
         {(((d?.tags?.length) || 0) + ((cis[0]?.tags?.length) || 0)) > 0 ? (
           <div className="flex flex-wrap gap-2 mb-2">
