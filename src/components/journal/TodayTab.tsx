@@ -1392,12 +1392,24 @@ export const TodayTab: React.FC = () => {
           
           <CollapsibleContent>
             <div className="space-y-3 mt-2">
+              {!displayName && (
+                <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-lg p-2 mb-3">
+                  {language === 'ar' ? '💡 أضف اسم المستخدم في ' : '💡 Add your username in '}
+                  <a href="/profile" className="underline font-medium hover:text-amber-700 dark:hover:text-amber-300">
+                    {language === 'ar' ? 'صفحة الحساب' : 'Account page'}
+                  </a>
+                  {language === 'ar' ? ' لتخصيص هذا القسم' : ' to personalize this section'}
+                </div>
+              )}
+              
               {/* Gratitude Line 1 */}
               <div className="flex items-start gap-3">
                 <span className="text-purple-500 dark:text-purple-400 font-medium text-sm mt-2.5 flex-shrink-0">1.</span>
                 <div className="flex-1">
                   <label className="text-xs text-muted-foreground mb-1.5 block">
-                    {language === 'ar' ? `${displayName || 'أنا'} ممتن لـ` : `${displayName || 'I am'} grateful for`}
+                    {language === 'ar' 
+                      ? `${displayName || '[اسم المستخدم]'} ممتن لـ` 
+                      : `${displayName || '[username]'} is grateful for`}
                   </label>
                   <Input
                     value={gratitude1}
@@ -1414,7 +1426,9 @@ export const TodayTab: React.FC = () => {
                 <span className="text-pink-500 dark:text-pink-400 font-medium text-sm mt-2.5 flex-shrink-0">2.</span>
                 <div className="flex-1">
                   <label className="text-xs text-muted-foreground mb-1.5 block">
-                    {language === 'ar' ? `${displayName || 'أنا'} ممتن لـ` : `${displayName || 'I am'} grateful for`}
+                    {language === 'ar' 
+                      ? `${displayName || '[اسم المستخدم]'} ممتن لـ` 
+                      : `${displayName || '[username]'} is grateful for`}
                   </label>
                   <Input
                     value={gratitude2}
@@ -1431,7 +1445,9 @@ export const TodayTab: React.FC = () => {
                 <span className="text-purple-600 dark:text-purple-300 font-medium text-sm mt-2.5 flex-shrink-0">3.</span>
                 <div className="flex-1">
                   <label className="text-xs text-muted-foreground mb-1.5 block">
-                    {language === 'ar' ? `${displayName || 'أنا'} ممتن لـ` : `${displayName || 'I am'} grateful for`}
+                    {language === 'ar' 
+                      ? `${displayName || '[اسم المستخدم]'} ممتن لـ` 
+                      : `${displayName || '[username]'} is grateful for`}
                   </label>
                   <Input
                     value={gratitude3}
