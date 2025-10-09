@@ -172,28 +172,36 @@ export const ChartsTab: React.FC = () => {
             ))}
           </div>
         </div>
-        <div className="h-64 relative pl-8">
+        <div className="h-64 relative pl-12">
+          {/* Mood legend on left - aligned with Y-axis positions */}
+          <div className="absolute left-0 top-[20px] bottom-[30px] flex flex-col justify-between">
+            {[5, 4, 3, 2, 1].map(m => (
+              <div key={`legend-${m}`} className="flex items-center justify-center" style={{ width: 32, height: 32 }}>
+                <MoodFace value={m as MoodValue} size={32} />
+              </div>
+            ))}
+          </div>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={trendData} margin={{ top: 20, right: 20, left: 10, bottom: 30 }}>
+            <LineChart data={trendData} margin={{ top: 20, right: 20, left: 0, bottom: 30 }}>
               <defs>
-                {/* Gradient fill that transitions through mood colors */}
+                {/* Gradient fill */}
                 <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#22c55e" stopOpacity={0.3}/>
-                  <stop offset="25%" stopColor="#10b981" stopOpacity={0.25}/>
-                  <stop offset="50%" stopColor="#eab308" stopOpacity={0.2}/>
-                  <stop offset="75%" stopColor="#f97316" stopOpacity={0.15}/>
-                  <stop offset="100%" stopColor="#ef4444" stopOpacity={0.1}/>
+                  <stop offset="0%" stopColor="#22c55e" stopOpacity={0.4}/>
+                  <stop offset="25%" stopColor="#10b981" stopOpacity={0.3}/>
+                  <stop offset="50%" stopColor="#eab308" stopOpacity={0.25}/>
+                  <stop offset="75%" stopColor="#f97316" stopOpacity={0.2}/>
+                  <stop offset="100%" stopColor="#ef4444" stopOpacity={0.15}/>
                 </linearGradient>
               </defs>
               <CartesianGrid 
                 strokeDasharray="3 3" 
                 stroke="hsl(var(--border))" 
-                opacity={0.2}
+                opacity={0.3}
                 vertical={false}
               />
               <XAxis 
                 dataKey="date" 
-                tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} 
+                tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} 
                 tickFormatter={(val) => {
                   const d = new Date(val);
                   return d.getDate().toString();
@@ -203,7 +211,7 @@ export const ChartsTab: React.FC = () => {
                 axisLine={{ stroke: 'hsl(var(--border))', strokeWidth: 1 }}
               />
               <YAxis 
-                domain={[1, 5]} 
+                domain={[0.5, 5.5]} 
                 ticks={[1, 2, 3, 4, 5]} 
                 tick={false}
                 width={0}
@@ -219,9 +227,9 @@ export const ChartsTab: React.FC = () => {
                   fontSize: '11px',
                   backgroundColor: 'hsl(var(--popover))',
                   border: '1px solid hsl(var(--border))',
-                  borderRadius: '6px',
-                  padding: '6px 10px',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                  borderRadius: '8px',
+                  padding: '8px 12px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
                 }}
               />
               <Area
@@ -229,20 +237,42 @@ export const ChartsTab: React.FC = () => {
                 dataKey="value"
                 stroke="none"
                 fill="url(#areaGradient)"
-                fillOpacity={0.8}
+                fillOpacity={1}
                 connectNulls
                 isAnimationActive={true}
                 animationDuration={800}
               />
+              {/* Custom colored line segments */}
+              {trendData.map((point, idx) => {
+                if (idx === trendData.length - 1 || point.value == null) return null;
+                const nextPoint = trendData[idx + 1];
+                if (nextPoint.value == null) return null;
+                
+                // Color based on the starting mood of the segment
+                const color = moodColors[point.value];
+                
+                return (
+                  <Line
+                    key={`segment-${idx}`}
+                    data={[point, nextPoint]}
+                    type="monotone"
+                    dataKey="value"
+                    stroke={color}
+                    strokeWidth={4}
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                );
+              })}
+              {/* Dots on top */}
               <Line
                 type="monotone"
                 dataKey="value"
-                strokeWidth={3}
-                connectNulls
+                stroke="transparent"
+                strokeWidth={0}
+                connectNulls={false}
                 isAnimationActive={true}
                 animationDuration={1000}
-                stroke="#10b981"
-                activeDot={{ r: 7, strokeWidth: 2, fill: '#fff' }}
                 dot={(props: any) => {
                   const { cx, cy, payload } = props;
                   if (payload?.value == null) return null;
@@ -252,25 +282,18 @@ export const ChartsTab: React.FC = () => {
                     <circle 
                       cx={cx} 
                       cy={cy} 
-                      r={8} 
+                      r={7} 
                       fill={color}
                       stroke="#fff"
-                      strokeWidth={2.5}
-                      style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))' }}
+                      strokeWidth={3}
+                      style={{ filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.2))' }}
                     />
                   );
                 }}
+                activeDot={{ r: 9, strokeWidth: 3, fill: '#fff', stroke: '#10b981' }}
               />
             </LineChart>
           </ResponsiveContainer>
-          {/* Mood legend on left - aligned with Y-axis positions */}
-          <div className="absolute left-0 top-0 h-full flex flex-col justify-between py-5">
-            {[5, 4, 3, 2, 1].map(m => (
-              <div key={`legend-${m}`} className="flex items-center justify-center" style={{ width: 28, height: 28 }}>
-                <MoodFace value={m as MoodValue} size={28} />
-              </div>
-            ))}
-          </div>
         </div>
       </div>
 
