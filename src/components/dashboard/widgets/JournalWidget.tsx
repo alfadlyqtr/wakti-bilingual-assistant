@@ -16,17 +16,17 @@ function getLocalDayString(d = new Date()) {
 export const JournalWidget: React.FC = () => {
   const { language } = useTheme();
   const navigate = useNavigate();
-  const [lastEntry, setLastEntry] = useState<JournalDay | null>(null);
+  const [lastCheckin, setLastCheckin] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       try {
         setLoading(true);
-        const timeline = await JournalService.getTimeline(30);
-        // Get the most recent entry
-        if (timeline.length > 0) {
-          setLastEntry(timeline[0]);
+        const checkins = await JournalService.getCheckinsSince(30);
+        // Get the most recent check-in
+        if (checkins.length > 0) {
+          setLastCheckin(checkins[0]);
         }
       } finally {
         setLoading(false);
@@ -34,66 +34,59 @@ export const JournalWidget: React.FC = () => {
     })();
   }, []);
 
-  const mood = lastEntry?.mood_value as MoodValue | null;
+  const mood = lastCheckin?.mood_value as MoodValue | null;
+  const tags = lastCheckin?.tags || [];
+  const time = lastCheckin?.occurred_at ? new Date(lastCheckin.occurred_at) : null;
 
-  if (loading) {
-    return (
-      <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
-        <div className="text-sm text-muted-foreground">{language === 'ar' ? 'جاري التحميل...' : 'Loading...'}</div>
-      </div>
-    );
-  }
+  const formatTime = (date: Date) => {
+    const hours = date.getHours();
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+    return `${displayHours}:${minutes} ${ampm}`;
+  };
 
-  if (!lastEntry) {
+  if (loading || !lastCheckin) {
     return (
-      <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-sm font-semibold">{language === 'ar' ? 'آخر دخول' : 'Last Entry'}</div>
+      <div 
+        className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid cursor-pointer hover:shadow-lg transition-shadow"
+        onClick={() => navigate('/journal')}
+      >
+        <div className="text-sm text-muted-foreground text-center">
+          {loading ? (language === 'ar' ? 'جاري التحميل...' : 'Loading...') : (language === 'ar' ? 'لا توجد إدخالات' : 'No entries yet')}
         </div>
-        <div className="text-sm text-muted-foreground mb-4">{language === 'ar' ? 'لا توجد إدخالات' : 'No entries yet'}</div>
-        <Button size="sm" onClick={() => navigate('/journal')} className="w-full">{language === 'ar' ? 'ابدأ الكتابة' : 'Start Writing'}</Button>
       </div>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
-      <div className="flex items-center justify-between mb-3">
-        <div className="text-sm font-semibold">{language === 'ar' ? 'آخر دخول' : 'Last Entry'}</div>
-        <div className="text-xs opacity-70">{lastEntry.date}</div>
-      </div>
-
-      <div className="flex items-center gap-3 mb-3">
-        {mood ? (
-          <>
-            <MoodFace value={mood} active size={36} />
-            <div className="text-sm capitalize">{moodLabels[mood]}</div>
-          </>
-        ) : (
-          <div className="text-sm text-muted-foreground">{language === 'ar' ? 'بدون مزاج' : 'No mood'}</div>
+    <div 
+      className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background px-4 py-3 shadow-md card-3d inner-bevel edge-liquid cursor-pointer hover:shadow-lg transition-shadow"
+      onClick={() => navigate('/journal')}
+    >
+      <div className="flex items-center justify-center gap-2 flex-wrap">
+        {/* Time pill */}
+        {time && (
+          <span className="px-3 py-1.5 rounded-full bg-muted/50 text-xs font-medium flex items-center gap-1.5">
+            <span>[{formatTime(time)}]</span>
+          </span>
         )}
+        
+        {/* Mood emoji pill */}
+        {mood && (
+          <span className="px-2 py-1 rounded-full bg-muted/50 flex items-center">
+            <MoodFace value={mood} size={24} />
+          </span>
+        )}
+
+        {/* Tags pills */}
+        {tags.slice(0, 3).map((tag: string) => (
+          <span key={tag} className="px-3 py-1.5 rounded-full bg-primary/10 text-xs font-medium flex items-center gap-1.5">
+            <TagIcon id={tag} className="h-3.5 w-3.5" />
+            {tag.replace(/_/g, ' ')}
+          </span>
+        ))}
       </div>
-
-      {lastEntry?.tags?.length ? (
-        <div className="flex flex-wrap gap-1.5 mb-3">
-          {lastEntry.tags.slice(0, 4).map(t => (
-            <span key={t} className="chip-3d flex items-center gap-1 px-2 py-1 rounded-lg text-xs border">
-              <TagIcon id={t} className="h-3 w-3" />
-              {t.replace(/_/g, ' ')}
-            </span>
-          ))}
-        </div>
-      ) : null}
-
-      {lastEntry?.note && (
-        <div className="text-sm line-clamp-2 mb-3 text-muted-foreground">
-          {lastEntry.note}
-        </div>
-      )}
-
-      <Button size="sm" onClick={() => navigate('/journal')} className="w-full">
-        {language === 'ar' ? 'فتح الدفتر' : 'Open Journal'}
-      </Button>
     </div>
   );
 };
