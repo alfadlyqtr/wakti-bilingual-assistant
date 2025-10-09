@@ -220,10 +220,16 @@ export const TodayTab: React.FC = () => {
         const cleaned = (data.custom_tags as string[])
           .map(s => (s || '').toString().toLowerCase().replace(/\s+/g,'_'))
           .filter(Boolean) as TagId[];
-        setCustomTags(cleaned);
+        // Remove any custom tags that are now default tags
+        const validCustomTags = cleaned.filter(t => !defaultTagSet.has(t));
+        // Update DB if we filtered any out
+        if (validCustomTags.length !== cleaned.length) {
+          await supabase.from('profiles').update({ custom_tags: validCustomTags }).eq('id', uid);
+        }
+        setCustomTags(validCustomTags);
         setAllTags([...
           DEFAULT_TAGS,
-          ...cleaned.filter(t => !defaultTagSet.has(t))
+          ...validCustomTags
         ] as TagId[]);
       } else {
         setAllTags([ ...DEFAULT_TAGS ]);
