@@ -236,7 +236,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
           }}
           exit={{ opacity: 0, scale: 0.94, y: -6, rotateX: 4 }}
           transition={{
-            duration: 0.5,
+            duration: 0.3,
             ease: 'easeOut',
             times: [0, 0.6, 1],
           }}
@@ -296,7 +296,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                     animationStage === 'icons' ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-3 scale-[0.98]"
                   )}
                   style={{
-                    transitionDelay: animationStage === 'icons' ? `${index * 90}ms` : '0ms'
+                    transitionDelay: animationStage === 'icons' ? `${index * 70}ms` : '0ms'
                   }}
                 >
                   <div className="relative">
@@ -373,7 +373,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                     isActive && item.path === '/tools/game' && "from-red-500/15 to-red-600/15 shadow-red-500/40 border border-red-500/20",
                     animationStage === 'icons' ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-3 scale-[0.98]"
                   )}
-                  style={{ transitionDelay: animationStage === 'icons' ? `${(navItems.length + qIndex) * 90}ms` : '0ms' }}
+                  style={{ transitionDelay: animationStage === 'icons' ? `${(navItems.length + qIndex) * 70}ms` : '0ms' }}
                 >
                   <div className="relative">
                     <IconComponent 
