@@ -2,7 +2,7 @@ import React from "react";
 import {
   Users, UserRound, Heart, Dumbbell, Trophy, Cloud, Clapperboard, Gamepad2,
   BookOpen, Sparkles, Moon, Apple, ShoppingCart, GraduationCap, Briefcase,
-  Music, Wind, TreeDeciduous, Plane, Utensils, Footprints, Handshake, Coffee
+  Music, Wind, TreeDeciduous, Plane, Utensils, Footprints, Handshake, Coffee, HandMetal
 } from "lucide-react";
 
 // Allow any string id to support custom user tags
@@ -19,6 +19,7 @@ const map: Record<string, React.ComponentType<any>> = {
   gaming: Gamepad2,
   reading: BookOpen,
   cleaning: Sparkles,
+  shower: Sparkles,
   sleep: Moon,
   eat_healthy: Apple,
   shopping: ShoppingCart,
@@ -32,6 +33,7 @@ const map: Record<string, React.ComponentType<any>> = {
   walk: Footprints,
   socialize: Handshake,
   coffee: Coffee,
+  prayer: HandMetal,
 };
 
 export function TagIcon({ id, className }: { id: string; className?: string }) {
