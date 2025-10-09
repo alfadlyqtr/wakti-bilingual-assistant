@@ -72,9 +72,9 @@ export const TodayTab: React.FC = () => {
   const [dayUpdatedAt, setDayUpdatedAt] = useState<string | null>(null);
   const lastMoodTapAtRef = useRef<number | null>(null);
   const lastCheckinIdRef = useRef<string | null>(null);
-  // Pending (pre-save) mood taps buffer
+  // Pending (pre-save) mood taps buffer - grouped by timestamp
   const [pendingMoodCounts, setPendingMoodCounts] = useState<Record<MoodValue, number>>({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
-  const [pendingActions, setPendingActions] = useState<Array<{ mood: MoodValue; at: string }>>([]);
+  const [pendingActions, setPendingActions] = useState<Record<string, { mood: MoodValue; tags: TagId[] }>>({});
   // In-UI tag tap counters (so tags can have ×N even without a mood tap)
   const [tagTapCounts, setTagTapCounts] = useState<Record<TagId, number>>({} as any);
   // Stub de-duplication
@@ -457,11 +457,17 @@ export const TodayTab: React.FC = () => {
     try {
       // Operate on pending (pre-save) actions only
       setPendingActions(prev => {
-        const idx = [...prev].reverse().findIndex(a => a.mood === value);
-        if (idx === -1) return prev; // nothing to undo
-        const realIdx = prev.length - 1 - idx;
-        const next = prev.slice(0, realIdx).concat(prev.slice(realIdx + 1));
-        return next;
+        const entries = Object.entries(prev);
+        // Find most recent entry with this mood
+        for (let i = entries.length - 1; i >= 0; i--) {
+          const [timeStr, action] = entries[i];
+          if (action.mood === value) {
+            const next = { ...prev };
+            delete next[timeStr];
+            return next;
+          }
+        }
+        return prev; // nothing to undo
       });
       setPendingMoodCounts(prev => ({ ...prev, [value]: Math.max(0, (prev[value] || 0) - 1) }));
       // Update the last timestamp line counts in the note editor
@@ -531,7 +537,7 @@ export const TodayTab: React.FC = () => {
     lastMoodTapAtRef.current = null;
     lastCheckinIdRef.current = null;
     // Clear pending buffers
-    setPendingActions([]);
+    setPendingActions({});
     setPendingMoodCounts({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
     // Keep saved entries in note (lines without __FREE__ or __UNSAVED__ markers); remove unsaved lines
     const lines = (note || '').split('\n');
@@ -573,7 +579,7 @@ export const TodayTab: React.FC = () => {
   useEffect(() => {
     // Immediately clear transient state to avoid showing stale xN while loading
     setCheckins([]);
-    setPendingActions([]);
+    setPendingActions({});
     setPendingMoodCounts({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
     setTagTapCounts({} as any);
     (async () => {
@@ -597,7 +603,7 @@ export const TodayTab: React.FC = () => {
             // Also clear all counters and check-ins so no xN shows after End Day
             setCheckins([]);
             setPendingMoodCounts({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
-            setPendingActions([]);
+            setPendingActions({});
             setTagTapCounts({} as any);
             // Clear editor DOM
             requestAnimationFrame(() => {
@@ -638,10 +644,18 @@ export const TodayTab: React.FC = () => {
       // Buffer the tap locally (no DB write yet)
       setPendingMoodCounts(prev => ({ ...prev, [value]: (prev[value] || 0) + 1 }));
       const now = new Date();
-      setPendingActions(prev => ([ ...prev, { mood: value, at: now.toISOString() } ]));
+      const timeStr = formatTime(now, language as any, { hour: '2-digit', minute: '2-digit' });
+      setPendingActions(prev => {
+        const next = { ...prev };
+        if (!next[timeStr]) {
+          next[timeStr] = { mood: value, tags: [] };
+        } else {
+          next[timeStr].mood = value; // Update mood for this timestamp
+        }
+        return next;
+      });
       // Append a stub line to the note textarea with time + mood emoji
       const emoji: Record<MoodValue, string> = { 1: '😖', 2: '🙁', 3: '😐', 4: '🙂', 5: '😄' };
-      const timeStr = formatTime(now, language as any, { hour: '2-digit', minute: '2-digit' });
       // Initial line with clock + mood, pipe-separated, plus trailing pipe placeholder
       // Mark as unsaved with __UNSAVED__ so renderer knows not to wrap in outer pill
       const stub = `[${timeStr}] 🕒 | ${emoji[value]} | __UNSAVED__`;
@@ -727,16 +741,51 @@ export const TodayTab: React.FC = () => {
       const icon = tagEmoji[tag] || '🏷️';
       const token = `${icon} ${label}`;
       if (!on) {
+        // Add tag to pending actions for this timestamp
+        setPendingActions(prev => {
+          const next = { ...prev };
+          if (!next[timeStr]) {
+            next[timeStr] = { mood: mood || 4, tags: [tag] };
+          } else {
+            if (!next[timeStr].tags.includes(tag)) {
+              next[timeStr].tags = [...next[timeStr].tags, tag];
+            }
+          }
+          return next;
+        });
+        
         setNote(prevText => {
           const prevVal = prevText || '';
-          // Always create a new timestamp line for each tag tap (new entry)
-          // Mark as unsaved with __UNSAVED__ so renderer knows not to wrap in outer pill
-          const stub = `[${timeStr}] 🕒 | ${token} | __UNSAVED__`;
-          const next = prevVal && prevVal.trim().length > 0 ? `${prevVal}\n${stub}` : stub;
-          lastStubTextRef.current = stub;
-          lastStubAtRef.current = Date.now();
-          try { noteCERef.current && (noteCERef.current.innerHTML = renderNoteHtml(next)); } catch {}
-          return next;
+          const lines = prevVal.split('\n');
+          // Find existing timestamp line for this time
+          let existingLineIdx = -1;
+          for (let i = lines.length - 1; i >= 0; i--) {
+            if (lines[i].startsWith(`[${timeStr}]`)) {
+              existingLineIdx = i;
+              break;
+            }
+          }
+          
+          if (existingLineIdx >= 0) {
+            // Append to existing line for this timestamp
+            let line = lines[existingLineIdx];
+            // Remove __UNSAVED__ temporarily
+            line = line.replace(/\s*__UNSAVED__\s*/g, '');
+            // Add the token before the trailing pipe
+            line = line.replace(/\s*\|\s*$/, '').trimEnd() + ` | ${token} | __UNSAVED__`;
+            lines[existingLineIdx] = line;
+            const next = lines.join('\n');
+            try { noteCERef.current && (noteCERef.current.innerHTML = renderNoteHtml(next)); } catch {}
+            return next;
+          } else {
+            // Create new timestamp line
+            const stub = `[${timeStr}] 🕒 | ${token} | __UNSAVED__`;
+            const next = prevVal && prevVal.trim().length > 0 ? `${prevVal}\n${stub}` : stub;
+            lastStubTextRef.current = stub;
+            lastStubAtRef.current = Date.now();
+            try { noteCERef.current && (noteCERef.current.innerHTML = renderNoteHtml(next)); } catch {}
+            return next;
+          }
         });
         // Do not auto-focus the note; user may continue selecting other tags/moods
       } else {
@@ -839,12 +888,14 @@ export const TodayTab: React.FC = () => {
         morning_reflection: morning || null,
         evening_reflection: evening || null
       });
-      // Flush pending mood taps to DB
-      for (const action of pendingActions) {
+      // Flush pending mood taps to DB - ONE check-in per unique timestamp
+      const timestamps = Object.keys(pendingActions);
+      for (const timeStr of timestamps) {
+        const action = pendingActions[timeStr];
         await JournalService.addCheckin({
           date,
           mood_value: action.mood,
-          tags,
+          tags: action.tags, // Only tags for this specific timestamp
           note: null,
         });
       }
@@ -852,7 +903,7 @@ export const TodayTab: React.FC = () => {
       const refreshed = await JournalService.getCheckinsForDay(date);
       setCheckins(refreshed);
       // Reset pending state
-      setPendingActions([]);
+      setPendingActions({});
       setPendingMoodCounts({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
       setDayUpdatedAt(new Date().toISOString());
       // Do not insert separators after save; end editing session
@@ -1177,11 +1228,13 @@ export const TodayTab: React.FC = () => {
             });
             
             // Flush pending mood taps
-            for (const action of pendingActions) {
+            const timestamps = Object.keys(pendingActions);
+            for (const timeStr of timestamps) {
+              const action = pendingActions[timeStr];
               await JournalService.addCheckin({
                 date,
                 mood_value: action.mood,
-                tags,
+                tags: action.tags,
                 note: null,
               });
             }
@@ -1191,7 +1244,7 @@ export const TodayTab: React.FC = () => {
             setCheckins(refreshed);
             
             // Reset pending state
-            setPendingActions([]);
+            setPendingActions({});
             setPendingMoodCounts({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
             
             // Update saved snapshots
@@ -1215,7 +1268,7 @@ export const TodayTab: React.FC = () => {
             // Clear check-ins and counters so badges are reset
             setCheckins([]);
             setPendingMoodCounts({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
-            setPendingActions([]);
+            setPendingActions({});
             setTagTapCounts({} as any);
             requestAnimationFrame(() => {
               if (noteCERef.current) noteCERef.current.innerHTML = "";
