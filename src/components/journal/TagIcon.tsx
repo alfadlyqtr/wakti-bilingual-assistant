@@ -33,6 +33,8 @@ const emojiMap: Record<string, string> = {
   spouse: "💑",
   prayer: "🙏",
   writing: "✍️",
+  horse_riding: "🐴",
+  fishing: "🎣",
 };
 
 // Intelligent custom tag emoji mapping with keyword matching
