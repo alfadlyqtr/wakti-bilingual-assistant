@@ -90,6 +90,19 @@ export const JournalService = {
     return true;
   },
 
+  async deleteCheckin(id: string) {
+    const { data: userData } = await supabase.auth.getUser();
+    const user = userData?.user;
+    if (!user) throw new Error("not_authenticated");
+    const { error } = await supabase
+      .from("journal_checkins")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user.id);
+    if (error) throw error;
+    return true;
+  },
+
   async updateCheckinNote(id: string, note: string | null) {
     const { data: userData } = await supabase.auth.getUser();
     const user = userData?.user;
