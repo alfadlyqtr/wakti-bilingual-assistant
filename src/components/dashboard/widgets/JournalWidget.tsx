@@ -50,27 +50,27 @@ export const JournalWidget: React.FC = () => {
     const tags: string[] = ci?.tags || [];
     const time = ci?.occurred_at ? new Date(ci.occurred_at) : null;
     return (
-      <div className="w-full rounded-full border border-white/40 bg-white/60 dark:bg-white/10 backdrop-blur-sm shadow-sm px-3 py-2">
+      <div className="w-full rounded-full border border-border/60 bg-card/80 backdrop-blur-sm shadow-sm px-3 py-2">
         <div className="flex items-center gap-2 flex-wrap">
           {time && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-white/60 bg-white/70 dark:bg-background px-2 py-0.5 text-xs text-foreground/80">
+            <span className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-background/90 px-2 py-0.5 text-xs text-foreground/90 shadow-sm">
               <span>[{formatTime(time)}]</span>
               <Clock className="h-3.5 w-3.5 opacity-70" />
             </span>
           )}
           {mood && (
-            <span className="inline-flex items-center rounded-full border border-white/60 bg-white/70 dark:bg-background px-1.5 py-0.5">
+            <span className="inline-flex items-center rounded-full border border-border/70 bg-background/90 px-1.5 py-0.5 shadow-sm">
               <MoodFace value={mood} size={22} />
             </span>
           )}
           {tags.slice(0, 6).map((t) => (
-            <span key={t} className="inline-flex items-center gap-1 rounded-full border border-white/60 bg-white/70 dark:bg-background px-2 py-0.5 text-xs">
+            <span key={t} className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-background/90 px-2 py-0.5 text-xs text-foreground/90 shadow-sm">
               <TagIcon id={t} className="h-5 w-5" />
               {t.replace(/_/g, ' ')}
             </span>
           ))}
           {ci?.note && (
-            <span className="inline-flex items-center rounded-full border border-white/60 bg-white/70 dark:bg-background px-2 py-0.5 text-xs max-w-full truncate">
+            <span className="inline-flex items-center rounded-full border border-border/70 bg-background/90 px-2 py-0.5 text-xs text-foreground/90 max-w-full truncate shadow-sm">
               {ci.note}
             </span>
           )}
@@ -112,12 +112,14 @@ export const JournalWidget: React.FC = () => {
         )}
 
         <div className="mt-4">
-          <button
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => navigate('/journal')}
-            className="w-full rounded-md border bg-white/10 backdrop-blur-sm border-white/20 text-sm py-1.5"
+            className="w-full bg-background/80 backdrop-blur-sm border-border/60 hover:bg-background/90 transition-all duration-300"
           >
             {language === 'ar' ? 'فتح' : 'Open'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
