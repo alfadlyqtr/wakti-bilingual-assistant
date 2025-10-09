@@ -172,82 +172,119 @@ export const ChartsTab: React.FC = () => {
             ))}
           </div>
         </div>
-        {/* Left mood face legend */}
-        <div className="absolute left-2 top-16 flex flex-col gap-1.5 opacity-90">
-          {[5,4,3,2,1].map(m => (
-            <div key={`ylegend-${m}`} className="flex items-center">
-              <MoodFace value={m as MoodValue} size={20} />
-            </div>
-          ))}
-        </div>
-        <div className="h-52 pl-4">
+        <div className="h-64 relative">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={trendData} margin={{ top: 12, right: 12, left: 8, bottom: 8 }}>
+            <LineChart data={trendData} margin={{ top: 20, right: 20, left: 10, bottom: 30 }}>
               <defs>
-                <linearGradient id="moodGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.05}/>
+                {/* Multi-color gradient based on mood */}
+                <linearGradient id="moodGradient1" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#22c55e" stopOpacity={0.4}/>
+                  <stop offset="100%" stopColor="#22c55e" stopOpacity={0.05}/>
+                </linearGradient>
+                <linearGradient id="moodGradient2" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.4}/>
+                  <stop offset="100%" stopColor="#10b981" stopOpacity={0.05}/>
+                </linearGradient>
+                <linearGradient id="moodGradient3" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#eab308" stopOpacity={0.4}/>
+                  <stop offset="100%" stopColor="#eab308" stopOpacity={0.05}/>
+                </linearGradient>
+                <linearGradient id="moodGradient4" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#f97316" stopOpacity={0.4}/>
+                  <stop offset="100%" stopColor="#f97316" stopOpacity={0.05}/>
+                </linearGradient>
+                <linearGradient id="moodGradient5" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#ef4444" stopOpacity={0.4}/>
+                  <stop offset="100%" stopColor="#ef4444" stopOpacity={0.05}/>
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.1} stroke="hsl(var(--muted-foreground))" />
+              <CartesianGrid 
+                strokeDasharray="3 3" 
+                stroke="hsl(var(--border))" 
+                opacity={0.3}
+                vertical={false}
+              />
               <XAxis 
                 dataKey="date" 
-                tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} 
+                tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} 
                 tickFormatter={(val) => {
                   const d = new Date(val);
-                  return `${d.getMonth() + 1}/${d.getDate()}`;
+                  return d.getDate().toString();
                 }}
                 stroke="hsl(var(--border))"
+                tickLine={false}
+                axisLine={false}
               />
               <YAxis 
-                domain={[1, 5]} 
+                domain={[0.5, 5.5]} 
                 ticks={[1, 2, 3, 4, 5]} 
-                tick={{ fontSize: 10 }} 
-                width={28} 
-                hide 
+                tick={false}
+                width={0}
+                axisLine={false}
               />
               <Tooltip 
                 formatter={(v: any) => v ? moodLabels[v as MoodValue] : '—'} 
-                labelFormatter={(l) => l}
+                labelFormatter={(l) => {
+                  const d = new Date(l);
+                  return `${d.getMonth() + 1}/${d.getDate()}`;
+                }}
                 contentStyle={{ 
-                  fontSize: '12px',
+                  fontSize: '11px',
                   backgroundColor: 'hsl(var(--popover))',
                   border: '1px solid hsl(var(--border))',
-                  borderRadius: '8px',
-                  padding: '8px 12px'
+                  borderRadius: '6px',
+                  padding: '6px 10px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
                 }}
               />
               <Area
                 type="monotone"
                 dataKey="value"
                 stroke="none"
-                fill="url(#moodGradient)"
+                fill="url(#moodGradient2)"
+                fillOpacity={0.6}
                 connectNulls
                 isAnimationActive={true}
-                animationDuration={600}
+                animationDuration={800}
               />
               <Line
                 type="monotone"
                 dataKey="value"
-                strokeWidth={3}
+                strokeWidth={2.5}
                 connectNulls
                 isAnimationActive={true}
-                animationDuration={800}
-                stroke="hsl(var(--primary))"
-                activeDot={{ r: 8, stroke: 'hsl(var(--background))', strokeWidth: 3, fill: 'hsl(var(--primary))' }}
+                animationDuration={1000}
+                stroke="#10b981"
+                activeDot={{ r: 6, strokeWidth: 2, fill: '#fff' }}
                 dot={(props: any) => {
                   const { cx, cy, payload } = props;
                   if (payload?.value == null) return null;
                   const mood = Number(payload.value) as MoodValue;
+                  const color = moodColors[mood];
                   return (
-                    <g transform={`translate(${cx - 14}, ${cy - 14})`}>
-                      <MoodFace value={mood} size={28} />
+                    <g>
+                      <circle 
+                        cx={cx} 
+                        cy={cy} 
+                        r={6} 
+                        fill={color}
+                        stroke="#fff"
+                        strokeWidth={2}
+                      />
                     </g>
                   );
                 }}
               />
             </LineChart>
           </ResponsiveContainer>
+          {/* Mood legend on left */}
+          <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-2">
+            {[5,4,3,2,1].map(m => (
+              <div key={`legend-${m}`} style={{ width: 24, height: 24 }}>
+                <MoodFace value={m as MoodValue} size={24} />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
