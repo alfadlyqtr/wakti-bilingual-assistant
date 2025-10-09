@@ -113,7 +113,15 @@ export const ChartsTab: React.FC = () => {
 
   const totalCheckins = useMemo(() => moodCounts.reduce((s, m) => s + m.count, 0), [moodCounts]);
 
-  const moodColors: Record<number, string> = { 1: "#ef4444", 2: "#f97316", 3: "#f59e0b", 4: "#10b981", 5: "#22c55e" };
+  const moodColors: Record<number, string> = { 1: "#ef4444", 2: "#f97316", 3: "#eab308", 4: "#10b981", 5: "#22c55e" };
+
+  const moodLabels: Record<MoodValue, string> = {
+    1: language === 'ar' ? 'سيئ جداً' : 'awful',
+    2: language === 'ar' ? 'سيئ' : 'bad',
+    3: language === 'ar' ? 'عادي' : 'meh',
+    4: language === 'ar' ? 'جيد' : 'good',
+    5: language === 'ar' ? 'ممتاز' : 'rad',
+  };
 
   return (
     <div className="space-y-4">
@@ -122,43 +130,52 @@ export const ChartsTab: React.FC = () => {
         <div className="flex items-center justify-between mb-3">
           <div className="text-sm text-muted-foreground">
             {language === 'ar' ? 'اتجاه المزاج' : 'Mood Trend'}
-            <span className="ml-2 opacity-60">{language === 'ar' ? 'اضغط على المخطط لرؤية المزيد' : 'Tap on the chart to see more'}</span>
           </div>
           <div className="flex items-center gap-2">
             {[7,14,30].map((r) => (
               <button key={r} onClick={() => setRange(r as 7|14|30)} className={`px-2.5 py-1 rounded-md border text-xs ${range===r? 'bg-primary text-primary-foreground border-primary' : 'bg-background hover:bg-muted border-border'}`}>
-                {r}
+                {r}d
               </button>
             ))}
           </div>
         </div>
-        {/* Left mood color legend like screenshot */}
-        <div className="absolute left-2 top-14 flex flex-col gap-2 opacity-80">
-          {[1,2,3,4,5].map(m => (
-            <span key={`ylegend-${m}`} className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: moodColors[m] }} />
+        {/* Left mood face legend */}
+        <div className="absolute left-2 top-16 flex flex-col gap-1.5 opacity-90">
+          {[5,4,3,2,1].map(m => (
+            <div key={`ylegend-${m}`} className="flex items-center">
+              <MoodFace value={m as MoodValue} size={20} />
+            </div>
           ))}
         </div>
-        <div className="h-48">
+        <div className="h-48 pl-4">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={trendData} margin={{ top: 4, right: 8, left: 4, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
+            <LineChart data={trendData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
               <XAxis dataKey="date" tick={{ fontSize: 10 }} hide />
-              <YAxis domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} tick={{ fontSize: 10 }} width={28} />
-              <Tooltip formatter={(v: any) => v ?? '—'} labelFormatter={(l) => l} />
+              <YAxis domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} tick={{ fontSize: 10 }} width={28} hide />
+              <Tooltip 
+                formatter={(v: any) => v ? moodLabels[v as MoodValue] : '—'} 
+                labelFormatter={(l) => l}
+                contentStyle={{ fontSize: '12px' }}
+              />
               <Line
                 type="monotone"
                 dataKey="value"
-                stroke="#22c55e"
-                strokeWidth={2}
+                stroke="#a855f7"
+                strokeWidth={2.5}
                 connectNulls
-                isAnimationActive={false}
-                activeDot={{ r: 5, stroke: '#ffffff', strokeWidth: 1 }}
+                isAnimationActive={true}
+                animationDuration={800}
+                activeDot={{ r: 6, stroke: '#ffffff', strokeWidth: 2 }}
                 dot={(props: any) => {
                   const { cx, cy, payload } = props;
                   if (payload?.value == null) return null;
-                  const mood = Number(payload.value) as 1|2|3|4|5;
-                  const fill = (moodColors as any)[mood] || '#999';
-                  return <circle cx={cx} cy={cy} r={4} fill={fill} stroke="none" />
+                  const mood = Number(payload.value) as MoodValue;
+                  return (
+                    <g transform={`translate(${cx - 12}, ${cy - 12})`}>
+                      <MoodFace value={mood} size={24} />
+                    </g>
+                  );
                 }}
               />
             </LineChart>
