@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
-import { JournalService, JournalDay } from "@/services/journalService";
+import { JournalService } from "@/services/journalService";
 import { Button } from "@/components/ui/button";
-import { MoodFace, moodLabels, MoodValue } from "@/components/journal/icons/MoodFaces";
+import { MoodFace, MoodValue } from "@/components/journal/icons/MoodFaces";
 import { TagIcon } from "@/components/journal/TagIcon";
+import { Hand, Clock } from "lucide-react";
 
 function getLocalDayString(d = new Date()) {
   const y = d.getFullYear();
@@ -16,7 +17,7 @@ function getLocalDayString(d = new Date()) {
 export const JournalWidget: React.FC = () => {
   const { language } = useTheme();
   const navigate = useNavigate();
-  const [lastCheckin, setLastCheckin] = useState<any>(null);
+  const [lastTwo, setLastTwo] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -24,19 +25,17 @@ export const JournalWidget: React.FC = () => {
       try {
         setLoading(true);
         const checkins = await JournalService.getCheckinsSince(30);
-        // Get the most recent check-in
-        if (checkins.length > 0) {
-          setLastCheckin(checkins[0]);
-        }
+        const sorted = [...checkins].sort((a, b) => {
+          const ta = a.occurred_at ? new Date(a.occurred_at).getTime() : 0;
+          const tb = b.occurred_at ? new Date(b.occurred_at).getTime() : 0;
+          return tb - ta;
+        });
+        setLastTwo(sorted.slice(0, 2));
       } finally {
         setLoading(false);
       }
     })();
   }, []);
-
-  const mood = lastCheckin?.mood_value as MoodValue | null;
-  const tags = lastCheckin?.tags || [];
-  const time = lastCheckin?.occurred_at ? new Date(lastCheckin.occurred_at) : null;
 
   const formatTime = (date: Date) => {
     const hours = date.getHours();
@@ -46,56 +45,81 @@ export const JournalWidget: React.FC = () => {
     return `${displayHours}:${minutes} ${ampm}`;
   };
 
-  if (loading) {
+  const Row = ({ ci }: { ci: any }) => {
+    const mood = ci?.mood_value as MoodValue | null;
+    const tags: string[] = ci?.tags || [];
+    const time = ci?.occurred_at ? new Date(ci.occurred_at) : null;
     return (
-      <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-sm font-semibold">{language === 'ar' ? 'آخر دخول' : 'Last Entry'}</div>
-        </div>
-        <div className="text-sm text-muted-foreground">{language === 'ar' ? 'جاري التحميل...' : 'Loading...'}</div>
-      </div>
-    );
-  }
-
-  if (!lastCheckin) {
-    return (
-      <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-sm font-semibold">{language === 'ar' ? 'آخر دخول' : 'Last Entry'}</div>
-        </div>
-        <div className="text-sm text-muted-foreground mb-4">{language === 'ar' ? 'لا توجد إدخالات' : 'No entries yet'}</div>
-        <Button size="sm" onClick={() => navigate('/journal')} className="w-full">{language === 'ar' ? 'ابدأ الكتابة' : 'Start Writing'}</Button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
-      <div className="flex items-center justify-between mb-3">
-        <div className="text-sm font-semibold">{language === 'ar' ? 'آخر دخول' : 'Last Entry'}</div>
-        {time && (
-          <div className="text-xs opacity-70">[{formatTime(time)}]</div>
-        )}
-      </div>
-
-      <div className="flex items-center gap-3 mb-3">
-        {mood && <MoodFace value={mood} active size={36} />}
-      </div>
-
-      {tags.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-4">
-          {tags.slice(0, 4).map((tag: string) => (
-            <span key={tag} className="chip-3d flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border">
-              <TagIcon id={tag} className="h-4 w-4" />
-              {tag.replace(/_/g, ' ')}
+      <div className="w-full rounded-full border border-white/40 bg-white/60 dark:bg-white/10 backdrop-blur-sm shadow-sm px-3 py-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {time && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-white/60 bg-white/70 dark:bg-background px-2 py-0.5 text-xs text-foreground/80">
+              <span>[{formatTime(time)}]</span>
+              <Clock className="h-3.5 w-3.5 opacity-70" />
+            </span>
+          )}
+          {mood && (
+            <span className="inline-flex items-center rounded-full border border-white/60 bg-white/70 dark:bg-background px-1.5 py-0.5">
+              <MoodFace value={mood} size={22} />
+            </span>
+          )}
+          {tags.slice(0, 6).map((t) => (
+            <span key={t} className="inline-flex items-center gap-1 rounded-full border border-white/60 bg-white/70 dark:bg-background px-2 py-0.5 text-xs">
+              <TagIcon id={t} className="h-5 w-5" />
+              {t.replace(/_/g, ' ')}
             </span>
           ))}
+          {ci?.note && (
+            <span className="inline-flex items-center rounded-full border border-white/60 bg-white/70 dark:bg-background px-2 py-0.5 text-xs max-w-full truncate">
+              {ci.note}
+            </span>
+          )}
         </div>
-      )}
+      </div>
+    );
+  };
 
-      <Button size="sm" onClick={() => navigate('/journal')} className="w-full">
-        {language === 'ar' ? 'فتح الدفتر' : 'Open Journal'}
-      </Button>
+  return (
+    <div className="relative group" dir={language === 'ar' ? 'rtl' : 'ltr'}>
+      {/* Glass layers to match other widgets */}
+      <div className="absolute inset-0 bg-gradient-to-br from-background/80 via-background/40 to-background/60 backdrop-blur-xl rounded-xl border border-white/10 shadow-2xl"></div>
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-purple-500/10 rounded-xl"></div>
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-500/15 via-transparent to-purple-500/15 rounded-xl"></div>
+
+      {/* Drag handle */}
+      <div className={`absolute top-2 z-20 p-2 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 bg-primary/20 border-primary/30 cursor-grab active:cursor-grabbing scale-110 ${language === 'ar' ? 'right-2' : 'left-2'}`}>
+        <Hand className="h-3 w-3 text-primary/70" />
+      </div>
+
+      {/* Content */}
+      <div className="relative z-10 p-6 pt-12">
+        <div className="mb-3">
+          <h3 className="font-semibold text-lg bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent">
+            {language === 'ar' ? 'دفتر اليوم' : "Today's Journal"}
+          </h3>
+        </div>
+
+        {loading ? (
+          <div className="text-center py-4 text-sm text-muted-foreground">{language === 'ar' ? 'جاري التحميل...' : 'Loading...'}</div>
+        ) : lastTwo.length === 0 ? (
+          <div className="text-center py-4 text-sm text-muted-foreground">{language === 'ar' ? 'لا توجد إدخالات' : 'No entries yet'}</div>
+        ) : (
+          <div className="space-y-3">
+            {lastTwo.map((ci) => (
+              <Row key={ci.id || ci.occurred_at} ci={ci} />
+            ))}
+          </div>
+        )}
+
+        <div className="mt-4">
+          <button
+            onClick={() => navigate('/journal')}
+            className="w-full rounded-md border bg-white/10 backdrop-blur-sm border-white/20 text-sm py-1.5"
+          >
+            {language === 'ar' ? 'فتح' : 'Open'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
