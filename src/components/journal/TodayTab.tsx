@@ -378,12 +378,28 @@ export const TodayTab: React.FC = () => {
         shopping: '🛍️', study: '🧠', work: '💼', music: '🎵', meditation: '🧘', nature: '🌿', travel: '✈️',
         cooking: '🍳', walk: '🚶', socialize: '🗣️', coffee: '☕', love: '❤️', romance: '💕', spouse: '💑', prayer: '🙏', writing: '✍️'
       };
-      const customTagEmojis: Record<string, string> = {
-        wife: "👰", husband: "🤵", partner: "💑", kids: "👶", children: "👨‍👩‍👧‍👦",
-        pet: "🐾", dog: "🐕", cat: "🐈", baby: "👶", gym: "💪", health: "❤️‍🩹", 
-        car: "🚗", bike: "🚴", run: "🏃", swim: "🏊", yoga: "🧘‍♀️"
+      // Smart icon matching for custom tags
+      const getIcon = (tagId: string): string => {
+        if (tagEmoji[tagId]) return tagEmoji[tagId]!;
+        const lower = tagId.toLowerCase();
+        if (lower.includes("wife")) return "👰";
+        if (lower.includes("husband")) return "🤵";
+        if (lower.includes("partner")) return "💑";
+        if (lower.includes("kid") || lower.includes("child")) return "👶";
+        if (lower.includes("pet") || lower.includes("dog")) return "🐕";
+        if (lower.includes("cat")) return "🐈";
+        if (lower.includes("gym") || lower.includes("workout")) return "💪";
+        if (lower.includes("run") || lower.includes("jog")) return "🏃";
+        if (lower.includes("bike") || lower.includes("cycl")) return "🚴";
+        if (lower.includes("swim")) return "🏊";
+        if (lower.includes("yoga")) return "🧘";
+        if (lower.includes("car") || lower.includes("drive")) return "🚗";
+        if (lower.includes("food") || lower.includes("eat")) return "🍽️";
+        if (lower.includes("code") || lower.includes("program")) return "💻";
+        if (lower.includes("write")) return "✍️";
+        return "🏷️";
       };
-      const icon = tagEmoji[tag] || customTagEmojis[tag] || '🏷️';
+      const icon = getIcon(tag);
       const token = `${icon} ${label}`;
 
       // 1) Remove the token from the most recent timestamp line in the Note text
@@ -765,12 +781,33 @@ export const TodayTab: React.FC = () => {
         family: '👨\u200d👩\u200d👧', friends: '🤝', date: '💘', exercise: '🏋️', sport: '🏆', relax: '😌',
         movies: '🎬', gaming: '🎮', reading: '📖', cleaning: '🧹', sleep: '😴', eat_healthy: '🥗',
         shopping: '🛍️', study: '🧠', work: '💼', music: '🎵', meditation: '🧘', nature: '🌿', travel: '✈️',
-        cooking: '🍳', walk: '🚶', socialize: '🗣️', coffee: '☕'
+        cooking: '🍳', walk: '🚶', socialize: '🗣️', coffee: '☕', love: '❤️', romance: '💕', spouse: '💑', prayer: '🙏', writing: '✍️'
       };
       const now = new Date();
       const timeStr = formatTime(now, language as any, { hour: '2-digit', minute: '2-digit' });
       const label = (language === 'ar' ? (arTagLabels[tag] || tag.replace('_',' ')) : tag.replace('_',' '));
-      const icon = tagEmoji[tag] || '🏷️';
+      // Smart icon matching for custom tags
+      const getIcon = (tagId: string): string => {
+        if (tagEmoji[tagId]) return tagEmoji[tagId]!;
+        const lower = tagId.toLowerCase();
+        if (lower.includes("wife")) return "👰";
+        if (lower.includes("husband")) return "🤵";
+        if (lower.includes("partner")) return "💑";
+        if (lower.includes("kid") || lower.includes("child")) return "👶";
+        if (lower.includes("pet") || lower.includes("dog")) return "🐕";
+        if (lower.includes("cat")) return "🐈";
+        if (lower.includes("gym") || lower.includes("workout")) return "💪";
+        if (lower.includes("run") || lower.includes("jog")) return "🏃";
+        if (lower.includes("bike") || lower.includes("cycl")) return "🚴";
+        if (lower.includes("swim")) return "🏊";
+        if (lower.includes("yoga")) return "🧘";
+        if (lower.includes("car") || lower.includes("drive")) return "🚗";
+        if (lower.includes("food") || lower.includes("eat")) return "🍽️";
+        if (lower.includes("code") || lower.includes("program")) return "💻";
+        if (lower.includes("write")) return "✍️";
+        return "🏷️";
+      };
+      const icon = getIcon(tag);
       const token = `${icon} ${label}`;
       if (!on) {
         // Add tag to pending actions for this timestamp
