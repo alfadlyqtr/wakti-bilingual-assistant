@@ -1192,7 +1192,7 @@ export const TodayTab: React.FC = () => {
               <button
                 onClick={() => toggleTag(tag)}
                 aria-pressed={tags.includes(tag)}
-                className={`group relative flex flex-col items-center justify-center gap-1 rounded-2xl px-3 py-2 h-[78px] w-full transition-all cursor-pointer select-none focus:outline-none border border-border bg-card shadow-sm hover:shadow-md hover:-translate-y-[1px] ${tags.includes(tag) ? 'border-primary bg-primary/5' : ''}`}
+                className={`group relative flex flex-col items-center justify-center gap-1 rounded-2xl px-3 py-2 h-[72px] w-full transition-all cursor-pointer select-none focus:outline-none border border-border bg-card shadow-sm hover:shadow-md hover:-translate-y-[1px] ${tags.includes(tag) ? 'border-primary bg-primary/5' : ''}`}
               >
                 {/* Custom tag marker */}
                 {!defaultTagSet.has(tag) && (
@@ -1217,7 +1217,7 @@ export const TodayTab: React.FC = () => {
                 <div
                   className={`h-9 w-9 rounded-full flex items-center justify-center bg-gradient-to-br from-white/70 to-muted shadow-sm ${tags.includes(tag) ? 'text-primary' : (tagColor[tag] || 'text-muted-foreground')}`}
                 >
-                  <TagIcon id={tag} className="h-6 w-6" />
+                  <TagIcon id={tag} className="h-7 w-7" />
                 </div>
                 <span className="text-[10px] leading-none opacity-80">{language === 'ar' ? (arTagLabels[tag] || tag.replace('_',' ')) : tag.replace('_',' ')}</span>
               </button>
