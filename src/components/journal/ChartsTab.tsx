@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { JournalService, JournalDay, JournalCheckin } from "@/services/journalService";
 import { useTheme } from "@/providers/ThemeProvider";
 import { MoodFace, MoodValue } from "./icons/MoodFaces";
+import { TagIcon } from "./TagIcon";
 import {
   ResponsiveContainer,
   LineChart,
@@ -10,8 +11,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  BarChart,
-  Bar,
   PieChart,
   Pie,
   Cell,
@@ -100,10 +99,16 @@ export const ChartsTab: React.FC = () => {
     for (const d of filtered) {
       for (const t of d.tags || []) map[t] = (map[t] || 0) + 1;
     }
-    return Object.entries(map)
+    const sorted = Object.entries(map)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([name, count]) => ({ name: name.replace('_', ' '), count }));
+      .slice(0, 6);
+    const maxCount = sorted[0]?.[1] || 1;
+    return sorted.map(([tagId, count]) => ({ 
+      tagId, 
+      name: tagId.replace('_', ' '), 
+      count,
+      percentage: (count / maxCount) * 100
+    }));
   }, [filtered]);
 
   const totalCheckins = useMemo(() => moodCounts.reduce((s, m) => s + m.count, 0), [moodCounts]);
@@ -204,16 +209,24 @@ export const ChartsTab: React.FC = () => {
             {language === 'ar' ? 'لا توجد بيانات' : 'No data'}
           </div>
         ) : (
-          <div className="h-40">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={topTags} margin={{ top: 4, right: 8, left: 4, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-20} height={40} tickMargin={8} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={28} />
-                <Tooltip />
-                <Bar dataKey="count" fill="#60a5fa" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="space-y-3">
+            {topTags.map((tag) => (
+              <div key={tag.tagId} className="space-y-1.5">
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg"><TagIcon id={tag.tagId} /></span>
+                    <span className="font-medium capitalize">{tag.name}</span>
+                  </div>
+                  <span className="text-muted-foreground font-semibold">{tag.count}</span>
+                </div>
+                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-primary to-primary/80 rounded-full transition-all duration-500"
+                    style={{ width: `${tag.percentage}%` }}
+                  />
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
