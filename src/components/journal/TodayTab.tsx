@@ -249,7 +249,7 @@ export const TodayTab: React.FC = () => {
   };
 
   // Render note with chips inside a contentEditable div. Chips are the tokens after the first '|'
-  // Wrap saved entries (without __FREE__ marker) in outer pill; keep editing line flat
+  // Each timestamp line is wrapped in its own outer pill
   const renderNoteHtml = (text: string) => {
     const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const lines = (text || '').split('\n');
@@ -301,13 +301,11 @@ export const TodayTab: React.FC = () => {
         ? `<span class="sr-only"> | </span><span contenteditable="false" class="pointer-events-none select-none inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white text-slate-800 px-2 py-0.5 shadow">${esc(noteFreeText)}</span> `
         : '';
       const innerContent = `${before}${chips}${free}`;
-      // Wrap in outer pill ONLY if this line is saved (no __UNSAVED__ or __FREE__ marker)
-      const isUnsaved = rawLine.includes('__UNSAVED__') || rawLine.includes('__FREE__');
-      if (!isUnsaved) {
-        // Saved entry: wrap in outer pill
+      // ALWAYS wrap timestamp lines in outer pill (whether saved or unsaved)
+      const hasTimestamp = /^\[/.test(rawLine.trim());
+      if (hasTimestamp) {
         htmlLines.push(`<div class="my-2 p-3 rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 text-slate-800 shadow-sm">${innerContent}</div>`);
       } else {
-        // Unsaved entry: keep flat
         htmlLines.push(`<div>${innerContent}</div>`);
       }
     }
