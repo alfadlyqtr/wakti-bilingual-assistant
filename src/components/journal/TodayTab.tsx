@@ -230,14 +230,20 @@ export const TodayTab: React.FC = () => {
       if (!uid) return;
       const { data, error } = await supabase
         .from('profiles')
-        .select('custom_tags, display_name')
+        .select('custom_tags, display_name, username')
         .eq('id', uid)
         .maybeSingle();
       if (!error && data) {
-        // Set display name
-        if (data.display_name) {
-          setDisplayName(data.display_name);
-        }
+        // Decide preferred name: username > metadata.username > metadata.full_name > display_name (ignore emails)
+        const meta = userRes?.user?.user_metadata || {};
+        const candidates = [
+          (data as any).username?.toString().trim(),
+          meta.username?.toString().trim(),
+          meta.full_name?.toString().trim(),
+          (data as any).display_name?.toString().trim(),
+        ];
+        const preferred = candidates.find((n: any) => n && !String(n).includes('@')) || '';
+        setDisplayName(preferred || null);
         // Handle custom tags
         if (Array.isArray(data.custom_tags)) {
           const cleaned = (data.custom_tags as string[])
@@ -1395,7 +1401,7 @@ export const TodayTab: React.FC = () => {
               {!displayName && (
                 <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-lg p-2 mb-3">
                   {language === 'ar' ? '💡 أضف اسم المستخدم في ' : '💡 Add your username in '}
-                  <a href="/profile" className="underline font-medium hover:text-amber-700 dark:hover:text-amber-300">
+                  <a href="/account" className="underline font-medium hover:text-amber-700 dark:hover:text-amber-300">
                     {language === 'ar' ? 'صفحة الحساب' : 'Account page'}
                   </a>
                   {language === 'ar' ? ' لتخصيص هذا القسم' : ' to personalize this section'}
