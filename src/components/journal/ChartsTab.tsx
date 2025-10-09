@@ -172,17 +172,9 @@ export const ChartsTab: React.FC = () => {
             ))}
           </div>
         </div>
-        <div className="h-64 relative pl-12">
-          {/* Mood legend on left - aligned with Y-axis positions */}
-          <div className="absolute left-0 top-[20px] bottom-[30px] flex flex-col justify-between">
-            {[5, 4, 3, 2, 1].map(m => (
-              <div key={`legend-${m}`} className="flex items-center justify-center" style={{ width: 32, height: 32 }}>
-                <MoodFace value={m as MoodValue} size={32} />
-              </div>
-            ))}
-          </div>
+        <div className="h-64 relative">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={trendData} margin={{ top: 20, right: 20, left: 0, bottom: 30 }}>
+            <LineChart data={trendData} margin={{ top: 20, right: 16, left: 56, bottom: 30 }}>
               <defs>
                 {/* Gradient fill */}
                 <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
@@ -209,13 +201,29 @@ export const ChartsTab: React.FC = () => {
                 stroke="hsl(var(--border))"
                 tickLine={false}
                 axisLine={{ stroke: 'hsl(var(--border))', strokeWidth: 1 }}
+                interval="preserveStartEnd"
+                minTickGap={8}
+                allowDuplicatedCategory={false}
               />
               <YAxis 
                 domain={[0.5, 5.5]} 
                 ticks={[1, 2, 3, 4, 5]} 
-                tick={false}
-                width={0}
+                tick={(props: any) => {
+                  const { x, y, payload } = props;
+                  const v = Number(payload?.value) as MoodValue;
+                  return (
+                    <g transform={`translate(${x - 52}, ${y - 16})`}>
+                      <foreignObject width={32} height={32}>
+                        <div style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <MoodFace value={v} size={28} />
+                        </div>
+                      </foreignObject>
+                    </g>
+                  );
+                }}
+                tickLine={false}
                 axisLine={false}
+                width={56}
               />
               <Tooltip 
                 formatter={(v: any) => v ? moodLabels[v as MoodValue] : '—'} 
