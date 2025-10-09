@@ -210,7 +210,7 @@ export const ChartsTab: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-3">
-            {topTags.map((tag) => (
+            {topTags.map((tag, index) => (
               <div key={tag.tagId} className="space-y-1.5">
                 <div className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-2">
@@ -219,10 +219,13 @@ export const ChartsTab: React.FC = () => {
                   </div>
                   <span className="text-muted-foreground font-semibold">{tag.count}</span>
                 </div>
-                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                <div className="relative h-2 bg-muted rounded-full overflow-hidden">
                   <div 
-                    className="h-full bg-gradient-to-r from-primary to-primary/80 rounded-full transition-all duration-500"
-                    style={{ width: `${tag.percentage}%` }}
+                    className="absolute inset-0 h-full bg-gradient-to-r from-primary to-primary/80 rounded-full origin-left"
+                    style={{ 
+                      transform: `scaleX(${tag.percentage / 100})`,
+                      transition: `transform 0.6s ease-out ${index * 0.1}s`
+                    }}
                   />
                 </div>
               </div>
