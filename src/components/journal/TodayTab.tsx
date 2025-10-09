@@ -312,8 +312,8 @@ export const TodayTab: React.FC = () => {
           chips += `<span class="sr-only"> | </span><span contenteditable="false" class="pointer-events-none select-none inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white text-slate-800 px-2 py-0.5 shadow">${safe}</span> `;
         });
       });
-      const free = noteFreeText !== undefined
-        ? `<span class="sr-only"> | </span><span data-free-pill="1" contenteditable="true" class="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white text-slate-800 px-2 py-0.5 shadow">${noteFreeText ? esc(noteFreeText) : "&#8203;"}</span> `
+      const free = noteFreeText
+        ? `<span class="sr-only"> | </span><span data-free-pill="1" contenteditable="true" class="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white text-slate-800 px-2 py-0.5 shadow">${esc(noteFreeText)}</span> `
         : '';
       const innerContent = `${before}${chips}${free}`;
       // ALWAYS wrap timestamp lines in outer pill (whether saved or unsaved)
