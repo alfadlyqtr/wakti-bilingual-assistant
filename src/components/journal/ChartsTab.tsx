@@ -211,11 +211,13 @@ export const ChartsTab: React.FC = () => {
                 tick={(props: any) => {
                   const { x, y, payload } = props;
                   const v = Number(payload?.value) as MoodValue;
+                  const color = moodColors[v];
                   return (
                     <g transform={`translate(${x - 52}, ${y - 16})`}>
-                      <foreignObject width={32} height={32}>
-                        <div style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <foreignObject width={56} height={32}>
+                        <div style={{ width: 56, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 8 }}>
                           <MoodFace value={v} size={28} />
+                          <span style={{ width: 10, height: 10, borderRadius: 9999, backgroundColor: color, boxShadow: '0 0 0 2px #ffffff' }} />
                         </div>
                       </foreignObject>
                     </g>
@@ -223,7 +225,7 @@ export const ChartsTab: React.FC = () => {
                 }}
                 tickLine={false}
                 axisLine={false}
-                width={56}
+                width={64}
               />
               <Tooltip 
                 formatter={(v: any) => v ? moodLabels[v as MoodValue] : '—'} 
@@ -284,21 +286,19 @@ export const ChartsTab: React.FC = () => {
                 dot={(props: any) => {
                   const { cx, cy, payload } = props;
                   if (payload?.value == null) return null;
-                  const mood = Number(payload.value) as MoodValue;
-                  const color = moodColors[mood];
                   return (
                     <circle 
                       cx={cx} 
                       cy={cy} 
                       r={7} 
-                      fill={color}
+                      fill="#22c55e"
                       stroke="#fff"
                       strokeWidth={3}
                       style={{ filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.2))' }}
                     />
                   );
                 }}
-                activeDot={{ r: 9, strokeWidth: 3, fill: '#fff', stroke: '#10b981' }}
+                activeDot={{ r: 9, strokeWidth: 3, fill: '#fff', stroke: '#22c55e' }}
               />
             </LineChart>
           </ResponsiveContainer>
