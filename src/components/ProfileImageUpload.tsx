@@ -317,13 +317,13 @@ export function ProfileImageUpload() {
         )}
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-col sm:flex-row gap-2 w-full">
         <Button
           variant="outline"
           size="sm"
           onClick={() => cameraInputRef.current?.click()}
           disabled={isUploading}
-          className="flex items-center gap-2"
+          className="flex items-center justify-center gap-2 w-full sm:w-auto"
         >
           {isUploading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -338,7 +338,7 @@ export function ProfileImageUpload() {
           size="sm"
           onClick={() => fileInputRef.current?.click()}
           disabled={isUploading}
-          className="flex items-center gap-2"
+          className="flex items-center justify-center gap-2 w-full sm:w-auto"
         >
           {isUploading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -354,7 +354,7 @@ export function ProfileImageUpload() {
             size="sm"
             onClick={handleRemoveAvatar}
             disabled={isUploading}
-            className="flex items-center gap-2 text-destructive hover:text-destructive"
+            className="flex items-center justify-center gap-2 w-full sm:w-auto text-destructive hover:text-destructive"
           >
             <X className="h-4 w-4" />
             {language === 'ar' ? 'حذف' : 'Remove'}
