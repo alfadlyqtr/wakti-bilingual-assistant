@@ -1037,9 +1037,6 @@ export const TodayTab: React.FC = () => {
                 aria-pressed={tags.includes(tag)}
                 className={`group relative flex flex-col items-center justify-center gap-1 rounded-2xl px-3 py-2 h-[78px] w-full transition-all cursor-pointer select-none focus:outline-none border border-border bg-card shadow-sm hover:shadow-md hover:-translate-y-[1px] ${tags.includes(tag) ? 'border-primary bg-primary/5' : ''}`}
               >
-                {(tagCounts[tag] ?? 0) >= 1 && (
-                  <span className="absolute top-1 right-1 text-[10px] px-1 py-0.5 rounded bg-muted/80 border border-border/60">×{tagCounts[tag]}</span>
-                )}
                 {/* Delete for custom tags */}
                 {!defaultTagSet.has(tag) && (
                   <div
@@ -1061,20 +1058,22 @@ export const TodayTab: React.FC = () => {
                 </div>
                 <span className="text-[10px] leading-none opacity-80">{language === 'ar' ? (arTagLabels[tag] || tag.replace('_',' ')) : tag.replace('_',' ')}</span>
               </button>
-              <div className="mt-1 h-6 flex items-center gap-2">
-                <span className={`text-[11px] px-1.5 py-0.5 rounded bg-muted/80 border border-border/60 ${((tagCounts[tag] ?? 0) >= 1) ? '' : 'opacity-0'}`}>×{tagCounts[tag] ?? 0}</span>
-                {hasUnsaved && (
-                  <button
-                    type="button"
-                    aria-label={language === 'ar' ? 'تراجع' : 'Undo'}
-                    className={`h-6 w-6 rounded-md border border-border bg-card text-foreground/80 leading-none flex items-center justify-center shadow-sm hover:shadow-md active:scale-[0.98] ${((tagCounts[tag] ?? 0) >= 1) ? '' : 'opacity-0 pointer-events-none'}`}
-                    onClick={() => undoLastTag(tag)}
-                  >
-                    <Undo2 className="h-3.5 w-3.5" />
-                    <span className="sr-only">{language === 'ar' ? 'تراجع' : 'Undo'}</span>
-                  </button>
-                )}
-              </div>
+              {(tagCounts[tag] ?? 0) >= 1 && (
+                <div className="mt-1 h-6 flex items-center gap-2">
+                  <span className="text-[11px] px-1.5 py-0.5 rounded bg-muted/80 border border-border/60">×{tagCounts[tag]}</span>
+                  {hasUnsaved && (
+                    <button
+                      type="button"
+                      aria-label={language === 'ar' ? 'تراجع' : 'Undo'}
+                      className="h-6 w-6 rounded-md border border-border bg-card text-foreground/80 leading-none flex items-center justify-center shadow-sm hover:shadow-md active:scale-[0.98]"
+                      onClick={() => undoLastTag(tag)}
+                    >
+                      <Undo2 className="h-3.5 w-3.5" />
+                      <span className="sr-only">{language === 'ar' ? 'تراجع' : 'Undo'}</span>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           ))}
           {/* Custom tag chip */}
