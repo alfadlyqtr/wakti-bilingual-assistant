@@ -3,12 +3,12 @@ import { cn } from "@/lib/utils";
 
 export type MoodValue = 1 | 2 | 3 | 4 | 5;
 
-const palette: Record<MoodValue, { stroke: string; fill: string }> = {
-  1: { stroke: "#ef4444", fill: "#fee2e2" }, // red
-  2: { stroke: "#f97316", fill: "#ffedd5" }, // orange
-  3: { stroke: "#f59e0b", fill: "#fef3c7" }, // amber
-  4: { stroke: "#10b981", fill: "#d1fae5" }, // emerald
-  5: { stroke: "#22c55e", fill: "#dcfce7" }, // green
+const palette: Record<MoodValue, { base: string; glow: string }> = {
+  1: { base: "#ef4444", glow: "#fca5a5" }, // red
+  2: { base: "#f97316", glow: "#fdba74" }, // orange
+  3: { base: "#eab308", glow: "#fde047" }, // yellow
+  4: { base: "#10b981", glow: "#6ee7b7" }, // emerald
+  5: { base: "#22c55e", glow: "#86efac" }, // green
 };
 
 export const moodLabels: Record<MoodValue, string> = {
@@ -20,89 +20,125 @@ export const moodLabels: Record<MoodValue, string> = {
 };
 
 export function MoodFace({ value, active = false, size = 52, className }: { value: MoodValue; active?: boolean; size?: number; className?: string }) {
-  const { stroke, fill } = palette[value];
+  const { base, glow } = palette[value];
   const cx = size / 2;
   const cy = size / 2;
-  const r = size / 2 - 2;
-
-  // Mouth shape per mood
-  const mouth = (() => {
-    const y = cy + size * 0.12;
-    const w = size * 0.26;
-    if (value === 1) return `M ${cx - w} ${y + 6} Q ${cx} ${y - 8} ${cx + w} ${y + 6}`; // frown
-    if (value === 2) return `M ${cx - w} ${y + 2} Q ${cx} ${y - 4} ${cx + w} ${y + 2}`; // slight frown
-    if (value === 3) return `M ${cx - w} ${y} L ${cx + w} ${y}`; // flat
-    if (value === 4) return `M ${cx - w} ${y} Q ${cx} ${y + 8} ${cx + w} ${y}`; // smile
-    return `M ${cx - w} ${y - 2} Q ${cx} ${y + 10} ${cx + w} ${y - 2}`; // big smile
-  })();
+  const r = size / 2 - 3;
 
   // Eye positions
-  const eyeY = cy - size * 0.08;
-  const eyeXOff = size * 0.14;
+  const eyeY = cy - size * 0.1;
+  const eyeXOff = size * 0.16;
+  const eyeSize = size * 0.08;
+
+  // Mouth positions and shapes
+  const mouthY = cy + size * 0.15;
+  const mouthWidth = size * 0.3;
 
   return (
     <svg
       width={size}
       height={size}
       viewBox={`0 0 ${size} ${size}`}
-      className={cn(active ? "drop-shadow-[0_8px_18px_rgba(236,72,153,0.35)]" : undefined, className)}
+      className={cn("transition-all duration-200", active ? "drop-shadow-lg scale-105" : "drop-shadow-sm", className)}
     >
       <defs>
-        <radialGradient id={`g-${stroke.replace('#','')}`} cx="50%" cy="40%" r="60%">
-          <stop offset="0%" stopColor={fill} stopOpacity="0.9" />
-          <stop offset="100%" stopColor={fill} stopOpacity="0.6" />
-        </radialGradient>
-        <linearGradient id={`gloss-${stroke.replace('#','')}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.45" />
-          <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+        <linearGradient id={`grad-${value}`} x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor={glow} />
+          <stop offset="100%" stopColor={base} />
         </linearGradient>
-        {/* Inner rim darkening for depth */}
-        <radialGradient id={`rim-${stroke.replace('#','')}`} cx="50%" cy="50%" r="55%">
-          <stop offset="70%" stopColor={fill} stopOpacity="0" />
-          <stop offset="100%" stopColor={stroke} stopOpacity="0.18" />
-        </radialGradient>
-        <filter id={`faceShadow-${stroke.replace('#','')}`} x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor={stroke} floodOpacity="0.22" />
+        <filter id={`glow-${value}`}>
+          <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
         </filter>
       </defs>
-      <g filter={`url(#faceShadow-${stroke.replace('#','')})`}>
-        {/* Face base - no stroke ring */}
-        <circle cx={cx} cy={cy} r={r} fill={`url(#g-${stroke.replace('#','')})`} stroke="none" />
-        {/* Rim overlay for subtle inner shading */}
-        <circle cx={cx} cy={cy} r={r} fill={`url(#rim-${stroke.replace('#','')})`} />
-        {/* Gloss highlight (top arc) */}
-        <path d={`M ${cx - r + 6} ${cy - r + 10} A ${r - 6} ${r - 10} 0 0 1 ${cx + r - 6} ${cy - r + 10}`} stroke={`url(#gloss-${stroke.replace('#','')})`} strokeWidth="2" fill="none" strokeLinecap="round" />
-        {/* Specular highlight spot */}
-        <circle cx={cx - r * 0.35} cy={cy - r * 0.35} r={r * 0.18} fill="#fff" fillOpacity="0.20" />
-        {/* Eyes */}
-        {value === 1 ? (
-          // X eyes for awful
-          <g stroke={stroke} strokeWidth={2} strokeLinecap="round">
-            <path d={`M ${cx - eyeXOff - 4} ${eyeY - 4} L ${cx - eyeXOff + 4} ${eyeY + 4}`} />
-            <path d={`M ${cx - eyeXOff + 4} ${eyeY - 4} L ${cx - eyeXOff - 4} ${eyeY + 4}`} />
-            <path d={`M ${cx + eyeXOff - 4} ${eyeY - 4} L ${cx + eyeXOff + 4} ${eyeY + 4}`} />
-            <path d={`M ${cx + eyeXOff + 4} ${eyeY - 4} L ${cx + eyeXOff - 4} ${eyeY + 4}`} />
-          </g>
-        ) : value === 5 ? (
-          // Smiling closed eyes (arcs)
-          <g stroke={stroke} strokeWidth={2} fill="none" strokeLinecap="round">
-            <path d={`M ${cx - eyeXOff - 5} ${eyeY} Q ${cx - eyeXOff} ${eyeY + 4} ${cx - eyeXOff + 5} ${eyeY}`} />
-            <path d={`M ${cx + eyeXOff - 5} ${eyeY} Q ${cx + eyeXOff} ${eyeY + 4} ${cx + eyeXOff + 5} ${eyeY}`} />
-          </g>
-        ) : (
-          // Default eyes as dots
-          <>
-            <circle cx={cx - eyeXOff} cy={eyeY} r={size * 0.04} fill={stroke} />
-            <circle cx={cx + eyeXOff} cy={eyeY} r={size * 0.04} fill={stroke} />
-          </>
-        )}
-        {/* Mouth */}
-        <path d={mouth} stroke={stroke} strokeWidth={value === 5 ? 2.4 : 2} fill="none" strokeLinecap="round" />
-        {value === 1 && (
-          // Tiny tongue for awful
-          <path d={`M ${cx} ${cy + size * 0.18} q 4 6 0 10 q -4 -4 0 -10`} fill="#ef4444" fillOpacity="0.6" stroke="none" />
-        )}
-      </g>
+
+      {/* Face circle with gradient */}
+      <circle 
+        cx={cx} 
+        cy={cy} 
+        r={r} 
+        fill={`url(#grad-${value})`}
+        stroke="white"
+        strokeWidth={active ? 3 : 2}
+        filter={active ? `url(#glow-${value})` : undefined}
+        className="transition-all duration-200"
+      />
+
+      {/* Eyes */}
+      {value === 1 ? (
+        // X eyes for awful
+        <g stroke="white" strokeWidth={2.5} strokeLinecap="round">
+          <path d={`M ${cx - eyeXOff - 3} ${eyeY - 3} L ${cx - eyeXOff + 3} ${eyeY + 3}`} />
+          <path d={`M ${cx - eyeXOff + 3} ${eyeY - 3} L ${cx - eyeXOff - 3} ${eyeY + 3}`} />
+          <path d={`M ${cx + eyeXOff - 3} ${eyeY - 3} L ${cx + eyeXOff + 3} ${eyeY + 3}`} />
+          <path d={`M ${cx + eyeXOff + 3} ${eyeY - 3} L ${cx + eyeXOff - 3} ${eyeY + 3}`} />
+        </g>
+      ) : value === 5 ? (
+        // Happy closed eyes (curved lines)
+        <g stroke="white" strokeWidth={2.5} fill="none" strokeLinecap="round">
+          <path d={`M ${cx - eyeXOff - 4} ${eyeY - 1} Q ${cx - eyeXOff} ${eyeY + 3} ${cx - eyeXOff + 4} ${eyeY - 1}`} />
+          <path d={`M ${cx + eyeXOff - 4} ${eyeY - 1} Q ${cx + eyeXOff} ${eyeY + 3} ${cx + eyeXOff + 4} ${eyeY - 1}`} />
+        </g>
+      ) : (
+        // Regular dot eyes
+        <>
+          <circle cx={cx - eyeXOff} cy={eyeY} r={eyeSize} fill="white" />
+          <circle cx={cx + eyeXOff} cy={eyeY} r={eyeSize} fill="white" />
+        </>
+      )}
+
+      {/* Mouth */}
+      {value === 1 ? (
+        // Deep frown
+        <path 
+          d={`M ${cx - mouthWidth} ${mouthY + 4} Q ${cx} ${mouthY - 6} ${cx + mouthWidth} ${mouthY + 4}`} 
+          stroke="white" 
+          strokeWidth={2.5} 
+          fill="none" 
+          strokeLinecap="round"
+        />
+      ) : value === 2 ? (
+        // Slight frown
+        <path 
+          d={`M ${cx - mouthWidth} ${mouthY + 2} Q ${cx} ${mouthY - 3} ${cx + mouthWidth} ${mouthY + 2}`} 
+          stroke="white" 
+          strokeWidth={2.5} 
+          fill="none" 
+          strokeLinecap="round"
+        />
+      ) : value === 3 ? (
+        // Flat line
+        <line 
+          x1={cx - mouthWidth} 
+          y1={mouthY} 
+          x2={cx + mouthWidth} 
+          y2={mouthY} 
+          stroke="white" 
+          strokeWidth={2.5} 
+          strokeLinecap="round"
+        />
+      ) : value === 4 ? (
+        // Smile
+        <path 
+          d={`M ${cx - mouthWidth} ${mouthY - 2} Q ${cx} ${mouthY + 6} ${cx + mouthWidth} ${mouthY - 2}`} 
+          stroke="white" 
+          strokeWidth={2.5} 
+          fill="none" 
+          strokeLinecap="round"
+        />
+      ) : (
+        // Big smile
+        <path 
+          d={`M ${cx - mouthWidth} ${mouthY - 3} Q ${cx} ${mouthY + 8} ${cx + mouthWidth} ${mouthY - 3}`} 
+          stroke="white" 
+          strokeWidth={3} 
+          fill="none" 
+          strokeLinecap="round"
+        />
+      )}
     </svg>
   );
 }
