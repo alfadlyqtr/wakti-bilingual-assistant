@@ -59,27 +59,24 @@ export const ChartsTab: React.FC = () => {
     return checkins.filter(c => c.date >= fromKey);
   }, [checkins, range]);
 
-  // Real counts come from check-ins within range
+  // Count all check-ins by mood value within the selected range
   const moodCounts = useMemo(() => {
-    const c: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-    for (const ci of filteredCheckins) {
-      c[ci.mood_value as number] = (c[ci.mood_value as number] || 0) + 1;
+    const counts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    
+    for (const checkin of filteredCheckins) {
+      if (checkin.mood_value != null && checkin.mood_value >= 1 && checkin.mood_value <= 5) {
+        counts[checkin.mood_value] = (counts[checkin.mood_value] || 0) + 1;
+      }
     }
-    return [1, 2, 3, 4, 5].map(v => ({ mood: v, count: c[v] || 0 }));
+    
+    return [1, 2, 3, 4, 5].map(value => ({ 
+      mood: value, 
+      count: counts[value] 
+    }));
   }, [filteredCheckins]);
 
   const trendData = useMemo(() => {
-    // Build a map to the last check-in mood per day
-    const lastByDate = new Map<string, number | null>();
-    for (const ci of filteredCheckins) {
-      const existing = lastByDate.get(ci.date);
-      // assume checkins are not guaranteed sorted; use occurred_at
-      const ts = ci.occurred_at ? new Date(ci.occurred_at).getTime() : 0;
-      const prevTs = (existing as any)?.ts || -1;
-      if (!lastByDate.has(ci.date) || ts > prevTs) {
-        (lastByDate as any).set(ci.date, { v: ci.mood_value, ts });
-      }
-    }
+    // Build a complete map of all days in range
     const days: string[] = [];
     const now = new Date();
     for (let i = range - 1; i >= 0; i--) {
@@ -87,26 +84,61 @@ export const ChartsTab: React.FC = () => {
       d.setDate(now.getDate() - i);
       days.push(getLocalDayString(d));
     }
-    const dayBaseMood = new Map(filtered.map(i => [i.date, i.mood_value || null] as const));
+    
+    // Get the most recent check-in mood value for each day
+    const checkinMoodByDate = new Map<string, { mood: number; time: number }>();
+    for (const ci of filteredCheckins) {
+      if (!ci.date || ci.mood_value == null) continue;
+      const timestamp = ci.occurred_at ? new Date(ci.occurred_at).getTime() : 0;
+      const existing = checkinMoodByDate.get(ci.date);
+      
+      // Keep the most recent check-in for this day
+      if (!existing || timestamp > existing.time) {
+        checkinMoodByDate.set(ci.date, { mood: ci.mood_value as number, time: timestamp });
+      }
+    }
+    
+    // Get base mood from journal days (fallback if no check-ins)
+    const dayBaseMood = new Map<string, number>();
+    for (const day of filtered) {
+      if (day.date && day.mood_value != null) {
+        dayBaseMood.set(day.date, day.mood_value as number);
+      }
+    }
+    
+    // Build trend data: prefer check-in mood over day base mood
     return days.map(date => {
-      const last = (lastByDate.get(date) as any)?.v ?? null;
-      const base = dayBaseMood.get(date) ?? null;
-      return { date, value: last ?? base };
+      const checkinData = checkinMoodByDate.get(date);
+      const baseMood = dayBaseMood.get(date);
+      const value = checkinData ? checkinData.mood : (baseMood ?? null);
+      return { date, value };
     });
   }, [filtered, filteredCheckins, range]);
 
   const topTags = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const d of filtered) {
-      for (const t of d.tags || []) map[t] = (map[t] || 0) + 1;
+    const tagCounts: Record<string, number> = {};
+    
+    // Count all tags from journal days in the selected range
+    for (const day of filtered) {
+      if (day.tags && Array.isArray(day.tags)) {
+        for (const tag of day.tags) {
+          if (tag) {
+            tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+          }
+        }
+      }
     }
-    const sorted = Object.entries(map)
+    
+    // Sort by count and take top 6
+    const sortedTags = Object.entries(tagCounts)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6);
-    const maxCount = sorted[0]?.[1] || 1;
-    return sorted.map(([tagId, count]) => ({ 
+    
+    const maxCount = sortedTags[0]?.[1] || 1;
+    
+    return sortedTags.map(([tagId, count]) => ({ 
       tagId, 
-      name: tagId.replace('_', ' '), 
+      name: tagId.replace(/_/g, ' '), // Replace all underscores
       count,
       percentage: (count / maxCount) * 100
     }));
@@ -168,7 +200,7 @@ export const ChartsTab: React.FC = () => {
                 stroke="hsl(var(--border))"
               />
               <YAxis 
-                domain={[0.5, 5.5]} 
+                domain={[1, 5]} 
                 ticks={[1, 2, 3, 4, 5]} 
                 tick={{ fontSize: 10 }} 
                 width={28} 
