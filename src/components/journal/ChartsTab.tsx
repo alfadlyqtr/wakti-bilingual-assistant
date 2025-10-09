@@ -7,6 +7,7 @@ import {
   ResponsiveContainer,
   LineChart,
   Line,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -28,7 +29,7 @@ export const ChartsTab: React.FC = () => {
   const { language } = useTheme();
   const [items, setItems] = useState<JournalDay[]>([]);
   const [checkins, setCheckins] = useState<JournalCheckin[]>([]);
-  const [range, setRange] = useState<7 | 14 | 30>(30);
+  const [range, setRange] = useState<7 | 14 | 30>(7);
 
   useEffect(() => {
     (async () => {
@@ -147,33 +148,68 @@ export const ChartsTab: React.FC = () => {
             </div>
           ))}
         </div>
-        <div className="h-48 pl-4">
+        <div className="h-52 pl-4">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={trendData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-              <XAxis dataKey="date" tick={{ fontSize: 10 }} hide />
-              <YAxis domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} tick={{ fontSize: 10 }} width={28} hide />
+            <LineChart data={trendData} margin={{ top: 12, right: 12, left: 8, bottom: 8 }}>
+              <defs>
+                <linearGradient id="moodGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.05}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" opacity={0.1} stroke="hsl(var(--muted-foreground))" />
+              <XAxis 
+                dataKey="date" 
+                tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} 
+                tickFormatter={(val) => {
+                  const d = new Date(val);
+                  return `${d.getMonth() + 1}/${d.getDate()}`;
+                }}
+                stroke="hsl(var(--border))"
+              />
+              <YAxis 
+                domain={[0.5, 5.5]} 
+                ticks={[1, 2, 3, 4, 5]} 
+                tick={{ fontSize: 10 }} 
+                width={28} 
+                hide 
+              />
               <Tooltip 
                 formatter={(v: any) => v ? moodLabels[v as MoodValue] : '—'} 
                 labelFormatter={(l) => l}
-                contentStyle={{ fontSize: '12px' }}
+                contentStyle={{ 
+                  fontSize: '12px',
+                  backgroundColor: 'hsl(var(--popover))',
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: '8px',
+                  padding: '8px 12px'
+                }}
+              />
+              <Area
+                type="monotone"
+                dataKey="value"
+                stroke="none"
+                fill="url(#moodGradient)"
+                connectNulls
+                isAnimationActive={true}
+                animationDuration={600}
               />
               <Line
                 type="monotone"
                 dataKey="value"
-                stroke="#a855f7"
-                strokeWidth={2.5}
+                strokeWidth={3}
                 connectNulls
                 isAnimationActive={true}
                 animationDuration={800}
-                activeDot={{ r: 6, stroke: '#ffffff', strokeWidth: 2 }}
+                stroke="hsl(var(--primary))"
+                activeDot={{ r: 8, stroke: 'hsl(var(--background))', strokeWidth: 3, fill: 'hsl(var(--primary))' }}
                 dot={(props: any) => {
                   const { cx, cy, payload } = props;
                   if (payload?.value == null) return null;
                   const mood = Number(payload.value) as MoodValue;
                   return (
-                    <g transform={`translate(${cx - 12}, ${cy - 12})`}>
-                      <MoodFace value={mood} size={24} />
+                    <g transform={`translate(${cx - 14}, ${cy - 14})`}>
+                      <MoodFace value={mood} size={28} />
                     </g>
                   );
                 }}
