@@ -199,7 +199,7 @@ export const TimelineTab: React.FC = () => {
       const cis = todayCheckins;
       const lastMood: MoodValue | null = (cis[0]?.mood_value as MoodValue | undefined) ?? (d?.mood_value as MoodValue | undefined) ?? null;
       return (
-        <div key={`today-${dateStr}`} className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid group/card">
+        <div key={`today-${dateStr}`} className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
           <div className="flex items-center justify-between mb-2">
             <div className="text-sm font-medium flex items-center gap-3 group">
               <span>{dateStr}</span>
@@ -221,7 +221,7 @@ export const TimelineTab: React.FC = () => {
             </div>
             <button
               onClick={() => handleDeleteDayCard(dateStr)}
-              className="opacity-0 group-hover/card:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400"
+              className="p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 transition-colors"
               title={language === 'ar' ? 'حذف اليوم' : 'Delete day'}
             >
               <Trash2 className="h-4 w-4" />
@@ -281,14 +281,7 @@ export const TimelineTab: React.FC = () => {
               <div className="space-y-2 mt-1">
                 {fc.length === 0 && <div className="text-xs text-muted-foreground">{language==='ar'?'لا توجد مدخلات':'No entries'}</div>}
                 {fc.map(c => (
-                  <div key={c.id} className="my-2 p-3 rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 text-slate-800 shadow-sm group relative">
-                    <button
-                      onClick={() => handleDeleteCheckin(c.id)}
-                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400"
-                      title={language === 'ar' ? 'حذف' : 'Delete'}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                  <div key={c.id} className="my-2 p-3 rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 text-slate-800 shadow-sm">
                     <div className="flex items-center flex-wrap gap-2">
                       {(() => {
                         const d2 = c.occurred_at ? new Date(c.occurred_at) : null;
@@ -319,7 +312,7 @@ export const TimelineTab: React.FC = () => {
     const lastMood: MoodValue | null = (cis[0]?.mood_value as MoodValue | undefined) ?? (d?.mood_value as MoodValue | undefined) ?? null;
     const missingEvening = dateStr < today && (!d || !d.evening_reflection);
     return (
-      <div key={dateStr} className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid group/card">
+      <div key={dateStr} className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
         <div className="flex items-center justify-between mb-2">
           <div className="text-sm font-medium flex items-center gap-3 group">
             <span>{dateStr}</span>
@@ -342,7 +335,7 @@ export const TimelineTab: React.FC = () => {
           </div>
           <button
             onClick={() => handleDeleteDayCard(dateStr)}
-            className="opacity-0 group-hover/card:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400"
+            className="p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 transition-colors"
             title={language === 'ar' ? 'حذف اليوم' : 'Delete day'}
           >
             <Trash2 className="h-4 w-4" />
@@ -400,14 +393,7 @@ export const TimelineTab: React.FC = () => {
             <div className="space-y-2 mt-1">
               {cis.length === 0 && <div className="text-xs text-muted-foreground">{language==='ar'?'لا توجد مدخلات':'No entries'}</div>}
               {cis.map(c => (
-                <div key={c.id} className="rounded-xl border p-3 bg-muted/30 group relative">
-                  <button
-                    onClick={() => handleDeleteCheckin(c.id)}
-                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400"
-                    title={language === 'ar' ? 'حذف' : 'Delete'}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                <div key={c.id} className="rounded-xl border p-3 bg-muted/30">
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
                       <MoodFace value={c.mood_value as MoodValue} size={24} />
