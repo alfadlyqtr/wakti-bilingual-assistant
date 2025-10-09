@@ -116,7 +116,7 @@ export const JournalWidget: React.FC = () => {
             variant="outline"
             size="sm"
             onClick={() => navigate('/journal')}
-            className="w-full bg-background/80 backdrop-blur-sm border-border/60 hover:bg-background/90 transition-all duration-300"
+            className="w-full border bg-primary/10 backdrop-blur-sm border-primary/30 hover:bg-primary/20 text-foreground transition-all duration-300"
           >
             {language === 'ar' ? 'فتح' : 'Open'}
           </Button>
