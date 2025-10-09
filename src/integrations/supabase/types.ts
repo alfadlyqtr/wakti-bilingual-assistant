@@ -1140,6 +1140,7 @@ export type Database = {
           file_size: number | null
           id: string
           is_read: boolean
+          is_saved: boolean
           media_type: string | null
           media_url: string | null
           message_type: string
@@ -1153,6 +1154,7 @@ export type Database = {
           file_size?: number | null
           id?: string
           is_read?: boolean
+          is_saved?: boolean
           media_type?: string | null
           media_url?: string | null
           message_type: string
@@ -1166,6 +1168,7 @@ export type Database = {
           file_size?: number | null
           id?: string
           is_read?: boolean
+          is_saved?: boolean
           media_type?: string | null
           media_url?: string | null
           message_type?: string

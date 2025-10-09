@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Save a message
+ * Save a message by updating the is_saved flag
  */
 export async function saveMessage(
   userId: string, 
@@ -9,12 +9,10 @@ export async function saveMessage(
   conversationId: string
 ) {
   const { data, error } = await supabase
-    .from('saved_messages')
-    .insert({
-      user_id: userId,
-      message_id: messageId,
-      conversation_id: conversationId
-    });
+    .from('messages')
+    .update({ is_saved: true })
+    .eq('id', messageId)
+    .or(`sender_id.eq.${userId},recipient_id.eq.${userId}`); // Ensure user owns or received the message
     
   if (error) {
     console.error('Error saving message:', error);
@@ -25,17 +23,17 @@ export async function saveMessage(
 }
 
 /**
- * Unsave a message
+ * Unsave a message by updating the is_saved flag
  */
 export async function unsaveMessage(
   userId: string, 
   messageId: string
 ) {
   const { error } = await supabase
-    .from('saved_messages')
-    .delete()
-    .eq('user_id', userId)
-    .eq('message_id', messageId);
+    .from('messages')
+    .update({ is_saved: false })
+    .eq('id', messageId)
+    .or(`sender_id.eq.${userId},recipient_id.eq.${userId}`); // Ensure user owns or received the message
     
   if (error) {
     console.error('Error unsaving message:', error);
@@ -46,17 +44,17 @@ export async function unsaveMessage(
 }
 
 /**
- * Check if a message is saved by the current user
+ * Check if a message is saved by checking the is_saved flag
  */
 export async function isMessageSaved(
   userId: string, 
   messageId: string
 ): Promise<boolean> {
   const { data, error } = await supabase
-    .from('saved_messages')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('message_id', messageId)
+    .from('messages')
+    .select('is_saved')
+    .eq('id', messageId)
+    .or(`sender_id.eq.${userId},recipient_id.eq.${userId}`)
     .maybeSingle();
     
   if (error) {
@@ -64,7 +62,7 @@ export async function isMessageSaved(
     return false;
   }
   
-  return !!data;
+  return data?.is_saved || false;
 }
 
 /**
@@ -72,22 +70,11 @@ export async function isMessageSaved(
  */
 export async function getSavedMessages(userId: string) {
   const { data, error } = await supabase
-    .from('saved_messages')
-    .select(`
-      id,
-      message_id,
-      saved_at,
-      conversation_id,
-      messages (
-        id,
-        content,
-        created_at,
-        sender_id,
-        message_type
-      )
-    `)
-    .eq('user_id', userId)
-    .order('saved_at', { ascending: false });
+    .from('messages')
+    .select('*')
+    .eq('is_saved', true)
+    .or(`sender_id.eq.${userId},recipient_id.eq.${userId}`)
+    .order('created_at', { ascending: false });
     
   if (error) {
     console.error('Error fetching saved messages:', error);
