@@ -480,7 +480,7 @@ const Tasjeel: React.FC = () => {
         .from(bucketId)
         .getPublicUrl(filePath);
       
-      const audioUrl = publicUrlData.publicUrl;
+      const audioUrl = (publicUrlData.publicUrl || '').trim();
       console.log("Generated public URL:", audioUrl);
       setAudioUrl(audioUrl);
       setAudioBlob(audioBlob);
@@ -490,7 +490,7 @@ const Tasjeel: React.FC = () => {
       setCurrentRecordId(recordId);
       
       // Transcribe the audio
-      await transcribeAudio(audioUrl);
+      await transcribeAudio((audioUrl || '').trim());
       
     } catch (error) {
       console.error("Error processing recording:", error);
@@ -529,7 +529,7 @@ const Tasjeel: React.FC = () => {
         .from("tasjeel_recordings")
         .getPublicUrl(filePath);
       
-      const audioUrl = publicUrlData.publicUrl;
+      const audioUrl = (publicUrlData.publicUrl || '').trim();
       setAudioUrl(audioUrl);
       
       // Create a blob from the file for local playback
@@ -537,7 +537,7 @@ const Tasjeel: React.FC = () => {
       setAudioBlob(fileBlob);
       
       // Transcribe the uploaded audio
-      await transcribeAudio(audioUrl);
+      await transcribeAudio((audioUrl || '').trim());
       
       toast(translationTexts.uploadSuccess);
     } catch (error) {
@@ -559,7 +559,8 @@ const Tasjeel: React.FC = () => {
       setIsTranscribing(true);
       
       console.log('Tasjeel: Starting transcription process');
-      console.log('Tasjeel: Audio URL for transcription:', audioUrl);
+      const safeUrl = (audioUrl || '').trim();
+      console.log('Tasjeel: Audio URL for transcription:', safeUrl);
       
       console.log('Tasjeel: Calling transcribe-audio edge function');
       const startTime = Date.now();
@@ -567,7 +568,7 @@ const Tasjeel: React.FC = () => {
       const response = await callEdgeFunctionWithRetry<{ transcript: string }>(
         "transcribe-audio",
         { 
-          body: { audioUrl },
+          body: { audioUrl: safeUrl },
           headers: { 'Content-Type': 'application/json' }
         }
       );

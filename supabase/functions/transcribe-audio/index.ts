@@ -95,8 +95,10 @@ serve(async (req) => {
 
     // Get the audio file URL from the request body
     const { audioUrl } = requestBody;
+    // Defensive sanitize: trim whitespace and validate
+    const cleanedAudioUrl = (typeof audioUrl === 'string' ? audioUrl : '').trim();
 
-    if (!audioUrl) {
+    if (!cleanedAudioUrl) {
       console.error('Missing audioUrl in request');
       return new Response(
         JSON.stringify({ error: 'Audio URL is required' }),
@@ -104,7 +106,7 @@ serve(async (req) => {
       );
     }
 
-    console.log('Processing audio URL:', audioUrl.substring(0, 30) + '...');
+    console.log('Processing audio URL:', cleanedAudioUrl.substring(0, 30) + '...');
 
     // Create a Supabase client with the service role key
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -114,7 +116,7 @@ serve(async (req) => {
     let filePath = '';
     try {
       // Format: https://[project-ref].supabase.co/storage/v1/object/public/tasjeel_recordings/[user-id]/[filename].webm
-      const storageUrl = new URL(audioUrl);
+      const storageUrl = new URL(cleanedAudioUrl);
       console.log('Storage URL parsed:', storageUrl.toString());
       console.log('Storage pathname:', storageUrl.pathname);
       
@@ -137,7 +139,7 @@ serve(async (req) => {
         JSON.stringify({ 
           error: 'Invalid audio URL format', 
           details: error.message,
-          audioUrl: audioUrl
+          audioUrl: cleanedAudioUrl
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
