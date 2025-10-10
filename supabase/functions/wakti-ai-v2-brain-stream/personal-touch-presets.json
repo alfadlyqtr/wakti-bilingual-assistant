@@ -43,6 +43,14 @@
     "detailed": {
       "max_tokens": 3072,
       "structure": "Well-structured paragraphs with sub-points/examples. End with a summary."
+    },
+    "conversational": {
+      "max_tokens": 1280,
+      "structure": "Sound like a friendly human. Use short paragraphs, occasional questions, and light emojis only if the user does first."
+    },
+    "analytical": {
+      "max_tokens": 2048,
+      "structure": "Break the answer into analysis sections: context, evaluation, pros vs cons, and a clear recommendation."
     }
   }
 }

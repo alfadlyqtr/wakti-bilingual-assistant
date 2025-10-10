@@ -74,7 +74,7 @@ class WaktiAIV2ServiceClass {
   // Ensure PT object exists with safe defaults and minimal normalization
   private ensurePersonalTouch(): any {
     const allowedTones = ['funny', 'serious', 'casual', 'encouraging', 'neutral'];
-    const allowedStyles = ['short answers', 'bullet points', 'step-by-step', 'detailed'];
+    const allowedStyles = ['short answers', 'bullet points', 'step-by-step', 'detailed', 'conversational', 'analytical'];
 
     let pt: any = null;
     try { pt = this.getPersonalTouch(); } catch {}
@@ -100,7 +100,10 @@ class WaktiAIV2ServiceClass {
         || (styleLower.includes('short') ? 'short answers'
         : styleLower.includes('bullet') ? 'bullet points'
         : styleLower.includes('step') ? 'step-by-step'
-        : styleLower.includes('detail') ? 'detailed' : 'short answers');
+        : styleLower.includes('detail') ? 'detailed'
+        : styleLower.includes('convers') ? 'conversational'
+        : styleLower.includes('analyt') ? 'analytical'
+        : 'short answers');
       pt.style = normalizedStyle;
 
       // Trim instruction

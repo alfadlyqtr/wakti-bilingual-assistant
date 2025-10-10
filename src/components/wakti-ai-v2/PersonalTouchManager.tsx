@@ -111,7 +111,9 @@ export function PersonalTouchManager({ compact = false }: PTMProps) {
     { value: 'short answers', label: language === 'ar' ? 'إجابات قصيرة' : 'Short answers' },
     { value: 'detailed', label: language === 'ar' ? 'مفصل' : 'Detailed' },
     { value: 'step-by-step', label: language === 'ar' ? 'خطوة بخطوة' : 'Step-by-step' },
-    { value: 'bullet points', label: language === 'ar' ? 'نقاط' : 'Bullet points' }
+    { value: 'bullet points', label: language === 'ar' ? 'نقاط' : 'Bullet points' },
+    { value: 'conversational', label: language === 'ar' ? 'حواري' : 'Conversational' },
+    { value: 'analytical', label: language === 'ar' ? 'تحليلي' : 'Analytical' }
   ];
 
   return (
