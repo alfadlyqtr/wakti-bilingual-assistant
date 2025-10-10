@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Hand } from 'lucide-react';
 import { toast } from "sonner";
+import { useWidgetDragHandle } from "@/components/dashboard/WidgetDragHandleContext";
 
 interface QuoteWidgetProps {
   className?: string;
@@ -20,6 +21,12 @@ export const QuoteWidget: React.FC<QuoteWidgetProps> = ({ className }) => {
   const { language } = useTheme();
   const [quote, setQuote] = useState<QuoteObject | string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const { registerHandle, listeners, attributes, isDragging } = useWidgetDragHandle();
+  const handleBindings = isDragging ? { ...attributes, ...listeners } : {};
+  const handleBaseClass = "absolute top-2 left-2 z-20 p-1 rounded-md border transition-all duration-300 cursor-grab active:cursor-grabbing";
+  const handleStateClass = isDragging
+    ? "ring-2 ring-purple-400/60 shadow-lg bg-purple-400/40 text-background border-purple-300/60 scale-110"
+    : "bg-purple-200/10 text-purple-400 border-purple-300/25 hover:bg-purple-400/30 hover:text-background hover:border-purple-200/60";
   
   const fetchQuote = (forceRefresh = false) => {
     try {
@@ -72,17 +79,22 @@ export const QuoteWidget: React.FC<QuoteWidgetProps> = ({ className }) => {
       }}
     >
       {/* Glass overlays (adjusted for purple accent) */}
-      <div className="absolute inset-0 rounded-xl pointer-events-none" 
+      <div
+        className="absolute inset-0 rounded-xl pointer-events-none"
         style={{
-          background: "linear-gradient(135deg, rgba(132,95,255,0.22) 0%, rgba(255,255,255,0.08) 45%, rgba(132,95,255,0.10) 100%)"
-        }} 
+          background: "linear-gradient(135deg, rgba(132,95,255,0.22) 0%, rgba(255,255,255,0.08) 45%, rgba(132,95,255,0.10) 100%)",
+        }}
       />
       <div className="absolute -top-5 -left-7 w-20 h-16 bg-purple-600/20 rounded-full blur-lg opacity-30 pointer-events-none" />
       <div className="absolute bottom-2 right-3 w-16 h-6 bg-purple-400/10 rounded-lg blur-md opacity-25 pointer-events-none" />
 
       {/* Drag handle inside the container */}
-      <div className="absolute top-2 left-2 z-20 p-1 rounded-md bg-purple-200/10 hover:bg-purple-400/30 hover:text-background transition-colors cursor-grab active:cursor-grabbing border border-purple-300/25">
-        <Hand className="h-4 w-4 text-purple-400" />
+      <div
+        ref={registerHandle}
+        {...handleBindings}
+        className={`${handleBaseClass} ${handleStateClass}`}
+      >
+        <Hand className="h-4 w-4" />
       </div>
       
       {/* Header */}

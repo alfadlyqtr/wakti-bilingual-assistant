@@ -1587,7 +1587,10 @@ export const TodayTab: React.FC = () => {
 
       {/* Custom Tag Dialog */}
       <Dialog open={isCustomOpen} onOpenChange={setCustomOpen}>
-        <DialogContent>
+        <DialogContent
+          title={language === 'ar' ? 'إضافة وسم مخصص' : 'Add custom tag'}
+          description={language === 'ar' ? 'أدخل وسمًا جديدًا لإضافته إلى قائمتك.' : 'Enter a new tag to add it to your list.'}
+        >
           <DialogHeader>
             <DialogTitle>{language === 'ar' ? 'إضافة وسم مخصص' : 'Add custom tag'}</DialogTitle>
           </DialogHeader>

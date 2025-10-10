@@ -6,6 +6,7 @@ import { t } from "@/utils/translations";
 import { Hand, CheckSquare, Bell, Plus, AlertTriangle, Clock } from "lucide-react";
 import { useOptimizedTRData } from "@/hooks/useOptimizedTRData";
 import { format, isToday, isPast, parseISO } from "date-fns";
+import { useWidgetDragHandle } from "@/components/dashboard/WidgetDragHandleContext";
 
 interface TRWidgetProps {
   language: 'en' | 'ar';
@@ -14,6 +15,12 @@ interface TRWidgetProps {
 export const TRWidget: React.FC<TRWidgetProps> = React.memo(({ language }) => {
   const navigate = useNavigate();
   const { tasks, reminders, loading } = useOptimizedTRData();
+  const { registerHandle, listeners, attributes, isDragging } = useWidgetDragHandle();
+  const handleBindings = isDragging ? { ...attributes, ...listeners } : {};
+  const handlePosition = language === 'ar' ? 'right-2' : 'left-2';
+  const handleClass = isDragging
+    ? `absolute top-2 z-20 p-2 rounded-lg border border-green-400/60 bg-green-500/35 text-white shadow-xl ring-2 ring-green-400/70 transition-all duration-300 scale-110 ${handlePosition}`
+    : `absolute top-2 z-20 p-2 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 bg-primary/20 border-primary/30 text-primary/70 transition-all duration-300 hover:bg-primary/30 hover:text-white ${handlePosition}`;
 
   // Calculate stats
   const pendingTasks = tasks.filter(task => !task.completed);
@@ -62,8 +69,12 @@ export const TRWidget: React.FC<TRWidgetProps> = React.memo(({ language }) => {
       <div className="absolute inset-0 bg-gradient-to-br from-green-500/15 via-transparent to-red-500/15 rounded-xl"></div>
       
       {/* Drag handle with glass effect - Always enhanced */}
-      <div className={`absolute top-2 z-20 p-2 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 bg-primary/20 border-primary/30 transition-all duration-300 cursor-grab active:cursor-grabbing scale-110 ${language === 'ar' ? 'right-2' : 'left-2'}`}>
-        <Hand className="h-3 w-3 text-primary/70" />
+      <div
+        ref={registerHandle}
+        {...handleBindings}
+        className={`${handleClass} cursor-grab active:cursor-grabbing`}
+      >
+        <Hand className="h-3 w-3 text-current" />
       </div>
 
       {/* Content */}

@@ -19,6 +19,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { Card, CardContent } from "@/components/ui/card";
 import { TranslationKey } from "@/utils/translationTypes";
+import { WidgetDragHandleProvider } from "@/components/dashboard/WidgetDragHandleContext";
 
 type WidgetType = {
   id: string;
@@ -42,6 +43,7 @@ const SortableWidget = ({ widget, isDragging }: { widget: WidgetType; isDragging
     transform,
     transition,
     isDragging: isSortableDragging,
+    setActivatorNodeRef,
   } = useSortable({ id: widget.id });
 
   const style = {
@@ -51,21 +53,27 @@ const SortableWidget = ({ widget, isDragging }: { widget: WidgetType; isDragging
     touchAction: isDragging ? 'none' as const : 'auto' as const,
   };
 
+  const handleContextValue = {
+    registerHandle: setActivatorNodeRef,
+    listeners: isDragging ? listeners : {},
+    attributes: isDragging ? attributes : {},
+    isDragging,
+  };
+
   return (
     <Card 
       ref={setNodeRef}
       style={style}
-      // Only attach DnD attributes/listeners while in drag mode
-      {...(isDragging ? attributes : {})}
-      {...(isDragging ? listeners : {})}
       className={`relative transition-all duration-200 w-[calc(100%-2rem)] mx-auto rounded-3xl overflow-hidden backdrop-blur-xl border border-white/10 bg-background/60 shadow-2xl ${
         isSortableDragging ? 'ring-2 ring-primary shadow-lg scale-102 z-50' : ''
-      } ${isDragging ? 'border-dashed border-primary/70 cursor-grab active:cursor-grabbing' : ''}`}
+      } ${isDragging ? 'border-dashed border-primary/70' : ''}`}
     >
       {/* Glass reflection overlay */}
       <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-white/20 via-transparent to-transparent opacity-25 pointer-events-none" />
       <CardContent className="p-0 w-full relative z-10">
-        {widget.component}
+        <WidgetDragHandleProvider value={handleContextValue}>
+          {widget.component}
+        </WidgetDragHandleProvider>
       </CardContent>
     </Card>
   );

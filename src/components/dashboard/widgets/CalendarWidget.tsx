@@ -8,6 +8,7 @@ import { t } from "@/utils/translations";
 import { Hand, Calendar, Clock } from "lucide-react";
 import { useOptimizedCalendarData } from "@/hooks/useOptimizedCalendarData";
 import { EntryType } from "@/utils/calendarUtils";
+import { useWidgetDragHandle } from "@/components/dashboard/WidgetDragHandleContext";
 
 interface CalendarWidgetProps {
   language: 'en' | 'ar';
@@ -32,6 +33,11 @@ const getEntryColor = (type: EntryType) => {
 export const CalendarWidget: React.FC<CalendarWidgetProps> = React.memo(({ language }) => {
   const navigate = useNavigate();
   const { entries, loading } = useOptimizedCalendarData();
+  const { registerHandle, listeners, attributes, isDragging } = useWidgetDragHandle();
+  const handleBindings = isDragging ? { ...attributes, ...listeners } : {};
+  const handleClass = isDragging
+    ? `absolute top-2 z-20 p-2 rounded-lg border border-blue-400/50 bg-blue-500/30 text-blue-50 shadow-lg ring-2 ring-blue-400/60 transition-all duration-300 scale-110 ${language === 'ar' ? 'right-2' : 'left-2'}`
+    : `absolute top-2 z-20 p-2 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 bg-primary/20 border-primary/30 transition-all duration-300 hover:bg-primary/30 hover:text-white ${language === 'ar' ? 'right-2' : 'left-2'}`;
 
   // Get upcoming entries for next 3 days
   const upcomingEntries = entries
@@ -70,7 +76,11 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = React.memo(({ langu
       <div className="absolute inset-0 bg-gradient-to-br from-blue-500/15 via-transparent to-purple-500/15 rounded-xl"></div>
       
       {/* Drag handle with glass effect - Always enhanced */}
-      <div className={`absolute top-2 z-20 p-2 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 bg-primary/20 border-primary/30 transition-all duration-300 cursor-grab active:cursor-grabbing scale-110 ${language === 'ar' ? 'right-2' : 'left-2'}`}>
+      <div
+        ref={registerHandle}
+        {...handleBindings}
+        className={`${handleClass} cursor-grab active:cursor-grabbing`}
+      >
         <Hand className="h-3 w-3 text-primary/70" />
       </div>
 

@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import { t } from "@/utils/translations";
+import { useWidgetDragHandle } from "@/components/dashboard/WidgetDragHandleContext";
 
 interface EventsWidgetProps {
   isLoading: boolean;
@@ -16,11 +17,20 @@ interface EventsWidgetProps {
 export const EventsWidget: React.FC<EventsWidgetProps> = ({ isLoading, events, language }) => {
   const navigate = useNavigate();
   const hasEvents = events && events.length > 0;
+  const { registerHandle, listeners, attributes, isDragging } = useWidgetDragHandle();
+  const handleBindings = isDragging ? { ...attributes, ...listeners } : {};
+  const handleClass = isDragging
+    ? "absolute top-1 left-1 z-20 p-1 rounded-md border border-primary/40 bg-primary/30 text-primary-foreground shadow-lg ring-2 ring-primary/60 cursor-grab active:cursor-grabbing transition-all duration-300"
+    : "absolute top-1 left-1 z-20 p-1 rounded-md bg-muted/60 border border-muted-foreground/20 hover:bg-primary/80 hover:text-primary-foreground hover:border-primary/60 transition-colors cursor-grab active:cursor-grabbing";
 
   return (
     <div className={`relative ${hasEvents ? 'p-4' : 'p-2'}`}>
       {/* Drag handle */}
-      <div className="absolute top-1 left-1 z-20 p-1 rounded-md bg-muted/60 hover:bg-primary/80 hover:text-primary-foreground transition-colors cursor-grab active:cursor-grabbing">
+      <div
+        ref={registerHandle}
+        {...handleBindings}
+        className={handleClass}
+      >
         <Hand className="h-3 w-3" />
       </div>
       

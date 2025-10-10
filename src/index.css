@@ -54,7 +54,8 @@
   /* Page-specific: hide scrollbars but keep scrolling (Dashboard, Wakti AI) */
   /* Ensure body itself never shows a scrollbar on Dashboard */
   body.dashboard-page {
-    overflow: hidden !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
   }
 
   /* Hide scrollbar on the actual scroll container */

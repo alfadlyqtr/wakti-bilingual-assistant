@@ -3,21 +3,30 @@ import { CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Moon, HeartPulse, Zap, Hand } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
-import { startWhoopAuth, isWhoopConnected, fetchCompactMetrics } from "@/services/whoopService";
+import { startWhoopAuth, fetchCompactMetrics, getWhoopStatus } from "@/services/whoopService";
 import { useNavigate } from "react-router-dom";
+import { useWidgetDragHandle } from "@/components/dashboard/WidgetDragHandleContext";
 
 export const WhoopWidget: React.FC = () => {
   const { language } = useTheme();
   const [connected, setConnected] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [metrics, setMetrics] = useState<any>(null);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { registerHandle, listeners, attributes, isDragging } = useWidgetDragHandle();
+  const handleBindings = isDragging ? { ...attributes, ...listeners } : {};
+  const handlePosition = language === 'ar' ? 'right-2' : 'left-2';
+  const handleClass = isDragging
+    ? `absolute top-2 z-20 p-2 rounded-lg border border-rose-400/60 bg-rose-500/35 text-white shadow-xl ring-2 ring-rose-400/70 transition-all duration-300 scale-110 ${handlePosition}`
+    : `absolute top-2 z-20 p-2 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 bg-primary/20 border-primary/30 text-primary/70 transition-all duration-300 hover:bg-primary/30 hover:text-white ${handlePosition}`;
 
   useEffect(() => {
     (async () => {
-      const ok = await isWhoopConnected();
-      setConnected(ok);
-      if (ok) {
+      const status = await getWhoopStatus();
+      setConnected(status.connected);
+      setLastSyncedAt(status.lastSyncedAt);
+      if (status.connected) {
         // FIX: Use forceFresh to bypass cache in widget
         const m = await fetchCompactMetrics(true);
         setMetrics(m);
@@ -62,6 +71,23 @@ export const WhoopWidget: React.FC = () => {
   const recovery = metrics?.recovery;
   const cycle = metrics?.cycle;
 
+  const formatSyncedAt = (iso: string | null) => {
+    if (!iso) return null;
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return null;
+    const locale = language === 'ar' ? 'ar-SA' : 'en-US';
+    try {
+      return new Intl.DateTimeFormat(locale, {
+        dateStyle: 'medium',
+        timeStyle: 'short'
+      }).format(date);
+    } catch {
+      return date.toLocaleString(locale);
+    }
+  };
+
+  const formattedSync = formatSyncedAt(lastSyncedAt);
+
   // Helper: robust sleep hours like Vitality page (no hooks)
   const computeSleepHours = (sleepObj: any): number | null => {
     if (!sleepObj) return null;
@@ -88,8 +114,12 @@ export const WhoopWidget: React.FC = () => {
       {/* Gradient container to match other widgets */}
       <div className="relative rounded-3xl border bg-gradient-to-br from-rose-500/10 via-pink-500/10 to-purple-500/10 dark:from-white/5 dark:via-white/5 dark:to-white/5 border-white/10 shadow-2xl overflow-hidden">
         {/* Drag handle to match TRWidget style */}
-        <div className={`absolute top-2 z-20 p-2 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 bg-primary/20 border-primary/30 transition-all duration-300 cursor-grab active:cursor-grabbing scale-110 ${language === 'ar' ? 'right-2' : 'left-2'}`}>
-          <Hand className="h-3 w-3 text-primary/70" />
+        <div
+          ref={registerHandle}
+          {...handleBindings}
+          className={`${handleClass} cursor-grab active:cursor-grabbing`}
+        >
+          <Hand className="h-3 w-3 text-current" />
         </div>
         <CardHeader className="px-5 pt-5 pb-2">
           <CardTitle className="flex items-center gap-2">
@@ -97,6 +127,12 @@ export const WhoopWidget: React.FC = () => {
             {language === 'ar' ? 'الحيوية' : 'Vitality'}
           </CardTitle>
         </CardHeader>
+        {formattedSync && (
+          <div className="px-5 pb-1 text-[11px] text-muted-foreground/80 flex items-center justify-between">
+            <span>{language === 'ar' ? 'آخر مزامنة' : 'Last synced'}</span>
+            <span>{formattedSync}</span>
+          </div>
+        )}
         <div className="grid grid-cols-3 gap-3 p-4">
           <div className="rounded-2xl p-3 border shadow-md bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-500/15 dark:to-cyan-500/10 border-blue-200/60 dark:border-blue-500/25">
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><Moon className="h-3.5 w-3.5 text-blue-400" /> {language === 'ar' ? 'النوم (آخر ليلة)' : 'Sleep (last night)'} </div>

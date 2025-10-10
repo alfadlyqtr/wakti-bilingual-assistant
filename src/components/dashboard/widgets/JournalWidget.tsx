@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { MoodFace, MoodValue } from "@/components/journal/icons/MoodFaces";
 import { TagIcon } from "@/components/journal/TagIcon";
 import { Hand, Clock } from "lucide-react";
+import { useWidgetDragHandle } from "@/components/dashboard/WidgetDragHandleContext";
 
 function getLocalDayString(d = new Date()) {
   const y = d.getFullYear();
@@ -19,6 +20,12 @@ export const JournalWidget: React.FC = () => {
   const navigate = useNavigate();
   const [lastTwo, setLastTwo] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const { registerHandle, listeners, attributes, isDragging } = useWidgetDragHandle();
+  const handleBindings = isDragging ? { ...attributes, ...listeners } : {};
+  const handlePosition = language === 'ar' ? 'right-2' : 'left-2';
+  const handleClass = isDragging
+    ? `absolute top-2 z-20 p-2 rounded-lg border border-blue-400/60 bg-blue-500/30 text-white shadow-xl ring-2 ring-blue-400/70 transition-all duration-300 scale-110 ${handlePosition}`
+    : `absolute top-2 z-20 p-2 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 bg-primary/20 border-primary/30 text-primary/70 transition-all duration-300 hover:bg-primary/30 hover:text-white ${handlePosition}`;
 
   useEffect(() => {
     (async () => {
@@ -30,7 +37,9 @@ export const JournalWidget: React.FC = () => {
           const tb = b.occurred_at ? new Date(b.occurred_at).getTime() : 0;
           return tb - ta;
         });
-        setLastTwo(sorted.slice(0, 2));
+        const today = getLocalDayString();
+        const todaysCheckins = sorted.filter((ci) => ci.date === today);
+        setLastTwo(todaysCheckins.slice(0, 2));
       } finally {
         setLoading(false);
       }
@@ -87,8 +96,12 @@ export const JournalWidget: React.FC = () => {
       <div className="absolute inset-0 bg-gradient-to-br from-blue-500/15 via-transparent to-purple-500/15 rounded-xl"></div>
 
       {/* Drag handle */}
-      <div className={`absolute top-2 z-20 p-2 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 bg-primary/20 border-primary/30 cursor-grab active:cursor-grabbing scale-110 ${language === 'ar' ? 'right-2' : 'left-2'}`}>
-        <Hand className="h-3 w-3 text-primary/70" />
+      <div
+        ref={registerHandle}
+        {...handleBindings}
+        className={`${handleClass} cursor-grab active:cursor-grabbing`}
+      >
+        <Hand className="h-3 w-3 text-current" />
       </div>
 
       {/* Content */}
@@ -102,7 +115,18 @@ export const JournalWidget: React.FC = () => {
         {loading ? (
           <div className="text-center py-4 text-sm text-muted-foreground">{language === 'ar' ? 'جاري التحميل...' : 'Loading...'}</div>
         ) : lastTwo.length === 0 ? (
-          <div className="text-center py-4 text-sm text-muted-foreground">{language === 'ar' ? 'لا توجد إدخالات' : 'No entries yet'}</div>
+          <div className="flex flex-col items-center gap-2 py-6 text-center">
+            <span className="text-base font-semibold bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 bg-clip-text text-transparent">
+              {language === 'ar'
+                ? 'خذ نفساً عميقاً ودَوِّن فكرة اليوم.'
+                : 'Take a breath and jot down a thought.'}
+            </span>
+            <span className="text-sm italic text-muted-foreground/80">
+              {language === 'ar'
+                ? 'الامتنان يبدأ بملاحظة واحدة.'
+                : 'Gratitude starts with one note.'}
+            </span>
+          </div>
         ) : (
           <div className="space-y-3">
             {lastTwo.map((ci) => (
