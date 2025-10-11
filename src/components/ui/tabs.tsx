@@ -24,39 +24,46 @@ TabsList.displayName = TabsPrimitive.List.displayName
 const TabsTrigger = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Trigger>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>
->(({ className, children, ...props }, ref) => (
-  <TabsPrimitive.Trigger
-    ref={ref}
-    className={cn(
-      "inline-flex items-center whitespace-nowrap rounded-xl px-5 py-2.5 text-sm font-medium",
-      // Base button look (at rest)
-      "border border-border bg-card text-foreground/90 shadow-sm",
-      // Hover subtle lift
-      "hover:shadow-md hover:-translate-y-[1px]",
-      // Active/selected tab is clearly pressed/primary
-      "data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:shadow-lg",
-      // underline indicator (stronger)
-      "relative after:absolute after:left-3 after:right-3 after:-bottom-0.5 after:h-[3px] after:rounded-full after:bg-transparent data-[state=active]:after:bg-primary",
-      "transition duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background",
-      "disabled:pointer-events-none disabled:opacity-50",
-      className
-    )}
-    {...props}
-  >
-    {typeof children === 'string' ? (
-      children.split(' ').length > 1 ? (
-        <>
-          <span className="leading-tight">{children.split(' ')[0]}</span>
-          <span className="leading-tight">{children.split(' ').slice(1).join(' ')}</span>
-        </>
-      ) : (
-        <span className="leading-tight">{children}</span>
-      )
-    ) : (
-      children
-    )}
-  </TabsPrimitive.Trigger>
-))
+>(({ className, children, ...props }, ref) => {
+  // Normalize children: if a child is a <button>, unwrap it to avoid button-in-button nesting
+  const normalizedChildren = React.Children.map(children, (child) => {
+    if (React.isValidElement(child)) {
+      const anyChild = child as any;
+      const isInteractive = anyChild.type === 'button' || anyChild.props?.role === 'button' || typeof anyChild.props?.onClick === 'function';
+      if (isInteractive) {
+        const inner = anyChild.props?.children;
+        return <span className="leading-tight">{inner}</span>;
+      }
+    }
+    return child;
+  });
+
+  return (
+    <TabsPrimitive.Trigger
+      ref={ref}
+      className={cn(
+        "inline-flex items-center whitespace-nowrap rounded-xl px-5 py-2.5 text-sm font-medium",
+        // Base button look (at rest)
+        "border border-border bg-card text-foreground/90 shadow-sm",
+        // Hover subtle lift
+        "hover:shadow-md hover:-translate-y-[1px]",
+        // Active/selected tab is clearly pressed/primary
+        "data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:shadow-lg",
+        // underline indicator (stronger)
+        "relative after:absolute after:left-3 after:right-3 after:-bottom-0.5 after:h-[3px] after:rounded-full after:bg-transparent data-[state=active]:after:bg-primary",
+        "transition duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background",
+        "disabled:pointer-events-none disabled:opacity-50",
+        className
+      )}
+      {...props}
+    >
+      {/* Wrap all children in a non-interactive container to prevent accidental nested buttons */}
+      <span className="inline-flex items-center gap-1 pointer-events-none select-none">
+        {normalizedChildren}
+      </span>
+    </TabsPrimitive.Trigger>
+  );
+})
 TabsTrigger.displayName = TabsPrimitive.Trigger.displayName
 
 const TabsContent = React.forwardRef<

@@ -963,15 +963,15 @@ const Tasjeel: React.FC = () => {
         <PageTitle title={translationTexts.pageTitle} Icon={Mic} colorClass="text-cyan-500" />
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "record" | "saved" | "quick")}>
           <TabsList className="grid grid-cols-3 w-full mb-6">
-            <TabsTrigger value="record" className="flex items-center gap-2">
+            <TabsTrigger value="record" className="flex items-center gap-2 flex-wrap min-w-0 max-w-full whitespace-normal break-words text-center">
               <Mic className="h-4 w-4" />
               {translationTexts.newRecording}
             </TabsTrigger>
-            <TabsTrigger value="quick" className="flex items-center gap-2">
+            <TabsTrigger value="quick" className="flex items-center gap-2 flex-wrap min-w-0 max-w-full whitespace-normal break-words text-center">
               <Zap className="h-4 w-4" />
               {translationTexts.quickSummary}
             </TabsTrigger>
-            <TabsTrigger value="saved" className="flex items-center gap-2">
+            <TabsTrigger value="saved" className="flex items-center gap-2 flex-wrap min-w-0 max-w-full whitespace-normal break-words text-center">
               <Save className="h-4 w-4" />
               {translationTexts.savedRecordings}
             </TabsTrigger>

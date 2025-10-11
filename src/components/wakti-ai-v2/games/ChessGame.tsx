@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -47,131 +47,54 @@ export function ChessGame({ onBack }: ChessGameProps) {
   const [isPlayerTurn, setIsPlayerTurn] = useState(true);
   const [currentAIRemark, setCurrentAIRemark] = useState<string>('');
   const [isAIThinking, setIsAIThinking] = useState(false);
+  // Stockfish worker ref
+  const engineWorkerRef = useRef<Worker | null>(null);
   
   // New states for tap-to-move system
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
   const [validMoves, setValidMoves] = useState<string[]>([]);
 
-  const evaluatePosition = (game: Chess): number => {
-    let score = 0;
-    const board = game.board();
-    
-    for (let row = 0; row < 8; row++) {
-      for (let col = 0; col < 8; col++) {
-        const piece = board[row][col];
-        if (piece) {
-          const pieceValue = PIECE_VALUES[piece.type];
-          if (piece.color === 'w') {
-            score += pieceValue;
-          } else {
-            score -= pieceValue;
-          }
-        }
+  // Initialize engine worker once
+  useEffect(() => {
+    if (!engineWorkerRef.current) {
+      try {
+        engineWorkerRef.current = new Worker(
+          new URL('../../../workers/chessEngine.worker.ts', import.meta.url),
+          { type: 'classic' }
+        );
+      } catch (e) {
+        console.error('Failed to create chess engine worker', e);
       }
     }
 
-    // Add bonus for checkmate/check
-    if (game.isCheckmate()) {
-      return game.turn() === 'w' ? -50000 : 50000;
-    }
-    if (game.isCheck()) {
-      score += game.turn() === 'w' ? -50 : 50;
-    }
+    return () => {
+      try {
+        engineWorkerRef.current?.postMessage({ type: 'terminate' });
+        engineWorkerRef.current?.terminate();
+      } catch {}
+      engineWorkerRef.current = null;
+    };
+  }, []);
 
-    return score;
-  };
-
-  const getAIMove = (currentGame: Chess): string | null => {
-    const possibleMoves = currentGame.moves();
-    if (possibleMoves.length === 0) return null;
-
-    const aiColor = playerColor === 'white' ? 'black' : 'white';
-    const isAIWhite = aiColor === 'white';
-
-    switch (difficulty) {
-      case 'easy':
-        // 100% random legal moves
-        return possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
-      
-      case 'medium':
-        // Basic evaluation with material counting
-        let bestMove = possibleMoves[0];
-        let bestScore = isAIWhite ? -Infinity : Infinity;
-        
-        for (const move of possibleMoves) {
-          const gameCopy = new Chess(currentGame.fen());
-          gameCopy.move(move);
-          const score = evaluatePosition(gameCopy);
-          
-          if (isAIWhite ? score > bestScore : score < bestScore) {
-            bestScore = score;
-            bestMove = move;
-          }
-        }
-        
-        return bestMove;
-      
-      case 'hard':
-        // Minimax with alpha-beta pruning (depth 2)
-        const minimax = (game: Chess, depth: number, isMaximizing: boolean, alpha: number = -Infinity, beta: number = Infinity): number => {
-          if (depth === 0 || game.isGameOver()) {
-            return evaluatePosition(game);
-          }
-          
-          const moves = game.moves();
-          
-          if (isMaximizing) {
-            let maxEvaluation = -Infinity;
-            for (const move of moves) {
-              const gameCopy = new Chess(game.fen());
-              gameCopy.move(move);
-              const evaluation = minimax(gameCopy, depth - 1, false, alpha, beta);
-              maxEvaluation = Math.max(maxEvaluation, evaluation);
-              alpha = Math.max(alpha, evaluation);
-              if (beta <= alpha) break;
-            }
-            return maxEvaluation;
-          } else {
-            let minEvaluation = Infinity;
-            for (const move of moves) {
-              const gameCopy = new Chess(game.fen());
-              gameCopy.move(move);
-              const evaluation = minimax(gameCopy, depth - 1, true, alpha, beta);
-              minEvaluation = Math.min(minEvaluation, evaluation);
-              beta = Math.min(beta, evaluation);
-              if (beta <= alpha) break;
-            }
-            return minEvaluation;
-          }
-        };
-        
-        let bestHardMove = possibleMoves[0];
-        let bestHardScore = isAIWhite ? -Infinity : Infinity;
-        
-        for (const move of possibleMoves) {
-          const gameCopy = new Chess(currentGame.fen());
-          gameCopy.move(move);
-          const score = minimax(gameCopy, 2, !isAIWhite);
-          
-          if (isAIWhite ? score > bestHardScore : score < bestHardScore) {
-            bestHardScore = score;
-            bestHardMove = move;
-          }
-        }
-        
-        return bestHardMove;
-      
-      default:
-        return possibleMoves[0];
-    }
-  };
-
-  const getAIThinkingTime = (difficulty: Difficulty): number => {
-    switch (difficulty) {
-      case 'easy': return 400 + Math.random() * 200; // 400-600ms
-      case 'medium': return 600 + Math.random() * 300; // 600-900ms
-      case 'hard': return 800 + Math.random() * 400; // 800-1200ms
-      default: return 600;
+  // Parse Stockfish bestmove like "e2e4" or "e7e8q"
+  const applyBestMove = (uci: string) => {
+    if (!uci || uci.length < 4) return;
+    const from = uci.slice(0, 2);
+    const to = uci.slice(2, 4);
+    const promo = uci.length >= 5 ? uci[4] : undefined;
+    const gameCopy = new Chess(game.fen());
+    try {
+      gameCopy.move({ from, to, promotion: (promo as any) || 'q' });
+      setGame(gameCopy);
+      if (gameCopy.isGameOver()) {
+        setGameOver(true);
+        setTimeout(() => showAIRemark('victory'), 500);
+      } else {
+        setIsPlayerTurn(true);
+        if (Math.random() < 0.25) setTimeout(() => showAIRemark('game'), 300);
+      }
+    } catch (err) {
+      console.error('Failed to apply engine move', uci, err);
     }
   };
 
@@ -196,35 +119,71 @@ export function ChessGame({ onBack }: ChessGameProps) {
 
   const makeAIMove = useCallback(() => {
     if (gameOver || isPlayerTurn) return;
-    
+    const worker = engineWorkerRef.current;
+    if (!worker) return;
+
     setIsAIThinking(true);
-    const thinkingTime = getAIThinkingTime(difficulty);
-    
-    setTimeout(() => {
-      const aiMove = getAIMove(game);
-      if (aiMove) {
-        const gameCopy = new Chess(game.fen());
-        try {
-          gameCopy.move(aiMove);
-          setGame(gameCopy);
-          
-          if (gameCopy.isGameOver()) {
-            setGameOver(true);
-            setTimeout(() => showAIRemark('victory'), 500);
-          } else {
-            setIsPlayerTurn(true);
-            
-            // Show AI remark occasionally (25% chance)
-            if (Math.random() < 0.25) {
-              setTimeout(() => showAIRemark('game'), 300);
-            }
-          }
-        } catch (error) {
-          console.error('Invalid AI move:', error);
-        }
-      }
+    let resolved = false;
+    const cleanup = (onMessageRef: any, toRef: number | undefined) => {
+      try { worker.removeEventListener('message', onMessageRef); } catch {}
+      if (toRef) clearTimeout(toRef);
+    };
+
+    const fallbackBasic = () => {
+      if (resolved) return;
+      resolved = true;
       setIsAIThinking(false);
-    }, thinkingTime);
+      try {
+        const moves = game.moves();
+        if (!moves.length) return;
+        // simple fallback: pick random legal move
+        const mv = moves[Math.floor(Math.random() * moves.length)];
+        const gameCopy = new Chess(game.fen());
+        gameCopy.move(mv);
+        setGame(gameCopy);
+        if (gameCopy.isGameOver()) {
+          setGameOver(true);
+          setTimeout(() => showAIRemark('victory'), 500);
+        } else {
+          setIsPlayerTurn(true);
+        }
+        showInfo(language === 'ar' ? 'تشغيل محرك بسيط مؤقتاً' : 'Using basic engine temporarily');
+      } catch (err) {
+        console.error('Fallback AI failed', err);
+        showError(language === 'ar' ? 'فشل محرك الشطرنج' : 'Chess engine failed');
+      }
+    };
+
+    const onMessage = (e: MessageEvent) => {
+      const data = e.data as { type: string; bestmove?: string; error?: string };
+      if (data?.type === 'bestmove' && !resolved) {
+        resolved = true;
+        cleanup(onMessage, timeoutId as any);
+        setIsAIThinking(false);
+        applyBestMove(data.bestmove || '');
+      } else if (data?.type === 'error' && !resolved) {
+        console.warn('Engine error:', data.error);
+        cleanup(onMessage, timeoutId as any);
+        fallbackBasic();
+      }
+    };
+    worker.addEventListener('message', onMessage);
+    try {
+      worker.postMessage({ type: 'go', fen: game.fen(), difficulty });
+    } catch (err) {
+      console.error('Worker postMessage failed', err);
+      cleanup(onMessage, undefined);
+      fallbackBasic();
+    }
+    // safety timeout
+    const timeoutMs = difficulty === 'hard' ? 4500 : difficulty === 'medium' ? 3500 : 2500;
+    const timeoutId = window.setTimeout(() => {
+      if (!resolved) {
+        console.warn('Engine timeout, falling back');
+        cleanup(onMessage, timeoutId);
+        fallbackBasic();
+      }
+    }, timeoutMs);
   }, [game, gameOver, isPlayerTurn, difficulty]);
 
   useEffect(() => {

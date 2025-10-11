@@ -181,6 +181,9 @@ export const ChartsTab: React.FC = () => {
 
   const moodColors: Record<number, string> = { 1: "#ef4444", 2: "#f97316", 3: "#eab308", 4: "#10b981", 5: "#22c55e" };
 
+  // Emoji faces for pure-SVG tick labels (mobile-safe, no foreignObject)
+  const moodEmoji: Record<number, string> = { 1: '😫', 2: '🙁', 3: '😐', 4: '🙂', 5: '😄' };
+
   const moodLabels: Record<MoodValue, string> = {
     1: language === 'ar' ? 'سيئ جداً' : 'awful',
     2: language === 'ar' ? 'سيئ' : 'bad',
@@ -229,24 +232,36 @@ export const ChartsTab: React.FC = () => {
             <BarChart data={moodCountsOrdered} layout="vertical" margin={{ top: 12, right: 24, left: 16, bottom: 12 }}>
               <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.25} />
               <XAxis type="number" domain={[0, barMax]} ticks={xTicks} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} stroke="hsl(var(--border))" tickLine={false} axisLine={{ stroke: 'hsl(var(--border))', strokeWidth: 1 }} />
-              <YAxis type="category" dataKey="mood" width={120} tickMargin={0} tickLine={false} axisLine={false} tick={(props: any) => {
-                const { x, y, payload } = props;
-                const v = Number(payload?.value) as MoodValue;
-                const color = moodColors[v];
-                const total = (moodCounts.find(m => m.mood === v)?.count) || 0;
-                return (
-                  <g transform={`translate(${x - 112}, ${y - 16})`}>
-                    <foreignObject width={120} height={32}>
-                      <div style={{ width: 120, height: 32, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <MoodFace value={v} size={24} />
-                        <span style={{ width: 8, height: 8, borderRadius: 9999, backgroundColor: color, boxShadow: '0 0 0 2px #ffffff' }} />
-                        <span style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--foreground))' }}>{moodLabels[v]}</span>
-                        <span style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))' }}>×{total}</span>
-                      </div>
-                    </foreignObject>
-                  </g>
-                );
-              }} />
+              <YAxis
+                type="category"
+                dataKey="mood"
+                width={120}
+                tickMargin={0}
+                tickLine={false}
+                axisLine={false}
+                tick={(props: any) => {
+                  const { x, y, payload } = props;
+                  const v = Number(payload?.value) as MoodValue;
+                  const color = moodColors[v];
+                  const total = (moodCounts.find(m => m.mood === v)?.count) || 0;
+                  const label = moodLabels[v];
+                  // Pure SVG to avoid foreignObject issues on mobile Safari
+                  return (
+                    <g transform={`translate(${x - 118}, ${y})`}>
+                      {/* emoji face */}
+                      <text x={0} y={4} fontSize={14}>
+                        {moodEmoji[v] || '🙂'}
+                      </text>
+                      {/* colored dot */}
+                      <circle cx={18} cy={0} r={4} fill={color} stroke="#fff" strokeWidth={2} />
+                      {/* label */}
+                      <text x={28} y={4} fontSize={12} fontWeight={500} fill="hsl(var(--foreground))">{label}</text>
+                      {/* total */}
+                      <text x={98} y={4} fontSize={11} fill="hsl(var(--muted-foreground))">×{total}</text>
+                    </g>
+                  );
+                }}
+              />
               <Tooltip formatter={(val: any, _name: any, info: any) => [`${val}`, language === 'ar' ? 'العدد' : 'count']} labelFormatter={(l) => `${language === 'ar' ? 'المزاج' : 'mood'} ${l}`} contentStyle={{ fontSize: '11px', backgroundColor: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: '8px', padding: '8px 12px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }} />
               <Bar dataKey="count" radius={[0, 8, 8, 0]} isAnimationActive={true} animationDuration={700}>
                 {moodCountsOrdered.map((entry, idx) => (

@@ -365,12 +365,41 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
       const margin = 20;
       let yPosition = margin;
 
-      // Header
+      // Header with brand bar + logo
       doc.setFillColor(6, 5, 65); // #060541
       doc.rect(0, 0, pageWidth, 40, 'F');
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(18);
-      doc.text('WAKTI', pageWidth / 2, 25, { align: 'center' });
+      // Try to render WAKTI logo on the left, fallback to text
+      try {
+        const logoUrl = 'https://raw.githubusercontent.com/alfadlyqtr/wakti-bilingual-assistant/main/public/lovable-uploads/4ed7b33a-201e-4f05-94de-bac892155c01.png';
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        const dataUrl: string = await new Promise((res, rej) => {
+          img.onload = () => {
+            try {
+              const c = document.createElement('canvas');
+              c.width = img.width;
+              c.height = img.height;
+              const ctx = c.getContext('2d');
+              if (!ctx) return rej(new Error('Canvas ctx null'));
+              ctx.drawImage(img, 0, 0);
+              res(c.toDataURL('image/png'));
+            } catch (e) { rej(e); }
+          };
+          img.onerror = rej;
+          img.src = logoUrl;
+        });
+        // place logo
+        doc.addImage(dataUrl, 'PNG', 12, 8, 24, 24);
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(18);
+        doc.setFont('helvetica', 'bold');
+        doc.text('WAKTI', 40, 25, { align: 'left' });
+      } catch {
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(18);
+        doc.setFont('helvetica', 'bold');
+        doc.text('WAKTI', 14, 25, { align: 'left' });
+      }
       
       yPosition = 50;
       doc.setTextColor(0, 0, 0);
@@ -418,92 +447,142 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
       
       yPosition += 15;
       
-      // Content section using html2canvas for Arabic text
+      // Content section as styled HTML (section colors Option A) rendered via html2canvas
       if (content.text && content.text.trim()) {
-        // Content header
-        doc.setFont('helvetica', 'bold');
-        doc.setFillColor(240, 240, 240);
-        doc.rect(margin, yPosition - 5, pageWidth - 2 * margin, 15, 'F');
-        doc.text(isRtl ? 'المحتوى' : 'Content', isRtl ? pageWidth - margin - 5 : margin + 5, yPosition + 5);
-        yPosition += 20;
-        
-        // Create hidden element with Arabic content
-        const hiddenDiv = document.createElement('div');
-        hiddenDiv.style.position = 'absolute';
-        hiddenDiv.style.left = '-9999px';
-        hiddenDiv.style.top = '-9999px';
-        hiddenDiv.style.width = `${(pageWidth - 2 * margin) * 3.78}px`; // Convert mm to px (approximate)
-        hiddenDiv.style.padding = '20px';
-        hiddenDiv.style.backgroundColor = 'white';
-        hiddenDiv.style.color = 'black';
-        hiddenDiv.style.fontSize = '16px';
-        hiddenDiv.style.lineHeight = '1.5';
-        hiddenDiv.style.fontFamily = isRtl ? 'Arial, "Segoe UI", Tahoma, sans-serif' : 'Arial, sans-serif';
-        hiddenDiv.style.direction = isRtl ? 'rtl' : 'ltr';
-        hiddenDiv.style.textAlign = isRtl ? 'right' : 'left';
-        hiddenDiv.style.whiteSpace = 'pre-wrap';
-        hiddenDiv.style.wordWrap = 'break-word';
-        hiddenDiv.textContent = content.text;
-        
-        document.body.appendChild(hiddenDiv);
-        
+        // Build a styled HTML from the summary content by detecting sections
+        const summary = content.text.trim();
+        const colorMap: Record<string, string> = {
+          Overview: '#2563EB',
+          'Main Points': '#7C3AED',
+          Decisions: '#0EA5E9',
+          'Action Items': '#F59E0B',
+          'People / Organizations': '#475569',
+          Locations: '#4F46E5',
+          'Dates / Times': '#06B6D4',
+          'Open Questions / Parking Lot': '#EC4899',
+          // Arabic labels
+          'نظرة عامة': '#2563EB',
+          'النقاط الرئيسية': '#7C3AED',
+          'القرارات': '#0EA5E9',
+          'عناصر العمل': '#F59E0B',
+          'الأسماء/المنظمات': '#475569',
+          'المواقع': '#4F46E5',
+          'التواريخ/الأوقات': '#06B6D4',
+          'الأسئلة المفتوحة/المواضيع المؤجلة': '#EC4899',
+        };
+
+        // Simple parser: split lines, detect heading lines by known labels + colon
+        const lines = summary.split(/\r?\n/);
+        type SectionBlock = { title: string; items: string[] };
+        const blocks: SectionBlock[] = [];
+        let current: SectionBlock | null = null;
+
+        const isHeading = (line: string) => {
+          const clean = line.trim().replace(/^[-*•\s]+/, '');
+          const headLabels = [
+            'Overview', 'Main Points', 'Decisions', 'Action Items', 'People / Organizations', 'Locations', 'Dates / Times', 'Open Questions / Parking Lot',
+            'نظرة عامة', 'النقاط الرئيسية', 'القرارات', 'عناصر العمل', 'الأسماء/المنظمات', 'المواقع', 'التواريخ/الأوقات', 'الأسئلة المفتوحة/المواضيع المؤجلة'
+          ];
+          for (const h of headLabels) {
+            if (clean.toLowerCase().startsWith(h.toLowerCase())) return h;
+          }
+          return null;
+        };
+
+        for (const raw of lines) {
+          const line = raw.trim();
+          if (!line) continue;
+          const h = isHeading(line);
+          if (h) {
+            current = { title: h, items: [] };
+            blocks.push(current);
+          } else {
+            if (!current) {
+              // Put initial text into Overview if none
+              current = { title: isRtl ? 'نظرة عامة' : 'Overview', items: [] };
+              blocks.push(current);
+            }
+            current.items.push(line.replace(/^[-*•]\s*/, ''));
+          }
+        }
+
+        const container = document.createElement('div');
+        container.style.position = 'absolute';
+        container.style.left = '-9999px';
+        container.style.top = '-9999px';
+        container.style.width = `${(pageWidth - 2 * margin) * 3.78}px`;
+        container.style.padding = '20px';
+        container.style.background = 'white';
+        container.style.fontFamily = isRtl ? 'Arial, "Segoe UI", Tahoma, sans-serif' : 'Inter, Arial, sans-serif';
+        container.style.direction = isRtl ? 'rtl' : 'ltr';
+        container.style.textAlign = isRtl ? 'right' : 'left';
+
+        const sectionHtml = blocks.map(b => {
+          const color = colorMap[b.title] || '#1F2937';
+          const itemsHtml = b.items.map(it => `<li>${it}</li>`).join('');
+          return `
+            <div style="margin-bottom:14px;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,0.04)">
+              <div style="background:${color};color:white;padding:8px 12px;font-weight:700">${b.title}</div>
+              <div style="padding:12px 14px;font-size:14px;line-height:1.6">
+                ${itemsHtml ? `<ul style='margin:${isRtl ? '0 18px 0 0' : '0 0 0 18px'}'>${itemsHtml}</ul>` : ''}
+              </div>
+            </div>`;
+        }).join('');
+
+        const titleRow = `
+          <div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:18px;font-weight:800;color:#111827">${title}</div>
+            <div style="font-size:12px;color:#6b7280">${format(new Date(metadata.createdAt), 'PPP', { locale })}</div>
+          </div>`;
+
+        const metaChips: string[] = [];
+        metaChips.push(`${isRtl ? 'النوع' : 'Type'}: ${metadata.type}`);
+        if (metadata.host) metaChips.push(`${isRtl ? 'المضيف' : 'Host'}: ${metadata.host}`);
+        if (metadata.attendees) metaChips.push(`${isRtl ? 'الحضور' : 'Attendees'}: ${metadata.attendees}`);
+        if (metadata.location) metaChips.push(`${isRtl ? 'الموقع' : 'Location'}: ${metadata.location}`);
+
+        const chipsHtml = metaChips.map(c => `<span style="display:inline-block;padding:6px 10px;border-radius:9999px;background:#F3F4F6;color:#374151;font-size:12px;margin:${isRtl ? '0 0 6px 6px' : '0 6px 6px 0'}">${c}</span>`).join('');
+
+        container.innerHTML = `
+          <div>
+            ${titleRow}
+            <div style="margin-bottom:12px">${chipsHtml}</div>
+            ${sectionHtml}
+          </div>`;
+
+        document.body.appendChild(container);
+
         try {
-          // Convert to canvas
-          const canvas = await html2canvas(hiddenDiv, {
-            backgroundColor: 'white',
-            scale: 2, // Higher quality
-            useCORS: true,
-            allowTaint: true
-          });
-          
-          // Remove hidden element
-          document.body.removeChild(hiddenDiv);
-          
-          // Convert canvas to image data
+          const canvas = await html2canvas(container, { backgroundColor: 'white', scale: 2, useCORS: true, allowTaint: true });
+          if (document.body.contains(container)) document.body.removeChild(container);
           const imgData = canvas.toDataURL('image/png');
-          
-          // Calculate dimensions for PDF
           const imgWidth = pageWidth - 2 * margin;
           const imgHeight = (canvas.height * imgWidth) / canvas.width;
-          
-          // Check if image fits on current page
           if (yPosition + imgHeight > pageHeight - margin) {
             doc.addPage();
             yPosition = margin;
           }
-          
-          // Add image to PDF
           doc.addImage(imgData, 'PNG', margin, yPosition, imgWidth, imgHeight);
-          
-        } catch (canvasError) {
-          console.error('Canvas rendering failed, using fallback:', canvasError);
-          
-          // Remove hidden element if still exists
-          if (document.body.contains(hiddenDiv)) {
-            document.body.removeChild(hiddenDiv);
-          }
-          
+        } catch (e) {
+          if (document.body.contains(container)) document.body.removeChild(container);
           // Fallback to simple text
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(11);
-          
-          const lines = content.text.split('\n');
-          lines.forEach(line => {
-            if (yPosition > pageHeight - margin - 10) {
-              doc.addPage();
-              yPosition = margin;
-            }
-            doc.text(line, isRtl ? pageWidth - margin - 5 : margin + 5, yPosition, { align: isRtl ? 'right' : 'left' });
+          const linesFallback = summary.split('\n');
+          for (const ln of linesFallback) {
+            if (yPosition > pageHeight - margin - 10) { doc.addPage(); yPosition = margin; }
+            doc.text(ln, isRtl ? pageWidth - margin - 5 : margin + 5, yPosition, { align: isRtl ? 'right' : 'left' });
             yPosition += 7;
-          });
+          }
         }
       }
       
-      // Footer
-      const footerY = pageHeight - 20;
+      // Footer: Powered by + current date
+      const footerY = pageHeight - 15;
       doc.setFontSize(9);
       doc.setTextColor(102, 102, 102);
-      const footerText = isRtl ? 'WAKTI © 2025 - وقتي' : 'WAKTI © 2025';
+      const dateStr = format(new Date(), 'PPP', { locale });
+      const footerText = isRtl ? `مشغّل بواسطة WAKTI AI • ${dateStr}` : `Powered by WAKTI AI • ${dateStr}`;
       doc.text(footerText, pageWidth / 2, footerY, { align: 'center' });
       
       console.log('PDF generation completed');
