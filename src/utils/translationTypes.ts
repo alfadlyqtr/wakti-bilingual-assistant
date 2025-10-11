@@ -726,6 +726,7 @@ export type TranslationKey =
   | "noUsersFound"
   | "dailyQuote"
   | "moodTrend"
+  | "journal"
   | "nothingScheduled"
   | "event"
   | "calendar_open"

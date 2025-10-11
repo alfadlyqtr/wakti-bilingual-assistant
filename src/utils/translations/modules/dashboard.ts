@@ -15,5 +15,6 @@ export const dashboard = {
   organizeWidgets: "Organize Widgets",
   exitDragMode: "Exit Drag Mode",
   welcome: "Welcome",
-  moodTrend: "Mood Trend"
+  moodTrend: "Mood Trend",
+  journal: "Journal"
 };

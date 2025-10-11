@@ -38,13 +38,13 @@ import { executeRegularSearch } from './search.ts'
             } catch {}
             
             const ctxPrefix = responseLanguage === 'ar'
-              ? 'سياق من بحث الويب (استخدمه للإجابة بدقيقة):\n'
-              : 'Context from web search (use it to answer accurately):\n';
+              ? 'استخدم فقط نتائج البحث التالية للإجابة. لا تذكر أي مصادر أخرى مثل ويكيبيديا:\n'
+              : 'Use ONLY the following search results to answer. Do NOT mention any other sources like Wikipedia:\n';
             messages.push({
               role: 'user',
               content: ctxPrefix + s.context
             });
-            console.log('� STREAMING: Web search context injected');
+            console.log('🔎 STREAMING: Web search context injected');
           } else {
             console.log('🔎 STREAMING: No web search context available or search disabled');
           }
@@ -55,8 +55,8 @@ import { executeRegularSearch } from './search.ts'
        
        // Add language enforcement directly in the user message
        const languagePrefix = responseLanguage === 'ar' 
-         ? 'يرجى الرد باللغة العربية فقط. ' 
-         : 'Please respond in English only. ';
+         ? 'يرجى الرد باللغة العربية فقط. قدم إجابة مباشرة بدون إضافة "المصدر:" في النهاية. ' 
+         : 'Please respond in English only. Provide a direct answer without adding "Source:" attribution at the end. ';
        
        messages.push({
          role: 'user',

@@ -423,12 +423,12 @@ serve(async (req) => {
       browsingUsed = true;
       browsingData = { ...baseMeta, success: true, answer: searchResult.answer || null, results: searchResult.results };
       const sourcesList = searchResult.results
-        .map((r: any, i: number) => `${i + 1}. ${r.title} - ${r.url}\nSummary: ${r.content}`)
+        .map((r: any, i: number) => `[${i + 1}] ${r.title}\n${r.url}\n${r.content}`)
         .join('\n\n');
 
       effectiveMessage = (requestLanguage === 'ar'
-        ? `بناءً على نتائج البحث أدناه، قدّم إجابة موجزة ودقيقة مع الاستشهاد بالمصادر باستخدام [رقم].\n\nنتائج البحث:\n${sourcesList}\n\nسؤال المستخدم: "${message}"\n\nصيغة الإخراج: إجابة موجزة تتضمن إشارات [1] و[2] إن لزم، ثم قسم "المصادر" به الروابط.`
-        : `Based on the web search results below, provide a concise, accurate answer with citations using [number].\n\nSearch results:\n${sourcesList}\n\nUser question: "${message}"\n\nOutput: A concise answer with [1], [2] style citations and a Sources section listing the URLs.`);
+        ? `استخدم فقط نتائج البحث التالية للإجابة. لا تذكر أي مصادر أخرى.\n\nنتائج البحث:\n${sourcesList}\n\nسؤال المستخدم: "${message}"\n\nملاحظة مهمة: قدم إجابة مباشرة بدون ذكر المصادر أو إضافة "المصدر:" في النهاية. المعلومات من بحث الويب.`
+        : `Use ONLY the following search results to answer. Do NOT mention any other sources like Wikipedia.\n\nSearch results:\n${sourcesList}\n\nUser question: "${message}"\n\nIMPORTANT: Provide a direct answer without adding "Source:" attribution at the end. The information comes from web search.`);
 
       // Avoid model-level search branches; treat as general after augmentation
       effectiveTrigger = 'general';

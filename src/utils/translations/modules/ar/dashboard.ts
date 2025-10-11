@@ -15,5 +15,6 @@ export const dashboardAr = {
   organizeWidgets: "تنظيم الأدوات",
   exitDragMode: "إيقاف السحب",
   welcome: "مرحبًا",
-  moodTrend: "اتجاه المزاج"
+  moodTrend: "اتجاه المزاج",
+  journal: "المذكرة"
 };
