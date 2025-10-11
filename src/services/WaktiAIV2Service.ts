@@ -461,9 +461,6 @@ class WaktiAIV2ServiceClass {
                 'Authorization': `Bearer ${session.access_token}`,
                 'Content-Type': 'application/json',
                 'Accept': 'text/event-stream',
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'x-request-id': requestId,
-                'x-mobile-request': 'true',
                 'apikey': maybeAnonKey
               },
               body: JSON.stringify({
