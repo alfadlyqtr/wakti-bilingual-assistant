@@ -559,7 +559,13 @@ const Tasjeel: React.FC = () => {
       setIsTranscribing(true);
       
       console.log('Tasjeel: Starting transcription process');
-      const safeUrl = (audioUrl || '').trim();
+      // Defensive URL cleaning: decode and trim
+      let safeUrl = (audioUrl || '').trim();
+      try {
+        safeUrl = decodeURIComponent(safeUrl).trim();
+      } catch (e) {
+        console.warn('Could not decode URL, using trimmed version');
+      }
       console.log('Tasjeel: Audio URL for transcription:', safeUrl);
       
       console.log('Tasjeel: Calling transcribe-audio edge function');

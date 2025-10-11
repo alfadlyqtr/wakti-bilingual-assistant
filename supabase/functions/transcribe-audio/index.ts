@@ -95,8 +95,15 @@ serve(async (req) => {
 
     // Get the audio file URL from the request body
     const { audioUrl } = requestBody;
-    // Defensive sanitize: trim whitespace and validate
-    const cleanedAudioUrl = (typeof audioUrl === 'string' ? audioUrl : '').trim();
+    // Defensive sanitize: decode URL-encoded spaces, trim whitespace, and validate
+    let cleanedAudioUrl = (typeof audioUrl === 'string' ? audioUrl : '').trim();
+    // Decode any URL-encoded characters (like %20 for space) and trim again
+    try {
+      cleanedAudioUrl = decodeURIComponent(cleanedAudioUrl).trim();
+    } catch (e) {
+      // If decoding fails, continue with the trimmed version
+      console.log('Could not decode URL, using trimmed version:', cleanedAudioUrl);
+    }
 
     if (!cleanedAudioUrl) {
       console.error('Missing audioUrl in request');
