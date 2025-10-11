@@ -27,10 +27,65 @@ const getCorsHeaders = (origin: string | null) => {
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 console.log("WAKTI AI V2 STREAMING BRAIN: Ready");
+
+// Helper function to convert OpenAI message format to Claude format
+function convertMessagesToClaudeFormat(messages: any[]) {
+  const systemMessage = messages.find(m => m.role === 'system');
+  const conversationMessages = messages.filter(m => m.role !== 'system');
+  
+  return {
+    system: systemMessage?.content || '',
+    messages: conversationMessages
+  };
+}
+
+// Helper function to stream Claude responses
+async function streamClaudeResponse(reader: ReadableStreamDefaultReader, controller: ReadableStreamDefaultController, encoder: TextEncoder) {
+  const decoder = new TextDecoder();
+  let buffer = '';
+  
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+    
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        const data = line.slice(6).trim();
+        
+        if (data === '[DONE]') {
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          break;
+        }
+        
+        try {
+          const parsed = JSON.parse(data);
+          
+          // Claude sends content in delta events
+          if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: parsed.delta.text })}\n\n`));
+          }
+          
+          // Claude signals completion with message_stop
+          if (parsed.type === 'message_stop') {
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+            break;
+          }
+        } catch (e) {
+          // Skip invalid JSON
+        }
+      }
+    }
+  }
+}
 
 serve(async (req) => {
   const origin = req.headers.get('origin');
@@ -80,10 +135,18 @@ serve(async (req) => {
           if (personalTouch.style) parts.push(`Style: ${personalTouch.style}`);
           if (personalTouch.instruction) parts.push(`Instructions: ${personalTouch.instruction}`);
           
-          if (parts.length > 0) {
+        if (parts.length > 0) {
             systemPrompt += `\n\nPersonalization: ${parts.join(', ')}`;
           }
         }
+        
+        // Log personalization application
+        console.log('🎨 PERSONAL TOUCH APPLIED:', {
+          hasPersonalization: !!personalTouch,
+          nickname: personalTouch?.nickname || 'none',
+          tone: personalTouch?.tone || 'default',
+          style: personalTouch?.style || 'default'
+        });
 
         // Build messages array
         let messages = [
@@ -148,67 +211,135 @@ serve(async (req) => {
            content: languagePrefix + message
          });
 
-        // Stream from OpenAI
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${OPENAI_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'gpt-4o-mini',
-            messages: messages,
-            temperature: 0.7,
-            max_tokens: 4000,
-            stream: true,
-          }),
-        });
+        // Try OpenAI first, fallback to Claude
+        let aiProvider = 'unknown';
+        let streamReader: ReadableStreamDefaultReader | null = null;
+        let openaiError: Error | null = null;
 
-        if (!response.ok) {
-          throw new Error(`OpenAI API error: ${response.status}`);
+        try {
+          // TRY OPENAI FIRST
+          if (!OPENAI_API_KEY) {
+            throw new Error('OpenAI API key not configured');
+          }
+          
+          console.log('🤖 STREAMING: Attempting OpenAI (gpt-4o-mini)...');
+          
+          const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${OPENAI_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: 'gpt-4o-mini',
+              messages: messages,
+              temperature: 0.7,
+              max_tokens: 4000,
+              stream: true,
+            }),
+          });
+
+          if (openaiResponse.ok) {
+            aiProvider = 'openai';
+            streamReader = openaiResponse.body?.getReader() || null;
+            console.log('✅ STREAMING: Using OpenAI');
+          } else {
+            throw new Error(`OpenAI failed with status: ${openaiResponse.status}`);
+          }
+          
+        } catch (error) {
+          openaiError = error as Error;
+          console.warn('⚠️ STREAMING: OpenAI failed, attempting Claude fallback...', openaiError.message);
+          
+          // FALLBACK TO CLAUDE
+          if (!ANTHROPIC_API_KEY) {
+            throw new Error(`OpenAI failed and Claude API key not configured. OpenAI error: ${openaiError.message}`);
+          }
+          
+          try {
+            const { system, messages: claudeMessages } = convertMessagesToClaudeFormat(messages);
+            
+            const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
+              method: 'POST',
+              headers: {
+                'x-api-key': ANTHROPIC_API_KEY,
+                'anthropic-version': '2023-06-01',
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: 'claude-3-5-sonnet-20241022',
+                messages: claudeMessages,
+                system: system,
+                max_tokens: 4000,
+                stream: true,
+              }),
+            });
+
+            if (!claudeResponse.ok) {
+              const errorText = await claudeResponse.text();
+              throw new Error(`Claude failed with status: ${claudeResponse.status} - ${errorText}`);
+            }
+
+            aiProvider = 'claude';
+            streamReader = claudeResponse.body?.getReader() || null;
+            console.log('✅ STREAMING: Using Claude (fallback)');
+            
+          } catch (claudeError) {
+            console.error('❌ STREAMING: Both OpenAI and Claude failed');
+            throw new Error(`All AI providers failed. OpenAI: ${openaiError.message}, Claude: ${(claudeError as Error).message}`);
+          }
         }
 
-        const reader = response.body?.getReader();
-        if (!reader) {
-          throw new Error('No response body');
+        // STREAM THE RESPONSE
+        if (!streamReader) {
+          throw new Error('No stream reader available');
         }
 
-        const decoder = new TextDecoder();
-        let buffer = '';
+        if (aiProvider === 'openai') {
+          // Handle OpenAI streaming format
+          const decoder = new TextDecoder();
+          let buffer = '';
+          
+          while (true) {
+            const { done, value } = await streamReader.read();
+            if (done) break;
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
 
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const data = line.slice(6);
-              if (data === '[DONE]') {
-                controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-                break;
-              }
-
-              try {
-                const parsed = JSON.parse(data);
-                const content = parsed.choices?.[0]?.delta?.content;
-                if (content) {
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const data = line.slice(6);
+                if (data === '[DONE]') {
+                  controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                  break;
                 }
-              } catch (e) {
-                // Skip invalid JSON
+
+                try {
+                  const parsed = JSON.parse(data);
+                  const content = parsed.choices?.[0]?.delta?.content;
+                  if (content) {
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
+                  }
+                } catch (e) {
+                  // Skip invalid JSON
+                }
               }
             }
           }
+        } else if (aiProvider === 'claude') {
+          // Handle Claude streaming format
+          await streamClaudeResponse(streamReader, controller, encoder);
         }
 
         controller.close();
       } catch (error) {
         console.error('🔥 STREAMING ERROR:', error);
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: error.message })}\n\n`));
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+          error: 'AI service temporarily unavailable. Please try again.',
+          details: (error as Error).message 
+        })}\n\n`));
         controller.close();
       }
     },
