@@ -364,6 +364,8 @@ serve(async (req) => {
               // Background removal flags: do not override user's prompt
               imageOptions.backgroundRemoval = true;
               // Keep user's prompt as-is; backend will remove background based on flags
+            }
+          }
         }
         if (mappedModel) {
           imageOptions.model = mappedModel;
