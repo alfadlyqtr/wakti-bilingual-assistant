@@ -71,7 +71,7 @@ async function streamClaudeResponse(reader: ReadableStreamDefaultReader, control
           
           // Claude sends content in delta events
           if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: parsed.delta.text })}\n\n`));
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: parsed.delta.text, content: parsed.delta.text })}\n\n`));
           }
           
           // Claude signals completion with message_stop
@@ -320,7 +320,7 @@ serve(async (req) => {
                   const parsed = JSON.parse(data);
                   const content = parsed.choices?.[0]?.delta?.content;
                   if (content) {
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: content, content })}\n\n`));
                   }
                 } catch (e) {
                   // Skip invalid JSON

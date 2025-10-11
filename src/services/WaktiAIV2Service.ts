@@ -589,6 +589,14 @@ class WaktiAIV2ServiceClass {
                   fullResponse += parsed.response; 
                   onToken?.(parsed.response); 
                 }
+                else if (typeof parsed.content === 'string') { 
+                  if (!firstTokenReceived) {
+                    firstTokenReceived = true;
+                    console.log(`🎯 CLIENT: First content chunk received [${requestId}] (primary=${primary})`);
+                  }
+                  fullResponse += parsed.content; 
+                  onToken?.(parsed.content); 
+                }
 
                 if (parsed.metadata && typeof parsed.metadata === 'object') {
                   metadata = { ...metadata, ...parsed.metadata };
