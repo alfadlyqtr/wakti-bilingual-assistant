@@ -99,10 +99,7 @@ export const AskTab: React.FC = () => {
     try {
       setLoading(true);
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-      const data = await JournalService.ask(q.trim(), language as any, tz, {
-        intent: detectedIntent,
-        tips: true
-      });
+      const data = await JournalService.ask(q.trim(), language as any, tz);
       const formattedSummary = formatJournalAnswer(data.summary || "", { tags: data?.stats?.most_common_tags });
       setResult({ ...data, formattedSummary });
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ q, result: data }));
