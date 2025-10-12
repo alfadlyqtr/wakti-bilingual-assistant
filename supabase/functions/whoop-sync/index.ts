@@ -34,6 +34,7 @@ async function refreshToken(refresh_token: string, client_id: string, client_sec
 
 async function fetchCollection(url: string, accessToken: string, params: Record<string, string>) {
   const records: any[] = [];
+  const seenIds = new Set<string>(); // Deduplicate by id or sleep_id
   let nextToken: string | undefined = undefined;
   const headers = { Authorization: `Bearer ${accessToken}` };
 
@@ -41,7 +42,6 @@ async function fetchCollection(url: string, accessToken: string, params: Record<
     const u = new URL(url);
     Object.entries(params).forEach(([k, v]) => u.searchParams.set(k, v));
     if (nextToken) u.searchParams.set("next_token", nextToken);
-    // Log each page request with safe token prefix and parameters
     console.log("whoop-sync: requesting", {
       url: u.toString(),
       hasToken: !!accessToken,
@@ -55,10 +55,20 @@ async function fetchCollection(url: string, accessToken: string, params: Record<
       break;
     }
     const json = await res.json();
-    if (Array.isArray(json.records)) records.push(...json.records);
+    if (Array.isArray(json.records)) {
+      // Deduplicate records by id or sleep_id
+      for (const record of json.records) {
+        const recordId = record.id || record.sleep_id;
+        if (recordId && !seenIds.has(recordId)) {
+          seenIds.add(recordId);
+          records.push(record);
+        }
+      }
+    }
     nextToken = json.next_token || json.nextToken || undefined;
   } while (nextToken);
 
+  console.log(`whoop-sync: fetchCollection complete - ${records.length} unique records (${seenIds.size} unique IDs)`);
   return records;
 }
 
@@ -241,12 +251,16 @@ serve(async (req: Request) => {
             training_load: asNumber(item.training_load ?? item.score?.training_load),
             data: item,
           }));
-          const { error: errCycles } = await admin.from("whoop_cycles").upsert(rows, { onConflict: "id" });
-          if (errCycles) console.error("whoop-sync upsert cycles error", errCycles);
+          console.log(`whoop-sync: Upserting ${rows.length} cycles for user ${u.user_id}`);
+          const { error: errCycles, count } = await admin.from("whoop_cycles").upsert(rows, { onConflict: "id", count: 'exact' });
+          if (errCycles) {
+            console.error("whoop-sync upsert cycles error", errCycles);
+          } else {
+            console.log(`whoop-sync: Successfully upserted ${count} cycles`);
+          }
         }
 
         if (sleeps.length) {
-          // FIX: Only write to columns that exist in schema. All data stored in 'data' JSONB column.
           const rows = sleeps.map((item: any) => ({
             id: item.id,
             user_id: u.user_id,
@@ -254,17 +268,30 @@ serve(async (req: Request) => {
             end: toDate(item.end),
             duration_sec: asNumber(item.duration ?? item.duration_sec ?? item.score?.stage_summary?.total_in_bed_milli ? Math.round(item.score.stage_summary.total_in_bed_milli / 1000) : null),
             performance_pct: asNumber(item.score?.sleep_performance_percentage ?? item.performance_pct),
-            data: item, // All WHOOP data stored here - frontend reads from this
+            data: item,
           }));
-          const { error: errSleep } = await admin.from("whoop_sleep").upsert(rows, { onConflict: "id" });
-          if (errSleep) {
-            console.error("whoop-sync upsert sleep error", errSleep);
-            console.error("Failed sleep IDs:", rows.map(r => r.id));
+          console.log(`whoop-sync: Upserting ${rows.length} sleeps (${new Set(rows.map(r => r.id)).size} unique IDs) for user ${u.user_id}`);
+          
+          // Batch process to handle large datasets
+          const batchSize = 50;
+          let successCount = 0;
+          for (let i = 0; i < rows.length; i += batchSize) {
+            const batch = rows.slice(i, i + batchSize);
+            try {
+              const { error: errSleep, count } = await admin.from("whoop_sleep").upsert(batch, { onConflict: "id", count: 'exact' });
+              if (errSleep) {
+                console.error(`whoop-sync batch ${i}-${i+batchSize} sleep error:`, errSleep);
+              } else {
+                successCount += (count || 0);
+              }
+            } catch (batchErr) {
+              console.error(`whoop-sync batch ${i}-${i+batchSize} exception:`, batchErr);
+            }
           }
+          console.log(`whoop-sync: Successfully upserted ${successCount}/${rows.length} sleep records`);
         }
 
         if (workouts.length) {
-          // FIX: Only write to columns that exist in schema. All data stored in 'data' JSONB column.
           const rows = workouts.map((item: any) => ({
             id: item.id,
             user_id: u.user_id,
@@ -273,32 +300,57 @@ serve(async (req: Request) => {
             sport_name: item.sport_name ?? null,
             strain: asNumber(item.score?.strain ?? item.strain),
             avg_hr_bpm: asNumber(item.score?.average_heart_rate ?? item.avg_hr_bpm),
-            data: item, // All WHOOP data stored here - frontend reads from this
+            data: item,
           }));
-          const { error: errWork } = await admin.from("whoop_workouts").upsert(rows, { onConflict: "id" });
-          if (errWork) {
-            console.error("whoop-sync upsert workouts error", errWork);
-            console.error("Failed workout IDs:", rows.map(r => r.id));
+          console.log(`whoop-sync: Upserting ${rows.length} workouts for user ${u.user_id}`);
+          
+          const batchSize = 50;
+          let successCount = 0;
+          for (let i = 0; i < rows.length; i += batchSize) {
+            const batch = rows.slice(i, i + batchSize);
+            try {
+              const { error: errWork, count } = await admin.from("whoop_workouts").upsert(batch, { onConflict: "id", count: 'exact' });
+              if (errWork) {
+                console.error(`whoop-sync batch ${i}-${i+batchSize} workouts error:`, errWork);
+              } else {
+                successCount += (count || 0);
+              }
+            } catch (batchErr) {
+              console.error(`whoop-sync batch ${i}-${i+batchSize} exception:`, batchErr);
+            }
           }
+          console.log(`whoop-sync: Successfully upserted ${successCount}/${rows.length} workout records`);
         }
 
         if (recoveries.length) {
-          // FIX: Only write to columns that exist in schema. All data stored in 'data' JSONB column.
           const rows = recoveries.map((item: any) => ({
-            sleep_id: item.sleep_id, // v2 UUID
+            sleep_id: item.sleep_id,
             cycle_id: typeof item.cycle_id === 'number' ? item.cycle_id : (item.cycle_id ? Number(item.cycle_id) : null),
             user_id: u.user_id,
             date: null,
             score: asNumber(item.score?.recovery_score ?? item.recovery_score ?? item.score),
             hrv_ms: asNumber(item.score?.hrv_rmssd_milli ?? item.hrv_rmssd_milli ?? item.heart_rate_variability_rmssd_milli),
             rhr_bpm: asNumber(item.score?.resting_heart_rate ?? item.resting_heart_rate ?? item.rhr_bpm ?? item.rhr),
-            data: item, // All WHOOP data stored here - frontend reads from this
+            data: item,
           }));
-          const { error: errRec } = await admin.from("whoop_recovery").upsert(rows, { onConflict: "sleep_id" });
-          if (errRec) {
-            console.error("whoop-sync upsert recovery error", errRec);
-            console.error("Failed recovery sleep_ids:", rows.map(r => r.sleep_id));
+          console.log(`whoop-sync: Upserting ${rows.length} recoveries (${new Set(rows.map(r => r.sleep_id)).size} unique sleep_ids) for user ${u.user_id}`);
+          
+          const batchSize = 50;
+          let successCount = 0;
+          for (let i = 0; i < rows.length; i += batchSize) {
+            const batch = rows.slice(i, i + batchSize);
+            try {
+              const { error: errRec, count } = await admin.from("whoop_recovery").upsert(batch, { onConflict: "sleep_id", count: 'exact' });
+              if (errRec) {
+                console.error(`whoop-sync batch ${i}-${i+batchSize} recovery error:`, errRec);
+              } else {
+                successCount += (count || 0);
+              }
+            } catch (batchErr) {
+              console.error(`whoop-sync batch ${i}-${i+batchSize} exception:`, batchErr);
+            }
           }
+          console.log(`whoop-sync: Successfully upserted ${successCount}/${rows.length} recovery records`);
         }
 
         // Store user profile data

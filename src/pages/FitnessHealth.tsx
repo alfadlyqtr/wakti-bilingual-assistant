@@ -105,92 +105,117 @@ export default function FitnessHealth() {
 
   useEffect(() => {
     (async () => {
-      const st = await getWhoopStatus();
-      setStatus(st);
-      setConnected(st.connected);
-      if (st.connected) {
-        // FIX: Fetch ALL data (6 months) once, filter locally
-        const [m, rec, sl, cyc, wks] = await Promise.all([
-          fetchCompactMetrics(true),
-          fetchRecoveryHistory(180, true), // 6 months
-          fetchSleepHistory(180, true),     // 6 months
-          fetchCycleHistory(180, true),     // 6 months
-          fetchWorkoutsHistory(180, true),  // 6 months
-        ]);
-        setMetrics(m);
-        setAllHrHistory(rec);
-        setAllSleepHist(sl.map((x:any)=>{
-          const deep = x.total_deep_sleep_ms ?? x.data?.score?.stage_summary?.total_slow_wave_sleep_time_milli ?? 0;
-          const rem = x.total_rem_sleep_ms ?? x.data?.score?.stage_summary?.total_rem_sleep_time_milli ?? 0;
-          const light = x.total_light_sleep_ms ?? x.data?.score?.stage_summary?.total_light_sleep_time_milli ?? 0;
-          const awake = x.total_awake_ms ?? x.data?.score?.stage_summary?.total_awake_time_milli ?? 0;
-          const durationSec = typeof x.duration_sec === 'number' ? x.duration_sec : (typeof x.data?.score?.sleep_duration_milli === 'number' ? x.data.score.sleep_duration_milli/1000 : undefined);
-          let hours: number | null = null;
-          // Convert to hours with 0.1 precision
-          if (typeof durationSec === 'number' && durationSec > 0) hours = Math.round((durationSec / 3600) * 10) / 10; // sec → hours
-          else if (deep+rem+light+awake > 0) hours = Math.round(((deep+rem+light+awake) / 3600000) * 10) / 10; // ms → hours
-          else if (x.start && x.end) {
-            const delta = new Date(x.end).getTime() - new Date(x.start).getTime();
-            if (delta > 0) hours = Math.round((delta / 3600000) * 10) / 10; // ms → hours
-          }
-          return { start: x.start, end: x.end, hours, stages: { deep, rem, light, awake } };
-        }));
-        setAllCycleHist(cyc);
-        setAllWorkoutsHist(wks.map((w:any)=>({ start: w.start, strain: w.strain ?? null, kcal: w.kcal ?? null })));
-        if (st.lastSyncedAt && autoSync) {
-          const ageMs = Date.now() - new Date(st.lastSyncedAt).getTime();
-          if (ageMs > 3600_000) {
-            try {
-              setSyncing(true);
-              const res = await triggerUserSync();
-              toast.success(`Synced: ${res?.counts?.cycles||0} cycles, ${res?.counts?.sleeps||0} sleeps, ${res?.counts?.workouts||0} workouts, ${res?.counts?.recoveries||0} recoveries`);
-              
-              // FIX: Add 2-second delay to allow database commits to complete
-              await new Promise(resolve => setTimeout(resolve, 2000));
-              
-              // FIX: Fetch ALL data (6 months) after sync
-              const [m2, rec2, sl2, cyc2, wks2] = await Promise.all([
-                fetchCompactMetrics(true), 
-                fetchRecoveryHistory(180, true), 
-                fetchSleepHistory(180, true), 
-                fetchCycleHistory(180, true), 
-                fetchWorkoutsHistory(180, true)
-              ]);
-              setMetrics(m2);
-              setAllHrHistory(rec2);
-              setAllSleepHist(sl2.map((x:any)=>{
-                const deep = x.total_deep_sleep_ms ?? x.data?.score?.stage_summary?.total_slow_wave_sleep_time_milli ?? 0;
-                const rem = x.total_rem_sleep_ms ?? x.data?.score?.stage_summary?.total_rem_sleep_time_milli ?? 0;
-                const light = x.total_light_sleep_ms ?? x.data?.score?.stage_summary?.total_light_sleep_time_milli ?? 0;
-                const awake = x.total_awake_ms ?? x.data?.score?.stage_summary?.total_awake_time_milli ?? 0;
-                const durationSec = typeof x.duration_sec === 'number' ? x.duration_sec : (typeof x.data?.score?.sleep_duration_milli === 'number' ? x.data.score.sleep_duration_milli/1000 : undefined);
-                let hours: number | null = null;
-                if (typeof durationSec === 'number' && durationSec > 0) hours = Math.round((durationSec/360))*0.1;
-                else if (deep+rem+light+awake > 0) hours = Math.round(((deep+rem+light+awake)/360000))*0.1;
-                else if (x.start && x.end) {
-                  const delta = new Date(x.end).getTime() - new Date(x.start).getTime();
-                  if (delta > 0) hours = Math.round((delta/360000))*0.1;
+      try {
+        const st = await getWhoopStatus();
+        setStatus(st);
+        setConnected(st.connected);
+        console.log('[Auth Debug] WHOOP status check', {
+          connected: st.connected,
+          lastSyncedAt: st.lastSyncedAt,
+          userId: user?.id,
+          timestamp: new Date().toISOString()
+        });
+        
+        if (st.connected) {
+          // FIX: Fetch ALL data (6 months) once, filter locally
+          const [m, rec, sl, cyc, wks] = await Promise.all([
+            fetchCompactMetrics(true),
+            fetchRecoveryHistory(180, true), // 6 months
+            fetchSleepHistory(180, true),     // 6 months
+            fetchCycleHistory(180, true),     // 6 months
+            fetchWorkoutsHistory(180, true),  // 6 months
+          ]);
+          setMetrics(m);
+          setAllHrHistory(rec);
+          setAllSleepHist(sl.map((x:any)=>{
+            const deep = x.total_deep_sleep_ms ?? x.data?.score?.stage_summary?.total_slow_wave_sleep_time_milli ?? 0;
+            const rem = x.total_rem_sleep_ms ?? x.data?.score?.stage_summary?.total_rem_sleep_time_milli ?? 0;
+            const light = x.total_light_sleep_ms ?? x.data?.score?.stage_summary?.total_light_sleep_time_milli ?? 0;
+            const awake = x.total_awake_ms ?? x.data?.score?.stage_summary?.total_awake_time_milli ?? 0;
+            const durationSec = typeof x.duration_sec === 'number' ? x.duration_sec : (typeof x.data?.score?.sleep_duration_milli === 'number' ? x.data.score.sleep_duration_milli/1000 : undefined);
+            let hours: number | null = null;
+            // Convert to hours with 0.1 precision
+            if (typeof durationSec === 'number' && durationSec > 0) hours = Math.round((durationSec / 3600) * 10) / 10; // sec → hours
+            else if (deep+rem+light+awake > 0) hours = Math.round(((deep+rem+light+awake) / 3600000) * 10) / 10; // ms → hours
+            else if (x.start && x.end) {
+              const delta = new Date(x.end).getTime() - new Date(x.start).getTime();
+              if (delta > 0) hours = Math.round((delta / 3600000) * 10) / 10; // ms → hours
+            }
+            return { start: x.start, end: x.end, hours, stages: { deep, rem, light, awake } };
+          }));
+          setAllCycleHist(cyc);
+          setAllWorkoutsHist(wks.map((w:any)=>({ start: w.start, strain: w.strain ?? null, kcal: w.kcal ?? null })));
+          if (st.lastSyncedAt && autoSync) {
+            const ageMs = Date.now() - new Date(st.lastSyncedAt).getTime();
+            if (ageMs > 3600_000) {
+              try {
+                setSyncing(true);
+                const res = await triggerUserSync();
+                toast.success(`Synced: ${res?.counts?.cycles||0} cycles, ${res?.counts?.sleeps||0} sleeps, ${res?.counts?.workouts||0} workouts, ${res?.counts?.recoveries||0} recoveries`);
+                
+                // FIX: Add 2-second delay to allow database commits to complete
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                // FIX: Fetch ALL data (6 months) after sync
+                const [m2, rec2, sl2, cyc2, wks2] = await Promise.all([
+                  fetchCompactMetrics(true), 
+                  fetchRecoveryHistory(180, true), 
+                  fetchSleepHistory(180, true), 
+                  fetchCycleHistory(180, true), 
+                  fetchWorkoutsHistory(180, true)
+                ]);
+                setMetrics(m2);
+                setAllHrHistory(rec2);
+                setAllSleepHist(sl2.map((x:any)=>{
+                  const deep = x.total_deep_sleep_ms ?? x.data?.score?.stage_summary?.total_slow_wave_sleep_time_milli ?? 0;
+                  const rem = x.total_rem_sleep_ms ?? x.data?.score?.stage_summary?.total_rem_sleep_time_milli ?? 0;
+                  const light = x.total_light_sleep_ms ?? x.data?.score?.stage_summary?.total_light_sleep_time_milli ?? 0;
+                  const awake = x.total_awake_ms ?? x.data?.score?.stage_summary?.total_awake_time_milli ?? 0;
+                  const durationSec = typeof x.duration_sec === 'number' ? x.duration_sec : (typeof x.data?.score?.sleep_duration_milli === 'number' ? x.data.score.sleep_duration_milli/1000 : undefined);
+                  let hours: number | null = null;
+                  if (typeof durationSec === 'number' && durationSec > 0) hours = Math.round((durationSec/360))*0.1;
+                  else if (deep+rem+light+awake > 0) hours = Math.round(((deep+rem+light+awake)/360000))*0.1;
+                  else if (x.start && x.end) {
+                    const delta = new Date(x.end).getTime() - new Date(x.start).getTime();
+                    if (delta > 0) hours = Math.round((delta/360000))*0.1;
+                  }
+                  return { start: x.start, end: x.end, hours, stages: { deep, rem, light, awake } };
+                }));
+                setAllCycleHist(cyc2);
+                setAllWorkoutsHist(wks2.map((w:any)=>({ start: w.start, strain: w.strain ?? null, kcal: w.kcal ?? null })));
+                setStatus({ connected: true, lastSyncedAt: new Date().toISOString() });
+              } catch (e: any) {
+                console.error('auto sync error', e);
+                try {
+                  localStorage.setItem('fitness_last_error', JSON.stringify({
+                    error: e instanceof Error ? e.message : String(e),
+                    timestamp: new Date().toISOString(),
+                    action: 'auto_sync'
+                  }));
+                } catch {}
+                if (e?.message?.includes('refresh failed') || e?.message?.includes('400')) {
+                  toast.info(
+                    language === 'ar' 
+                      ? 'يرجى إعادة الاتصال بـ WHOOP لمواصلة المزامنة التلقائية' 
+                      : 'Please reconnect to WHOOP to continue auto-sync',
+                    { duration: 5000 }
+                  );
                 }
-                return { start: x.start, end: x.end, hours, stages: { deep, rem, light, awake } };
-              }));
-              setAllCycleHist(cyc2);
-              setAllWorkoutsHist(wks2.map((w:any)=>({ start: w.start, strain: w.strain ?? null, kcal: w.kcal ?? null })));
-              setStatus({ connected: true, lastSyncedAt: new Date().toISOString() });
-            } catch (e: any) {
-              console.error('auto sync error', e);
-              if (e?.message?.includes('refresh failed') || e?.message?.includes('400')) {
-                toast.info(
-                  language === 'ar' 
-                    ? 'يرجى إعادة الاتصال بـ WHOOP لمواصلة المزامنة التلقائية' 
-                    : 'Please reconnect to WHOOP to continue auto-sync',
-                  { duration: 5000 }
-                );
+              } finally {
+                setSyncing(false);
               }
-            } finally {
-              setSyncing(false);
             }
           }
         }
+      } catch (err) {
+        console.error('[Auth Debug] Failed to initialize WHOOP status', err);
+        try {
+          localStorage.setItem('fitness_last_error', JSON.stringify({
+            error: err instanceof Error ? err.message : String(err),
+            timestamp: new Date().toISOString(),
+            action: 'init_status_check'
+          }));
+        } catch {}
       }
       setLoading(false);
     })();
@@ -205,13 +230,32 @@ export default function FitnessHealth() {
       setConnecting(true);
       if (!user) {
         toast.error(language === 'ar' ? 'الرجاء تسجيل الدخول أولاً' : 'Please sign in first');
-        try { localStorage.setItem('whoop_pending', '1'); } catch {}
+        try { 
+          localStorage.setItem('whoop_pending', '1');
+          // Log auth redirect for debugging
+          console.log('[Auth Debug] Redirecting to login - no user session', {
+            timestamp: new Date().toISOString(),
+            currentUrl: window.location.href,
+            redirectTarget: '/login?redirect=/fitness',
+            userAgent: navigator.userAgent,
+            isPWA: window.matchMedia('(display-mode: standalone)').matches
+          });
+        } catch (e) {
+          console.error('[Auth Debug] Failed to store whoop_pending flag', e);
+        }
         window.location.href = `/login?redirect=/fitness`;
         return;
       }
       await startWhoopAuth();
     } catch (e) {
       console.error('whoop connect error', e);
+      try {
+        localStorage.setItem('fitness_last_error', JSON.stringify({
+          error: e instanceof Error ? e.message : String(e),
+          timestamp: new Date().toISOString(),
+          action: 'whoop_connect'
+        }));
+      } catch {}
       toast.error(language === 'ar' ? 'تعذر بدء الاتصال بـ WHOOP' : 'Failed to start WHOOP connect');
     } finally {
       setConnecting(false);
