@@ -5,6 +5,8 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth,
   setYear, getYear, addYears, subYears, parse } from "date-fns";
 import { arSA, enUS } from "date-fns/locale";
 import { useTheme } from "@/providers/ThemeProvider";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { JournalService, JournalCheckin, JournalDay } from "@/services/journalService";
 import { t } from "@/utils/translations";
 import { CalendarControls } from "./CalendarControls";
 import { CalendarGrid } from "./CalendarGrid";
@@ -49,6 +51,9 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
   const [agendaOpen, setAgendaOpen] = useState(false);
   const [entryDialogOpen, setEntryDialogOpen] = useState(false);
   const [editEntry, setEditEntry] = useState<CalendarEntry | null>(null);
+  const [journalDialogOpen, setJournalDialogOpen] = useState(false);
+  const [journalLatest, setJournalLatest] = useState<JournalCheckin | null>(null);
+  const [journalDay, setJournalDay] = useState<JournalDay | null>(null);
   const [gestureStartY, setGestureStartY] = useState<number | null>(null);
   const [pinchStartDistance, setPinchStartDistance] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -198,9 +203,72 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
   // Handle day selection
   const handleDayClick = useCallback((date: Date) => {
     setSelectedDate(date);
-    setCurrentDate(date); // Update current date when clicking a day
+    setCurrentDate(date);
+    setJournalDialogOpen(false);
     setAgendaOpen(true);
   }, []);
+
+  // Fetch journal data when the journal dialog opens
+  useEffect(() => {
+    const run = async () => {
+      if (!journalDialogOpen || !selectedDate) return;
+      const dayStr = format(selectedDate, 'yyyy-MM-dd');
+      try {
+        const [day, checks] = await Promise.all([
+          JournalService.getDay(dayStr),
+          JournalService.getCheckinsForDay(dayStr)
+        ]);
+        setJournalDay(day);
+        setJournalLatest((checks && checks.length > 0) ? checks[0] : null);
+      } catch {
+        setJournalDay(null);
+        setJournalLatest(null);
+      }
+    };
+    run();
+  }, [journalDialogOpen, selectedDate]);
+
+  // Render note lines as pills (same as TimelineTab)
+  const renderNotePills = (text?: string | null) => {
+    if (!text) return null;
+    const lines = (text || '').split('\n');
+    return (
+      <div className="mt-2">
+        {lines.map((rawLine, idx) => {
+          const i = rawLine.indexOf('|');
+          if (i < 0) return <div key={`note-line-${idx}`} className="text-sm">{rawLine}</div>;
+          const before = rawLine.slice(0, i);
+          const after = rawLine.slice(i);
+          const parts = after.split('|').map(s => s.trim());
+          const markerRe = /^__FREE__(.*)__END__$/;
+          let noteFreeText = '';
+          const tokensRaw: string[] = [];
+          for (const p of parts) {
+            if (!p) continue;
+            const m = p.match(markerRe);
+            if (m) { noteFreeText = m[1]; continue; }
+            if (p === '🕒' || p === '__UNSAVED__') continue;
+            tokensRaw.push(p);
+          }
+          const tokens = Array.from(new Set(tokensRaw));
+          return (
+            <div key={`pill-${idx}`} className="my-2 p-3 rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 text-slate-800 shadow-sm">
+              <span className="text-xs text-slate-600 mr-1">{before.match(/\[[^\]]+\]/)?.[0] || before}</span>
+              <span className="sr-only"> | </span>
+              <span className="inline-flex flex-wrap gap-2 align-middle">
+                {tokens.map((tok, k) => (
+                  <span key={`tok-${k}`} className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white text-slate-800 px-2 py-0.5 shadow text-xs">{tok}</span>
+                ))}
+                {noteFreeText && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white text-slate-800 px-2 py-0.5 shadow text-xs">{noteFreeText}</span>
+                )}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   // Add a new manual calendar entry - optimized to prevent freezing
   const addManualEntry = useCallback((entry: Omit<CalendarEntry, 'id'>) => {
@@ -386,6 +454,8 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
         language={language}
         locale={locale}
       />
+
+      
 
       <Drawer open={agendaOpen} onOpenChange={setAgendaOpen}>
         <DrawerTrigger asChild>

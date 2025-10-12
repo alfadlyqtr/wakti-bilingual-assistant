@@ -122,11 +122,6 @@ const DrawerContent = React.forwardRef<
             else if (contentRef.current) contentRef.current.focus();
           }, 50);
         }}
-        onPointerDownOutside={(e) => {
-          const isOverlay = (e.target as HTMLElement)?.hasAttribute('data-vaul-overlay');
-          if (isOverlay) return;
-          e.preventDefault();
-        }}
         aria-labelledby={hasTitle ? titleIdToUse : undefined}
         aria-describedby={hasDescription ? descriptionIdToUse : undefined}
         {...props}

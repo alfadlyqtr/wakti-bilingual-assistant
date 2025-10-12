@@ -12,6 +12,63 @@ export const AskTab: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any | null>(null);
 
+  // Persona formatter: required openers, banned phrases, icon mapping, 60–80 words
+  const formatJournalAnswer = (raw: string, opts?: { tags?: string[]; mood?: string }): string => {
+    if (!raw) return "";
+    let txt = String(raw).trim();
+
+    // Map moods/tags to icons
+    const tagIcon: Record<string, string> = {
+      family: "👨‍👩‍👧", friends: "👥", care: "❤️", exercise: "🏋️", sport: "🏆", relax: "😌",
+      movies: "📽️", gaming: "🎮", reading: "📚", cleaning: "✨", sleep: "🌙", eat_healthy: "🥗",
+      shopping: "🛒", study: "📊", work: "💼", music: "🎵", meditation: "🧘", nature: "🌲",
+      travel: "✈️", cooking: "🍳", walk: "🚶", socialize: "💬", coffee: "☕", love: "❤️",
+      romance: "💕", spouse: "💑", prayer: "🙏", writing: "✍️", horse_riding: "🐴",
+      fishing: "🎣", wife: "👰"
+    };
+    const moodIcon: Record<string, string> = { awful: "😤", bad: "😟", meh: "😐", good: "😊", rad: "😄" };
+    // Replace standalone tag/mood words with icons
+    Object.entries(tagIcon).forEach(([k, v]) => {
+      const re = new RegExp(`(?<=\b)${k.replace('_','[_ ]?')}(?=\b)`, 'gi');
+      txt = txt.replace(re as any, `${v}`);
+    });
+    Object.entries(moodIcon).forEach(([k, v]) => {
+      const re = new RegExp(`(?<=\b)${k}(?=\b)`, 'gi');
+      txt = txt.replace(re as any, `${v}`);
+    });
+
+    // Banned phrases removal/rephrase
+    const banned = [
+      "It appears that", "This suggests", "Consider ", "I would recommend",
+      "Your data shows", "Based on your patterns", " level "
+    ];
+    banned.forEach(b => { txt = txt.replace(new RegExp(b, 'gi'), '').trim(); });
+
+    // Ensure one of the required openers
+    const openers = ["I notice", "Look at this", "You don't just", "Every time", "Wait, look"];
+    const hasOpener = openers.some(o => txt.startsWith(o));
+    if (!hasOpener) txt = `${openers[0]} ${txt.charAt(0).toLowerCase()}${txt.slice(1)}`;
+
+    // Enforce 60–80 words, trim at sentence boundary when possible
+    const words = txt.split(/\s+/);
+    if (words.length > 80) {
+      const slice = words.slice(0, 85).join(' ');
+      // Try to cut at last period within range 60–80
+      const match = slice.match(/([\s\S]{0,}\.)/);
+      if (match) {
+        const cutWords = match[0].trim().split(/\s+/);
+        if (cutWords.length >= 60 && cutWords.length <= 80) txt = match[0].trim();
+        else txt = words.slice(0, 80).join(' ');
+      } else {
+        txt = words.slice(0, 80).join(' ');
+      }
+    }
+    if (txt.split(/\s+/).length < 60) {
+      // If too short, keep as-is; we won't pad
+    }
+    return txt.trim();
+  };
+
   // Restore last session
   useEffect(() => {
     try {
@@ -46,7 +103,8 @@ export const AskTab: React.FC = () => {
         intent: detectedIntent,
         tips: true
       });
-      setResult(data);
+      const formattedSummary = formatJournalAnswer(data.summary || "", { tags: data?.stats?.most_common_tags });
+      setResult({ ...data, formattedSummary });
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ q, result: data }));
     } finally {
       setLoading(false);
@@ -132,7 +190,9 @@ export const AskTab: React.FC = () => {
             </div>
           )}
           {/* Summary & Tip */}
-          {result.summary && <div className="text-sm text-foreground/90">📝 {result.summary}</div>}
+          {(result.formattedSummary || result.summary) && (
+            <div className="text-sm text-foreground/90">📝 {result.formattedSummary || result.summary}</div>
+          )}
           {result.tips && (
             <div className="mt-2 text-[13px] text-muted-foreground">💡 {result.tips}</div>
           )}

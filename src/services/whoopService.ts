@@ -275,8 +275,12 @@ export async function startWhoopAuth(): Promise<void> {
   }
   const { authorize_url, state } = data || {};
   if (!authorize_url) throw new Error("Missing authorize_url");
+  if (state) try { localStorage.setItem(STATE_KEY, state); } catch (_) {}
   console.log('Redirecting to WHOOP authorization...');
-  window.location.href = authorize_url;
+  const popup = window.open(authorize_url, '_blank', 'noopener,noreferrer');
+  if (!popup) {
+    window.location.href = authorize_url;
+  }
 }
 
 export async function completeWhoopCallback(code: string, state: string | null) {

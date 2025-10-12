@@ -22,7 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { JournalService } from "@/services/journalService";
+import { JournalService, JournalCheckin, JournalDay } from "@/services/journalService";
 import { format as fmt } from "date-fns";
 
 interface CalendarAgendaProps {
@@ -42,6 +42,8 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
   const navigate = useNavigate();
   const [selectedEntry, setSelectedEntry] = useState<CalendarEntry | null>(null);
   const [journalDay, setJournalDay] = useState<any | null>(null);
+  const [journalCheckins, setJournalCheckins] = useState<JournalCheckin[]>([]);
+  // inline journal card removed in favor of navigating to full Timeline view
   
   console.log('CalendarAgenda - Selected date:', date);
   console.log('CalendarAgenda - All entries:', entries);
@@ -99,19 +101,65 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
 
   const locale = language === 'ar' ? 'ar-SA' : 'en-US';
 
+  // Render note lines as pills (mirrors TimelineTab behavior)
+  const renderNotePills = (text?: string | null) => {
+    if (!text) return null;
+    const lines = (text || '').split('\n');
+    return (
+      <div className="mt-2">
+        {lines.map((rawLine, idx) => {
+          const i = rawLine.indexOf('|');
+          if (i < 0) return <div key={`note-line-${idx}`} className="text-sm">{rawLine}</div>;
+          const before = rawLine.slice(0, i);
+          const after = rawLine.slice(i);
+          const parts = after.split('|').map(s => s.trim());
+          const markerRe = /^__FREE__(.*)__END__$/;
+          let noteFreeText = '';
+          const tokensRaw: string[] = [];
+          for (const p of parts) {
+            if (!p) continue;
+            const m = p.match(markerRe);
+            if (m) { noteFreeText = m[1]; continue; }
+            if (p === '🕒' || p === '__UNSAVED__') continue;
+            tokensRaw.push(p);
+          }
+          const tokens = Array.from(new Set(tokensRaw));
+          return (
+            <div key={`pill-${idx}`} className="my-2 p-3 rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 text-slate-800 shadow-sm">
+              <span className="text-xs text-slate-600 mr-1">{before.match(/\[[^\]]+\]/)?.[0] || before}</span>
+              <span className="sr-only"> | </span>
+              <span className="inline-flex flex-wrap gap-2 align-middle">
+                {tokens.map((tok, k) => (
+                  <span key={`tok-${k}`} className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white text-slate-800 px-2 py-0.5 shadow text-xs">{tok}</span>
+                ))}
+                {noteFreeText && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white text-slate-800 px-2 py-0.5 shadow text-xs">{noteFreeText}</span>
+                )}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   // When opening a Journal item, fetch that day's details
   React.useEffect(() => {
     (async () => {
       if (!selectedEntry || selectedEntry.type !== EntryType.JOURNAL) {
         setJournalDay(null);
+        setJournalCheckins([]);
         return;
       }
       const dayStr = (selectedEntry.date || fmt(date, 'yyyy-MM-dd')).split('T')[0];
       try {
         const d = await JournalService.getDay(dayStr);
         setJournalDay(d || null);
+        const checks = await JournalService.getCheckinsForDay(dayStr);
+        setJournalCheckins(checks || []);
       } catch {
         setJournalDay(null);
+        setJournalCheckins([]);
       }
     })();
   }, [selectedEntry, date]);
@@ -247,7 +295,11 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
                   <CompactAgendaItem
                     key={j.id}
                     entry={j}
-                    onClick={() => setSelectedEntry(j)}
+                    onClick={() => {
+                      const dayStr = format(date, 'yyyy-MM-dd');
+                      onClose();
+                      navigate(`/journal?date=${dayStr}&tab=timeline`);
+                    }}
                   />
                 ))}
               </div>
@@ -255,81 +307,6 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
           )}
         </div>
       )}
-
-      {/* Entry Details Dialog */}
-      <Dialog open={!!selectedEntry} onOpenChange={() => setSelectedEntry(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {selectedEntry && renderIcon(selectedEntry.type)}
-              {selectedEntry?.title}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            {selectedEntry?.description && (
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Description</p>
-                <p className="text-sm">{selectedEntry.description}</p>
-              </div>
-            )}
-            {selectedEntry?.time && !selectedEntry?.isAllDay && (
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Time</p>
-                <p className="text-sm">{selectedEntry.time}</p>
-              </div>
-            )}
-            {selectedEntry?.location && (
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Location</p>
-                <p className="text-sm"> {selectedEntry.location}</p>
-              </div>
-            )}
-            {selectedEntry?.isAllDay && selectedEntry?.type !== EntryType.JOURNAL && (
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Duration</p>
-                <p className="text-sm">All Day</p>
-              </div>
-            )}
-            {selectedEntry?.priority && (selectedEntry.type === EntryType.TASK) && (
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Priority</p>
-                <p className="text-sm capitalize">{selectedEntry.priority}</p>
-              </div>
-            )}
-            {selectedEntry?.completed !== undefined && (selectedEntry.type === EntryType.TASK) && (
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Status</p>
-                <p className="text-sm">{selectedEntry.completed ? 'Completed' : 'Pending'}</p>
-              </div>
-            )}
-            {selectedEntry?.type === EntryType.MANUAL_NOTE && (
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => {
-                  onEditEntry(selectedEntry);
-                  setSelectedEntry(null);
-                }}
-                className="w-full"
-              >
-                Edit Note
-              </Button>
-            )}
-            {(selectedEntry?.type === EntryType.TASK || selectedEntry?.type === EntryType.REMINDER) && (
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => {
-                  navigate('/tr');
-                }}
-                className="w-full"
-              >
-                View in T&R
-              </Button>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
@@ -353,6 +330,8 @@ const CompactAgendaItem: React.FC<CompactAgendaItemProps> = ({ entry, onClick })
         return "border-l-green-500 hover:bg-green-50 dark:hover:bg-green-950/20";
       case EntryType.REMINDER:
         return "border-l-red-500 hover:bg-red-50 dark:hover:bg-red-950/20";
+      case EntryType.JOURNAL:
+        return "border-l-sky-500 hover:bg-sky-50 dark:hover:bg-sky-950/20";
       default:
         return "border-l-gray-500 hover:bg-gray-50 dark:hover:bg-gray-950/20";
     }
