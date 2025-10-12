@@ -106,7 +106,7 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
         setJournalDay(null);
         return;
       }
-      const dayStr = fmt(date, 'yyyy-MM-dd');
+      const dayStr = (selectedEntry.date || fmt(date, 'yyyy-MM-dd')).split('T')[0];
       try {
         const d = await JournalService.getDay(dayStr);
         setJournalDay(d || null);
