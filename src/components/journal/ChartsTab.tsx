@@ -196,7 +196,7 @@ export const ChartsTab: React.FC = () => {
   const RADIAN = Math.PI / 180;
   const renderPieLabel = ({ cx, cy, midAngle, outerRadius, percent, payload }: any) => {
     if (percent == null) return null;
-    const radius = (outerRadius || 0) + 18;
+    const radius = (outerRadius || 0) + 14;
     const x = cx + radius * Math.cos(-midAngle * RADIAN);
     const y = cy + radius * Math.sin(-midAngle * RADIAN);
     const p = Math.round((percent || 0) * 100);
@@ -292,13 +292,13 @@ export const ChartsTab: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
           <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart margin={{ top: 4, right: 44, bottom: 4, left: 44 }}>
+              <PieChart margin={{ top: 28, right: 64, bottom: 28, left: 64 }}>
                 <Pie
                   data={moodCounts}
                   dataKey="count"
                   nameKey="mood"
                   innerRadius={0}
-                  outerRadius={78}
+                  outerRadius={72}
                   paddingAngle={1}
                   stroke="#ffffff"
                   strokeWidth={2}
@@ -308,11 +308,6 @@ export const ChartsTab: React.FC = () => {
                   {moodCounts.map((entry, idx) => (
                     <Cell key={`cell-${idx}`} fill={moodColors[entry.mood]} />
                   ))}
-                  <Label position="center" content={() => (
-                    <text x={0} y={0} textAnchor="middle" dominantBaseline="central" className="fill-foreground">
-                      <tspan fontSize="20" fontWeight={600}>{totalCheckins}</tspan>
-                    </text>
-                  )} />
                 </Pie>
               </PieChart>
             </ResponsiveContainer>

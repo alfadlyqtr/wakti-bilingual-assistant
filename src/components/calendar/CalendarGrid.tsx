@@ -178,6 +178,12 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                       {entryCounts[EntryType.REMINDER] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.REMINDER]}</span>}
                     </div>
                   )}
+                  {entryCounts[EntryType.JOURNAL] > 0 && (
+                    <div className="flex items-center">
+                      <Circle className="h-2 w-2 fill-sky-500 text-sky-500" />
+                      {entryCounts[EntryType.JOURNAL] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.JOURNAL]}</span>}
+                    </div>
+                  )}
                 </div>
               )}
             </motion.div>
@@ -277,17 +283,25 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                   {entryCounts[EntryType.TASK] > 0 && (
                     <div className="flex items-center">
                       <Circle className="h-3 w-3 fill-green-500 text-green-500" />
-                      {entryCounts[EntryType.TASK] > 1 && 
+                      {entryCounts[EntryType.TASK] > 1 && (
                         <span className="text-xs ml-0.5">{entryCounts[EntryType.TASK]}</span>
-                      }
+                      )}
                     </div>
                   )}
                   {entryCounts[EntryType.REMINDER] > 0 && (
                     <div className="flex items-center">
                       <Circle className="h-3 w-3 fill-red-500 text-red-500" />
-                      {entryCounts[EntryType.REMINDER] > 1 && 
+                      {entryCounts[EntryType.REMINDER] > 1 && (
                         <span className="text-xs ml-0.5">{entryCounts[EntryType.REMINDER]}</span>
-                      }
+                      )}
+                    </div>
+                  )}
+                  {entryCounts[EntryType.JOURNAL] > 0 && (
+                    <div className="flex items-center">
+                      <Circle className="h-3 w-3 fill-sky-500 text-sky-500" />
+                      {entryCounts[EntryType.JOURNAL] > 1 && (
+                        <span className="text-xs ml-0.5">{entryCounts[EntryType.JOURNAL]}</span>
+                      )}
                     </div>
                   )}
                 </div>
@@ -298,4 +312,4 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
       </div>
     </div>
   );
-};
+}

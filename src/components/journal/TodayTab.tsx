@@ -1129,7 +1129,7 @@ export const TodayTab: React.FC = () => {
 
       <Collapsible open={moodOpen} onOpenChange={setMoodOpen}>
         <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
-          <CollapsibleTrigger className="w-full">
+          <CollapsibleTrigger asChild className="w-full">
             <div className="text-sm text-muted-foreground mb-2 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />
@@ -1178,7 +1178,7 @@ export const TodayTab: React.FC = () => {
 
       <Collapsible open={tagsOpen} onOpenChange={setTagsOpen}>
         <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
-          <CollapsibleTrigger className="w-full mb-3">
+          <CollapsibleTrigger asChild className="w-full mb-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />
@@ -1258,128 +1258,180 @@ export const TodayTab: React.FC = () => {
       </Collapsible>
 
       <Collapsible open={notesOpen} onOpenChange={setNotesOpen}>
-      <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
-        <CollapsibleTrigger className="w-full">
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-xs text-muted-foreground flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />
-            {language === 'ar' ? 'ملاحظاتي اليومية' : 'My daily notes'}
-            <ChevronDown className={`h-5 w-5 transition-transform ${notesOpen ? 'rotate-180' : ''}`} />
+        <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
+          <div className="flex items-center justify-between mb-2">
+            <CollapsibleTrigger asChild>
+              <div className="text-sm text-muted-foreground flex items-center gap-2 cursor-pointer select-none">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />
+                {language === 'ar' ? 'ملاحظة' : 'Note'}
+                <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${notesOpen ? 'rotate-180' : ''}`} />
+              </div>
+            </CollapsibleTrigger>
+            <div className="flex items-center gap-2">
+              {dayUpdatedAt && (
+                <span className="text-[10px] text-muted-foreground">
+                  {formatTime(new Date(dayUpdatedAt), language as any, { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+              {!isNoteEditing ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsNoteEditing(true);
+                    ensureEndStub();
+                    // Focus editor and place caret inside the free pill after DOM updates
+                    setTimeout(() => {
+                      const el = noteCERef.current; if (!el) return;
+                      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      el.focus();
+                      // Double rAF to ensure innerHTML from renderNoteHtml has committed
+                      requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                          try {
+                            const pills = el.querySelectorAll('span[data-free-pill="1"]');
+                            const target = pills.length ? pills[pills.length - 1] : el;
+                            const range = document.createRange();
+                            range.selectNodeContents(target);
+                            range.collapse(false);
+                            const sel = window.getSelection();
+                            sel?.removeAllRanges();
+                            sel?.addRange(range);
+                          } catch {}
+                        });
+                      });
+                    }, 120);
+                  }}
+                  className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border border-border bg-gradient-to-b from-card to-background text-foreground/80 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-inner transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Plus className="h-3.5 w-3.5" /> {language === 'ar' ? 'أضف ملاحظة' : 'Add note'}
+                </button>
+              ) : (
+                <span className="text-[11px] text-primary font-medium">
+                  {language === 'ar' ? '✍️ اكتب هنا...' : '✍️ Type here...'}
+                </span>
+              )}
+              {hasUnsaved && (
+                <button
+                  type="button"
+                  onClick={clearSelections}
+                  aria-label={language === 'ar' ? 'مسح التغييرات غير المحفوظة' : 'Clear unsaved changes'}
+                  className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border border-border bg-gradient-to-b from-muted to-background text-muted-foreground shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-inner transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {language === 'ar' ? 'مسح' : 'Clear'}
+                </button>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-          {dayUpdatedAt && (
-            <span className="text-[10px] text-muted-foreground">
-              {formatTime(new Date(dayUpdatedAt), language as any, { hour: '2-digit', minute: '2-digit' })}
-            </span>
-          )}
-          {!isNoteEditing ? (
-            <button
-              type="button"
-              onClick={() => { setIsNoteEditing(true); ensureEndStub(); setTimeout(() => noteCERef.current?.focus(), 50); }}
-              className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border border-border bg-gradient-to-b from-card to-background text-foreground/80 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-inner transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Plus className="h-3.5 w-3.5" /> {language === 'ar' ? 'أضف ملاحظة' : 'Add note'}
-            </button>
-          ) : (
-            <span className="text-[11px] text-primary font-medium">
-              {language === 'ar' ? '✍️ اكتب هنا...' : '✍️ Type here...'}
-            </span>
-          )}
-          {hasUnsaved && (
-          <button
-            type="button"
-            onClick={clearSelections}
-            aria-label={language === 'ar' ? 'مسح التغييرات غير المحفوظة' : 'Clear unsaved changes'}
-            className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border border-border bg-gradient-to-b from-muted to-background text-muted-foreground shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-inner transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {language === 'ar' ? 'مسح' : 'Clear'}
-          </button>
-          )}
-          </div>
+          <CollapsibleContent>
+            <div
+              ref={noteCERef}
+              className={`flex flex-col gap-2 w-full rounded-md px-3 py-2 text-sm min-h-[96px] overflow-y-auto focus-visible:outline-none transition-all ${
+                isNoteEditing 
+                  ? 'border-2 border-primary bg-primary/5 shadow-inner' 
+                  : 'border-0 bg-transparent'
+              }`}
+              tabIndex={0}
+              role="textbox"
+              aria-multiline="true"
+              contentEditable
+              spellCheck={false}
+              onFocus={() => {
+                editorFocusedRef.current = true;
+                // Auto-start editing on focus so users can type immediately
+                if (!isNoteEditing) setIsNoteEditing(true);
+                ensureEndStub();
+                // After DOM updates, place caret inside the free pill so the cursor is visible
+                setTimeout(() => {
+                  const el = noteCERef.current; if (!el) return;
+                  el.focus();
+                  requestAnimationFrame(() => {
+                    try {
+                      const pills = el.querySelectorAll('span[data-free-pill="1"]');
+                      const target = pills.length ? pills[pills.length - 1] : el;
+                      const range = document.createRange();
+                      range.selectNodeContents(target);
+                      range.collapse(false);
+                      const sel = window.getSelection();
+                      sel?.removeAllRanges();
+                      sel?.addRange(range);
+                    } catch {}
+                  });
+                }, 50);
+              }}
+              onBlur={() => { editorFocusedRef.current = false; }}
+              onKeyDown={(e) => {
+                if (!isNoteEditing) { e.preventDefault(); return; }
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  return;
+                }
+                // Controlled typing: append to free-text pill; handle Backspace
+                const printable = e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
+                if (printable) {
+                  e.preventDefault();
+                  mutateFreeText(prev => (prev + e.key).slice(0, 512));
+                  return;
+                }
+                if (e.key === 'Backspace') {
+                  e.preventDefault();
+                  mutateFreeText(prev => prev.slice(0, Math.max(0, prev.length - 1)));
+                  return;
+                }
+              }}
+              onMouseDown={(e) => {
+                // Turn on edit mode and place caret in the free pill automatically
+                try {
+                  e.preventDefault();
+                  if (!isNoteEditing) setIsNoteEditing(true);
+                  ensureEndStub();
+                  const el = noteCERef.current;
+                  if (!el) return;
+                  const range = document.createRange();
+                  const pills = el.querySelectorAll('span[data-free-pill="1"]');
+                  const target = pills.length ? pills[pills.length - 1] : el;
+                  range.selectNodeContents(target);
+                  range.collapse(false);
+                  const sel = window.getSelection();
+                  sel?.removeAllRanges();
+                  sel?.addRange(range);
+                } catch {}
+              }}
+              onDrop={(e) => { e.preventDefault(); }}
+              onInput={(e) => {
+                // In controlled typing mode we already updated note via key handlers; ignore browser input
+                if (isNoteEditing) return;
+                const el = e.currentTarget as HTMLDivElement;
+                const raw = el.innerText.replace(/\r\n/g, '\n');
+                setNote(raw);
+                requestAnimationFrame(() => {
+                  try {
+                    const range = document.createRange();
+                    range.selectNodeContents(el);
+                    range.collapse(false);
+                    const sel = window.getSelection();
+                    sel?.removeAllRanges();
+                    sel?.addRange(range);
+                  } catch {}
+                });
+              }}
+              onPaste={(e) => {
+                e.preventDefault();
+                if (!isNoteEditing) return;
+                const text = e.clipboardData.getData('text/plain').replace(/\r?\n+/g, ' ');
+                mutateFreeText(prev => (prev + text).slice(0, 2000));
+              }}
+              aria-label={language === 'ar' ? 'ملاحظة' : 'Note'}
+            />
+            {/* Hidden textarea to preserve existing save flows that read from noteRef */}
+            <textarea ref={noteRef} value={note} onChange={(e)=>setNote(e.target.value)} className="sr-only" aria-hidden="true" tabIndex={-1} />
+          </CollapsibleContent>
         </div>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-        <div
-          ref={noteCERef}
-          contentEditable={isNoteEditing}
-          suppressContentEditableWarning
-          className={`flex flex-col gap-2 w-full rounded-md px-3 py-2 text-sm min-h-[96px] overflow-y-auto focus-visible:outline-none transition-all ${
-            isNoteEditing 
-              ? 'border-2 border-primary bg-primary/5 shadow-inner' 
-              : 'border-0 bg-transparent'
-          }`}
-          spellCheck={false}
-          onFocus={() => { editorFocusedRef.current = true; if (isNoteEditing) ensureEndStub(); }}
-          onBlur={() => { editorFocusedRef.current = false; }}
-          onKeyDown={(e) => {
-            if (!isNoteEditing) { e.preventDefault(); return; }
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              return;
-            }
-            // Controlled typing: append to free-text pill; handle Backspace
-            const printable = e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
-            if (printable) {
-              e.preventDefault();
-              mutateFreeText(prev => (prev + e.key).slice(0, 512));
-              return;
-            }
-            if (e.key === 'Backspace') {
-              e.preventDefault();
-              mutateFreeText(prev => prev.slice(0, Math.max(0, prev.length - 1)));
-              return;
-            }
-          }}
-          onMouseDown={(e) => {
-            // Prevent placing caret inside chips; always set caret to end
-            try {
-              e.preventDefault();
-              const el = noteCERef.current;
-              if (!el) return;
-              const range = document.createRange();
-              range.selectNodeContents(el);
-              range.collapse(false);
-              const sel = window.getSelection();
-              sel?.removeAllRanges();
-              sel?.addRange(range);
-            } catch {}
-          }}
-          onDrop={(e) => { e.preventDefault(); }}
-          onInput={(e) => {
-            // In controlled typing mode we already updated note via key handlers; ignore browser input
-            if (isNoteEditing) return;
-            const el = e.currentTarget as HTMLDivElement;
-            const raw = el.innerText.replace(/\r\n/g, '\n');
-            setNote(raw);
-            requestAnimationFrame(() => {
-              try {
-                const range = document.createRange();
-                range.selectNodeContents(el);
-                range.collapse(false);
-                const sel = window.getSelection();
-                sel?.removeAllRanges();
-                sel?.addRange(range);
-              } catch {}
-            });
-          }}
-          onPaste={(e) => {
-            e.preventDefault();
-            if (!isNoteEditing) return;
-            const text = e.clipboardData.getData('text/plain').replace(/\r?\n+/g, ' ');
-            mutateFreeText(prev => (prev + text).slice(0, 2000));
-          }}
-          aria-label={language === 'ar' ? 'ملاحظة' : 'Note'}
-        />
-        {/* Hidden textarea to preserve existing save flows that read from noteRef */}
-        <textarea ref={noteRef} value={note} onChange={(e)=>setNote(e.target.value)} className="sr-only" aria-hidden="true" tabIndex={-1} />
-        </CollapsibleContent>
-      </div>
       </Collapsible>
 
       {/* Gratitude Section */}
       <Collapsible open={gratitudeOpen} onOpenChange={setGratitudeOpen}>
         <div className="rounded-2xl border border-border/50 bg-gradient-to-br from-purple-50/80 via-pink-50/60 to-card dark:from-purple-950/20 dark:via-pink-950/20 dark:to-card p-5 shadow-lg card-3d inner-bevel edge-liquid backdrop-blur-sm">
-          <CollapsibleTrigger className="w-full">
+          <CollapsibleTrigger asChild className="w-full">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
                 <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center shadow-md">
@@ -1479,7 +1531,7 @@ export const TodayTab: React.FC = () => {
 
       <Collapsible open={eveningOpen} onOpenChange={setEveningOpen}>
         <div className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
-          <CollapsibleTrigger className="w-full">
+          <CollapsibleTrigger asChild className="w-full">
             <div className="flex items-center justify-between mb-2">
               <div className="text-sm text-muted-foreground flex items-center gap-2">
                 <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />

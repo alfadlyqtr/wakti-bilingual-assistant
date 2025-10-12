@@ -12,7 +12,8 @@ import {
   Calendar as CalendarIcon,
   Bell,
   PinIcon,
-  Heart
+  Heart,
+  NotebookPen
 } from "lucide-react";
 import { DrawerClose } from "@/components/ui/drawer";
 import {
@@ -21,6 +22,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { JournalService } from "@/services/journalService";
+import { format as fmt } from "date-fns";
 
 interface CalendarAgendaProps {
   date: Date;
@@ -38,6 +41,7 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
   const { language } = useTheme();
   const navigate = useNavigate();
   const [selectedEntry, setSelectedEntry] = useState<CalendarEntry | null>(null);
+  const [journalDay, setJournalDay] = useState<any | null>(null);
   
   console.log('CalendarAgenda - Selected date:', date);
   console.log('CalendarAgenda - All entries:', entries);
@@ -58,6 +62,7 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
   const notes = dayEntries.filter(entry => entry.type === EntryType.MANUAL_NOTE);
   const tasks = dayEntries.filter(entry => entry.type === EntryType.TASK);
   const reminders = dayEntries.filter(entry => entry.type === EntryType.REMINDER);
+  const journals = dayEntries.filter(entry => entry.type === EntryType.JOURNAL);
   
   console.log('CalendarAgenda - Grouped entries:', {
     events: events.length,
@@ -85,12 +90,31 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
         return <CheckSquare className="h-4 w-4 text-green-500" />;
       case EntryType.REMINDER:
         return <Bell className="h-4 w-4 text-red-500" />;
+      case EntryType.JOURNAL:
+        return <NotebookPen className="h-4 w-4 text-sky-500" />;
       default:
         return <PinIcon className="h-4 w-4 text-gray-500" />;
     }
   };
 
   const locale = language === 'ar' ? 'ar-SA' : 'en-US';
+
+  // When opening a Journal item, fetch that day's details
+  React.useEffect(() => {
+    (async () => {
+      if (!selectedEntry || selectedEntry.type !== EntryType.JOURNAL) {
+        setJournalDay(null);
+        return;
+      }
+      const dayStr = fmt(date, 'yyyy-MM-dd');
+      try {
+        const d = await JournalService.getDay(dayStr);
+        setJournalDay(d || null);
+      } catch {
+        setJournalDay(null);
+      }
+    })();
+  }, [selectedEntry, date]);
   
   return (
     <div className="flex flex-col">
@@ -210,6 +234,25 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
               </div>
             </div>
           )}
+
+          {/* Journal section */}
+          {journals.length > 0 && (
+            <div>
+              <h3 className="font-medium mb-2 flex items-center gap-2">
+                <NotebookPen className="h-4 w-4 text-sky-500" />
+                Journal ({journals.length})
+              </h3>
+              <div className="space-y-1">
+                {journals.sort(sortEntries).map(j => (
+                  <CompactAgendaItem
+                    key={j.id}
+                    entry={j}
+                    onClick={() => setSelectedEntry(j)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -238,10 +281,10 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
             {selectedEntry?.location && (
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Location</p>
-                <p className="text-sm">📍 {selectedEntry.location}</p>
+                <p className="text-sm"> {selectedEntry.location}</p>
               </div>
             )}
-            {selectedEntry?.isAllDay && (
+            {selectedEntry?.isAllDay && selectedEntry?.type !== EntryType.JOURNAL && (
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Duration</p>
                 <p className="text-sm">All Day</p>
@@ -345,7 +388,7 @@ const CompactAgendaItem: React.FC<CompactAgendaItemProps> = ({ entry, onClick })
           {entry.time && !entry.isAllDay && (
             <div className="text-xs text-muted-foreground">{entry.time}</div>
           )}
-          {entry.isAllDay && (
+          {entry.isAllDay && entry.type !== EntryType.JOURNAL && (
             <div className="text-xs text-muted-foreground">All Day</div>
           )}
           {entry.completed !== undefined && entry.type === EntryType.TASK && (
