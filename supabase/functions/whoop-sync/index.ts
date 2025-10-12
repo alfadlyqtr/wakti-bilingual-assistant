@@ -261,16 +261,25 @@ serve(async (req: Request) => {
         }
 
         if (sleeps.length) {
-          const rows = sleeps.map((item: any) => ({
+          // Deduplicate by conflict key (id)
+          const uniqMap = new Map<string, any>();
+          for (const item of sleeps) {
+            const key = String(item.id ?? "");
+            if (!key) continue;
+            if (!uniqMap.has(key)) uniqMap.set(key, item);
+          }
+          const uniqSleeps = Array.from(uniqMap.values());
+
+          const rows = uniqSleeps.map((item: any) => ({
             id: item.id,
             user_id: u.user_id,
             start: toDate(item.start),
             end: toDate(item.end),
-            duration_sec: asNumber(item.duration ?? item.duration_sec ?? item.score?.stage_summary?.total_in_bed_milli ? Math.round(item.score.stage_summary.total_in_bed_milli / 1000) : null),
+            duration_sec: asNumber(item.duration ?? item.duration_sec ?? (item.score?.stage_summary?.total_in_bed_milli ? Math.round(item.score.stage_summary.total_in_bed_milli / 1000) : null)),
             performance_pct: asNumber(item.score?.sleep_performance_percentage ?? item.performance_pct),
             data: item,
           }));
-          console.log(`whoop-sync: Upserting ${rows.length} sleeps (${new Set(rows.map(r => r.id)).size} unique IDs) for user ${u.user_id}`);
+          console.log(`whoop-sync: Upserting ${rows.length} sleeps (${new Set(rows.map(r => r.id)).size} unique IDs, from ${sleeps.length} raw) for user ${u.user_id}`);
           
           // Batch process to handle large datasets
           const batchSize = 50;
@@ -323,7 +332,16 @@ serve(async (req: Request) => {
         }
 
         if (recoveries.length) {
-          const rows = recoveries.map((item: any) => ({
+          // Deduplicate strictly by conflict key (sleep_id)
+          const uniqRecMap = new Map<string, any>();
+          for (const item of recoveries) {
+            const key = String(item.sleep_id ?? item.sleepId ?? item.sleepID ?? "");
+            if (!key) continue;
+            if (!uniqRecMap.has(key)) uniqRecMap.set(key, item);
+          }
+          const uniqRecoveries = Array.from(uniqRecMap.values());
+
+          const rows = uniqRecoveries.map((item: any) => ({
             sleep_id: item.sleep_id,
             cycle_id: typeof item.cycle_id === 'number' ? item.cycle_id : (item.cycle_id ? Number(item.cycle_id) : null),
             user_id: u.user_id,
@@ -333,7 +351,7 @@ serve(async (req: Request) => {
             rhr_bpm: asNumber(item.score?.resting_heart_rate ?? item.resting_heart_rate ?? item.rhr_bpm ?? item.rhr),
             data: item,
           }));
-          console.log(`whoop-sync: Upserting ${rows.length} recoveries (${new Set(rows.map(r => r.sleep_id)).size} unique sleep_ids) for user ${u.user_id}`);
+          console.log(`whoop-sync: Upserting ${rows.length} recoveries (${new Set(rows.map(r => r.sleep_id)).size} unique sleep_ids, from ${recoveries.length} raw) for user ${u.user_id}`);
           
           const batchSize = 50;
           let successCount = 0;
