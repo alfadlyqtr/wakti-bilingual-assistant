@@ -204,14 +204,15 @@ export function AppHeader() {
   const headerEl = (
     <header
       className={cn(
-        "h-16 border-b border-white/10",
+        "h-16 border-b border-border",
         "glue-fixed glue-top glue-z shadow-md",
         "solid-bg app-header-fixed",
         language === 'ar' ? 'font-arabic' : ''
       )}
       style={{
         height: 'var(--app-header-h)',
-        width: '100%'
+        width: '100%',
+        backgroundColor: 'hsl(var(--background))'
       }}
     >
       <div className={cn(
