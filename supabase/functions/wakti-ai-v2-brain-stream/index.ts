@@ -120,12 +120,6 @@ serve(async (req) => {
           return;
         }
 
-        if (!OPENAI_API_KEY) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'AI service not configured' })}\n\n`));
-          controller.close();
-          return;
-        }
-
         // Build system prompt
         const currentDate = new Date().toLocaleDateString('en-US', { 
           weekday: 'long', 
