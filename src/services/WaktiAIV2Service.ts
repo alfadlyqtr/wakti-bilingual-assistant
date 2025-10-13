@@ -925,94 +925,35 @@ class WaktiAIV2ServiceClass {
           } as any;
         }
 
-        // Fallback to previous pipeline for other modes (t2i, background removal handled elsewhere)
-        const pt_version = pt?.pt_version ?? null;
-        const pt_updated_at = pt?.pt_updated_at ?? null;
-        const pt_hash = this.hashPersonalTouch(pt);
-
-        const payload = {
-          message,
-          conversationId,
-          language,
-          attachedFiles,
-          activeTrigger: 'image',
-          recentMessages: enhancedMessages,
-          personalTouch: pt,
-          pt_version,
-          pt_updated_at,
-          pt_hash,
-          userId,
-          imageMode,
-          imageQuality,
-          conversationSummary: finalSummary,
-          clientLocalHour,
-          isWelcomeBack,
-          location,
-          visionPrimary: 'claude',
-          visionFallback: 'openai'
-        };
-
-        let maybeAnonKey;
-        try {
-          maybeAnonKey = (typeof window !== 'undefined' && (window as any).__SUPABASE_ANON_KEY)
-            || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
-        } catch (e) {
-          maybeAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
+        // Text2Image now uses a dedicated Edge Function (decoupled from the brain)
+        // Reuse existing session and supabaseUrl from the image branch to avoid duplicate declarations
+        if (!session?.access_token) {
+          throw new Error('No valid session for text2image');
         }
-
-        const resp = await fetch(`${supabaseUrl}/functions/v1/wakti-ai-v2-brain`, {
+        const resp = await fetch(`${supabaseUrl}/functions/v1/wakti-text2image`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-app-name': 'Wakti AI',
-            'Authorization': `Bearer ${session.access_token}`,
-            'apikey': maybeAnonKey
+            'Authorization': `Bearer ${session.access_token}`
           },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            prompt: message,
+            quality: imageQuality || 'fast',
+            user_id: userId
+          }),
           signal
         });
-
-        if (!resp.ok) {
-          throw new Error(`Non-streaming request failed: ${resp.status}`);
+        const json = await resp.json().catch(() => ({} as any));
+        if (!resp.ok || !json?.success || !json?.url) {
+          console.error('wakti-text2image failed', resp.status, json);
+          return { response: language === 'ar' ? 'فشل إنشاء الصورة. يرجى المحاولة مرة أخرى.' : 'Image generation failed. Please try again.', error: true } as any;
         }
-
-        const data = await resp.json();
-        // Best-effort: persist updated rolling summary after completion
-        try {
-          const msgsForSummary: AIMessage[] = [
-            ...enhancedMessages,
-            { id: `user-${Date.now()}`, role: 'user', content: message, timestamp: new Date() } as AIMessage,
-            { id: `assistant-${Date.now()}`, role: 'assistant', content: data?.response || '', timestamp: new Date() } as AIMessage
-          ];
-          const updatedSummary = this.generateConversationSummary(msgsForSummary);
-          if (updatedSummary && updatedSummary.trim()) {
-            const uuidLike2 = typeof conversationId === 'string' && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(conversationId || '');
-            if (uuidLike2 && conversationId) {
-              const { data: existing } = await supabase
-                .from('ai_conversation_summaries')
-                .select('id')
-                .eq('conversation_id', conversationId)
-                .limit(1)
-                .maybeSingle();
-              if ((existing as any)?.id) {
-                await supabase
-                  .from('ai_conversation_summaries')
-                  .update({ summary_text: updatedSummary, message_count: msgsForSummary.length })
-                  .eq('id', (existing as any).id);
-              } else {
-                await supabase
-                  .from('ai_conversation_summaries')
-                  .insert({ user_id: userId, conversation_id: conversationId, summary_text: updatedSummary, message_count: msgsForSummary.length });
-              }
-            } else if (conversationId) {
-              localStorage.setItem(`wakti_local_summary_${conversationId}`, updatedSummary);
-            }
-          }
-        } catch {}
-
-        try { localStorage.setItem('wakti_last_seen_at', String(Date.now())); } catch {}
-
-        return data; // { response, imageUrl?, error?, ... }
+        return {
+          response: language === 'ar' ? 'تم إنشاء الصورة.' : 'Image generated.',
+          imageUrl: json.url,
+          error: false,
+          metadata: { provider: 'runware', model: (json as any)?.model || (imageQuality === 'best_fast' ? 'runware:108@20' : 'runware:106@1'), quality: imageQuality || 'fast', mode }
+        } as any;
       }
 
       // Vision/chat/search accumulation via streaming method under the hood

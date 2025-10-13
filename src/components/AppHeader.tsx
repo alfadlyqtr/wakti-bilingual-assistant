@@ -201,12 +201,12 @@ export function AppHeader() {
     setMobileNavOpen(!mobileNavOpen);
   };
 
-  return (
+  const headerEl = (
     <header
       className={cn(
         "h-16 border-b border-white/10",
         "glue-fixed glue-top glue-z shadow-md",
-        "solid-bg", // Make header solid
+        "solid-bg app-header-fixed",
         language === 'ar' ? 'font-arabic' : ''
       )}
       style={{
@@ -344,4 +344,10 @@ export function AppHeader() {
       )}
     </header>
   );
+
+  // Option A: Portal the entire header to body on mobile to avoid ancestor scroll/transform issues
+  if (isMobile) {
+    return createPortal(headerEl, document.body);
+  }
+  return headerEl;
 }
