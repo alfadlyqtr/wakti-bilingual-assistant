@@ -1,9 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Trash2, MessageSquare, Clock, Plus, RefreshCw, Trash, Eraser, CheckCircle } from 'lucide-react';
+import { Trash2, MessageSquare, Clock, Plus, RefreshCw, Trash, Eraser, CheckCircle, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   AlertDialog,
@@ -16,6 +16,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { SavedConversationsService } from '@/services/SavedConversationsService';
+import { toast } from '@/hooks/use-toast';
 
 interface Conversation {
   id: string;
@@ -51,6 +53,8 @@ export function ConversationsList({
 }: ConversationsListProps) {
   const { language, toggleLanguage } = useTheme();
   const [isClearing, setIsClearing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [cloudConvos, setCloudConvos] = useState<Array<{ id: string; title: string; message_count: number; last_message_at: string }>>([]);
 
   // Limit to 5 conversations
   const limitedConversations = conversations.slice(0, 5);
@@ -81,6 +85,28 @@ export function ConversationsList({
     onClose?.();
   };
 
+  const handleSaveConversation = async () => {
+    try {
+      if (sessionMessages.length === 0) return;
+      setIsSaving(true);
+      const id = await SavedConversationsService.saveCurrentConversation(sessionMessages, currentConversationId || undefined);
+      toast({
+        title: language === 'ar' ? 'تم الحفظ' : 'Saved',
+        description: language === 'ar' ? 'تم حفظ المحادثة سحابيًا. يمكنك استعادتها على أي جهاز.' : 'Conversation saved to cloud. You can retrieve it on any device.'
+      });
+      try { await fetchCloudConvos(); } catch {}
+    } catch (e: any) {
+      console.error('💾 Save failed:', e);
+      toast({
+        title: language === 'ar' ? 'فشل الحفظ' : 'Save failed',
+        description: e?.message || (language === 'ar' ? 'تعذر حفظ المحادثة.' : 'Could not save the conversation.'),
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleClearChat = () => {
     console.log('🧹 CONVERSATIONS: User clearing current chat');
     onClearChat();
@@ -102,6 +128,19 @@ export function ConversationsList({
       setIsClearing(false);
     }
   };
+
+  const fetchCloudConvos = async () => {
+    try {
+      const list = await SavedConversationsService.listSavedConversations();
+      setCloudConvos(Array.isArray(list) ? list : []);
+    } catch (e) {
+      // silent; user might be offline or not authenticated yet
+    }
+  };
+
+  useEffect(() => {
+    fetchCloudConvos();
+  }, []);
 
   const formatRelativeTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -154,6 +193,18 @@ export function ConversationsList({
           >
             <Plus className="h-3 w-3 mr-1" />
             {language === 'ar' ? 'محادثة جديدة' : 'New Chat'}
+          </Button>
+          {/* Save Conversation to Cloud */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSaveConversation}
+            disabled={isSaving || sessionMessages.length === 0}
+            className="h-8 px-3 text-xs"
+            title={language === 'ar' ? 'حفظ المحادثة سحابيًا' : 'Save conversation to cloud'}
+          >
+            <Save className="h-3 w-3 mr-1" />
+            {language === 'ar' ? 'حفظ' : 'Save'}
           </Button>
           
           <Button
@@ -253,6 +304,62 @@ export function ConversationsList({
       {/* Conversations List */}
       <ScrollArea className="flex-1 p-4">
         <div className="space-y-2">
+          {/* Cloud-saved conversations */}
+          {cloudConvos.length > 0 && (
+            <div className="mb-3">
+              <div className="text-xs font-medium text-muted-foreground mb-1">{language === 'ar' ? 'المحادثات المحفوظة سحابيًا' : 'Saved to Cloud'}</div>
+              <div className="space-y-1">
+                {cloudConvos.map((c) => (
+                  <div key={c.id} className="flex items-center justify-between p-2 rounded-md border gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium truncate">{c.title}</div>
+                      <div className="text-xs text-muted-foreground">{new Date(c.last_message_at).toLocaleString(language === 'ar' ? 'ar' : 'en')}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        className="text-xs px-2 py-1 rounded-md border hover:bg-blue-50 text-blue-700 border-blue-200"
+                        onClick={async () => {
+                          const proposed = window.prompt(language === 'ar' ? 'أدخل اسماً جديداً' : 'Enter a new name', c.title) || '';
+                          const newTitle = proposed.trim();
+                          if (!newTitle || newTitle === c.title) return;
+                          const prev = [...cloudConvos];
+                          setCloudConvos(prev.map(cc => cc.id === c.id ? { ...cc, title: newTitle } : cc));
+                          try {
+                            await SavedConversationsService.updateTitle(c.id, newTitle);
+                            toast({ title: language === 'ar' ? 'تمت إعادة التسمية' : 'Renamed' });
+                          } catch (err) {
+                            setCloudConvos(prev); // revert
+                            toast({ title: language === 'ar' ? 'تعذر إعادة التسمية' : 'Rename failed', variant: 'destructive' });
+                          }
+                        }}
+                        title={language === 'ar' ? 'إعادة تسمية' : 'Rename'}
+                      >
+                        {language === 'ar' ? 'إعادة تسمية' : 'Rename'}
+                      </button>
+                      <div className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Cloud</div>
+                      <button
+                        className="text-xs px-2 py-1 rounded-md border hover:bg-red-50 text-red-700 border-red-200"
+                        onClick={async () => {
+                          const prev = [...cloudConvos];
+                          setCloudConvos(prev.filter(cc => cc.id !== c.id));
+                          try {
+                            await SavedConversationsService.deleteSavedConversation(c.id);
+                            toast({ title: language === 'ar' ? 'تم الحذف' : 'Deleted' });
+                          } catch (err) {
+                            setCloudConvos(prev); // revert
+                            toast({ title: language === 'ar' ? 'تعذر الحذف' : 'Delete failed', variant: 'destructive' });
+                          }
+                        }}
+                        title={language === 'ar' ? 'حذف' : 'Delete'}
+                      >
+                        {language === 'ar' ? 'حذف' : 'Delete'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {limitedConversations.map((conversation) => (
             <div
               key={conversation.id}

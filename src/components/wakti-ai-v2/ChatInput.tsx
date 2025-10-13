@@ -302,14 +302,21 @@ export function ChatInput({
   // Auto-reset vision mode when no images are present
   useEffect(() => {
     // Only auto-reset if we previously auto-switched to vision mode
-    if (wasAutoSwitchedToVision && uploadedFiles.length === 0 && activeTrigger === 'vision') {
+    const hasAnyImage = Array.isArray(uploadedFiles) && uploadedFiles.some((f: any) => {
+      const t = (f?.type || '') as string;
+      const url = (f?.url || '') as string;
+      const isImageType = t.startsWith('image/');
+      const isImageUrl = typeof url === 'string' && (url.startsWith('http') || url.startsWith('data:'));
+      return isImageType || isImageUrl;
+    });
+    if (wasAutoSwitchedToVision && activeTrigger === 'vision' && !hasAnyImage) {
       console.log('🔄 AUTO-RESET: No images present, switching back to chat mode');
       if (onTriggerChange) {
         onTriggerChange('chat');
       }
       setWasAutoSwitchedToVision(false);
     }
-  }, [uploadedFiles.length, activeTrigger, wasAutoSwitchedToVision, onTriggerChange]);
+  }, [uploadedFiles, activeTrigger, wasAutoSwitchedToVision, onTriggerChange]);
 
   // When in Image mode and switching to Text2Image, clear any seed uploads from other submodes
   useEffect(() => {

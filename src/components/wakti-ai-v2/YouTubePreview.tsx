@@ -396,7 +396,7 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ videoId, title, 
   // (Reverted) No Media Session integration; retain prior stable behavior.
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 w-full md:max-w-[720px] lg:max-w-[820px] mx-auto">
       <div className="font-medium" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
         {title}
       </div>

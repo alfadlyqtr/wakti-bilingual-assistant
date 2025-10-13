@@ -222,21 +222,18 @@ serve(async (req) => {
            });
          }
 
-        // Try OpenAI first, fallback to Claude
+        // Choose provider order based on visionPrimary
+        // If client asked for Claude, try Claude first, else try OpenAI first
         let aiProvider = 'unknown';
         let streamReader: ReadableStreamDefaultReader | null = null;
-        let openaiError: Error | null = null;
+        const primaryIsClaude = useVisionMode && (visionPrimary === 'claude');
+        console.log(`🧠 PROVIDER ORDER: primary=${primaryIsClaude ? 'claude' : 'openai'}, useVisionMode=${useVisionMode}`);
 
-        try {
-          // TRY OPENAI FIRST
-          if (!OPENAI_API_KEY) {
-            throw new Error('OpenAI API key not configured');
-          }
-          
-          // Select model based on vision mode
+        // Small helpers
+        const tryOpenAI = async () => {
+          if (!OPENAI_API_KEY) throw new Error('OpenAI API key not configured');
           const model = useVisionMode ? 'gpt-4o' : 'gpt-4o-mini';
           console.log(`🤖 STREAMING: Attempting OpenAI (${model})${useVisionMode ? ' with vision' : ''}...`);
-          
           const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -244,65 +241,68 @@ serve(async (req) => {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              model: model,
-              messages: messages,
+              model,
+              messages,
               temperature: 0.7,
               max_tokens: 4000,
               stream: true,
             }),
           });
+          if (!openaiResponse.ok) throw new Error(`OpenAI failed with status: ${openaiResponse.status}`);
+          aiProvider = 'openai';
+          streamReader = openaiResponse.body?.getReader() || null;
+          console.log('✅ STREAMING: Using OpenAI');
+        };
 
-          if (openaiResponse.ok) {
-            aiProvider = 'openai';
-            streamReader = openaiResponse.body?.getReader() || null;
-            console.log('✅ STREAMING: Using OpenAI');
-          } else {
-            throw new Error(`OpenAI failed with status: ${openaiResponse.status}`);
+        const tryClaude = async () => {
+          if (!ANTHROPIC_API_KEY) throw new Error('Claude API key not configured');
+          const { system, messages: claudeMessages } = convertMessagesToClaudeFormat(messages);
+          console.log(`🤖 STREAMING: Attempting Claude${useVisionMode ? ' with vision' : ''}...`);
+          const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'x-api-key': ANTHROPIC_API_KEY,
+              'anthropic-version': '2023-06-01',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: 'claude-3-5-sonnet-20241022',
+              messages: claudeMessages,
+              system,
+              max_tokens: 4000,
+              stream: true,
+            }),
+          });
+          if (!claudeResponse.ok) {
+            const errorText = await claudeResponse.text();
+            throw new Error(`Claude failed with status: ${claudeResponse.status} - ${errorText}`);
           }
-          
-        } catch (error) {
-          openaiError = error as Error;
-          console.warn('⚠️ STREAMING: OpenAI failed, attempting Claude fallback...', openaiError.message);
-          
-          // FALLBACK TO CLAUDE
-          if (!ANTHROPIC_API_KEY) {
-            throw new Error(`OpenAI failed and Claude API key not configured. OpenAI error: ${openaiError.message}`);
-          }
-          
-          try {
-            const { system, messages: claudeMessages } = convertMessagesToClaudeFormat(messages);
-            
-            console.log(`🤖 STREAMING: Using Claude${useVisionMode ? ' with vision' : ''}...`);
-            
-            const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
-              method: 'POST',
-              headers: {
-                'x-api-key': ANTHROPIC_API_KEY,
-                'anthropic-version': '2023-06-01',
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                model: 'claude-3-5-sonnet-20241022',
-                messages: claudeMessages,
-                system: system,
-                max_tokens: 4000,
-                stream: true,
-              }),
-            });
+          aiProvider = 'claude';
+          streamReader = claudeResponse.body?.getReader() || null;
+          console.log('✅ STREAMING: Using Claude');
+        };
 
-            if (!claudeResponse.ok) {
-              const errorText = await claudeResponse.text();
-              throw new Error(`Claude failed with status: ${claudeResponse.status} - ${errorText}`);
+        try {
+          if (primaryIsClaude) {
+            // Claude first, fallback to OpenAI
+            try {
+              await tryClaude();
+            } catch (errClaude) {
+              console.warn('⚠️ STREAMING: Claude failed, attempting OpenAI fallback...', (errClaude as Error).message);
+              await tryOpenAI();
             }
-
-            aiProvider = 'claude';
-            streamReader = claudeResponse.body?.getReader() || null;
-            console.log('✅ STREAMING: Using Claude (fallback)');
-            
-          } catch (claudeError) {
-            console.error('❌ STREAMING: Both OpenAI and Claude failed');
-            throw new Error(`All AI providers failed. OpenAI: ${openaiError.message}, Claude: ${(claudeError as Error).message}`);
+          } else {
+            // OpenAI first, fallback to Claude (existing behavior)
+            try {
+              await tryOpenAI();
+            } catch (errOpenAI) {
+              console.warn('⚠️ STREAMING: OpenAI failed, attempting Claude fallback...', (errOpenAI as Error).message);
+              await tryClaude();
+            }
           }
+        } catch (finalErr) {
+          console.error('❌ STREAMING: All providers failed', (finalErr as Error).message);
+          throw finalErr;
         }
 
         // STREAM THE RESPONSE
