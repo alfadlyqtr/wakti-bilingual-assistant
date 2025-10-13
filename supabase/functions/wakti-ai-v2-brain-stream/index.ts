@@ -2,6 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { executeRegularSearch } from './search.ts'
+import { VisionSystem } from './vision.ts'
 
 const allowedOrigins = [
   'https://wakti.qa',
@@ -99,8 +100,19 @@ serve(async (req) => {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const { message, conversationId, language = 'en', recentMessages = [], personalTouch = null, activeTrigger = 'general' } = await req.json();
+        const { 
+          message, 
+          conversationId, 
+          language = 'en', 
+          recentMessages = [], 
+          personalTouch = null, 
+          activeTrigger = 'general',
+          attachedFiles = [],
+          visionPrimary = 'claude'
+        } = await req.json();
         const responseLanguage = language;
+        
+        console.log(`🎯 REQUEST RECEIVED: trigger=${activeTrigger}, hasFiles=${attachedFiles?.length || 0}, language=${language}`);
 
         if (!message) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Message is required' })}\n\n`));
@@ -123,22 +135,12 @@ serve(async (req) => {
           timeZone: 'Asia/Qatar'
         });
 
-        let systemPrompt = responseLanguage === 'ar'
-          ? `أنت WAKTI AI، مساعد ذكي ومفيد. التاريخ الحالي: ${currentDate}. قدم إجابات واضحة ودقيقة.`
-          : `You are WAKTI AI, an intelligent and helpful assistant. Current date: ${currentDate}. Provide clear and accurate answers.`;
+        // Check if vision mode should be used
+        const useVisionMode = VisionSystem.shouldUseVisionMode(activeTrigger, attachedFiles);
+        console.log(`👁️ VISION MODE: ${useVisionMode ? 'ENABLED' : 'DISABLED'}`);
 
-        if (personalTouch) {
-          const parts = [];
-          if (personalTouch.nickname) parts.push(`User name: ${personalTouch.nickname}`);
-          if (personalTouch.aiNickname) parts.push(`AI name: ${personalTouch.aiNickname}`);
-          if (personalTouch.tone) parts.push(`Tone: ${personalTouch.tone}`);
-          if (personalTouch.style) parts.push(`Style: ${personalTouch.style}`);
-          if (personalTouch.instruction) parts.push(`Instructions: ${personalTouch.instruction}`);
-          
-        if (parts.length > 0) {
-            systemPrompt += `\n\nPersonalization: ${parts.join(', ')}`;
-          }
-        }
+        // Build enhanced system prompt (includes vision capabilities if needed)
+        const systemPrompt = VisionSystem.buildCompleteSystemPrompt(responseLanguage, currentDate, personalTouch);
         
         // Log personalization application
         console.log('🎨 PERSONAL TOUCH APPLIED:', {
@@ -167,7 +169,7 @@ serve(async (req) => {
         }
         
         // Inject web search context when in Search mode (non-vision)
-        if (activeTrigger === 'search') {
+        if (activeTrigger === 'search' && !useVisionMode) {
           try {
             const s = await executeRegularSearch(message, responseLanguage);
             if (s?.success && s?.context) {
@@ -201,15 +203,24 @@ serve(async (req) => {
           }
         }
          
-         // Add language enforcement directly in the user message
-         const languagePrefix = responseLanguage === 'ar' 
-           ? 'يرجى الرد باللغة العربية فقط. قدم إجابة مباشرة بدون إضافة "المصدر:" في النهاية. ' 
-           : 'Please respond in English only. Provide a direct answer without adding "Source:" attribution at the end. ';
-         
-         messages.push({
-           role: 'user',
-           content: languagePrefix + message
-         });
+         // Add user message (with images if in vision mode)
+         if (useVisionMode) {
+           // Determine provider for vision formatting
+           const provider = visionPrimary === 'openai' ? 'openai' : 'claude';
+           const visionMessage = VisionSystem.buildVisionMessage(message, attachedFiles, responseLanguage, provider);
+           messages.push(visionMessage);
+           console.log(`👁️ VISION MESSAGE: Built for ${provider} with ${attachedFiles?.length || 0} files`);
+         } else {
+           // Regular text message
+           const languagePrefix = responseLanguage === 'ar' 
+             ? 'يرجى الرد باللغة العربية فقط. قدم إجابة مباشرة بدون إضافة "المصدر:" في النهاية. ' 
+             : 'Please respond in English only. Provide a direct answer without adding "Source:" attribution at the end. ';
+           
+           messages.push({
+             role: 'user',
+             content: languagePrefix + message
+           });
+         }
 
         // Try OpenAI first, fallback to Claude
         let aiProvider = 'unknown';
@@ -222,7 +233,9 @@ serve(async (req) => {
             throw new Error('OpenAI API key not configured');
           }
           
-          console.log('🤖 STREAMING: Attempting OpenAI (gpt-4o-mini)...');
+          // Select model based on vision mode
+          const model = useVisionMode ? 'gpt-4o' : 'gpt-4o-mini';
+          console.log(`🤖 STREAMING: Attempting OpenAI (${model})${useVisionMode ? ' with vision' : ''}...`);
           
           const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
@@ -231,7 +244,7 @@ serve(async (req) => {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              model: 'gpt-4o-mini',
+              model: model,
               messages: messages,
               temperature: 0.7,
               max_tokens: 4000,
@@ -258,6 +271,8 @@ serve(async (req) => {
           
           try {
             const { system, messages: claudeMessages } = convertMessagesToClaudeFormat(messages);
+            
+            console.log(`🤖 STREAMING: Using Claude${useVisionMode ? ' with vision' : ''}...`);
             
             const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
               method: 'POST',
