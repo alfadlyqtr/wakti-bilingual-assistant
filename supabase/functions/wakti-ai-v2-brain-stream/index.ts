@@ -120,6 +120,35 @@ serve(async (req) => {
           return;
         }
 
+        // If files have URLs instead of base64, fetch and convert them
+        if (attachedFiles && attachedFiles.length > 0) {
+          for (let i = 0; i < attachedFiles.length; i++) {
+            const file = attachedFiles[i];
+            // Check if this is a storage URL (not base64)
+            if (file.url && !file.data && !file.content) {
+              try {
+                console.log(`📥 Fetching image from storage: ${file.url}`);
+                const response = await fetch(file.url);
+                if (!response.ok) {
+                  console.warn(`⚠️ Failed to fetch image from storage: ${response.status}`);
+                  continue;
+                }
+                const arrayBuffer = await response.arrayBuffer();
+                const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+                // Update the file object with base64 data
+                attachedFiles[i] = {
+                  ...file,
+                  data: base64,
+                  type: file.mimeType || file.type || 'image/jpeg'
+                };
+                console.log(`✅ Converted storage URL to base64 (${base64.length} chars)`);
+              } catch (fetchErr) {
+                console.error(`❌ Error fetching image from storage:`, fetchErr);
+              }
+            }
+          }
+        }
+
         // Build system prompt
         const currentDate = new Date().toLocaleDateString('en-US', { 
           weekday: 'long', 
