@@ -375,6 +375,39 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_saved_conversations: {
+        Row: {
+          created_at: string
+          id: string
+          last_message_at: string
+          message_count: number
+          messages: Json
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_message_at?: string
+          message_count?: number
+          messages: Json
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_message_at?: string
+          message_count?: number
+          messages?: Json
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       ai_usage_logs: {
         Row: {
           created_at: string
@@ -2776,7 +2809,7 @@ export type Database = {
               p_plan_name: string
               p_user_id: string
             }
-        Returns: boolean
+        Returns: Json
       }
       admin_gift_translation_credits: {
         Args: { p_admin_id: string; p_translations: number; p_user_id: string }
