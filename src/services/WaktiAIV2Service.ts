@@ -175,6 +175,103 @@ class WaktiAIV2ServiceClass {
     await this.getUserLocation(userId);
   }
 
+  private approxBase64Bytes(b64: string): number {
+    if (!b64) return 0;
+    const len = b64.length;
+    const padding = (b64.endsWith('==') ? 2 : (b64.endsWith('=') ? 1 : 0));
+    return Math.floor((len * 3) / 4) - padding;
+    }
+
+  private isBrowser(): boolean {
+    try { return typeof window !== 'undefined' && typeof document !== 'undefined'; } catch { return false; }
+  }
+
+  private async downscaleBase64(rawBase64: string, mimeType: string, maxLongEdge = 1280, quality = 0.75): Promise<string> {
+    if (!this.isBrowser()) return rawBase64;
+    const dataUrl = rawBase64.startsWith('data:') ? rawBase64 : `data:${mimeType || 'image/jpeg'};base64,${rawBase64}`;
+    return await new Promise<string>((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const w = img.width || 1;
+        const h = img.height || 1;
+        const long = Math.max(w, h);
+        const ratio = long > maxLongEdge ? maxLongEdge / long : 1;
+        const nw = Math.max(1, Math.round(w * ratio));
+        const nh = Math.max(1, Math.round(h * ratio));
+        const canvas = document.createElement('canvas');
+        canvas.width = nw;
+        canvas.height = nh;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve(rawBase64); return; }
+        ctx.drawImage(img, 0, 0, nw, nh);
+        const out = canvas.toDataURL((mimeType || 'image/jpeg'), quality);
+        const base64 = out.split(',')[1] || '';
+        resolve(base64 || rawBase64);
+      };
+      img.onerror = () => resolve(rawBase64);
+      img.src = dataUrl;
+    });
+  }
+
+  private base64ToBlob(base64: string, mimeType: string): Blob {
+    const binary = atob(base64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], { type: mimeType || 'image/jpeg' });
+  }
+
+  private async uploadVisionToStorage(files: any[], userId: string, requestId: string): Promise<{ url: string; mimeType: string }[]> {
+    const out: { url: string; mimeType: string }[] = [];
+    const bucket = 'wakti-ai-v2'; // reuse existing bucket
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i] || {};
+      const type = (f.type || f.mimeType || 'image/jpeg').toString();
+      const raw = (typeof f.data === 'string' && f.data) ? f.data : (typeof f.content === 'string' ? f.content : '');
+      if (!raw) continue;
+      const blob = this.base64ToBlob(raw, type);
+      const ext = type.includes('png') ? 'png' : type.includes('webp') ? 'webp' : 'jpg';
+      const path = `vision-temp/${userId}/${requestId}/${i}.${ext}`;
+      const { error: upErr } = await supabase.storage.from(bucket).upload(path, blob, { contentType: type, upsert: true });
+      if (upErr) throw upErr;
+      const { data: publicUrl } = supabase.storage.from(bucket).getPublicUrl(path);
+      if (!publicUrl?.publicUrl) throw new Error('no_public_url');
+      out.push({ url: publicUrl.publicUrl, mimeType: type });
+    }
+    return out;
+  }
+
+  private async prepareVisionAttachments(files: any[]): Promise<any[]> {
+    if (!Array.isArray(files) || files.length === 0) return files || [];
+    const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
+    const MAX_TOTAL_BYTES = 4 * 1024 * 1024;
+    const processed: any[] = [];
+    for (const f of files) {
+      if (!f || typeof f !== 'object') { processed.push(f); continue; }
+      const type = (f.type || f.mimeType || '').toString();
+      const isImage = typeof type === 'string' && type.startsWith('image/');
+      const raw = typeof f.data === 'string' && f.data ? f.data : (typeof f.content === 'string' ? f.content : '');
+      if (!isImage || !raw) { processed.push(f); continue; }
+      let outBase64 = raw;
+      const bytes = this.approxBase64Bytes(raw);
+      if (bytes > MAX_IMAGE_BYTES) {
+        outBase64 = await this.downscaleBase64(raw, type, 1280, 0.75);
+      }
+      processed.push({ ...f, data: outBase64, content: outBase64, type });
+    }
+    let total = 0;
+    for (const p of processed) {
+      const type = (p.type || p.mimeType || '').toString();
+      const isImage = typeof type === 'string' && type.startsWith('image/');
+      const raw = typeof p.data === 'string' && p.data ? p.data : (typeof p.content === 'string' ? p.content : '');
+      if (isImage && raw) total += this.approxBase64Bytes(raw);
+    }
+    if (total > MAX_TOTAL_BYTES) {
+      throw new Error('Images too large. Please upload smaller images.');
+    }
+    return processed;
+  }
+
   // Enhanced message handling with session storage
   private getEnhancedMessages(recentMessages: AIMessage[]): AIMessage[] {
     // Combine session storage with current messages
@@ -656,8 +753,175 @@ class WaktiAIV2ServiceClass {
         return { response: fullResponse, metadata };
       };
 
-      // Try Claude first, then auto-fallback to OpenAI on 529/overloaded errors
+      // Vision-first path (Option A rollout): if chat upload has images, prefer new vision endpoint
+      const attemptVision = async (primary: 'claude' | 'openai', visionFiles: any[]) => {
+        if (!visionFiles || visionFiles.length === 0) {
+          throw new Error('No images for vision');
+        }
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+          throw new Error('No valid session for vision');
+        }
+        let maybeAnonKey;
+        try {
+          maybeAnonKey = (typeof window !== 'undefined' && (window as any).__SUPABASE_ANON_KEY)
+            || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
+        } catch (e) {
+          maybeAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
+        }
+
+        const pt = this.ensurePersonalTouch();
+        const supabaseUrl = ((import.meta as any).env && (import.meta as any).env.VITE_SUPABASE_URL)
+          || 'https://hxauxozopvpzpdygoqwf.supabase.co';
+
+        const resp = await fetch(`${supabaseUrl}/functions/v1/wakti-vision-stream`, {
+          method: 'POST',
+          mode: 'cors',
+          cache: 'no-cache',
+          credentials: 'omit',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+            'Accept': 'text/event-stream',
+            'apikey': maybeAnonKey
+          },
+          body: JSON.stringify({
+            requestId,
+            prompt: message,
+            language,
+            personalTouch: pt,
+            provider: primary,
+            images: visionFiles,
+            options: { ocr: true, max_tokens: 1200 }
+          }),
+          signal
+        });
+
+        if (!resp.ok) throw new Error(`Vision HTTP ${resp.status}`);
+
+        const reader = resp.body?.getReader();
+        if (!reader) throw new Error('No response body reader for vision');
+
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullResponse = '';
+        let metadata: any = {};
+        let encounteredError: string | null = null;
+        let isCompleted = false;
+
+        const abortHandler = async () => { try { await reader.cancel(); } catch {} };
+        if (signal) {
+          if (signal.aborted) {
+            await abortHandler();
+            throw new Error('Streaming aborted');
+          }
+          signal.addEventListener('abort', abortHandler, { once: true });
+        }
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+              if (!isCompleted) onComplete?.(metadata);
+              console.log(`✅ VISION: Stream closed cleanly [${requestId}] (primary=${primary})`);
+              break;
+            }
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              const data = line.slice(6);
+              if (data === '[DONE]') {
+                if (!isCompleted) { onComplete?.(metadata); isCompleted = true; }
+                console.log(`🏁 VISION: Received [DONE] [${requestId}] (primary=${primary})`);
+                continue;
+              }
+              try {
+                const parsed = JSON.parse(data);
+                if (parsed.error) {
+                  encounteredError = typeof parsed.error === 'string' ? parsed.error : (parsed.error?.message || 'vision_error');
+                  continue;
+                }
+                if (parsed.json && typeof parsed.json === 'object') {
+                  metadata = { ...metadata, visionJson: parsed.json };
+                  continue;
+                }
+                if (typeof parsed.token === 'string') {
+                  onToken?.(parsed.token);
+                  fullResponse += parsed.token;
+                } else if (typeof parsed.content === 'string') {
+                  onToken?.(parsed.content);
+                  fullResponse += parsed.content;
+                }
+                if (parsed.metadata && typeof parsed.metadata === 'object') {
+                  metadata = { ...metadata, ...parsed.metadata };
+                }
+              } catch {
+                onToken?.(data);
+                fullResponse += data;
+              }
+            }
+          }
+        } finally {
+          try { reader.releaseLock(); } catch {}
+          if (signal) signal.removeEventListener('abort', abortHandler as any);
+          try { localStorage.setItem('wakti_last_seen_at', String(Date.now())); } catch {}
+        }
+
+        if (encounteredError) throw new Error(String(encounteredError));
+        return { response: fullResponse, metadata };
+      };
+
+      // Try Claude first, then auto-fallback to OpenAI on 529/overloaded errors (text/search or fallback vision)
       try {
+        // If we have images from Chat upload, attempt the new Vision endpoint first (Option A)
+        if (attachedFiles && attachedFiles.length > 0 && activeTrigger !== 'image') {
+          // Preflight: size-check and downscale large images client-side to avoid gateway aborts
+          let processedFiles: any[] = [];
+          try {
+            processedFiles = await this.prepareVisionAttachments(attachedFiles);
+          } catch (prepErr: any) {
+            const msg = (prepErr?.message || 'Images too large. Please upload smaller images.');
+            onError?.(msg);
+            return { response: msg, conversationId, metadata: { vision: 'client_preflight_reject' } } as any;
+          }
+          // Compute client bytes total
+          let clientBytesTotal = 0;
+          for (const p of processedFiles) {
+            const type = (p.type || p.mimeType || '').toString();
+            const isImage = typeof type === 'string' && type.startsWith('image/');
+            const raw = typeof p.data === 'string' && p.data ? p.data : (typeof p.content === 'string' ? p.content : '');
+            if (isImage && raw) clientBytesTotal += this.approxBase64Bytes(raw);
+          }
+          // Upload to storage and use URLs to avoid large request bodies
+          let urlFiles: any[] = [];
+          try {
+            const up = await this.uploadVisionToStorage(processedFiles, userId as string, requestId);
+            urlFiles = up.map((u, idx) => ({ url: u.url, mimeType: u.mimeType, type: u.mimeType, index: idx }));
+          } catch (upErr: any) {
+            console.error('vision storage upload failed', upErr);
+            onError?.('Unable to upload images. Please try again.');
+            return { response: 'Upload failed', conversationId, metadata: { vision: 'storage_upload_failed' } } as any;
+          }
+          try {
+            // Send URL list only
+            const vres = await attemptVision('claude', urlFiles);
+            return { response: vres.response, conversationId, metadata: vres.metadata };
+          } catch (vErr: any) {
+            const msg = String(vErr?.message || vErr || '').toLowerCase();
+            const shouldFallbackVision = msg.includes('overloaded') || msg.includes('529') || msg.includes('claude');
+            if (shouldFallbackVision) {
+              console.warn('⚠️ Vision Claude overloaded, falling back to OpenAI Vision...');
+              const vres2 = await attemptVision('openai', urlFiles);
+              return { response: vres2.response, conversationId, metadata: vres2.metadata };
+            }
+            console.warn('⚠️ Vision endpoint failed, falling back to brain stream...');
+          }
+        }
+
+        // Normal chat path (or vision fallback to brain)
         const res = await attemptStream('claude');
         return { response: res.response, conversationId, metadata: res.metadata };
       } catch (err: any) {
