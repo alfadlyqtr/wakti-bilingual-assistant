@@ -18,7 +18,7 @@ type ModelPreference = 'gpt-4o' | 'gpt-4o-mini' | 'auto';
 // Stable keys for option values; labels are localized at render time
 type ContentTypeKey =
   | 'email' | 'text_message' | 'message' | 'blog_post' | 'story' | 'press_release' | 'cover_letter'
-  | 'research_brief' | 'research_report' | 'case_study' | 'how_to_guide' | 'policy_note' | 'product_description' | 'essay' | 'proposal' | 'official_letter' | 'poem'
+  | 'research_brief' | 'research_report' | 'case_study' | 'how_to_guide' | 'policy_note' | 'product_description' | 'report' | 'essay' | 'proposal' | 'official_letter' | 'poem'
   | 'school_project' | 'questionnaire';
 type ToneKey =
   | 'professional' | 'casual' | 'formal' | 'friendly' | 'persuasive' | 'romantic' | 'neutral' | 'empathetic' | 'confident' | 'humorous' | 'urgent'
@@ -36,7 +36,7 @@ type EmojisKey = 'auto' | 'none' | 'light' | 'rich' | 'extra';
 
 const CONTENT_TYPE_KEYS: ContentTypeKey[] = [
   'email', 'text_message', 'message', 'blog_post', 'story', 'press_release', 'cover_letter',
-  'research_brief', 'research_report', 'case_study', 'how_to_guide', 'policy_note', 'product_description', 'essay', 'proposal', 'official_letter', 'poem',
+  'research_brief', 'research_report', 'case_study', 'how_to_guide', 'policy_note', 'product_description', 'report', 'essay', 'proposal', 'official_letter', 'poem',
   'school_project', 'questionnaire'
 ];
 const TONE_KEYS: ToneKey[] = [
@@ -52,12 +52,12 @@ const EMOJIS_KEYS: EmojisKey[] = ['auto', 'none', 'light', 'rich', 'extra'];
 const ctLabel = (k: ContentTypeKey, lang: 'en' | 'ar') => {
   const en: Record<ContentTypeKey, string> = {
     email: 'Email', text_message: 'Text Message', message: 'Message', blog_post: 'Blog Post', story: 'Story', press_release: 'Press Release', cover_letter: 'Cover Letter',
-    research_brief: 'Research Brief', research_report: 'Research Report', case_study: 'Case Study', how_to_guide: 'How-to Guide', policy_note: 'Policy Note', product_description: 'Product Description', essay: 'Essay', proposal: 'Proposal', official_letter: 'Official Letter', poem: 'Poem',
+    research_brief: 'Research Brief', research_report: 'Research Report', case_study: 'Case Study', how_to_guide: 'How-to Guide', policy_note: 'Policy Note', product_description: 'Product Description', report: 'Report', essay: 'Essay', proposal: 'Proposal', official_letter: 'Official Letter', poem: 'Poem',
     school_project: 'School Project', questionnaire: 'Questionnaire'
   };
   const ar: Record<ContentTypeKey, string> = {
     email: 'بريد إلكتروني', text_message: 'رسالة نصية', message: 'رسالة', blog_post: 'مقال مدونة', story: 'قصة', press_release: 'بيان صحفي', cover_letter: 'خطاب تقديم', poem: 'قصيدة',
-    research_brief: 'موجز بحثي', research_report: 'تقرير بحثي', case_study: 'دراسة حالة', how_to_guide: 'دليل إرشادي', policy_note: 'مذكرة سياسات', product_description: 'وصف منتج', essay: 'مقال', proposal: 'اقتراح', official_letter: 'خطاب رسمي',
+    research_brief: 'موجز بحثي', research_report: 'تقرير بحثي', case_study: 'دراسة حالة', how_to_guide: 'دليل إرشادي', policy_note: 'مذكرة سياسات', product_description: 'وصف منتج', report: 'تقرير', essay: 'مقال', proposal: 'اقتراح', official_letter: 'خطاب رسمي',
     school_project: 'مشروع مدرسي', questionnaire: 'استبيان'
   };
   return lang === 'ar' ? ar[k] : en[k];

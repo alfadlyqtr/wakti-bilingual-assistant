@@ -56,16 +56,29 @@ const EnhancedAudioControls: React.FC<EnhancedAudioControlsProps> = ({
       setIsPlaying(false);
     };
 
+    const handlePlaying = () => {
+      setIsPlaying(true);
+    };
+
+    const handlePaused = () => {
+      setIsPlaying(false);
+      onPause?.();
+    };
+
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('error', handleError);
+    audio.addEventListener('playing', handlePlaying);
+    audio.addEventListener('pause', handlePaused);
 
     return () => {
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('error', handleError);
+      audio.removeEventListener('playing', handlePlaying);
+      audio.removeEventListener('pause', handlePaused);
     };
   }, [audioUrl, labels.error, onTimeUpdate, onLoadedMetadata, onPause]);
 
@@ -120,7 +133,7 @@ const EnhancedAudioControls: React.FC<EnhancedAudioControlsProps> = ({
 
   return (
     <div className="space-y-3">
-      <audio ref={audioRef} src={audioUrl} preload="metadata" />
+      <audio ref={audioRef} src={audioUrl} preload="metadata" playsInline />
       
       <div className="flex items-center justify-center gap-2">
         <Button
@@ -133,7 +146,7 @@ const EnhancedAudioControls: React.FC<EnhancedAudioControlsProps> = ({
         </Button>
         
         <Button
-          onClick={handlePlay}
+          onPointerUp={handlePlay}
           variant={isPlaying ? "secondary" : "default"}
           size="sm"
           disabled={!duration}
