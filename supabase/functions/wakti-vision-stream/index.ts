@@ -48,14 +48,40 @@ function normalizeImage(input: { mimeType?: string; dataBase64?: string; url?: s
   return { mimeType: mime || 'image/jpeg', base64: data };
 }
 
+// Download an image by URL and return its base64 data and mime type
+async function fetchImageAsBase64(url: string): Promise<{ base64: string; mimeType: string; byteLength: number }>{
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to fetch image URL (${res.status})`);
+  const mimeHeader = (res.headers.get('content-type') || 'image/jpeg').split(';')[0].toLowerCase().replace('image/jpg', 'image/jpeg');
+  const ab = await res.arrayBuffer();
+  const bytes = new Uint8Array(ab);
+  let binary = '';
+  // Build binary string in chunks to avoid call stack limits for large files
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const sub = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, Array.from(sub) as unknown as number[]);
+  }
+  const base64 = btoa(binary);
+  return { base64, mimeType: mimeHeader, byteLength: bytes.byteLength };
+}
+
 function buildSystemPrompt(language: string, currentDate: string, personalTouch: any) {
   const pt = personalTouch || {};
-  const nick = pt.nickname ? `Use the user's nickname "${pt.nickname}" naturally.` : '';
-  const tone = pt.tone ? `Adopt a ${pt.tone} tone.` : '';
-  const style = pt.style ? `Structure responses as ${pt.style}.` : '';
-  const langRule = language === 'ar' 
+  const langRule = language === 'ar'
     ? 'CRITICAL: Respond ONLY in Arabic. Do NOT use English.'
     : 'CRITICAL: Respond ONLY in English. Do NOT use Arabic.';
+
+  const ptNick = (pt.nickname || '').toString().trim();
+  const ptTone = (pt.tone || '').toString().trim();
+  const ptStyle = (pt.style || '').toString().trim();
+
+  const PT_ENFORCEMENT = `
+CRITICAL PERSONAL TOUCH ENFORCEMENT ===
+- Nickname: ${ptNick ? `Use the user's nickname "${ptNick}" frequently and naturally in your responses.` : 'No nickname provided.'}
+- Tone: ${ptTone ? `Maintain a ${ptTone} tone consistently.` : 'Default to neutral tone.'}
+- Style: ${ptStyle ? `Shape your structure as ${ptStyle}.` : 'Keep answers concise and clear.'}
+`;
 
   const VISION_CAPS = `ENHANCED VISION CAPABILITIES (Documents + General Photos + Screenshots) ===
 - You can analyze images and describe their content in detail
@@ -74,12 +100,25 @@ function buildSystemPrompt(language: string, currentDate: string, personalTouch:
 - You can compare multiple images and explain differences; state uncertainty when needed
 - Always perform OCR on visible text; be precise and grounded in the image content`;
 
+  const TABLE_ENFORCEMENT = `
+CRITICAL TABLE MODE ENFORCEMENT ===
+- If the user requests a "table view", "tabular", "columns/rows", or similar formatting:
+  1) Populate the JSON 'tables' field with 'headers' and 'rows' reflecting extracted fields.
+  2) In PART 2 (SUMMARY), render a compact Markdown table mirroring the main extracted fields.
+- Prefer canonical field names (e.g., Name, Document No., Nationality, DOB, Expiry, Issuer, etc.).
+- Keep columns aligned; avoid overly wide texts; truncate where necessary.
+`;
+
   return `${langRule}
+
+${PT_ENFORCEMENT}
 
 You are WAKTI Vision — a specialized image understanding service. Date: ${currentDate}
 Your job: analyze user-uploaded images from Chat mode (not Image Mode), perform OCR/extraction/reasoning, and answer directly.
 
 ${VISION_CAPS}
+
+${TABLE_ENFORCEMENT}
 
 OUTPUT REQUIREMENTS:
 - Always return BOTH parts in this order:
@@ -106,9 +145,9 @@ PEOPLE DESCRIPTION POLICY:
 - Do NOT identify real persons by name or claim identity.
 
 Personal Touch:
-- ${nick}
-- ${tone}
-- ${style}
+- Nickname: ${ptNick || 'N/A'}
+- Tone: ${ptTone || 'neutral'}
+- Style: ${ptStyle || 'short answers'}
 - Keep responses aligned with user language (${language}).`;
 }
 
@@ -133,10 +172,7 @@ function convertToClaude(systemPrompt: string, prompt: string, language: string,
   const content: any[] = [];
   content.push({ type: 'text', text: `${language === 'ar' ? 'يرجى الرد باللغة العربية فقط.' : 'Please respond in English only.'} ${prompt || ''}`.trim() });
   for (const img of images) {
-    if (img.url) {
-      // Anthropic URL source must NOT include media_type
-      content.push({ type: 'image', source: { type: 'url', url: img.url } });
-    } else if (img.base64) {
+    if (img.base64) {
       content.push({ type: 'image', source: { type: 'base64', media_type: img.mimeType, data: img.base64 } });
     }
   }
@@ -270,8 +306,23 @@ serve(async (req) => {
                            .filter(Boolean) as { mimeType: string; base64?: string; url?: string }[];
         if (norm.length === 0) throw new Error('No valid images');
 
-        // Per-image size cap: 8MB (base64 length ~ 4/3 of bytes)
-        const MAX_BYTES = 8 * 1024 * 1024;
+        // Convert any URL images to base64 for Anthropic compatibility
+        const MAX_BYTES = 8 * 1024 * 1024; // 8MB
+        for (const n of norm) {
+          if (n.url) {
+            const originalMime = n.mimeType; // preserve the original mime from the frontend
+            const { base64, mimeType, byteLength } = await fetchImageAsBase64(n.url);
+            if (byteLength > MAX_BYTES) {
+              throw new Error('Image too large (max 8MB). Please upload a smaller image.');
+            }
+            n.base64 = base64;
+            // Prefer the original mimeType coming from the client; fallback to fetched header
+            n.mimeType = originalMime || mimeType;
+            delete (n as any).url;
+          }
+        }
+
+        // Per-image size cap: validate base64 sizes as well (if images came in as base64)
         for (const n of norm) {
           if (n.base64) {
             const approxBytes = Math.floor((n.base64.length * 3) / 4);

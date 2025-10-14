@@ -73,6 +73,14 @@ export function AppLayout({ children }: AppLayoutProps) {
     }
   }, [location.pathname]);
 
+  useEffect(() => {
+    document.body.style.pointerEvents = '';
+    document.body.removeAttribute('data-scroll-locked');
+    const rootEl = document.getElementById('root');
+    if (rootEl) rootEl.removeAttribute('data-aria-hidden');
+    document.querySelectorAll('[data-aria-hidden="true"]').forEach((el) => el.removeAttribute('data-aria-hidden'));
+  }, [location.pathname]);
+
   // Conditional rendering based on screen size
   if (isMobile) {
     return <MobileAppLayout>{children}</MobileAppLayout>;

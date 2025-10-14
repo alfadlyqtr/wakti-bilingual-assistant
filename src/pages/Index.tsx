@@ -6,7 +6,7 @@ import { Logo3D } from "@/components/Logo3D";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { useTheme } from "@/providers/ThemeProvider";
 import { motion } from "framer-motion";
-import { Check, ArrowRight, Sparkles, Bot, Calendar, Mic, Users, MessageSquare, LogIn, Zap, Star, Image as ImageIcon } from "lucide-react";
+import { Check, ArrowRight, Sparkles, Bot, Calendar, Mic, Users, MessageSquare, LogIn, Zap, Star, Music, Globe, Image as ImageIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { MobileHeader } from "@/components/MobileHeader";
 import { Footer } from "@/components/Footer";
@@ -111,6 +111,63 @@ export default function Index() {
       bgGradient: "from-violet-50 to-purple-50",
       iconColor: "text-violet-600"
     }
+    ,
+    {
+      icon: Zap,
+      title: t("vitalityTitle", language),
+      description: t("vitalityDesc", language),
+      gradient: "from-lime-500 via-green-500 to-emerald-600",
+      bgGradient: "from-lime-50 to-emerald-50",
+      iconColor: "text-emerald-600"
+    },
+    {
+      icon: Calendar,
+      title: t("journalTitle", language),
+      description: t("journalDesc", language),
+      gradient: "from-rose-500 via-pink-500 to-fuchsia-600",
+      bgGradient: "from-rose-50 to-pink-50",
+      iconColor: "text-rose-600"
+    },
+    {
+      icon: MessageSquare,
+      title: t("smartTextTitle", language),
+      description: t("smartTextDesc", language),
+      gradient: "from-indigo-500 via-violet-500 to-purple-600",
+      bgGradient: "from-indigo-50 to-violet-50",
+      iconColor: "text-indigo-600"
+    },
+    {
+      icon: Star,
+      title: t("aiGamesTitle", language),
+      description: t("aiGamesDesc", language),
+      gradient: "from-amber-500 via-orange-500 to-red-600",
+      bgGradient: "from-amber-50 to-orange-50",
+      iconColor: "text-amber-600"
+    },
+    {
+      icon: Mic,
+      title: t("voiceCloningTitle", language),
+      description: t("voiceCloningDesc", language),
+      gradient: "from-cyan-500 via-sky-500 to-blue-600",
+      bgGradient: "from-cyan-50 to-sky-50",
+      iconColor: "text-sky-600"
+    },
+    {
+      icon: Music,
+      title: t("musicGenTitle", language),
+      description: t("musicGenDesc", language),
+      gradient: "from-purple-500 via-fuchsia-500 to-pink-600",
+      bgGradient: "from-purple-50 to-fuchsia-50",
+      iconColor: "text-fuchsia-600"
+    },
+    {
+      icon: Globe,
+      title: t("voiceTranslationTitle", language),
+      description: t("voiceTranslationDesc", language),
+      gradient: "from-teal-500 via-emerald-500 to-green-600",
+      bgGradient: "from-teal-50 to-emerald-50",
+      iconColor: "text-teal-600"
+    }
   ];
 
   return (
@@ -209,7 +266,7 @@ export default function Index() {
                               {feature.title}
                               <Check className="h-4 w-4 text-green-500" />
                             </h3>
-                            <p className="text-sm text-muted-foreground leading-relaxed">
+                            <p className="text-sm text-muted-foreground leading-relaxed w-full">
                               {feature.description}
                             </p>
                           </div>
@@ -413,7 +470,7 @@ export default function Index() {
                                 {feature.title}
                                 <Check className="h-6 w-6 lg:h-7 lg:w-7 text-green-500" />
                               </h3>
-                              <p className="text-lg lg:text-xl text-muted-foreground leading-relaxed">
+                              <p className="text-lg lg:text-xl text-muted-foreground leading-relaxed w-full">
                                 {feature.description}
                               </p>
                             </div>

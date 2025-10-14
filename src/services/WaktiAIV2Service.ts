@@ -35,6 +35,29 @@ class WaktiAIV2ServiceClass {
     try { this.ensurePersonalTouch(); } catch {}
   }
 
+  private async convertImage(base64Data: string, mimeType: string): Promise<{ data: string; type: string }> {
+    if (!this.isBrowser()) return { data: base64Data, type: mimeType || 'image/jpeg' };
+    const src = base64Data.startsWith('data:') ? base64Data : `data:${mimeType || 'image/jpeg'};base64,${base64Data}`;
+    return await new Promise<{ data: string; type: string }>((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const w = img.width || 1;
+        const h = img.height || 1;
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, w);
+        canvas.height = Math.max(1, h);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve({ data: base64Data, type: mimeType || 'image/jpeg' }); return; }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const out = canvas.toDataURL('image/jpeg', 0.9);
+        const b64 = out.split(',')[1] || '';
+        resolve({ data: b64 || base64Data, type: 'image/jpeg' });
+      };
+      img.onerror = () => resolve({ data: base64Data, type: mimeType || 'image/jpeg' });
+      img.src = src;
+    });
+  }
+
   // Safely get user's personal touch preferences from cache or localStorage
   private getPersonalTouch(): any {
     try {
@@ -246,13 +269,19 @@ class WaktiAIV2ServiceClass {
     const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
     const MAX_TOTAL_BYTES = 4 * 1024 * 1024;
     const processed: any[] = [];
+    const supportedTypes = ['image/jpeg', 'image/png', 'image/gif'];
     for (const f of files) {
       if (!f || typeof f !== 'object') { processed.push(f); continue; }
-      const type = (f.type || f.mimeType || '').toString();
+      let type = (f.type || f.mimeType || '').toString();
       const isImage = typeof type === 'string' && type.startsWith('image/');
       const raw = typeof f.data === 'string' && f.data ? f.data : (typeof f.content === 'string' ? f.content : '');
       if (!isImage || !raw) { processed.push(f); continue; }
       let outBase64 = raw;
+      if (type && !supportedTypes.includes(type)) {
+        const converted = await this.convertImage(outBase64, type);
+        outBase64 = converted.data;
+        type = converted.type;
+      }
       const bytes = this.approxBase64Bytes(raw);
       if (bytes > MAX_IMAGE_BYTES) {
         outBase64 = await this.downscaleBase64(raw, type, 1280, 0.75);
