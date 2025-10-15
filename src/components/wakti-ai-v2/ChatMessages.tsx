@@ -234,18 +234,7 @@ export function ChatMessages({
     return () => window.removeEventListener('wakti-ai-stream-finished', onStreamFinished as EventListener);
   }, []);
 
-  // Listen for voice changes to invalidate caches
-  useEffect(() => {
-    const handler = () => {
-      // Clear in-memory cache when voice is changed to avoid stale audio
-      for (const url of audioCacheRef.current.values()) {
-        try { URL.revokeObjectURL(url); } catch {}
-      }
-      audioCacheRef.current.clear();
-    };
-    window.addEventListener('wakti-tts-voice-changed', handler as EventListener);
-    return () => window.removeEventListener('wakti-tts-voice-changed', handler as EventListener);
-  }, []);
+  // Cache-clearing logic removed as caching is now disabled for debugging.
 
   // Rewritten to use a single, persistent audio element for reliability on mobile.
   const handleSpeak = async (text: string, messageId: string) => {
@@ -311,14 +300,7 @@ export function ChatMessages({
       }
     };
 
-    // --- Cache or Fetch ---
-    if (audioCacheRef.current.has(cacheKey)) {
-      const cachedUrl = audioCacheRef.current.get(cacheKey)!;
-      console.log('[TTS] Playing from memory cache.');
-      playAudio(cachedUrl);
-      return;
-    }
-
+    // --- Cache or Fetch (Cache Disabled) ---
     setFetchingIds(prev => new Set(prev).add(messageId));
 
     try {
@@ -351,7 +333,7 @@ export function ChatMessages({
 
       const audioBlob = await response.blob();
       const objectUrl = URL.createObjectURL(audioBlob);
-      audioCacheRef.current.set(cacheKey, objectUrl);
+      // Caching is disabled for debugging.
       playAudio(objectUrl);
 
     } catch (err) {
