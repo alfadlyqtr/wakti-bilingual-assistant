@@ -96,6 +96,23 @@ export function ChatMessages({
     return btoa(binary);
   };
 
+  const logPlayFailure = (where: string, err: any, a: HTMLAudioElement) => {
+    try {
+      const mediaErr = (a as any)?.error;
+      console.error('[TTS] play() failed', {
+        where,
+        name: err?.name,
+        message: err?.message,
+        code: mediaErr?.code,
+        readyState: a?.readyState,
+        networkState: a?.networkState,
+        paused: a?.paused,
+        ended: a?.ended,
+        muted: a?.muted,
+      });
+    } catch {}
+  };
+
   // Sanitize content for TTS so it does not read symbols like ":", "*", or markdown like "##"
   const sanitizeForTTS = (raw: string) => {
     try {
@@ -281,10 +298,11 @@ export function ChatMessages({
         const url = base64ToBlobUrl(persisted.b64);
         const a = new Audio();
         try { (a as any).playsInline = true; } catch {}
-        try { a.muted = false; a.volume = 1; } catch {}
+        try { a.muted = false; a.volume = 1; a.preload = 'auto'; } catch {}
         audioRef.current = a;
         // set src
         a.src = url;
+        try { a.load(); } catch {}
         a.onended = () => { 
           setSpeakingMessageId(null); 
           setIsPaused(false); 
@@ -302,7 +320,18 @@ export function ChatMessages({
           setIsPaused(true);
         };
         try { await a.play(); } catch (e) {
-          console.error('[TTS] play() failed from persisted (possible silent mode or gesture policy)', e);
+          logPlayFailure('persisted', e, a);
+          if (userInitiated) {
+            try {
+              const unlock = new Audio();
+              try { (unlock as any).playsInline = true; } catch {}
+              try { unlock.muted = true; unlock.volume = 0; } catch {}
+              unlock.src = 'data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+              await unlock.play().catch(() => {});
+              unlock.pause();
+              try { await a.play(); return; } catch (e2) { logPlayFailure('persisted_retry', e2, a); }
+            } catch {}
+          }
           try { URL.revokeObjectURL(url); } catch {}
           setSpeakingMessageId(null);
           setIsPaused(false);
@@ -399,10 +428,11 @@ export function ChatMessages({
 
       const audio = new Audio();
       try { (audio as any).playsInline = true; } catch {}
-      try { audio.muted = false; audio.volume = 1; } catch {}
+      try { audio.muted = false; audio.volume = 1; audio.preload = 'auto'; } catch {}
       audioRef.current = audio;
       // set src
       audio.src = objectUrl;
+      try { audio.load(); } catch {}
       audio.onended = () => { 
         setSpeakingMessageId(null); 
         setIsPaused(false); 
@@ -419,7 +449,19 @@ export function ChatMessages({
       audio.onpause = () => { setIsPaused(true); };
       console.log('[TTS] playing audio');
       try { await audio.play(); } catch (e) {
-        console.error('[TTS] play() failed after fetch (possible silent mode or gesture policy)', e);
+        logPlayFailure('network', e, audio);
+        if (userInitiated) {
+          try {
+            const unlock = new Audio();
+            try { (unlock as any).playsInline = true; } catch {}
+            try { unlock.muted = true; unlock.volume = 0; } catch {}
+            unlock.src = 'data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+            await unlock.play().catch(() => {});
+            unlock.pause();
+            try { await audio.play(); }
+            catch (e2) { logPlayFailure('network_retry', e2, audio); }
+          } catch {}
+        }
         try { URL.revokeObjectURL(objectUrl); } catch {}
         setSpeakingMessageId(null);
         setIsPaused(false);
