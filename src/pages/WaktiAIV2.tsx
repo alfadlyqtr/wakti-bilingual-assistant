@@ -188,6 +188,9 @@ const WaktiAIV2 = () => {
 
     // Do NOT auto-force 'vision' when files exist; ChatInput already controls trigger.
     const inputType = trigger === 'vision' ? 'vision' : 'text';
+    // Per-message language override: if user explicitly asks for Arabic translation, force 'ar' for this request
+    const wantsArabic = /translate.+to\s+arabic/i.test(messageContent || '') || /إلى العربية/.test(messageContent || '');
+    const requestLanguage = wantsArabic ? 'ar' : language;
 
     const userMessage: AIMessage = {
       id: `user-${Date.now()}`,
@@ -220,7 +223,7 @@ const WaktiAIV2 = () => {
         const response = await WaktiAIV2Service.sendMessage(
           messageContent,
           userProfile.id,
-          language,
+          requestLanguage,
           convId,
           'text',
           newMessages,
@@ -252,7 +255,7 @@ const WaktiAIV2 = () => {
         const streamedResp = await WaktiAIV2Service.sendStreamingMessage(
           messageContent,
           userProfile.id,
-          language,
+          requestLanguage,
           convId,
           inputType, // 'vision'
           newMessages,
@@ -281,16 +284,18 @@ const WaktiAIV2 = () => {
           EnhancedFrontendMemory.saveActiveConversation(finalMessages, convId);
           return finalMessages;
         });
-      } else {
+        return; // Done (skip streaming path)
+      }
+      else {
         let streamed = '';
         let streamMeta: any = {};
         // If Search mode and message is a YouTube query, use the non-streaming YouTube path
-        const ytPrefix = /^(?:\s*yt:\s*|\s*yt\s+).*/i.test(messageContent || '');
+        const ytPrefix = /^(?:\s*yt:\s*|\s*yt\s+)/i.test(messageContent || '');
         if (trigger === 'search' && ytPrefix) {
           const response = await WaktiAIV2Service.sendMessage(
             messageContent,
             userProfile.id,
-            language,
+            requestLanguage,
             convId,
             inputType,
             newMessages,
@@ -319,7 +324,7 @@ const WaktiAIV2 = () => {
         const streamedResp = await WaktiAIV2Service.sendStreamingMessage(
           messageContent,
           userProfile.id,
-          language,
+          requestLanguage,
           convId,
           inputType, // 'text' or other non-vision types
           newMessages,

@@ -45,9 +45,7 @@ function buildSystemPrompt(
   const ptTone = (pt.tone || '').toString().trim();
   const ptStyle = (pt.style || '').toString().trim();
 
-  const langRule = language === 'ar'
-    ? 'CRITICAL: Respond ONLY in Arabic. Do NOT use English.'
-    : 'CRITICAL: Respond ONLY in English. Do NOT use Arabic.';
+  const langRule = `CRITICAL: You are multilingual. Default to the user's UI language "${language}" for normal conversation. If the user asks to translate or specifies a target language, RESPOND IN THAT TARGET LANGUAGE, even if it differs from "${language}".`;
 
   const PERSONAL_TOUCH = `
 CRITICAL PERSONAL TOUCH ENFORCEMENT ===
@@ -85,7 +83,7 @@ ${INTELLIGENT_FORMATTING}
 ${activeTrigger === 'search' ? SEARCH_BEHAVIOR : ''}
 
 - Always answer directly and helpfully.
-- Keep responses aligned with user language (${language}).
+    - Default to the UI language for normal chat, but if a translation is requested, use the target language explicitly.
 - Avoid verbose preambles and avoid repeating the question unless necessary.`;
 }
 
@@ -246,11 +244,8 @@ serve(async (req) => {
           }
         }
          
-         // Regular text message
-        const languagePrefix = responseLanguage === 'ar' 
-          ? 'يرجى الرد باللغة العربية فقط. قدم إجابة مباشرة بدون إضافة "المصدر:" في النهاية. ' 
-          : 'Please respond in English only. Provide a direct answer without adding "Source:" attribution at the end. ';
-        messages.push({ role: 'user', content: languagePrefix + message });
+        // Regular text message: do NOT enforce hard language prefix so translations can work regardless of UI language
+        messages.push({ role: 'user', content: message });
 
         // Choose provider (text-only): OpenAI first, fallback to Claude
         let aiProvider: 'openai' | 'claude' | 'unknown' = 'unknown';

@@ -236,24 +236,18 @@ serve(async (req: Request) => {
         return resp;
       };
 
-      // Split the input text into safe chunks
-      const chunks = splitIntoChunks(text);
-      if (!chunks.length) throw new Error('No text to synthesize');
-
-      const audioSegments: Uint8Array[] = [];
-      for (let i = 0; i < chunks.length; i++) {
-        const part = chunks[i];
-        console.log(`🎵 Synthesizing chunk ${i + 1}/${chunks.length} (len=${part.length})`);
-        let resp = await synthesize(voice_id, part);
+      // Fast path: single-call synthesis for typical lengths to avoid MP3 concatenation issues on iOS
+      if ((text?.length || 0) <= 4500) {
+        let resp = await synthesize(voice_id, text);
         if (!resp.ok && (resp.status === 400 || resp.status === 404)) {
           const isArabic = /^ar/i.test(languageCode);
           const fallbackVoice = isArabic ? 'ar-XA-Chirp3-HD-Schedar' : 'en-US-Chirp3-HD-Orus';
-          console.warn('🎵 Google TTS voice failed for chunk, retry with fallback:', fallbackVoice);
-          resp = await synthesize(fallbackVoice, part);
+          console.warn('🎵 Google TTS voice failed (single-call), retry with fallback:', fallbackVoice);
+          resp = await synthesize(fallbackVoice, text);
         }
         if (!resp.ok) {
           const errTxt = await resp.text();
-          console.error('🎵 Google TTS API error (chunk):', { status: resp.status, err: errTxt });
+          console.error('🎵 Google TTS API error (single):', { status: resp.status, err: errTxt });
           if (resp.status === 401 || resp.status === 403) {
             throw new Error('Google TTS authentication/authorization failed - check API key and quotas');
           }
@@ -261,27 +255,66 @@ serve(async (req: Request) => {
         }
         const json = await resp.json();
         const b64 = json.audioContent as string | undefined;
-        if (!b64) throw new Error('Google TTS returned no audioContent for a chunk');
-        audioSegments.push(base64ToBytes(b64));
-      }
+        if (!b64) throw new Error('Google TTS returned no audioContent');
+        const bytes = base64ToBytes(b64);
+        const audioBuffer = bytes.buffer as ArrayBuffer;
+        console.log('🎵 Google TTS audio generated successfully (single):', { audioSize: audioBuffer.byteLength });
+        return new Response(audioBuffer, {
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "audio/mpeg",
+            "Content-Length": audioBuffer.byteLength.toString()
+          }
+        });
+      } else {
+        // Fallback for very long texts: existing chunking with concatenation
+        // Split the input text into safe chunks
+        const chunks = splitIntoChunks(text);
+        if (!chunks.length) throw new Error('No text to synthesize');
 
-      // Concatenate MP3 byte arrays – players can play concatenated MP3 frames sequentially
-      const total = audioSegments.reduce((sum, seg) => sum + seg.byteLength, 0);
-      const joined = new Uint8Array(total);
-      let offset = 0;
-      for (const seg of audioSegments) { joined.set(seg, offset); offset += seg.byteLength; }
-      const audioBuffer = joined.buffer as ArrayBuffer;
-      console.log('🎵 Google TTS audio generated successfully (concatenated):', { chunks: audioSegments.length, audioSize: audioBuffer.byteLength });
-
-      // NOTE: No voice quota mutation here. Persist usage only in `elevenlabs-tts`.
-
-      return new Response(audioBuffer, {
-        headers: { 
-          ...corsHeaders, 
-          "Content-Type": "audio/mpeg",
-          "Content-Length": audioBuffer.byteLength.toString()
+        const audioSegments: Uint8Array[] = [];
+        for (let i = 0; i < chunks.length; i++) {
+          const part = chunks[i];
+          console.log(`🎵 Synthesizing chunk ${i + 1}/${chunks.length} (len=${part.length})`);
+          let resp = await synthesize(voice_id, part);
+          if (!resp.ok && (resp.status === 400 || resp.status === 404)) {
+            const isArabic = /^ar/i.test(languageCode);
+            const fallbackVoice = isArabic ? 'ar-XA-Chirp3-HD-Schedar' : 'en-US-Chirp3-HD-Orus';
+            console.warn('🎵 Google TTS voice failed for chunk, retry with fallback:', fallbackVoice);
+            resp = await synthesize(fallbackVoice, part);
+          }
+          if (!resp.ok) {
+            const errTxt = await resp.text();
+            console.error('🎵 Google TTS API error (chunk):', { status: resp.status, err: errTxt });
+            if (resp.status === 401 || resp.status === 403) {
+              throw new Error('Google TTS authentication/authorization failed - check API key and quotas');
+            }
+            throw new Error(`Google TTS API error: ${resp.status} - ${errTxt}`);
+          }
+          const json = await resp.json();
+          const b64 = json.audioContent as string | undefined;
+          if (!b64) throw new Error('Google TTS returned no audioContent for a chunk');
+          audioSegments.push(base64ToBytes(b64));
         }
-      });
+
+        // Concatenate MP3 byte arrays – players can play concatenated MP3 frames sequentially
+        const total = audioSegments.reduce((sum, seg) => sum + seg.byteLength, 0);
+        const joined = new Uint8Array(total);
+        let offset = 0;
+        for (const seg of audioSegments) { joined.set(seg, offset); offset += seg.byteLength; }
+        const audioBuffer = joined.buffer as ArrayBuffer;
+        console.log('🎵 Google TTS audio generated successfully (concatenated):', { chunks: audioSegments.length, audioSize: audioBuffer.byteLength });
+
+        // NOTE: No voice quota mutation here. Persist usage only in `elevenlabs-tts`.
+
+        return new Response(audioBuffer, {
+          headers: { 
+            ...corsHeaders, 
+            "Content-Type": "audio/mpeg",
+            "Content-Length": audioBuffer.byteLength.toString()
+          }
+        });
+      }
 
   } catch (error: unknown) {
     const message = (error && typeof error === 'object' && 'message' in error) ? (error as { message: string }).message : 'TTS generation failed';
