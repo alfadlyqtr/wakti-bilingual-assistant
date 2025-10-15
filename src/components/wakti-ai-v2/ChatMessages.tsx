@@ -264,10 +264,11 @@ export function ChatMessages({
     // Play a tiny silent audio on the first user gesture to unlock the browser.
     if (!audioUnlockedRef.current) {
       try {
-        const unlockEl = new Audio();
-        unlockEl.src = 'data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
-        await unlockEl.play();
-        unlockEl.pause();
+        el.src = 'data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+        try { el.load(); } catch {}
+        await el.play();
+        el.pause();
+        el.currentTime = 0;
         audioUnlockedRef.current = true;
         console.log('[TTS] Mobile audio unlocked.');
       } catch (err) {
@@ -280,6 +281,7 @@ export function ChatMessages({
       setSpeakingMessageId(messageId);
       setIsPaused(false);
       el.src = url;
+      try { el.load(); } catch {}
       el.onended = () => {
         setSpeakingMessageId(null);
         setIsPaused(false);
@@ -1062,6 +1064,9 @@ export function ChatMessages({
           <div ref={messagesEndRef} />
         </div>
       </div>
+
+      {/* Persistent hidden audio for mobile reliability */}
+      <audio ref={audioRef} preload="auto" playsInline style={{ display: 'none' }} />
 
       {/* Image Modal */}
       {selectedImage && (
