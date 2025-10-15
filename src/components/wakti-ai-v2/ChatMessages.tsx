@@ -258,7 +258,7 @@ export function ChatMessages({
     }
 
     const cleanText = sanitizeForTTS(text);
-    const cacheKey = `${language}-${messageId}-${cleanText.length}`;
+    const cacheKey = ''; // no cache (match AI Insights minimal flow)
 
     // --- Mobile Unlock ---
     // Play a tiny silent audio on the first user gesture to unlock the browser.
@@ -302,8 +302,8 @@ export function ChatMessages({
       }
     };
 
-    // --- Cache or Fetch (Cache Disabled) ---
-    setFetchingIds(prev => new Set(prev).add(messageId));
+    // --- Fetch (no cache), match AI Insights ---
+    setFetchingIds(prev => prev);
 
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -342,11 +342,7 @@ export function ChatMessages({
       console.error('[TTS] Failed to fetch or play audio:', err);
       setSpeakingMessageId(null);
     } finally {
-      setFetchingIds(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(messageId);
-        return newSet;
-      });
+      setFetchingIds(prev => prev);
     }
   };
 
