@@ -35,7 +35,11 @@ console.log("WAKTI VISION STREAM: Ready");
 // --- Helpers ---
 function normalizeImage(input: { mimeType?: string; dataBase64?: string; url?: string } ) {
   const mime = (input.mimeType || '').toLowerCase().replace('image/jpg', 'image/jpeg');
-  const url = (input.url || '').trim();
+  let url = (input.url || '').trim();
+  // Defensive: strip any leading encoded spaces or invisible chars coming from some mobile clients
+  if (url) {
+    url = url.replace(/^%20+/, '').replace(/^[\u0000-\u001F\u007F\u00A0\u200B\u200C\u200D]+/, '');
+  }
   let data = input.dataBase64 || '';
   if (url) return { mimeType: mime || 'image/jpeg', url };
   if (!data) return null;
@@ -50,7 +54,14 @@ function normalizeImage(input: { mimeType?: string; dataBase64?: string; url?: s
 
 // Download an image by URL and return its base64 data and mime type
 async function fetchImageAsBase64(url: string): Promise<{ base64: string; mimeType: string; byteLength: number }>{
-  const res = await fetch(url.trim());
+  // Defensive sanitize for malformed mobile URLs (e.g., "%20https://...")
+  let cleanUrl = (url || '').trim()
+    .replace(/^%20+/, '') // strip leading encoded spaces
+    .replace(/^[\u0000-\u001F\u007F\u00A0\u200B\u200C\u200D]+/, ''); // invisible/nbspace chars
+  if (!/^https?:\/\//i.test(cleanUrl)) {
+    throw new Error(`Invalid image URL (unsupported scheme): ${cleanUrl.slice(0, 48)}...`);
+  }
+  const res = await fetch(cleanUrl);
   if (!res.ok) throw new Error(`Failed to fetch image URL (${res.status})`);
   const mimeHeader = (res.headers.get('content-type') || 'image/jpeg').split(';')[0].toLowerCase().replace('image/jpg', 'image/jpeg');
   const ab = await res.arrayBuffer();
