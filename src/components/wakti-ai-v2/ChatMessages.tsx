@@ -230,6 +230,23 @@ export function ChatMessages({
       console.log('[TTS] handleSpeak click', { id: messageId, len: text?.length || 0 });
       const cleanText = sanitizeForTTS(text);
       const sessionId = `tts-${messageId}`;
+      // Inline mobile unlock on direct user gesture to satisfy autoplay policies
+      if (userInitiated && !audioUnlockedRef.current) {
+        try {
+          const unlock = new Audio();
+          try { (unlock as any).playsInline = true; } catch {}
+          try { unlock.muted = true; unlock.volume = 0; } catch {}
+          unlock.src = 'data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+          await unlock.play().catch(() => {});
+          unlock.pause();
+          audioUnlockedRef.current = true;
+          try { sessionStorage.setItem('wakti_tts_unlocked', '1'); } catch {}
+          try { window.dispatchEvent(new Event('wakti-tts-unlocked')); } catch {}
+          console.log('[TTS] Inline unlock done');
+        } catch (e) {
+          console.warn('[TTS] Inline unlock failed (continuing):', e);
+        }
+      }
       
       // Toggle off if already playing this message
       if (speakingMessageId === messageId) {
@@ -263,6 +280,7 @@ export function ChatMessages({
         console.log('[TTS] using persisted cache', { id: messageId });
         const url = base64ToBlobUrl(persisted.b64);
         const a = new Audio();
+        try { (a as any).playsInline = true; } catch {}
         try { a.muted = false; a.volume = 1; } catch {}
         audioRef.current = a;
         // set src
@@ -284,7 +302,7 @@ export function ChatMessages({
           setIsPaused(true);
         };
         try { await a.play(); } catch (e) {
-          console.error('[TTS] play() failed from persisted', e);
+          console.error('[TTS] play() failed from persisted (possible silent mode or gesture policy)', e);
           try { URL.revokeObjectURL(url); } catch {}
           setSpeakingMessageId(null);
           setIsPaused(false);
@@ -380,6 +398,7 @@ export function ChatMessages({
       const objectUrl = URL.createObjectURL(full);
 
       const audio = new Audio();
+      try { (audio as any).playsInline = true; } catch {}
       try { audio.muted = false; audio.volume = 1; } catch {}
       audioRef.current = audio;
       // set src
@@ -400,7 +419,7 @@ export function ChatMessages({
       audio.onpause = () => { setIsPaused(true); };
       console.log('[TTS] playing audio');
       try { await audio.play(); } catch (e) {
-        console.error('[TTS] play() failed after fetch', e);
+        console.error('[TTS] play() failed after fetch (possible silent mode or gesture policy)', e);
         try { URL.revokeObjectURL(objectUrl); } catch {}
         setSpeakingMessageId(null);
         setIsPaused(false);
@@ -1005,11 +1024,14 @@ export function ChatMessages({
                             <div className="w-full">
                               <div className="flex items-center gap-2 text-muted-foreground">
                                 <span>{language === 'ar' ? 'جاري تحليل الصورة...' : 'Wakti Vision is analyzing...'}</span>
-                                <span className="inline-flex items-center gap-1">
-                                  <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                                  <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                                  <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                                </span>
+                                <img
+                                  src="/assets/wakti-eye-soft.svg"
+                                  alt={language === 'ar' ? 'عين وقتي تومض' : 'Wakti eye blinking'}
+                                  className="h-5 w-auto"
+                                  loading="eager"
+                                  decoding="sync"
+                                  aria-hidden="true"
+                                />
                               </div>
                             </div>
                           );

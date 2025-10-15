@@ -2,7 +2,6 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { executeRegularSearch } from './search.ts'
-import { VisionSystem } from './vision.ts'
 
 const allowedOrigins = [
   'https://wakti.qa',
@@ -30,12 +29,69 @@ const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-console.log("WAKTI AI V2 STREAMING BRAIN: Ready");
+console.log("WAKTI AI V2 STREAMING BRAIN (TEXT-ONLY): Ready");
+
+// Build the system prompt for text chat/search with Personal Touch and intelligent formatting
+function buildSystemPrompt(
+  language: string,
+  currentDate: string,
+  personalTouch: any,
+  activeTrigger: string,
+) {
+  const pt = personalTouch || {};
+  const ptNick = (pt.nickname || '').toString().trim();
+  const ptTone = (pt.tone || '').toString().trim();
+  const ptStyle = (pt.style || '').toString().trim();
+
+  const langRule = language === 'ar'
+    ? 'CRITICAL: Respond ONLY in Arabic. Do NOT use English.'
+    : 'CRITICAL: Respond ONLY in English. Do NOT use Arabic.';
+
+  const PERSONAL_TOUCH = `
+CRITICAL PERSONAL TOUCH ENFORCEMENT ===
+- Nickname: ${ptNick ? `Use the user's nickname "${ptNick}" naturally and warmly.` : 'No nickname provided.'}
+- Tone: ${ptTone ? `Maintain a ${ptTone} tone consistently.` : 'Default to a friendly, neutral tone.'}
+- Style: ${ptStyle ? `Shape your structure as ${ptStyle}.` : 'Keep answers concise and clear.'}
+`;
+
+  const INTELLIGENT_FORMATTING = `
+CRITICAL OUTPUT FORMATTING RULES ===
+- Choose ONE primary format based on content:
+  1) Markdown table: for structured results (search results, comparisons, item lists with attributes). Keep headers short; cells concise.
+  2) Bulleted list: for steps, checklists, pros/cons, short enumerations.
+  3) Natural paragraph (1–3 sentences): for conversational replies and short explanations.
+- Do NOT include headings like "TABLE", "SUMMARY", or "SOURCES" unless the user asks.
+- Use Markdown links only when explicit URLs are provided within context. Avoid placeholders.
+- Do NOT add code fences unless the user asks for code.
+`;
+
+  const SEARCH_BEHAVIOR = `
+SEARCH BEHAVIOR (when active) ===
+- Read provided search snippets carefully and synthesize a short, direct answer first.
+- If scan-friendly, render a compact Markdown table (e.g., Title | Source | Key Point) or a short bulleted list.
+- Avoid filler; be precise; do not invent sources.
+`;
+
+  return `${langRule}
+
+${PERSONAL_TOUCH}
+
+You are WAKTI AI — a high-performance text chat and search assistant. Date: ${currentDate}
+
+${INTELLIGENT_FORMATTING}
+
+${activeTrigger === 'search' ? SEARCH_BEHAVIOR : ''}
+
+- Always answer directly and helpfully.
+- Keep responses aligned with user language (${language}).
+- Avoid verbose preambles and avoid repeating the question unless necessary.`;
+}
 
 // Helper function to convert OpenAI message format to Claude format
-function convertMessagesToClaudeFormat(messages: any[]) {
+type BasicMessage = { role: 'system' | 'user' | 'assistant'; content: string };
+function convertMessagesToClaudeFormat(messages: BasicMessage[]) {
   const systemMessage = messages.find(m => m.role === 'system');
   const conversationMessages = messages.filter(m => m.role !== 'system');
   
@@ -102,53 +158,21 @@ serve(async (req) => {
       try {
         const { 
           message, 
-          conversationId, 
+          conversationId: _conversationId, 
           language = 'en', 
           recentMessages = [], 
           personalTouch = null, 
-          activeTrigger = 'general',
-          attachedFiles = [],
-          visionPrimary = 'claude'
+          activeTrigger = 'general'
         } = await req.json();
         const responseLanguage = language;
         
-        console.log(`🎯 REQUEST RECEIVED: trigger=${activeTrigger}, hasFiles=${attachedFiles?.length || 0}, language=${language}`);
+        console.log(`🎯 TEXT REQUEST: trigger=${activeTrigger}, language=${language}`);
 
         if (!message) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Message is required' })}\n\n`));
           controller.close();
           return;
         }
-
-        // If files have URLs instead of base64, fetch and convert them
-        if (attachedFiles && attachedFiles.length > 0) {
-          for (let i = 0; i < attachedFiles.length; i++) {
-            const file = attachedFiles[i];
-            // Check if this is a storage URL (not base64)
-            if (file.url && !file.data && !file.content) {
-              try {
-                console.log(`📥 Fetching image from storage: ${file.url}`);
-                const response = await fetch(file.url);
-                if (!response.ok) {
-                  console.warn(`⚠️ Failed to fetch image from storage: ${response.status}`);
-                  continue;
-                }
-                const arrayBuffer = await response.arrayBuffer();
-                const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-                // Update the file object with base64 data
-                attachedFiles[i] = {
-                  ...file,
-                  data: base64,
-                  type: file.mimeType || file.type || 'image/jpeg'
-                };
-                console.log(`✅ Converted storage URL to base64 (${base64.length} chars)`);
-              } catch (fetchErr) {
-                console.error(`❌ Error fetching image from storage:`, fetchErr);
-              }
-            }
-          }
-        }
-
         // Build system prompt
         const currentDate = new Date().toLocaleDateString('en-US', { 
           weekday: 'long', 
@@ -158,12 +182,8 @@ serve(async (req) => {
           timeZone: 'Asia/Qatar'
         });
 
-        // Check if vision mode should be used
-        const useVisionMode = VisionSystem.shouldUseVisionMode(activeTrigger, attachedFiles);
-        console.log(`👁️ VISION MODE: ${useVisionMode ? 'ENABLED' : 'DISABLED'}`);
-
-        // Build enhanced system prompt (includes vision capabilities if needed)
-        const systemPrompt = VisionSystem.buildCompleteSystemPrompt(responseLanguage, currentDate, personalTouch);
+        // Build enhanced system prompt (text-only)
+        const systemPrompt = buildSystemPrompt(responseLanguage, currentDate, personalTouch, activeTrigger);
         
         // Log personalization application
         console.log('🎨 PERSONAL TOUCH APPLIED:', {
@@ -174,13 +194,13 @@ serve(async (req) => {
         });
 
         // Build messages array
-        let messages = [
+        const messages: BasicMessage[] = [
           { role: 'system', content: systemPrompt }
         ];
 
         if (recentMessages && recentMessages.length > 0) {
-          const historyMessages = recentMessages.slice(-6);
-          historyMessages.forEach(msg => {
+          const historyMessages = (recentMessages as BasicMessage[]).slice(-6);
+          historyMessages.forEach((msg: BasicMessage) => {
             if (msg.role === 'user' || msg.role === 'assistant') {
               messages.push({
                 role: msg.role,
@@ -191,8 +211,8 @@ serve(async (req) => {
           console.log(`🧠 STREAMING: Using ${historyMessages.length} messages from conversation history`);
         }
         
-        // Inject web search context when in Search mode (non-vision)
-        if (activeTrigger === 'search' && !useVisionMode) {
+        // Inject web search context when in Search mode
+        if (activeTrigger === 'search') {
           try {
             const s = await executeRegularSearch(message, responseLanguage);
             if (s?.success && s?.context) {
@@ -226,37 +246,20 @@ serve(async (req) => {
           }
         }
          
-         // Add user message (with images if in vision mode)
-         if (useVisionMode) {
-           // Determine provider for vision formatting
-           const provider = visionPrimary === 'openai' ? 'openai' : 'claude';
-           const visionMessage = VisionSystem.buildVisionMessage(message, attachedFiles, responseLanguage, provider);
-           messages.push(visionMessage);
-           console.log(`👁️ VISION MESSAGE: Built for ${provider} with ${attachedFiles?.length || 0} files`);
-         } else {
-           // Regular text message
-           const languagePrefix = responseLanguage === 'ar' 
-             ? 'يرجى الرد باللغة العربية فقط. قدم إجابة مباشرة بدون إضافة "المصدر:" في النهاية. ' 
-             : 'Please respond in English only. Provide a direct answer without adding "Source:" attribution at the end. ';
-           
-           messages.push({
-             role: 'user',
-             content: languagePrefix + message
-           });
-         }
+         // Regular text message
+        const languagePrefix = responseLanguage === 'ar' 
+          ? 'يرجى الرد باللغة العربية فقط. قدم إجابة مباشرة بدون إضافة "المصدر:" في النهاية. ' 
+          : 'Please respond in English only. Provide a direct answer without adding "Source:" attribution at the end. ';
+        messages.push({ role: 'user', content: languagePrefix + message });
 
-        // Choose provider order based on visionPrimary
-        // If client asked for Claude, try Claude first, else try OpenAI first
-        let aiProvider = 'unknown';
-        let streamReader: ReadableStreamDefaultReader | null = null;
-        const primaryIsClaude = useVisionMode && (visionPrimary === 'claude');
-        console.log(`🧠 PROVIDER ORDER: primary=${primaryIsClaude ? 'claude' : 'openai'}, useVisionMode=${useVisionMode}`);
+        // Choose provider (text-only): OpenAI first, fallback to Claude
+        let aiProvider: 'openai' | 'claude' | 'unknown' = 'unknown';
+        let streamReader: ReadableStreamDefaultReader<any> | null = null;
 
-        // Small helpers
         const tryOpenAI = async () => {
           if (!OPENAI_API_KEY) throw new Error('OpenAI API key not configured');
-          const model = useVisionMode ? 'gpt-4o' : 'gpt-4o-mini';
-          console.log(`🤖 STREAMING: Attempting OpenAI (${model})${useVisionMode ? ' with vision' : ''}...`);
+          const model = 'gpt-4o-mini';
+          console.log(`🤖 STREAMING: Attempting OpenAI (${model})...`);
           const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -280,7 +283,7 @@ serve(async (req) => {
         const tryClaude = async () => {
           if (!ANTHROPIC_API_KEY) throw new Error('Claude API key not configured');
           const { system, messages: claudeMessages } = convertMessagesToClaudeFormat(messages);
-          console.log(`🤖 STREAMING: Attempting Claude${useVisionMode ? ' with vision' : ''}...`);
+          console.log('🤖 STREAMING: Attempting Claude...');
           const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers: {
@@ -306,22 +309,12 @@ serve(async (req) => {
         };
 
         try {
-          if (primaryIsClaude) {
-            // Claude first, fallback to OpenAI
-            try {
-              await tryClaude();
-            } catch (errClaude) {
-              console.warn('⚠️ STREAMING: Claude failed, attempting OpenAI fallback...', (errClaude as Error).message);
-              await tryOpenAI();
-            }
-          } else {
-            // OpenAI first, fallback to Claude (existing behavior)
-            try {
-              await tryOpenAI();
-            } catch (errOpenAI) {
-              console.warn('⚠️ STREAMING: OpenAI failed, attempting Claude fallback...', (errOpenAI as Error).message);
-              await tryClaude();
-            }
+          // OpenAI first, fallback to Claude
+          try {
+            await tryOpenAI();
+          } catch (errOpenAI) {
+            console.warn('⚠️ STREAMING: OpenAI failed, attempting Claude fallback...', (errOpenAI as Error).message);
+            await tryClaude();
           }
         } catch (finalErr) {
           console.error('❌ STREAMING: All providers failed', (finalErr as Error).message);
@@ -338,8 +331,9 @@ serve(async (req) => {
           const decoder = new TextDecoder();
           let buffer = '';
           
+          const reader = streamReader as ReadableStreamDefaultReader<any>;
           while (true) {
-            const { done, value } = await streamReader.read();
+            const { done, value } = await reader.read();
             if (done) break;
 
             buffer += decoder.decode(value, { stream: true });
@@ -360,7 +354,7 @@ serve(async (req) => {
                   if (content) {
                     controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: content, content })}\n\n`));
                   }
-                } catch (e) {
+                } catch (_e) {
                   // Skip invalid JSON
                 }
               }
@@ -368,7 +362,7 @@ serve(async (req) => {
           }
         } else if (aiProvider === 'claude') {
           // Handle Claude streaming format
-          await streamClaudeResponse(streamReader, controller, encoder);
+          await streamClaudeResponse(streamReader as ReadableStreamDefaultReader<any>, controller, encoder);
         }
 
         controller.close();

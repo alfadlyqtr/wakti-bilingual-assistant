@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="88" height="44" viewBox="0 0 88 44" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Calm Wakti eye">
+  <defs>
+    <linearGradient id="irisGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7c3aed"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+    <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <style><![CDATA[
+      .outline { stroke: url(#irisGrad); stroke-width: 2.5; fill: none; opacity: 0.9; }
+      .iris { fill: url(#irisGrad); opacity: 0.22; }
+      .pupil { fill: #0891b2; }
+      .highlight { fill: #ffffff; opacity: 0.8; }
+      .breath { animation: breath 4.8s ease-in-out infinite; transform-origin: 44px 22px; }
+      .pupilMove { animation: look 7s ease-in-out infinite; transform-origin: 44px 22px; }
+      .lids { transform-origin: 44px 22px; animation: blink 6s cubic-bezier(.4,0,.2,1) infinite; }
+      @keyframes breath { 0%,100%{ transform: scale(1); } 50%{ transform: scale(1.02); } }
+      @keyframes look { 0%,100%{ transform: translate(0,0); } 25%{ transform: translate(2px,-1px);} 50%{ transform: translate(-1px,1px);} 75%{ transform: translate(1px,0);} }
+      /* slow natural blink with short closure */
+      @keyframes blink {
+        0%, 92%, 100% { transform: scaleY(1); }
+        94% { transform: scaleY(0.08); }
+        96% { transform: scaleY(1); }
+      }
+    ]]></style>
+  </defs>
+  <!-- Eye outline -->
+  <path class="outline" d="M6 22 C20 3,68 3,82 22 C68 41,20 41,6 22 Z"/>
+  <!-- Iris + pupil group with gentle breathing -->
+  <g class="breath">
+    <circle class="iris" cx="44" cy="22" r="10.5"/>
+    <g class="pupilMove" filter="url(#softGlow)">
+      <circle class="pupil" cx="44" cy="22" r="4.2"/>
+      <circle class="highlight" cx="41.8" cy="20.3" r="1.1"/>
+    </g>
+  </g>
+  <!-- Lids group to emulate blink via scaleY -->
+  <g class="lids">
+    <path d="M6 22 C20 3,68 3,82 22" stroke="#94a3b8" stroke-width="6" stroke-linecap="round" fill="none" opacity="0.22"/>
+    <path d="M6 22 C20 41,68 41,82 22" stroke="#94a3b8" stroke-width="6" stroke-linecap="round" fill="none" opacity="0.22"/>
+  </g>
+</svg>
