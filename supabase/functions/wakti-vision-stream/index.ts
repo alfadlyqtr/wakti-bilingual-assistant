@@ -50,7 +50,7 @@ function normalizeImage(input: { mimeType?: string; dataBase64?: string; url?: s
 
 // Download an image by URL and return its base64 data and mime type
 async function fetchImageAsBase64(url: string): Promise<{ base64: string; mimeType: string; byteLength: number }>{
-  const res = await fetch(url);
+  const res = await fetch(url.trim());
   if (!res.ok) throw new Error(`Failed to fetch image URL (${res.status})`);
   const mimeHeader = (res.headers.get('content-type') || 'image/jpeg').split(';')[0].toLowerCase().replace('image/jpg', 'image/jpeg');
   const ab = await res.arrayBuffer();
