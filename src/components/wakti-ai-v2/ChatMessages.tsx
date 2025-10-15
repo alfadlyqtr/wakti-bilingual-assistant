@@ -57,31 +57,20 @@ export function ChatMessages({
   // No longer need keyboard detection in ChatMessages
   const [inputHeight, setInputHeight] = useState<number>(80);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
-  // Always-accurate ref mirror to avoid stale state in async guards
   const speakingMessageIdRef = useRef<string | null>(null);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   // Transient visual state to keep the green glow briefly after audio ends
   const [fadeOutId, setFadeOutId] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<{ url: string; prompt?: string } | null>(null);
-  // ElevenLabs audio playback state
+  // Simplified audio playback state, inspired by AIInsights.tsx
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioCacheRef = useRef<Map<string, string>>(new Map()); // messageId -> object URL
+  const audioCacheRef = useRef<Map<string, string>>(new Map()); // cacheKey -> object URL
   const PERSIST_CACHE_PREFIX = 'wakti_tts_cache_'; // sessionStorage key prefix
-  const [prefetchingIds, setPrefetchingIds] = useState<Set<string>>(new Set());
   const [fetchingIds, setFetchingIds] = useState<Set<string>>(new Set()); // active network fetches for playback
-  const prefetchTimersRef = useRef<Map<string, number>>(new Map()); // messageId -> timeout id
-  const autoPlayedIdsRef = useRef<Set<string>>(new Set()); // messages we've auto-played
-  // Progress percentage per message while fetching audio
   const [progressMap, setProgressMap] = useState<Map<string, number>>(new Map());
-  // Smooth progress intervals for unknown content-length streams
-  const progressIntervalRef = useRef<Map<string, number>>(new Map()); // messageId -> interval id
-  // Talk Back Auto Play and iOS unlock helpers
-  const autoPlayRef = useRef<boolean>(false);
+  const progressIntervalRef = useRef<Map<string, number>>(new Map());
   const audioUnlockedRef = useRef<boolean>(false);
-  const preemptRef = useRef<boolean>(false);
-  const [preemptPromptId, setPreemptPromptId] = useState<string | null>(null);
-
-  // No audio session manager: direct play/pause everywhere
+  const [preemptPromptId, setPreemptPromptId] = useState<string | null>(null); // Keep for UI, though preempt logic is removed
 
   // Keep ref synchronized with state to avoid stale closures during async work
   useEffect(() => {
@@ -177,6 +166,23 @@ export function ChatMessages({
     return URL.createObjectURL(blob);
   };
 
+  // Create the single, persistent audio element on mount
+  useEffect(() => {
+    if (!audioRef.current) {
+      const audio = new Audio();
+      audio.preload = 'auto';
+      try { (audio as any).playsInline = true; } catch {}
+      audioRef.current = audio;
+    }
+    // Cleanup on unmount
+    return () => {
+      if (audioRef.current) {
+        try { audioRef.current.pause(); } catch {}
+        audioRef.current.src = '';
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -241,330 +247,127 @@ export function ChatMessages({
     return () => window.removeEventListener('wakti-tts-voice-changed', handler as EventListener);
   }, []);
 
-  // Google Cloud TTS via Edge Function (no ElevenLabs, no browser SpeechSynthesis)
-  const handleSpeak = async (text: string, messageId: string, userInitiated = false, forcePreempt = false) => {
-    try {
-      console.log('[TTS] handleSpeak click', { id: messageId, len: text?.length || 0 });
-      const cleanText = sanitizeForTTS(text);
-      const sessionId = `tts-${messageId}`;
-      // Inline mobile unlock on direct user gesture to satisfy autoplay policies
-      if (userInitiated && !audioUnlockedRef.current) {
-        try {
-          const unlock = new Audio();
-          try { (unlock as any).playsInline = true; } catch {}
-          try { unlock.muted = true; unlock.volume = 0; } catch {}
-          unlock.src = 'data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
-          await unlock.play().catch(() => {});
-          unlock.pause();
-          audioUnlockedRef.current = true;
-          try { sessionStorage.setItem('wakti_tts_unlocked', '1'); } catch {}
-          try { window.dispatchEvent(new Event('wakti-tts-unlocked')); } catch {}
-          console.log('[TTS] Inline unlock done');
-        } catch (e) {
-          console.warn('[TTS] Inline unlock failed (continuing):', e);
-        }
-      }
-      
-      // Toggle off if already playing this message
-      if (speakingMessageId === messageId) {
-        console.log('[TTS] toggling OFF current message', messageId);
-        if (audioRef.current) {
-          try { audioRef.current.pause(); } catch {}
-          try { audioRef.current.currentTime = 0; } catch {}
-        }
-        setSpeakingMessageId(null);
-        setIsPaused(false);
-        setPreemptPromptId(null);
-        return;
-      }
+  // Rewritten to use a single, persistent audio element for reliability on mobile.
+  const handleSpeak = async (text: string, messageId: string) => {
+    const el = audioRef.current;
+    if (!el) return;
 
-      // Simplified: no preempt logic and no platform unlock gate
-
-      // Stop any current playback
-      if (audioRef.current) {
-        try { audioRef.current.pause(); } catch {}
-        try { audioRef.current.currentTime = 0; } catch {}
-        try { window.dispatchEvent(new Event('wakti-tts-stopped')); } catch {}
+    // If this message is already playing, toggle pause.
+    if (speakingMessageId === messageId) {
+      if (el.paused) {
+        try { await el.play(); setIsPaused(false); } catch {}
+      } else {
+        try { el.pause(); setIsPaused(true); } catch {}
       }
+      return;
+    }
+
+    // Stop any other message that is currently playing.
+    if (!el.paused) {
+      el.pause();
+      el.currentTime = 0;
+    }
+
+    const cleanText = sanitizeForTTS(text);
+    const cacheKey = `${language}-${messageId}-${cleanText.length}`;
+
+    // --- Mobile Unlock ---
+    // Play a tiny silent audio on the first user gesture to unlock the browser.
+    if (!audioUnlockedRef.current) {
+      try {
+        const unlockEl = new Audio();
+        unlockEl.src = 'data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+        await unlockEl.play();
+        unlockEl.pause();
+        audioUnlockedRef.current = true;
+        console.log('[TTS] Mobile audio unlocked.');
+      } catch (err) {
+        console.warn('[TTS] Mobile audio unlock failed, continuing...', err);
+      }
+    }
+
+    // --- Playback Logic ---
+    const playAudio = async (url: string) => {
       setSpeakingMessageId(messageId);
       setIsPaused(false);
-      // Start showing spinner immediately for better feedback
-      setFetchingIds(prev => { const n = new Set(prev); n.add(messageId); return n; });
-
-      // Check persisted cache next
-      const persisted = getPersisted(messageId);
-      if (persisted?.b64) {
-        console.log('[TTS] using persisted cache', { id: messageId });
-        const url = base64ToBlobUrl(persisted.b64);
-        const a = new Audio();
-        try { (a as any).playsInline = true; } catch {}
-        try { a.muted = false; a.volume = 1; a.preload = 'auto'; } catch {}
-        audioRef.current = a;
-        // set src
-        a.src = url;
-        try { a.load(); } catch {}
-        a.onended = () => { 
-          setSpeakingMessageId(null); 
-          setIsPaused(false); 
-          triggerFadeOut(messageId); 
-          try { URL.revokeObjectURL(url); } catch {} 
-        };
-        a.onerror = () => { 
-          setSpeakingMessageId(null); 
-          setIsPaused(false); 
-          triggerFadeOut(messageId); 
-          try { URL.revokeObjectURL(url); } catch {} 
-        };
-        a.onplay = () => { setIsPaused(false); };
-        a.onpause = () => {
-          setIsPaused(true);
-        };
-        try { await a.play(); } catch (e) {
-          logPlayFailure('persisted', e, a);
-          if (userInitiated) {
-            try {
-              const unlock = new Audio();
-              try { (unlock as any).playsInline = true; } catch {}
-              try { unlock.muted = true; unlock.volume = 0; } catch {}
-              unlock.src = 'data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
-              await unlock.play().catch(() => {});
-              unlock.pause();
-              try { await a.play(); return; } catch (e2) { logPlayFailure('persisted_retry', e2, a); }
-            } catch {}
-          }
-          try { URL.revokeObjectURL(url); } catch {}
-          setSpeakingMessageId(null);
-          setIsPaused(false);
-        }
-        // Clear spinner if we used cache
-        setFetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
-        return;
+      el.src = url;
+      el.onended = () => {
+        setSpeakingMessageId(null);
+        setIsPaused(false);
+        triggerFadeOut(messageId);
+        // Do not revoke from cache, as it's shared.
+      };
+      el.onerror = (e) => {
+        console.error('[TTS] Audio playback error:', e);
+        setSpeakingMessageId(null);
+        setIsPaused(false);
+      };
+      try {
+        await el.play();
+      } catch (err) {
+        console.error('[TTS] el.play() rejected:', err);
+        setSpeakingMessageId(null);
+        setIsPaused(false);
       }
+    };
 
-      console.log('[TTS] fetching from edge function');
+    // --- Cache or Fetch ---
+    if (audioCacheRef.current.has(cacheKey)) {
+      const cachedUrl = audioCacheRef.current.get(cacheKey)!;
+      console.log('[TTS] Playing from memory cache.');
+      playAudio(cachedUrl);
+      return;
+    }
 
-      // Determine voice_id from TalkBack settings
-      const isArabicText = /[\u0600-\u06FF]/.test(cleanText);
-      const { ar, en } = getSelectedVoices();
-      const voice_id = (isArabicText || language === 'ar') ? ar : en;
+    setFetchingIds(prev => new Set(prev).add(messageId));
 
-      // Auth + endpoint
+    try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
       const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
 
-      // Guard: if URL missing, fail fast with clear UI and logs
-      if (!supabaseUrl || typeof supabaseUrl !== 'string') {
-        console.error('[TTS] Missing VITE_SUPABASE_URL env. Cannot call voice-tts function.');
-        setSpeakingMessageId(null);
-        setIsPaused(false);
-        // Clear spinner
-        setFetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
-        return;
+      if (!supabaseUrl) {
+        throw new Error('VITE_SUPABASE_URL is not defined.');
       }
 
-      const resp = await fetch(`${supabaseUrl}/functions/v1/voice-tts`, {
+      const isArabicText = /[\u0600-\u06FF]/.test(cleanText);
+      const { ar, en } = getSelectedVoices();
+      const voice_id = (isArabicText || language === 'ar') ? ar : en;
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/voice-tts`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'audio/mpeg',
           ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
         },
-        mode: 'cors',
-        body: JSON.stringify({ text: cleanText, voice_id, style: 'neutral' })
+        body: JSON.stringify({ text: cleanText, voice_id }),
       });
 
-      if (!resp.ok) {
-        setSpeakingMessageId(null);
-        setIsPaused(false);
-        setFetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
-        try { console.error('[TTS] voice-tts failed', resp.status, await resp.text()); } catch {}
-        return;
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`TTS service failed: ${response.status} ${errorText}`);
       }
 
-      // Stream response for progress if possible
-      const contentLength = Number(resp.headers.get('Content-Length') || 0);
-      const reader = resp.body?.getReader();
-      const chunks: Uint8Array[] = [];
-      let received = 0;
+      const audioBlob = await response.blob();
+      const objectUrl = URL.createObjectURL(audioBlob);
+      audioCacheRef.current.set(cacheKey, objectUrl);
+      playAudio(objectUrl);
 
-      if (reader) {
-        if (contentLength > 0) {
-          // Update real percentage while reading
-          setProgressMap(prev => { const n = new Map(prev); n.set(messageId, 0); return n; });
-        } else {
-          // Unknown size: simulate smooth progress 0→90% until complete
-          const iv = window.setInterval(() => {
-            setProgressMap(prev => {
-              const n = new Map(prev);
-              const curr = n.get(messageId) ?? 0;
-              const next = Math.min(90, (curr || 0) + 2);
-              n.set(messageId, next);
-              return n;
-            });
-          }, 200);
-          progressIntervalRef.current.set(messageId, iv);
-        }
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          if (value) {
-            chunks.push(value);
-            received += value.length;
-            if (contentLength > 0) {
-              const pct = Math.max(1, Math.min(99, Math.floor((received / contentLength) * 100)));
-              setProgressMap(prev => { const n = new Map(prev); n.set(messageId, pct); return n; });
-            }
-          }
-        }
-      }
-
-      const full = chunks.length ? new Blob(chunks as BlobPart[], { type: 'audio/mpeg' }) : await resp.blob();
-      const buf = await full.arrayBuffer();
-      const b64 = bufferToBase64(buf);
-      setPersisted(messageId, b64, cleanText.length);
-      const objectUrl = URL.createObjectURL(full);
-
-      const audio = new Audio();
-      try { (audio as any).playsInline = true; } catch {}
-      try { audio.muted = false; audio.volume = 1; audio.preload = 'auto'; } catch {}
-      audioRef.current = audio;
-      // set src
-      audio.src = objectUrl;
-      try { audio.load(); } catch {}
-      audio.onended = () => { 
-        setSpeakingMessageId(null); 
-        setIsPaused(false); 
-        triggerFadeOut(messageId); 
-        try { URL.revokeObjectURL(objectUrl); } catch {} 
-      };
-      audio.onerror = () => { 
-        setSpeakingMessageId(null); 
-        setIsPaused(false); 
-        triggerFadeOut(messageId); 
-        try { URL.revokeObjectURL(objectUrl); } catch {} 
-      };
-      audio.onplay = () => { setIsPaused(false); };
-      audio.onpause = () => { setIsPaused(true); };
-      console.log('[TTS] playing audio');
-      try { await audio.play(); } catch (e) {
-        logPlayFailure('network', e, audio);
-        if (userInitiated) {
-          try {
-            const unlock = new Audio();
-            try { (unlock as any).playsInline = true; } catch {}
-            try { unlock.muted = true; unlock.volume = 0; } catch {}
-            unlock.src = 'data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
-            await unlock.play().catch(() => {});
-            unlock.pause();
-            try { await audio.play(); }
-            catch (e2) { logPlayFailure('network_retry', e2, audio); }
-          } catch {}
-        }
-        try { URL.revokeObjectURL(objectUrl); } catch {}
-        setSpeakingMessageId(null);
-        setIsPaused(false);
-      }
     } catch (err) {
-      console.error('[TTS] Unexpected error while fetching/playing audio', err);
+      console.error('[TTS] Failed to fetch or play audio:', err);
       setSpeakingMessageId(null);
-      setIsPaused(false);
     } finally {
-      setFetchingIds(prev => { const n = new Set(prev); n.delete(messageId); return n; });
-      const iv = progressIntervalRef.current.get(messageId);
-      if (iv) { window.clearInterval(iv); progressIntervalRef.current.delete(messageId); }
-      setProgressMap(prev => { const n = new Map(prev); n.delete(messageId); return n; });
+      setFetchingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(messageId);
+        return newSet;
+      });
     }
   };
 
-  // Manage prefetch timers (kept disabled)
-  useEffect(() => {
-    for (const [, t] of prefetchTimersRef.current) { clearTimeout(t); }
-    prefetchTimersRef.current.clear();
-  }, []);
-
-  // Initialize Talk Back Auto Play state and listen for changes
-  useEffect(() => {
-    try {
-      autoPlayRef.current = (localStorage.getItem('wakti_tts_autoplay') === '1');
-    } catch {}
-    const onAuto = (e: Event) => {
-      const ce = e as CustomEvent<{ value: boolean }>;
-      if (typeof ce?.detail?.value === 'boolean') autoPlayRef.current = ce.detail.value;
-    };
-    window.addEventListener('wakti-tts-autoplay-changed', onAuto as EventListener);
-    return () => window.removeEventListener('wakti-tts-autoplay-changed', onAuto as EventListener);
-  }, []);
-
-  // Listen for preempt setting changes (Option C)
-  useEffect(() => {
-    try { preemptRef.current = (localStorage.getItem('wakti_tts_preempt') === '1'); } catch {}
-    const onPreempt = (e: Event) => {
-      const ce = e as CustomEvent<{ value: boolean }>;
-      if (typeof ce?.detail?.value === 'boolean') preemptRef.current = ce.detail.value;
-    };
-    window.addEventListener('wakti-tts-preempt-changed', onPreempt as EventListener);
-    return () => window.removeEventListener('wakti-tts-preempt-changed', onPreempt as EventListener);
-  }, []);
-
-  // Best-effort iOS audio unlock on first user interaction, persisted per session
-  useEffect(() => {
-    try {
-      if (sessionStorage.getItem('wakti_tts_unlocked') === '1') {
-        audioUnlockedRef.current = true;
-      }
-    } catch {}
-
-    const unlock = async () => {
-      if (audioUnlockedRef.current) return;
-      try {
-        const a = new Audio();
-        // A very short silent data URI (tiny)
-        a.src = 'data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
-        await a.play().catch(() => {});
-        a.pause();
-        audioUnlockedRef.current = true;
-        try { sessionStorage.setItem('wakti_tts_unlocked', '1'); } catch {}
-        try { window.dispatchEvent(new Event('wakti-tts-unlocked')); } catch {}
-      } catch {
-        // Ignore; autoplay will gracefully fail on iOS until the user taps the speaker once
-      }
-      window.removeEventListener('touchend', unlock);
-      window.removeEventListener('click', unlock);
-    };
-    window.addEventListener('pointerdown', unlock, { once: true } as any);
-    window.addEventListener('touchstart', unlock, { once: true, passive: true } as any);
-    window.addEventListener('touchend', unlock, { once: true, passive: true } as any);
-    window.addEventListener('click', unlock, { once: true } as any);
-    return () => {
-      window.removeEventListener('pointerdown', unlock);
-      window.removeEventListener('touchstart', unlock);
-      window.removeEventListener('touchend', unlock);
-      window.removeEventListener('click', unlock);
-    };
-  }, []);
-
-  // Attempt to auto-play the newest assistant reply when messages change
-  useEffect(() => {
-    try {
-      if (!autoPlayRef.current) return;
-      const last = sessionMessages[sessionMessages.length - 1];
-      if (!last || last.role !== 'assistant') return;
-      if (autoPlayedIdsRef.current.has(last.id)) return;
-      // Avoid overlapping
-      if (speakingMessageIdRef.current) return;
-
-      // Mark to avoid repeats
-      autoPlayedIdsRef.current.add(last.id);
-      const text = last.content || '';
-      // Debounce slightly to let DOM settle
-      setTimeout(() => { handleSpeak(text, last.id); }, 150);
-    } catch {}
-  }, [sessionMessages]);
-
-  // Remove ElevenLabs warmup; Google TTS via edge needs none
-  useEffect(() => {}, []);
+  // All old auto-play, pre-emption, and complex unlock logic is removed.
+  // A single, persistent audio element is now used, matching the reliable pattern from AIInsights.
 
   // FIXED: Show welcome message for new conversations
   const renderWelcomeMessage = () => {
@@ -614,7 +417,7 @@ export function ChatMessages({
                 <button
                   onPointerUp={() => handleSpeak(language === 'ar' 
                     ? `مرحباً ${userName}! 👋 أنا وقتي AI، هنا لمساعدتك في كل ما تحتاجه.`
-                    : `Hey ${userName}! 👋 I'm Wakti AI your smart assistant. Ask me anything, from tasks and reminders to chats and ideas. What's on your mind today?`, 'welcome', true
+                    : `Hey ${userName}! 👋 I'm Wakti AI your smart assistant. Ask me anything, from tasks and reminders to chats and ideas. What's on your mind today?`, 'welcome'
                   )}
                   className={`p-2 rounded-md transition-colors ${speakingMessageId === 'welcome' || fadeOutId === 'welcome' ? 'text-green-500 bg-green-500/10 shadow-[0_0_8px_rgba(34,197,94,0.7)]' : 'hover:bg-background/80'}`}
                   title={language === 'ar' ? 'تشغيل الصوت' : 'Play audio'}
@@ -662,9 +465,7 @@ export function ChatMessages({
                         language === 'ar'
                           ? `مرحباً ${userName}! 👋 أنا وقتي AI، هنا لمساعدتك في كل ما تحتاجه.`
                           : `Hey ${userName}! 👋 I'm Wakti AI your smart assistant. Ask me anything, from tasks and reminders to chats and ideas. What's on your mind today?`,
-                        'welcome',
-                        true,
-                        true
+                        'welcome'
                       );
                     }}
                     className="inline-flex items-center justify-center h-5 w-5 rounded bg-amber-500/20 text-amber-700 hover:bg-amber-500/30"
@@ -1178,7 +979,7 @@ export function ChatMessages({
                             {/* TTS Button with Stop Functionality (assistant only) */}
                             {message.role === 'assistant' && (
                               <button
-                                onPointerUp={() => handleSpeak(message.content, message.id, true)}
+                                onPointerUp={() => handleSpeak(message.content, message.id)}
                                 style={{ touchAction: 'manipulation' }}
                                 className={`p-2 rounded-md transition-colors ${speakingMessageId === message.id || fadeOutId === message.id ? 'text-green-500 bg-green-500/10 shadow-[0_0_8px_rgba(34,197,94,0.7)]' : 'hover:bg-background/80'}`}
                                 title={speakingMessageId === message.id 
@@ -1228,7 +1029,7 @@ export function ChatMessages({
                             <div className="inline-flex items-center gap-1 px-1 py-0 rounded-md border border-border/40 bg-background/60 text-[11px]">
                               <span className="text-foreground/80">{language === 'ar' ? 'إيقاف يوتيوب وتشغيل؟' : 'Pause YouTube and play?'}</span>
                               <button
-                                onPointerUp={() => { setPreemptPromptId(null); handleSpeak(message.content, message.id, true, true); }}
+                                onPointerUp={() => { setPreemptPromptId(null); handleSpeak(message.content, message.id); }}
                                 className="inline-flex items-center justify-center h-5 w-5 rounded bg-amber-500/20 text-amber-700 hover:bg-amber-500/30"
                                 aria-label={language === 'ar' ? 'تشغيل' : 'Play'}
                                 title={language === 'ar' ? 'تشغيل' : 'Play'}
