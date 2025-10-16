@@ -280,8 +280,18 @@ export function ChatMessages({
     const playAudio = async (url: string) => {
       setSpeakingMessageId(messageId);
       setIsPaused(false);
+
+      // Ensure sane attributes before playback (iOS/PWA quirks)
+      try {
+        el.muted = false;
+        el.volume = 1.0;
+        el.preload = 'auto';
+        try { (el as any).crossOrigin = 'anonymous'; } catch {}
+      } catch {}
+
       el.src = url;
       try { el.load(); } catch {}
+
       el.onended = () => {
         setSpeakingMessageId(null);
         setIsPaused(false);
@@ -293,8 +303,20 @@ export function ChatMessages({
         setSpeakingMessageId(null);
         setIsPaused(false);
       };
+
       try {
         await el.play();
+        // Lightweight diagnostics to spot silent playback issues
+        try {
+          console.debug('[TTS] play() resolved', {
+            readyState: el.readyState,
+            duration: el.duration,
+            currentTime: el.currentTime,
+            paused: el.paused,
+            muted: el.muted,
+            volume: el.volume,
+          });
+        } catch {}
       } catch (err) {
         console.error('[TTS] el.play() rejected:', err);
         setSpeakingMessageId(null);
@@ -334,9 +356,34 @@ export function ChatMessages({
       }
 
       const audioBlob = await response.blob();
-      const objectUrl = URL.createObjectURL(audioBlob);
-      // Caching is disabled for debugging.
-      playAudio(objectUrl);
+      const contentType = response.headers.get('content-type') || '';
+      try {
+        console.debug('[TTS] blob received', { size: audioBlob.size, contentType });
+      } catch {}
+
+      if (!audioBlob || audioBlob.size === 0) {
+        console.error('[TTS] Empty audio blob received. Aborting playback.');
+        setSpeakingMessageId(null);
+        return;
+      }
+
+      // iOS/PWA Safari sometimes plays object URLs silently. Prefer data URL on iOS.
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || ((navigator.platform === 'MacIntel') && (navigator.maxTouchPoints > 1));
+      if (isIOS) {
+        try {
+          const buf = await audioBlob.arrayBuffer();
+          const b64 = bufferToBase64(buf);
+          const dataUrl = `data:${contentType || 'audio/mpeg'};base64,${b64}`;
+          playAudio(dataUrl);
+        } catch (err) {
+          console.warn('[TTS] Data URL fallback failed, trying object URL...', err);
+          const objectUrl = URL.createObjectURL(audioBlob);
+          playAudio(objectUrl);
+        }
+      } else {
+        const objectUrl = URL.createObjectURL(audioBlob);
+        playAudio(objectUrl);
+      }
 
     } catch (err) {
       console.error('[TTS] Failed to fetch or play audio:', err);
