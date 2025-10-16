@@ -93,8 +93,8 @@ serve(async (req) => {
       );
     }
 
-    // Get the audio file URL from the request body
-    const { audioUrl } = requestBody;
+    // Get the audio file URL and optional language hint from the request body
+    const { audioUrl, language: languageHint } = requestBody as { audioUrl?: string; language?: string };
     // Defensive sanitize: decode URL-encoded spaces, trim whitespace, and validate
     let cleanedAudioUrl = (typeof audioUrl === 'string' ? audioUrl : '').trim();
     // Decode any URL-encoded characters (like %20 for space) and trim again
@@ -113,7 +113,7 @@ serve(async (req) => {
       );
     }
 
-    console.log('Processing audio URL:', cleanedAudioUrl.substring(0, 30) + '...');
+    console.log('Processing audio URL:', cleanedAudioUrl.substring(0, 30) + '...', 'languageHint:', languageHint || 'none');
 
     // Create a Supabase client with the service role key
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -209,8 +209,12 @@ serve(async (req) => {
     // Keep filename and content-type explicit for best format detection
     const audioBlob = new Blob([audioData], { type: 'audio/webm' });
     formData.append('file', audioBlob, 'audio.webm');
-    // Use GPT-4o mini transcribe for speed/cost. Supports multilingual (AR/EN).
-    formData.append('model', 'gpt-4o-mini-transcribe');
+    // Use GPT-4o transcribe for better multilingual code-switching (AR/EN and mixed).
+    formData.append('model', 'gpt-4o-transcribe');
+    // Optional language hint (e.g., 'ar' or 'en')
+    if (typeof languageHint === 'string' && (languageHint === 'ar' || languageHint === 'en')) {
+      formData.append('language', languageHint);
+    }
 
     console.log('FormData ready, sending to OpenAI GPT-4o Mini Transcribe');
     const openaiResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {

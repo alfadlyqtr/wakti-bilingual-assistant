@@ -168,7 +168,7 @@ export function AIInsights() {
       <Card className="rounded-2xl p-4 shadow-sm bg-white/5">
         <div className="flex items-center justify-between mb-3">
           <div className="text-sm font-medium">{language === 'ar' ? 'رؤى WAKTI AI' : 'WAKTI AI Insights'}</div>
-          <Button onClick={onGenerate} disabled={aiLoading || loading}>
+          <Button onClick={onGenerate} disabled={aiLoading || loading} size="sm" className="h-8 px-3 text-xs">
             <RefreshCcw className={aiLoading ? 'mr-2 h-4 w-4 animate-spin':'mr-2 h-4 w-4'} /> {aiLoading ? (language==='ar'?'جاري الإنشاء...':'Generating...') : (language==='ar'?'إنشاء الرؤى':'Generate Insights')}
           </Button>
         </div>
@@ -238,9 +238,13 @@ export function AIInsights() {
         <Card ref={printableRef} className="rounded-2xl p-4 shadow-sm bg-white/5">
           <div className="flex items-center justify-between mb-3">
             <div className="text-sm font-medium">{language === 'ar' ? 'رؤى المدرب' : 'Coach Insights'}</div>
-            <div className="flex gap-2">
-              <Button variant="secondary" onClick={onCopy}><Copy className="h-4 w-4 mr-2" />{language==='ar'?'نسخ':'Copy'}</Button>
-              <Button variant="outline" onClick={onDownload}><Download className="h-4 w-4 mr-2" />{language==='ar'?'تنزيل PDF':'Download PDF'}</Button>
+            <div className="flex items-center gap-2 flex-nowrap">
+              <Button variant="secondary" size="sm" className="h-8 px-3 text-xs" onClick={onCopy}>
+                <Copy className="h-4 w-4 mr-2" />{language==='ar'?'نسخ':'Copy'}
+              </Button>
+              <Button variant="outline" size="sm" className="h-8 px-3 text-xs" onClick={onDownload}>
+                <Download className="h-4 w-4 mr-2" />{language==='ar'?'PDF':'PDF'}
+              </Button>
             </div>
           </div>
           <Section title={language==='ar'?'الملخص اليومي':'Daily Summary'}>{ai?.daily_summary || placeholder(language)}</Section>

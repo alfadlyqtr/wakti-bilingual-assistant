@@ -34,57 +34,14 @@ const _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 console.log("WAKTI AI V2 STREAMING BRAIN (TEXT-ONLY): Ready");
 
 // Build the system prompt for text chat/search with Personal Touch and intelligent formatting
-function buildSystemPrompt(
-  language: string,
-  currentDate: string,
-  personalTouch: any,
-  activeTrigger: string,
-) {
+function buildSystemPrompt(language, currentDate, personalTouch, activeTrigger) {
   const pt = personalTouch || {};
-  const ptNick = (pt.nickname || '').toString().trim();
-  const ptTone = (pt.tone || '').toString().trim();
-  const ptStyle = (pt.style || '').toString().trim();
+  const ptNick = (pt.nickname || '').toString().trim() || 'none';
+  const ptTone = (pt.tone || '').toString().trim() || 'neutral';
+  const ptStyle = (pt.style || '').toString().trim() || 'short answers';
 
-  const langRule = `CRITICAL: You are multilingual. Default to the user's UI language "${language}" for normal conversation. If the user asks to translate or specifies a target language, RESPOND IN THAT TARGET LANGUAGE, even if it differs from "${language}".`;
-
-  const PERSONAL_TOUCH = `
-CRITICAL PERSONAL TOUCH ENFORCEMENT ===
-- Nickname: ${ptNick ? `Use the user's nickname "${ptNick}" naturally and warmly.` : 'No nickname provided.'}
-- Tone: ${ptTone ? `Maintain a ${ptTone} tone consistently.` : 'Default to a friendly, neutral tone.'}
-- Style: ${ptStyle ? `Shape your structure as ${ptStyle}.` : 'Keep answers concise and clear.'}
-`;
-
-  const INTELLIGENT_FORMATTING = `
-CRITICAL OUTPUT FORMATTING RULES ===
-- Choose ONE primary format based on content:
-  1) Markdown table: for structured results (search results, comparisons, item lists with attributes). Keep headers short; cells concise.
-  2) Bulleted list: for steps, checklists, pros/cons, short enumerations.
-  3) Natural paragraph (1–3 sentences): for conversational replies and short explanations.
-- Do NOT include headings like "TABLE", "SUMMARY", or "SOURCES" unless the user asks.
-- Use Markdown links only when explicit URLs are provided within context. Avoid placeholders.
-- Do NOT add code fences unless the user asks for code.
-`;
-
-  const SEARCH_BEHAVIOR = `
-SEARCH BEHAVIOR (when active) ===
-- Read provided search snippets carefully and synthesize a short, direct answer first.
-- If scan-friendly, render a compact Markdown table (e.g., Title | Source | Key Point) or a short bulleted list.
-- Avoid filler; be precise; do not invent sources.
-`;
-
-  return `${langRule}
-
-${PERSONAL_TOUCH}
-
-You are WAKTI AI — a high-performance text chat and search assistant. Date: ${currentDate}
-
-${INTELLIGENT_FORMATTING}
-
-${activeTrigger === 'search' ? SEARCH_BEHAVIOR : ''}
-
-- Always answer directly and helpfully.
-    - Default to the UI language for normal chat, but if a translation is requested, use the target language explicitly.
-- Avoid verbose preambles and avoid repeating the question unless necessary.`;
+  const BASE_PROMPT = `CRITICAL MULTI-LANGUAGE RULE\n- You are multilingual. Default to the UI language "${language}".\n- If the user asks for a translation or specifies a target language, RESPOND IN THAT TARGET LANGUAGE.\n\nCRITICAL PERSONAL TOUCH ENFORCEMENT\n- Nickname: ${ptNick}. If provided, USE the nickname naturally and warmly throughout.\n- Tone: ${ptTone}. Maintain this tone consistently.\n- Style: ${ptStyle}. Shape your structure to match the style in ALL replies.\n\nCRITICAL OUTPUT FORMAT SELECTION\n- Choose ONE primary format:\n  1) Markdown table: for structured multi-item results (search, comparisons, lists with attributes).\n     Columns: Title | Source | Key Point. Keep headers short; cells concise.\n  2) Bulleted list: for steps, checklists, 1–2 results, pros/cons, short enumerations.\n  3) 1–3 sentence paragraph: for brief conversational replies or simple explanations.\n- Use Markdown links ONLY when a real URL is provided. No placeholder links.\n- Do NOT wrap normal text in code fences unless the user asks for code.\n\n${activeTrigger === 'search' ? `SEARCH BEHAVIOR (applies only when Search is active)\n- Read the injected search context carefully; synthesize a short, direct answer FIRST.\n- Deterministic formatting:\n  - If results ≥ 3 → render a Markdown table (Title | Source | Key Point).\n  - If 1–2 results → concise bulleted list with sources.\n  - If explanatory/no results → 1–3 sentence paragraph.\n- Be precise. Do NOT invent sources.\n\n` : ''}GENERAL BEHAVIOR\n- Be direct and helpful. Avoid verbose preambles and do not repeat the question unless needed.\n- Use the target language explicitly when the user requests translation.\n\nYou are WAKTI AI — date: ${currentDate}.`;
+  return BASE_PROMPT;
 }
 
 // Helper function to convert OpenAI message format to Claude format
@@ -235,6 +192,9 @@ serve(async (req) => {
                 role: 'user',
                 content: ctxPrefix + s.context
               });
+              // Re-assert PT + deterministic formatting right after context
+              const reminder = `REMINDER — ENFORCE PT + FORMAT\n- Use nickname if provided. Keep tone "${(personalTouch?.tone||'neutral')}" and style "${(personalTouch?.style||'short answers')}".\n- Apply deterministic format rules for search: table (≥3 results), bullets (1–2), or short paragraph otherwise.\n- Be concise and precise.`;
+              messages.push({ role: 'system', content: reminder });
               console.log('🔎 STREAMING: Web search context injected');
             } else {
               console.log('🔎 STREAMING: No web search context available or search disabled');
@@ -255,6 +215,7 @@ serve(async (req) => {
           if (!OPENAI_API_KEY) throw new Error('OpenAI API key not configured');
           const model = 'gpt-4o-mini';
           console.log(`🤖 STREAMING: Attempting OpenAI (${model})...`);
+          const temperature = activeTrigger === 'search' ? 0.3 : 0.7;
           const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -264,7 +225,7 @@ serve(async (req) => {
             body: JSON.stringify({
               model,
               messages,
-              temperature: 0.7,
+              temperature,
               max_tokens: 4000,
               stream: true,
             }),

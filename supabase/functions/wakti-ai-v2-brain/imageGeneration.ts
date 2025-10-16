@@ -194,7 +194,7 @@ export async function generateImageWithRunware(
             inputImage: inputImage, // base64 data URL (Option 1)
             outputType: outputType,
             outputFormat: bgOutputFormat,
-            model: 'runware:109@1',
+            model: 'google:4@1',
             settings
           }
         ];
@@ -288,7 +288,7 @@ export async function generateImageWithRunware(
           inputImage: inputImageUUID,
           outputType,
           outputFormat: bgOutputFormat,
-          model: 'runware:109@1',
+          model: 'google:4@1',
           settings
         }
       ];
@@ -337,7 +337,7 @@ export async function generateImageWithRunware(
           response: responseMessage,
           imageUrl: urlCandidate,
           runwareCost: imageResult?.cost,
-          modelUsed: 'runware:109@1',
+          modelUsed: 'google:4@1',
           responseTime: durationMs
         };
       }

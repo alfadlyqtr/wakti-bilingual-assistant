@@ -225,6 +225,19 @@ const Tasjeel: React.FC = () => {
   const [quickTranscript, setQuickTranscript] = useState<string>("");
   const [quickSummaryStatus, setQuickSummaryStatus] = useState<"idle" | "uploading" | "processing" | "ready">("idle");
   
+  // Language preference for transcription (Option A) - default to UI language
+  const [transcriptionLanguage, setTranscriptionLanguage] = useState<'auto' | 'ar' | 'en'>(language === 'ar' ? 'ar' : 'en');
+  // Track if user manually changed the transcription language; if not, follow UI language
+  const [userTouchedLanguage, setUserTouchedLanguage] = useState(false);
+
+  // Keep transcriptionLanguage in sync with UI language when the user hasn't overridden it
+  useEffect(() => {
+    if (!userTouchedLanguage) {
+      setTranscriptionLanguage(language === 'ar' ? 'ar' : 'en');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language]);
+  
   // New state for timer color indication
   const [timerColorState, setTimerColorState] = useState<"normal" | "warning" | "critical">("normal");
   const [showPulse, setShowPulse] = useState(false);
@@ -490,7 +503,7 @@ const Tasjeel: React.FC = () => {
       setCurrentRecordId(recordId);
       
       // Transcribe the audio
-      await transcribeAudio((audioUrl || '').trim());
+      await transcribeAudio((audioUrl || '').trim(), transcriptionLanguage);
       
     } catch (error) {
       console.error("Error processing recording:", error);
@@ -554,7 +567,7 @@ const Tasjeel: React.FC = () => {
   };
   
   // Transcribe audio function with enhanced logging
-  const transcribeAudio = async (audioUrl: string) => {
+  const transcribeAudio = async (audioUrl: string, langHint: 'auto' | 'ar' | 'en' = transcriptionLanguage) => {
     try {
       setIsTranscribing(true);
       
@@ -574,7 +587,7 @@ const Tasjeel: React.FC = () => {
       const response = await callEdgeFunctionWithRetry<{ transcript: string }>(
         "transcribe-audio",
         { 
-          body: { audioUrl: safeUrl },
+          body: { audioUrl: safeUrl, language: langHint !== 'auto' ? (langHint === 'ar' ? 'ar' : 'en') : undefined },
           headers: { 'Content-Type': 'application/json' }
         }
       );
@@ -673,30 +686,40 @@ const Tasjeel: React.FC = () => {
         throw new Error(errorData.error || 'Failed to generate audio');
       }
       
-      // Parse the response to get the storage URL
+      // Parse the response to get audio
       const jsonData = await response.json();
       console.log("Audio generation response:", jsonData);
-      
+
       if (jsonData.audioUrl) {
-        // Store the permanent URL from Supabase
+        // Backend returned a permanent URL (older flow)
         setSummaryAudioUrl(jsonData.audioUrl);
-        
-        // Still fetch and prepare the audio for immediate playback
+
         const audioResponse = await fetch(jsonData.audioUrl);
         if (!audioResponse.ok) {
           throw new Error('Failed to fetch audio file from URL');
         }
-        
         const audioData = await audioResponse.blob();
         setSummaryAudioBlob(audioData);
-        
-        // Create audio element for playback using the permanent URL
-        const audio = new Audio(jsonData.audioUrl);
-        summaryAudioPlayerRef.current = audio;
-        
+        summaryAudioPlayerRef.current = new Audio(jsonData.audioUrl);
+        toast(translationTexts.audioGenerationComplete);
+      } else if (jsonData.audioContent) {
+        // New flow: backend returns base64 mp3 content directly
+        const base64 = jsonData.audioContent as string;
+        const byteCharacters = atob(base64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const audioBlob = new Blob([byteArray], { type: 'audio/mpeg' });
+        setSummaryAudioBlob(audioBlob);
+        setSummaryAudioUrl(null); // no permanent URL in this flow
+
+        const objectUrl = URL.createObjectURL(audioBlob);
+        summaryAudioPlayerRef.current = new Audio(objectUrl);
         toast(translationTexts.audioGenerationComplete);
       } else {
-        throw new Error('No audio URL returned');
+        throw new Error('No audio returned from server');
       }
     } catch (error) {
       console.error("Error generating audio:", error);
@@ -717,7 +740,34 @@ const Tasjeel: React.FC = () => {
       
       // Important: Use the permanent storage URL for summary audio
       // instead of the temporary object URL from the audio player
-      const finalSummaryAudioPath = summaryAudioUrl;
+      let finalSummaryAudioPath = summaryAudioUrl as string | null;
+      // If we don't have a URL but we do have a Blob (base64 flow), upload it now
+      if (!finalSummaryAudioPath && summaryAudioBlob) {
+        try {
+          const uniqueId = uuidv4();
+          const fname = `summary-${uniqueId}.mp3`;
+          const bucketId = 'tasjeel_recordings';
+          const userPrefix = user?.id ? `${user.id}/` : '';
+          const filePath = `${userPrefix}${fname}`;
+
+          const { error: uploadErr } = await supabase
+            .storage
+            .from(bucketId)
+            .upload(filePath, summaryAudioBlob, {
+              contentType: 'audio/mpeg',
+              cacheControl: '3600'
+            });
+          if (uploadErr) throw uploadErr;
+
+          const { data: publicUrlData } = supabase
+            .storage
+            .from(bucketId)
+            .getPublicUrl(filePath);
+          finalSummaryAudioPath = (publicUrlData.publicUrl || '').trim();
+        } catch (e) {
+          console.warn('Failed to upload summary audio blob; saving without summary audio URL.', e);
+        }
+      }
       
       if (!finalSummaryAudioPath) {
         console.warn("No permanent summary audio URL available");
@@ -1046,6 +1096,46 @@ const Tasjeel: React.FC = () => {
                           ? "Maximum recording time: 45 minutes" 
                           : "الحد الأقصى لمدة التسجيل: 45 دقيقة"}
                       </span>
+                    </div>
+
+                    {/* Transcription language preference and note */}
+                    <div className="p-3 rounded-md border bg-muted/30">
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <div className="text-sm font-medium">
+                          {language === 'en' ? 'Transcription language' : 'لغة النسخ'}
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant={transcriptionLanguage === 'auto' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => { setTranscriptionLanguage('auto'); setUserTouchedLanguage(true); }}
+                          >
+                            {language === 'en' ? 'Auto' : 'تلقائي'}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={transcriptionLanguage === 'ar' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => { setTranscriptionLanguage('ar'); setUserTouchedLanguage(true); }}
+                          >
+                            {language === 'en' ? 'Arabic' : 'العربية'}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={transcriptionLanguage === 'en' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => { setTranscriptionLanguage('en'); setUserTouchedLanguage(true); }}
+                          >
+                            {language === 'en' ? 'English' : 'الإنجليزية'}
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {language === 'en'
+                          ? 'Note: Mixed Arabic/English may reduce accuracy. We are working hard to improve this.'
+                          : 'ملاحظة: المزج بين العربية والإنجليزية قد يقلل الدقة. نحن نعمل بجد لتحسين ذلك.'}
+                      </div>
                     </div>
                   </div>
                 )}

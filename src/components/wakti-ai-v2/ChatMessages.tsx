@@ -114,11 +114,26 @@ export function ChatMessages({
       // Remove markdown headings and emphasis markers (#, *, _, >)
       t = t.replace(/^\s*#{1,6}\s*/gm, '');
       t = t.replace(/[\*\_\>#`~]+/g, ' ');
+      // Remove markdown tables entirely (lines with pipes or header separators)
+      t = t
+        .split(/\n+/)
+        .filter(line => {
+          const trimmed = line.trim();
+          if (/^\|.*\|$/.test(trimmed)) return false; // full table row
+          if (/^[:\-\|\s]{3,}$/.test(trimmed)) return false; // header separator
+          if (trimmed.includes('|')) return false; // any remaining pipe-heavy line
+          return true;
+        })
+        .join('\n');
       // Remove list bullets like "- ", "* ", "• " at line starts
       t = t.replace(/^\s*[-*•]\s+/gm, '');
       // Remove excessive separators like ::: or ---
       t = t.replace(/[:]{1,}/g, ' ');
       t = t.replace(/-{3,}/g, ' ');
+      // Replace any stray pipes with commas (safety)
+      t = t.replace(/\|+/g, ', ');
+      // Aggressively keep only letters/numbers/basic punctuation (including Arabic range)
+      t = t.replace(/[^\p{L}\p{N}\s\.,!\?;:%\-\u0600-\u06FF]/gu, ' ');
       // Collapse whitespace
       t = t.replace(/\s{2,}/g, ' ').trim();
       return t;
@@ -257,7 +272,26 @@ export function ChatMessages({
       el.currentTime = 0;
     }
 
-    const cleanText = sanitizeForTTS(text);
+    let cleanText = sanitizeForTTS(text);
+    if (!cleanText || cleanText.length < 3) {
+      try {
+        // Fallback: keep content but neutralize tables/pipes and markdown
+        let alt = text || '';
+        alt = alt.replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1');
+        alt = alt.replace(/`{1,3}[^`]*`{1,3}/g, ' ');
+        alt = alt.replace(/`/g, ' ');
+        alt = alt
+          .split(/\n+/)
+          .filter(line => !/^[:\-\|\s]{3,}$/.test(line.trim()))
+          .join(' ');
+        alt = alt.replace(/\|+/g, ', ').replace(/\s{2,}/g, ' ').trim();
+        cleanText = alt.slice(0, 1000);
+      } catch {}
+    }
+    if (!cleanText || cleanText.length < 3) {
+      console.warn('[TTS] Skipping: no readable text after sanitization');
+      return;
+    }
     const cacheKey = ''; // no cache (match AI Insights minimal flow)
 
     // --- Mobile Unlock ---
@@ -325,7 +359,12 @@ export function ChatMessages({
     };
 
     // --- Fetch (no cache), match AI Insights ---
-    setFetchingIds(prev => prev);
+    // Mark fetching for this message to show a spinner
+    setFetchingIds(prev => {
+      const next = new Set(prev);
+      next.add(messageId);
+      return next;
+    });
 
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -389,7 +428,11 @@ export function ChatMessages({
       console.error('[TTS] Failed to fetch or play audio:', err);
       setSpeakingMessageId(null);
     } finally {
-      setFetchingIds(prev => prev);
+      setFetchingIds(prev => {
+        const next = new Set(prev);
+        next.delete(messageId);
+        return next;
+      });
     }
   };
 
@@ -590,6 +633,7 @@ export function ChatMessages({
     const content = message.content;
     const yt = (message as any)?.metadata?.youtube;
     const ytErr = (message as any)?.metadata?.youtubeError as string | undefined;
+    const searchMeta = (message as any)?.metadata?.search;
 
     // YouTube search result preview
     if (message.role === 'assistant' && yt && yt.videoId) {
@@ -756,6 +800,24 @@ export function ChatMessages({
           >
             {content}
           </ReactMarkdown>
+          {message.intent === 'search' && Array.isArray(searchMeta?.followUps) && searchMeta.followUps.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {searchMeta.followUps.slice(0, 6).map((q: string, i: number) => (
+                <button
+                  key={i}
+                  className="text-xs px-2 py-1 rounded-md border border-border hover:bg-muted/50 dark:hover:bg-white/10"
+                  title={q}
+                  onClick={() => {
+                    try {
+                      window.dispatchEvent(new CustomEvent('wakti-chat-send', { detail: { text: q, intent: 'search' } }));
+                    } catch {}
+                  }}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       );
     }

@@ -1,4 +1,3 @@
-
 /**
  * SIMPLIFIED: Search functionality with robust JSON parsing
  */
@@ -18,11 +17,15 @@ export async function executeRegularSearch(query: string, language: string = 'en
   }
 
   try {
+    // Recency heuristic: if the query implies breaking/very recent info, prefer 'day'
+    const freshIntent = /\b(today|latest|now|live|breaking|scores?|result|this\s*(week|day)|tonight|just\s*now|update[sd]?|news)\b/i.test(query);
+    const time_range = freshIntent ? 'day' : 'week';
+
     const searchPayload = {
       api_key: TAVILY_API_KEY,
       query: query,
       search_depth: "advanced",
-      time_range: "week",
+      time_range,
       include_answer: "advanced",
       include_raw_content: true,
       chunks_per_source: 5,
