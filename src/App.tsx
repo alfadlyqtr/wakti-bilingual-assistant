@@ -54,6 +54,7 @@ import VoiceTTS from "./pages/VoiceTTS";
 import VoiceStudio from "./pages/VoiceStudio";
 import TextGenerator from "./pages/TextGenerator";
 import GameMode from "./pages/GameMode";
+import Games from "./pages/Games";
 import FitnessHealth from "./pages/FitnessHealth";
 import FitnessWhoopCallback from "./pages/FitnessWhoopCallback";
 import Journal from "./pages/Journal";
@@ -166,6 +167,11 @@ function App() {
                 <Route path="/journal" element={
                   <GiftNotificationProvider>
                     <AppLayout><Journal /></AppLayout>
+                  </GiftNotificationProvider>
+                } />
+                <Route path="/games" element={
+                  <GiftNotificationProvider>
+                    <AppLayout><Games /></AppLayout>
                   </GiftNotificationProvider>
                 } />
                 <Route path="/contacts" element={

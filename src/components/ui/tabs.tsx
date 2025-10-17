@@ -47,10 +47,11 @@ const TabsTrigger = React.forwardRef<
           "border border-border bg-card text-foreground/90 shadow-sm",
           // Hover subtle lift
           "hover:shadow-md hover:-translate-y-[1px]",
-          // Active/selected tab is clearly pressed/primary
+          // Active: brand gradient + glass (no underline)
           "data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:shadow-lg",
-          // underline indicator (stronger)
-          "relative after:absolute after:left-3 after:right-3 after:-bottom-0.5 after:h-[3px] after:rounded-full after:bg-transparent data-[state=active]:after:bg-primary",
+          "data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500/15 data-[state=active]:to-violet-500/15 data-[state=active]:backdrop-blur-sm",
+          // Remove underline pseudo-element
+          "relative after:absolute after:left-3 after:right-3 after:-bottom-0.5 after:h-0 after:bg-transparent",
           "transition duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background",
           "disabled:pointer-events-none disabled:opacity-50",
           className

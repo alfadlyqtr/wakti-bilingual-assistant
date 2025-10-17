@@ -3,6 +3,7 @@ import { useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import Loading from "@/components/ui/loading";
+import { SplashVideo } from "@/components/SplashVideo";
 import { FawranPaymentOverlay } from "@/components/fawran/FawranPaymentOverlay";
 
 interface ProtectedRouteProps {
@@ -29,6 +30,8 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const destroyedRef = useRef(false);
   const retriedRef = useRef(false); // allow at most one background retry per user
   const lastUserIdRef = useRef<string | null>(null);
+  const [showSplash, setShowSplash] = useState(false);
+  const lastSessionTokenRef = useRef<string | null>(null);
 
   // Owner accounts that bypass all restrictions
   const ownerAccounts = ['alfadly@me.com', 'alfadlyqatar@gmail.com'];
@@ -43,6 +46,37 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
       userId: user?.id
     });
   }, [isLoading, user, session, location.pathname]);
+
+  // Show splash after each fresh sign-in (detect session token change) - MOBILE ONLY
+  useEffect(() => {
+    if (!isLoading && user && session) {
+      const token = (session as any)?.access_token || JSON.stringify(session);
+      if (lastSessionTokenRef.current !== token) {
+        lastSessionTokenRef.current = token;
+        try {
+          const isMobile = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+          if (isMobile) setShowSplash(true);
+          else setShowSplash(false);
+        } catch {
+          setShowSplash(false);
+        }
+      }
+    }
+  }, [isLoading, user, session]);
+
+  const preloadApp = React.useCallback(async () => {
+    try {
+      // Minimal preload scaffolding; extend with real data fetches as needed
+      const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+      await Promise.race([
+        (async () => {
+          // TODO: add real preloads (dashboard widgets, quotas, user settings)
+          await delay(1200);
+        })(),
+        delay(8000)
+      ]);
+    } catch {}
+  }, []);
 
   useEffect(() => {
     const checkSubscriptionStatus = async () => {
@@ -323,5 +357,17 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   console.log("ProtectedRoute: User has valid subscription, allowing access");
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      {showSplash && user && (
+        <SplashVideo
+          preload={preloadApp}
+          onDone={() => {
+            setShowSplash(false);
+          }}
+        />
+      )}
+    </>
+  );
 }

@@ -1012,17 +1012,17 @@ const Tasjeel: React.FC = () => {
         {/* Page title area above tabs, matching sidebar */}
         <PageTitle title={translationTexts.pageTitle} Icon={Mic} colorClass="text-cyan-500" />
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "record" | "saved" | "quick")}>
-          <TabsList className="grid grid-cols-3 w-full mb-6">
-            <TabsTrigger value="record" className="flex items-center gap-2 flex-wrap min-w-0 max-w-full whitespace-normal break-words text-center">
-              <Mic className="h-4 w-4" />
+          <TabsList className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full mb-6 rounded-2xl border bg-muted/40 p-1 shadow-sm">
+            <TabsTrigger value="record" className="group flex items-center gap-2 flex-wrap min-w-0 max-w-full whitespace-normal break-words text-center transition-all duration-200 hover:-translate-y-[1px] hover:shadow-md hover:bg-card/70 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500/15 data-[state=active]:to-violet-500/15 data-[state=active]:backdrop-blur-sm data-[state=active]:border-cyan-500/60 data-[state=active]:text-foreground data-[state=active]:shadow-md data-[state=active]:ring-1 data-[state=active]:ring-cyan-500/40 after:h-0 after:opacity-0 data-[state=active]:after:bg-transparent">
+              <Mic className="h-4 w-4 text-cyan-600" />
               {translationTexts.newRecording}
             </TabsTrigger>
-            <TabsTrigger value="quick" className="flex items-center gap-2 flex-wrap min-w-0 max-w-full whitespace-normal break-words text-center">
-              <Zap className="h-4 w-4" />
+            <TabsTrigger value="quick" className="group flex items-center gap-2 flex-wrap min-w-0 max-w-full whitespace-normal break-words text-center transition-all duration-200 hover:-translate-y-[1px] hover:shadow-md hover:bg-card/70 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500/15 data-[state=active]:to-violet-500/15 data-[state=active]:backdrop-blur-sm data-[state=active]:border-cyan-500/60 data-[state=active]:text-foreground data-[state=active]:shadow-md data-[state=active]:ring-1 data-[state=active]:ring-cyan-500/40 after:h-0 after:opacity-0 data-[state=active]:after:bg-transparent">
+              <Zap className="h-4 w-4 text-cyan-600" />
               {translationTexts.quickSummary}
             </TabsTrigger>
-            <TabsTrigger value="saved" className="flex items-center gap-2 flex-wrap min-w-0 max-w-full whitespace-normal break-words text-center">
-              <Save className="h-4 w-4" />
+            <TabsTrigger value="saved" className="group flex items-center gap-2 flex-wrap min-w-0 max-w-full whitespace-normal break-words text-center transition-all duration-200 hover:-translate-y-[1px] hover:shadow-md hover:bg-card/70 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500/15 data-[state=active]:to-violet-500/15 data-[state=active]:backdrop-blur-sm data-[state=active]:border-cyan-500/60 data-[state=active]:text-foreground data-[state=active]:shadow-md data-[state=active]:ring-1 data-[state=active]:ring-cyan-500/40 after:h-0 after:opacity-0 data-[state=active]:after:bg-transparent">
+              <Save className="h-4 w-4 text-cyan-600" />
               {translationTexts.savedRecordings}
             </TabsTrigger>
           </TabsList>

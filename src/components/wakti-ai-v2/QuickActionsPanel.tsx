@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { motion } from 'framer-motion';
-import { PenTool, Mic, Gamepad2 } from 'lucide-react';
+import { PenTool, Mic } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 
 interface QuickActionsProps {
@@ -33,13 +33,6 @@ export function QuickActionsPanel({
     action: () => onOpenTool && onOpenTool('voice'),
     color: 'text-pink-500',
     path: '/tools/voice-studio'
-  }, {
-    id: 'game',
-    icon: <Gamepad2 />,
-    label: language === 'ar' ? 'لعبة' : 'Game',
-    action: () => onOpenTool && onOpenTool('game'),
-    color: 'text-red-500',
-    path: '/tools/game'
   }], [language, onOpenTool]);
   
   // Quick actions are non-routing helpers; no active state
@@ -67,7 +60,6 @@ export function QuickActionsPanel({
     switch(toolId) {
       case 'text': return 'shadow-[0_0_15px_rgba(168,85,247,0.7)]';
       case 'voice': return 'shadow-[0_0_15px_rgba(236,72,153,0.7)]';
-      case 'game': return 'shadow-[0_0_15px_rgba(239,68,68,0.7)]';
       default: return 'shadow-[0_0_15px_rgba(156,163,175,0.7)]';
     }
   };
@@ -76,7 +68,6 @@ export function QuickActionsPanel({
     switch(toolId) {
       case 'text': return 'border-purple-500/40';
       case 'voice': return 'border-pink-500/40';
-      case 'game': return 'border-red-500/40';
       default: return 'border-gray-400/30';
     }
   };

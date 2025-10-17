@@ -15,7 +15,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Home,
-  LucideIcon
+  LucideIcon,
+  Gamepad2
 } from "lucide-react";
 
 type IconComponent = React.ComponentType<{ 
@@ -52,6 +53,7 @@ export function DesktopSidebar() {
     { icon: Sparkles, label: "wakti_ai", path: "/wakti-ai" },
     { icon: HeartPulse, label: "vitality", path: "/fitness" },
     { icon: Mic, label: "tasjeel", path: "/tasjeel" },
+    { icon: Gamepad2 as unknown as IconComponent, label: "games", path: "/games" },
   ];
 
   const handleNavigation = (path: string) => {
@@ -186,13 +188,14 @@ export function DesktopSidebar() {
           </Button>
         </div>
 
-        {/* Main Navigation */}
-        <div className="flex-1">
+        {/* Main Navigation (scrollable to prevent clipping on small heights) */}
+        <div className="flex-1 overflow-y-auto pr-1 pb-4">
           <motion.nav className="space-y-2" variants={navVariants} initial="hidden" animate="show">
-            {navItems.map((item) => {
+            {navItems.filter(i => i.path !== '/games').map((item) => {
               const isActive = location.pathname === item.path || 
                 (item.path === '/maw3d' && location.pathname.startsWith('/maw3d')) || 
-                (item.path === '/tr' && location.pathname.startsWith('/tr'));
+                (item.path === '/tr' && location.pathname.startsWith('/tr')) ||
+                (item.path === '/games' && location.pathname.startsWith('/games'));
               
               // Define color classes and glow effects matching mobile nav
               const getColorClass = (path: string) => {
@@ -202,6 +205,7 @@ export function DesktopSidebar() {
                   case '/maw3d': return 'nav-icon-maw3d text-purple-500';
                   case '/tr': return 'nav-icon-tr text-emerald-500';
                   case '/wakti-ai': return 'nav-icon-ai text-amber-500';
+                  case '/games': return 'text-indigo-500';
                   case '/tasjeel': return 'text-cyan-500';
                   default: return 'text-gray-500';
                 }
@@ -214,6 +218,7 @@ export function DesktopSidebar() {
                   case '/maw3d': return 'shadow-[0_0_15px_rgba(168,85,247,0.7)]';
                   case '/tr': return 'shadow-[0_0_15px_rgba(16,185,129,0.7)]';
                   case '/wakti-ai': return 'shadow-[0_0_15px_rgba(245,158,11,0.7)]';
+                  case '/games': return 'shadow-[0_0_15px_rgba(99,102,241,0.7)]';
                   case '/tasjeel': return 'shadow-[0_0_15px_rgba(6,182,212,0.7)]';
                   default: return 'shadow-[0_0_15px_rgba(156,163,175,0.7)]';
                 }
@@ -226,6 +231,7 @@ export function DesktopSidebar() {
                   case '/maw3d': return 'border-purple-500/40';
                   case '/tr': return 'border-emerald-500/40';
                   case '/wakti-ai': return 'border-amber-500/40';
+                  case '/games': return 'border-indigo-500/40';
                   case '/tasjeel': return 'border-cyan-500/40';
                   default: return 'border-gray-400/30';
                 }
@@ -242,7 +248,7 @@ export function DesktopSidebar() {
                   onClick={() => handleNavigation(item.path)}
                   variants={itemVariants}
                 >
-                  <div className={`flex ${isCollapsed ? 'flex-col' : 'flex-row'} items-center w-full gap-2 overflow-hidden`}>
+                  <div className={`flex ${isCollapsed ? 'flex-col' : 'flex-row'} items-center w-full gap-2`}>
                     <div className="relative flex items-center justify-center">
                       <item.icon 
                         className={`h-5 w-5 transition-all duration-300 ${getColorClass(item.path)} ${
@@ -286,15 +292,62 @@ export function DesktopSidebar() {
                 </motion.button>
               );
             })}
-            {/* Quick Actions inserted directly after nav items to match styling and spacing */}
+            {/* Quick Actions: Text + Voice & Translator */}
             <QuickActionsPanel
               isCollapsed={isCollapsed}
               onOpenTool={(tool) => {
                 if (tool === 'text') navigate('/tools/text');
                 else if (tool === 'voice') navigate('/tools/voice-studio');
-                else if (tool === 'game') navigate('/tools/game');
               }}
             />
+
+            {/* Render Games after quick actions so it appears below Voice & Translator */}
+            {navItems.filter(i => i.path === '/games').map((item) => {
+              const isActive = location.pathname.startsWith('/games');
+              const getColorClass = () => 'text-indigo-500';
+              const getGlowColor = () => 'shadow-[0_0_15px_rgba(99,102,241,0.7)]';
+              const getBorderClass = () => 'border-indigo-500/40';
+              return (
+                <motion.button
+                  key={item.label}
+                  className={`w-full ${isCollapsed ? 'h-14 px-1' : 'h-12 px-3'} justify-start rounded-xl group ${
+                    isActive
+                      ? `bg-white/10 dark:bg-white/5 shadow-lg backdrop-blur-sm ${getGlowColor()} border ${getBorderClass()}`
+                      : 'hover:bg-white/5 dark:hover:bg-white/[0.02]'
+                  } transition-all duration-300 ease-[cubic-bezier(.22,1,.36,1)] hover:scale-[1.02] active:scale-[0.98]`}
+                  onClick={() => handleNavigation(item.path)}
+                  variants={itemVariants}
+                >
+                  <div className={`flex ${isCollapsed ? 'flex-col' : 'flex-row'} items-center w-full gap-2`}>
+                    <div className="relative flex items-center justify-center">
+                      <item.icon
+                        className={`h-5 w-5 transition-all duration-300 ${getColorClass()} ${
+                          isActive ? 'scale-110 brightness-125 drop-shadow-[0_0_8px]' : 'group-hover:scale-110 group-hover:brightness-110'
+                        }`}
+                        style={{ filter: isActive ? 'drop-shadow(0 0 8px currentColor)' : 'none' }}
+                      />
+                      {isActive && (
+                        <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-transparent via-white/10 to-transparent animate-pulse" />
+                      )}
+                    </div>
+                    <AnimatePresence>
+                      {!isCollapsed && (
+                        <motion.span
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -10 }}
+                          className={`text-sm font-medium transition-all duration-300 ${
+                            isActive ? 'text-foreground font-semibold' : 'text-muted-foreground group-hover:text-foreground'
+                          }`}
+                        >
+                          {t(item.label as any, language)}
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </motion.button>
+              );
+            })}
           </motion.nav>
         </div>
 
