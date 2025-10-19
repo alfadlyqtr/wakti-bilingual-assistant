@@ -371,7 +371,17 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
           {activeTab === 'compose' && (
             <div className="space-y-4">
               <div className="grid gap-2">
-                <label className="text-sm font-medium">{language === 'ar' ? 'الموضوع' : 'Topic to write'}</label>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-sm font-medium">{language === 'ar' ? 'الموضوع' : 'Topic to write'}</label>
+                  <button
+                    type="button"
+                    onClick={() => setTopic('')}
+                    className="text-xs px-2 py-1 rounded-md border hover:bg-muted"
+                    aria-label={language === 'ar' ? 'مسح النص' : 'Clear text'}
+                  >
+                    {language === 'ar' ? 'مسح' : 'Clear'}
+                  </button>
+                </div>
                 <textarea
                   className={`w-full border rounded p-3 min-h-[120px] ${fieldAccent}`}
                   placeholder={language === 'ar' ? 'أدخل الموضوع أو الفكرة...' : 'Topic or idea you want to write about...'}
@@ -443,7 +453,17 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
           {activeTab === 'reply' && (
             <div className="space-y-4">
               <div className="grid gap-3 mb-3">
-                <label className="text-sm font-medium">{language === 'ar' ? 'نقاط أساسية وكلمات مفتاحية' : 'Key Points & Keywords'}</label>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-sm font-medium">{language === 'ar' ? 'نقاط أساسية وكلمات مفتاحية' : 'Key Points & Keywords'}</label>
+                  <button
+                    type="button"
+                    onClick={() => setKeyPoints('')}
+                    className="text-xs px-2 py-1 rounded-md border hover:bg-muted"
+                    aria-label={language === 'ar' ? 'مسح النص' : 'Clear text'}
+                  >
+                    {language === 'ar' ? 'مسح' : 'Clear'}
+                  </button>
+                </div>
                 <textarea
                   className={`w-full border rounded px-3 py-2 min-h-[96px] ${fieldAccent}`}
                   placeholder={
@@ -456,7 +476,17 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 />
               </div>
               <div className="grid gap-2">
-                <label className="text-sm font-medium">{language === 'ar' ? 'الرسالة الأصلية' : 'Original Message'}</label>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-sm font-medium">{language === 'ar' ? 'الرسالة الأصلية' : 'Original Message'}</label>
+                  <button
+                    type="button"
+                    onClick={() => setOriginalMessage('')}
+                    className="text-xs px-2 py-1 rounded-md border hover:bg-muted"
+                    aria-label={language === 'ar' ? 'مسح النص' : 'Clear text'}
+                  >
+                    {language === 'ar' ? 'مسح' : 'Clear'}
+                  </button>
+                </div>
                 <textarea
                   className={`w-full border rounded p-3 min-h-[140px] ${fieldAccent}`}
                   placeholder={language === 'ar' ? 'الرسالة التي تريد الرد عليها...' : 'Original message you want to reply to...'}

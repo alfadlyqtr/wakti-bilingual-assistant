@@ -365,9 +365,9 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
       const margin = 20;
       let yPosition = margin;
 
-      // Header with brand bar + logo
+      // Header with brand bar + logo (compact height)
       doc.setFillColor(6, 5, 65); // #060541
-      doc.rect(0, 0, pageWidth, 40, 'F');
+      doc.rect(0, 0, pageWidth, 24, 'F');
       // Try to render WAKTI logo on the left, fallback to text
       try {
         const logoUrl = 'https://raw.githubusercontent.com/alfadlyqtr/wakti-bilingual-assistant/main/public/lovable-uploads/4ed7b33a-201e-4f05-94de-bac892155c01.png';
@@ -388,20 +388,20 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
           img.onerror = rej;
           img.src = logoUrl;
         });
-        // place logo
-        doc.addImage(dataUrl, 'PNG', 12, 8, 24, 24);
+        // place logo (smaller and higher)
+        doc.addImage(dataUrl, 'PNG', 10, 5, 16, 16);
         doc.setTextColor(255, 255, 255);
-        doc.setFontSize(18);
+        doc.setFontSize(14);
         doc.setFont('helvetica', 'bold');
-        doc.text('WAKTI', 40, 25, { align: 'left' });
+        doc.text('WAKTI', 30, 16, { align: 'left' });
       } catch {
         doc.setTextColor(255, 255, 255);
-        doc.setFontSize(18);
+        doc.setFontSize(14);
         doc.setFont('helvetica', 'bold');
-        doc.text('WAKTI', 14, 25, { align: 'left' });
+        doc.text('WAKTI', 14, 16, { align: 'left' });
       }
-      
-      yPosition = 50;
+
+      yPosition = 34;
       doc.setTextColor(0, 0, 0);
       
       // Title
@@ -410,6 +410,9 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
       doc.text(title, isRtl ? pageWidth - margin : margin, yPosition, { align: isRtl ? 'right' : 'left' });
       yPosition += 15;
       
+      // Decide if this is a Tasjeel PDF (sidebar layout) to optionally skip the top gray metadata box
+      const isTasjeelHeader = (metadata.type || '').toLowerCase().includes('tasjeel');
+
       // Metadata section
       doc.setFontSize(12);
       doc.setFont('helvetica', 'normal');
@@ -435,19 +438,22 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
         metadataItems.push(`${isRtl ? 'الموقع:' : 'Location:'} ${metadata.location}`);
       }
       
-      // Add metadata with background
-      doc.setFillColor(248, 249, 250);
-      const metadataHeight = metadataItems.length * 7 + 10;
-      doc.rect(margin, yPosition - 5, pageWidth - 2 * margin, metadataHeight, 'F');
+      if (!isTasjeelHeader) {
+        // Add metadata with background
+        doc.setFillColor(248, 249, 250);
+        const metadataHeight = metadataItems.length * 7 + 10;
+        doc.rect(margin, yPosition - 5, pageWidth - 2 * margin, metadataHeight, 'F');
+        metadataItems.forEach(item => {
+          doc.text(item, isRtl ? pageWidth - margin - 5 : margin + 5, yPosition, { align: isRtl ? 'right' : 'left' });
+          yPosition += 7;
+        });
+        yPosition += 15;
+      } else {
+        // Minimal spacing before content for Tasjeel
+        yPosition += 6;
+      }
       
-      metadataItems.forEach(item => {
-        doc.text(item, isRtl ? pageWidth - margin - 5 : margin + 5, yPosition, { align: isRtl ? 'right' : 'left' });
-        yPosition += 7;
-      });
-      
-      yPosition += 15;
-      
-      // Content section as styled HTML (section colors Option A) rendered via html2canvas
+      // Content section: Branch layouts
       if (content.text && content.text.trim()) {
         // Build a styled HTML from the summary content by detecting sections
         const summary = content.text.trim();
@@ -502,53 +508,111 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
               current = { title: isRtl ? 'نظرة عامة' : 'Overview', items: [] };
               blocks.push(current);
             }
-            current.items.push(line.replace(/^[-*•]\s*/, ''));
+            // Sanitize: remove leading list markers and markdown bold markers (**)
+            const cleaned = line
+              .replace(/^[-*•]\s*/, '')
+              .replace(/\*\*(.+?)\*\*/g, '$1')
+              .replace(/\*\*/g, '');
+            current.items.push(cleaned);
           }
         }
+        // Normalize/rename Parking Lot heading to Open Questions
+        const normalizeTitle = (t: string) => {
+          const tLow = t.toLowerCase();
+          if (tLow.includes('parking lot')) return isRtl ? 'الأسئلة المفتوحة' : 'Open Questions';
+          if (tLow.includes('open questions')) return isRtl ? 'الأسئلة المفتوحة' : 'Open Questions';
+          return t;
+        };
+        const normalizedBlocks = blocks
+          .map(b => ({ title: normalizeTitle(b.title), items: b.items.filter(it => it && it.trim().length > 0) }))
+          .filter(b => b.items.length > 0);
 
+        const isTasjeel = (metadata.type || '').toLowerCase().includes('tasjeel');
+
+        // Build container for either default (existing) or Tasjeel Sidebar (Option B)
         const container = document.createElement('div');
         container.style.position = 'absolute';
         container.style.left = '-9999px';
         container.style.top = '-9999px';
         container.style.width = `${(pageWidth - 2 * margin) * 3.78}px`;
-        container.style.padding = '20px';
+        container.style.padding = '16px';
         container.style.background = 'white';
         container.style.fontFamily = isRtl ? 'Arial, "Segoe UI", Tahoma, sans-serif' : 'Inter, Arial, sans-serif';
         container.style.direction = isRtl ? 'rtl' : 'ltr';
         container.style.textAlign = isRtl ? 'right' : 'left';
 
-        const sectionHtml = blocks.map(b => {
-          const color = colorMap[b.title] || '#1F2937';
-          const itemsHtml = b.items.map(it => `<li>${it}</li>`).join('');
-          return `
-            <div style="margin-bottom:14px;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,0.04)">
-              <div style="background:${color};color:white;padding:8px 12px;font-weight:700">${b.title}</div>
-              <div style="padding:12px 14px;font-size:14px;line-height:1.6">
-                ${itemsHtml ? `<ul style='margin:${isRtl ? '0 18px 0 0' : '0 0 0 18px'}'>${itemsHtml}</ul>` : ''}
-              </div>
+        if (isTasjeel) {
+          // Sidebar layout (25% meta, 75% content), compact headings
+          const metaRows: string[] = [];
+          metaRows.push(`<div>${isRtl ? 'النوع' : 'Type'}: ${metadata.type}</div>`);
+          if (metadata.host) metaRows.push(`<div>${isRtl ? 'المضيف' : 'Host'}: ${metadata.host}</div>`);
+          if (metadata.attendees) metaRows.push(`<div>${isRtl ? 'الحضور' : 'Attendees'}: ${metadata.attendees}</div>`);
+          if (metadata.location) metaRows.push(`<div>${isRtl ? 'الموقع' : 'Location'}: ${metadata.location}</div>`);
+
+          const sectionBlockHtml = (b: { title: string; items: string[] }) => `
+            <div style="margin:0 0 10px 0">
+              <div style="font-size:13px;font-weight:800;color:#111827;margin-bottom:6px;border-bottom:2px solid #CBD5E1;padding-bottom:4px">${b.title}</div>
+              <ul style="font-size:12px;line-height:1.45;margin:${isRtl ? '0 16px 0 0' : '0 0 0 16px'}">
+                ${b.items.map(it => `<li>${it}</li>`).join('')}
+              </ul>
             </div>`;
-        }).join('');
 
-        const titleRow = `
-          <div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
-            <div style="font-size:18px;font-weight:800;color:#111827">${title}</div>
-            <div style="font-size:12px;color:#6b7280">${format(new Date(metadata.createdAt), 'PPP', { locale })}</div>
-          </div>`;
+          const rightHtml = normalizedBlocks.map(sectionBlockHtml).join('');
+          const createdChip = format(new Date(metadata.createdAt), 'PPP', { locale });
 
-        const metaChips: string[] = [];
-        metaChips.push(`${isRtl ? 'النوع' : 'Type'}: ${metadata.type}`);
-        if (metadata.host) metaChips.push(`${isRtl ? 'المضيف' : 'Host'}: ${metadata.host}`);
-        if (metadata.attendees) metaChips.push(`${isRtl ? 'الحضور' : 'Attendees'}: ${metadata.attendees}`);
-        if (metadata.location) metaChips.push(`${isRtl ? 'الموقع' : 'Location'}: ${metadata.location}`);
+          const sideBorderStyle = isRtl
+            ? 'border-left:1px solid #E5E7EB;padding-left:12px'
+            : 'border-right:1px solid #E5E7EB;padding-right:12px';
 
-        const chipsHtml = metaChips.map(c => `<span style="display:inline-block;padding:6px 10px;border-radius:9999px;background:#F3F4F6;color:#374151;font-size:12px;margin:${isRtl ? '0 0 6px 6px' : '0 6px 6px 0'}">${c}</span>`).join('');
+          container.innerHTML = `
+            <div style="position:relative;border:2px solid #CBD5E1;border-radius:10px;padding:12px">
+              <div style="display:grid;grid-template-columns:25% 1fr;gap:16px;align-items:start">
+                <div style="${sideBorderStyle}">
+                  <div style="font-size:12px;color:#6B7280;font-weight:700;margin-bottom:8px">${isRtl ? 'معلومات' : 'Meta'}</div>
+                  <div style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:#374151">${metaRows.join('')}</div>
+                  <div style="font-size:11px;color:#94A3B8;margin-top:10px">${createdChip}</div>
+                </div>
+                <div>
+                  ${rightHtml}
+                </div>
+              </div>
+              <div style="position:absolute;${isRtl ? 'right' : 'left'}:calc(25% + 12px);top:12px;bottom:12px;${isRtl ? 'border-left' : 'border-right'}:2px solid #CBD5E1"></div>
+            </div>`;
+        } else {
+          // Existing colorful blocks layout (non-Tasjeel)
+          const sectionHtml = normalizedBlocks.map(b => {
+            const color = colorMap[b.title] || '#1F2937';
+            const itemsHtml = b.items.map(it => `<li>${it}</li>`).join('');
+            return `
+              <div style="margin-bottom:14px;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,0.04)">
+                <div style="background:${color};color:white;padding:8px 12px;font-weight:700">${b.title}</div>
+                <div style="padding:12px 14px;font-size:14px;line-height:1.6">
+                  ${itemsHtml ? `<ul style='margin:${isRtl ? '0 18px 0 0' : '0 0 0 18px'}'>${itemsHtml}</ul>` : ''}
+                </div>
+              </div>`;
+          }).join('');
 
-        container.innerHTML = `
-          <div>
-            ${titleRow}
-            <div style="margin-bottom:12px">${chipsHtml}</div>
-            ${sectionHtml}
-          </div>`;
+          const titleRow = `
+            <div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+              <div style="font-size:18px;font-weight:800;color:#111827">${title}</div>
+              <div style="font-size:12px;color:#6b7280">${format(new Date(metadata.createdAt), 'PPP', { locale })}</div>
+            </div>`;
+
+          const metaChips: string[] = [];
+          metaChips.push(`${isRtl ? 'النوع' : 'Type'}: ${metadata.type}`);
+          if (metadata.host) metaChips.push(`${isRtl ? 'المضيف' : 'Host'}: ${metadata.host}`);
+          if (metadata.attendees) metaChips.push(`${isRtl ? 'الحضور' : 'Attendees'}: ${metadata.attendees}`);
+          if (metadata.location) metaChips.push(`${isRtl ? 'الموقع' : 'Location'}: ${metadata.location}`);
+
+          const chipsHtml = metaChips.map(c => `<span style="display:inline-block;padding:6px 10px;border-radius:9999px;background:#F3F4F6;color:#374151;font-size:12px;margin:${isRtl ? '0 0 6px 6px' : '0 6px 6px 0'}">${c}</span>`).join('');
+
+          container.innerHTML = `
+            <div>
+              ${titleRow}
+              <div style="margin-bottom:12px">${chipsHtml}</div>
+              ${sectionHtml}
+            </div>`;
+        }
 
         document.body.appendChild(container);
 
@@ -556,13 +620,16 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
           const canvas = await html2canvas(container, { backgroundColor: 'white', scale: 2, useCORS: true, allowTaint: true });
           if (document.body.contains(container)) document.body.removeChild(container);
           const imgData = canvas.toDataURL('image/png');
-          const imgWidth = pageWidth - 2 * margin;
-          const imgHeight = (canvas.height * imgWidth) / canvas.width;
-          if (yPosition + imgHeight > pageHeight - margin) {
-            doc.addPage();
-            yPosition = margin;
+          // Scale-to-fit one page always (no additional pages)
+          const maxW = pageWidth - 2 * margin;
+          const maxH = pageHeight - 2 * margin - (yPosition - margin);
+          let imgW = maxW;
+          let imgH = (canvas.height * imgW) / canvas.width;
+          if (imgH > maxH) {
+            imgH = maxH;
+            imgW = (canvas.width * imgH) / canvas.height;
           }
-          doc.addImage(imgData, 'PNG', margin, yPosition, imgWidth, imgHeight);
+          doc.addImage(imgData, 'PNG', margin, yPosition, imgW, imgH);
         } catch (e) {
           if (document.body.contains(container)) document.body.removeChild(container);
           // Fallback to simple text

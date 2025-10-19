@@ -162,42 +162,36 @@ export function PersonalTouchManager({ compact = false }: PTMProps) {
               />
             </div>
 
-            {/* Tone Dropdown */}
+            {/* Tone Dropdown (native for compact/mobile) */}
             <div className="space-y-1.5">
               <Label className="text-[11px] text-slate-600 dark:text-slate-400">
                 {language === 'ar' ? 'النبرة' : 'Tone'}
               </Label>
-              <Select value={formData.tone} onValueChange={(value) => setFormData(prev => ({ ...prev, tone: value }))}>
-                <SelectTrigger className="bg-white/10 dark:bg-black/10 border-white/20 dark:border-white/10 text-[13px] h-8">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {toneOptions.map(option => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <select
+                className="h-8 w-full rounded-md border bg-white/80 dark:bg-black/20 border-white/20 dark:border-white/10 text-[13px] px-2"
+                value={formData.tone}
+                onChange={(e) => setFormData(prev => ({ ...prev, tone: e.target.value }))}
+              >
+                {toneOptions.map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
             </div>
 
-            {/* Style Dropdown */}
+            {/* Style Dropdown (native for compact/mobile) */}
             <div className="space-y-1.5">
               <Label className="text-[11px] text-slate-600 dark:text-slate-400">
                 {language === 'ar' ? 'الأسلوب' : 'Style'}
               </Label>
-              <Select value={formData.style} onValueChange={(value) => setFormData(prev => ({ ...prev, style: value }))}>
-                <SelectTrigger className="bg-white/10 dark:bg-black/10 border-white/20 dark:border-white/10 text-[13px] h-8">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {styleOptions.map(option => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <select
+                className="h-8 w-full rounded-md border bg-white/80 dark:bg-black/20 border-white/20 dark:border-white/10 text-[13px] px-2"
+                value={formData.style}
+                onChange={(e) => setFormData(prev => ({ ...prev, style: e.target.value }))}
+              >
+                {styleOptions.map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
             </div>
           </div>
         ) : (

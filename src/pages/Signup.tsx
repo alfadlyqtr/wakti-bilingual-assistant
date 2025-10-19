@@ -79,11 +79,6 @@ export default function Signup() {
       return;
     }
     
-    if (!dateOfBirth) {
-      setErrorMsg(language === 'en' ? 'Please select your date of birth' : 'يرجى اختيار تاريخ الميلاد');
-      return;
-    }
-
     if (!country) {
       setErrorMsg(language === 'en' ? 'Please select your country' : 'يرجى اختيار بلدك');
       return;
@@ -119,7 +114,7 @@ export default function Signup() {
           data: {
             full_name: name,
             username,
-            date_of_birth: dateOfBirth.toISOString().split('T')[0],
+            date_of_birth: dateOfBirth ? dateOfBirth.toISOString().split('T')[0] : '',
             country: selectedCountry?.name || '',
             country_code: country,
             city: city || ''
@@ -296,7 +291,7 @@ export default function Signup() {
 
               <form onSubmit={handleSignup} className="space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="name" className="text-base">{t.name}</Label>
+                  <Label htmlFor="name" className="text-base">{t.name}<span className="text-red-500 ml-1" aria-hidden="true">*</span></Label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                       <User className="h-5 w-5 text-muted-foreground" />
@@ -320,7 +315,7 @@ export default function Signup() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Country */}
                   <div className="space-y-2">
-                    <Label htmlFor="country" className="text-base">{t.country}</Label>
+                    <Label htmlFor="country" className="text-base">{t.country}<span className="text-red-500 ml-1" aria-hidden="true">*</span></Label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none z-10">
                         <Globe className="h-5 w-5 text-muted-foreground" />
@@ -347,7 +342,7 @@ export default function Signup() {
 
                   {/* City - Plain input (no dataset) */}
                   <div className="space-y-2">
-                    <Label htmlFor="city" className="text-base">{language === 'ar' ? 'المدينة' : 'City'}</Label>
+                    <Label htmlFor="city" className="text-base">{language === 'ar' ? 'المدينة' : 'City'}<span className="text-red-500 ml-1" aria-hidden="true">*</span></Label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none z-10">
                         <Globe className="h-5 w-5 text-muted-foreground" />
@@ -372,7 +367,7 @@ export default function Signup() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Username */}
                   <div className="space-y-2">
-                    <Label htmlFor="username" className="text-base">{t.username}</Label>
+                    <Label htmlFor="username" className="text-base">{t.username}<span className="text-red-500 ml-1" aria-hidden="true">*</span></Label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                         <User className="h-5 w-5 text-muted-foreground" />
@@ -394,7 +389,7 @@ export default function Signup() {
 
                   {/* Email */}
                   <div className="space-y-2">
-                    <Label htmlFor="email" className="text-base">{t.email}</Label>
+                    <Label htmlFor="email" className="text-base">{t.email}<span className="text-red-500 ml-1" aria-hidden="true">*</span></Label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                         <Mail className="h-5 w-5 text-muted-foreground" />
@@ -464,7 +459,7 @@ export default function Signup() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Password */}
                   <div className="space-y-2">
-                    <Label htmlFor="password" className="text-base">{t.password}</Label>
+                    <Label htmlFor="password" className="text-base">{t.password}<span className="text-red-500 ml-1" aria-hidden="true">*</span></Label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                         <Lock className="h-5 w-5 text-muted-foreground" />
@@ -498,7 +493,7 @@ export default function Signup() {
 
                   {/* Confirm Password */}
                   <div className="space-y-2">
-                    <Label htmlFor="confirmPassword" className="text-base">{t.confirmPassword}</Label>
+                    <Label htmlFor="confirmPassword" className="text-base">{t.confirmPassword}<span className="text-red-500 ml-1" aria-hidden="true">*</span></Label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                         <Lock className="h-5 w-5 text-muted-foreground" />
@@ -540,7 +535,7 @@ export default function Signup() {
                   />
                   <div className="text-sm leading-relaxed">
                     <label htmlFor="terms" className="cursor-pointer">
-                      {t.agreeToTerms}{" "}
+                      <span className="text-red-500 mr-1" aria-hidden="true">*</span>{t.agreeToTerms}{" "}
                       <button
                         type="button"
                         onClick={() => navigate("/privacy-terms")}

@@ -1,0 +1,69 @@
+[
+  {
+    "fenPrefix": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -",
+    "moves": [
+      { "san": "e4", "weight": 40 },
+      { "san": "d4", "weight": 28 },
+      { "san": "c4", "weight": 16 },
+      { "san": "Nf3", "weight": 16 }
+    ]
+  },
+  {
+    "fenPrefix": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -",
+    "moves": [
+      { "san": "e5", "weight": 34 },
+      { "san": "c5", "weight": 34 },
+      { "san": "e6", "weight": 16 },
+      { "san": "c6", "weight": 16 }
+    ]
+  },
+  {
+    "fenPrefix": "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -",
+    "moves": [
+      { "san": "Nf3", "weight": 40 },
+      { "san": "Nc3", "weight": 20 },
+      { "san": "d4", "weight": 40 }
+    ]
+  },
+  {
+    "fenPrefix": "rnbqkbnr/pp1ppppp/2p5/8/3PP3/8/PPP2PPP/RNBQKBNR b KQkq -",
+    "moves": [
+      { "san": "d5", "weight": 45 },
+      { "san": "Nf6", "weight": 35 },
+      { "san": "e6", "weight": 20 }
+    ]
+  },
+  {
+    "fenPrefix": "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq -",
+    "moves": [
+      { "san": "d5", "weight": 40 },
+      { "san": "Nf6", "weight": 32 },
+      { "san": "e6", "weight": 28 }
+    ]
+  },
+  {
+    "fenPrefix": "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -",
+    "moves": [
+      { "san": "Nf3", "weight": 34 },
+      { "san": "d4", "weight": 34 },
+      { "san": "c3", "weight": 16 },
+      { "san": "Nc3", "weight": 16 }
+    ]
+  },
+  {
+    "fenPrefix": "rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq -",
+    "moves": [
+      { "san": "c4", "weight": 40 },
+      { "san": "Nf3", "weight": 40 },
+      { "san": "e3", "weight": 20 }
+    ]
+  },
+  {
+    "fenPrefix": "rnbqkbnr/pp1ppppp/2p5/8/3PP3/8/PPP2PPP/RNBQKBNR w KQkq -",
+    "moves": [
+      { "san": "c4", "weight": 40 },
+      { "san": "Nf3", "weight": 40 },
+      { "san": "Nc3", "weight": 20 }
+    ]
+  }
+]

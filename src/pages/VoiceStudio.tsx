@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { PenLine, Loader2, Copy } from 'lucide-react';
 import { VoiceCloneScreen1 } from '@/components/wakti-ai-v2/VoiceCloneScreen1';
 import { VoiceCloneScreen2 } from '@/components/wakti-ai-v2/VoiceCloneScreen2';
 import { VoiceCloneScreen3 } from '@/components/wakti-ai-v2/VoiceCloneScreen3';
@@ -12,6 +13,78 @@ export default function VoiceStudio() {
   const { user } = useAuth();
   const [currentScreen, setCurrentScreen] = useState(0); // 0 = Welcome
   const [hasExistingVoices, setHasExistingVoices] = useState(false);
+  // Text translator states
+  const [ttText, setTtText] = useState('');
+  const [ttTarget, setTtTarget] = useState('ar');
+  const [ttLoading, setTtLoading] = useState(false);
+  const [ttResult, setTtResult] = useState('');
+  const TT_MAX = 2500;
+  const [ttHistory, setTtHistory] = useState<{ target:string; sourceLen:number; preview:string; ts:number }[]>(() => {
+    try {
+      const raw = localStorage.getItem('wakti-tt-history');
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
+
+  const LANGS = [
+    { code: 'en', nameEn: 'English', nameAr: 'الإنجليزية' },
+    { code: 'ar', nameEn: 'Arabic', nameAr: 'العربية' },
+    { code: 'es', nameEn: 'Spanish', nameAr: 'الإسبانية' },
+    { code: 'fr', nameEn: 'French', nameAr: 'الفرنسية' },
+    { code: 'de', nameEn: 'German', nameAr: 'الألمانية' },
+    { code: 'it', nameEn: 'Italian', nameAr: 'الإيطالية' },
+    { code: 'pt', nameEn: 'Portuguese', nameAr: 'البرتغالية' },
+    { code: 'ru', nameEn: 'Russian', nameAr: 'الروسية' },
+    { code: 'hi', nameEn: 'Hindi', nameAr: 'الهندية' },
+    { code: 'bn', nameEn: 'Bengali', nameAr: 'البنغالية' },
+    { code: 'zh', nameEn: 'Chinese', nameAr: 'الصينية' },
+    { code: 'ja', nameEn: 'Japanese', nameAr: 'اليابانية' },
+    { code: 'ko', nameEn: 'Korean', nameAr: 'الكورية' },
+    { code: 'tr', nameEn: 'Turkish', nameAr: 'التركية' },
+    { code: 'fa', nameEn: 'Persian (Farsi)', nameAr: 'الفارسية' },
+    { code: 'ur', nameEn: 'Urdu', nameAr: 'الأردية' },
+    { code: 'sv', nameEn: 'Swedish', nameAr: 'السويدية' },
+    { code: 'no', nameEn: 'Norwegian', nameAr: 'النرويجية' },
+    { code: 'da', nameEn: 'Danish', nameAr: 'الدنماركية' },
+    { code: 'nl', nameEn: 'Dutch', nameAr: 'الهولندية' },
+    { code: 'pl', nameEn: 'Polish', nameAr: 'البولندية' },
+    { code: 'uk', nameEn: 'Ukrainian', nameAr: 'الأوكرانية' },
+    { code: 'el', nameEn: 'Greek', nameAr: 'اليونانية' },
+    { code: 'cs', nameEn: 'Czech', nameAr: 'التشيكية' },
+    { code: 'sk', nameEn: 'Slovak', nameAr: 'السلوفاكية' },
+    { code: 'ro', nameEn: 'Romanian', nameAr: 'الرومانية' },
+    { code: 'hu', nameEn: 'Hungarian', nameAr: 'المجرية' },
+    { code: 'id', nameEn: 'Indonesian', nameAr: 'الإندونيسية' },
+    { code: 'ms', nameEn: 'Malaysian', nameAr: 'الماليزية' },
+    { code: 'th', nameEn: 'Thai', nameAr: 'التايلاندية' },
+    { code: 'vi', nameEn: 'Vietnamese', nameAr: 'الفيتنامية' },
+    { code: 'he', nameEn: 'Hebrew', nameAr: 'العبرية' },
+    { code: 'tl', nameEn: 'Filipino (Tagalog)', nameAr: 'الفلبينية (التاغالوغ)' },
+  ];
+
+  const doTextTranslate = async () => {
+    if (!ttText.trim()) return;
+    setTtLoading(true);
+    setTtResult('');
+    try {
+      const { data: result, error } = await supabase.functions.invoke('voice-clone-translator', {
+        body: { original_text: ttText.trim(), target_language: ttTarget }
+      });
+      if (error) throw new Error(error.message);
+      if (!result || !result.success) throw new Error(result?.error || 'Translation failed');
+      setTtResult(result.translated_text || '');
+      // update last-two history
+      const item = { target: ttTarget, sourceLen: ttText.trim().length, preview: (result.translated_text || '').slice(0, 80), ts: Date.now() };
+      const next = [item, ...ttHistory].slice(0,2);
+      setTtHistory(next);
+      try { localStorage.setItem('wakti-tt-history', JSON.stringify(next)); } catch {}
+    } catch (e:any) {
+      setTtResult(language === 'ar' ? 'حدث خطأ في الترجمة' : 'Translation error');
+      console.error(e);
+    } finally {
+      setTtLoading(false);
+    }
+  };
 
   useEffect(() => {
     // On page mount, mirror popup behavior: check if user already has voices
@@ -134,6 +207,87 @@ export default function VoiceStudio() {
             onBack={() => setCurrentScreen(1)}
           />
         );
+      case 5:
+        return (
+          <div className="rounded-2xl border border-border/60 bg-white/70 dark:bg-white/5 shadow-xl p-5 md:p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">{language === 'ar' ? 'ترجمة نصية' : 'Text Translate'}</h2>
+              <div className="text-xs text-muted-foreground">{ttText.length} / {TT_MAX}</div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">{language === 'ar' ? 'اللغة الهدف' : 'Translate to'}</label>
+                <select value={ttTarget} onChange={(e)=>setTtTarget(e.target.value)} className="h-11 rounded-md border border-border bg-white/80 dark:bg-white/5 px-3">
+                  {LANGS.map(l => (
+                    <option key={l.code} value={l.code}>{language === 'ar' ? l.nameAr : l.nameEn}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">{language === 'ar' ? 'نص للترجمة' : 'Text to translate'}</label>
+              <textarea
+                value={ttText}
+                onChange={(e)=> setTtText(e.target.value.slice(0, TT_MAX))}
+                dir="auto"
+                placeholder={language === 'ar' ? 'ألصق النص هنا...' : 'Paste your text here...'}
+                className="w-full min-h-32 rounded-md border border-border bg-white/80 dark:bg-white/5 p-3"
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={doTextTranslate}
+                disabled={!ttText.trim() || ttLoading}
+                className="flex-1 h-12 rounded-xl border text-sm font-medium transition-all bg-gradient-to-r from-indigo-400 to-purple-400 text-white shadow-md disabled:opacity-60"
+              >
+                {ttLoading ? (
+                  <span className="inline-flex items-center gap-2">
+                    <PenLine className="h-5 w-5 animate-spin" style={{ animationDuration: '800ms' }} />
+                    {language === 'ar' ? 'جاري الترجمة النصية...' : 'Text translating...'}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-2">
+                    <PenLine className="h-5 w-5" />
+                    {language === 'ar' ? 'ترجمة نصية' : 'Text Translate'}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={()=> ttResult && navigator.clipboard.writeText(ttResult)}
+                disabled={!ttResult}
+                className="h-10 px-3 rounded-md border border-border bg-white/80 dark:bg-white/5 text-sm flex items-center gap-1"
+              >
+                <Copy className="h-4 w-4" /> {language === 'ar' ? 'نسخ' : 'Copy'}
+              </button>
+            </div>
+
+            {ttResult && (
+              <div className="relative">
+                <label className="text-sm font-medium mb-1 block">{language === 'ar' ? 'النتيجة' : 'Result'}</label>
+                <textarea readOnly value={ttResult} className="w-full min-h-32 rounded-md border border-border bg-white/80 dark:bg-white/5 p-3" />
+              </div>
+            )}
+
+            {ttHistory.length > 0 && (
+              <div className="pt-2">
+                <div className="text-xs font-medium text-muted-foreground mb-1">{language === 'ar' ? 'آخر النتائج' : 'Recent results'}</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {ttHistory.map((h, idx) => (
+                    <div key={idx} className="p-2 border border-border rounded-md bg-white/70 dark:bg-white/5">
+                      <div className="text-[11px] text-muted-foreground mb-1">{(language==='ar'?'إلى ':'to ')}{h.target} · {new Date(h.ts).toLocaleTimeString()}</div>
+                      <div className="text-xs line-clamp-2">{h.preview}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
       default:
         return null;
     }
@@ -151,7 +305,7 @@ export default function VoiceStudio() {
 
         {/* Top tabs under title */}
         <div className="mb-3">
-          <div className="grid grid-cols-3 gap-2 p-1 rounded-2xl border border-border/70 bg-white/60 dark:bg-white/5 shadow-sm" role="tablist" aria-label={language === 'ar' ? 'التبويبات' : 'Tabs'}>
+          <div className="grid grid-cols-4 gap-2 p-1 rounded-2xl border border-border/70 bg-white/60 dark:bg-white/5 shadow-sm" role="tablist" aria-label={language === 'ar' ? 'التبويبات' : 'Tabs'}>
             <button
               type="button"
               onClick={() => setCurrentScreen(4)}
@@ -189,7 +343,20 @@ export default function VoiceStudio() {
                   : 'bg-white/80 dark:bg-white/5 border-border shadow-sm hover:shadow-md hover:bg-white'}
               `}
             >
-              {language === 'ar' ? 'المترجم' : 'Translator'}
+              {language === 'ar' ? 'المترجم الصوتي' : 'Voice translator'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentScreen(5)}
+              role="tab"
+              aria-selected={currentScreen === 5}
+              className={`h-12 rounded-xl border text-sm font-medium transition-all
+                ${currentScreen === 5
+                  ? 'bg-white text-foreground shadow-lg border-foreground/20 ring-1 ring-foreground/20'
+                  : 'bg-white/80 dark:bg-white/5 border-border shadow-sm hover:shadow-md hover:bg-white'}
+              `}
+            >
+              {language === 'ar' ? 'مترجم النص' : 'Text translator'}
             </button>
           </div>
         </div>

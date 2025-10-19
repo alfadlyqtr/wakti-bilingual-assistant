@@ -687,16 +687,26 @@ export function ChatMessages({
               </div>
             )}
             
-            {/* Display the actual image with click handler for modal */}
-            <div className="relative">
+            {/* Display the actual image with blur-to-sharp reveal */}
+            <div className="relative w-full md:max-w-[720px] lg:max-w-[900px]">
               <img
                 src={imageUrl}
                 alt="Generated image"
-                className="max-w-full h-auto rounded-lg border border-border/50 cursor-pointer hover:opacity-90 transition-opacity"
+                className="w-full h-auto max-h-[70vh] object-contain rounded-lg border border-border/50 cursor-pointer hover:opacity-90 transition-opacity transition-[filter] duration-300 image-reveal-start"
+                onLoad={(e) => { try { e.currentTarget.classList.remove('image-reveal-start'); e.currentTarget.classList.add('image-reveal-done'); e.currentTarget.style.filter = 'none'; } catch {} }}
                 onClick={() => setSelectedImage({ url: imageUrl, prompt })}
                 onError={(e) => {
                   console.error('Image failed to load:', imageUrl);
                   e.currentTarget.style.display = 'none';
+                }}
+                style={{ filter: 'blur(8px) saturate(0.95) brightness(1.02)' }}
+              />
+              {/* Grain overlay fades out on load */}
+              <div
+                className="pointer-events-none absolute inset-0 transition-opacity duration-300"
+                style={{
+                  backgroundImage: 'repeating-linear-gradient(45deg, rgba(0,0,0,0.05) 0, rgba(0,0,0,0.05) 1px, transparent 1px, transparent 3px)',
+                  opacity: 0.35
                 }}
               />
               
@@ -917,15 +927,30 @@ export function ChatMessages({
                               : (language === 'ar' ? 'جارٍ توليد الصورة...' : 'Generating image...');
 
                           if (stage === 'saving' && hasImageUrl) {
+                            // Blur-to-sharp with grain reveal (300ms), no artificial delay
                             return (
                               <div className="w-full">
                                 <div className="relative overflow-hidden rounded-lg border border-border/50 shadow-sm max-w-xs">
                                   <img
                                     src={(message as any).imageUrl}
                                     alt="Generated image"
-                                    className="max-w-full h-auto rounded-lg img-blur-reveal"
+                                    className="max-w-full h-auto rounded-lg transition-[filter] duration-300 image-reveal-start"
+                                    onLoad={(e) => {
+                                      try {
+                                        e.currentTarget.classList.remove('image-reveal-start');
+                                        e.currentTarget.classList.add('image-reveal-done');
+                                      } catch {}
+                                    }}
+                                    style={{ filter: 'blur(8px) saturate(0.95) brightness(1.02)' }}
                                   />
-                                  <div className="reveal-wipe" />
+                                  {/* Grain overlay fades out on load */}
+                                  <div
+                                    className="pointer-events-none absolute inset-0 transition-opacity duration-300"
+                                    style={{
+                                      backgroundImage: 'repeating-linear-gradient(45deg, rgba(0,0,0,0.05) 0, rgba(0,0,0,0.05) 1px, transparent 1px, transparent 3px)',
+                                      opacity: 0.35
+                                    }}
+                                  />
                                 </div>
                                 <div className="mt-2 text-xs text-muted-foreground">
                                   <span>{label}</span>
@@ -941,9 +966,6 @@ export function ChatMessages({
                               <div className="relative overflow-hidden rounded-lg border border-border/50 shadow-sm max-w-xs">
                                 <div className="brush-skeleton" style={{ width: '100%', height: 256 }} />
                                 <div className="absolute inset-0 pointer-events-none" />
-                                <div className="absolute bottom-0 left-0 right-0 p-2">
-                                  <div className="tiny-progress" />
-                                </div>
                               </div>
                               <div className="mt-2 text-xs text-muted-foreground">
                                 <span>{label}</span>

@@ -306,53 +306,73 @@ export function ChessGame({ onBack }: ChessGameProps) {
 
     setTimeout(() => {
       try {
-        const best = pickMoveForDifficulty(gameCopy, difficulty, aiColor);
+        (async () => {
+          let moved = false;
+          try {
+            const engine = await import('@/chess/engine/index');
+            await engine.initEngine();
+            await engine.setPosition(gameCopy.fen());
+            const diff = difficulty as 'easy' | 'medium' | 'hard' | 'master';
+            const res = await engine.bestMove(gameCopy.fen(), diff);
+            if (res?.bestmove && typeof res.bestmove === 'string') {
+              const uci = res.bestmove;
+              const from = uci.slice(0, 2) as any;
+              const to = uci.slice(2, 4) as any;
+              const promotion = (uci.length > 4 ? uci.slice(4, 5) : undefined) as any;
+              const applied = gameCopy.move({ from, to, promotion: promotion || 'q' });
+              if (applied) moved = true;
+            }
+          } catch {}
 
-        if (!best) {
-          // fallback random legal to ensure progress
-          const moves = gameCopy.moves();
-          if (moves.length > 0) {
-            gameCopy.move(moves[Math.floor(Math.random()*moves.length)]);
+          if (!moved) {
+            const best = pickMoveForDifficulty(gameCopy, difficulty, aiColor);
+            if (!best) {
+              const moves = gameCopy.moves();
+              if (moves.length > 0) {
+                gameCopy.move(moves[Math.floor(Math.random() * moves.length)]);
+              }
+            } else {
+              gameCopy.move({ from: best.from, to: best.to, promotion: (best.promotion || 'q') });
+            }
           }
-        } else {
-          gameCopy.move({ from: best.from, to: best.to, promotion: (best.promotion || 'q') });
-        }
-        const elapsed = performance.now() - startedAt;
-        const waitMore = Math.max(0, minThinkMs - elapsed);
-        window.setTimeout(() => {
-          setGame(gameCopy);
-          setIsAIThinking(false);
-          if (!gameCopy.isGameOver() && gameCopy.inCheck()) {
-            setCheckBanner(language === 'ar' ? '⚠️ كش!' : '⚠️ Check!');
-            try {
-              const board = gameCopy.board();
-              let kingSq: string | null = null;
-              for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                  const p = board[r][c];
-                  if (p && p.type === 'k' && p.color === gameCopy.turn()) {
-                    const files = 'abcdefgh';
-                    kingSq = `${files[c]}${8 - r}`;
-                    break;
+
+          const elapsed = performance.now() - startedAt;
+          const waitMore = Math.max(0, minThinkMs - elapsed);
+          window.setTimeout(() => {
+            setGame(gameCopy);
+            setIsAIThinking(false);
+            if (!gameCopy.isGameOver() && gameCopy.inCheck()) {
+              setCheckBanner(language === 'ar' ? '⚠️ كش!' : '⚠️ Check!');
+              try {
+                const board = gameCopy.board();
+                let kingSq: string | null = null;
+                for (let r = 0; r < 8; r++) {
+                  for (let c = 0; c < 8; c++) {
+                    const p = board[r][c];
+                    if (p && p.type === 'k' && p.color === gameCopy.turn()) {
+                      const files = 'abcdefgh';
+                      kingSq = `${files[c]}${8 - r}`;
+                      break;
+                    }
                   }
                 }
-              }
-              setCheckedSquare(kingSq);
-              window.setTimeout(() => setCheckedSquare(null), 2000);
-            } catch {}
-            window.setTimeout(() => setCheckBanner(''), 2000);
-          }
-          if (gameCopy.isGameOver()) {
-            setGameOver(true);
-            if (gameCopy.isCheckmate()) {
-              setMateBanner(language === 'ar' ? 'كش مات 👑' : 'CHECKMATE 👑');
+                setCheckedSquare(kingSq);
+                window.setTimeout(() => setCheckedSquare(null), 2000);
+              } catch {}
+              window.setTimeout(() => setCheckBanner(''), 2000);
             }
-            setTimeout(() => showAIRemark('victory'), 500);
-          } else {
-            setIsPlayerTurn(true);
-            if (Math.random() < 0.25) setTimeout(() => showAIRemark('game'), 300);
-          }
-        }, waitMore);
+            if (gameCopy.isGameOver()) {
+              setGameOver(true);
+              if (gameCopy.isCheckmate()) {
+                setMateBanner(language === 'ar' ? 'كش مات 👑' : 'CHECKMATE 👑');
+              }
+              setTimeout(() => showAIRemark('victory'), 500);
+            } else {
+              setIsPlayerTurn(true);
+              if (Math.random() < 0.25) setTimeout(() => showAIRemark('game'), 300);
+            }
+          }, waitMore);
+        })();
       } catch (err) {
         console.error('AI move failed', err);
         setIsAIThinking(false);
