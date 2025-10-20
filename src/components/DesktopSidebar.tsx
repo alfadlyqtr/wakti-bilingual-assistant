@@ -16,7 +16,8 @@ import {
   ChevronRight,
   Home,
   LucideIcon,
-  Gamepad2
+  Gamepad2,
+  Music
 } from "lucide-react";
 
 type IconComponent = React.ComponentType<{ 
@@ -53,6 +54,7 @@ export function DesktopSidebar() {
     { icon: Sparkles, label: "wakti_ai", path: "/wakti-ai" },
     { icon: HeartPulse, label: "vitality", path: "/fitness" },
     { icon: Mic, label: "tasjeel", path: "/tasjeel" },
+    { icon: Music as unknown as IconComponent, label: "music", path: "/music" },
     { icon: Gamepad2 as unknown as IconComponent, label: "games", path: "/games" },
   ];
 
@@ -205,6 +207,7 @@ export function DesktopSidebar() {
                   case '/maw3d': return 'nav-icon-maw3d text-purple-500';
                   case '/tr': return 'nav-icon-tr text-emerald-500';
                   case '/wakti-ai': return 'nav-icon-ai text-amber-500';
+                  case '/music': return 'text-fuchsia-500';
                   case '/games': return 'text-indigo-500';
                   case '/tasjeel': return 'text-cyan-500';
                   default: return 'text-gray-500';
@@ -218,6 +221,7 @@ export function DesktopSidebar() {
                   case '/maw3d': return 'shadow-[0_0_15px_rgba(168,85,247,0.7)]';
                   case '/tr': return 'shadow-[0_0_15px_rgba(16,185,129,0.7)]';
                   case '/wakti-ai': return 'shadow-[0_0_15px_rgba(245,158,11,0.7)]';
+                  case '/music': return 'shadow-[0_0_15px_rgba(217,70,239,0.7)]';
                   case '/games': return 'shadow-[0_0_15px_rgba(99,102,241,0.7)]';
                   case '/tasjeel': return 'shadow-[0_0_15px_rgba(6,182,212,0.7)]';
                   default: return 'shadow-[0_0_15px_rgba(156,163,175,0.7)]';
@@ -231,6 +235,7 @@ export function DesktopSidebar() {
                   case '/maw3d': return 'border-purple-500/40';
                   case '/tr': return 'border-emerald-500/40';
                   case '/wakti-ai': return 'border-amber-500/40';
+                  case '/music': return 'border-fuchsia-500/40';
                   case '/games': return 'border-indigo-500/40';
                   case '/tasjeel': return 'border-cyan-500/40';
                   default: return 'border-gray-400/30';

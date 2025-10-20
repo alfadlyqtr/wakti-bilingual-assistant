@@ -58,6 +58,7 @@ import Games from "./pages/Games";
 import FitnessHealth from "./pages/FitnessHealth";
 import FitnessWhoopCallback from "./pages/FitnessWhoopCallback";
 import Journal from "./pages/Journal";
+import MusicStudio from "./pages/MusicStudio";
 
 import "./App.css";
 
@@ -167,6 +168,11 @@ function App() {
                 <Route path="/journal" element={
                   <GiftNotificationProvider>
                     <AppLayout><Journal /></AppLayout>
+                  </GiftNotificationProvider>
+                } />
+                <Route path="/music" element={
+                  <GiftNotificationProvider>
+                    <AppLayout><MusicStudio /></AppLayout>
                   </GiftNotificationProvider>
                 } />
                 <Route path="/games" element={

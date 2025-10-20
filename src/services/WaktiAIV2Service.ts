@@ -28,6 +28,7 @@ class WaktiAIV2ServiceClass {
   private personalTouchCache: any = null;
   private conversationStorage = new Map<string, AIMessage[]>();
   private locationCache: { country: string | null; city: string | null } | null = null;
+  private lastPTFetchAt: number | null = null;
 
   constructor() {
     console.log('🤖 WAKTI AI SERVICE: Initialized as Backend Worker (Frontend Boss mode)');
@@ -151,6 +152,50 @@ class WaktiAIV2ServiceClass {
     } catch {}
 
     return pt;
+  }
+
+  // Option A cross-device: pull server PT if newer (lightweight, called lazily)
+  private async maybeRefreshPersonalTouchFromServer(userId?: string) {
+    try {
+      const now = Date.now();
+      if (this.lastPTFetchAt && now - this.lastPTFetchAt < 2 * 60 * 1000) return; // 2 min throttle
+      const { data: { user } } = await supabase.auth.getUser();
+      const uid = userId || user?.id;
+      if (!uid) return;
+      const { data, error } = await supabase
+        .from('user_personal_touch')
+        .select('nickname, ai_nickname, tone, style, instruction, pt_version, updated_at')
+        .eq('user_id', uid)
+        .maybeSingle();
+      this.lastPTFetchAt = now;
+      if (error || !data) return;
+
+      const serverPT: any = {
+        nickname: data.nickname || '',
+        aiNickname: data.ai_nickname || '',
+        tone: data.tone || 'neutral',
+        style: data.style || 'short answers',
+        instruction: data.instruction || '',
+        pt_version: typeof data.pt_version === 'number' ? data.pt_version : 1,
+        pt_updated_at: data.updated_at || new Date().toISOString()
+      };
+
+      let localPT: any = null;
+      try { const raw = localStorage.getItem('wakti_personal_touch'); localPT = raw ? JSON.parse(raw) : null; } catch {}
+
+      const localVersion = typeof localPT?.pt_version === 'number' ? localPT.pt_version : 0;
+      const serverVersion = typeof serverPT.pt_version === 'number' ? serverPT.pt_version : 0;
+      const localUpdated = localPT?.pt_updated_at ? Date.parse(localPT.pt_updated_at) : 0;
+      const serverUpdated = serverPT?.pt_updated_at ? Date.parse(serverPT.pt_updated_at) : 0;
+
+      const serverIsNewer = serverVersion > localVersion || (serverVersion === localVersion && serverUpdated > localUpdated);
+      if (serverIsNewer) {
+        try {
+          localStorage.setItem('wakti_personal_touch', JSON.stringify(serverPT));
+          this.personalTouchCache = serverPT;
+        } catch {}
+      }
+    } catch {}
   }
 
   // Fetch user's country/city once and cache (localStorage + memory)
@@ -497,6 +542,8 @@ class WaktiAIV2ServiceClass {
         if (!user) throw new Error('Authentication required');
         userId = user.id;
       }
+
+      try { await this.maybeRefreshPersonalTouchFromServer(userId); } catch {}
 
       // Generate a lightweight requestId for diagnostics across iOS/Safari
       const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;

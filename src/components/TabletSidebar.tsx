@@ -13,7 +13,8 @@ import {
   ListTodo,
   ChevronLeft,
   ChevronRight,
-  Gamepad2
+  Gamepad2,
+  Music
 } from "lucide-react";
 import { t } from "@/utils/translations";
 import { Logo3D } from "@/components/Logo3D";
@@ -39,6 +40,7 @@ export function TabletSidebar() {
     { icon: CalendarClock, label: "events", path: "/maw3d", badge: maw3dEventCount },
     { icon: ListTodo, label: "tasks", path: "/tr", badge: 0 },
     { icon: Sparkles, label: "wakti_ai", path: "/wakti-ai" },
+    { icon: Music, label: "music", path: "/music" },
     { icon: Gamepad2, label: "games", path: "/games" },
     { icon: Mic, label: "tasjeel", path: "/tasjeel" },
   ];
@@ -144,6 +146,7 @@ export function TabletSidebar() {
                   case '/maw3d': return 'nav-icon-maw3d';
                   case '/tr': return 'nav-icon-tr';
                   case '/wakti-ai': return 'nav-icon-ai';
+                  case '/music': return 'text-fuchsia-500';
                   case '/games': return 'text-indigo-500';
                   case '/tasjeel': return 'text-cyan-500';
                   default: return '';

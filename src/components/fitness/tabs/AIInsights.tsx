@@ -261,8 +261,6 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
   // SIMPLE: Auto-generate insights on load
   useEffect(() => {
     if (!activeWindow && !loading) {
-      console.log('Auto-generating morning insights...');
-      generateInsights('morning');
     }
   }, []);
 
@@ -330,10 +328,19 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
           console.log('HRV ms:', metrics?.recovery?.hrv_ms);
           console.log('Day strain:', metrics?.cycle?.day_strain);
           
-          // Check if we have any WHOOP data
-          if (!metrics || (!metrics.sleep && !metrics.recovery && !metrics.cycle)) {
-            console.warn('No WHOOP metrics available, using mock data');
-            throw new Error('No WHOOP data available');
+          // Ensure we have WHOOP data: if missing, auto-sync, rebuild, and re-check
+          let haveMetrics = !!(metrics && (metrics.sleep || metrics.recovery || metrics.cycle));
+          if (!haveMetrics) {
+            try { await triggerUserSync(); } catch {}
+            const rebuilt: any = await buildInsightsAggregate();
+            haveMetrics = !!(rebuilt && ((rebuilt as any).sleep || (rebuilt as any).recovery || (rebuilt as any).cycle));
+            if (!haveMetrics) {
+              toast.error(language === 'ar' 
+                ? 'لا توجد بيانات بعد. قم بالمزامنة أولاً ثم أعد المحاولة.' 
+                : 'No data yet. Please sync first and try again.'
+              );
+              return;
+            }
           }
           
           // Extract sleep hours from duration_sec or stage_summary
@@ -387,10 +394,11 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
           console.log('Time Window:', window);
           console.log('Language:', language);
           
+          const dataFull = await buildInsightsAggregate();
           const response = await generateAiInsights(language as 'en' | 'ar', {
             time_of_day: window,
             user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            data: aiData || undefined
+            data: dataFull
           });
           
           console.log('=== AI RESPONSE ===');
@@ -415,57 +423,7 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
           
         } catch (error) {
           console.error('AI insights error:', error);
-          
-          // If WHOOP data is unavailable, use mock data for demo
-          console.log('Using mock data for AI insights...');
-          
-          const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || "Champion";
-          
-          const mockData = {
-            user_name: userName,
-            current_time: new Date().toISOString(),
-            time_window: window,
-            sleep_hours: 6.2,
-            performance_score: 73,
-            hrv_score: 45,
-            strain_score: 8.7,
-            sleep_performance: 78,
-            resting_hr: 62,
-            latest_workout: { sport: "Running", duration: 35, strain: 12.3 },
-            today: {
-              sleepHours: 6.2,
-              recoveryPct: 73,
-              hrvMs: 45,
-              dayStrain: 8.7,
-              sleepPerformancePct: 78,
-              rhrBpm: 62
-            }
-          };
-          
-          try {
-            const response = await generateAiInsights(language as 'en' | 'ar', {
-              time_of_day: window,
-              user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-              data: mockData
-            });
-            
-            setInsights(prev => ({
-              ...prev,
-              [window]: response
-            }));
-            
-            setLastGenerated(prev => ({
-              ...prev,
-              [window]: Date.now()
-            }));
-            
-            setActiveWindow(window);
-            toast.success(language === 'ar' ? 'تم إنشاء الرؤى (بيانات تجريبية)' : 'Insights generated (demo data)');
-            
-          } catch (apiError) {
-            console.error('API call failed even with mock data:', apiError);
-            toast.error(language === 'ar' ? 'فشل في الاتصال بالخدمة' : 'Service connection failed');
-          }
+          toast.error(language === 'ar' ? 'فشل في الاتصال بالخدمة' : 'Service connection failed');
         } finally {
           setLoading(null);
         }

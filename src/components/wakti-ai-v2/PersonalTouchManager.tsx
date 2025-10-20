@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { Brain, Save, Bot } from 'lucide-react';
 import { WaktiAIV2Service } from '@/services/WaktiAIV2Service';
+import { supabase } from '@/integrations/supabase/client';
 
 const PERSONAL_TOUCH_KEY = "wakti_personal_touch";
 
@@ -95,6 +96,28 @@ export function PersonalTouchManager({ compact = false }: PTMProps) {
       const latest = loadWaktiPersonalTouch() || formData;
       window.dispatchEvent(new CustomEvent('wakti-personal-touch-updated', { detail: latest }));
     } catch {}
+    
+    ;(async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const existingRaw = localStorage.getItem(PERSONAL_TOUCH_KEY);
+          let existing: any = null;
+          try { existing = existingRaw ? JSON.parse(existingRaw) : null; } catch {}
+          const nextVersion = typeof existing?.pt_version === 'number' ? existing.pt_version : 1;
+          await supabase.from('user_personal_touch').upsert({
+            user_id: user.id,
+            nickname: formData.nickname || '',
+            ai_nickname: formData.aiNickname || '',
+            tone: formData.tone || 'neutral',
+            style: formData.style || 'short answers',
+            instruction: formData.instruction || '',
+            pt_version: nextVersion,
+            updated_at: new Date().toISOString()
+          });
+        }
+      } catch {}
+    })();
     
     showSuccess(language === 'ar' ? 'تم حفظ الإعدادات!' : 'Settings saved!');
   };
