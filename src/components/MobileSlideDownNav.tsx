@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { cn } from "@/lib/utils";
-import { Calendar, CalendarClock, Mic, Sparkles, ListTodo, LayoutDashboard, PenTool, Gamepad2, HeartPulse, NotebookPen } from "lucide-react";
+import { Calendar, CalendarClock, Mic, Sparkles, ListTodo, LayoutDashboard, PenTool, Gamepad2, HeartPulse, NotebookPen, Music } from "lucide-react";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { waktiBadges } from "@/services/waktiBadges";
 import { motion } from "framer-motion";
@@ -110,6 +110,12 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
       colorClass: 'nav-icon-ai',
     },
     {
+      name: language === 'ar' ? 'الموسيقى' : 'Music',
+      path: '/music',
+      icon: 'music',
+      colorClass: 'text-fuchsia-500',
+    },
+    {
       name: language === 'ar' ? 'الحيوية' : 'Vitality',
       path: '/fitness',
       icon: 'heart-pulse',
@@ -156,6 +162,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
     gamepad: Gamepad2,
     'heart-pulse': HeartPulse,
     'notebook-pen': NotebookPen,
+    music: Music,
   };
 
   const handleNavigation = (path: string, badgeType?: string) => {
@@ -321,6 +328,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                             item.path === '/maw3d' ? 'hsl(var(--accent-purple))' :
                             item.path === '/tr' ? 'hsl(var(--accent-green))' :
                             item.path === '/wakti-ai' ? 'hsl(var(--accent-orange))' :
+                            item.path === '/music' ? '#d946ef' :
                             item.path === '/tasjeel' ? '#06b6d4' : '#3b82f6',
                           boxShadow: `0 0 28px ${
                             item.path === '/dashboard' ? '#3b82f6' :
@@ -328,6 +336,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                             item.path === '/maw3d' ? 'hsl(var(--accent-purple))' :
                             item.path === '/tr' ? 'hsl(var(--accent-green))' :
                             item.path === '/wakti-ai' ? 'hsl(var(--accent-orange))' :
+                            item.path === '/music' ? '#d946ef' :
                             item.path === '/tasjeel' ? '#06b6d4' : '#3b82f6'
                           }`
                         }}
