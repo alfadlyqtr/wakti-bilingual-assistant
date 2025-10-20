@@ -396,8 +396,19 @@ export default function Index() {
           <main className="w-full">
             {/* Hero Section */}
             <section className="relative py-12 lg:py-16 px-6 lg:px-8">
-              <div className="absolute inset-0 opacity-50"></div>
-              
+              <div className="absolute inset-0 z-0 pointer-events-none grid grid-cols-1 lg:grid-cols-2 bg-transparent dark:bg-transparent">
+                <div className="col-span-1 lg:col-span-2 flex items-center justify-center bg-transparent dark:bg-transparent">
+                  <video
+                    className="h-full w-full max-w-5xl object-contain bg-transparent dark:bg-transparent opacity-40 dark:opacity-30 mix-blend-screen dark:mix-blend-lighten [mask-image:radial-gradient(ellipse_at_center,rgba(0,0,0,1)_58%,rgba(0,0,0,0)_92%)] [-webkit-mask-image:radial-gradient(ellipse_at_center,rgba(0,0,0,1)_58%,rgba(0,0,0,0)_92%)]"
+                    src="/Animated_Logo_Splash_Screen_Creation.mp4"
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                  />
+                </div>
+              </div>
+
               <motion.div
                 initial="hidden"
                 animate="visible"
@@ -407,18 +418,18 @@ export default function Index() {
                 <motion.div variants={itemVariants} className="mb-12">
                   <Logo3D size="lg" className="mx-auto mb-6" />
                   <div className="flex items-center justify-center gap-3 mb-6">
-                    <h1 className="text-5xl lg:text-6xl font-bold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+                    <h1 className="relative text-5xl lg:text-6xl font-extrabold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent drop-shadow-[0_6px_0_rgba(0,0,0,0.22)] shadow-[0_0_40px_rgba(99,102,241,0.35)] hover:shadow-[0_0_60px_rgba(99,102,241,0.45)] transition-transform duration-500 ease-out transform-gpu [perspective:1000px] [transform-style:preserve-3d] rotate-x-3 -rotate-y-3 hover:rotate-x-0 hover:rotate-y-0 before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-[12%] before:rounded-full before:bg-white/25 dark:before:bg-transparent before:blur-[2px] before:pointer-events-none">
                       WAKTI
                     </h1>
                     <Zap className="h-10 w-10 lg:h-12 lg:w-12 text-yellow-500" />
                   </div>
-                  <p className="text-xl lg:text-2xl font-semibold text-muted-foreground max-w-3xl mx-auto">
+                  <p className="text-xl lg:text-2xl font-extrabold text-muted-foreground max-w-3xl mx-auto drop-shadow-[0_3px_0_rgba(0,0,0,0.22)] tracking-tight">
                     {t("mainTagline", language)}
                   </p>
                 </motion.div>
                 
                 <motion.div variants={itemVariants} className="mb-12">
-                  <h2 className="text-3xl lg:text-4xl font-bold mb-6 bg-gradient-to-r from-slate-700 to-slate-900 dark:from-slate-200 dark:to-white bg-clip-text text-transparent max-w-3xl mx-auto">
+                  <h2 className="text-3xl lg:text-4xl font-extrabold mb-6 bg-gradient-to-r from-slate-700 to-slate-900 dark:from-slate-200 dark:to-white bg-clip-text text-transparent max-w-3xl mx-auto drop-shadow-[0_4px_0_rgba(0,0,0,0.22)] tracking-tight">
                     {t("heroSubtitle", language)}
                   </h2>
                 </motion.div>
@@ -426,7 +437,7 @@ export default function Index() {
                 <motion.div variants={itemVariants} className="mb-16">
                   <Button
                     size="lg"
-                    className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-600 hover:via-purple-600 hover:to-pink-600 text-white font-semibold py-6 px-10 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 text-lg"
+                    className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-600 hover:via-purple-600 hover:to-pink-600 text-white font-extrabold py-6 px-10 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 text-lg shadow-[0_10px_0_rgba(0,0,0,0.2)] hover:shadow-[0_8px_0_rgba(0,0,0,0.2)] active:shadow-[0_6px_0_rgba(0,0,0,0.22)] active:translate-y-0.5 shadow-[0_0_40px_rgba(99,102,241,0.35)] hover:shadow-[0_0_60px_rgba(99,102,241,0.45)]"
                     onClick={() => navigate('/signup')}
                   >
                     <Star className="h-6 w-6 mr-3" />

@@ -68,6 +68,19 @@ export function ChessGame({ onBack }: ChessGameProps) {
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
   const [validMoves, setValidMoves] = useState<string[]>([]);
 
+  // Option A: Recent FEN buffer to avoid repetition cycles
+  const recentFensRef = useRef<string[]>([]);
+  // Phase 2: Threefold repetition detection (position count map)
+  const fenCountsRef = useRef<Map<string, number>>(new Map());
+
+  // Phase 1: Centralized engine profiles (behavioral per difficulty)
+  const ENGINE_PROFILES = {
+    easy:   { movetime: 120,  maxDepth: 2, variety: 0.6, allowBlunder: 0.30 },
+    medium: { movetime: 350,  maxDepth: 3, variety: 0.20, allowBlunder: 0.00 },
+    hard:   { movetime: 800,  maxDepth: 5, variety: 0.05, allowBlunder: 0.00 },
+    master: { movetime: 1400, maxDepth: 7, variety: 0.00, allowBlunder: 0.00 }
+  } as const;
+
   // Track repetitions for anti-repeat behavior
   useEffect(() => {
     const fen = game.fen();
@@ -165,16 +178,34 @@ export function ChessGame({ onBack }: ChessGameProps) {
     const fen = g.fen();
     const repeats = repetitionRef.current[fen] || 0;
     score -= repeats * 5;
+    // Option B: soft penalty if position is in recent history to encourage progress
+    if (recentFensRef.current.includes(fen)) {
+      score -= 20;
+    }
+    // Phase 2: threefold awareness — extra penalty if this would be third time
+    const count = fenCountsRef.current.get(fen) || 0;
+    if (count >= 2) score -= 50;
 
     return aiIsWhite ? score : -score;
   };
 
   const orderMoves = (g: Chess, moves: any[]) => {
-    // Basic ordering: captures first, then checks, then others
+    // Option B: captures first, then checking moves, then promotions/others
     return moves.sort((a, b) => {
       const ac = (a.flags || '').includes('c') ? 1 : 0;
       const bc = (b.flags || '').includes('c') ? 1 : 0;
       if (ac !== bc) return bc - ac;
+      // Compute check-effect cheaply by applying
+      const checkRank = (m: any) => {
+        try {
+          const clone = new Chess(g.fen());
+          clone.move({ from: m.from, to: m.to, promotion: (m.promotion || 'q') });
+          return clone.inCheck() ? 1 : 0;
+        } catch { return 0; }
+      };
+      const ach = checkRank(a);
+      const bch = checkRank(b);
+      if (ach !== bch) return bch - ach;
       const ap = (a.promotion ? 1 : 0);
       const bp = (b.promotion ? 1 : 0);
       if (ap !== bp) return bp - ap;
@@ -182,7 +213,7 @@ export function ChessGame({ onBack }: ChessGameProps) {
     });
   };
 
-  const searchBestMove = (root: Chess, maxDepth: number, maxTimeMs: number, aiColor: 'w' | 'b') => {
+  const searchBestMove = (root: Chess, maxDepth: number, maxTimeMs: number, aiColor: 'w' | 'b', recentFens?: string[]) => {
     const start = performance.now();
     let bestMove: any = null;
     let bestScore = -Infinity;
@@ -203,7 +234,12 @@ export function ChessGame({ onBack }: ChessGameProps) {
         for (const m of moves) {
           const clone = new Chess(g.fen());
           clone.move({ from: m.from, to: m.to, promotion: (m.promotion || 'q') });
-          const sc = minimax(clone, depth - 1, alpha, beta, false);
+          // Option A: penalize returning to recent FENs
+          const nextFen = clone.fen();
+          let sc = minimax(clone, depth - 1, alpha, beta, false);
+          if (recentFens && recentFens.includes(nextFen)) sc -= 150;
+          const cnt = fenCountsRef.current.get(nextFen) || 0;
+          if (cnt >= 2) sc -= 200;
           if (sc > value) value = sc;
           if (value > alpha) alpha = value;
           if (alpha >= beta) break;
@@ -214,7 +250,11 @@ export function ChessGame({ onBack }: ChessGameProps) {
         for (const m of moves) {
           const clone = new Chess(g.fen());
           clone.move({ from: m.from, to: m.to, promotion: (m.promotion || 'q') });
-          const sc = minimax(clone, depth - 1, alpha, beta, true);
+          const nextFen = clone.fen();
+          let sc = minimax(clone, depth - 1, alpha, beta, true);
+          if (recentFens && recentFens.includes(nextFen)) sc += 150; // minimize branch: make it worse for us by opponent repeating
+          const cnt = fenCountsRef.current.get(nextFen) || 0;
+          if (cnt >= 2) sc += 200;
           if (sc < value) value = sc;
           if (value < beta) beta = value;
           if (alpha >= beta) break;
@@ -227,11 +267,27 @@ export function ChessGame({ onBack }: ChessGameProps) {
     const legal = orderMoves(root, root.moves({ verbose: true } as any));
     for (let depth = 1; depth <= maxDepth; depth++) {
       if (performance.now() - start > maxTimeMs) break;
-      for (const m of legal) {
+      // Option A: avoid exploring moves that immediately repeat recent positions unless no alternatives
+      const legalFiltered = (() => {
+        try {
+          const lf = legal.filter(m => {
+            const c = new Chess(root.fen());
+            c.move({ from: m.from, to: m.to, promotion: (m.promotion || 'q') });
+            const f = c.fen();
+            return !(recentFens && recentFens.includes(f));
+          });
+          return lf.length > 0 ? lf : legal;
+        } catch { return legal; }
+      })();
+      for (const m of legalFiltered) {
         if (performance.now() - start > maxTimeMs) break;
         const clone = new Chess(root.fen());
         clone.move({ from: m.from, to: m.to, promotion: (m.promotion || 'q') });
-        const sc = minimax(clone, depth - 1, -Infinity, Infinity, false);
+        let sc = minimax(clone, depth - 1, -Infinity, Infinity, false);
+        const f2 = clone.fen();
+        if (recentFens && recentFens.includes(f2)) sc -= 150;
+        const c2 = fenCountsRef.current.get(f2) || 0;
+        if (c2 >= 2) sc -= 200;
         if (sc > bestScore || !bestMove) {
           bestScore = sc;
           bestMove = m;
@@ -244,28 +300,42 @@ export function ChessGame({ onBack }: ChessGameProps) {
   const pickMoveForDifficulty = (root: Chess, diff: Difficulty, aiColor: 'w' | 'b') => {
     const legalVerbose = orderMoves(root, root.moves({ verbose: true } as any));
     if (!legalVerbose.length) return null;
+    // Option A: filter out moves that return to recent FENs if there are alternatives
+    const legalNonRepeating = (() => {
+      try {
+        const lf = legalVerbose.filter(m => {
+          const c = new Chess(root.fen());
+          c.move({ from: m.from, to: m.to, promotion: (m.promotion || 'q') });
+          const f = c.fen();
+          const recent = !recentFensRef.current.includes(f);
+          const tfold = (fenCountsRef.current.get(f) || 0) < 2;
+          return recent && tfold;
+        });
+        return lf.length > 0 ? lf : legalVerbose;
+      } catch { return legalVerbose; }
+    })();
     if (diff === 'easy') {
-      const blunder = Math.random() < 0.35;
+      const blunder = Math.random() < ENGINE_PROFILES.easy.allowBlunder;
       if (blunder) {
-        const tail = Math.max(1, Math.min(3, legalVerbose.length));
-        const pool = legalVerbose.slice(-tail);
+        const tail = Math.max(1, Math.min(3, legalNonRepeating.length));
+        const pool = legalNonRepeating.slice(-tail);
         return pool[Math.floor(Math.random() * pool.length)];
       }
-      const pool = legalVerbose.slice(0, Math.max(1, Math.min(3, legalVerbose.length)));
+      const pool = legalNonRepeating.slice(0, Math.max(1, Math.min(3, legalNonRepeating.length)));
       return pool[Math.floor(Math.random() * pool.length)];
     }
     if (diff === 'medium') {
-      const best = searchBestMove(root, 3, 250, aiColor) || legalVerbose[0];
-      if (Math.random() < 0.15 && legalVerbose.length > 1) {
-        return legalVerbose[1];
+      const best = searchBestMove(root, ENGINE_PROFILES.medium.maxDepth, ENGINE_PROFILES.medium.movetime, aiColor, recentFensRef.current) || legalNonRepeating[0];
+      if (Math.random() < ENGINE_PROFILES.medium.variety && legalNonRepeating.length > 1) {
+        return legalNonRepeating[1];
       }
       return best;
     }
     if (diff === 'hard') {
-      return searchBestMove(root, 5, 700, aiColor) || legalVerbose[0];
+      return searchBestMove(root, ENGINE_PROFILES.hard.maxDepth, ENGINE_PROFILES.hard.movetime, aiColor, recentFensRef.current) || legalNonRepeating[0];
     }
     // master
-    return searchBestMove(root, 7, 1500, aiColor) || legalVerbose[0];
+    return searchBestMove(root, ENGINE_PROFILES.master.maxDepth, ENGINE_PROFILES.master.movetime, aiColor, recentFensRef.current) || legalNonRepeating[0];
   };
 
   const showAIRemark = (type: 'game' | 'victory' = 'game') => {
@@ -307,33 +377,15 @@ export function ChessGame({ onBack }: ChessGameProps) {
     setTimeout(() => {
       try {
         (async () => {
-          let moved = false;
-          try {
-            const engine = await import('@/chess/engine/index');
-            await engine.initEngine();
-            await engine.setPosition(gameCopy.fen());
-            const diff = difficulty as 'easy' | 'medium' | 'hard' | 'master';
-            const res = await engine.bestMove(gameCopy.fen(), diff);
-            if (res?.bestmove && typeof res.bestmove === 'string') {
-              const uci = res.bestmove;
-              const from = uci.slice(0, 2) as any;
-              const to = uci.slice(2, 4) as any;
-              const promotion = (uci.length > 4 ? uci.slice(4, 5) : undefined) as any;
-              const applied = gameCopy.move({ from, to, promotion: promotion || 'q' });
-              if (applied) moved = true;
+          // Use in-house move selection only (engine removed)
+          const best = pickMoveForDifficulty(gameCopy, difficulty, aiColor);
+          if (!best) {
+            const moves = gameCopy.moves();
+            if (moves.length > 0) {
+              gameCopy.move(moves[Math.floor(Math.random() * moves.length)]);
             }
-          } catch {}
-
-          if (!moved) {
-            const best = pickMoveForDifficulty(gameCopy, difficulty, aiColor);
-            if (!best) {
-              const moves = gameCopy.moves();
-              if (moves.length > 0) {
-                gameCopy.move(moves[Math.floor(Math.random() * moves.length)]);
-              }
-            } else {
-              gameCopy.move({ from: best.from, to: best.to, promotion: (best.promotion || 'q') });
-            }
+          } else {
+            gameCopy.move({ from: best.from, to: best.to, promotion: (best.promotion || 'q') });
           }
 
           const elapsed = performance.now() - startedAt;
@@ -341,6 +393,13 @@ export function ChessGame({ onBack }: ChessGameProps) {
           window.setTimeout(() => {
             setGame(gameCopy);
             setIsAIThinking(false);
+            // Option A: record AI resulting FEN into recent buffer
+            try {
+              recentFensRef.current.push(gameCopy.fen());
+              while (recentFensRef.current.length > 20) recentFensRef.current.shift();
+              const f = gameCopy.fen();
+              fenCountsRef.current.set(f, (fenCountsRef.current.get(f) || 0) + 1);
+            } catch {}
             if (!gameCopy.isGameOver() && gameCopy.inCheck()) {
               setCheckBanner(language === 'ar' ? '⚠️ كش!' : '⚠️ Check!');
               try {
@@ -436,6 +495,13 @@ export function ChessGame({ onBack }: ChessGameProps) {
         setValidMoves([]);
         setIsPlayerTurn(false);
         lastPlayerFenRef.current = gameCopy.fen();
+        // Option A: track recent FENs including player's positions
+        try {
+          recentFensRef.current.push(gameCopy.fen());
+          while (recentFensRef.current.length > 20) recentFensRef.current.shift();
+          const f = gameCopy.fen();
+          fenCountsRef.current.set(f, (fenCountsRef.current.get(f) || 0) + 1);
+        } catch {}
         if (!gameCopy.isGameOver() && gameCopy.inCheck()) {
           setCheckBanner(language === 'ar' ? '⚠️ كش!' : '⚠️ Check!');
           try {

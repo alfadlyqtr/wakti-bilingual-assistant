@@ -709,7 +709,6 @@ export function ChatMessages({
                   opacity: 0.35
                 }}
               />
-              
               {/* Copy URL button overlay */}
               <button
                 onClick={(e) => {
@@ -891,6 +890,13 @@ export function ChatMessages({
   return (
     <>
       <div className="px-2 sm:px-3 md:px-4 pt-4 pb-0 space-y-4 chat-messages-wrapper">
+        <style>{`
+          @keyframes waktiBrushMove { from { transform: translateX(-24px) rotate(8deg); } to { transform: translateX(calc(100% + 24px)) rotate(-8deg); } }
+          .brush-anim { position: relative; width: 100%; height: 100%; background: repeating-linear-gradient(90deg, rgba(148,163,184,0.15) 0 10px, transparent 10px 20px); }
+          .brush-icon { position: absolute; top: 50%; left: 0; transform: translateY(-50%); animation: waktiBrushMove 1.6s linear infinite; opacity: 0.95; font-size: 22px; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.35)); }
+          @keyframes waktiBrushWiggle { 0% { transform: translateX(0) rotate(0deg); } 50% { transform: translateX(6px) rotate(12deg); } 100% { transform: translateX(0) rotate(0deg); } }
+          .brush-inline { display: inline-block; animation: waktiBrushWiggle 900ms ease-in-out infinite; }
+        `}</style>
         <div className="w-full px-0 space-y-4">
           {/* Welcome Message */}
           {renderWelcomeMessage()}
@@ -953,6 +959,7 @@ export function ChatMessages({
                                   />
                                 </div>
                                 <div className="mt-2 text-xs text-muted-foreground">
+                                  <span className="brush-inline mr-1" aria-hidden>🖌️</span>
                                   <span>{label}</span>
                                 </div>
                               </div>
@@ -966,6 +973,9 @@ export function ChatMessages({
                               <div className="relative overflow-hidden rounded-lg border border-border/50 shadow-sm max-w-xs">
                                 <div className="brush-skeleton" style={{ width: '100%', height: 256 }} />
                                 <div className="absolute inset-0 pointer-events-none" />
+                                <div className="absolute inset-0 brush-anim">
+                                  <div className="brush-icon">🖌️</div>
+                                </div>
                               </div>
                               <div className="mt-2 text-xs text-muted-foreground">
                                 <span>{label}</span>
