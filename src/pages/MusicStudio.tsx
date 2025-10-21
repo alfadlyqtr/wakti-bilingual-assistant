@@ -24,7 +24,7 @@ export default function MusicStudio() {
           {language === 'ar' ? 'إنشاء' : 'Compose'}
         </Button>
         <Button variant={activeTab === 'editor' ? 'default' : 'outline'} size="sm" onClick={() => setActiveTab('editor')}>
-          {language === 'ar' ? 'المحرر / المشروع' : 'Editor / Project'}
+          {language === 'ar' ? 'المحفوظات' : 'Saved'}
         </Button>
       </nav>
 
@@ -69,6 +69,8 @@ function ComposeTab() {
   const [submitting, setSubmitting] = useState(false);
   const [audios, setAudios] = useState<Array<{ url: string; mime: string; meta?: any; createdAt: number }>>([]);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [songsUsed, setSongsUsed] = useState(0);
+  const [songsRemaining, setSongsRemaining] = useState(5);
 
   // 3000 character cap across request fields (prompt only; styles do NOT count)
   const totalChars = useMemo(() => {
@@ -76,72 +78,171 @@ function ComposeTab() {
     return count(prompt || '');
   }, [prompt]);
 
-  const limit = 3000;
+  const limit = 500;
   const remaining = Math.max(0, limit - totalChars);
   const overLimit = totalChars > limit;
+
+  // Helpers to mirror styles into the prompt as plain wording (Option A)
+  function stripStylesSuffix(text: string) {
+    // Remove any trailing "Include styles: ..." or "Exclude styles: ..." sentences we previously added
+    return text
+      .replace(/\s*Include styles:[^\.]*\.?\s*$/i, '')
+      .replace(/\s*Exclude styles:[^\.]*\.?\s*$/i, '')
+      .trim();
+  }
+
+  function buildStylesSuffix() {
+    const parts: string[] = [];
+    if (includeTags.length > 0) parts.push(`Include styles: ${includeTags.join(', ')}`);
+    if (excludeTags.length > 0) parts.push(`Exclude styles: ${excludeTags.join(', ')}`);
+    return parts.join('. ');
+  }
+
+  // Sync chips -> prompt wording whenever styles change
+  useEffect(() => {
+    const suffix = buildStylesSuffix();
+    const base = stripStylesSuffix(prompt);
+    const withSpace = suffix ? (base ? base + '. ' : '') + suffix : base;
+    // Enforce 500-char cap by truncating base if needed
+    if (withSpace.length > limit) {
+      const suffixLen = suffix.length + (base ? 2 : 0); // ". " if base not empty
+      const maxBase = Math.max(0, limit - (suffix ? suffixLen : 0));
+      const trimmedBase = base.slice(0, maxBase);
+      const rebuilt = suffix ? (trimmedBase ? trimmedBase + '. ' : '') + suffix : trimmedBase;
+      if (rebuilt !== prompt) setPrompt(rebuilt);
+    } else {
+      if (withSpace !== prompt) setPrompt(withSpace);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [includeTags, excludeTags]);
 
   const handleGenerate = async () => {
     if (overLimit) return;
     setSubmitting(true);
     try {
-      const chars = totalChars;
-      const { data, error } = await supabase.functions.invoke('music-apply-quota', {
-        body: { mode: 'precheck', chars }
-      });
-      if (error) throw error;
-      const allowed = data?.allowed;
-      const rem = data?.remaining;
-      if (!allowed) {
-        toast.error(language==='ar' ? 'نفدت الحصة الشهرية' : 'Monthly limit reached');
+      // Check song count quota (5 songs per month)
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+      
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+      
+      const { count, error: countError } = await supabase
+        .from('user_music_tracks')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .gte('created_at', startOfMonth.toISOString());
+      
+      if (countError) throw countError;
+      
+      const songsThisMonth = count || 0;
+      const songsRemainingLocal = 5 - songsThisMonth;
+      
+      if (songsThisMonth >= 5) {
+        toast.error(language==='ar' ? 'لقد وصلت إلى الحد الأقصى 5 أغاني شهريا' : 'Monthly limit reached: 5 songs per month');
         return;
       }
-      // Generate audio via Runware proxy edge function (structured composition plan)
-      const gen = await supabase.functions.invoke('runware-music', {
-        body: {
-          prompt,
-          stylesInclude: includeTags,
-          stylesExclude: excludeTags,
-          duration: Math.min(180, duration),
-          seed: seedLocked ? (seed || undefined) : undefined
-        }
-      });
-      if (gen.error) throw gen.error;
-      const payload = gen.data as { ok?: boolean; audio?: string; mime?: string; url?: string; path?: string; meta?: any };
-      if (!payload?.ok) throw new Error('Generation failed');
-
-      console.debug('elevenlabs-music payload:', payload);
-      let mediaUrl = '';
-      if (payload.url) {
-        mediaUrl = payload.url;
-      } else if (payload.audio && payload.mime) {
-        const bstr = atob(payload.audio);
-        const bytes = new Uint8Array(bstr.length);
-        for (let i = 0; i < bstr.length; i++) bytes[i] = bstr.charCodeAt(i);
-        const blob = new Blob([bytes], { type: payload.mime });
-        mediaUrl = URL.createObjectURL(blob);
-      } else if (payload.path) {
-        // Try public URL fallback if bucket is public
-        try {
-          const { data } = supabase.storage.from('music').getPublicUrl(payload.path);
-          if (data?.publicUrl) {
-            mediaUrl = data.publicUrl;
+      
+      // Full prompt already contains styles wording (Option A)
+      const fullPrompt = prompt;
+      
+      // Call Runware directly from frontend
+      const runwareResponse = await fetch('https://api.runware.ai/v1/inference', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer uS1Bbyhfcs0dAigYhXwELRxBcCndER6M'
+        },
+        body: JSON.stringify([{
+          taskType: 'audioInference',
+          taskUUID: crypto.randomUUID(),
+          model: 'elevenlabs:1@1',
+          positivePrompt: fullPrompt,
+          duration: Math.min(120, duration),
+          outputFormat: 'MP3',
+          deliveryMethod: 'sync',
+          numberResults: 1,
+          audioSettings: {
+            sampleRate: 44100,
+            bitrate: 128
           }
-          console.debug('storage path fallback', payload.path, '->', data?.publicUrl);
-        } catch (_) {}
-      } else {
-        throw new Error('No audio URL or data in response');
-      }
-      setAudios((prev) => [{ url: mediaUrl, mime: payload.mime || 'audio/mpeg', meta: payload.meta, createdAt: Date.now() }, ...prev]);
-      setLastError(null);
+        }])
+      });
 
-      // Commit quota after successful generation using same chars
-      await supabase.functions.invoke('music-apply-quota', { body: { mode: 'commit', chars } });
+      const result = await runwareResponse.json();
+      console.log('Runware full response:', result);
+      console.log('Response structure:', {
+        hasData: !!result.data,
+        isArray: Array.isArray(result),
+        keys: Object.keys(result || {}),
+        firstItem: result.data?.[0] || result[0] || result
+      });
+
+      if (!runwareResponse.ok || result.errors) {
+        throw new Error(result.errors?.[0]?.message || 'Runware API error');
+      }
+
+      // Get audio from response - can be audioURL or audioDataURI
+      const audioData = result?.data?.[0];
+      const audioURL = audioData?.audioURL || audioData?.audioDataURI;
+      console.log('Found audio:', audioURL ? 'YES' : 'NO');
+      
+      if (!audioURL) {
+        console.error('Could not find audio. Full result:', JSON.stringify(result, null, 2));
+        throw new Error('No audio returned from Runware');
+      }
+
+      // Convert base64 data URI to blob and upload to storage
+      let storedUrl = audioURL;
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user && audioURL.startsWith('data:')) {
+          // Convert data URI to blob
+          const response = await fetch(audioURL);
+          const blob = await response.blob();
+          
+          // Upload to Supabase Storage
+          const fileName = `${user.id}/${Date.now()}.mp3`;
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('music')
+            .upload(fileName, blob, { contentType: 'audio/mpeg' });
+          
+          if (uploadError) throw uploadError;
+          
+          // Get public URL
+          const { data: urlData } = supabase.storage.from('music').getPublicUrl(fileName);
+          storedUrl = urlData.publicUrl;
+          
+          // Save to database
+          const { error: dbError } = await supabase.from('user_music_tracks').insert({
+            user_id: user.id,
+            title: prompt.substring(0, 100),
+            storage_path: fileName,
+            duration_sec: Math.min(120, duration),
+            prompt: prompt,
+            cost_usd: audioData.cost || 0
+          });
+          
+          if (dbError) console.error('DB save error:', dbError);
+        }
+      } catch (saveError) {
+        console.error('Storage save error:', saveError);
+        // Continue anyway - audio will still play from data URI
+      }
+
+      setAudios((prev) => [{ url: storedUrl, mime: 'audio/mpeg', meta: {}, createdAt: Date.now() }, ...prev]);
+      setLastError(null);
 
       toast.success(
         language==='ar'
-          ? `تم الإنشاء. المتبقي هذا الشهر: ${rem}`
-          : `Generated. Remaining this month: ${rem}`
+          ? `تم الإنشاء. المتبقي: ${songsRemainingLocal - 1} من 5`
+          : `Generated. Remaining: ${songsRemainingLocal - 1} of 5 songs`
       );
+
+      // Update local quota counters
+      setSongsUsed(songsThisMonth + 1);
+      setSongsRemaining(Math.max(0, 5 - (songsThisMonth + 1)));
     } catch (e: any) {
       const msg = e?.message || String(e);
       console.error('Music generate error:', e);
@@ -151,6 +252,27 @@ function ComposeTab() {
       setSubmitting(false);
     }
   };
+
+  // Load monthly usage on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+        const { count } = await supabase
+          .from('user_music_tracks')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .gte('created_at', startOfMonth.toISOString());
+        const used = count || 0;
+        setSongsUsed(used);
+        setSongsRemaining(Math.max(0, 5 - used));
+      } catch (_) {}
+    })();
+  }, []);
 
   // Position and outside-click handling for pickers
   useEffect(() => {
@@ -314,14 +436,13 @@ function ComposeTab() {
             <select
               className="px-3 py-1 rounded-full border bg-background text-foreground shadow-sm"
               value={duration}
-              onChange={(e)=> setDuration(Math.min(180, Math.max(10, parseInt(e.target.value||'30'))))}
+              onChange={(e)=> setDuration(Math.min(120, Math.max(10, parseInt(e.target.value||'30'))))}
             >
               <option value={10}>↔ 0:10</option>
               <option value={30}>↔ 0:30</option>
               <option value={60}>↔ 1:00</option>
               <option value={90}>↔ 1:30</option>
               <option value={120}>↔ 2:00</option>
-              <option value={180}>↔ 3:00</option>
             </select>
             <button
               type="button"
@@ -335,7 +456,10 @@ function ComposeTab() {
             {submitting && <span className="text-emerald-600 animate-spin">🎵</span>}
           </div>
           <div className={`ml-auto font-medium ${overLimit ? 'text-red-600' : 'text-emerald-600'}`}>
-            {language === 'ar' ? `المتبقي ${remaining} / 3000` : `${remaining} / 3000 remaining`}
+            {language === 'ar' ? `المتبقي ${remaining} / 500` : `${remaining} / 500 remaining`}
+          </div>
+          <div className="font-medium">
+            {language === 'ar' ? `تم الاستخدام: ${songsUsed} من 5 هذا الشهر` : `Used ${songsUsed} of 5 this month`}
           </div>
         </div>
       </Card>
