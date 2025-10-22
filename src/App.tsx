@@ -59,6 +59,11 @@ import FitnessHealth from "./pages/FitnessHealth";
 import FitnessWhoopCallback from "./pages/FitnessWhoopCallback";
 import Journal from "./pages/Journal";
 import MusicStudio from "./pages/MusicStudio";
+import CreateGame from "./pages/letters/CreateGame";
+import JoinGame from "./pages/letters/JoinGame";
+import PlayRound from "./pages/letters/PlayRound";
+import RoundResults from "./pages/letters/RoundResults";
+import GameEnd from "./pages/letters/GameEnd";
 
 import "./App.css";
 
@@ -173,6 +178,31 @@ function App() {
                 <Route path="/music" element={
                   <GiftNotificationProvider>
                     <AppLayout><MusicStudio /></AppLayout>
+                  </GiftNotificationProvider>
+                } />
+                <Route path="/letters/create" element={
+                  <GiftNotificationProvider>
+                    <AppLayout><CreateGame /></AppLayout>
+                  </GiftNotificationProvider>
+                } />
+                <Route path="/letters/join" element={
+                  <GiftNotificationProvider>
+                    <AppLayout><JoinGame /></AppLayout>
+                  </GiftNotificationProvider>
+                } />
+                <Route path="/letters/play" element={
+                  <GiftNotificationProvider>
+                    <AppLayout><PlayRound /></AppLayout>
+                  </GiftNotificationProvider>
+                } />
+                <Route path="/letters/results" element={
+                  <GiftNotificationProvider>
+                    <AppLayout><RoundResults /></AppLayout>
+                  </GiftNotificationProvider>
+                } />
+                <Route path="/letters/end" element={
+                  <GiftNotificationProvider>
+                    <AppLayout><GameEnd /></AppLayout>
                   </GiftNotificationProvider>
                 } />
                 <Route path="/games" element={
