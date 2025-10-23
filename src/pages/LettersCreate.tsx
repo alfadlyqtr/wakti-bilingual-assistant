@@ -27,6 +27,7 @@ export default function LettersCreate() {
   const [gameCode, setGameCode] = useState('');
   const [copied, setCopied] = useState(false);
   const [maxPlayers, setMaxPlayers] = useState<number>(2);
+  const [validationMode, setValidationMode] = useState<'strict'|'lenient'>('strict');
 
   const EN_LETTERS = useMemo(()=>"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""),[]);
   const AR_LETTERS = useMemo(()=>"ابتثجحخدذرزسشصضطظعغفقكلمنهوي".split(""),[]);
@@ -61,6 +62,7 @@ export default function LettersCreate() {
           letterMode: letterMode,
           manualLetter: letterMode === 'manual' ? manualLetter : null,
           roundsTotal: roundsMode === 'custom' ? Math.max(1, Math.min(10, customRounds || 1)) : parseInt(roundsMode, 10),
+          validationMode,
         };
         localStorage.setItem(`wakti_letters_game_${code}`, JSON.stringify(meta));
         // Persist to Supabase so others can fetch by code
@@ -75,6 +77,7 @@ export default function LettersCreate() {
           letter_mode: meta.letterMode,
           manual_letter: meta.manualLetter,
           rounds_total: meta.roundsTotal,
+          validation_mode: meta.validationMode,
         });
         // Ensure host is recorded as a player
         await supabase.from('letters_players').upsert({
@@ -113,7 +116,7 @@ export default function LettersCreate() {
 
       <div className="glass-hero p-5 rounded-xl space-y-5 relative z-10 bg-white/60 dark:bg-gray-900/35">
         <p className="text-sm text-muted-foreground">
-          {language === 'ar' ? 'حتى 5 لاعبين فقط' : 'Up to 5 players only'}
+          {language === 'ar' ? 'حتى 6 لاعبين فقط' : 'Up to 6 players only'}
         </p>
         <div className="space-y-2">
           <Label htmlFor="letters-title">{language === 'ar' ? 'العنوان' : 'Title'}</Label>
@@ -189,15 +192,31 @@ export default function LettersCreate() {
             <Label>{language === 'ar' ? 'عدد اللاعبين' : 'Number of players'}</Label>
             <Select value={String(maxPlayers)} onValueChange={(v)=>setMaxPlayers(parseInt(v,10))}>
               <SelectTrigger>
-                <SelectValue placeholder={language === 'ar' ? 'اختر عدد اللاعبين (حتى 5)' : 'Select number of players (up to 5)'} />
+                <SelectValue placeholder={language === 'ar' ? 'اختر عدد اللاعبين (حتى 6)' : 'Select number of players (up to 6)'} />
               </SelectTrigger>
               <SelectContent>
-                {[1,2,3,4,5].map(n => (
+                {[2,3,4,5,6].map(n => (
                   <SelectItem key={n} value={String(n)}>{n}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">{language === 'ar' ? 'الحد الأقصى ٥ لاعبين' : 'Maximum 5 players'}</p>
+            <p className="text-xs text-muted-foreground">{language === 'ar' ? 'الحد الأقصى ٦ لاعبين' : 'Maximum 6 players'}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>{language === 'ar' ? 'وضع التحقق' : 'Validation mode'}</Label>
+            <Select value={validationMode} onValueChange={(v)=>setValidationMode(v as 'strict'|'lenient')}>
+              <SelectTrigger>
+                <SelectValue placeholder={language === 'ar' ? 'اختر وضع التحقق' : 'Select validation mode'} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="strict">{language === 'ar' ? 'صارم (دقيق)' : 'Strict (accurate)'}</SelectItem>
+                <SelectItem value="lenient">{language === 'ar' ? 'مرن (سريع)' : 'Lenient (fast)'}</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">{language === 'ar' ? 'صارم يستخدم الذكاء للتحقق من الفئة. مرن يتحقق من الحرف فقط.' : 'Strict uses AI to validate category. Lenient checks only starting letter.'}</p>
           </div>
         </div>
 

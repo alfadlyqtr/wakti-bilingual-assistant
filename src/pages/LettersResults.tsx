@@ -16,6 +16,7 @@ export default function LettersResults() {
   const [totals, setTotals] = React.useState<TotalRow[]>([]);
   const [players, setPlayers] = React.useState<Player[]>([]);
   const [hostName, setHostName] = React.useState<string | undefined>();
+  const [breakdown, setBreakdown] = React.useState<Array<{ user_id: string | null; base: number; bonus: number; total: number; fields?: any }>>([]);
 
   React.useEffect(() => {
     let active = true;
@@ -44,6 +45,24 @@ export default function LettersResults() {
       setTotals((totalsData || []).sort((a,b)=> (b.total||0) - (a.total||0)));
       setPlayers(p || []);
       setHostName(g?.host_name || undefined);
+
+      // Last round breakdown
+      const { data: lastRound } = await supabase
+        .from('letters_rounds')
+        .select('id, round_no')
+        .eq('game_code', code)
+        .order('round_no', { ascending: false })
+        .limit(1);
+      const lastId = Array.isArray(lastRound) && lastRound[0]?.id;
+      if (lastId) {
+        const { data: bd } = await supabase
+          .from('letters_round_scores')
+          .select('user_id, base, bonus, total, fields')
+          .eq('round_id', lastId);
+        if (bd) setBreakdown(bd as any);
+      } else {
+        setBreakdown([]);
+      }
     }
     load();
     return () => { active = false };
@@ -89,8 +108,7 @@ export default function LettersResults() {
   const top3 = totals.slice(0,3);
   const rest = totals.slice(3);
 
-  return (
-    <div className="container mx-auto p-3 max-w-5xl relative min-h-[100dvh]">
+  return (<div className="container mx-auto p-3 max-w-5xl relative min-h-[100dvh]">
       <LettersBackdrop density={60} />
 
       <div className="glass-hero px-5 py-4 mb-4 flex items-center justify-between gap-3 relative z-10 bg-white/60 dark:bg-gray-900/35">
@@ -105,50 +123,87 @@ export default function LettersResults() {
           </button>
         </div>
         <div className="text-sm text-muted-foreground">
-          {language==='ar' ? `المضيف: ${hostName || '-'}` : `Host: ${hostName || '-'}`}
+          {language==='ar' ? 'المضيف: ' : 'Host: '} {hostName || '-'}
         </div>
       </div>
 
       <div className="glass-hero p-5 rounded-xl space-y-6 relative z-10 bg-white/60 dark:bg-gray-900/35">
         <h1 className="text-2xl font-bold">{language==='ar' ? 'النتائج النهائية' : 'Final Results'}</h1>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {top3.map((r, idx) => (
-            <div key={idx} className={`rounded-xl border p-4 text-center ${idx===0? 'bg-amber-50 dark:bg-amber-900/20' : idx===1? 'bg-slate-50 dark:bg-slate-900/20' : 'bg-emerald-50 dark:bg-emerald-900/20'}`}>
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <Crown className={`${idx===0?'text-amber-500':'text-muted-foreground'}`} />
-                <span className="text-sm text-muted-foreground">{language==='ar'? `المركز ${idx+1}` : `Place ${idx+1}`}</span>
+        <div className="mt-6 grid grid-cols-1 gap-3">
+        {top3.length === 0 ? (
+          <div className="rounded-lg border p-5 bg-card/50 text-sm text-muted-foreground">
+            {language==='ar'? 'لا توجد نتائج بعد' : 'No results yet'}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {top3.map((row, idx) => (
+              <div key={(row.user_id ?? 'u') + idx} className="rounded-lg border p-5 bg-card">
+                <div className="flex items-center gap-2 mb-2">
+                  <Crown className={`h-5 w-5 ${idx===0?'text-yellow-500': idx===1?'text-slate-400':'text-amber-700'}`} />
+                  <div className="text-xs text-muted-foreground">{language==='ar'?`المركز ${idx+1}`:`Place ${idx+1}`}</div>
+                </div>
+                <div className="text-lg font-semibold">{nameOf(row.user_id)}</div>
+                <div className="text-2xl font-bold mt-1">{row.total || 0}</div>
               </div>
-              <div className="text-lg font-semibold">{nameOf(r.user_id)}</div>
-              <div className="text-2xl font-black">{r.total}</div>
+            ))}
+          </div>
+        )}
+        {breakdown.length > 0 && (
+          <div className="rounded-lg border p-4 bg-card/50">
+            <div className="text-sm font-medium mb-2">{language==='ar'?'تفاصيل الجولة الأخيرة':'Last round breakdown'}</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {breakdown.map((b, i) => (
+                <div key={(b.user_id ?? 'u') + i} className="rounded-md border bg-card p-3 text-sm">
+                  <div className="font-medium mb-1">{nameOf(b.user_id)}</div>
+                  <div className="flex flex-col gap-1 text-xs">
+                    {(['name','place','plant','animal','thing'] as const).map((key) => {
+                      const label = language==='ar' ? ({name:'اسم',place:'مكان',plant:'نبات',animal:'حيوان',thing:'شيء'} as any)[key] : key;
+                      const valid = !!b.fields?.[key]?.valid;
+                      const value = b.fields?.[key]?.value ?? '';
+                      const reason = b.fields?.[key]?.reason || '';
+                      return (
+                        <div key={key} className={`px-2 py-1 rounded ${valid ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200' : 'bg-rose-100 text-rose-800 dark:bg-rose-900/20 dark:text-rose-200'}`}>
+                          <div className="inline-flex w-full items-center justify-between">
+                            <span className="mr-2">{label}</span>
+                            <span className="truncate max-w-[14rem] opacity-90">{String(value || '')}</span>
+                            <span className="ml-2">{valid ? '✓' : '✗'}</span>
+                          </div>
+                          {!valid && reason && (
+                            <div className="mt-0.5 text-[11px] opacity-80">{String(reason)}</div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">{language==='ar'?'المجموع':'Total'}: {b.total} {b.bonus ? ('(+' + b.bonus + ')') : ''}</div>
+                </div>
+              ))}
             </div>
-          ))}
-          {top3.length === 0 && (
-            <div className="md:col-span-3 text-sm text-muted-foreground">{language==='ar'?'لا توجد نتائج':'No results yet'}</div>
-          )}
-        </div>
-
+          </div>
+        )}
         {rest.length > 0 && (
           <div className="rounded-lg border p-4 bg-card/50">
-            <div className="text-sm font-medium mb-2">{language==='ar'?'لوحة المتصدرين':'Leaderboard'}</div>
+            <div className="text-sm font-medium mb-2">{language==='ar'?'الترتيب':'Leaderboard'}</div>
             <div className="divide-y">
               {rest.map((r, i) => (
-                <div key={i} className="flex items-center justify-between py-2 text-sm">
+                <div key={(r.user_id ?? 'u') + i} className="flex items-center justify-between py-2 text-sm">
                   <div className="flex items-center gap-2">
                     <span className="inline-flex w-6 justify-center text-muted-foreground">{i+4}</span>
                     <span className="font-medium">{nameOf(r.user_id)}</span>
                   </div>
-                  <div className="font-semibold">{r.total}</div>
+                  <div className="font-semibold">{r.total || 0}</div>
                 </div>
               ))}
             </div>
           </div>
         )}
 
+        </div>
+
         <div className="flex items-center justify-end gap-2">
           <Button variant="secondary" onClick={()=>navigate('/games')}>{language==='ar'?'عودة إلى الألعاب':'Back to Games'}</Button>
         </div>
       </div>
-    </div>
-  );
+    </div>);
 }

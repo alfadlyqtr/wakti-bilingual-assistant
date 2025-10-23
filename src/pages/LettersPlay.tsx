@@ -35,6 +35,8 @@ export default function LettersPlay() {
   const [hostPick, setHostPick] = React.useState<string>('A');
   const isHost = !!(user?.id && hostUserId && user.id === hostUserId);
   const [submittedLeftSec, setSubmittedLeftSec] = React.useState<number | null>(null);
+  const [roundAnswers, setRoundAnswers] = React.useState<Record<string, {name?:string;place?:string;plant?:string;animal?:string;thing?:string}>>({});
+  const [validationMode, setValidationMode] = React.useState<'strict'|'lenient'>('strict');
 
   React.useEffect(() => {
     let cancelled = false;
@@ -42,7 +44,7 @@ export default function LettersPlay() {
       if (!code) return;
       const { data } = await supabase
         .from('letters_games')
-        .select('title, host_name, host_user_id, round_duration_sec, language, letter_mode, manual_letter, rounds_total, started_at, current_round_no, phase')
+        .select('title, host_name, host_user_id, round_duration_sec, language, letter_mode, manual_letter, rounds_total, started_at, current_round_no, phase, validation_mode')
         .eq('code', code)
         .maybeSingle();
       if (!cancelled && data) {
@@ -60,6 +62,7 @@ export default function LettersPlay() {
         if (typeof data.rounds_total === 'number') setRoundsTotal(data.rounds_total);
         if (typeof data.current_round_no === 'number') setRoundNo(data.current_round_no);
         if (typeof data.phase === 'string') setPhase(data.phase as any);
+        if (data.validation_mode) setValidationMode((data.validation_mode as 'strict'|'lenient'));
       }
     }
     loadMeta();
@@ -232,14 +235,26 @@ export default function LettersPlay() {
         letter: currentLetter,
         round_duration_sec: roundDuration,
         started_at: startedAt,
-        answers: ans || []
+        answers: ans || [],
+        validation_mode: validationMode,
       };
       try {
         const { data: res } = await supabase.functions.invoke('letters-teacher', { body: payload });
         const rows = res?.results || [];
         setResults(rows);
         if (rows.length) {
-          const roundRows = rows.map((r:any)=>({ game_code: code, round_id: roundId, user_id: r.user_id, base: r.base||0, bonus: r.bonus||0, total: r.total||0 }));
+          const byId = new Map((ans||[]).map(a=>[a.user_id, a]));
+          const roundRows = rows.map((r:any)=>{
+            const a = byId.get(r.user_id) as any;
+            const fields = {
+              name: { value: a?.name || '', valid: !!r?.fields?.name?.valid, reason: r?.fields?.name?.reason || null },
+              place: { value: a?.place || '', valid: !!r?.fields?.place?.valid, reason: r?.fields?.place?.reason || null },
+              plant: { value: a?.plant || '', valid: !!r?.fields?.plant?.valid, reason: r?.fields?.plant?.reason || null },
+              animal: { value: a?.animal || '', valid: !!r?.fields?.animal?.valid, reason: r?.fields?.animal?.reason || null },
+              thing: { value: a?.thing || '', valid: !!r?.fields?.thing?.valid, reason: r?.fields?.thing?.reason || null },
+            };
+            return { game_code: code, round_id: roundId, user_id: r.user_id, base: r.base||0, bonus: r.bonus||0, total: r.total||0, fields };
+          });
           // Upsert scores per (round_id, user_id)
           await supabase.from('letters_round_scores').upsert(roundRows, { onConflict: 'round_id,user_id' });
         }
@@ -248,6 +263,7 @@ export default function LettersPlay() {
 
         // If last round, end game (host authoritative)
         if (roundsTotal && roundNo >= roundsTotal) {
+          await new Promise(r => setTimeout(r, 2000));
           await supabase.from('letters_games').update({ phase: 'done' }).eq('code', code);
           await supabase.from('letters_rounds').update({ status: 'done' }).eq('id', roundId);
           setPhase('done');
@@ -257,6 +273,38 @@ export default function LettersPlay() {
       }
     })();
   }, [phase, code, roundId, gameLang, currentLetter, roundDuration, startedAt]);
+
+  // Fetch answers for scoring UI (all clients) and keep a simple map for display
+  React.useEffect(() => {
+    (async () => {
+      if (phase !== 'scoring' || !roundId) return;
+      const { data } = await supabase
+        .from('letters_answers')
+        .select('user_id, name, place, plant, animal, thing')
+        .eq('round_id', roundId);
+      const map: Record<string, any> = {};
+      (data||[]).forEach((a:any)=>{ if(a.user_id) map[a.user_id] = { name:a.name, place:a.place, plant:a.plant, animal:a.animal, thing:a.thing }; });
+      setRoundAnswers(map);
+    })();
+  }, [phase, roundId]);
+
+  // Non-host clients: once scores land, load them for the breakdown
+  React.useEffect(() => {
+    if (phase !== 'scoring' || !roundId) return;
+    const ch = supabase.channel(`letters:lrs:${roundId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'letters_round_scores', filter: `round_id=eq.${roundId}` }, async () => {
+        const { data } = await supabase
+          .from('letters_round_scores')
+          .select('user_id, base, bonus, total, fields')
+          .eq('round_id', roundId);
+        if (Array.isArray(data)) {
+          const rows = data.map((r:any)=>({ user_id: r.user_id, base: r.base, bonus: r.bonus, total: r.total, fields: r.fields }));
+          setResults(rows);
+        }
+      })
+      .subscribe();
+    return () => { try { supabase.removeChannel(ch); } catch {} };
+  }, [phase, roundId]);
 
   async function handleSubmit() {
     if (submitting || submitted || !code || !roundId) return;
@@ -469,13 +517,25 @@ export default function LettersPlay() {
                   {results.map((r:any, idx:number) => (
                     <div key={idx} className="rounded-md border bg-card p-2 text-sm">
                       <div className="font-medium mb-1">{players.find(p=>p.user_id===r.user_id)?.name || r.user_id || '-'}</div>
-                      <div className="flex flex-wrap gap-2 text-xs">
-                        {(['name','place','plant','animal','thing'] as const).map(key => (
-                          <span key={key} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${r.fields?.[key]?.valid ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200' : 'bg-rose-100 text-rose-800 dark:bg-rose-900/20 dark:text-rose-200'}`}>
-                            {language==='ar' ? ({name:'اسم',place:'مكان',plant:'نبات',animal:'حيوان',thing:'شيء'} as any)[key] : key}
-                            {r.fields?.[key]?.valid ? '✓' : '✗'}
-                          </span>
-                        ))}
+                      <div className="flex flex-col gap-1 text-xs">
+                        {(['name','place','plant','animal','thing'] as const).map(key => {
+                          const label = language==='ar' ? ({name:'اسم',place:'مكان',plant:'نبات',animal:'حيوان',thing:'شيء'} as any)[key] : key;
+                          const valid = !!r.fields?.[key]?.valid;
+                          const value = r.fields?.[key]?.value ?? roundAnswers?.[r.user_id || '']?.[key] ?? '';
+                          const reason = r.fields?.[key]?.reason || '';
+                          return (
+                            <div key={key} className={`px-2 py-1 rounded ${valid ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200' : 'bg-rose-100 text-rose-800 dark:bg-rose-900/20 dark:text-rose-200'}`}>
+                              <div className="flex items-center justify-between">
+                                <span className="mr-2">{label}</span>
+                                <span className="truncate max-w-[14rem] opacity-90">{String(value || '')}</span>
+                                <span className="ml-2">{valid ? '✓' : '✗'}</span>
+                              </div>
+                              {!valid && reason && (
+                                <div className="mt-0.5 text-[11px] opacity-80">{String(reason)}</div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                       <div className="mt-1 text-xs text-muted-foreground">{language==='ar'?'مجموع':'Total'}: {r.total} {r.bonus?`(+${r.bonus})`:''}</div>
                     </div>

@@ -28,12 +28,12 @@ export default function MusicStudio() {
         </Button>
       </nav>
 
-      {activeTab === 'compose' ? <ComposeTab /> : <EditorTab />}
+      {activeTab === 'compose' ? <ComposeTab onSaved={()=>setActiveTab('editor')} /> : <EditorTab />}
     </div>
   );
 }
 
-function ComposeTab() {
+function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
   const { language } = useTheme();
 
   // Inputs
@@ -67,7 +67,7 @@ function ComposeTab() {
   const [excludeRect, setExcludeRect] = useState<{top:number,left:number,width:number} | null>(null);
   // Minimal mode only: styles include/exclude + prompt + duration
   const [submitting, setSubmitting] = useState(false);
-  const [audios, setAudios] = useState<Array<{ url: string; mime: string; meta?: any; createdAt: number }>>([]);
+  const [audios, setAudios] = useState<Array<{ url: string; mime: string; meta?: any; createdAt: number; saved?: boolean }>>([]);
   const [lastError, setLastError] = useState<string | null>(null);
   const [songsUsed, setSongsUsed] = useState(0);
   const [songsRemaining, setSongsRemaining] = useState(5);
@@ -231,7 +231,7 @@ function ComposeTab() {
         // Continue anyway - audio will still play from data URI
       }
 
-      setAudios((prev) => [{ url: storedUrl, mime: 'audio/mpeg', meta: {}, createdAt: Date.now() }, ...prev]);
+      setAudios((prev) => [{ url: storedUrl, mime: 'audio/mpeg', meta: {}, createdAt: Date.now(), saved: true }, ...prev]);
       setLastError(null);
 
       toast.success(
@@ -479,6 +479,59 @@ function ComposeTab() {
             {audios.map((a, idx) => (
               <div key={a.createdAt + '-' + idx} className="flex items-center gap-3">
                 <audio controls src={a.url} className="w-full" />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={a.saved}
+                  onClick={async () => {
+                    try {
+                      const { data: { user } } = await supabase.auth.getUser();
+                      if (!user) throw new Error(language==='ar' ? 'سجّل الدخول للحفظ' : 'Sign in to save');
+                      let storagePath: string | null = null;
+                      let publicUrl = a.url;
+                      // If already a public URL within our bucket, derive storage path
+                      const marker = '/storage/v1/object/public/music/';
+                      if (publicUrl.includes(marker)) {
+                        storagePath = publicUrl.split(marker)[1] || null;
+                      }
+                      // Otherwise, fetch and upload
+                      if (!storagePath) {
+                        const response = await fetch(a.url);
+                        const blob = await response.blob();
+                        const fileName = `${user.id}/${Date.now()}.mp3`;
+                        const up = await supabase.storage.from('music').upload(fileName, blob, { contentType: 'audio/mpeg', upsert: false });
+                        if (up.error) throw up.error;
+                        const { data: urlData } = supabase.storage.from('music').getPublicUrl(fileName);
+                        publicUrl = urlData.publicUrl;
+                        storagePath = fileName;
+                      }
+                      // Avoid duplicates: check existing by storage_path
+                      if (storagePath) {
+                        const { count } = await supabase
+                          .from('user_music_tracks')
+                          .select('*', { count: 'exact', head: true })
+                          .eq('user_id', user.id)
+                          .eq('storage_path', storagePath);
+                        if (!count || count === 0) {
+                          await supabase.from('user_music_tracks').insert({
+                            user_id: user.id,
+                            title: prompt.substring(0, 100),
+                            storage_path: storagePath,
+                            duration_sec: Math.min(120, duration),
+                            prompt: prompt,
+                          });
+                        }
+                      }
+                      setAudios((prev) => prev.map((it, i) => i===idx ? { ...it, url: publicUrl, saved: true } : it));
+                      toast.success(language==='ar' ? 'تم الحفظ. انتقل إلى المحفوظات.' : 'Saved. Switched to Saved.');
+                      onSaved?.();
+                    } catch (e: any) {
+                      toast.error((language==='ar'?'تعذر الحفظ: ':'Save failed: ') + (e?.message || String(e)));
+                    }
+                  }}
+                >
+                  {a.saved ? (language==='ar' ? 'تم الحفظ' : 'Saved') : (language==='ar' ? 'حفظ' : 'Save')}
+                </Button>
               </div>
             ))}
           </div>
