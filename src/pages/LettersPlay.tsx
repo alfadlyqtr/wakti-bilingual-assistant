@@ -34,6 +34,7 @@ export default function LettersPlay() {
   const [results, setResults] = React.useState<any[] | null>(null);
   const [hostPick, setHostPick] = React.useState<string>('A');
   const isHost = !!(user?.id && hostUserId && user.id === hostUserId);
+  const [submittedLeftSec, setSubmittedLeftSec] = React.useState<number | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -131,6 +132,8 @@ export default function LettersPlay() {
     } else if (code) {
       setCurrentLetter(letterFromCode(code));
     }
+    // Initialize hostPick default per language
+    setHostPick(gameLang === 'ar' ? 'ا' : 'A');
   }, [letterMode, manualLetter, code, gameLang]);
 
   // Ensure round row exists for current round (race-safe upsert by unique key)
@@ -203,11 +206,21 @@ export default function LettersPlay() {
     }
   }, [phase, code, navigate]);
 
-  // When in scoring, fetch answers and call letters-teacher once
+  // When in scoring, host computes results once; others wait
   React.useEffect(() => {
     (async () => {
       if (phase !== 'scoring' || !code || !roundId || !gameLang || !currentLetter) return;
-      // Fetch answers for this round
+      // Check if already scored
+      const { data: roundRow } = await supabase
+        .from('letters_rounds')
+        .select('scored_at')
+        .eq('id', roundId)
+        .maybeSingle();
+      if (roundRow?.scored_at) return; // already done by host
+
+      if (!isHost) return; // only host scores
+
+      // Host fetches answers
       const { data: ans } = await supabase
         .from('letters_answers')
         .select('user_id, name, place, plant, animal, thing, submitted_at')
@@ -225,28 +238,18 @@ export default function LettersPlay() {
         const { data: res } = await supabase.functions.invoke('letters-teacher', { body: payload });
         const rows = res?.results || [];
         setResults(rows);
-        // Persist scores
         if (rows.length) {
           const roundRows = rows.map((r:any)=>({ game_code: code, round_id: roundId, user_id: r.user_id, base: r.base||0, bonus: r.bonus||0, total: r.total||0 }));
-          await supabase.from('letters_round_scores').insert(roundRows).select('user_id,total');
-          // Upsert totals
-          for (const r of rows) {
-            const { data: cur } = await supabase
-              .from('letters_totals')
-              .select('total')
-              .eq('game_code', code)
-              .eq('user_id', r.user_id)
-              .maybeSingle();
-            const newTotal = (cur?.total || 0) + (r.total || 0);
-            await supabase.from('letters_totals').upsert({ game_code: code, user_id: r.user_id, total: newTotal, updated_at: new Date().toISOString() });
-          }
+          // Upsert scores per (round_id, user_id)
+          await supabase.from('letters_round_scores').upsert(roundRows, { onConflict: 'round_id,user_id' });
         }
+        // Mark scored_at to gate other clients
+        await supabase.from('letters_rounds').update({ scored_at: new Date().toISOString() }).eq('id', roundId);
+
         // If last round, end game (host authoritative)
         if (roundsTotal && roundNo >= roundsTotal) {
-          if (isHost) {
-            await supabase.from('letters_games').update({ phase: 'done' }).eq('code', code);
-            if (roundId) await supabase.from('letters_rounds').update({ status: 'done' }).eq('id', roundId);
-          }
+          await supabase.from('letters_games').update({ phase: 'done' }).eq('code', code);
+          await supabase.from('letters_rounds').update({ status: 'done' }).eq('id', roundId);
           setPhase('done');
         }
       } catch {
@@ -266,6 +269,7 @@ export default function LettersPlay() {
         const elapsed = Math.floor((nowMs - startedMs) / 1000);
         const left = Math.max(0, roundDuration - elapsed);
         setRemaining(left);
+        setSubmittedLeftSec(left);
       }
       await supabase.from('letters_answers').upsert({
         game_code: code,
@@ -415,7 +419,12 @@ export default function LettersPlay() {
                 <input disabled={phase!=='playing' || submitted} className="mt-1 w-full rounded-md border px-3 py-2 bg-background" value={values.thing} onChange={(e)=>updateValue('thing', e.target.value)} />
               </div>
             </div>
-            <div className="pt-3 flex justify-end">
+            <div className="pt-3 flex items-center justify-between">
+              {submittedLeftSec !== null && (
+                <div className="text-xs text-muted-foreground">
+                  {language==='ar' ? `تم الإرسال عند ${submittedLeftSec}s متبقية` : `Submitted at ${submittedLeftSec}s left`}
+                </div>
+              )}
               {phase==='playing' ? (
                 <Button disabled={submitted || submitting} className="bg-indigo-600 hover:bg-indigo-700" onClick={handleSubmit}>
                   {submitted ? (language==='ar'?'تم الإرسال':'Submitted') : (submitting ? (language==='ar'?'جارٍ...':'Submitting...') : (language === 'ar' ? 'إرسال' : 'Submit'))}
@@ -485,7 +494,7 @@ export default function LettersPlay() {
                   <div className="text-sm font-medium">{language==='ar'?'اختر الحرف للجولة التالية':'Pick letter for next round'}</div>
                   <div className="flex items-center gap-2">
                     <select className="rounded-md border px-2 py-1 bg-background" value={hostPick} onChange={(e)=>setHostPick(e.target.value)}>
-                      {('ABCDEFGHIJKLMNOPQRSTUVWXYZ').split('').map(l => (
+                      {(gameLang === 'ar' ? 'ابتثجحخدذرزسشصضطظعغفقكلمنهوي' : 'ABCDEFGHIJKLMNOPQRSTUVWXYZ').split('').map(l => (
                         <option key={l} value={l}>{l}</option>
                       ))}
                     </select>

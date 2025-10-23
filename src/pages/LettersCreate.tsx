@@ -29,6 +29,15 @@ export default function LettersCreate() {
   const [maxPlayers, setMaxPlayers] = useState<number>(2);
 
   const EN_LETTERS = useMemo(()=>"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""),[]);
+  const AR_LETTERS = useMemo(()=>"ابتثجحخدذرزسشصضطظعغفقكلمنهوي".split(""),[]);
+  const currentAlphabet = useMemo(()=> (langChoice === 'ar' ? AR_LETTERS : EN_LETTERS), [langChoice, AR_LETTERS, EN_LETTERS]);
+
+  React.useEffect(() => {
+    if (letterMode === 'manual') {
+      const alph = langChoice === 'ar' ? AR_LETTERS : EN_LETTERS;
+      if (!alph.includes(manualLetter)) setManualLetter(alph[0]);
+    }
+  }, [langChoice, letterMode]);
 
   async function handleCreate() {
     const ensureCode = gameCode && gameCode.trim().length >= 6
@@ -210,7 +219,7 @@ export default function LettersCreate() {
                 <SelectValue placeholder={language === 'ar' ? 'اختر حرفًا' : 'Pick a letter'} />
               </SelectTrigger>
               <SelectContent className="max-h-64 overflow-auto">
-                {EN_LETTERS.map(l => (
+                {currentAlphabet.map(l => (
                   <SelectItem key={l} value={l}>{l}</SelectItem>
                 ))}
               </SelectContent>
