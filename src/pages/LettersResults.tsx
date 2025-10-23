@@ -27,12 +27,59 @@ export default function LettersResults() {
         supabase.from('letters_games').select('host_name').eq('code', code).maybeSingle(),
       ]);
       if (!active) return;
-      setTotals((t || []).sort((a,b)=> (b.total||0) - (a.total||0)));
+      let totalsData: TotalRow[] = (t || []) as any;
+      // Fallback: aggregate from letters_round_scores when totals are empty
+      if (!totalsData || totalsData.length === 0) {
+        const { data: rs } = await supabase
+          .from('letters_round_scores')
+          .select('user_id, total')
+          .eq('game_code', code);
+        const map = new Map<string | null, number>();
+        (rs || []).forEach(r => {
+          const key = r.user_id ?? null;
+          map.set(key, (map.get(key) || 0) + (r.total || 0));
+        });
+        totalsData = Array.from(map.entries()).map(([user_id, total]) => ({ user_id, total }));
+      }
+      setTotals((totalsData || []).sort((a,b)=> (b.total||0) - (a.total||0)));
       setPlayers(p || []);
       setHostName(g?.host_name || undefined);
     }
     load();
     return () => { active = false };
+  }, [code]);
+
+  // Realtime refresh when totals or round_scores change
+  React.useEffect(() => {
+    if (!code) return;
+    const ch1 = supabase.channel(`letters:totals:${code}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'letters_totals', filter: `game_code=eq.${code}` }, () => {
+        // Trigger reload
+        (async () => {
+          const { data } = await supabase.from('letters_totals').select('user_id, total').eq('game_code', code);
+          if (data) setTotals((data as any).sort((a: any,b: any)=> (b.total||0) - (a.total||0)));
+        })();
+      })
+      .subscribe();
+    const ch2 = supabase.channel(`letters:scores:${code}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'letters_round_scores', filter: `game_code=eq.${code}` }, () => {
+        // Fallback refresh via aggregation
+        (async () => {
+          const { data: rs } = await supabase.from('letters_round_scores').select('user_id, total').eq('game_code', code);
+          const map = new Map<string | null, number>();
+          (rs || []).forEach(r => {
+            const key = r.user_id ?? null;
+            map.set(key, (map.get(key) || 0) + (r.total || 0));
+          });
+          const agg = Array.from(map.entries()).map(([user_id, total]) => ({ user_id, total }));
+          setTotals(agg.sort((a,b)=> (b.total||0) - (a.total||0)));
+        })();
+      })
+      .subscribe();
+    return () => {
+      try { supabase.removeChannel(ch1); } catch {}
+      try { supabase.removeChannel(ch2); } catch {}
+    };
   }, [code]);
 
   function nameOf(user_id: string | null) {
