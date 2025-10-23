@@ -154,6 +154,7 @@ export default function LettersWaiting() {
           <div className="pt-2 flex items-center justify-end">
             <Button className="bg-emerald-600 hover:bg-emerald-700" disabled={playersCount < 2}
               title={playersCount < 2 ? (language === 'ar' ? 'يتطلب لاعبين على الأقل' : 'Requires at least 2 players') : undefined}
+              onClick={()=>navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: (location.state as any)?.roundDurationSec } })}
             >
               {language === 'ar' ? 'ابدأ اللعبة الآن' : 'Start game now'}
             </Button>

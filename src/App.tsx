@@ -62,6 +62,7 @@ import MusicStudio from "./pages/MusicStudio";
 import LettersCreate from "./pages/LettersCreate";
 import LettersWaiting from "./pages/LettersWaiting";
 import LettersJoin from "./pages/LettersJoin";
+import LettersPlay from "./pages/LettersPlay";
  
 
 import "./App.css";
@@ -192,6 +193,11 @@ function App() {
                 <Route path="/games/letters/waiting" element={
                   <GiftNotificationProvider>
                     <AppLayout><LettersWaiting /></AppLayout>
+                  </GiftNotificationProvider>
+                } />
+                <Route path="/games/letters/play/:code" element={
+                  <GiftNotificationProvider>
+                    <AppLayout><LettersPlay /></AppLayout>
                   </GiftNotificationProvider>
                 } />
                 <Route path="/games" element={

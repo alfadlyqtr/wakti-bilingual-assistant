@@ -22,6 +22,8 @@ export default function LettersCreate() {
   const [manualLetter, setManualLetter] = useState('A');
   const [roundsMode, setRoundsMode] = useState<'1'|'3'|'custom'>('1');
   const [customRounds, setCustomRounds] = useState(1);
+  const [durationMode, setDurationMode] = useState<'60'|'90'|'custom'>('60');
+  const [customDuration, setCustomDuration] = useState<number>(60);
   const [gameCode, setGameCode] = useState('');
   const [copied, setCopied] = useState(false);
   const [maxPlayers, setMaxPlayers] = useState<number>(2);
@@ -45,6 +47,11 @@ export default function LettersCreate() {
           title: gameTitle || (language === 'ar' ? 'لعبة الحروف' : 'Letters Game'),
           hostName: resolvedHost,
           maxPlayers,
+          roundDurationSec: durationMode === 'custom' ? Math.max(10, Math.min(300, customDuration || 60)) : parseInt(durationMode, 10),
+          language: langChoice,
+          letterMode: letterMode,
+          manualLetter: letterMode === 'manual' ? manualLetter : null,
+          roundsTotal: roundsMode === 'custom' ? Math.max(1, Math.min(10, customRounds || 1)) : parseInt(roundsMode, 10),
         };
         localStorage.setItem(`wakti_letters_game_${code}`, JSON.stringify(meta));
         // Persist to Supabase so others can fetch by code
@@ -54,6 +61,11 @@ export default function LettersCreate() {
           host_user_id: user?.id || null,
           host_name: resolvedHost,
           max_players: maxPlayers,
+          round_duration_sec: meta.roundDurationSec,
+          language: meta.language,
+          letter_mode: meta.letterMode,
+          manual_letter: meta.manualLetter,
+          rounds_total: meta.roundsTotal,
         });
         // Ensure host is recorded as a player
         await supabase.from('letters_players').upsert({
@@ -68,7 +80,7 @@ export default function LettersCreate() {
       || user?.user_metadata?.username
       || user?.email?.split('@')[0]
       || (language === 'ar' ? 'المضيف' : 'Host')) as string;
-    navigate('/games/letters/waiting', { state: { isHost: true, gameCode: code, maxPlayers, gameTitle, hostName: hostForState } });
+    navigate('/games/letters/waiting', { state: { isHost: true, gameCode: code, maxPlayers, gameTitle, hostName: hostForState, roundDurationSec: durationMode === 'custom' ? Math.max(10, Math.min(300, customDuration || 60)) : parseInt(durationMode, 10) } });
   }
 
   return (
@@ -104,6 +116,55 @@ export default function LettersCreate() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
+            <Label>{language === 'ar' ? 'مدة الجولة (ثوانٍ)' : 'Round duration (seconds)'}</Label>
+            <RadioGroup value={durationMode} onValueChange={(v)=>setDurationMode(v as '60'|'90'|'custom')} className="flex gap-6">
+              <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                <RadioGroupItem id="dur60" value="60" />
+                <Label htmlFor="dur60">60</Label>
+              </div>
+              <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                <RadioGroupItem id="dur90" value="90" />
+                <Label htmlFor="dur90">90</Label>
+              </div>
+              <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                <RadioGroupItem id="durCustom" value="custom" />
+                <Label htmlFor="durCustom">{language === 'ar' ? 'مخصص' : 'Custom'}</Label>
+              </div>
+            </RadioGroup>
+            {durationMode === 'custom' && (
+              <div className="mt-2">
+                <Input type="number" min={10} max={300} value={customDuration} onChange={(e)=>setCustomDuration(parseInt(e.target.value||'60',10))} />
+                <p className="text-xs text-muted-foreground mt-1">{language === 'ar' ? 'بين 10 و 300 ثانية' : 'Between 10 and 300 seconds'}</p>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label>{language === 'ar' ? 'الجولات' : 'Rounds'}</Label>
+            <RadioGroup value={roundsMode} onValueChange={(v)=>setRoundsMode(v as '1'|'3'|'custom')} className="flex gap-4">
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="1" id="rounds-1" />
+                <Label htmlFor="rounds-1">{language === 'ar' ? '١' : '1'}</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="3" id="rounds-3" />
+                <Label htmlFor="rounds-3">{language === 'ar' ? '٣' : '3'}</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="custom" id="rounds-custom" />
+                <Label htmlFor="rounds-custom">{language === 'ar' ? 'مخصص' : 'Custom'}</Label>
+              </div>
+            </RadioGroup>
+            {roundsMode === 'custom' && (
+              <div className="mt-2">
+                <Input type="number" min={1} max={10} value={customRounds} onChange={(e)=>setCustomRounds(parseInt(e.target.value||'1',10))} />
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-2">
             <Label>{language === 'ar' ? 'لغة اللعبة' : 'Game language'}</Label>
             <Select value={langChoice} onValueChange={(v)=>setLangChoice(v as 'ar'|'en')}>
               <SelectTrigger>
@@ -116,69 +177,50 @@ export default function LettersCreate() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>{language === 'ar' ? 'الحرف' : 'Letter'}</Label>
-            <RadioGroup value={letterMode} onValueChange={(v)=>setLetterMode(v as 'auto'|'manual')} className="flex gap-4">
-              <div className="flex items-center gap-2">
-                <RadioGroupItem value="auto" id="letter-auto" />
-                <Label htmlFor="letter-auto">{language === 'ar' ? 'تلقائي' : 'Auto'}</Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <RadioGroupItem value="manual" id="letter-manual" />
-                <Label htmlFor="letter-manual">{language === 'ar' ? 'يدوي' : 'Manual'}</Label>
-              </div>
-            </RadioGroup>
-            {letterMode === 'manual' && (
-              <Select value={manualLetter} onValueChange={setManualLetter}>
-                <SelectTrigger className="mt-2">
-                  <SelectValue placeholder={language === 'ar' ? 'اختر حرفًا' : 'Pick a letter'} />
-                </SelectTrigger>
-                <SelectContent className="max-h-64 overflow-auto">
-                  {EN_LETTERS.map(l => (
-                    <SelectItem key={l} value={l}>{l}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            <Label>{language === 'ar' ? 'عدد اللاعبين' : 'Number of players'}</Label>
+            <Select value={String(maxPlayers)} onValueChange={(v)=>setMaxPlayers(parseInt(v,10))}>
+              <SelectTrigger>
+                <SelectValue placeholder={language === 'ar' ? 'اختر عدد اللاعبين (حتى 5)' : 'Select number of players (up to 5)'} />
+              </SelectTrigger>
+              <SelectContent>
+                {[1,2,3,4,5].map(n => (
+                  <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">{language === 'ar' ? 'الحد الأقصى ٥ لاعبين' : 'Maximum 5 players'}</p>
           </div>
         </div>
 
         <div className="space-y-2">
-          <Label>{language === 'ar' ? 'الجولات' : 'Rounds'}</Label>
-          <RadioGroup value={roundsMode} onValueChange={(v)=>setRoundsMode(v as '1'|'3'|'custom')} className="flex gap-4">
+          <Label>{language === 'ar' ? 'الحرف' : 'Letter'}</Label>
+          <RadioGroup value={letterMode} onValueChange={(v)=>setLetterMode(v as 'auto'|'manual')} className="flex gap-4">
             <div className="flex items-center gap-2">
-              <RadioGroupItem value="1" id="rounds-1" />
-              <Label htmlFor="rounds-1">{language === 'ar' ? '١' : '1'}</Label>
+              <RadioGroupItem value="auto" id="letter-auto" />
+              <Label htmlFor="letter-auto">{language === 'ar' ? 'تلقائي' : 'Auto'}</Label>
             </div>
             <div className="flex items-center gap-2">
-              <RadioGroupItem value="3" id="rounds-3" />
-              <Label htmlFor="rounds-3">{language === 'ar' ? '٣' : '3'}</Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <RadioGroupItem value="custom" id="rounds-custom" />
-              <Label htmlFor="rounds-custom">{language === 'ar' ? 'مخصص' : 'Custom'}</Label>
+              <RadioGroupItem value="manual" id="letter-manual" />
+              <Label htmlFor="letter-manual">{language === 'ar' ? 'يدوي' : 'Manual'}</Label>
             </div>
           </RadioGroup>
-          {roundsMode === 'custom' && (
-            <div className="mt-2">
-              <Input type="number" min={1} max={10} value={customRounds} onChange={(e)=>setCustomRounds(parseInt(e.target.value||'1',10))} />
-            </div>
+          {letterMode === 'manual' && (
+            <Select value={manualLetter} onValueChange={setManualLetter}>
+              <SelectTrigger className="mt-2">
+                <SelectValue placeholder={language === 'ar' ? 'اختر حرفًا' : 'Pick a letter'} />
+              </SelectTrigger>
+              <SelectContent className="max-h-64 overflow-auto">
+                {EN_LETTERS.map(l => (
+                  <SelectItem key={l} value={l}>{l}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
         </div>
 
-        <div className="space-y-2">
-          <Label>{language === 'ar' ? 'عدد اللاعبين' : 'Number of players'}</Label>
-          <Select value={String(maxPlayers)} onValueChange={(v)=>setMaxPlayers(parseInt(v,10))}>
-            <SelectTrigger>
-              <SelectValue placeholder={language === 'ar' ? 'اختر عدد اللاعبين (حتى 5)' : 'Select number of players (up to 5)'} />
-            </SelectTrigger>
-            <SelectContent>
-              {[1,2,3,4,5].map(n => (
-                <SelectItem key={n} value={String(n)}>{n}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">{language === 'ar' ? 'الحد الأقصى ٥ لاعبين' : 'Maximum 5 players'}</p>
-        </div>
+        
+
+        
 
         <div className="space-y-2">
           <Label htmlFor="letters-code">{language === 'ar' ? 'رمز اللعبة' : 'Game code'}</Label>
