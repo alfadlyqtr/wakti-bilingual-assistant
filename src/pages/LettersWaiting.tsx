@@ -141,13 +141,23 @@ export default function LettersWaiting() {
         </div>
 
         <div className="rounded-lg border p-4 bg-card/50">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="font-medium">{language === 'ar' ? 'اللاعبون' : 'Players'}</h2>
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-medium">{language === 'ar' ? 'اللاعبون' : 'Players'}</div>
             <Badge variant="secondary" className="rounded-full">
               {playersCount}/{maxPlayers}
             </Badge>
           </div>
-          <p className="text-sm text-muted-foreground">{language === 'ar' ? 'سيظهر اللاعبون هنا عند الانضمام.' : 'Players will appear here as they join.'}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {players.length > 0 ? (
+              players.map((p, i) => (
+                <span key={(p.user_id ?? 'anon') + i} className="inline-flex items-center rounded-full bg-secondary px-3 py-1 text-xs">
+                  {p.name}
+                </span>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">{language === 'ar' ? 'سيظهر اللاعبون هنا عند الانضمام.' : 'Players will appear here as they join.'}</p>
+            )}
+          </div>
         </div>
 
         {isHost && (
