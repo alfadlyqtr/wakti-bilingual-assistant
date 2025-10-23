@@ -59,11 +59,10 @@ import FitnessHealth from "./pages/FitnessHealth";
 import FitnessWhoopCallback from "./pages/FitnessWhoopCallback";
 import Journal from "./pages/Journal";
 import MusicStudio from "./pages/MusicStudio";
-import CreateGame from "./pages/letters/CreateGame";
-import JoinGame from "./pages/letters/JoinGame";
-import PlayRound from "./pages/letters/PlayRound";
-import RoundResults from "./pages/letters/RoundResults";
-import GameEnd from "./pages/letters/GameEnd";
+import LettersCreate from "./pages/LettersCreate";
+import LettersWaiting from "./pages/LettersWaiting";
+import LettersJoin from "./pages/LettersJoin";
+ 
 
 import "./App.css";
 
@@ -180,29 +179,19 @@ function App() {
                     <AppLayout><MusicStudio /></AppLayout>
                   </GiftNotificationProvider>
                 } />
-                <Route path="/letters/create" element={
+                <Route path="/games/letters/create" element={
                   <GiftNotificationProvider>
-                    <AppLayout><CreateGame /></AppLayout>
+                    <AppLayout><LettersCreate /></AppLayout>
                   </GiftNotificationProvider>
                 } />
-                <Route path="/letters/join" element={
+                <Route path="/games/letters/join" element={
                   <GiftNotificationProvider>
-                    <AppLayout><JoinGame /></AppLayout>
+                    <AppLayout><LettersJoin /></AppLayout>
                   </GiftNotificationProvider>
                 } />
-                <Route path="/letters/play" element={
+                <Route path="/games/letters/waiting" element={
                   <GiftNotificationProvider>
-                    <AppLayout><PlayRound /></AppLayout>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/letters/results" element={
-                  <GiftNotificationProvider>
-                    <AppLayout><RoundResults /></AppLayout>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/letters/end" element={
-                  <GiftNotificationProvider>
-                    <AppLayout><GameEnd /></AppLayout>
+                    <AppLayout><LettersWaiting /></AppLayout>
                   </GiftNotificationProvider>
                 } />
                 <Route path="/games" element={
