@@ -1,6 +1,7 @@
 import React from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import LettersBackdrop from '@/components/letters/LettersBackdrop';
 import { ArrowLeft, Timer } from 'lucide-react';
@@ -8,11 +9,13 @@ import { supabase } from '@/integrations/supabase/client';
 
 export default function LettersPlay() {
   const { language } = useTheme();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const { code } = useParams();
   const location = useLocation() as { state?: { roundDurationSec?: number, lateJoin?: boolean, hostName?: string } };
   const [gameTitle, setGameTitle] = React.useState<string | undefined>();
   const [hostName, setHostName] = React.useState<string | undefined>();
+  const [hostUserId, setHostUserId] = React.useState<string | undefined>();
   const [gameLang, setGameLang] = React.useState<'en'|'ar'|undefined>();
   const [letterMode, setLetterMode] = React.useState<'auto'|'manual'|undefined>();
   const [manualLetter, setManualLetter] = React.useState<string | undefined>();
@@ -20,8 +23,16 @@ export default function LettersPlay() {
   const [players, setPlayers] = React.useState<Array<{ user_id: string | null; name: string }>>([]);
   const [roundDuration, setRoundDuration] = React.useState<number>(location.state?.roundDurationSec || 60);
   const [remaining, setRemaining] = React.useState<number>(roundDuration);
+  const [startedAt, setStartedAt] = React.useState<string | undefined>();
   const [currentLetter, setCurrentLetter] = React.useState<string>('');
   const [values, setValues] = React.useState<{name:string;place:string;plant:string;animal:string;thing:string}>({name:'',place:'',plant:'',animal:'',thing:''});
+  const [phase, setPhase] = React.useState<'playing'|'scoring'|'done'>('playing');
+  const [roundNo, setRoundNo] = React.useState<number>(1);
+  const [submitting, setSubmitting] = React.useState(false);
+  const [submitted, setSubmitted] = React.useState(false);
+  const [roundId, setRoundId] = React.useState<string | undefined>();
+  const [results, setResults] = React.useState<any[] | null>(null);
+  const [hostPick, setHostPick] = React.useState<string>('A');
 
   React.useEffect(() => {
     let cancelled = false;
@@ -29,20 +40,24 @@ export default function LettersPlay() {
       if (!code) return;
       const { data } = await supabase
         .from('letters_games')
-        .select('title, host_name, round_duration_sec, language, letter_mode, manual_letter, rounds_total')
+        .select('title, host_name, host_user_id, round_duration_sec, language, letter_mode, manual_letter, rounds_total, started_at, current_round_no, phase')
         .eq('code', code)
         .maybeSingle();
       if (!cancelled && data) {
         if (data.title) setGameTitle(data.title);
         if (data.host_name) setHostName(data.host_name);
+        if (data.host_user_id) setHostUserId(data.host_user_id);
         if (!location.state?.roundDurationSec && typeof data.round_duration_sec === 'number') {
           setRoundDuration(data.round_duration_sec);
           setRemaining(data.round_duration_sec);
         }
+        if (data.started_at) setStartedAt(data.started_at);
         if (data.language) setGameLang((data.language as 'en'|'ar'));
         if (data.letter_mode) setLetterMode((data.letter_mode as 'auto'|'manual'));
         if (data.manual_letter) setManualLetter(data.manual_letter);
         if (typeof data.rounds_total === 'number') setRoundsTotal(data.rounds_total);
+        if (typeof data.current_round_no === 'number') setRoundNo(data.current_round_no);
+        if (typeof data.phase === 'string') setPhase(data.phase as any);
       }
     }
     loadMeta();
@@ -54,21 +69,34 @@ export default function LettersPlay() {
   }, [roundDuration]);
 
   React.useEffect(() => {
-    const start = Date.now();
-    let raf: number;
-    function tick() {
-      const elapsed = Math.floor((Date.now() - start) / 1000);
+    let id: number | undefined;
+    function compute() {
+      if (!startedAt) {
+        setRemaining(roundDuration);
+        return;
+      }
+      const startedMs = new Date(startedAt).getTime();
+      const nowMs = Date.now();
+      const elapsed = Math.floor((nowMs - startedMs) / 1000);
       const left = Math.max(0, roundDuration - elapsed);
       setRemaining(left);
-      if (left > 0) {
-        raf = window.setTimeout(tick, 250) as unknown as number;
-      }
     }
-    tick();
-    return () => {
-      if (raf) clearTimeout(raf);
-    };
-  }, [roundDuration]);
+    compute();
+    id = window.setInterval(compute, 250) as unknown as number;
+    return () => { if (id) clearInterval(id); };
+  }, [roundDuration, startedAt]);
+
+  // Realtime update for started_at in case client reaches Play before start
+  React.useEffect(() => {
+    if (!code) return;
+    const channel = supabase.channel(`letters:play:${code}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'letters_games', filter: `code=eq.${code}` }, (payload: any) => {
+        if (payload?.new?.started_at) setStartedAt(payload.new.started_at as string);
+        if (typeof payload?.new?.round_duration_sec === 'number') setRoundDuration(payload.new.round_duration_sec as number);
+      })
+      .subscribe();
+    return () => { try { supabase.removeChannel(channel); } catch {} };
+  }, [code]);
 
   // Compute a deterministic auto letter if needed
   React.useEffect(() => {
@@ -86,6 +114,121 @@ export default function LettersPlay() {
       setCurrentLetter(letterFromCode(code));
     }
   }, [letterMode, manualLetter, code, gameLang]);
+
+  // Ensure round row exists for current round
+  React.useEffect(() => {
+    (async () => {
+      if (!code || !currentLetter || !startedAt || !roundNo) return;
+      const { data } = await supabase
+        .from('letters_rounds')
+        .select('id')
+        .eq('game_code', code)
+        .eq('round_no', roundNo)
+        .maybeSingle();
+      if (!data) {
+        const ins = await supabase
+          .from('letters_rounds')
+          .insert({ game_code: code, round_no: roundNo, letter: currentLetter, status: 'playing', started_at: startedAt })
+          .select('id')
+          .single();
+        if (ins.data?.id) setRoundId(ins.data.id);
+      } else {
+        setRoundId(data.id);
+      }
+    })();
+  }, [code, currentLetter, startedAt, roundNo]);
+
+  const isHost = !!(user?.id && hostUserId && user.id === hostUserId);
+
+  // When timer hits zero, transition to scoring (host only triggers the phase flip)
+  React.useEffect(() => {
+    if (remaining === 0 && phase === 'playing' && code) {
+      (async () => {
+        if (isHost) {
+          await supabase.from('letters_games').update({ phase: 'scoring' }).eq('code', code);
+          if (roundId) await supabase.from('letters_rounds').update({ ended_at: new Date().toISOString(), status: 'scoring' }).eq('id', roundId);
+        }
+        setPhase('scoring');
+      })();
+    }
+  }, [remaining, phase, isHost, code, roundId]);
+
+  // When in scoring, fetch answers and call letters-teacher once
+  React.useEffect(() => {
+    (async () => {
+      if (phase !== 'scoring' || !code || !roundId || !gameLang || !currentLetter) return;
+      // Fetch answers for this round
+      const { data: ans } = await supabase
+        .from('letters_answers')
+        .select('user_id, name, place, plant, animal, thing, submitted_at')
+        .eq('round_id', roundId);
+      const payload = {
+        game_code: code,
+        round_id: roundId,
+        language: gameLang,
+        letter: currentLetter,
+        round_duration_sec: roundDuration,
+        started_at: startedAt,
+        answers: ans || []
+      };
+      try {
+        const { data: res } = await supabase.functions.invoke('letters-teacher', { body: payload });
+        setResults(res?.results || []);
+      } catch {
+        setResults(null);
+      }
+    })();
+  }, [phase, code, roundId, gameLang, currentLetter, roundDuration, startedAt]);
+
+  async function handleSubmit() {
+    if (submitting || submitted || !code || !roundId) return;
+    setSubmitting(true);
+    try {
+      await supabase.from('letters_answers').upsert({
+        game_code: code,
+        round_id: roundId,
+        user_id: user?.id || null,
+        name: values.name || null,
+        place: values.place || null,
+        plant: values.plant || null,
+        animal: values.animal || null,
+        thing: values.thing || null,
+        submitted_at: new Date().toISOString(),
+        duration_ms: startedAt ? Math.max(0, Date.now() - new Date(startedAt).getTime()) : null,
+      });
+      setSubmitted(true);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function startNextRound() {
+    if (!isHost || !code || !roundsTotal) return;
+    const nextNo = roundNo + 1;
+    const nextStarted = new Date().toISOString();
+    const letter = hostPick;
+    // Update game state
+    await supabase.from('letters_games').update({
+      current_round_no: nextNo,
+      phase: 'playing',
+      started_at: nextStarted,
+    }).eq('code', code);
+    // Insert new round row
+    await supabase.from('letters_rounds').insert({
+      game_code: code,
+      round_no: nextNo,
+      letter,
+      status: 'playing',
+      started_at: nextStarted,
+    });
+    // Reset local
+    setRoundNo(nextNo);
+    setPhase('playing');
+    setStartedAt(nextStarted);
+    setSubmitted(false);
+    setValues({ name: '', place: '', plant: '', animal: '', thing: '' });
+    setCurrentLetter(letter);
+  }
 
   // Poll players list
   React.useEffect(() => {
@@ -152,9 +295,13 @@ export default function LettersPlay() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="rounded-lg border p-4 bg-card/50">
             <div className="text-xs text-muted-foreground mb-1">{language === 'ar' ? 'الحرف' : 'Letter'}</div>
-            <div className="text-3xl font-extrabold tracking-wide">{currentLetter || '-'}</div>
+            <div className="flex items-center gap-3">
+              <div className="w-16 h-16 md:w-20 md:h-20 rounded-lg flex items-center justify-center bg-gradient-to-br from-indigo-600 to-fuchsia-600 text-white shadow-md">
+                <span className="text-3xl md:text-4xl font-black">{currentLetter || '-'}</span>
+              </div>
+            </div>
             <div className="mt-3 text-xs text-muted-foreground">
-              {language === 'ar' ? 'الجولات' : 'Rounds'}: {roundsTotal ?? '-'}
+              {language === 'ar' ? `الجولة 1 من ${roundsTotal ?? '-'}` : `Round 1 of ${roundsTotal ?? '-'}`}
             </div>
             <div className="mt-1 text-xs text-muted-foreground">
               {language === 'ar' ? 'اللغة' : 'Language'}: {gameLang === 'ar' ? (language === 'ar' ? 'العربية' : 'Arabic') : (language === 'ar' ? 'الإنجليزية' : 'English')}
@@ -164,48 +311,112 @@ export default function LettersPlay() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-muted-foreground">{language === 'ar' ? 'اسم' : 'Name'}</label>
-                <input className="mt-1 w-full rounded-md border px-3 py-2 bg-background" value={values.name} onChange={(e)=>updateValue('name', e.target.value)} />
+                <input disabled={phase!=='playing' || submitted} className="mt-1 w-full rounded-md border px-3 py-2 bg-background" value={values.name} onChange={(e)=>updateValue('name', e.target.value)} />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">{language === 'ar' ? 'مكان' : 'Place'}</label>
-                <input className="mt-1 w-full rounded-md border px-3 py-2 bg-background" value={values.place} onChange={(e)=>updateValue('place', e.target.value)} />
+                <input disabled={phase!=='playing' || submitted} className="mt-1 w-full rounded-md border px-3 py-2 bg-background" value={values.place} onChange={(e)=>updateValue('place', e.target.value)} />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">{language === 'ar' ? 'نبات' : 'Plant'}</label>
-                <input className="mt-1 w-full rounded-md border px-3 py-2 bg-background" value={values.plant} onChange={(e)=>updateValue('plant', e.target.value)} />
+                <input disabled={phase!=='playing' || submitted} className="mt-1 w-full rounded-md border px-3 py-2 bg-background" value={values.plant} onChange={(e)=>updateValue('plant', e.target.value)} />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">{language === 'ar' ? 'حيوان' : 'Animal'}</label>
-                <input className="mt-1 w-full rounded-md border px-3 py-2 bg-background" value={values.animal} onChange={(e)=>updateValue('animal', e.target.value)} />
+                <input disabled={phase!=='playing' || submitted} className="mt-1 w-full rounded-md border px-3 py-2 bg-background" value={values.animal} onChange={(e)=>updateValue('animal', e.target.value)} />
               </div>
               <div className="sm:col-span-2">
                 <label className="text-xs text-muted-foreground">{language === 'ar' ? 'شيء' : 'Thing'}</label>
-                <input className="mt-1 w-full rounded-md border px-3 py-2 bg-background" value={values.thing} onChange={(e)=>updateValue('thing', e.target.value)} />
+                <input disabled={phase!=='playing' || submitted} className="mt-1 w-full rounded-md border px-3 py-2 bg-background" value={values.thing} onChange={(e)=>updateValue('thing', e.target.value)} />
               </div>
             </div>
             <div className="pt-3 flex justify-end">
-              <Button className="bg-indigo-600 hover:bg-indigo-700">{language === 'ar' ? 'إرسال' : 'Submit'}</Button>
+              {phase==='playing' ? (
+                <Button disabled={submitted || submitting} className="bg-indigo-600 hover:bg-indigo-700" onClick={handleSubmit}>
+                  {submitted ? (language==='ar'?'تم الإرسال':'Submitted') : (submitting ? (language==='ar'?'جارٍ...':'Submitting...') : (language === 'ar' ? 'إرسال' : 'Submit'))}
+                </Button>
+              ) : null}
             </div>
           </div>
         </div>
 
-        <div className="rounded-lg border p-4 bg-card/50">
-          <div className="text-sm font-medium mb-2">{language === 'ar' ? 'اللاعبون' : 'Players'}</div>
+        <div className="rounded-lg border p-4 bg-card/50 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-medium">{language === 'ar' ? 'اللاعبون' : 'Players'}</div>
+            <div className="text-xs text-muted-foreground">{language==='ar' ? (phase==='scoring'?'عرض النتائج':'قيد اللعب') : (phase==='scoring'?'Showing results':'Playing')}</div>
+          </div>
           <div className="flex flex-wrap gap-2">
-            {players.map((p, i) => (
-              <span key={(p.user_id ?? 'anon') + i} className="inline-flex items-center rounded-full bg-secondary px-3 py-1 text-xs">
-                {p.name}
-              </span>
-            ))}
+            {players.map((p, i) => {
+              const isHostChip = (hostUserId && p.user_id === hostUserId) || (!hostUserId && hostName && p.name === hostName);
+              return (
+                <span
+                  key={(p.user_id ?? 'anon') + i}
+                  className={`inline-flex items-center rounded-full px-3 py-1 text-xs border ${isHostChip ? 'bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200 border-amber-400' : 'bg-secondary border-transparent'}`}
+                >
+                  {p.name}
+                  {isHostChip && (
+                    <span className="ml-2 rounded-full px-2 py-0.5 text-[10px] border border-amber-400 bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+                      {language === 'ar' ? 'المضيف' : 'Host'}
+                    </span>
+                  )}
+                </span>
+              );
+            })}
             {players.length === 0 && (
               <span className="text-xs text-muted-foreground">{language === 'ar' ? 'لا يوجد لاعبين بعد' : 'No players yet'}</span>
             )}
           </div>
+
+          {phase==='scoring' && (
+            <div className="mt-2 rounded-md border p-3 bg-muted/30">
+              <div className="text-sm font-medium mb-2">{language==='ar'?'النتائج':'Results'}</div>
+              {Array.isArray(results) ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {results.map((r:any, idx:number) => (
+                    <div key={idx} className="rounded-md border bg-card p-2 text-sm">
+                      <div className="font-medium mb-1">{players.find(p=>p.user_id===r.user_id)?.name || r.user_id || '-'}</div>
+                      <div className="flex flex-wrap gap-2 text-xs">
+                        {(['name','place','plant','animal','thing'] as const).map(key => (
+                          <span key={key} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${r.fields?.[key]?.valid ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200' : 'bg-rose-100 text-rose-800 dark:bg-rose-900/20 dark:text-rose-200'}`}>
+                            {language==='ar' ? ({name:'اسم',place:'مكان',plant:'نبات',animal:'حيوان',thing:'شيء'} as any)[key] : key}
+                            {r.fields?.[key]?.valid ? '✓' : '✗'}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">{language==='ar'?'مجموع':'Total'}: {r.total} {r.bonus?`(+${r.bonus})`:''}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-xs text-muted-foreground">{language==='ar'?'جاري التحقق من الإجابات...':'Checking answers...'}</div>
+              )}
+            </div>
+          )}
+
+          {phase==='scoring' && roundsTotal && roundNo < roundsTotal && (
+            <div className="mt-3 flex items-center justify-between gap-3">
+              {isHost ? (
+                <>
+                  <div className="text-sm font-medium">{language==='ar'?'اختر الحرف للجولة التالية':'Pick letter for next round'}</div>
+                  <div className="flex items-center gap-2">
+                    <select className="rounded-md border px-2 py-1 bg-background" value={hostPick} onChange={(e)=>setHostPick(e.target.value)}>
+                      {('ABCDEFGHIJKLMNOPQRSTUVWXYZ').split('').map(l => (
+                        <option key={l} value={l}>{l}</option>
+                      ))}
+                    </select>
+                    <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={startNextRound}>
+                      {language==='ar'?'بدء الجولة التالية':'Start next round'}
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <div className="text-sm text-muted-foreground">{language==='ar'?'بانتظار اختيار المضيف للجولة التالية...':'Waiting for host to pick next round letter...'}</div>
+              )}
+            </div>
+          )}
         </div>
 
-        <div className="flex justify-end">
-          <Button variant="secondary" onClick={()=>setRoundDuration((d)=>d)}>{language === 'ar' ? 'تحديث المؤقت' : 'Refresh timer'}</Button>
-        </div>
+        
       </div>
     </div>
   );

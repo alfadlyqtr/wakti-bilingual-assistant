@@ -22,6 +22,7 @@ export default function LettersWaiting() {
   const [maxPlayers, setMaxPlayers] = useState<number>(location.state?.maxPlayers || 5);
   const [gameTitle, setGameTitle] = useState<string | undefined>(location.state?.gameTitle);
   const [hostName, setHostName] = useState<string | undefined>(location.state?.hostName);
+  const [hostUserId, setHostUserId] = useState<string | undefined>();
   const [navigated, setNavigated] = useState(false);
   const startChannelRef = useRef<any>(null);
 
@@ -32,13 +33,14 @@ export default function LettersWaiting() {
       // Try Supabase first
       const { data, error } = await supabase
         .from('letters_games')
-        .select('title, host_name, max_players')
+        .select('title, host_name, host_user_id, max_players')
         .eq('code', gameCode)
         .maybeSingle();
       if (!cancelled) {
         if (!error && data) {
           if (!gameTitle && data.title) setGameTitle(data.title);
           if (!hostName && data.host_name) setHostName(data.host_name);
+          if (data.host_user_id) setHostUserId(data.host_user_id);
           if (typeof data.max_players === 'number' && !location.state?.maxPlayers) setMaxPlayers(data.max_players);
         } else {
           // Fallback to localStorage if available
@@ -200,11 +202,22 @@ export default function LettersWaiting() {
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             {players.length > 0 ? (
-              players.map((p, i) => (
-                <span key={(p.user_id ?? 'anon') + i} className="inline-flex items-center rounded-full bg-secondary px-3 py-1 text-xs">
-                  {p.name}
-                </span>
-              ))
+              players.map((p, i) => {
+                const isHostChip = (hostUserId && p.user_id === hostUserId) || (!hostUserId && hostName && p.name === hostName);
+                return (
+                  <span
+                    key={(p.user_id ?? 'anon') + i}
+                    className={`inline-flex items-center rounded-full px-3 py-1 text-xs border ${isHostChip ? 'bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200 border-amber-400' : 'bg-secondary border-transparent'}`}
+                  >
+                    {p.name}
+                    {isHostChip && (
+                      <span className="ml-2 rounded-full px-2 py-0.5 text-[10px] border border-amber-400 bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+                        {language === 'ar' ? 'المضيف' : 'Host'}
+                      </span>
+                    )}
+                  </span>
+                );
+              })
             ) : (
               <p className="text-sm text-muted-foreground">{language === 'ar' ? 'سيظهر اللاعبون هنا عند الانضمام.' : 'Players will appear here as they join.'}</p>
             )}
