@@ -6,15 +6,31 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ArrowLeft } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function LettersJoin() {
   const { language } = useTheme();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [code, setCode] = useState('');
 
-  function handleJoin() {
-    // Placeholder: navigate to waiting page passing state (not host)
-    navigate('/games/letters/waiting', { state: { isHost: false, gameCode: code } });
+  async function handleJoin() {
+    const clean = code.trim().toUpperCase();
+    if (clean.length < 6) return;
+    const displayName = (user?.user_metadata?.full_name
+      || user?.user_metadata?.display_name
+      || user?.user_metadata?.username
+      || user?.email?.split('@')[0]
+      || (language === 'ar' ? 'لاعب' : 'Player')) as string;
+    try {
+      await supabase.from('letters_players').upsert({
+        game_code: clean,
+        user_id: user?.id || null,
+        name: displayName,
+      });
+    } catch {}
+    navigate('/games/letters/waiting', { state: { isHost: false, gameCode: clean } });
   }
 
   return (

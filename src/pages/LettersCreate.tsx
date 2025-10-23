@@ -55,6 +55,12 @@ export default function LettersCreate() {
           host_name: resolvedHost,
           max_players: maxPlayers,
         });
+        // Ensure host is recorded as a player
+        await supabase.from('letters_players').upsert({
+          game_code: code,
+          user_id: user?.id || null,
+          name: resolvedHost,
+        });
       }
     } catch {}
     const hostForState = (user?.user_metadata?.full_name

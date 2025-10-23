@@ -17,8 +17,9 @@ export default function LettersWaiting() {
   const [copied, setCopied] = useState(false);
   // Placeholder game code; in the future this would come from state/router.
   const [gameCode] = useState<string>(location.state?.gameCode || 'WABCDE');
+  const [players, setPlayers] = useState<Array<{ user_id: string | null; name: string }>>([]);
   const [playersCount, setPlayersCount] = useState<number>(1);
-  const maxPlayers = location.state?.maxPlayers || 5;
+  const [maxPlayers, setMaxPlayers] = useState<number>(location.state?.maxPlayers || 5);
   const [gameTitle, setGameTitle] = useState<string | undefined>(location.state?.gameTitle);
   const [hostName, setHostName] = useState<string | undefined>(location.state?.hostName);
 
@@ -36,13 +37,7 @@ export default function LettersWaiting() {
         if (!error && data) {
           if (!gameTitle && data.title) setGameTitle(data.title);
           if (!hostName && data.host_name) setHostName(data.host_name);
-          if (data.max_players) {
-            // only update if not provided via navigation
-            if (!location.state?.maxPlayers) {
-              // @ts-ignore set locally for display
-              (typeof data.max_players === 'number') && (/* no state setter for maxPlayers here; it's a const */ null);
-            }
-          }
+          if (typeof data.max_players === 'number' && !location.state?.maxPlayers) setMaxPlayers(data.max_players);
         } else {
           // Fallback to localStorage if available
           try {
@@ -67,6 +62,27 @@ export default function LettersWaiting() {
       setTimeout(() => setCopied(false), 1500);
     } catch {}
   }
+
+  // Poll players list every 2 seconds
+  useEffect(() => {
+    let active = true;
+    async function fetchPlayers() {
+      if (!gameCode) return;
+      const { data } = await supabase
+        .from('letters_players')
+        .select('user_id, name')
+        .eq('game_code', gameCode)
+        .order('joined_at', { ascending: true });
+      if (!active) return;
+      if (Array.isArray(data)) {
+        setPlayers(data as any);
+        setPlayersCount(data.length);
+      }
+    }
+    fetchPlayers();
+    const id = setInterval(fetchPlayers, 2000);
+    return () => { active = false; clearInterval(id); };
+  }, [gameCode]);
 
   return (
     <div className="container mx-auto p-3 max-w-3xl relative min-h-[100dvh]">
