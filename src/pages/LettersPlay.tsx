@@ -71,6 +71,7 @@ export default function LettersPlay() {
   React.useEffect(() => {
     let id: number | undefined;
     function compute() {
+      if (submitted) return; // freeze local timer after submission
       if (!startedAt) {
         setRemaining(roundDuration);
         return;
@@ -82,9 +83,11 @@ export default function LettersPlay() {
       setRemaining(left);
     }
     compute();
-    id = window.setInterval(compute, 250) as unknown as number;
+    if (!submitted) {
+      id = window.setInterval(compute, 250) as unknown as number;
+    }
     return () => { if (id) clearInterval(id); };
-  }, [roundDuration, startedAt]);
+  }, [roundDuration, startedAt, submitted]);
 
   // Realtime update for started_at in case client reaches Play before start
   React.useEffect(() => {
@@ -229,6 +232,14 @@ export default function LettersPlay() {
     if (submitting || submitted || !code || !roundId) return;
     setSubmitting(true);
     try {
+      // Freeze local timer to current remaining
+      if (startedAt) {
+        const startedMs = new Date(startedAt).getTime();
+        const nowMs = Date.now();
+        const elapsed = Math.floor((nowMs - startedMs) / 1000);
+        const left = Math.max(0, roundDuration - elapsed);
+        setRemaining(left);
+      }
       await supabase.from('letters_answers').upsert({
         game_code: code,
         round_id: roundId,
