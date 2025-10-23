@@ -11,12 +11,15 @@ import { Badge } from '@/components/ui/badge';
 export default function LettersWaiting() {
   const { language } = useTheme();
   const navigate = useNavigate();
-  const location = useLocation() as { state?: { isHost?: boolean; gameCode?: string } };
+  const location = useLocation() as { state?: { isHost?: boolean; gameCode?: string; gameTitle?: string; hostName?: string; maxPlayers?: number } };
   const isHost = !!location.state?.isHost;
   const [copied, setCopied] = useState(false);
   // Placeholder game code; in the future this would come from state/router.
   const [gameCode] = useState<string>(location.state?.gameCode || 'WABCDE');
   const [playersCount, setPlayersCount] = useState<number>(1);
+  const maxPlayers = location.state?.maxPlayers || 5;
+  const gameTitle = location.state?.gameTitle;
+  const hostName = location.state?.hostName;
 
   async function handleCopy() {
     try {
@@ -52,6 +55,25 @@ export default function LettersWaiting() {
             : 'Waiting for players to join… Share the game code with your friends.'}
         </p>
 
+        {(gameTitle || hostName) && (
+          <div className="rounded-lg border p-4 bg-card/40">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {gameTitle && (
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">{language === 'ar' ? 'عنوان اللعبة' : 'Game title'}</div>
+                  <div className="font-medium">{gameTitle}</div>
+                </div>
+              )}
+              {hostName && (
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">{language === 'ar' ? 'المضيف' : 'Host'}</div>
+                  <div className="font-medium">{hostName}</div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="space-y-2">
           <Label htmlFor="wg-code">{language === 'ar' ? 'رمز اللعبة' : 'Game code'}</Label>
           <div className="flex gap-2">
@@ -67,7 +89,7 @@ export default function LettersWaiting() {
           <div className="flex items-center justify-between mb-2">
             <h2 className="font-medium">{language === 'ar' ? 'اللاعبون' : 'Players'}</h2>
             <Badge variant="secondary" className="rounded-full">
-              {playersCount}/5
+              {playersCount}/{maxPlayers}
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground">{language === 'ar' ? 'سيظهر اللاعبون هنا عند الانضمام.' : 'Players will appear here as they join.'}</p>

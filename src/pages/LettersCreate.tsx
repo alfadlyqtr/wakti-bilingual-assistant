@@ -143,7 +143,7 @@ export default function LettersCreate() {
         </div>
 
         <div className="pt-2">
-          <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={() => navigate('/games/letters/waiting', { state: { isHost: true, gameCode, maxPlayers } })}>
+          <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={() => navigate('/games/letters/waiting', { state: { isHost: true, gameCode, maxPlayers, gameTitle, hostName: language === 'ar' ? 'أنت' : 'You' } })}>
             {language === 'ar' ? 'إنشاء' : 'Create'}
           </Button>
         </div>
