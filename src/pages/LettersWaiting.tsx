@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -18,8 +18,21 @@ export default function LettersWaiting() {
   const [gameCode] = useState<string>(location.state?.gameCode || 'WABCDE');
   const [playersCount, setPlayersCount] = useState<number>(1);
   const maxPlayers = location.state?.maxPlayers || 5;
-  const gameTitle = location.state?.gameTitle;
-  const hostName = location.state?.hostName;
+  const [gameTitle, setGameTitle] = useState<string | undefined>(location.state?.gameTitle);
+  const [hostName, setHostName] = useState<string | undefined>(location.state?.hostName);
+
+  useEffect(() => {
+    try {
+      if (gameCode) {
+        const raw = localStorage.getItem(`wakti_letters_game_${gameCode}`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (!gameTitle && parsed?.title) setGameTitle(parsed.title);
+          if (!hostName && parsed?.hostName) setHostName(parsed.hostName);
+        }
+      }
+    } catch {}
+  }, [gameCode]);
 
   async function handleCopy() {
     try {
@@ -97,7 +110,9 @@ export default function LettersWaiting() {
 
         {isHost && (
           <div className="pt-2 flex items-center justify-end">
-            <Button className="bg-emerald-600 hover:bg-emerald-700">
+            <Button className="bg-emerald-600 hover:bg-emerald-700" disabled={playersCount < 2}
+              title={playersCount < 2 ? (language === 'ar' ? 'يتطلب لاعبين على الأقل' : 'Requires at least 2 players') : undefined}
+            >
               {language === 'ar' ? 'ابدأ اللعبة الآن' : 'Start game now'}
             </Button>
           </div>

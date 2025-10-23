@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useAuth } from '@/contexts/AuthContext';
 import { AppLayout } from '@/components/AppLayout';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -12,6 +13,7 @@ import LettersBackdrop from '@/components/letters/LettersBackdrop';
 
 export default function LettersCreate() {
   const { language } = useTheme();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [gameTitle, setGameTitle] = useState('');
   const [langChoice, setLangChoice] = useState<'ar'|'en'>('en');
@@ -21,9 +23,34 @@ export default function LettersCreate() {
   const [customRounds, setCustomRounds] = useState(1);
   const [gameCode, setGameCode] = useState('');
   const [copied, setCopied] = useState(false);
-  const [maxPlayers, setMaxPlayers] = useState<number>(5);
+  const [maxPlayers, setMaxPlayers] = useState<number>(2);
 
   const EN_LETTERS = useMemo(()=>"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""),[]);
+
+  function handleCreate() {
+    try {
+      const code = gameCode || '';
+      const resolvedHost = (user?.user_metadata?.full_name
+        || user?.user_metadata?.display_name
+        || user?.user_metadata?.username
+        || user?.email?.split('@')[0]
+        || (language === 'ar' ? 'المضيف' : 'Host')) as string;
+      if (code) {
+        const meta = {
+          title: gameTitle || (language === 'ar' ? 'لعبة الحروف' : 'Letters Game'),
+          hostName: resolvedHost,
+          maxPlayers,
+        };
+        localStorage.setItem(`wakti_letters_game_${code}`, JSON.stringify(meta));
+      }
+    } catch {}
+    const hostForState = (user?.user_metadata?.full_name
+      || user?.user_metadata?.display_name
+      || user?.user_metadata?.username
+      || user?.email?.split('@')[0]
+      || (language === 'ar' ? 'المضيف' : 'Host')) as string;
+    navigate('/games/letters/waiting', { state: { isHost: true, gameCode, maxPlayers, gameTitle, hostName: hostForState } });
+  }
 
   return (
     <div className="container mx-auto p-3 max-w-3xl relative min-h-[100dvh]">
@@ -50,7 +77,10 @@ export default function LettersCreate() {
         </p>
         <div className="space-y-2">
           <Label htmlFor="letters-title">{language === 'ar' ? 'العنوان' : 'Title'}</Label>
-          <Input id="letters-title" value={gameTitle} onChange={(e)=>setGameTitle(e.target.value)} placeholder={language === 'ar' ? 'أدخل عنوانًا جميلًا للعبة' : 'Give your game a nice title'} />
+          <Input id="letters-title" value={gameTitle} onChange={(e)=>setGameTitle(e.target.value)} placeholder={language === 'ar' ? 'أدخل عنوانًا جميلًا للعبة' : 'Give your game a nice title'} aria-required/>
+          {!gameTitle.trim() && (
+            <p className="text-xs text-destructive">{language === 'ar' ? 'العنوان مطلوب' : 'Title is required'}</p>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -143,7 +173,7 @@ export default function LettersCreate() {
         </div>
 
         <div className="pt-2">
-          <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={() => navigate('/games/letters/waiting', { state: { isHost: true, gameCode, maxPlayers, gameTitle, hostName: language === 'ar' ? 'أنت' : 'You' } })}>
+          <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={handleCreate} disabled={!gameTitle.trim()}>
             {language === 'ar' ? 'إنشاء' : 'Create'}
           </Button>
         </div>
