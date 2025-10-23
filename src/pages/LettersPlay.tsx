@@ -33,6 +33,7 @@ export default function LettersPlay() {
   const [roundId, setRoundId] = React.useState<string | undefined>();
   const [results, setResults] = React.useState<any[] | null>(null);
   const [hostPick, setHostPick] = React.useState<string>('A');
+  const isHost = !!(user?.id && hostUserId && user.id === hostUserId);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -85,7 +86,7 @@ export default function LettersPlay() {
   React.useEffect(() => {
     let id: number | undefined;
     function compute() {
-      if (submitted) return; // freeze local timer after submission
+      if (submitted && !isHost) return; // freeze for non-hosts only; host keeps ticking
       if (!startedAt) {
         setRemaining(roundDuration);
         return;
@@ -97,11 +98,11 @@ export default function LettersPlay() {
       setRemaining(left);
     }
     compute();
-    if (!submitted) {
+    if (!submitted || isHost) {
       id = window.setInterval(compute, 250) as unknown as number;
     }
     return () => { if (id) clearInterval(id); };
-  }, [roundDuration, startedAt, submitted]);
+  }, [roundDuration, startedAt, submitted, isHost]);
 
   // Realtime update for started_at in case client reaches Play before start
   React.useEffect(() => {
@@ -132,30 +133,19 @@ export default function LettersPlay() {
     }
   }, [letterMode, manualLetter, code, gameLang]);
 
-  // Ensure round row exists for current round
+  // Ensure round row exists for current round (race-safe upsert by unique key)
   React.useEffect(() => {
     (async () => {
       if (!code || !currentLetter || !startedAt || !roundNo) return;
-      const { data } = await supabase
+      const up = await supabase
         .from('letters_rounds')
+        .upsert({ game_code: code, round_no: roundNo, letter: currentLetter, status: 'playing', started_at: startedAt }, { onConflict: 'game_code,round_no' })
         .select('id')
-        .eq('game_code', code)
-        .eq('round_no', roundNo)
-        .maybeSingle();
-      if (!data) {
-        const ins = await supabase
-          .from('letters_rounds')
-          .insert({ game_code: code, round_no: roundNo, letter: currentLetter, status: 'playing', started_at: startedAt })
-          .select('id')
-          .single();
-        if (ins.data?.id) setRoundId(ins.data.id);
-      } else {
-        setRoundId(data.id);
-      }
+        .single();
+      if (up.data?.id) setRoundId(up.data.id);
     })();
   }, [code, currentLetter, startedAt, roundNo]);
 
-  const isHost = !!(user?.id && hostUserId && user.id === hostUserId);
 
   async function checkAllSubmitted() {
     if (!roundId || players.length === 0) return false;
