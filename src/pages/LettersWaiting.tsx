@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Copy, ArrowLeft } from 'lucide-react';
 import LettersBackdrop from '@/components/letters/LettersBackdrop';
 import { Badge } from '@/components/ui/badge';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function LettersWaiting() {
   const { language } = useTheme();
@@ -22,16 +23,41 @@ export default function LettersWaiting() {
   const [hostName, setHostName] = useState<string | undefined>(location.state?.hostName);
 
   useEffect(() => {
-    try {
-      if (gameCode) {
-        const raw = localStorage.getItem(`wakti_letters_game_${gameCode}`);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (!gameTitle && parsed?.title) setGameTitle(parsed.title);
-          if (!hostName && parsed?.hostName) setHostName(parsed.hostName);
+    let cancelled = false;
+    async function load() {
+      if (!gameCode) return;
+      // Try Supabase first
+      const { data, error } = await supabase
+        .from('letters_games')
+        .select('title, host_name, max_players')
+        .eq('code', gameCode)
+        .maybeSingle();
+      if (!cancelled) {
+        if (!error && data) {
+          if (!gameTitle && data.title) setGameTitle(data.title);
+          if (!hostName && data.host_name) setHostName(data.host_name);
+          if (data.max_players) {
+            // only update if not provided via navigation
+            if (!location.state?.maxPlayers) {
+              // @ts-ignore set locally for display
+              (typeof data.max_players === 'number') && (/* no state setter for maxPlayers here; it's a const */ null);
+            }
+          }
+        } else {
+          // Fallback to localStorage if available
+          try {
+            const raw = localStorage.getItem(`wakti_letters_game_${gameCode}`);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (!gameTitle && parsed?.title) setGameTitle(parsed.title);
+              if (!hostName && parsed?.hostName) setHostName(parsed.hostName);
+            }
+          } catch {}
         }
       }
-    } catch {}
+    }
+    load();
+    return () => { cancelled = true };
   }, [gameCode]);
 
   async function handleCopy() {

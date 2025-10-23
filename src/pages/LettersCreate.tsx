@@ -10,6 +10,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Button } from '@/components/ui/button';
 import { Copy, ArrowLeft } from 'lucide-react';
 import LettersBackdrop from '@/components/letters/LettersBackdrop';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function LettersCreate() {
   const { language } = useTheme();
@@ -27,9 +28,13 @@ export default function LettersCreate() {
 
   const EN_LETTERS = useMemo(()=>"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""),[]);
 
-  function handleCreate() {
+  async function handleCreate() {
+    const ensureCode = gameCode && gameCode.trim().length >= 6
+      ? gameCode
+      : ('W' + Array.from({length:5},()=>String.fromCharCode(65+Math.floor(Math.random()*26))).join(''));
+    if (!gameCode) setGameCode(ensureCode);
+    const code = ensureCode;
     try {
-      const code = gameCode || '';
       const resolvedHost = (user?.user_metadata?.full_name
         || user?.user_metadata?.display_name
         || user?.user_metadata?.username
@@ -42,6 +47,14 @@ export default function LettersCreate() {
           maxPlayers,
         };
         localStorage.setItem(`wakti_letters_game_${code}`, JSON.stringify(meta));
+        // Persist to Supabase so others can fetch by code
+        await supabase.from('letters_games').upsert({
+          code,
+          title: meta.title,
+          host_user_id: user?.id || null,
+          host_name: resolvedHost,
+          max_players: maxPlayers,
+        });
       }
     } catch {}
     const hostForState = (user?.user_metadata?.full_name
@@ -49,7 +62,7 @@ export default function LettersCreate() {
       || user?.user_metadata?.username
       || user?.email?.split('@')[0]
       || (language === 'ar' ? 'المضيف' : 'Host')) as string;
-    navigate('/games/letters/waiting', { state: { isHost: true, gameCode, maxPlayers, gameTitle, hostName: hostForState } });
+    navigate('/games/letters/waiting', { state: { isHost: true, gameCode: code, maxPlayers, gameTitle, hostName: hostForState } });
   }
 
   return (
