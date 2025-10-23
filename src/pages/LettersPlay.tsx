@@ -10,7 +10,7 @@ export default function LettersPlay() {
   const { language } = useTheme();
   const navigate = useNavigate();
   const { code } = useParams();
-  const location = useLocation() as { state?: { roundDurationSec?: number } };
+  const location = useLocation() as { state?: { roundDurationSec?: number, lateJoin?: boolean, hostName?: string } };
   const [gameTitle, setGameTitle] = React.useState<string | undefined>();
   const [hostName, setHostName] = React.useState<string | undefined>();
   const [gameLang, setGameLang] = React.useState<'en'|'ar'|undefined>();
@@ -134,6 +134,13 @@ export default function LettersPlay() {
       </div>
 
       <div className="glass-hero p-5 rounded-xl space-y-6 relative z-10 bg-white/60 dark:bg-gray-900/35">
+        {location.state?.lateJoin && (
+          <div className="rounded-md border border-amber-200 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200 px-4 py-2">
+            {language === 'ar'
+              ? `تم بدء اللعبة بالفعل بواسطة ${location.state?.hostName || hostName || '-'}`
+              : `Game already started by ${location.state?.hostName || hostName || '-'}`}
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Timer className="h-5 w-5" />

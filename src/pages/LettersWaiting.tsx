@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,8 @@ export default function LettersWaiting() {
   const [maxPlayers, setMaxPlayers] = useState<number>(location.state?.maxPlayers || 5);
   const [gameTitle, setGameTitle] = useState<string | undefined>(location.state?.gameTitle);
   const [hostName, setHostName] = useState<string | undefined>(location.state?.hostName);
+  const [navigated, setNavigated] = useState(false);
+  const startChannelRef = useRef<any>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -54,6 +56,55 @@ export default function LettersWaiting() {
     load();
     return () => { cancelled = true };
   }, [gameCode]);
+
+  // Poll game started status and auto-navigate when started
+  useEffect(() => {
+    let active = true;
+    async function pollStarted() {
+      if (!gameCode || navigated) return;
+      const { data } = await supabase
+        .from('letters_games')
+        .select('started_at, round_duration_sec')
+        .eq('code', gameCode)
+        .maybeSingle();
+      if (!active) return;
+      if (data && data.started_at) {
+        setNavigated(true);
+        navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: data.round_duration_sec } });
+      }
+    }
+    pollStarted();
+    const id = setInterval(pollStarted, 1500);
+    return () => { active = false; clearInterval(id); };
+  }, [gameCode, navigated, navigate]);
+
+  // Realtime subscribe for started flag (best-effort; falls back to polling if disabled)
+  useEffect(() => {
+    if (!gameCode || navigated) return;
+    const channel = supabase.channel(`letters_games:${gameCode}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'letters_games', filter: `code=eq.${gameCode}` }, (payload: any) => {
+        const started = payload?.new?.started_at;
+        if (started && !navigated) {
+          setNavigated(true);
+          navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: payload?.new?.round_duration_sec } });
+        }
+      })
+      .subscribe();
+    // Also subscribe to broadcast for instant start
+    const startChannel = supabase.channel(`letters:start:${gameCode}`)
+      .on('broadcast', { event: 'started' }, (payload: any) => {
+        if (!navigated) {
+          setNavigated(true);
+          navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: payload?.roundDurationSec } });
+        }
+      })
+      .subscribe();
+    startChannelRef.current = startChannel;
+    return () => {
+      try { supabase.removeChannel(channel); } catch {}
+      try { supabase.removeChannel(startChannel); } catch {}
+    };
+  }, [gameCode, navigated, navigate]);
 
   async function handleCopy() {
     try {
@@ -164,7 +215,20 @@ export default function LettersWaiting() {
           <div className="pt-2 flex items-center justify-end">
             <Button className="bg-emerald-600 hover:bg-emerald-700" disabled={playersCount < 2}
               title={playersCount < 2 ? (language === 'ar' ? 'يتطلب لاعبين على الأقل' : 'Requires at least 2 players') : undefined}
-              onClick={()=>navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: (location.state as any)?.roundDurationSec } })}
+              onClick={async()=>{
+                if (!gameCode) return;
+                try {
+                  await supabase.from('letters_games').update({ started_at: new Date().toISOString() }).eq('code', gameCode);
+                } catch {}
+                try {
+                  const roundDuration = (location.state as any)?.roundDurationSec;
+                  if (startChannelRef.current) {
+                    await startChannelRef.current.send({ type: 'broadcast', event: 'started', payload: { roundDurationSec: roundDuration } });
+                  }
+                } catch {}
+                setNavigated(true);
+                navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: (location.state as any)?.roundDurationSec } });
+              }}
             >
               {language === 'ar' ? 'ابدأ اللعبة الآن' : 'Start game now'}
             </Button>
