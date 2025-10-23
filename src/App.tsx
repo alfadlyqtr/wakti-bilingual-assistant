@@ -63,6 +63,7 @@ import LettersCreate from "./pages/LettersCreate";
 import LettersWaiting from "./pages/LettersWaiting";
 import LettersJoin from "./pages/LettersJoin";
 import LettersPlay from "./pages/LettersPlay";
+import LettersResults from "./pages/LettersResults";
  
 
 import "./App.css";
@@ -198,6 +199,11 @@ function App() {
                 <Route path="/games/letters/play/:code" element={
                   <GiftNotificationProvider>
                     <AppLayout><LettersPlay /></AppLayout>
+                  </GiftNotificationProvider>
+                } />
+                <Route path="/games/letters/results/:code" element={
+                  <GiftNotificationProvider>
+                    <AppLayout><LettersResults /></AppLayout>
                   </GiftNotificationProvider>
                 } />
                 <Route path="/games" element={

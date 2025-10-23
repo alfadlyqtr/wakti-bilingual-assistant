@@ -153,6 +153,26 @@ export default function LettersPlay() {
     }
   }, [remaining, phase, isHost, code, roundId]);
 
+  // Subscribe to game phase changes (to catch 'done' or next round started by host)
+  React.useEffect(() => {
+    if (!code) return;
+    const ch = supabase.channel(`letters:phase:${code}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'letters_games', filter: `code=eq.${code}` }, (payload: any) => {
+        if (typeof payload?.new?.phase === 'string') setPhase(payload.new.phase as any);
+        if (typeof payload?.new?.current_round_no === 'number') setRoundNo(payload.new.current_round_no as number);
+        if (payload?.new?.started_at) setStartedAt(payload.new.started_at as string);
+      })
+      .subscribe();
+    return () => { try { supabase.removeChannel(ch); } catch {} };
+  }, [code]);
+
+  // Navigate to final results on done
+  React.useEffect(() => {
+    if (phase === 'done' && code) {
+      navigate(`/games/letters/results/${code}`);
+    }
+  }, [phase, code, navigate]);
+
   // When in scoring, fetch answers and call letters-teacher once
   React.useEffect(() => {
     (async () => {
@@ -173,7 +193,32 @@ export default function LettersPlay() {
       };
       try {
         const { data: res } = await supabase.functions.invoke('letters-teacher', { body: payload });
-        setResults(res?.results || []);
+        const rows = res?.results || [];
+        setResults(rows);
+        // Persist scores
+        if (rows.length) {
+          const roundRows = rows.map((r:any)=>({ game_code: code, round_id: roundId, user_id: r.user_id, base: r.base||0, bonus: r.bonus||0, total: r.total||0 }));
+          await supabase.from('letters_round_scores').insert(roundRows).select('user_id,total');
+          // Upsert totals
+          for (const r of rows) {
+            const { data: cur } = await supabase
+              .from('letters_totals')
+              .select('total')
+              .eq('game_code', code)
+              .eq('user_id', r.user_id)
+              .maybeSingle();
+            const newTotal = (cur?.total || 0) + (r.total || 0);
+            await supabase.from('letters_totals').upsert({ game_code: code, user_id: r.user_id, total: newTotal, updated_at: new Date().toISOString() });
+          }
+        }
+        // If last round, end game (host authoritative)
+        if (roundsTotal && roundNo >= roundsTotal) {
+          if (isHost) {
+            await supabase.from('letters_games').update({ phase: 'done' }).eq('code', code);
+            if (roundId) await supabase.from('letters_rounds').update({ status: 'done' }).eq('id', roundId);
+          }
+          setPhase('done');
+        }
       } catch {
         setResults(null);
       }
