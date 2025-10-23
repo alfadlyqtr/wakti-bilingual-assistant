@@ -64,6 +64,20 @@ export default function LettersPlay() {
     return () => { cancelled = true; };
   }, [code]);
 
+  // Realtime: react when answers are inserted/updated to detect all-submitted case
+  React.useEffect(() => {
+    if (!roundId) return;
+    const ch = supabase.channel(`letters:submitted:${roundId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'letters_answers', filter: `round_id=eq.${roundId}` }, () => {
+        if (phase === 'playing') checkAllSubmitted();
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'letters_answers', filter: `round_id=eq.${roundId}` }, () => {
+        if (phase === 'playing') checkAllSubmitted();
+      })
+      .subscribe();
+    return () => { try { supabase.removeChannel(ch); } catch {} };
+  }, [roundId, phase, players]);
+
   React.useEffect(() => {
     setRemaining(roundDuration);
   }, [roundDuration]);
@@ -142,6 +156,29 @@ export default function LettersPlay() {
   }, [code, currentLetter, startedAt, roundNo]);
 
   const isHost = !!(user?.id && hostUserId && user.id === hostUserId);
+
+  async function checkAllSubmitted() {
+    if (!roundId || players.length === 0) return false;
+    // Only consider players with a user_id (authenticated)
+    const expectedIds = players.map(p=>p.user_id).filter((id): id is string => !!id);
+    if (expectedIds.length === 0) return false;
+    const { data: ans } = await supabase
+      .from('letters_answers')
+      .select('user_id, submitted_at')
+      .eq('round_id', roundId);
+    const submittedSet = new Set((ans||[]).filter(a=>a.submitted_at && a.user_id).map(a=>a.user_id as string));
+    const all = expectedIds.every(id => submittedSet.has(id));
+    if (all && phase === 'playing' && code) {
+      // Host flips to scoring immediately
+      if (isHost) {
+        await supabase.from('letters_games').update({ phase: 'scoring' }).eq('code', code);
+        await supabase.from('letters_rounds').update({ ended_at: new Date().toISOString(), status: 'scoring' }).eq('id', roundId);
+      }
+      setPhase('scoring');
+      return true;
+    }
+    return false;
+  }
 
   // When timer hits zero, transition to scoring (host only triggers the phase flip)
   React.useEffect(() => {
@@ -253,6 +290,8 @@ export default function LettersPlay() {
         duration_ms: startedAt ? Math.max(0, Date.now() - new Date(startedAt).getTime()) : null,
       });
       setSubmitted(true);
+      // If all players submitted, host triggers scoring immediately
+      await checkAllSubmitted();
     } finally {
       setSubmitting(false);
     }
