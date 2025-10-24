@@ -5,7 +5,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { ChessGame } from '@/components/wakti-ai-v2/games/ChessGame';
 import { TicTacToeGame } from '@/components/wakti-ai-v2/games/TicTacToeGame';
 import { SolitaireGame } from '@/components/wakti-ai-v2/games/SolitaireGame';
-import { Gamepad2, Castle, Grid3x3, Spade } from 'lucide-react';
+import { Gamepad2, Castle, Grid3x3, Spade, Languages } from 'lucide-react';
 
 export default function Games() {
   const { language } = useTheme();
@@ -38,7 +38,7 @@ export default function Games() {
             {language === 'ar' ? 'سوليتير' : 'Solitaire'}
           </TabsTrigger>
           <TabsTrigger value="letters" className="md:flex-1 flex-none min-w-[140px] whitespace-nowrap font-medium bg-card hover:-translate-y-[1px] data-[state=active]:bg-gradient-to-r data-[state=active]:backdrop-blur-sm relative after:absolute after:left-3 after:right-3 after:-bottom-0.5 after:h-0 after:bg-transparent duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background disabled:pointer-events-none disabled:opacity-50 flex items-center justify-center gap-2 px-3 py-2 text-xs sm:text-sm min-h-[40px] rounded-full border-2 shadow-md bg-gradient-to-br from-gray-50 to-white dark:from-gray-800/60 dark:to-gray-700/50 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-white/10 hover:from-gray-100 hover:to-white dark:hover:from-gray-700 dark:hover:to-gray-600 hover:shadow-lg transition-all data-[state=active]:from-purple-600 data-[state=active]:to-blue-700 data-[state=active]:text-white data-[state=active]:border-purple-300 data-[state=active]:shadow-[0_6px_20px_rgba(147,51,234,0.35)] dark:data-[state=active]:from-purple-600 dark:data-[state=active]:to-blue-700">
-            {/* Empty tab label for now */}
+            <Languages className="h-4 w-4" />
             {language === 'ar' ? 'الحروف' : 'Letters'}
           </TabsTrigger>
         </TabsList>
