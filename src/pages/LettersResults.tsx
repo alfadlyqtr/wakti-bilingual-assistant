@@ -17,6 +17,8 @@ export default function LettersResults() {
   const [players, setPlayers] = React.useState<Player[]>([]);
   const [hostName, setHostName] = React.useState<string | undefined>();
   const [breakdown, setBreakdown] = React.useState<Array<{ user_id: string | null; base: number; bonus: number; total: number; fields?: any }>>([]);
+  const [roundList, setRoundList] = React.useState<Array<{id: string; round_no: number}>>([]);
+  const [perRound, setPerRound] = React.useState<Record<string, Record<number, number>>>({});
 
   React.useEffect(() => {
     let active = true;
@@ -45,6 +47,36 @@ export default function LettersResults() {
       setTotals((totalsData || []).sort((a,b)=> (b.total||0) - (a.total||0)));
       setPlayers(p || []);
       setHostName(g?.host_name || undefined);
+
+      // Rounds list for per-round table
+      const { data: rounds } = await supabase
+        .from('letters_rounds')
+        .select('id, round_no')
+        .eq('game_code', code)
+        .order('round_no', { ascending: true });
+      setRoundList((rounds || []) as any);
+
+      // Per-round scores across all players
+      if (rounds && rounds.length > 0) {
+        const roundIds = rounds.map(r=>r.id);
+        const { data: prs } = await supabase
+          .from('letters_round_scores')
+          .select('user_id, round_id, total')
+          .in('round_id', roundIds as any);
+        const idToNo = new Map<string, number>((rounds||[]).map(r=>[String(r.id), r.round_no]));
+        const map: Record<string, Record<number, number>> = {};
+        (prs || []).forEach(r => {
+          const uid = String(r.user_id ?? 'null');
+          const rn = idToNo.get(String(r.round_id));
+          if (typeof rn === 'number') {
+            map[uid] = map[uid] || {};
+            map[uid][rn] = (r.total || 0);
+          }
+        });
+        setPerRound(map);
+      } else {
+        setPerRound({});
+      }
 
       // Last round breakdown
       const { data: lastRound } = await supabase
@@ -107,6 +139,7 @@ export default function LettersResults() {
 
   const top3 = totals.slice(0,3);
   const rest = totals.slice(3);
+  const allTotals = totals;
 
   return (<div className="container mx-auto p-3 max-w-5xl relative min-h-[100dvh]">
       <LettersBackdrop density={60} />
@@ -147,6 +180,57 @@ export default function LettersResults() {
                 <div className="text-2xl font-bold mt-1">{row.total || 0}</div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* All players totals (Option B) */}
+        {allTotals.length > 0 && (
+          <div className="rounded-lg border p-4 bg-card/50">
+            <div className="text-sm font-medium mb-2">{language==='ar'?'مجموع كل اللاعبين':'All players totals'}</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {allTotals.map((row, i) => (
+                <div key={(row.user_id ?? 'u') + i} className="rounded-md border bg-card p-3">
+                  <div className="text-sm font-semibold">{nameOf(row.user_id)}</div>
+                  <div className="text-xl font-bold mt-1">{row.total || 0}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Per-round table (Option C) */}
+        {roundList.length > 0 && (
+          <div className="rounded-lg border p-4 bg-card/50">
+            <div className="text-sm font-medium mb-2">{language==='ar'?'نتائج كل جولة':'Per-round scores'}</div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-muted-foreground">
+                    <th className="text-left py-2 pr-2">{language==='ar'?'لاعب':'Player'}</th>
+                    {roundList.map(r=> (
+                      <th key={r.id} className="text-center py-2 px-2">{language==='ar'?`جولة ${r.round_no}`:`R${r.round_no}`}</th>
+                    ))}
+                    <th className="text-right py-2 pl-2">{language==='ar'?'المجموع':'Total'}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {players.map((p, idx)=>{
+                    const uid = String(p.user_id ?? 'null');
+                    const rowMap = perRound[uid] || {};
+                    const total = (allTotals.find(t=>String(t.user_id ?? 'null')===uid)?.total) || 0;
+                    return (
+                      <tr key={uid+idx} className="border-t">
+                        <td className="py-2 pr-2 font-medium">{p.name}</td>
+                        {roundList.map(r => (
+                          <td key={r.id} className="text-center py-2 px-2 tabular-nums">{rowMap[r.round_no] ?? 0}</td>
+                        ))}
+                        <td className="text-right py-2 pl-2 font-semibold tabular-nums">{total}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
         {breakdown.length > 0 && (
