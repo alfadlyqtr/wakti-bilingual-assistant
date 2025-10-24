@@ -480,6 +480,13 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
             {audios.map((a, idx) => (
               <div key={a.createdAt + '-' + idx} className="flex items-center gap-3">
                 <audio controls src={a.url} className="w-full" />
+                <a
+                  href={a.url}
+                  download={`track-${a.createdAt}.mp3`}
+                  className="inline-flex items-center rounded-md border px-3 py-1 text-sm hover:bg-accent"
+                >
+                  {language==='ar' ? 'تنزيل' : 'Download'}
+                </a>
                 <Button
                   variant="outline"
                   size="sm"
@@ -597,7 +604,18 @@ function EditorTab() {
               <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                 {(t.include_styles||[]).map((s)=> <span key={s} className="px-2 py-0.5 rounded-full bg-muted">{s}</span>)}
               </div>
-              <audio controls src={t.signed_url || undefined} className="w-full" />
+              <div className="flex items-center gap-3">
+                <audio controls src={t.signed_url || undefined} className="w-full" />
+                {t.signed_url && (
+                  <a
+                    href={t.signed_url}
+                    download={`track-${t.id}.mp3`}
+                    className="inline-flex items-center rounded-md border px-3 py-1 text-sm hover:bg-accent"
+                  >
+                    {language==='ar' ? 'تنزيل' : 'Download'}
+                  </a>
+                )}
+              </div>
             </Card>
           ))}
         </div>
