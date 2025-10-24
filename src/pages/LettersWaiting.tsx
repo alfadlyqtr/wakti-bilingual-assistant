@@ -16,7 +16,7 @@ export default function LettersWaiting() {
   const isHost = !!location.state?.isHost;
   const [copied, setCopied] = useState(false);
   // Placeholder game code; in the future this would come from state/router.
-  const [gameCode] = useState<string>(location.state?.gameCode || 'WABCDE');
+  const [gameCode] = useState<string>(location.state?.gameCode || 'W123456');
   const [players, setPlayers] = useState<Array<{ user_id: string | null; name: string }>>([]);
   const [playersCount, setPlayersCount] = useState<number>(1);
   const [maxPlayers, setMaxPlayers] = useState<number>(location.state?.maxPlayers || 5);
@@ -25,6 +25,8 @@ export default function LettersWaiting() {
   const [hostUserId, setHostUserId] = useState<string | undefined>();
   const [navigated, setNavigated] = useState(false);
   const startChannelRef = useRef<any>(null);
+  const [hintsEnabled, setHintsEnabled] = useState<boolean>(false);
+  const [endOnFirstSubmit, setEndOnFirstSubmit] = useState<boolean>(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -33,7 +35,7 @@ export default function LettersWaiting() {
       // Try Supabase first
       const { data, error } = await supabase
         .from('letters_games')
-        .select('title, host_name, host_user_id, max_players')
+        .select('title, host_name, host_user_id, max_players, hints_enabled, end_on_first_submit')
         .eq('code', gameCode)
         .maybeSingle();
       if (!cancelled) {
@@ -42,6 +44,8 @@ export default function LettersWaiting() {
           if (!hostName && data.host_name) setHostName(data.host_name);
           if (data.host_user_id) setHostUserId(data.host_user_id);
           if (typeof data.max_players === 'number' && !location.state?.maxPlayers) setMaxPlayers(data.max_players);
+          if (typeof data.hints_enabled === 'boolean') setHintsEnabled(!!data.hints_enabled);
+          if (typeof data.end_on_first_submit === 'boolean') setEndOnFirstSubmit(!!data.end_on_first_submit);
         } else {
           // Fallback to localStorage if available
           try {
@@ -66,13 +70,13 @@ export default function LettersWaiting() {
       if (!gameCode || navigated) return;
       const { data } = await supabase
         .from('letters_games')
-        .select('started_at, round_duration_sec')
+        .select('started_at, round_duration_sec, hints_enabled, end_on_first_submit')
         .eq('code', gameCode)
         .maybeSingle();
       if (!active) return;
       if (data && data.started_at) {
         setNavigated(true);
-        navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: data.round_duration_sec } });
+        navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: data.round_duration_sec, hintsEnabled: !!data.hints_enabled, endOnFirstSubmit: !!data.end_on_first_submit } });
       }
     }
     pollStarted();
@@ -88,7 +92,7 @@ export default function LettersWaiting() {
         const started = payload?.new?.started_at;
         if (started && !navigated) {
           setNavigated(true);
-          navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: payload?.new?.round_duration_sec } });
+          navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: payload?.new?.round_duration_sec, hintsEnabled: !!payload?.new?.hints_enabled, endOnFirstSubmit: !!payload?.new?.end_on_first_submit } });
         }
       })
       .subscribe();
@@ -97,7 +101,7 @@ export default function LettersWaiting() {
       .on('broadcast', { event: 'started' }, (payload: any) => {
         if (!navigated) {
           setNavigated(true);
-          navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: payload?.roundDurationSec } });
+          navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: payload?.roundDurationSec, hintsEnabled: !!payload?.hintsEnabled, endOnFirstSubmit: !!payload?.endOnFirstSubmit } });
         }
       })
       .subscribe();
@@ -236,11 +240,11 @@ export default function LettersWaiting() {
                 try {
                   const roundDuration = (location.state as any)?.roundDurationSec;
                   if (startChannelRef.current) {
-                    await startChannelRef.current.send({ type: 'broadcast', event: 'started', payload: { roundDurationSec: roundDuration } });
+                    await startChannelRef.current.send({ type: 'broadcast', event: 'started', payload: { roundDurationSec: roundDuration, hintsEnabled, endOnFirstSubmit } });
                   }
                 } catch {}
                 setNavigated(true);
-                navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: (location.state as any)?.roundDurationSec } });
+                navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: (location.state as any)?.roundDurationSec, hintsEnabled, endOnFirstSubmit } });
               }}
             >
               {language === 'ar' ? 'ابدأ اللعبة الآن' : 'Start game now'}

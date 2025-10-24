@@ -12,7 +12,7 @@ export default function LettersPlay() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { code } = useParams();
-  const location = useLocation() as { state?: { roundDurationSec?: number, lateJoin?: boolean, hostName?: string } };
+  const location = useLocation() as { state?: { roundDurationSec?: number, lateJoin?: boolean, hostName?: string, submitEndsRound?: boolean, hintsEnabled?: boolean, endOnFirstSubmit?: boolean } };
   const [gameTitle, setGameTitle] = React.useState<string | undefined>();
   const [hostName, setHostName] = React.useState<string | undefined>();
   const [hostUserId, setHostUserId] = React.useState<string | undefined>();
@@ -36,7 +36,23 @@ export default function LettersPlay() {
   const isHost = !!(user?.id && hostUserId && user.id === hostUserId);
   const [submittedLeftSec, setSubmittedLeftSec] = React.useState<number | null>(null);
   const [roundAnswers, setRoundAnswers] = React.useState<Record<string, {name?:string;place?:string;plant?:string;animal?:string;thing?:string}>>({});
-  const [validationMode, setValidationMode] = React.useState<'strict'|'lenient'>('strict');
+  // Validation is always strict now
+  const [submitEndsRoundFlag, setSubmitEndsRoundFlag] = React.useState<boolean>(!!location.state?.submitEndsRound);
+  const [hintsEnabledFlag, setHintsEnabledFlag] = React.useState<boolean>(!!location.state?.hintsEnabled);
+  const [hintLoading, setHintLoading] = React.useState<boolean>(false);
+  const [hintText, setHintText] = React.useState<string | null>(null);
+  const [hintUsed, setHintUsed] = React.useState<boolean>(false);
+  const [hintCategory, setHintCategory] = React.useState<'name'|'place'|'plant'|'animal'|'thing'>('name');
+  const [endOnFirstSubmitFlag, setEndOnFirstSubmitFlag] = React.useState<boolean>(!!location.state?.endOnFirstSubmit);
+
+  // Host-only: flip game to scoring and mark round ended
+  async function endRoundNow() {
+    if (!code || !roundId) return;
+    if (!isHost) return; // Only host should authoritatively flip
+    await supabase.from('letters_games').update({ phase: 'scoring' }).eq('code', code);
+    await supabase.from('letters_rounds').update({ ended_at: new Date().toISOString(), status: 'scoring' }).eq('id', roundId);
+    setPhase('scoring');
+  }
 
   React.useEffect(() => {
     let cancelled = false;
@@ -44,7 +60,7 @@ export default function LettersPlay() {
       if (!code) return;
       const { data } = await supabase
         .from('letters_games')
-        .select('title, host_name, host_user_id, round_duration_sec, language, letter_mode, manual_letter, rounds_total, started_at, current_round_no, phase, validation_mode')
+        .select('title, host_name, host_user_id, round_duration_sec, language, letter_mode, manual_letter, rounds_total, started_at, current_round_no, phase, validation_mode, submit_ends_round, hints_enabled, end_on_first_submit')
         .eq('code', code)
         .maybeSingle();
       if (!cancelled && data) {
@@ -62,26 +78,88 @@ export default function LettersPlay() {
         if (typeof data.rounds_total === 'number') setRoundsTotal(data.rounds_total);
         if (typeof data.current_round_no === 'number') setRoundNo(data.current_round_no);
         if (typeof data.phase === 'string') setPhase(data.phase as any);
-        if (data.validation_mode) setValidationMode((data.validation_mode as 'strict'|'lenient'));
+        // validation_mode is enforced as 'strict' globally
+        if (typeof data.submit_ends_round === 'boolean') setSubmitEndsRoundFlag(!!data.submit_ends_round);
+        if (typeof data.hints_enabled === 'boolean') setHintsEnabledFlag(!!data.hints_enabled);
+        if (typeof data.end_on_first_submit === 'boolean') setEndOnFirstSubmitFlag(!!data.end_on_first_submit);
       }
     }
     loadMeta();
     return () => { cancelled = true; };
   }, [code]);
 
-  // Realtime: react when answers are inserted/updated to detect all-submitted case
+  // Load hint usage status per player per round
+  React.useEffect(() => {
+    (async () => {
+      setHintText(null);
+      setHintUsed(false);
+      if (!code || !user?.id || !roundNo) return;
+      const { data } = await supabase
+        .from('letters_hints_used')
+        .select('id')
+        .eq('game_code', code)
+        .eq('round_no', roundNo)
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (data) setHintUsed(true);
+    })();
+  }, [code, user?.id, roundNo]);
+
+  async function handleHint(cat: 'name'|'place'|'plant'|'animal'|'thing') {
+    if (hintUsed || !hintsEnabledFlag || !code || !roundNo) return;
+    setHintLoading(true);
+    setHintText(null);
+    try {
+      // Enforce one-use-per-player-per-round server-side via unique constraint
+      await supabase.from('letters_hints_used').insert({ game_code: code, round_no: roundNo, user_id: user?.id });
+      setHintUsed(true);
+      try {
+        const payload: any = {
+          game_code: code,
+          round_no: roundNo,
+          language: gameLang,
+          letter: currentLetter,
+          category: cat,
+          partial: (values as any)[cat] || ''
+        };
+        const { data: res } = await supabase.functions.invoke('letters-hint', { body: payload });
+        if (res?.hint) setHintText(res.hint);
+        else if (res?.text) setHintText(res.text);
+        else setHintText(language==='ar' ? 'تلميح جاهز. جرّب كلمة شائعة تبدأ بهذا الحرف.' : 'Hint ready. Try a common word starting with this letter.');
+      } catch {
+        setHintText(language==='ar' ? 'تلميح سريع غير متاح الآن.' : 'Quick hint is not available right now.');
+      }
+    } finally {
+      setHintLoading(false);
+    }
+  }
+
+  // Realtime: react when answers are inserted/updated to detect submission events
   React.useEffect(() => {
     if (!roundId) return;
     const ch = supabase.channel(`letters:submitted:${roundId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'letters_answers', filter: `round_id=eq.${roundId}` }, () => {
-        if (phase === 'playing') checkAllSubmitted();
+        if (phase === 'playing') {
+          if (endOnFirstSubmitFlag) {
+            // Race mode: host ends immediately on first submission
+            endRoundNow();
+          } else {
+            checkAllSubmitted();
+          }
+        }
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'letters_answers', filter: `round_id=eq.${roundId}` }, () => {
-        if (phase === 'playing') checkAllSubmitted();
+        if (phase === 'playing') {
+          if (endOnFirstSubmitFlag) {
+            endRoundNow();
+          } else {
+            checkAllSubmitted();
+          }
+        }
       })
       .subscribe();
     return () => { try { supabase.removeChannel(ch); } catch {} };
-  }, [roundId, phase, players]);
+  }, [roundId, phase, players, endOnFirstSubmitFlag]);
 
   React.useEffect(() => {
     setRemaining(roundDuration);
@@ -115,6 +193,7 @@ export default function LettersPlay() {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'letters_games', filter: `code=eq.${code}` }, (payload: any) => {
         if (payload?.new?.started_at) setStartedAt(payload.new.started_at as string);
         if (typeof payload?.new?.round_duration_sec === 'number') setRoundDuration(payload.new.round_duration_sec as number);
+        if (typeof payload?.new?.end_on_first_submit === 'boolean') setEndOnFirstSubmitFlag(!!payload?.new?.end_on_first_submit);
       })
       .subscribe();
     return () => { try { supabase.removeChannel(channel); } catch {} };
@@ -164,8 +243,8 @@ export default function LettersPlay() {
       .eq('round_id', roundId);
     const submittedSet = new Set((ans||[]).filter(a=>a.submitted_at && a.user_id).map(a=>a.user_id as string));
     const all = expectedIds.every(id => submittedSet.has(id));
-    if (all && phase === 'playing' && code) {
-      // Host flips to scoring immediately
+    if (all && phase === 'playing' && code && submitEndsRoundFlag) {
+      // Host flips to scoring immediately when enabled
       if (isHost) {
         await supabase.from('letters_games').update({ phase: 'scoring' }).eq('code', code);
         await supabase.from('letters_rounds').update({ ended_at: new Date().toISOString(), status: 'scoring' }).eq('id', roundId);
@@ -197,6 +276,9 @@ export default function LettersPlay() {
         if (typeof payload?.new?.phase === 'string') setPhase(payload.new.phase as any);
         if (typeof payload?.new?.current_round_no === 'number') setRoundNo(payload.new.current_round_no as number);
         if (payload?.new?.started_at) setStartedAt(payload.new.started_at as string);
+        if (typeof payload?.new?.submit_ends_round === 'boolean') setSubmitEndsRoundFlag(!!payload?.new?.submit_ends_round);
+        if (typeof payload?.new?.hints_enabled === 'boolean') setHintsEnabledFlag(!!payload?.new?.hints_enabled);
+        if (typeof payload?.new?.end_on_first_submit === 'boolean') setEndOnFirstSubmitFlag(!!payload?.new?.end_on_first_submit);
       })
       .subscribe();
     return () => { try { supabase.removeChannel(ch); } catch {} };
@@ -236,7 +318,7 @@ export default function LettersPlay() {
         round_duration_sec: roundDuration,
         started_at: startedAt,
         answers: ans || [],
-        validation_mode: validationMode,
+        validation_mode: 'strict',
       };
       try {
         const { data: res } = await supabase.functions.invoke('letters-teacher', { body: payload });
@@ -332,8 +414,13 @@ export default function LettersPlay() {
         duration_ms: startedAt ? Math.max(0, Date.now() - new Date(startedAt).getTime()) : null,
       });
       setSubmitted(true);
-      // If all players submitted, host triggers scoring immediately
-      await checkAllSubmitted();
+      // Race mode: host will end via realtime listener; non-hosts do not flip locally
+      if (endOnFirstSubmitFlag && phase === 'playing') {
+        if (isHost) await endRoundNow();
+      } else {
+        // Otherwise, if all players submitted, host triggers scoring immediately when enabled
+        await checkAllSubmitted();
+      }
     } finally {
       setSubmitting(false);
     }
@@ -474,11 +561,30 @@ export default function LettersPlay() {
                 </div>
               )}
               {phase==='playing' ? (
-                <Button disabled={submitted || submitting} className="bg-indigo-600 hover:bg-indigo-700" onClick={handleSubmit}>
-                  {submitted ? (language==='ar'?'تم الإرسال':'Submitted') : (submitting ? (language==='ar'?'جارٍ...':'Submitting...') : (language === 'ar' ? 'إرسال' : 'Submit'))}
-                </Button>
+                <div className="flex items-center gap-2">
+                  {hintsEnabledFlag && (
+                    <>
+                      <select className="rounded-md border px-2 py-1 bg-background text-xs" value={hintCategory} onChange={(e)=>setHintCategory(e.target.value as any)}>
+                        <option value="name">{language==='ar'?'اسم':'Name'}</option>
+                        <option value="place">{language==='ar'?'مكان':'Place'}</option>
+                        <option value="plant">{language==='ar'?'نبات':'Plant'}</option>
+                        <option value="animal">{language==='ar'?'حيوان':'Animal'}</option>
+                        <option value="thing">{language==='ar'?'شيء':'Thing'}</option>
+                      </select>
+                      <Button type="button" variant="secondary" disabled={hintUsed || hintLoading || submitted} onClick={()=>handleHint(hintCategory)}>
+                        {hintUsed ? (language==='ar'?'تم استخدام التلميح':'Hint used') : (hintLoading ? (language==='ar'?'...':'...') : (language==='ar'?'تلميح سريع':'Quick Hint'))}
+                      </Button>
+                    </>
+                  )}
+                  <Button disabled={submitted || submitting} className="bg-indigo-600 hover:bg-indigo-700" onClick={handleSubmit}>
+                    {submitted ? (language==='ar'?'تم الإرسال':'Submitted') : (submitting ? (language==='ar'?'جارٍ...':'Submitting...') : (language === 'ar' ? 'إرسال' : 'Submit'))}
+                  </Button>
+                </div>
               ) : null}
             </div>
+            {hintsEnabledFlag && hintText && (
+              <div className="mt-2 text-xs text-muted-foreground">{hintText}</div>
+            )}
           </div>
         </div>
 

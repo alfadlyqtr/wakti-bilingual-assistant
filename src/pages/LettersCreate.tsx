@@ -27,7 +27,8 @@ export default function LettersCreate() {
   const [gameCode, setGameCode] = useState('');
   const [copied, setCopied] = useState(false);
   const [maxPlayers, setMaxPlayers] = useState<number>(2);
-  const [validationMode, setValidationMode] = useState<'strict'|'lenient'>('strict');
+  const [hintsEnabled, setHintsEnabled] = useState<boolean>(false);
+  const [endOnFirstSubmit, setEndOnFirstSubmit] = useState<boolean>(false);
 
   const EN_LETTERS = useMemo(()=>"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""),[]);
   const AR_LETTERS = useMemo(()=>"ابتثجحخدذرزسشصضطظعغفقكلمنهوي".split(""),[]);
@@ -41,9 +42,10 @@ export default function LettersCreate() {
   }, [langChoice, letterMode]);
 
   async function handleCreate() {
-    const ensureCode = gameCode && gameCode.trim().length >= 6
-      ? gameCode
-      : ('W' + Array.from({length:5},()=>String.fromCharCode(65+Math.floor(Math.random()*26))).join(''));
+    const digitsFromState = (gameCode || '').toUpperCase().replace(/^W?/, '').replace(/\D/g, '').slice(0, 6);
+    const ensureCode = digitsFromState.length === 6
+      ? ('W' + digitsFromState)
+      : ('W' + Array.from({ length: 6 }, () => Math.floor(Math.random() * 10)).join(''));
     if (!gameCode) setGameCode(ensureCode);
     const code = ensureCode;
     try {
@@ -62,7 +64,8 @@ export default function LettersCreate() {
           letterMode: letterMode,
           manualLetter: letterMode === 'manual' ? manualLetter : null,
           roundsTotal: roundsMode === 'custom' ? Math.max(1, Math.min(10, customRounds || 1)) : parseInt(roundsMode, 10),
-          validationMode,
+          hintsEnabled,
+          endOnFirstSubmit,
         };
         localStorage.setItem(`wakti_letters_game_${code}`, JSON.stringify(meta));
         // Persist to Supabase so others can fetch by code
@@ -77,7 +80,9 @@ export default function LettersCreate() {
           letter_mode: meta.letterMode,
           manual_letter: meta.manualLetter,
           rounds_total: meta.roundsTotal,
-          validation_mode: meta.validationMode,
+          validation_mode: 'strict',
+          hints_enabled: hintsEnabled,
+          end_on_first_submit: endOnFirstSubmit,
         });
         // Ensure host is recorded as a player
         await supabase.from('letters_players').upsert({
@@ -92,7 +97,7 @@ export default function LettersCreate() {
       || user?.user_metadata?.username
       || user?.email?.split('@')[0]
       || (language === 'ar' ? 'المضيف' : 'Host')) as string;
-    navigate('/games/letters/waiting', { state: { isHost: true, gameCode: code, maxPlayers, gameTitle, hostName: hostForState, roundDurationSec: durationMode === 'custom' ? Math.max(10, Math.min(300, customDuration || 60)) : parseInt(durationMode, 10) } });
+    navigate('/games/letters/waiting', { state: { isHost: true, gameCode: code, maxPlayers, gameTitle, hostName: hostForState, roundDurationSec: durationMode === 'custom' ? Math.max(10, Math.min(300, customDuration || 60)) : parseInt(durationMode, 10), hintsEnabled, endOnFirstSubmit } });
   }
 
   return (
@@ -205,18 +210,31 @@ export default function LettersCreate() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          
           <div className="space-y-2">
-            <Label>{language === 'ar' ? 'وضع التحقق' : 'Validation mode'}</Label>
-            <Select value={validationMode} onValueChange={(v)=>setValidationMode(v as 'strict'|'lenient')}>
-              <SelectTrigger>
-                <SelectValue placeholder={language === 'ar' ? 'اختر وضع التحقق' : 'Select validation mode'} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="strict">{language === 'ar' ? 'صارم (دقيق)' : 'Strict (accurate)'}</SelectItem>
-                <SelectItem value="lenient">{language === 'ar' ? 'مرن (سريع)' : 'Lenient (fast)'}</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">{language === 'ar' ? 'صارم يستخدم الذكاء للتحقق من الفئة. مرن يتحقق من الحرف فقط.' : 'Strict uses AI to validate category. Lenient checks only starting letter.'}</p>
+            <Label>{language === 'ar' ? 'خيارات متقدمة' : 'Advanced options'}</Label>
+            <div className="flex items-start gap-3 p-3 rounded-md border bg-card/40">
+              <input id="opt-race" type="checkbox" className="mt-1" checked={endOnFirstSubmit} onChange={(e)=>{ const v=e.target.checked; setEndOnFirstSubmit(v); }} />
+              <div>
+                <label htmlFor="opt-race" className="font-medium text-sm cursor-pointer">
+                  {language === 'ar' ? 'نمط السباق: تنتهي الجولة عند أول إرسال' : 'Race mode: end round on first submit'}
+                </label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {language === 'ar' ? 'أول لاعب يرسل يُنهي الجولة فورًا.' : 'The first player to submit ends the round immediately.'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 rounded-md border bg-card/40">
+              <input id="opt-hints" type="checkbox" className="mt-1" checked={hintsEnabled} onChange={(e)=>setHintsEnabled(e.target.checked)} />
+              <div>
+                <label htmlFor="opt-hints" className="font-medium text-sm cursor-pointer">
+                  {language === 'ar' ? 'تفعيل التلميحات (مرة لكل لاعب في كل جولة)' : 'Enable hints (once per player per round)'}
+                </label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {language === 'ar' ? 'يساعد الذكاء بسرعة في الفئة العالقة، مرة واحدة لكل لاعب في كل جولة.' : 'Blazing-fast AI hint to help stuck category, once per player per round.'}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -253,8 +271,8 @@ export default function LettersCreate() {
         <div className="space-y-2">
           <Label htmlFor="letters-code">{language === 'ar' ? 'رمز اللعبة' : 'Game code'}</Label>
           <div className="flex gap-2">
-            <Input id="letters-code" value={gameCode} onChange={(e)=>setGameCode(e.target.value.toUpperCase())} placeholder={language === 'ar' ? 'رمز اختياري للمشاركة' : 'Optional code to share'} />
-            <Button type="button" variant="secondary" onClick={()=>setGameCode('W' + Array.from({length:5},()=>String.fromCharCode(65+Math.floor(Math.random()*26))).join(''))}>{language === 'ar' ? 'توليد' : 'Generate'}</Button>
+            <Input id="letters-code" value={gameCode} onChange={(e)=>{ const raw=e.target.value.toUpperCase(); const digits=raw.replace(/^W?/, '').replace(/\D/g,'').slice(0,6); setGameCode(digits ? ('W'+digits) : ''); }} placeholder={language === 'ar' ? 'رمز اختياري للمشاركة' : 'Optional code to share'} />
+            <Button type="button" variant="secondary" onClick={()=>setGameCode('W' + Array.from({ length: 6 }, () => Math.floor(Math.random() * 10)).join(''))}>{language === 'ar' ? 'توليد' : 'Generate'}</Button>
             <Button type="button" variant="outline" onClick={async()=>{ if(!gameCode) return; try{ await navigator.clipboard.writeText(gameCode); setCopied(true); setTimeout(()=>setCopied(false), 1500);}catch{}}}>
               <Copy className="mr-2 h-4 w-4" />{copied ? (language === 'ar' ? 'نُسخ' : 'Copied') : (language === 'ar' ? 'نسخ' : 'Copy')}
             </Button>

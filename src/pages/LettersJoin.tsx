@@ -17,8 +17,9 @@ export default function LettersJoin() {
   const [startedHost, setStartedHost] = useState<string | null>(null);
 
   async function handleJoin() {
-    const clean = code.trim().toUpperCase();
-    if (clean.length < 6) return;
+    const digits = code.trim().toUpperCase().replace(/^W?/, '').replace(/\D/g, '').slice(0, 6);
+    const clean = digits.length === 6 ? ('W' + digits) : '';
+    if (!/^W\d{6}$/.test(clean)) return;
     const displayName = (user?.user_metadata?.full_name
       || user?.user_metadata?.display_name
       || user?.user_metadata?.username
@@ -73,8 +74,8 @@ export default function LettersJoin() {
             <Input
               id="join-code"
               value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
-              placeholder={language === 'ar' ? 'اكتب رمز اللعبة (مثال: WABCDE)' : 'Enter game code (e.g., WABCDE)'}
+              onChange={(e) => { const raw=e.target.value.toUpperCase(); const digits=raw.replace(/^W?/, '').replace(/\D/g,'').slice(0,6); setCode(digits ? ('W'+digits) : ''); }}
+              placeholder={language === 'ar' ? 'اكتب رمز اللعبة (مثال: W123456)' : 'Enter game code (e.g., W123456)'}
             />
           </div>
           <div className="pt-2">
