@@ -44,6 +44,7 @@ export default function LettersPlay() {
   const [hintUsed, setHintUsed] = React.useState<boolean>(false);
   const [hintCategory, setHintCategory] = React.useState<'name'|'place'|'plant'|'animal'|'thing'>('name');
   const [endOnFirstSubmitFlag, setEndOnFirstSubmitFlag] = React.useState<boolean>(!!location.state?.endOnFirstSubmit);
+  const [hintsMap, setHintsMap] = React.useState<{name?:string|null; place?:string|null; plant?:string|null; animal?:string|null; thing?:string|null}>({});
 
   // Host-only: flip game to scoring and mark round ended
   async function endRoundNow() {
@@ -92,6 +93,7 @@ export default function LettersPlay() {
   React.useEffect(() => {
     (async () => {
       setHintText(null);
+      setHintsMap({});
       setHintUsed(false);
       if (!code || !user?.id || !roundNo) return;
       const { data } = await supabase
@@ -123,9 +125,9 @@ export default function LettersPlay() {
           partial: (values as any)[cat] || ''
         };
         const { data: res } = await supabase.functions.invoke('letters-hint', { body: payload });
-        if (res?.hint) setHintText(res.hint);
-        else if (res?.text) setHintText(res.text);
-        else setHintText(language==='ar' ? 'تلميح جاهز. جرّب كلمة شائعة تبدأ بهذا الحرف.' : 'Hint ready. Try a common word starting with this letter.');
+        const text = res?.hint || res?.text || (language==='ar' ? 'كلمة شائعة مناسبة' : 'Common fitting word');
+        setHintText(text);
+        setHintsMap(prev => ({ ...prev, [cat]: text }));
       } catch {
         setHintText(language==='ar' ? 'تلميح سريع غير متاح الآن.' : 'Quick hint is not available right now.');
       }
@@ -168,7 +170,6 @@ export default function LettersPlay() {
   React.useEffect(() => {
     let id: number | undefined;
     function compute() {
-      if (submitted && !isHost) return; // freeze for non-hosts only; host keeps ticking
       if (!startedAt) {
         setRemaining(roundDuration);
         return;
@@ -180,11 +181,9 @@ export default function LettersPlay() {
       setRemaining(left);
     }
     compute();
-    if (!submitted || isHost) {
-      id = window.setInterval(compute, 250) as unknown as number;
-    }
+    id = window.setInterval(compute, 250) as unknown as number;
     return () => { if (id) clearInterval(id); };
-  }, [roundDuration, startedAt, submitted, isHost]);
+  }, [roundDuration, startedAt]);
 
   // Realtime update for started_at in case client reaches Play before start
   React.useEffect(() => {
@@ -199,37 +198,53 @@ export default function LettersPlay() {
     return () => { try { supabase.removeChannel(channel); } catch {} };
   }, [code]);
 
-  // Compute a deterministic auto letter if needed
+  // Deterministic auto letter per round
+  function autoLetterForRound(c: string, lang: 'en'|'ar'|undefined, round: number) {
+    const alphabet = (lang === 'ar')
+      ? 'ابتثجحخدذرزسشصضطظعغفقكلمنهوي'
+      : 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    let seed = 0;
+    for (let i = 0; i < c.length; i++) seed = (seed + c.charCodeAt(i) * (i + 1)) % alphabet.length;
+    const idx = (seed + Math.max(0, round - 1)) % alphabet.length;
+    return alphabet[idx] || alphabet[0];
+  }
+
+  // Load current letter when round or mode changes
   React.useEffect(() => {
-    function letterFromCode(c: string) {
-      const alphabet = (gameLang === 'ar')
-        ? 'ابتثجحخدذرزسشصضطظعغفقكلمنهوي'
-        : 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-      let sum = 0;
-      for (let i = 0; i < c.length; i++) sum = (sum + c.charCodeAt(i) * (i + 1)) % alphabet.length;
-      return alphabet[sum] || alphabet[0];
-    }
+    if (!code) return;
     if (letterMode === 'manual' && manualLetter) {
       setCurrentLetter(manualLetter);
-    } else if (code) {
-      setCurrentLetter(letterFromCode(code));
+    } else {
+      setCurrentLetter(autoLetterForRound(code, gameLang, roundNo));
     }
-    // Initialize hostPick default per language
     setHostPick(gameLang === 'ar' ? 'ا' : 'A');
-  }, [letterMode, manualLetter, code, gameLang]);
+  }, [letterMode, manualLetter, code, gameLang, roundNo]);
 
-  // Ensure round row exists for current round (race-safe upsert by unique key)
+  // Ensure round row handling: host inserts, players fetch
   React.useEffect(() => {
     (async () => {
-      if (!code || !currentLetter || !startedAt || !roundNo) return;
-      const up = await supabase
-        .from('letters_rounds')
-        .upsert({ game_code: code, round_no: roundNo, letter: currentLetter, status: 'playing', started_at: startedAt }, { onConflict: 'game_code,round_no' })
-        .select('id')
-        .single();
-      if (up.data?.id) setRoundId(up.data.id);
+      if (!code || !startedAt || !roundNo) return;
+      if (isHost) {
+        if (!currentLetter) return;
+        const up = await supabase
+          .from('letters_rounds')
+          .upsert({ game_code: code, round_no: roundNo, letter: currentLetter, status: 'playing', started_at: startedAt }, { onConflict: 'game_code,round_no' })
+          .select('id')
+          .single();
+        if (up.data?.id) setRoundId(up.data.id);
+      } else {
+        const row = await supabase
+          .from('letters_rounds')
+          .select('id, letter, started_at')
+          .eq('game_code', code)
+          .eq('round_no', roundNo)
+          .maybeSingle();
+        if (row.data?.id) setRoundId(row.data.id);
+        if (row.data?.letter) setCurrentLetter(row.data.letter);
+        if (row.data?.started_at) setStartedAt(row.data.started_at);
+      }
     })();
-  }, [code, currentLetter, startedAt, roundNo]);
+  }, [code, currentLetter, startedAt, roundNo, isHost]);
 
 
   async function checkAllSubmitted() {
@@ -430,7 +445,7 @@ export default function LettersPlay() {
     if (!isHost || !code || !roundsTotal) return;
     const nextNo = roundNo + 1;
     const nextStarted = new Date().toISOString();
-    const letter = hostPick;
+    const letter = (letterMode === 'manual' && hostPick) ? hostPick : autoLetterForRound(code!, gameLang!, nextNo);
     // Update game state
     await supabase.from('letters_games').update({
       current_round_no: nextNo,
@@ -452,7 +467,21 @@ export default function LettersPlay() {
     setSubmitted(false);
     setValues({ name: '', place: '', plant: '', animal: '', thing: '' });
     setCurrentLetter(letter);
+    setHintText(null);
+    setHintsMap({});
+    setHintUsed(false);
   }
+
+  // When round number or started_at changes from host, align local state
+  React.useEffect(() => {
+    // This runs for all clients when host updates letters_games
+    setSubmitted(false);
+    setValues({ name: '', place: '', plant: '', animal: '', thing: '' });
+    setResults(null);
+    setHintText(null);
+    setHintsMap({});
+    setHintUsed(false);
+  }, [roundNo, startedAt]);
 
   // Poll players list
   React.useEffect(() => {
@@ -508,13 +537,7 @@ export default function LettersPlay() {
               : `Game already started by ${location.state?.hostName || hostName || '-'}`}
           </div>
         )}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Timer className="h-5 w-5" />
-            <span className="font-medium">{language === 'ar' ? 'الوقت المتبقي' : 'Time remaining'}:</span>
-          </div>
-          <div className="text-2xl font-bold tabular-nums">{remaining}s</div>
-        </div>
+        
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="rounded-lg border p-4 bg-card/50">
@@ -523,6 +546,7 @@ export default function LettersPlay() {
               <div className="w-16 h-16 md:w-20 md:h-20 rounded-lg flex items-center justify-center bg-gradient-to-br from-indigo-600 to-fuchsia-600 text-white shadow-md">
                 <span className="text-3xl md:text-4xl font-black">{currentLetter || '-'}</span>
               </div>
+              <div className={`ml-2 text-lg md:text-xl font-semibold tabular-nums ${remaining <= 10 ? 'text-red-600 animate-pulse' : ''}`}>{remaining}s</div>
             </div>
             <div className="mt-3 text-xs text-muted-foreground">
               {language === 'ar' ? `الجولة 1 من ${roundsTotal ?? '-'}` : `Round 1 of ${roundsTotal ?? '-'}`}
@@ -535,29 +559,44 @@ export default function LettersPlay() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-muted-foreground">{language === 'ar' ? 'اسم' : 'Name'}</label>
-                <input disabled={phase!=='playing' || submitted} className="mt-1 w-full rounded-md border px-3 py-2 bg-background" value={values.name} onChange={(e)=>updateValue('name', e.target.value)} />
+                <input disabled={phase!=='playing' || submitted} placeholder={hintsMap.name || ''} className="mt-1 w-full rounded-md border px-3 py-2 bg-background" value={values.name} onChange={(e)=>updateValue('name', e.target.value)} />
+                {hintsEnabledFlag && hintsMap.name && !values.name && (
+                  <div className="mt-1 text-[11px] text-muted-foreground">{language==='ar'?'تلميح: ':'Hint: '}{hintsMap.name}</div>
+                )}
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">{language === 'ar' ? 'مكان' : 'Place'}</label>
-                <input disabled={phase!=='playing' || submitted} className="mt-1 w-full rounded-md border px-3 py-2 bg-background" value={values.place} onChange={(e)=>updateValue('place', e.target.value)} />
+                <input disabled={phase!=='playing' || submitted} placeholder={hintsMap.place || ''} className="mt-1 w-full rounded-md border px-3 py-2 bg-background" value={values.place} onChange={(e)=>updateValue('place', e.target.value)} />
+                {hintsEnabledFlag && hintsMap.place && !values.place && (
+                  <div className="mt-1 text-[11px] text-muted-foreground">{language==='ar'?'تلميح: ':'Hint: '}{hintsMap.place}</div>
+                )}
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">{language === 'ar' ? 'نبات' : 'Plant'}</label>
-                <input disabled={phase!=='playing' || submitted} className="mt-1 w-full rounded-md border px-3 py-2 bg-background" value={values.plant} onChange={(e)=>updateValue('plant', e.target.value)} />
+                <input disabled={phase!=='playing' || submitted} placeholder={hintsMap.plant || ''} className="mt-1 w-full rounded-md border px-3 py-2 bg-background" value={values.plant} onChange={(e)=>updateValue('plant', e.target.value)} />
+                {hintsEnabledFlag && hintsMap.plant && !values.plant && (
+                  <div className="mt-1 text-[11px] text-muted-foreground">{language==='ar'?'تلميح: ':'Hint: '}{hintsMap.plant}</div>
+                )}
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">{language === 'ar' ? 'حيوان' : 'Animal'}</label>
-                <input disabled={phase!=='playing' || submitted} className="mt-1 w-full rounded-md border px-3 py-2 bg-background" value={values.animal} onChange={(e)=>updateValue('animal', e.target.value)} />
+                <input disabled={phase!=='playing' || submitted} placeholder={hintsMap.animal || ''} className="mt-1 w-full rounded-md border px-3 py-2 bg-background" value={values.animal} onChange={(e)=>updateValue('animal', e.target.value)} />
+                {hintsEnabledFlag && hintsMap.animal && !values.animal && (
+                  <div className="mt-1 text-[11px] text-muted-foreground">{language==='ar'?'تلميح: ':'Hint: '}{hintsMap.animal}</div>
+                )}
               </div>
               <div className="sm:col-span-2">
                 <label className="text-xs text-muted-foreground">{language === 'ar' ? 'شيء' : 'Thing'}</label>
-                <input disabled={phase!=='playing' || submitted} className="mt-1 w-full rounded-md border px-3 py-2 bg-background" value={values.thing} onChange={(e)=>updateValue('thing', e.target.value)} />
+                <input disabled={phase!=='playing' || submitted} placeholder={hintsMap.thing || ''} className="mt-1 w-full rounded-md border px-3 py-2 bg-background" value={values.thing} onChange={(e)=>updateValue('thing', e.target.value)} />
+                {hintsEnabledFlag && hintsMap.thing && !values.thing && (
+                  <div className="mt-1 text-[11px] text-muted-foreground">{language==='ar'?'تلميح: ':'Hint: '}{hintsMap.thing}</div>
+                )}
               </div>
             </div>
             <div className="pt-3 flex items-center justify-between">
               {submittedLeftSec !== null && (
                 <div className="text-xs text-muted-foreground">
-                  {language==='ar' ? `تم الإرسال عند ${submittedLeftSec}s متبقية` : `Submitted at ${submittedLeftSec}s left`}
+                  {language==='ar' ? `استغرقت ${Math.max(0, roundDuration - (submittedLeftSec||0))}ث` : `You took ${Math.max(0, roundDuration - (submittedLeftSec||0))}s`}
                 </div>
               )}
               {phase==='playing' ? (
@@ -582,9 +621,7 @@ export default function LettersPlay() {
                 </div>
               ) : null}
             </div>
-            {hintsEnabledFlag && hintText && (
-              <div className="mt-2 text-xs text-muted-foreground">{hintText}</div>
-            )}
+            {/* per-field hint helper moved inline with fields below */}
           </div>
         </div>
 
@@ -657,20 +694,29 @@ export default function LettersPlay() {
             <div className="mt-3 flex items-center justify-between gap-3">
               {isHost ? (
                 <>
-                  <div className="text-sm font-medium">{language==='ar'?'اختر الحرف للجولة التالية':'Pick letter for next round'}</div>
-                  <div className="flex items-center gap-2">
-                    <select className="rounded-md border px-2 py-1 bg-background" value={hostPick} onChange={(e)=>setHostPick(e.target.value)}>
-                      {(gameLang === 'ar' ? 'ابتثجحخدذرزسشصضطظعغفقكلمنهوي' : 'ABCDEFGHIJKLMNOPQRSTUVWXYZ').split('').map(l => (
-                        <option key={l} value={l}>{l}</option>
-                      ))}
-                    </select>
-                    <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={startNextRound}>
-                      {language==='ar'?'بدء الجولة التالية':'Start next round'}
-                    </Button>
-                  </div>
+                  {letterMode === 'manual' ? (
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm font-medium">{language==='ar'?'اختر الحرف للجولة التالية':'Pick letter for next round'}</div>
+                      <select className="rounded-md border px-2 py-1 bg-background" value={hostPick} onChange={(e)=>setHostPick(e.target.value)}>
+                        {(gameLang === 'ar' ? 'ابتثجحخدذرزسشصضطظعغفقكلمنهوي' : 'ABCDEFGHIJKLMNOPQRSTUVWXYZ').split('').map(l => (
+                          <option key={l} value={l}>{l}</option>
+                        ))}
+                      </select>
+                      <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={startNextRound}>
+                        {language==='ar'?'بدء الجولة التالية':'Start next round'}
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm text-muted-foreground">{language==='ar'?'الوضع تلقائي: سيتم اختيار الحرف تلقائيًا':'Auto mode: next letter is automatic'}</div>
+                      <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={startNextRound}>
+                        {language==='ar'?'بدء الجولة التالية':'Start next round'}
+                      </Button>
+                    </div>
+                  )}
                 </>
               ) : (
-                <div className="text-sm text-muted-foreground">{language==='ar'?'بانتظار اختيار المضيف للجولة التالية...':'Waiting for host to pick next round letter...'}</div>
+                <div className="text-sm text-muted-foreground">{letterMode==='manual' ? (language==='ar'?'بانتظار اختيار المضيف للجولة التالية...':'Waiting for host to pick next round letter...') : (language==='ar'?'بانتظار بدء الجولة التالية...':'Waiting for next round to start...')}</div>
               )}
             </div>
           )}
