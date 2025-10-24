@@ -128,6 +128,10 @@ export default function LettersPlay() {
         const text = res?.hint || res?.text || (language==='ar' ? 'كلمة شائعة مناسبة' : 'Common fitting word');
         setHintText(text);
         setHintsMap(prev => ({ ...prev, [cat]: text }));
+        // Option A: auto-fill selected field only if it's empty; no auto-submit
+        if (!(values as any)[cat]) {
+          updateValue(cat as any, text);
+        }
       } catch {
         setHintText(language==='ar' ? 'تلميح سريع غير متاح الآن.' : 'Quick hint is not available right now.');
       }
