@@ -255,21 +255,22 @@ export default function LettersPlay() {
     if (!roundId || players.length === 0) return false;
     // Only consider players with a user_id (authenticated)
     const expectedIds = players.map(p=>p.user_id).filter((id): id is string => !!id);
-    if (expectedIds.length === 0) return false;
+    // If some players don't have user_id (guest), skip early end to avoid false positives
+    if (expectedIds.length !== players.length) return false;
     const { data: ans } = await supabase
       .from('letters_answers')
       .select('user_id, submitted_at')
       .eq('round_id', roundId);
     const submittedSet = new Set((ans||[]).filter(a=>a.submitted_at && a.user_id).map(a=>a.user_id as string));
     const all = expectedIds.every(id => submittedSet.has(id));
-    if (all && phase === 'playing' && code && submitEndsRoundFlag) {
-      // Host flips to scoring immediately when enabled
+    if (all && phase === 'playing' && code) {
+      // Always end early when everyone has submitted (host authoritative)
       if (isHost) {
         await supabase.from('letters_games').update({ phase: 'scoring' }).eq('code', code);
         await supabase.from('letters_rounds').update({ ended_at: new Date().toISOString(), status: 'scoring' }).eq('id', roundId);
+        setPhase('scoring');
       }
-      setPhase('scoring');
-      return true;
+      return all;
     }
     return false;
   }
@@ -281,11 +282,25 @@ export default function LettersPlay() {
         if (isHost) {
           await supabase.from('letters_games').update({ phase: 'scoring' }).eq('code', code);
           if (roundId) await supabase.from('letters_rounds').update({ ended_at: new Date().toISOString(), status: 'scoring' }).eq('id', roundId);
+          setPhase('scoring');
         }
-        setPhase('scoring');
       })();
     }
   }, [remaining, phase, isHost, code, roundId]);
+
+  // Safeguard: ensure roundId is present during scoring on all clients
+  React.useEffect(() => {
+    (async () => {
+      if (phase !== 'scoring' || roundId || !code || !roundNo) return;
+      const row = await supabase
+        .from('letters_rounds')
+        .select('id')
+        .eq('game_code', code)
+        .eq('round_no', roundNo)
+        .maybeSingle();
+      if (row.data?.id) setRoundId(row.data.id);
+    })();
+  }, [phase, roundId, code, roundNo]);
 
   // Subscribe to game phase changes (to catch 'done' or next round started by host)
   React.useEffect(() => {
@@ -389,22 +404,32 @@ export default function LettersPlay() {
     })();
   }, [phase, roundId]);
 
-  // Non-host clients: once scores land, load them for the breakdown
+  // Load round scores for breakdown and subscribe for updates
   React.useEffect(() => {
-    if (phase !== 'scoring' || !roundId) return;
-    const ch = supabase.channel(`letters:lrs:${roundId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'letters_round_scores', filter: `round_id=eq.${roundId}` }, async () => {
-        const { data } = await supabase
-          .from('letters_round_scores')
-          .select('user_id, base, bonus, total, fields')
-          .eq('round_id', roundId);
-        if (Array.isArray(data)) {
-          const rows = data.map((r:any)=>({ user_id: r.user_id, base: r.base, bonus: r.bonus, total: r.total, fields: r.fields }));
-          setResults(rows);
-        }
-      })
-      .subscribe();
-    return () => { try { supabase.removeChannel(ch); } catch {} };
+    (async () => {
+      if (phase !== 'scoring' || !roundId) return;
+      const { data } = await supabase
+        .from('letters_round_scores')
+        .select('user_id, base, bonus, total, fields')
+        .eq('round_id', roundId);
+      if (Array.isArray(data) && data.length) {
+        const rows = data.map((r:any)=>({ user_id: r.user_id, base: r.base, bonus: r.bonus, total: r.total, fields: r.fields }));
+        setResults(rows);
+      }
+      const ch = supabase.channel(`letters:lrs:${roundId}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'letters_round_scores', filter: `round_id=eq.${roundId}` }, async () => {
+          const { data } = await supabase
+            .from('letters_round_scores')
+            .select('user_id, base, bonus, total, fields')
+            .eq('round_id', roundId);
+          if (Array.isArray(data)) {
+            const rows = data.map((r:any)=>({ user_id: r.user_id, base: r.base, bonus: r.bonus, total: r.total, fields: r.fields }));
+            setResults(rows);
+          }
+        })
+        .subscribe();
+      return () => { try { supabase.removeChannel(ch); } catch {} };
+    })();
   }, [phase, roundId]);
 
   async function handleSubmit() {
@@ -436,10 +461,9 @@ export default function LettersPlay() {
       // Race mode: host will end via realtime listener; non-hosts do not flip locally
       if (endOnFirstSubmitFlag && phase === 'playing') {
         if (isHost) await endRoundNow();
-      } else {
-        // Otherwise, if all players submitted, host triggers scoring immediately when enabled
-        await checkAllSubmitted();
       }
+      // Regardless of race mode, if everyone has submitted, end early (host only)
+      await checkAllSubmitted();
     } finally {
       setSubmitting(false);
     }
@@ -659,38 +683,42 @@ export default function LettersPlay() {
           {phase==='scoring' && (
             <div className="mt-2 rounded-md border p-3 bg-muted/30">
               <div className="text-sm font-medium mb-2">{language==='ar'?'النتائج':'Results'}</div>
-              {Array.isArray(results) ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {results.map((r:any, idx:number) => (
-                    <div key={idx} className="rounded-md border bg-card p-2 text-sm">
-                      <div className="font-medium mb-1">{players.find(p=>p.user_id===r.user_id)?.name || r.user_id || '-'}</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {players.map((p, idx) => {
+                  const r = (results || []).find((x:any)=>x.user_id===p.user_id);
+                  const uidKey = p.user_id || '';
+                  return (
+                    <div key={(uidKey||'u')+idx} className="rounded-md border bg-card p-2 text-sm">
+                      <div className="font-medium mb-1">{p.name}</div>
                       <div className="flex flex-col gap-1 text-xs">
                         {(['name','place','plant','animal','thing'] as const).map(key => {
                           const label = language==='ar' ? ({name:'اسم',place:'مكان',plant:'نبات',animal:'حيوان',thing:'شيء'} as any)[key] : key;
-                          const valid = !!r.fields?.[key]?.valid;
-                          const value = r.fields?.[key]?.value ?? roundAnswers?.[r.user_id || '']?.[key] ?? '';
-                          const reason = r.fields?.[key]?.reason || '';
+                          const resField:any = r?.fields?.[key];
+                          const value = (resField?.value ?? roundAnswers?.[uidKey]?.[key] ?? '') as string;
+                          const valid = (typeof resField?.valid === 'boolean') ? !!resField.valid : null;
+                          const reason = resField?.reason || '';
+                          const baseCls = valid===true ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200'
+                                        : valid===false ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/20 dark:text-rose-200'
+                                        : 'bg-muted text-muted-foreground';
                           return (
-                            <div key={key} className={`px-2 py-1 rounded ${valid ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200' : 'bg-rose-100 text-rose-800 dark:bg-rose-900/20 dark:text-rose-200'}`}>
+                            <div key={key} className={`px-2 py-1 rounded ${baseCls}`}>
                               <div className="flex items-center justify-between">
                                 <span className="mr-2">{label}</span>
                                 <span className="truncate max-w-[14rem] opacity-90">{String(value || '')}</span>
-                                <span className="ml-2">{valid ? '✓' : '✗'}</span>
+                                <span className="ml-2">{valid===true ? '✓' : valid===false ? '✗' : '…'}</span>
                               </div>
-                              {!valid && reason && (
+                              {valid===false && reason && (
                                 <div className="mt-0.5 text-[11px] opacity-80">{String(reason)}</div>
                               )}
                             </div>
                           );
                         })}
                       </div>
-                      <div className="mt-1 text-xs text-muted-foreground">{language==='ar'?'مجموع':'Total'}: {r.total} {r.bonus?`(+${r.bonus})`:''}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">{language==='ar'?'المجموع':'Total'}: {r?.total ?? 0} {r?.bonus?`(+${r.bonus})`:''}</div>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-xs text-muted-foreground">{language==='ar'?'جاري التحقق من الإجابات...':'Checking answers...'}</div>
-              )}
+                  );
+                })}
+              </div>
             </div>
           )}
 
