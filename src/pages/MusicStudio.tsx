@@ -193,45 +193,46 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
         throw new Error('No audio returned from Runware');
       }
 
-      // Convert base64 data URI to blob and upload to storage
+      // Always upload to Supabase Storage and insert DB row (both data: and https:)
       let storedUrl = audioURL;
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (user && audioURL.startsWith('data:')) {
-          // Convert data URI to blob
-          const response = await fetch(audioURL);
-          const blob = await response.blob();
-          
-          // Upload to Supabase Storage
-          const fileName = `${user.id}/${Date.now()}.mp3`;
-          const { data: uploadData, error: uploadError } = await supabase.storage
-            .from('music')
-            .upload(fileName, blob, { contentType: 'audio/mpeg' });
-          
-          if (uploadError) throw uploadError;
-          
-          // Get public URL
-          const { data: urlData } = supabase.storage.from('music').getPublicUrl(fileName);
-          storedUrl = urlData.publicUrl;
-          
-          // Save to database
-          const { error: dbError } = await supabase.from('user_music_tracks').insert({
-            user_id: user.id,
-            title: prompt.substring(0, 100),
-            storage_path: fileName,
-            duration_sec: Math.min(120, duration),
-            prompt: prompt,
-            cost_usd: audioData.cost || 0
-          });
-          
-          if (dbError) console.error('DB save error:', dbError);
-        }
+        if (!user) throw new Error('Not authenticated');
+
+        // Fetch the audioURL (works for data: and https:)
+        const response = await fetch(audioURL);
+        const blob = await response.blob();
+
+        // Upload to Supabase Storage
+        const fileName = `${user.id}/${Date.now()}.mp3`;
+        const up = await supabase.storage
+          .from('music')
+          .upload(fileName, blob, { contentType: 'audio/mpeg', upsert: false });
+        if (up.error) throw up.error;
+
+        // Public URL
+        const { data: urlData } = supabase.storage.from('music').getPublicUrl(fileName);
+        storedUrl = urlData.publicUrl;
+
+        // Insert into DB
+        const ins = await supabase.from('user_music_tracks').insert({
+          user_id: user.id,
+          title: prompt.substring(0, 100),
+          storage_path: fileName,
+          duration_sec: Math.min(120, duration),
+          prompt: prompt,
+          cost_usd: audioData?.cost || 0
+        });
+        if (ins.error) throw ins.error;
+
+        // Update UI after successful save
+        setAudios((prev) => [{ url: storedUrl, mime: 'audio/mpeg', meta: {}, createdAt: Date.now(), saved: true }, ...prev]);
       } catch (saveError) {
-        console.error('Storage save error:', saveError);
-        // Continue anyway - audio will still play from data URI
+        console.error('Storage/DB save error:', saveError);
+        // Fallback: still show playable result but allow manual Save
+        setAudios((prev) => [{ url: storedUrl, mime: 'audio/mpeg', meta: {}, createdAt: Date.now(), saved: false }, ...prev]);
       }
 
-      setAudios((prev) => [{ url: storedUrl, mime: 'audio/mpeg', meta: {}, createdAt: Date.now(), saved: true }, ...prev]);
       setLastError(null);
 
       toast.success(
@@ -555,7 +556,15 @@ function EditorTab() {
         .order('created_at', { ascending: false })
         .limit(50);
       if (error) throw error;
-      setTracks(data || []);
+      // Derive a playable URL from storage_path when signed_url is missing
+      const withUrls = (data || []).map((t) => {
+        if (!t.signed_url && t.storage_path) {
+          const { data: urlData } = supabase.storage.from('music').getPublicUrl(t.storage_path);
+          return { ...t, signed_url: urlData.publicUrl };
+        }
+        return t;
+      });
+      setTracks(withUrls);
     } catch (e) {
       // noop
     } finally {
