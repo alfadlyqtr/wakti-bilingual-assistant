@@ -170,16 +170,28 @@ export default function LettersResults() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {top3.map((row, idx) => (
-              <div key={(row.user_id ?? 'u') + idx} className="rounded-lg border p-5 bg-card">
-                <div className="flex items-center gap-2 mb-2">
-                  <Crown className={`h-5 w-5 ${idx===0?'text-yellow-500': idx===1?'text-slate-400':'text-amber-700'}`} />
-                  <div className="text-xs text-muted-foreground">{language==='ar'?`المركز ${idx+1}`:`Place ${idx+1}`}</div>
+            {top3.map((row, idx) => {
+              const isFirst = idx === 0;
+              return (
+                <div
+                  key={(row.user_id ?? 'u') + idx}
+                  className={
+                    isFirst
+                      ? "rounded-xl p-6 border bg-gradient-to-br from-yellow-200/60 to-amber-100/50 dark:from-yellow-900/20 dark:to-amber-900/10 shadow-lg ring-1 ring-yellow-400/40"
+                      : "rounded-lg border p-5 bg-card"
+                  }
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Crown className={`h-6 w-6 ${isFirst?'text-yellow-500':'text-slate-400'}`} />
+                    <div className={`text-xs ${isFirst ? 'font-semibold' : 'text-muted-foreground'}`}>
+                      {language==='ar' ? (isFirst ? 'البطل' : `المركز ${idx+1}`) : (isFirst ? 'Champion' : `Place ${idx+1}`)}
+                    </div>
+                  </div>
+                  <div className={isFirst ? 'text-xl font-bold' : 'text-lg font-semibold'}>{nameOf(row.user_id)}</div>
+                  <div className={isFirst ? 'text-3xl font-black mt-1' : 'text-2xl font-bold mt-1'}>{row.total || 0}</div>
                 </div>
-                <div className="text-lg font-semibold">{nameOf(row.user_id)}</div>
-                <div className="text-2xl font-bold mt-1">{row.total || 0}</div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

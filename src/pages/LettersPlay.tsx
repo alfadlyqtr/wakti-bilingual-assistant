@@ -302,6 +302,22 @@ export default function LettersPlay() {
     })();
   }, [phase, roundId, code, roundNo]);
 
+  // Realtime: keep the round letter and started_at in sync for all clients
+  React.useEffect(() => {
+    if (!code || !roundNo) return;
+    const ch = supabase.channel(`letters:round:${code}:${roundNo}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'letters_rounds', filter: `game_code=eq.${code}` }, (payload: any) => {
+        const rn = payload?.new?.round_no;
+        if (typeof rn === 'number' && rn === roundNo) {
+          if (payload?.new?.id && !roundId) setRoundId(payload.new.id as string);
+          if (payload?.new?.letter && payload.new.letter !== currentLetter) setCurrentLetter(payload.new.letter as string);
+          if (payload?.new?.started_at) setStartedAt(payload.new.started_at as string);
+        }
+      })
+      .subscribe();
+    return () => { try { supabase.removeChannel(ch); } catch {} };
+  }, [code, roundNo, currentLetter, roundId]);
+
   // Subscribe to game phase changes (to catch 'done' or next round started by host)
   React.useEffect(() => {
     if (!code) return;
@@ -399,7 +415,10 @@ export default function LettersPlay() {
         .select('user_id, name, place, plant, animal, thing')
         .eq('round_id', roundId);
       const map: Record<string, any> = {};
-      (data||[]).forEach((a:any)=>{ if(a.user_id) map[a.user_id] = { name:a.name, place:a.place, plant:a.plant, animal:a.animal, thing:a.thing }; });
+      (data||[]).forEach((a:any)=>{
+        const key = String(a.user_id ?? 'null');
+        map[key] = { name:a.name, place:a.place, plant:a.plant, animal:a.animal, thing:a.thing };
+      });
       setRoundAnswers(map);
     })();
   }, [phase, roundId]);
@@ -504,12 +523,21 @@ export default function LettersPlay() {
   React.useEffect(() => {
     // This runs for all clients when host updates letters_games
     setSubmitted(false);
+    setSubmittedLeftSec(null);
     setValues({ name: '', place: '', plant: '', animal: '', thing: '' });
     setResults(null);
     setHintText(null);
     setHintsMap({});
     setHintUsed(false);
   }, [roundNo, startedAt]);
+
+  // Also unlock inputs whenever phase returns to 'playing'
+  React.useEffect(() => {
+    if (phase === 'playing') {
+      setSubmitted(false);
+      setSubmittedLeftSec(null);
+    }
+  }, [phase]);
 
   // Poll players list
   React.useEffect(() => {
@@ -686,7 +714,7 @@ export default function LettersPlay() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {players.map((p, idx) => {
                   const r = (results || []).find((x:any)=>x.user_id===p.user_id);
-                  const uidKey = p.user_id || '';
+                  const uidKey = String(p.user_id ?? 'null');
                   return (
                     <div key={(uidKey||'u')+idx} className="rounded-md border bg-card p-2 text-sm">
                       <div className="font-medium mb-1">{p.name}</div>
