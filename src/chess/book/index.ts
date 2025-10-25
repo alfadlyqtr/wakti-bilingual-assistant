@@ -1,4 +1,5 @@
-import type { Difficulty } from "../engine/difficulty";
+// Define Difficulty type locally
+export type Difficulty = 'easy' | 'medium' | 'hard' | 'master';
 
 export type BookMove = { san: string; weight: number };
 export type BookLine = { fenPrefix: string; moves: BookMove[] };
