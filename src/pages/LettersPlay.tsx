@@ -214,38 +214,63 @@ export default function LettersPlay() {
   }
 
   // Load current letter when round or mode changes
+  // CRITICAL: Only host computes letter. Players fetch from DB only.
   React.useEffect(() => {
     if (!code) return;
+    if (!isHost) {
+      // Non-host: don't compute, wait for DB sync
+      return;
+    }
+    // Host only: compute and set letter
     if (letterMode === 'manual' && manualLetter) {
       setCurrentLetter(manualLetter);
     } else {
       setCurrentLetter(autoLetterForRound(code, gameLang, roundNo));
     }
     setHostPick(gameLang === 'ar' ? 'ا' : 'A');
-  }, [letterMode, manualLetter, code, gameLang, roundNo]);
+  }, [letterMode, manualLetter, code, gameLang, roundNo, isHost]);
 
   // Ensure round row handling: host inserts, players fetch
+  // CRITICAL FIX: Host inserts letter first, then ALL players (including host) fetch to ensure sync
   React.useEffect(() => {
     (async () => {
       if (!code || !startedAt || !roundNo) return;
       if (isHost) {
         if (!currentLetter) return;
+        // Host: insert the computed letter into DB
         const up = await supabase
           .from('letters_rounds')
           .upsert({ game_code: code, round_no: roundNo, letter: currentLetter, status: 'playing', started_at: startedAt }, { onConflict: 'game_code,round_no' })
-          .select('id')
+          .select('id, letter')
           .single();
         if (up.data?.id) setRoundId(up.data.id);
+        // Host also syncs from DB to ensure consistency
+        if (up.data?.letter && up.data.letter !== currentLetter) {
+          setCurrentLetter(up.data.letter);
+        }
       } else {
-        const row = await supabase
-          .from('letters_rounds')
-          .select('id, letter, started_at')
-          .eq('game_code', code)
-          .eq('round_no', roundNo)
-          .maybeSingle();
-        if (row.data?.id) setRoundId(row.data.id);
-        if (row.data?.letter) setCurrentLetter(row.data.letter);
-        if (row.data?.started_at) setStartedAt(row.data.started_at);
+        // Non-host: ONLY fetch from DB, never compute locally
+        let attempts = 0;
+        const maxAttempts = 10;
+        // Retry until we get the letter (wait for host to insert)
+        while (attempts < maxAttempts) {
+          const row = await supabase
+            .from('letters_rounds')
+            .select('id, letter, started_at')
+            .eq('game_code', code)
+            .eq('round_no', roundNo)
+            .maybeSingle();
+          if (row.data?.id) setRoundId(row.data.id);
+          if (row.data?.letter) {
+            setCurrentLetter(row.data.letter);
+            if (row.data?.started_at) setStartedAt(row.data.started_at);
+            break;
+          }
+          attempts++;
+          if (attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
       }
     })();
   }, [code, currentLetter, startedAt, roundNo, isHost]);
