@@ -630,7 +630,7 @@ export default function LettersPlay() {
               <div className={`ml-2 text-lg md:text-xl font-semibold tabular-nums ${remaining <= 10 ? 'text-red-600 animate-pulse' : ''}`}>{remaining}s</div>
             </div>
             <div className="mt-3 text-xs text-muted-foreground">
-              {language === 'ar' ? `الجولة 1 من ${roundsTotal ?? '-'}` : `Round 1 of ${roundsTotal ?? '-'}`}
+              {language === 'ar' ? `الجولة ${roundNo} من ${roundsTotal ?? '-'}` : `Round ${roundNo} of ${roundsTotal ?? '-'}`}
             </div>
             <div className="mt-1 text-xs text-muted-foreground">
               {language === 'ar' ? 'اللغة' : 'Language'}: {gameLang === 'ar' ? (language === 'ar' ? 'العربية' : 'Arabic') : (language === 'ar' ? 'الإنجليزية' : 'English')}
