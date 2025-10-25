@@ -7,6 +7,8 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { createPortal } from 'react-dom';
+import { AudioPlayer } from '@/components/music/AudioPlayer';
+import { Info } from 'lucide-react';
 
 export default function MusicStudio() {
   const { language } = useTheme();
@@ -476,70 +478,82 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
             )}
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-4">
+            {/* Save Reminder */}
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/50 border border-muted">
+              <Info className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-muted-foreground">
+                {language === 'ar' 
+                  ? 'تذكير: احفظ الموسيقى للوصول إليها لاحقاً من علامة التبويب "المحفوظات" وتنزيلها.'
+                  : 'Reminder: Save your music to access it later from the "Saved" tab and download it.'}
+              </p>
+            </div>
+
             {audios.map((a, idx) => (
-              <div key={a.createdAt + '-' + idx} className="flex items-center gap-3">
-                <audio controls src={a.url} className="w-full" />
-                <a
-                  href={a.url}
-                  download={`track-${a.createdAt}.mp3`}
-                  className="inline-flex items-center rounded-md border px-3 py-1 text-sm hover:bg-accent"
-                >
-                  {language==='ar' ? 'تنزيل' : 'Download'}
-                </a>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={a.saved}
-                  onClick={async () => {
-                    try {
-                      const { data: { user } } = await supabase.auth.getUser();
-                      if (!user) throw new Error(language==='ar' ? 'سجّل الدخول للحفظ' : 'Sign in to save');
-                      let storagePath: string | null = null;
-                      let publicUrl = a.url;
-                      // If already a public URL within our bucket, derive storage path
-                      const marker = '/storage/v1/object/public/music/';
-                      if (publicUrl.includes(marker)) {
-                        storagePath = publicUrl.split(marker)[1] || null;
-                      }
-                      // Otherwise, fetch and upload
-                      if (!storagePath) {
-                        const response = await fetch(a.url);
-                        const blob = await response.blob();
-                        const fileName = `${user.id}/${Date.now()}.mp3`;
-                        const up = await supabase.storage.from('music').upload(fileName, blob, { contentType: 'audio/mpeg', upsert: false });
-                        if (up.error) throw up.error;
-                        const { data: urlData } = supabase.storage.from('music').getPublicUrl(fileName);
-                        publicUrl = urlData.publicUrl;
-                        storagePath = fileName;
-                      }
-                      // Avoid duplicates: check existing by storage_path
-                      if (storagePath) {
-                        const { count } = await supabase
-                          .from('user_music_tracks')
-                          .select('*', { count: 'exact', head: true })
-                          .eq('user_id', user.id)
-                          .eq('storage_path', storagePath);
-                        if (!count || count === 0) {
-                          await supabase.from('user_music_tracks').insert({
-                            user_id: user.id,
-                            title: prompt.substring(0, 100),
-                            storage_path: storagePath,
-                            duration_sec: Math.min(120, duration),
-                            prompt: prompt,
-                          });
+              <div key={a.createdAt + '-' + idx} className="space-y-3 p-3 rounded-lg border bg-card">
+                <AudioPlayer src={a.url} className="w-full" />
+                <div className="flex items-center gap-2 justify-end">
+                  <a
+                    href={a.url}
+                    download={`track-${a.createdAt}.mp3`}
+                    className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-accent transition-colors"
+                  >
+                    {language==='ar' ? 'تنزيل' : 'Download'}
+                  </a>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={a.saved}
+                    onClick={async () => {
+                      try {
+                        const { data: { user } } = await supabase.auth.getUser();
+                        if (!user) throw new Error(language==='ar' ? 'سجّل الدخول للحفظ' : 'Sign in to save');
+                        let storagePath: string | null = null;
+                        let publicUrl = a.url;
+                        // If already a public URL within our bucket, derive storage path
+                        const marker = '/storage/v1/object/public/music/';
+                        if (publicUrl.includes(marker)) {
+                          storagePath = publicUrl.split(marker)[1] || null;
                         }
+                        // Otherwise, fetch and upload
+                        if (!storagePath) {
+                          const response = await fetch(a.url);
+                          const blob = await response.blob();
+                          const fileName = `${user.id}/${Date.now()}.mp3`;
+                          const up = await supabase.storage.from('music').upload(fileName, blob, { contentType: 'audio/mpeg', upsert: false });
+                          if (up.error) throw up.error;
+                          const { data: urlData } = supabase.storage.from('music').getPublicUrl(fileName);
+                          publicUrl = urlData.publicUrl;
+                          storagePath = fileName;
+                        }
+                        // Avoid duplicates: check existing by storage_path
+                        if (storagePath) {
+                          const { count } = await supabase
+                            .from('user_music_tracks')
+                            .select('*', { count: 'exact', head: true })
+                            .eq('user_id', user.id)
+                            .eq('storage_path', storagePath);
+                          if (!count || count === 0) {
+                            await supabase.from('user_music_tracks').insert({
+                              user_id: user.id,
+                              title: prompt.substring(0, 100),
+                              storage_path: storagePath,
+                              duration_sec: Math.min(120, duration),
+                              prompt: prompt,
+                            });
+                          }
+                        }
+                        setAudios((prev) => prev.map((it, i) => i===idx ? { ...it, url: publicUrl, saved: true } : it));
+                        toast.success(language==='ar' ? 'تم الحفظ. انتقل إلى المحفوظات.' : 'Saved. Switched to Saved.');
+                        onSaved?.();
+                      } catch (e: any) {
+                        toast.error((language==='ar'?'تعذر الحفظ: ':'Save failed: ') + (e?.message || String(e)));
                       }
-                      setAudios((prev) => prev.map((it, i) => i===idx ? { ...it, url: publicUrl, saved: true } : it));
-                      toast.success(language==='ar' ? 'تم الحفظ. انتقل إلى المحفوظات.' : 'Saved. Switched to Saved.');
-                      onSaved?.();
-                    } catch (e: any) {
-                      toast.error((language==='ar'?'تعذر الحفظ: ':'Save failed: ') + (e?.message || String(e)));
-                    }
-                  }}
-                >
-                  {a.saved ? (language==='ar' ? 'تم الحفظ' : 'Saved') : (language==='ar' ? 'حفظ' : 'Save')}
-                </Button>
+                    }}
+                  >
+                    {a.saved ? (language==='ar' ? 'تم الحفظ' : 'Saved') : (language==='ar' ? 'حفظ' : 'Save')}
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
@@ -604,18 +618,20 @@ function EditorTab() {
               <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                 {(t.include_styles||[]).map((s)=> <span key={s} className="px-2 py-0.5 rounded-full bg-muted">{s}</span>)}
               </div>
-              <div className="flex items-center gap-3">
-                <audio controls src={t.signed_url || undefined} className="w-full" />
-                {t.signed_url && (
-                  <a
-                    href={t.signed_url}
-                    download={`track-${t.id}.mp3`}
-                    className="inline-flex items-center rounded-md border px-3 py-1 text-sm hover:bg-accent"
-                  >
-                    {language==='ar' ? 'تنزيل' : 'Download'}
-                  </a>
-                )}
-              </div>
+              {t.signed_url && (
+                <div className="space-y-3">
+                  <AudioPlayer src={t.signed_url} className="w-full" />
+                  <div className="flex justify-end">
+                    <a
+                      href={t.signed_url}
+                      download={`track-${t.id}.mp3`}
+                      className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-accent transition-colors"
+                    >
+                      {language==='ar' ? 'تنزيل' : 'Download'}
+                    </a>
+                  </div>
+                </div>
+              )}
             </Card>
           ))}
         </div>
