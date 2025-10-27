@@ -35,7 +35,7 @@ export default function LettersWaiting() {
       // Try Supabase first
       const { data, error } = await supabase
         .from('letters_games')
-        .select('title, host_name, host_user_id, max_players, hints_enabled, end_on_first_submit')
+        .select('title, host_name, host_user_id, max_players, hints_enabled, end_on_first_submit, phase')
         .eq('code', gameCode)
         .maybeSingle();
       if (!cancelled) {
@@ -46,6 +46,10 @@ export default function LettersWaiting() {
           if (typeof data.max_players === 'number' && !location.state?.maxPlayers) setMaxPlayers(data.max_players);
           if (typeof data.hints_enabled === 'boolean') setHintsEnabled(!!data.hints_enabled);
           if (typeof data.end_on_first_submit === 'boolean') setEndOnFirstSubmit(!!data.end_on_first_submit);
+          if ((data as any)?.phase === 'countdown' && !navigated) {
+            setNavigated(true);
+            navigate(`/games/letters/play/${gameCode}`, { state: { lateJoin: true, hintsEnabled, endOnFirstSubmit } });
+          }
         } else {
           // Fallback to localStorage if available
           try {
@@ -70,13 +74,13 @@ export default function LettersWaiting() {
       if (!gameCode || navigated) return;
       const { data } = await supabase
         .from('letters_games')
-        .select('started_at, round_duration_sec, hints_enabled, end_on_first_submit')
+        .select('started_at, round_duration_sec, hints_enabled, end_on_first_submit, phase')
         .eq('code', gameCode)
         .maybeSingle();
       if (!active) return;
-      if (data && data.started_at) {
+      if (data && ((data as any).phase === 'countdown' || data.started_at)) {
         setNavigated(true);
-        navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: data.round_duration_sec, hintsEnabled: !!data.hints_enabled, endOnFirstSubmit: !!data.end_on_first_submit } });
+        navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: data.round_duration_sec, hintsEnabled: !!data.hints_enabled, endOnFirstSubmit: !!data.end_on_first_submit, lateJoin: true } });
       }
     }
     pollStarted();
@@ -90,9 +94,10 @@ export default function LettersWaiting() {
     const channel = supabase.channel(`letters_games:${gameCode}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'letters_games', filter: `code=eq.${gameCode}` }, (payload: any) => {
         const started = payload?.new?.started_at;
-        if (started && !navigated) {
+        const phase = payload?.new?.phase;
+        if ((phase === 'countdown' || started) && !navigated) {
           setNavigated(true);
-          navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: payload?.new?.round_duration_sec, hintsEnabled: !!payload?.new?.hints_enabled, endOnFirstSubmit: !!payload?.new?.end_on_first_submit } });
+          navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: payload?.new?.round_duration_sec, hintsEnabled: !!payload?.new?.hints_enabled, endOnFirstSubmit: !!payload?.new?.end_on_first_submit, lateJoin: true } });
         }
       })
       .subscribe();
@@ -235,16 +240,12 @@ export default function LettersWaiting() {
               onClick={async()=>{
                 if (!gameCode) return;
                 try {
-                  await supabase.from('letters_games').update({ started_at: new Date().toISOString() }).eq('code', gameCode);
-                } catch {}
-                try {
-                  const roundDuration = (location.state as any)?.roundDurationSec;
-                  if (startChannelRef.current) {
-                    await startChannelRef.current.send({ type: 'broadcast', event: 'started', payload: { roundDurationSec: roundDuration, hintsEnabled, endOnFirstSubmit } });
-                  }
+                  const nowIso = new Date().toISOString();
+                  // Start DB-driven countdown (Option B)
+                  await supabase.from('letters_games').update({ phase: 'countdown', countdown_start_at: nowIso, countdown_sec: 3, current_round_no: 1, started_at: null }).eq('code', gameCode);
                 } catch {}
                 setNavigated(true);
-                navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: (location.state as any)?.roundDurationSec, hintsEnabled, endOnFirstSubmit } });
+                navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: (location.state as any)?.roundDurationSec, hintsEnabled, endOnFirstSubmit, lateJoin: true } });
               }}
             >
               {language === 'ar' ? 'ابدأ اللعبة الآن' : 'Start game now'}
