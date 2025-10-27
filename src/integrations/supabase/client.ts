@@ -18,9 +18,12 @@ const supabaseAnonKey =
 const effectiveUrl = supabaseUrl;
 const effectiveAnon = supabaseAnonKey;
 
+<<<<<<< Updated upstream
 // Export the URL for use in other services
 export const SUPABASE_URL = effectiveUrl;
 
+=======
+>>>>>>> Stashed changes
 export const supabase = createClient<Database>(effectiveUrl, effectiveAnon, {
   auth: {
     persistSession: true,

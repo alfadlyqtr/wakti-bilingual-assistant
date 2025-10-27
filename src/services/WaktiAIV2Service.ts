@@ -1056,6 +1056,9 @@ class WaktiAIV2ServiceClass {
           await ensurePassport();
           userId = await getCurrentUserId();
           if (!userId) throw new Error('Authentication required');
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
         }
       } catch {}

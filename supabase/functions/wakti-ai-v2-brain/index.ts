@@ -209,6 +209,7 @@ async function performSearchWithTavily(query: string, userId: string, language: 
       : [];
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
       return {
         success: true,
         results: searchResults,
@@ -269,6 +270,32 @@ async function performSearchWithTavily(query: string, userId: string, language: 
         };
       }
     
+=======
+      if (searchResults.length > 0) {
+        return {
+          success: true,
+          results: searchResults,
+          answer: (searchData as Record<string, unknown>)?.answer as string | null || null
+        };
+      } else {
+        return {
+          success: false,
+          error: language === 'ar' ? 'لم يتم العثور على نتائج' : 'No results found',
+          response: language === 'ar' 
+            ? 'لم أتمكن من العثور على معلومات حول هذا الموضوع.'
+            : 'I could not find information about this topic.'
+        };
+      }
+    } catch (error: unknown) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return {
+          success: false,
+          error: 'Search request was cancelled',
+          response: language === 'ar' ? 'تم إلغاء البحث' : 'Search was cancelled'
+        };
+      }
+    
+>>>>>>> Stashed changes
       const errMsg = error instanceof Error ? error.message : String(error);
       console.error('🔍 SEARCH ERROR:', error);
       return {
@@ -279,6 +306,9 @@ async function performSearchWithTavily(query: string, userId: string, language: 
           : 'I apologize, there was an error during search. I can help you with other questions.'
       };
     }
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
   }
 
@@ -332,6 +362,7 @@ async function fetchWithTimeout(
       
       return response;
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     } catch (error: any) {
       clearTimeout(timeoutId);
       
@@ -344,6 +375,21 @@ async function fetchWithTimeout(
       }
       
       console.log(`🔄 Retrying after error (attempt ${attempt + 2}/${resolvedRetries + 1}):`, error?.message || String(error));
+=======
+    } catch (error: unknown) {
+      clearTimeout(timeoutId);
+      
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new Error(`Request timeout after ${timeoutMs}ms`);
+      }
+      
+      const msg = error instanceof Error ? error.message : String(error);
+      if (attempt === retries) {
+        throw (error instanceof Error ? error : new Error(msg));
+      }
+      
+      console.log(`🔄 Retrying after error (attempt ${attempt + 2}/${retries + 1}):`, msg);
+>>>>>>> Stashed changes
 =======
     } catch (error: unknown) {
       clearTimeout(timeoutId);
@@ -521,7 +567,11 @@ serve(async (req) => {
       browsingData = { ...baseMeta, success: true, answer: searchResult.answer || null, results: searchResult.results };
       const sourcesList = searchResult.results
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         .map((r: any, i: number) => `[${i + 1}] ${r.title}\n${r.url}\n${r.content}`)
+=======
+        .map((r: SearchResultItem, i: number) => `${i + 1}. ${r.title} - ${r.url}\nSummary: ${r.content}`)
+>>>>>>> Stashed changes
 =======
         .map((r: SearchResultItem, i: number) => `${i + 1}. ${r.title} - ${r.url}\nSummary: ${r.content}`)
 >>>>>>> Stashed changes
@@ -556,6 +606,9 @@ serve(async (req) => {
     // Try models in order: Claude → GPT-4 → DeepSeek
     const modelOrder = ['claude', 'gpt4', 'deepseek'];
     let lastError: unknown | null = null;
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
     let fallbackUsed = false;
     const attemptedModels: string[] = [];
@@ -629,12 +682,21 @@ serve(async (req) => {
         });
         
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
       } catch (error) {
         console.error(`❌ ${modelName} failed:`, (error as any)?.message || String(error));
         if ((error as any)?.stack) console.error((error as any).stack);
         lastError = error;
         fallbackUsed = true;
         attemptedModels.push(`${modelName}: failed - ${((error as any)?.message || String(error))}`);
+=======
+      } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error);
+        console.error(`❌ ${modelName} failed:`, msg);
+        lastError = error as unknown;
+        fallbackUsed = true;
+        attemptedModels.push(`${modelName}: failed - ${msg}`);
+>>>>>>> Stashed changes
 =======
       } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error);
@@ -681,14 +743,20 @@ serve(async (req) => {
     if (stack) console.error("🚀 ERROR STACK:", stack);
     
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     const errorMessage = requestLanguage === 'ar'
 =======
+=======
+>>>>>>> Stashed changes
     const preferredLanguage = (() => {
       const h = req.headers.get('accept-language') ?? '';
       return h.includes('ar') ? 'ar' : 'en';
     })();
 
     const errorMessage = preferredLanguage === 'ar' 
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
       ? 'أعتذر، حدث خطأ مؤقت. يرجى المحاولة مرة أخرى.'
       : 'I apologize, there was a temporary issue. Please try again.';
@@ -866,8 +934,11 @@ async function callClaude35API(
 }
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 async function callOpenAIChatAPI(message, conversationId, language = 'en', attachedFiles = [], activeTrigger = 'general', recentMessages = [], personalTouch = null) {
 =======
+=======
+>>>>>>> Stashed changes
 async function callGPT4API(
   message: string,
   conversationId?: string,
@@ -877,6 +948,9 @@ async function callGPT4API(
   recentMessages: RecentMessageUnknown[] = [],
   personalTouch: PersonalTouch | null = null
 ) {
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
   try {
     if (!OPENAI_API_KEY) {
@@ -961,6 +1035,7 @@ ${personalizationContext}`;
     });
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     // Always use Chat Completions for chat mode
     const openAiModel = (models.openai && models.openai.model) ? models.openai.model : 'gpt-4o-mini';
     const resp = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
@@ -977,6 +1052,26 @@ ${personalizationContext}`;
       }),
       timeoutMs: models.openai.timeout
     });
+=======
+    // Make API call to OpenAI
+    const response = await fetchWithTimeout(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: messages,
+          max_tokens: 4000,
+          temperature: 0.7
+        })
+      },
+      models.gpt4.timeout
+    );
+>>>>>>> Stashed changes
 =======
     // Make API call to OpenAI
     const response = await fetchWithTimeout(
@@ -1016,9 +1111,12 @@ ${personalizationContext}`;
     }
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
   } catch (error) {
     console.error('🤖 OPENAI API ERROR:', error);
 =======
+=======
+>>>>>>> Stashed changes
   } catch (error: unknown) {
     console.error('🤖 GPT-4 API ERROR:', error);
 >>>>>>> Stashed changes

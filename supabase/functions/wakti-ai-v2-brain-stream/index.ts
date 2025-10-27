@@ -15,6 +15,9 @@ import type {
   SearchAPIData,
   OpenAIStreamChunk,
 } from "../_types/shared.ts";
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 
 const allowedOrigins = [

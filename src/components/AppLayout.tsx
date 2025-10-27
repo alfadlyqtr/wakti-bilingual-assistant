@@ -1,6 +1,10 @@
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 import React, { useEffect } from "react";
 import { useLocation } from "react-router-dom";
+=======
+import React, { createContext, useContext } from "react";
+>>>>>>> Stashed changes
 =======
 import React, { createContext, useContext } from "react";
 >>>>>>> Stashed changes
@@ -16,6 +20,7 @@ interface AppLayoutProps {
   children: React.ReactNode;
 }
 
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
 function MobileAppLayout({ children }: AppLayoutProps) {
   useUnreadMessages();
@@ -60,6 +65,35 @@ export function AppLayout({ children }: AppLayoutProps) {
   const unreadData = useUnreadMessages();
 
   return (
+=======
+interface UnreadContextType {
+  unreadTotal: number;
+  taskCount: number;
+  maw3dEventCount: number;
+  contactCount: number;
+  sharedTaskCount: number;
+  perContactUnread: Record<string, number>;
+  refetch: () => void;
+}
+
+const UnreadContext = createContext<UnreadContextType>({
+  unreadTotal: 0,
+  taskCount: 0,
+  maw3dEventCount: 0,
+  contactCount: 0,
+  sharedTaskCount: 0,
+  perContactUnread: {},
+  refetch: () => {}
+});
+
+export const useUnreadContext = () => useContext(UnreadContext);
+
+export function AppLayout({ children }: AppLayoutProps) {
+  // Single instance of useUnreadMessages hook - the only one in the entire app
+  const unreadData = useUnreadMessages();
+
+  return (
+>>>>>>> Stashed changes
     <UnreadContext.Provider value={unreadData}>
       <ProtectedRoute>
         <div className="min-h-screen bg-background">
@@ -76,6 +110,9 @@ export function AppLayout({ children }: AppLayoutProps) {
         </div>
       </ProtectedRoute>
     </UnreadContext.Provider>
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
   );
 }
