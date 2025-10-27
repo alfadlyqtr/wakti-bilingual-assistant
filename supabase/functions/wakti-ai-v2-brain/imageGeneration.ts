@@ -1,6 +1,9 @@
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 =======
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
 import '../_types/deno-globals.d.ts';
@@ -258,6 +261,9 @@ export async function generateImageWithRunware(
       }
     ] as const);
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
@@ -431,6 +437,7 @@ export async function generateImageWithRunware(
 
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     // Select result per task type
     const targetTaskType = options?.backgroundRemoval ? 'imageBackgroundRemoval' : 'imageInference';
     const imageResult = responseData?.data?.find((item: any) => item.taskType === targetTaskType);
@@ -450,12 +457,21 @@ export async function generateImageWithRunware(
       : undefined;
 
 >>>>>>> Stashed changes
+=======
+    const imageResult = Array.isArray(responseData?.data)
+      ? responseData.data.find((item) => (item as { taskType?: unknown }).taskType === 'imageInference')
+      : undefined;
+
+>>>>>>> Stashed changes
     // Safely read the imageURL from loosely-typed response
     const imageUrl = (imageResult && typeof imageResult === 'object' && 'imageURL' in imageResult)
       ? (imageResult as { imageURL?: unknown }).imageURL
       : undefined;
     if (typeof imageUrl === 'string' && imageUrl.length > 0) {
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
@@ -474,8 +490,13 @@ export async function generateImageWithRunware(
       const responseMessage = language === 'ar' 
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         ? `🎨 تم إنشاء الصورة بنجاح!\n\n![Generated Image](${urlCandidate})\n\n**الوصف الأصلي:** ${originalPrompt}\n**الوصف المترجم:** ${finalPrompt}`
         : `🎨 Image generated successfully!\n\n![Generated Image](${urlCandidate})\n\n**Prompt:** ${finalPrompt}`;
+=======
+        ? `🎨 تم إنشاء الصورة بنجاح!\n\n![Generated Image](${imageUrl})\n\n**الوصف الأصلي:** ${originalPrompt}\n**الوصف المترجم:** ${finalPrompt}`
+        : `🎨 Image generated successfully!\n\n![Generated Image](${imageUrl})\n\n**Prompt:** ${finalPrompt}`;
+>>>>>>> Stashed changes
 =======
         ? `🎨 تم إنشاء الصورة بنجاح!\n\n![Generated Image](${imageUrl})\n\n**الوصف الأصلي:** ${originalPrompt}\n**الوصف المترجم:** ${finalPrompt}`
         : `🎨 Image generated successfully!\n\n![Generated Image](${imageUrl})\n\n**Prompt:** ${finalPrompt}`;
@@ -491,7 +512,11 @@ export async function generateImageWithRunware(
         response: responseMessage,
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         imageUrl: urlCandidate,
+=======
+        imageUrl,
+>>>>>>> Stashed changes
 =======
         imageUrl,
 >>>>>>> Stashed changes

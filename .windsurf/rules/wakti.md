@@ -175,11 +175,24 @@ eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3p
 Legacy JWT secret
 zEG7tYaGSKbRRw4DNzkJTFN6HERGFKzvFQ2FZkoN7QmoKsQEvQn2av/Wr2rCHIFiKQHXpGOBpBugDkhzdPQ7tA==
 
+anon public
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU
+
+service_role
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NzA3MDE2NCwiZXhwIjoyMDYyNjQ2MTY0fQ.5h2M2RiaDlr44NhQPGQnnMHGMYyT-ANUawczbgwFCWU
+
+Legacy JWT secret
+zEG7tYaGSKbRRw4DNzkJTFN6HERGFKzvFQ2FZkoN7QmoKsQEvQn2av/Wr2rCHIFiKQHXpGOBpBugDkhzdPQ7tA==
+
 ## Rules
 ⚠️ Note: Service Role secrets and JWT secrets must never be exposed to frontend code.
 Use them only in secure server-side environments (e.g., Supabase Edge Functions, backend API).
 - ⚠️ Always obey and follow all **Global Rules (Non-Negotiable)** set in `global_rules.md`.  
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
+- Any backend work (Supabase, Edge Functions, DB changes) must respect both **Global Rules** and this **project file**.
+>>>>>>> Stashed changes
+=======
 - Any backend work (Supabase, Edge Functions, DB changes) must respect both **Global Rules** and this **project file**.
 >>>>>>> Stashed changes
 =======

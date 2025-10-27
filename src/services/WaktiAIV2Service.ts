@@ -1057,6 +1057,9 @@ class WaktiAIV2ServiceClass {
           userId = await getCurrentUserId();
           if (!userId) throw new Error('Authentication required');
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
