@@ -168,11 +168,21 @@ serve(async (req) => {
     console.log("🎯 Requested modelPreference:", modelPreference);
     console.log("🎯 Requested temperature:", temperature);
 
+<<<<<<< Updated upstream
     const systemPrompt = getSystemPrompt(language, languageVariant);
     const genParams = getGenerationParams(contentType, tone, length || 'medium', register);
     console.log("🎯 Generation parameters:", genParams);
 
     let generatedText: string | undefined;
+=======
+    const systemPrompt = getSystemPrompt(language);
+    const temp = typeof temperature === 'number' ? Math.max(0, Math.min(1, temperature)) : 0.7;
+    const preferredOpenAIModel = modelPreference === 'gpt-4o' ? 'gpt-4o' : 'gpt-4o-mini';
+    const temperatureUsed = temp;
+    
+    let generatedText = "";
+    let modelUsed = "";
+>>>>>>> Stashed changes
 
     // Try OpenAI (preferred model) first if available
     if (OPENAI_API_KEY) {

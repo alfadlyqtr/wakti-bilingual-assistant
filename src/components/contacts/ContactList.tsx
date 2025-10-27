@@ -22,7 +22,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ContactRelationshipIndicator } from "./ContactRelationshipIndicator";
 import { UnreadBadge } from "@/components/UnreadBadge";
-import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { useAuth } from "@/contexts/AuthContext";
 
 type UserProfile = {
@@ -40,7 +39,15 @@ type ContactType = {
   [key: string]: any;
 };
 
-export function ContactList() {
+interface ContactListProps {
+  perContactUnread?: Record<string, number>;
+  refetchUnreadCounts?: () => void;
+}
+
+export function ContactList({ 
+  perContactUnread = {}, 
+  refetchUnreadCounts = () => {} 
+}: ContactListProps) {
   const { language } = useTheme();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -50,9 +57,6 @@ export function ContactList() {
   const [selectedContact, setSelectedContact] = useState<{id: string, name: string, avatar?: string} | null>(null);
   const [avatarErrors, setAvatarErrors] = useState<Record<string, boolean>>({});
   
-  // Use unified unread system
-  const { perContactUnread, refetch: refetchUnreadCounts } = useUnreadMessages();
-
   // Debug logging for user and unread data
   useEffect(() => {
     console.log('🔍 ContactList - Current user:', user?.id);

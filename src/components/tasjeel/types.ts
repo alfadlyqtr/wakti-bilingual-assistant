@@ -9,13 +9,14 @@ export interface TasjeelRecord {
   id: string;
   user_id: string;
   title: string | null;
-  original_recording_path: string | null;
+  original_recording_path: string;
   transcription: string | null;
   summary: string | null;
   summary_audio_path: string | null;
   duration: number | null;
   saved: boolean;
   created_at: string;
+  updated_at?: string;
   source_type: 'recording' | 'upload' | 'quick_summary';
 }
 

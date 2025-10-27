@@ -1,21 +1,21 @@
-
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, ensurePassport, getCurrentUserId } from "@/integrations/supabase/client";
 
 export class UserEventLinksService {
   // Add an event to user's calendar
   static async addEventToCalendar(eventId: string): Promise<void> {
     console.log('Adding event to user calendar:', eventId);
     
-    const { data: userData, error: userError } = await supabase.auth.getUser();
+    await ensurePassport();
+    const userId = await getCurrentUserId();
     
-    if (userError || !userData.user) {
+    if (!userId) {
       throw new Error('User must be logged in to add events to calendar');
     }
 
     const { error } = await supabase
       .from('user_event_links')
       .insert({
-        user_id: userData.user.id,
+        user_id: userId,
         event_id: eventId
       });
 
@@ -35,16 +35,17 @@ export class UserEventLinksService {
   static async removeEventFromCalendar(eventId: string): Promise<void> {
     console.log('Removing event from user calendar:', eventId);
     
-    const { data: userData, error: userError } = await supabase.auth.getUser();
+    await ensurePassport();
+    const userId = await getCurrentUserId();
     
-    if (userError || !userData.user) {
+    if (!userId) {
       throw new Error('User must be logged in');
     }
 
     const { error } = await supabase
       .from('user_event_links')
       .delete()
-      .eq('user_id', userData.user.id)
+      .eq('user_id', userId)
       .eq('event_id', eventId);
 
     if (error) {
@@ -57,16 +58,17 @@ export class UserEventLinksService {
 
   // Check if event is in user's calendar
   static async isEventInUserCalendar(eventId: string): Promise<boolean> {
-    const { data: userData, error: userError } = await supabase.auth.getUser();
+    await ensurePassport();
+    const userId = await getCurrentUserId();
     
-    if (userError || !userData.user) {
+    if (!userId) {
       return false;
     }
 
     const { data, error } = await supabase
       .from('user_event_links')
       .select('id')
-      .eq('user_id', userData.user.id)
+      .eq('user_id', userId)
       .eq('event_id', eventId)
       .maybeSingle();
 
@@ -80,9 +82,10 @@ export class UserEventLinksService {
 
   // Get user's linked events
   static async getUserLinkedEvents(): Promise<any[]> {
-    const { data: userData, error: userError } = await supabase.auth.getUser();
+    await ensurePassport();
+    const userId = await getCurrentUserId();
     
-    if (userError || !userData.user) {
+    if (!userId) {
       return [];
     }
 
@@ -92,7 +95,7 @@ export class UserEventLinksService {
         *,
         maw3d_events:event_id (*)
       `)
-      .eq('user_id', userData.user.id)
+      .eq('user_id', userId)
       .order('added_at', { ascending: false });
 
     if (error) {

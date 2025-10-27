@@ -319,7 +319,7 @@ async function callClaude35API(message, conversationId, language = 'en', attache
     console.log(`🤖 BACKEND WORKER: Mode="${detectedMode}" (trigger: "${activeTrigger}")`);
 
     const responseLanguage = language;
-    let messages = [];
+    const messages = [];
 
     let personalizationContext = '';
     if (personalTouch) {

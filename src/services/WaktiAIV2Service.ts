@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, ensurePassport, getCurrentUserId } from '@/integrations/supabase/client';
 
 export interface AIMessage {
   id: string;
@@ -538,9 +538,9 @@ class WaktiAIV2ServiceClass {
   ) {
     try {
       if (!userId) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('Authentication required');
-        userId = user.id;
+        await ensurePassport();
+        userId = await getCurrentUserId();
+        if (!userId) throw new Error('Authentication required');
       }
 
       try { await this.maybeRefreshPersonalTouchFromServer(userId); } catch {}
@@ -1046,10 +1046,17 @@ class WaktiAIV2ServiceClass {
       const clientLocalHour = new Date().getHours();
       let isWelcomeBack = false;
       try {
+<<<<<<< Updated upstream
         const lastSeenStr = localStorage.getItem('wakti_last_seen_at');
         if (lastSeenStr) {
           const gapMs = Date.now() - Number(lastSeenStr);
           isWelcomeBack = gapMs >= 12 * 60 * 60 * 1000; // 12 hours
+=======
+        if (!userId) {
+          await ensurePassport();
+          userId = await getCurrentUserId();
+          if (!userId) throw new Error('Authentication required');
+>>>>>>> Stashed changes
         }
       } catch {}
 

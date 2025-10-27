@@ -109,7 +109,7 @@ function extractTaskDetails(message: string, language: string) {
   console.log('📋 EXTRACTING TASK DETAILS from:', message);
   
   // Remove task command prefixes to get the actual task content
-  let taskContent = message
+  const taskContent = message
     .replace(/^(please\s+)?(create|make|add|new)\s+(a\s+)?task\s*:?\s*/i, '')
     .replace(/^(can\s+you\s+)?(create|make|add)\s+(a\s+)?task\s+(for|about|to|that)\s+/i, '')
     .replace(/^(i\s+need\s+)?(a\s+)?(new\s+)?task\s+(for|about|to|that)\s+/i, '')
@@ -129,11 +129,11 @@ function extractTaskDetails(message: string, language: string) {
 
   // Extract title (first part before any time/date mentions)
   let title = taskContent;
-  let description = '';
+  const description = '';
   let dueDate = null;
   let dueTime = null;
-  let priority = 'normal';
-  let subtasks: string[] = [];
+  const priority = 'normal';
+  const subtasks: string[] = [];
 
   // Look for time patterns to extract due date/time
   const timePatterns = [
@@ -224,7 +224,7 @@ function extractReminderDetails(message: string, language: string) {
   console.log('📋 EXTRACTING REMINDER DETAILS from:', message);
   
   // Remove reminder command prefixes
-  let reminderContent = message
+  const reminderContent = message
     .replace(/^(please\s+)?(remind|reminder)\s+me\s+(to|about|that)\s+/i, '')
     .replace(/^(can\s+you\s+)?remind\s+me\s+(to|about|that)\s+/i, '')
     .replace(/^(create|make|add|new)\s+(a\s+)?reminder\s*:?\s*/i, '')

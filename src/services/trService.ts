@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, ensurePassport, getCurrentUserId } from "@/integrations/supabase/client";
 import { TRServiceCache } from "./trServiceCache";
 
 export interface TRTask {
@@ -85,24 +85,19 @@ export class TRService {
       return cachedTasks;
     }
     
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError) {
-      console.error('TRService.getTasks: Authentication error:', authError);
-      throw new Error('Authentication failed. Please log in again.');
-    }
-    
-    if (!user) {
+    const userId = await getCurrentUserId();
+    if (!userId) {
       console.error('TRService.getTasks: No user found');
       throw new Error('User not authenticated. Please log in.');
     }
 
-    console.log('TRService.getTasks: Fetching tasks for user:', user.id);
+    console.log('TRService.getTasks: Fetching tasks for user:', userId);
 
+    await ensurePassport();
     const { data, error } = await supabase
       .from('tr_tasks')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .order('created_at', { ascending: false });
     
     if (error) {
@@ -122,13 +117,14 @@ export class TRService {
   // Background refresh for cached data
   private static async refreshTasksInBackground(): Promise<void> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const userId = await getCurrentUserId();
+      if (!userId) return;
 
+      await ensurePassport();
       const { data, error } = await supabase
         .from('tr_tasks')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .order('created_at', { ascending: false });
       
       if (!error && data) {
@@ -144,23 +140,17 @@ export class TRService {
     console.log('TRService.createTask: Starting task creation');
     console.log('TRService.createTask: Raw input data:', task);
     
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError) {
-      console.error('TRService.createTask: Authentication error:', authError);
-      throw new Error('Authentication failed. Please log in again.');
-    }
-    
-    if (!user) {
+    const userId = await getCurrentUserId();
+    if (!userId) {
       console.error('TRService.createTask: No user found');
       throw new Error('User not authenticated. Please log in.');
     }
 
-    console.log('TRService.createTask: User authenticated:', user.id);
+    console.log('TRService.createTask: User authenticated:', userId);
 
     const taskData = { 
       ...task, 
-      user_id: user.id, 
+      user_id: userId, 
       completed: false 
     };
 
@@ -168,6 +158,7 @@ export class TRService {
 
     console.log('TRService.createTask: Final sanitized data being inserted:', sanitizedData);
 
+    await ensurePassport();
     const { data, error } = await supabase
       .from('tr_tasks')
       .insert([sanitizedData])
@@ -306,24 +297,19 @@ export class TRService {
       return cachedReminders;
     }
     
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError) {
-      console.error('TRService.getReminders: Authentication error:', authError);
-      throw new Error('Authentication failed. Please log in again.');
-    }
-    
-    if (!user) {
+    const userId = await getCurrentUserId();
+    if (!userId) {
       console.error('TRService.getReminders: No user found');
       throw new Error('User not authenticated. Please log in.');
     }
 
-    console.log('TRService.getReminders: Fetching reminders for user:', user.id);
+    console.log('TRService.getReminders: Fetching reminders for user:', userId);
 
+    await ensurePassport();
     const { data, error } = await supabase
       .from('tr_reminders')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .order('due_date', { ascending: true });
     
     if (error) {
@@ -343,13 +329,14 @@ export class TRService {
   // Background refresh for cached reminders
   private static async refreshRemindersInBackground(): Promise<void> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const userId = await getCurrentUserId();
+      if (!userId) return;
 
+      await ensurePassport();
       const { data, error } = await supabase
         .from('tr_reminders')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .order('due_date', { ascending: true });
       
       if (!error && data) {
@@ -362,14 +349,15 @@ export class TRService {
   }
 
   static async createReminder(reminder: Omit<TRReminder, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'snoozed_until'>): Promise<TRReminder> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('User not authenticated');
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error('User not authenticated');
 
     const sanitizedReminder = this.sanitizeTaskData(reminder);
 
+    await ensurePassport();
     const { data, error } = await supabase
       .from('tr_reminders')
-      .insert([{ ...sanitizedReminder, user_id: user.id }])
+      .insert([{ ...sanitizedReminder, user_id: userId }])
       .select()
       .single();
     
@@ -434,14 +422,15 @@ export class TRService {
 
   // Shared access operations
   static async recordSharedAccess(taskId: string, viewerName?: string): Promise<void> {
-    const { data: { user } } = await supabase.auth.getUser();
+    const userId = await getCurrentUserId();
     
+    await ensurePassport();
     const { error } = await supabase
       .from('tr_shared_access')
       .insert([{
         task_id: taskId,
-        viewer_id: user?.id || null,
-        viewer_name: viewerName || (user?.user_metadata?.full_name || user?.email || 'Guest')
+        viewer_id: userId || null,
+        viewer_name: viewerName || 'Guest'
       }]);
     
     if (error) throw error;

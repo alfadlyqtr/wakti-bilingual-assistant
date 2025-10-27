@@ -1,6 +1,7 @@
 // This file contains helper functions for interacting with Supabase
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient, Session } from '@supabase/supabase-js';
 import { TasjeelRecord, AudioUploadOptions } from '@/components/tasjeel/types';
+import type { Database } from '@/integrations/supabase/types';
 
 // Create a single supabase client for interacting with your database
 // Prefer environment variables; fall back to current values for dev safety
@@ -20,7 +21,7 @@ const effectiveAnon = supabaseAnonKey;
 // Export the URL for use in other services
 export const SUPABASE_URL = effectiveUrl;
 
-export const supabase = createClient(effectiveUrl, effectiveAnon, {
+export const supabase = createClient<Database>(effectiveUrl, effectiveAnon, {
   auth: {
     persistSession: true,
     // Ensure tokens refresh and session detection on redirects
@@ -31,6 +32,103 @@ export const supabase = createClient(effectiveUrl, effectiveAnon, {
     storageKey: 'wakti-auth'
   }
 });
+
+// Centralized auth gate to avoid refresh storms across the app.
+// - Coalesces concurrent callers into a single in-flight promise
+// - Resolves when there is a valid (non-expired) session or a token refresh completes
+// - Rejects cleanly on SIGNED_OUT
+let __passportInFlight: Promise<void> | null = null;
+
+const isSessionValid = (session: Session | null | undefined, safetySeconds = 30): boolean => {
+  if (!session) return false;
+  const exp = session.expires_at; // seconds since epoch
+  if (!exp) return true; // be permissive if field missing
+  const nowSec = Math.floor(Date.now() / 1000);
+  return exp - nowSec > safetySeconds;
+};
+
+export async function ensurePassport(timeoutMs = 4000): Promise<void> {
+  // Fast path: if current session is valid enough, return immediately
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (isSessionValid(session)) return;
+  } catch (error) {
+    console.error('[Supabase] Error getting session:', error);
+  }
+
+  if (__passportInFlight) return __passportInFlight;
+
+  __passportInFlight = new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const settle = (ok: boolean, err?: unknown) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      __passportInFlight = null;
+      if (ok) {
+        resolve();
+      } else {
+        reject(err instanceof Error ? err : new Error(err ? String(err) : 'Unknown error'));
+      }
+    };
+
+    const cleanup = () => {
+      try { sub?.unsubscribe(); } catch (_e) { void _e; }
+      try { clearTimeout(timer); } catch (_e) { void _e; }
+    };
+
+    // Listen for auth changes that indicate readiness
+    const { data: { subscription: sub } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'TOKEN_REFRESHED' || (event === 'SIGNED_IN' && session)) {
+        // Extra guard: validate session freshness
+        if (isSessionValid(session)) settle(true);
+      } else if (event === 'SIGNED_OUT') {
+        settle(false, new Error('Signed out'));
+      }
+    });
+
+    // Kick the tires: if we already have a near-valid session, resolve; otherwise, try a single refresh
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (isSessionValid(session)) return settle(true);
+        // Attempt an explicit one-off refresh to avoid multiple implicit refreshers elsewhere
+        try {
+          await supabase.auth.refreshSession();
+          // Resolution will occur via TOKEN_REFRESHED event listener
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.warn('[Supabase] refreshSession failed (will rely on events/timeout):', msg);
+        }
+      } catch (error) {
+        console.error('[Supabase] Error refreshing session:', error);
+      }
+    })();
+
+    // Final fallback: timeout to avoid hanging callers
+    const timer = setTimeout(async () => {
+      try {
+        // As a last check, if we do have any session at all, allow progress to avoid deadlocks
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) return settle(true);
+      } catch (_e) { void _e; }
+      settle(true); // allow proceed; downstream calls may handle 401s
+    }, timeoutMs);
+  });
+
+  return __passportInFlight;
+}
+
+export async function withPassport<T>(op: () => Promise<T>): Promise<T> {
+  await ensurePassport();
+  return op();
+}
+
+// Lightweight helper to get current user id without hitting network
+export async function getCurrentUserId(): Promise<string | null> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.user?.id ?? null;
+}
 
 // One-time connectivity check (no UI impact). Logs minimal status to console.
 declare global {
@@ -53,12 +151,10 @@ if (typeof window !== 'undefined' && !window.__SUPABASE_CHECKED__) {
 // Define types for edge function payloads
 interface TranscribeAudioPayload {
   audioUrl: string;
-  [key: string]: any;  // Allow other properties
+  [key: string]: unknown;  // Allow other properties
 }
 
-interface EdgeFunctionPayload {
-  [key: string]: any;
-}
+type EdgeFunctionPayload = Record<string, unknown>;
 
 // Helper function to wrap Supabase functions with retry logic and detailed error logging
 export const callEdgeFunctionWithRetry = async <T>(
@@ -101,16 +197,18 @@ export const callEdgeFunctionWithRetry = async <T>(
     });
   } else if (functionName === 'summarize-text' && body) {
     // Log summarize-text specific details
+    const sBody = body as { transcript?: string; language?: string };
     console.log(`summarize-text request payload:`, {
-      hasTranscript: !!body.transcript,
-      transcriptLength: body.transcript ? body.transcript.length : 0,
-      language: body.language
+      hasTranscript: !!sBody.transcript,
+      transcriptLength: sBody.transcript ? sBody.transcript.length : 0,
+      language: sBody.language
     });
   } else if (functionName === 'generate-speech' && body) {
     // Log generate-speech specific details
+    const gBody = body as { summary?: string; voice?: string };
     console.log(`generate-speech request payload:`, {
-      summaryLength: body.summary ? body.summary.length : 0,
-      voice: body.voice
+      summaryLength: gBody.summary ? gBody.summary.length : 0,
+      voice: gBody.voice
     });
   }
   
@@ -118,7 +216,7 @@ export const callEdgeFunctionWithRetry = async <T>(
     try {
       console.log(`Edge function "${functionName}" attempt ${attempt + 1}/${maxRetries}`);
       
-      let fullUrl = `${effectiveUrl}/functions/v1/${functionName}`;
+      const fullUrl = `${effectiveUrl}/functions/v1/${functionName}`;
       console.log(`Using direct fetch to: ${fullUrl}`);
       
       const fetchOptions: RequestInit = {
@@ -189,14 +287,15 @@ export const callEdgeFunctionWithRetry = async <T>(
       });
       
       return data as T;
-    } catch (error: any) {
-      console.error(`Error calling edge function "${functionName}" (attempt ${attempt + 1}/${maxRetries}):`, error);
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      console.error(`Error calling edge function "${functionName}" (attempt ${attempt + 1}/${maxRetries}):`, err);
       console.error(`Error details:`, {
-        message: error.message,
-        name: error.name,
-        stack: error.stack?.split('\n').slice(0, 3).join('\n')
+        message: err.message,
+        name: err.name,
+        stack: err.stack?.split('\n').slice(0, 3).join('\n')
       });
-      lastError = error as Error;
+      lastError = err;
       
       // Wait before retrying
       await new Promise(resolve => setTimeout(resolve, retryDelay * (attempt + 1)));
@@ -269,11 +368,30 @@ export const manuallyDeleteOldRecordings = async (): Promise<{ success: boolean;
     };
   } catch (error) {
     console.error('Error manually deleting old recordings:', error);
+    const message = error instanceof Error ? error.message : 'Failed to delete old recordings';
     return {
       success: false,
-      message: error.message || 'Failed to delete old recordings'
+      message
     };
   }
+};
+
+// Map DB row -> domain TasjeelRecord (coerces nullables to domain invariants)
+const mapDbTasjeelRecord = (row: Database['public']['Tables']['tasjeel_records']['Row']): TasjeelRecord => {
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    title: row.title ?? null,
+    original_recording_path: String(row.original_recording_path),
+    transcription: row.transcription ?? null,
+    summary: row.summary ?? null,
+    summary_audio_path: row.summary_audio_path ?? null,
+    duration: row.duration ?? null,
+    saved: row.saved ?? false,
+    created_at: row.created_at ?? new Date().toISOString(),
+    updated_at: row.updated_at ?? undefined,
+    source_type: (row.source_type as TasjeelRecord['source_type']) ?? 'recording'
+  };
 };
 
 // Helper functions for Tasjeel records
@@ -283,18 +401,13 @@ export const saveTasjeelRecord = async (
   recordData: Omit<TasjeelRecord, 'id' | 'user_id' | 'created_at' | 'updated_at'>
 ): Promise<TasjeelRecord> => {
   try {
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    
-    if (userError) {
-      console.error('Error getting user:', userError);
-      throw userError;
-    }
-    
-    if (!userData.user) {
+    await ensurePassport();
+    const userId = await getCurrentUserId();
+    if (!userId) {
       throw new Error('No authenticated user found');
     }
     
-    console.log('Creating Tasjeel record for user:', userData.user.id);
+    console.log('Creating Tasjeel record for user:', userId);
     
     // Make sure to include the saved field, defaulting to true
     const finalRecordData = {
@@ -306,7 +419,7 @@ export const saveTasjeelRecord = async (
       .from('tasjeel_records')
       .insert({
         ...finalRecordData,
-        user_id: userData.user.id
+        user_id: userId
       })
       .select('*')
       .single();
@@ -317,7 +430,7 @@ export const saveTasjeelRecord = async (
     }
     
     console.log('Successfully saved Tasjeel record:', data);
-    return data;
+    return mapDbTasjeelRecord(data);
   } catch (error) {
     console.error('Error saving Tasjeel record:', error);
     throw error;
@@ -347,7 +460,7 @@ export const updateTasjeelRecord = async (
     }
     
     console.log('Successfully updated Tasjeel record:', data);
-    return data;
+    return mapDbTasjeelRecord(data);
   } catch (error) {
     console.error('Error updating Tasjeel record:', error);
     throw error;
@@ -357,23 +470,18 @@ export const updateTasjeelRecord = async (
 // Get all Tasjeel records for the current user
 export const getTasjeelRecords = async (limit = 20, page = 0, savedOnly = false): Promise<TasjeelRecord[]> => {
   try {
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    
-    if (userError) {
-      console.error('Error getting user:', userError);
-      throw userError;
-    }
-    
-    if (!userData.user) {
+    await ensurePassport();
+    const userId = await getCurrentUserId();
+    if (!userId) {
       throw new Error('No authenticated user found');
     }
     
-    console.log('Fetching Tasjeel records for user:', userData.user.id);
+    console.log('Fetching Tasjeel records for user:', userId);
     
     let query = supabase
       .from('tasjeel_records')
       .select('*')
-      .eq('user_id', userData.user.id);
+      .eq('user_id', userId);
     
     // If savedOnly is true, only return saved records
     if (savedOnly) {
@@ -390,7 +498,7 @@ export const getTasjeelRecords = async (limit = 20, page = 0, savedOnly = false)
     }
     
     console.log(`Found ${data?.length || 0} Tasjeel records`);
-    return data || [];
+    return (data || []).map(mapDbTasjeelRecord);
   } catch (error) {
     console.error('Error fetching Tasjeel records:', error);
     throw error;
@@ -417,13 +525,14 @@ export const uploadAudioFile = async (options: AudioUploadOptions): Promise<stri
   const { file, onProgress, onError, onSuccess } = options;
   
   try {
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) {
+    await ensurePassport();
+    const userId = await getCurrentUserId();
+    if (!userId) {
       throw new Error('User not authenticated');
     }
     
     const fileName = `upload-${Date.now()}-${file.name}`;
-    const filePath = `${userData.user.id}/${fileName}`;
+    const filePath = `${userId}/${fileName}`;
     
     const { data, error } = await supabase
       .storage

@@ -1,6 +1,18 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import type {
+  ExecuteActionRequest,
+  ExecuteActionResult,
+  CreateTaskData,
+  CreateEventData,
+  CreateReminderData,
+  AddContactData,
+  Language,
+  RunwareResponse,
+  RunwareImageTask,
+} from "../_types/shared.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -28,7 +40,8 @@ serve(async (req) => {
   }
 
   try {
-    const { action, userId, language } = await req.json();
+    const body = await req.json() as Partial<ExecuteActionRequest>;
+    const { action, userId, language = 'en' as Language } = body;
     
     if (!action || !userId) {
       return new Response(
@@ -48,27 +61,28 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    let result = { success: false, message: '' };
+    let result: ExecuteActionResult = { success: false, message: '' };
 
-    switch (action.type) {
+    const act = action as ExecuteActionRequest['action'];
+    switch (act.type) {
       case 'create_task':
-        result = await createTask(supabase, action.data, userId, language);
+        result = await createTask(supabase, act.data as CreateTaskData, userId, language);
         break;
         
       case 'create_event':
-        result = await createEvent(supabase, action.data, userId, language);
+        result = await createEvent(supabase, act.data as CreateEventData, userId, language);
         break;
         
       case 'create_reminder':
-        result = await createReminder(supabase, action.data, userId, language);
+        result = await createReminder(supabase, act.data as CreateReminderData, userId, language);
         break;
         
       case 'add_contact':
-        result = await addContact(supabase, action.data, userId, language);
+        result = await addContact(supabase, act.data as AddContactData, userId, language);
         break;
         
       case 'generate_image':
-        result = await generateImage(action.prompt || action.data?.prompt, userId, language);
+        result = await generateImage((act as { prompt?: string; data?: { prompt?: string } }).prompt || (act as { data?: { prompt?: string } }).data?.prompt, userId, language);
         break;
         
       default:
@@ -88,7 +102,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: false, 
-        message: error.message 
+        message: error instanceof Error ? error.message : String(error)
       }),
       { 
         status: 500, 
@@ -99,7 +113,7 @@ serve(async (req) => {
 });
 
 // Create task
-async function createTask(supabase: any, data: any, userId: string, language: string) {
+async function createTask(supabase: SupabaseClient, data: CreateTaskData, userId: string, language: Language): Promise<ExecuteActionResult> {
   try {
     const { error } = await supabase
       .from('tasks')
@@ -128,7 +142,7 @@ async function createTask(supabase: any, data: any, userId: string, language: st
 }
 
 // Create event
-async function createEvent(supabase: any, data: any, userId: string, language: string) {
+async function createEvent(supabase: SupabaseClient, data: CreateEventData, userId: string, language: Language): Promise<ExecuteActionResult> {
   try {
     const { error } = await supabase
       .from('maw3d_events')
@@ -159,7 +173,7 @@ async function createEvent(supabase: any, data: any, userId: string, language: s
 }
 
 // Create reminder
-async function createReminder(supabase: any, data: any, userId: string, language: string) {
+async function createReminder(supabase: SupabaseClient, data: CreateReminderData, userId: string, language: Language): Promise<ExecuteActionResult> {
   try {
     const { error } = await supabase
       .from('reminders')
@@ -186,7 +200,7 @@ async function createReminder(supabase: any, data: any, userId: string, language
 }
 
 // Add contact
-async function addContact(supabase: any, data: any, userId: string, language: string) {
+async function addContact(supabase: SupabaseClient, data: AddContactData, userId: string, language: Language): Promise<ExecuteActionResult> {
   try {
     // This is a simplified version - in reality you'd handle contact invitations
     console.log('Contact addition requested:', data);
@@ -205,7 +219,7 @@ async function addContact(supabase: any, data: any, userId: string, language: st
 }
 
 // Generate image with Runware
-async function generateImage(prompt: string, userId: string, language: string) {
+async function generateImage(prompt: string | undefined, userId: string, language: Language): Promise<ExecuteActionResult & { imageUrl?: string }> {
   try {
     console.log("Generating image with Runware for prompt:", prompt);
     if (!RUNWARE_API_KEY) {
@@ -249,7 +263,26 @@ async function generateImage(prompt: string, userId: string, language: string) {
       });
     }
 
+<<<<<<< Updated upstream
     console.log('Runware response status:', response.status, 'modelUsed:', modelUsed);
+=======
+    if (response.ok) {
+      const runwareRes: RunwareResponse = await response.json();
+      console.log("Runware response data:", runwareRes);
+      
+      // Type guard to locate image inference result
+      const isRunwareImageTask = (item: unknown): item is RunwareImageTask => {
+        return typeof item === 'object' && item !== null && (item as { taskType?: unknown }).taskType === 'imageInference';
+      };
+      const imageResult = (runwareRes.data ?? []).find(isRunwareImageTask);
+      
+      if (imageResult && imageResult.imageURL) {
+        // Create Supabase client to save image
+        const supabase = createClient(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        );
+>>>>>>> Stashed changes
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -294,7 +327,7 @@ async function generateImage(prompt: string, userId: string, language: string) {
     return {
       success: false,
       message: language === 'ar' ? 'فشل في إنشاء الصورة' : 'Failed to generate image',
-      error: error.message
+      error: error instanceof Error ? error.message : String(error)
     };
   }
 }

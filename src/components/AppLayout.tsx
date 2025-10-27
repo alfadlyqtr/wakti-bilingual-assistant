@@ -1,5 +1,9 @@
+<<<<<<< Updated upstream
 import React, { useEffect } from "react";
 import { useLocation } from "react-router-dom";
+=======
+import React, { createContext, useContext } from "react";
+>>>>>>> Stashed changes
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { AppHeader } from "@/components/AppHeader";
 import { DesktopLayout } from "@/components/layouts/DesktopLayout";
@@ -12,6 +16,7 @@ interface AppLayoutProps {
   children: React.ReactNode;
 }
 
+<<<<<<< Updated upstream
 function MobileAppLayout({ children }: AppLayoutProps) {
   useUnreadMessages();
 
@@ -27,6 +32,51 @@ function MobileAppLayout({ children }: AppLayoutProps) {
         </main>
       </div>
     </ProtectedRoute>
+=======
+interface UnreadContextType {
+  unreadTotal: number;
+  taskCount: number;
+  maw3dEventCount: number;
+  contactCount: number;
+  sharedTaskCount: number;
+  perContactUnread: Record<string, number>;
+  refetch: () => void;
+}
+
+const UnreadContext = createContext<UnreadContextType>({
+  unreadTotal: 0,
+  taskCount: 0,
+  maw3dEventCount: 0,
+  contactCount: 0,
+  sharedTaskCount: 0,
+  perContactUnread: {},
+  refetch: () => {}
+});
+
+export const useUnreadContext = () => useContext(UnreadContext);
+
+export function AppLayout({ children }: AppLayoutProps) {
+  // Single instance of useUnreadMessages hook - the only one in the entire app
+  const unreadData = useUnreadMessages();
+
+  return (
+    <UnreadContext.Provider value={unreadData}>
+      <ProtectedRoute>
+        <div className="min-h-screen bg-background">
+          <AppHeader unreadTotal={unreadData.unreadTotal} />
+          <main className="pb-16">
+            {children}
+          </main>
+          <MobileNav 
+            taskCount={unreadData.taskCount}
+            maw3dEventCount={unreadData.maw3dEventCount}
+            contactCount={unreadData.contactCount}
+            sharedTaskCount={unreadData.sharedTaskCount}
+          />
+        </div>
+      </ProtectedRoute>
+    </UnreadContext.Provider>
+>>>>>>> Stashed changes
   );
 }
 

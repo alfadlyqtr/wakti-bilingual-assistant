@@ -1,8 +1,12 @@
-
-import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { useState, useEffect, useRef } from 'react';
+import { supabase, ensurePassport } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { waktiToast } from '@/services/waktiToast';
+
+// Global deduplication to prevent multiple concurrent instances
+let globalSetupInProgress = false;
+let globalUserId: string | null = null;
+let globalCleanupFn: (() => void) | null = null;
 
 export function useUnreadMessages() {
   const { user } = useAuth();
@@ -12,155 +16,193 @@ export function useUnreadMessages() {
   const [taskCount, setTaskCount] = useState(0);
   const [sharedTaskCount, setSharedTaskCount] = useState(0);
   const [perContactUnread, setPerContactUnread] = useState<Record<string, number>>({});
+  const initializedRef = useRef(false);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user?.id) return;
 
-    console.log('👀 Setting up unread message tracking for user:', user.id);
+    // Global deduplication - only allow one instance per user
+    if (globalSetupInProgress || globalUserId === user.id) {
+      console.log('⏭️ Unread subscriptions already running for user:', user.id);
+      return;
+    }
 
-    // Get initial counts
-    fetchUnreadCounts();
+    globalSetupInProgress = true;
+    globalUserId = user.id;
 
-    // Set up real-time subscriptions
-    const messagesChannel = supabase
-      .channel('unread-messages')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-        filter: `recipient_id=eq.${user.id}`
-      }, async (payload) => {
-        console.log('📨 New message received:', payload);
-        
-        // Show notification
-        await waktiToast.show({
-          id: `message-${payload.new.id}`,
-          type: 'message',
-          title: 'New Message',
-          message: 'You have received a new message',
-          priority: 'normal',
-          sound: 'chime'
-        });
-        
-        fetchUnreadCounts();
-      })
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'messages',
-        filter: `recipient_id=eq.${user.id}`
-      }, () => {
-        fetchUnreadCounts();
-      })
-      .subscribe();
+    let messagesChannel: any;
+    let contactsChannel: any;
+    let maw3dChannel: any;
+    let sharedTaskChannel: any;
 
-    const contactsChannel = supabase
-      .channel('contact-requests')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'contacts',
-        filter: `contact_id=eq.${user.id}`
-      }, async (payload) => {
-        console.log('👥 New contact request:', payload);
-        
-        if (payload.new.status === 'pending') {
-          await waktiToast.show({
-            id: `contact-${payload.new.id}`,
-            type: 'contact',
-            title: 'Contact Request',
-            message: 'Someone wants to connect with you',
-            priority: 'normal',
-            sound: 'ding'
-          });
-        }
-        
-        fetchUnreadCounts();
-      })
-      .subscribe();
+    const setup = async () => {
+      try {
+        await ensurePassport();
 
-    const maw3dChannel = supabase
-      .channel('maw3d-rsvps')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'maw3d_rsvps'
-      }, async (payload) => {
-        console.log('📅 New Maw3d RSVP:', payload);
-        
-        // Check if this is for user's event
-        const { data: event } = await supabase
-          .from('maw3d_events')
-          .select('created_by, title')
-          .eq('id', payload.new.event_id)
-          .single();
-          
-        if (event?.created_by === user.id) {
-          await waktiToast.show({
-            id: `rsvp-${payload.new.id}`,
-            type: 'event',
-            title: 'RSVP Response',
-            message: `${payload.new.guest_name} responded to ${event.title}`,
-            priority: 'normal',
-            sound: 'beep'
-          });
-          
-          fetchUnreadCounts();
-        }
-      })
-      .subscribe();
+        console.log('👀 Setting up unread message tracking for user:', user.id);
 
-    const sharedTaskChannel = supabase
-      .channel('shared-task-responses')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'tr_shared_responses'
-      }, async (payload) => {
-        console.log('📋 New shared task response:', payload);
-        
-        // Check if this is for user's task
-        const { data: task } = await supabase
-          .from('tr_tasks')
-          .select('user_id, title')
-          .eq('id', payload.new.task_id)
-          .single();
-          
-        if (task?.user_id === user.id) {
-          let message = 'Task updated';
-          if (payload.new.response_type === 'completion' && payload.new.is_completed) {
-            message = `${payload.new.visitor_name} completed: ${task.title}`;
-          } else if (payload.new.response_type === 'comment') {
-            message = `${payload.new.visitor_name} commented on: ${task.title}`;
-          }
-          
-          await waktiToast.show({
-            id: `task-${payload.new.id}`,
-            type: 'shared_task',
-            title: 'Task Update',
-            message,
-            priority: 'normal',
-            sound: 'chime'
-          });
-          
-          fetchUnreadCounts();
-        }
-      })
-      .subscribe();
+        // Get initial counts
+        await fetchUnreadCounts();
 
-    return () => {
-      console.log('🧹 Cleaning up unread message subscriptions');
-      supabase.removeChannel(messagesChannel);
-      supabase.removeChannel(contactsChannel);
-      supabase.removeChannel(maw3dChannel);
-      supabase.removeChannel(sharedTaskChannel);
+        // Set up real-time subscriptions
+        messagesChannel = supabase
+          .channel(`unread-messages:${user.id}`)
+          .on('postgres_changes', {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `recipient_id=eq.${user.id}`
+          }, async (payload) => {
+            console.log('📨 New message received:', payload);
+            
+            // Show notification
+            await waktiToast.show({
+              id: `message-${payload.new.id}`,
+              type: 'message',
+              title: 'New Message',
+              message: 'You have received a new message',
+              priority: 'normal',
+              sound: 'chime'
+            });
+            
+            fetchUnreadCounts();
+          })
+          .on('postgres_changes', {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'messages',
+            filter: `recipient_id=eq.${user.id}`
+          }, () => {
+            fetchUnreadCounts();
+          })
+          .subscribe();
+
+        contactsChannel = supabase
+          .channel(`contact-requests:${user.id}`)
+          .on('postgres_changes', {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'contacts',
+            filter: `contact_id=eq.${user.id}`
+          }, async (payload) => {
+            console.log('👥 New contact request:', payload);
+            
+            if (payload.new.status === 'pending') {
+              await waktiToast.show({
+                id: `contact-${payload.new.id}`,
+                type: 'contact',
+                title: 'Contact Request',
+                message: 'Someone wants to connect with you',
+                priority: 'normal',
+                sound: 'ding'
+              });
+            }
+            
+            fetchUnreadCounts();
+          })
+          .subscribe();
+
+        maw3dChannel = supabase
+          .channel(`maw3d-rsvps:${user.id}`)
+          .on('postgres_changes', {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'maw3d_rsvps'
+          }, async (payload) => {
+            console.log('📅 New Maw3d RSVP:', payload);
+            
+            // Check if this is for user's event
+            await ensurePassport();
+            const { data: event } = await supabase
+              .from('maw3d_events')
+              .select('created_by, title')
+              .eq('id', payload.new.event_id)
+              .single();
+              
+            if (event?.created_by === user.id) {
+              await waktiToast.show({
+                id: `rsvp-${payload.new.id}`,
+                type: 'event',
+                title: 'RSVP Response',
+                message: `${payload.new.guest_name} responded to ${event.title}`,
+                priority: 'normal',
+                sound: 'beep'
+              });
+              
+              fetchUnreadCounts();
+            }
+          })
+          .subscribe();
+
+        sharedTaskChannel = supabase
+          .channel(`shared-task-responses:${user.id}`)
+          .on('postgres_changes', {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'tr_shared_responses'
+          }, async (payload) => {
+            console.log('📋 New shared task response:', payload);
+            
+            // Check if this is for user's task
+            await ensurePassport();
+            const { data: task } = await supabase
+              .from('tr_tasks')
+              .select('user_id, title')
+              .eq('id', payload.new.task_id)
+              .single();
+              
+            if (task?.user_id === user.id) {
+              let message = 'Task updated';
+              if (payload.new.response_type === 'completion' && payload.new.is_completed) {
+                message = `${payload.new.visitor_name} completed: ${task.title}`;
+              } else if (payload.new.response_type === 'comment') {
+                message = `${payload.new.visitor_name} commented on: ${task.title}`;
+              }
+              
+              await waktiToast.show({
+                id: `task-${payload.new.id}`,
+                type: 'shared_task',
+                title: 'Task Update',
+                message,
+                priority: 'normal',
+                sound: 'chime'
+              });
+              
+              fetchUnreadCounts();
+            }
+          })
+          .subscribe();
+      } catch (error) {
+        console.error('❌ Error setting up unread message tracking:', error);
+      }
     };
-  }, [user]);
+
+    setup();
+
+    const cleanup = () => {
+      console.log('🧹 Cleaning up unread message subscriptions');
+      if (messagesChannel) supabase.removeChannel(messagesChannel);
+      if (contactsChannel) supabase.removeChannel(contactsChannel);
+      if (maw3dChannel) supabase.removeChannel(maw3dChannel);
+      if (sharedTaskChannel) supabase.removeChannel(sharedTaskChannel);
+      
+      // Reset global state
+      globalSetupInProgress = false;
+      globalUserId = null;
+      globalCleanupFn = null;
+      initializedRef.current = false;
+    };
+
+    globalCleanupFn = cleanup;
+
+    return cleanup;
+  }, [user?.id]);
 
   const fetchUnreadCounts = async () => {
     if (!user) return;
 
     try {
+      await ensurePassport();
       console.log('📊 Fetching unread counts for user:', user.id);
       
       // Messages count

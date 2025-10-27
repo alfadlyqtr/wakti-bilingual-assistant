@@ -1,3 +1,9 @@
+<<<<<<< Updated upstream
+=======
+import '../_types/deno-globals.d.ts';
+// Note: Edge function runs in Deno; utilities are not used here.
+
+>>>>>>> Stashed changes
 /**
  * ENHANCED: Image generation with Arabic translation support and better error handling
  */
@@ -57,7 +63,7 @@ export async function generateImageWithRunware(
   }
 
   let finalPrompt = prompt;
-  let originalPrompt = prompt;
+  const originalPrompt = prompt;
 
   try {
     const isArabic = language === 'ar' || /[\u0600-\u06FF]/.test(prompt);
@@ -136,6 +142,7 @@ export async function generateImageWithRunware(
 
     const outputFormat = options?.outputFormat || 'WEBP';
 
+<<<<<<< Updated upstream
     // Helper: upload image (data URI, base64, or URL) to Runware to get imageUUID
     const uploadImageAndGetUUID = async (image: string): Promise<string> => {
       const uploadTaskUUID = crypto.randomUUID();
@@ -224,8 +231,32 @@ export async function generateImageWithRunware(
         }
       ];
     };
+=======
+    const buildPayload = (modelToUse: string) => ([
+      {
+        taskType: "authentication" as const,
+        apiKey: RUNWARE_API_KEY as string
+      },
+      {
+        taskType: "imageInference" as const,
+        taskUUID: taskUUID,
+        positivePrompt: finalPrompt,
+        ...(options?.negativePrompt ? { negativePrompt: options.negativePrompt } : {}),
+        width,
+        height,
+        model: modelToUse,
+        numberResults: 1,
+        outputFormat,
+        includeCost: true,
+        CFGScale: cfgScale,
+        steps,
+        ...(options?.seedImage ? { seedImage: options.seedImage, strength: Math.max(0, Math.min(1, strength ?? 0.8)) } : {}),
+        ...(options?.maskImage ? { maskImage: options.maskImage, maskMargin: options.maskMargin ?? 8 } : {})
+      }
+    ] as const);
+>>>>>>> Stashed changes
 
-    const fetchWithTimeout = async (payload: any, timeoutMs = RW_TIMEOUT_MS) => {
+    const fetchWithTimeout = async (payload: ReadonlyArray<Record<string, unknown>>, timeoutMs: number = RW_TIMEOUT_MS): Promise<Response> => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
       
@@ -384,14 +415,15 @@ export async function generateImageWithRunware(
       throw new Error('Empty response from image generation service');
     }
 
-    let responseData;
+    let responseData: { data?: Array<Record<string, unknown>> };
     try {
-      responseData = JSON.parse(responseText);
-    } catch (jsonError) {
+      responseData = JSON.parse(responseText) as { data?: Array<Record<string, unknown>> };
+    } catch (jsonError: unknown) {
       console.error('❌ IMAGE JSON parsing error:', jsonError);
       throw new Error('Invalid JSON response from image generation service');
     }
 
+<<<<<<< Updated upstream
     // Select result per task type
     const targetTaskType = options?.backgroundRemoval ? 'imageBackgroundRemoval' : 'imageInference';
     const imageResult = responseData?.data?.find((item: any) => item.taskType === targetTaskType);
@@ -400,27 +432,47 @@ export async function generateImageWithRunware(
     const urlCandidate = imageResult?.imageURL || imageResult?.url || imageResult?.outputUrl || imageResult?.outputURL;
 
     if (urlCandidate) {
+=======
+    const imageResult = Array.isArray(responseData?.data)
+      ? responseData.data.find((item) => (item as { taskType?: unknown }).taskType === 'imageInference')
+      : undefined;
+
+    // Safely read the imageURL from loosely-typed response
+    const imageUrl = (imageResult && typeof imageResult === 'object' && 'imageURL' in imageResult)
+      ? (imageResult as { imageURL?: unknown }).imageURL
+      : undefined;
+    if (typeof imageUrl === 'string' && imageUrl.length > 0) {
+>>>>>>> Stashed changes
       console.log('✅ IMAGE GEN: Successfully generated image');
 
       // Extract any available cost metadata without assuming exact shape
-      let runwareCost: any = undefined;
+      let runwareCost: unknown = undefined;
       if (imageResult && typeof imageResult === 'object') {
-        if ('cost' in imageResult) runwareCost = (imageResult as any).cost;
-        else if ('usage' in imageResult) runwareCost = (imageResult as any).usage;
-        else if ('pricing' in imageResult) runwareCost = (imageResult as any).pricing;
+        if ('cost' in imageResult) runwareCost = (imageResult as Record<string, unknown>).cost;
+        else if ('usage' in imageResult) runwareCost = (imageResult as Record<string, unknown>).usage;
+        else if ('pricing' in imageResult) runwareCost = (imageResult as Record<string, unknown>).pricing;
       }
 
       const durationMs = Date.now() - startTime;
 
       const responseMessage = language === 'ar' 
+<<<<<<< Updated upstream
         ? `🎨 تم إنشاء الصورة بنجاح!\n\n![Generated Image](${urlCandidate})\n\n**الوصف الأصلي:** ${originalPrompt}\n**الوصف المترجم:** ${finalPrompt}`
         : `🎨 Image generated successfully!\n\n![Generated Image](${urlCandidate})\n\n**Prompt:** ${finalPrompt}`;
+=======
+        ? `🎨 تم إنشاء الصورة بنجاح!\n\n![Generated Image](${imageUrl})\n\n**الوصف الأصلي:** ${originalPrompt}\n**الوصف المترجم:** ${finalPrompt}`
+        : `🎨 Image generated successfully!\n\n![Generated Image](${imageUrl})\n\n**Prompt:** ${finalPrompt}`;
+>>>>>>> Stashed changes
       
       return {
         success: true,
         error: null,
         response: responseMessage,
+<<<<<<< Updated upstream
         imageUrl: urlCandidate,
+=======
+        imageUrl,
+>>>>>>> Stashed changes
         runwareCost,
         modelUsed,
         responseTime: durationMs
@@ -433,8 +485,10 @@ export async function generateImageWithRunware(
       error: language === 'ar' ? 'لم يتم إنشاء الصورة بنجاح' : 'Image generation failed',
       response: language === 'ar' ? 'أعتذر، لم أتمكن من إنشاء الصورة. يرجى المحاولة مرة أخرى.' : 'I apologize, I could not generate the image. Please try again.'
     };
-  } catch (error) {
-    if (error.name === 'AbortError' || error.message.includes('cancelled')) {
+  } catch (error: unknown) {
+    const isAbort = (error instanceof DOMException && error.name === 'AbortError') ||
+      (error instanceof Error && /cancelled/i.test(error.message));
+    if (isAbort) {
       console.log('🚫 Image generation was cancelled');
       return {
         success: false,

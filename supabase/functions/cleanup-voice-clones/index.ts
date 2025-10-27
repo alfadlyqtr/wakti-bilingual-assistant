@@ -58,7 +58,7 @@ serve(async (req) => {
     });
 
     let deletedCount = 0;
-    let errors: string[] = [];
+    const errors: string[] = [];
 
     // Delete each expired voice from ElevenLabs first
     for (const voice of expiredVoices) {

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, ensurePassport, getCurrentUserId } from "@/integrations/supabase/client";
 
 interface AdminRouteProps {
   children: React.ReactNode;
@@ -20,11 +20,12 @@ export default function AdminRoute({ children }: AdminRouteProps) {
 
     const check = async () => {
       try {
-        // 1) Must have a session
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError) throw sessionError;
-        const session = sessionData.session;
-        if (!session) {
+        // Ensure valid session before backend checks (dedupes refresh storms)
+        await ensurePassport();
+
+        // 1) Must have a user id
+        const userId = await getCurrentUserId();
+        if (!userId) {
           if (!isMounted) return;
           setAllowed(false);
           setLoading(false);

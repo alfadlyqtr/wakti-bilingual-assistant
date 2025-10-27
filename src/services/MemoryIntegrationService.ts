@@ -1,5 +1,4 @@
-
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, ensurePassport, getCurrentUserId } from '@/integrations/supabase/client';
 
 export interface UserMemoryContext {
   id?: string;
@@ -105,8 +104,9 @@ class MemoryIntegrationServiceClass {
   // Check if memory integration is available for user
   async isMemoryAvailable(userId: string): Promise<boolean> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      return user?.id === userId;
+      await ensurePassport();
+      const currentUserId = await getCurrentUserId();
+      return currentUserId === userId;
     } catch {
       return false;
     }

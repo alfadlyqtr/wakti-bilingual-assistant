@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, ensurePassport } from "@/integrations/supabase/client";
 import Loading from "@/components/ui/loading";
 import { FawranPaymentOverlay } from "@/components/fawran/FawranPaymentOverlay";
 
@@ -73,6 +73,8 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
       }
 
       try {
+        // Ensure we have a fresh/valid session before hitting DB (dedupes refreshes)
+        await ensurePassport();
         console.log("ProtectedRoute: Fetching subscription status from database...");
 
         // Use a 5s timeout to avoid indefinite loading
@@ -288,7 +290,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
         retryTimerRef.current = null;
       }
     };
-  }, [user, isLoading]);
+  }, [user?.id, isLoading]);
 
   // Show loading while auth or subscription status is loading
   if (isLoading || subscriptionStatus.isLoading) {

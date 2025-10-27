@@ -1,3 +1,4 @@
+import '../_types/deno-globals.d.ts';
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -76,28 +77,66 @@ const models: Record<string, AIModelConfig> = {
     timeout: 30000
   }
 };
+ 
+ // Types for safer message, search, and image payloads
+ type MessageRole = 'system' | 'user' | 'assistant';
+ interface TextMessage { role: MessageRole; content: string }
+ type RecentMessageUnknown = { role?: unknown; content?: unknown };
+ interface AttachedFile { type?: string | null; data?: string | null; [k: string]: unknown }
+ interface PersonalTouch { nickname?: string; aiNickname?: string; tone?: string; style?: string; instruction?: string }
+ interface SearchResultItem { title: string; url: string; content: string }
+ type TavilySearchResult =
+   | { success: true; results: SearchResultItem[]; answer: string | null }
+   | { success: false; error: string; response: string };
+ type BrowsingData =
+   (
+     | { success: true; answer: string | null; results: SearchResultItem[] }
+     | { success: false; error: string; results: []; answer: null }
+   ) & { query: string; timestamp: string };
+ type RunwareOptions = NonNullable<Parameters<typeof generateImageWithRunware>[3]>;
+
+ // Types for Claude and OpenAI chat messages
+ interface ClaudeTextContent { type: 'text'; text: string }
+ interface ClaudeImageSource { type: 'base64'; media_type?: string | null; data?: string | null }
+ interface ClaudeImageContent { type: 'image'; source: ClaudeImageSource }
+ type ClaudeContent = string | (ClaudeTextContent | ClaudeImageContent)[]
+ interface ClaudeMessage { role: 'user' | 'assistant'; content: ClaudeContent }
+ 
+ interface OpenAIMessage { role: 'system' | 'user' | 'assistant'; content: string }
 
 // Enhanced message filtering with better performance
-function smartFilterMessages(messages: any[]) {
-  if (!messages || messages.length === 0) return [];
-  
-  // Filter out invalid messages and keep only recent ones
-  return messages
-    .filter((msg, index) => {
-      // Always keep system messages
-      if (msg.role === 'system') return true;
-      
-      // Keep user and assistant messages with valid content
-      return (msg.role === 'user' || msg.role === 'assistant') && 
-             msg.content && 
-             typeof msg.content === 'string' && 
-             msg.content.trim().length > 0;
-    })
-    .slice(-20); // Keep last 20 messages for better context
+function smartFilterMessages(messages: RecentMessageUnknown[]): TextMessage[] {
+  if (!Array.isArray(messages) || messages.length === 0) return [];
+
+  const filtered = messages.filter((msg) => {
+    const role = (msg as { role?: unknown }).role;
+    const content = (msg as { content?: unknown }).content;
+    // Always keep system messages
+    if (role === 'system') return true;
+    // Keep user and assistant messages with valid content
+    return (
+      (role === 'user' || role === 'assistant') &&
+      typeof content === 'string' &&
+      content.trim().length > 0
+    );
+  });
+
+  return filtered
+    .slice(-20)
+    .map((msg) => {
+      const roleUnknown = (msg as { role?: unknown }).role;
+      const contentUnknown = (msg as { content?: unknown }).content;
+      const role: MessageRole =
+        roleUnknown === 'system' || roleUnknown === 'user' || roleUnknown === 'assistant'
+          ? (roleUnknown as MessageRole)
+          : 'user';
+      const content: string = typeof contentUnknown === 'string' ? contentUnknown : '';
+      return { role, content };
+    });
 }
 
 // Enhanced Tavily search with better error handling
-async function performSearchWithTavily(query: string, userId: string, language: string = 'en', signal?: AbortSignal) {
+async function performSearchWithTavily(query: string, userId: string, language: string = 'en', signal?: AbortSignal): Promise<TavilySearchResult> {
   console.log('🔍 BACKEND WORKER: Processing search request');
   
   if (!TAVILY_API_KEY) {
@@ -156,15 +195,20 @@ async function performSearchWithTavily(query: string, userId: string, language: 
       throw new Error(`Tavily API error: ${searchResponse.status}`);
     }
 
-    const searchData = await searchResponse.json();
+    const searchData = await searchResponse.json() as unknown;
     
-    if (searchData.results && searchData.results.length > 0) {
-      const searchResults = searchData.results.map((result: any) => ({
-        title: result.title || 'Untitled',
-        url: result.url || '',
-        content: result.content || ''
-      }));
+    const rawResults = (searchData as Record<string, unknown>)?.results as unknown;
+    const searchResults: SearchResultItem[] = Array.isArray(rawResults)
+      ? rawResults.map((result) => {
+          const r = result as Record<string, unknown>;
+          const title = typeof r.title === 'string' ? r.title : 'Untitled';
+          const url = typeof r.url === 'string' ? r.url : '';
+          const content = typeof r.content === 'string' ? r.content : '';
+          return { title, url, content } as SearchResultItem;
+        })
+      : [];
 
+<<<<<<< Updated upstream
       return {
         success: true,
         results: searchResults,
@@ -200,8 +244,43 @@ async function performSearchWithTavily(query: string, userId: string, language: 
         ? 'أعتذر، حدث خطأ أثناء البحث. يمكنني مساعدتك بأسئلة أخرى.'
         : 'I apologize, there was an error during search. I can help you with other questions.'
     };
+=======
+      if (searchResults.length > 0) {
+        return {
+          success: true,
+          results: searchResults,
+          answer: (searchData as Record<string, unknown>)?.answer as string | null || null
+        };
+      } else {
+        return {
+          success: false,
+          error: language === 'ar' ? 'لم يتم العثور على نتائج' : 'No results found',
+          response: language === 'ar' 
+            ? 'لم أتمكن من العثور على معلومات حول هذا الموضوع.'
+            : 'I could not find information about this topic.'
+        };
+      }
+    } catch (error: unknown) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return {
+          success: false,
+          error: 'Search request was cancelled',
+          response: language === 'ar' ? 'تم إلغاء البحث' : 'Search was cancelled'
+        };
+      }
+    
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.error('🔍 SEARCH ERROR:', error);
+      return {
+        success: false,
+        error: errMsg,
+        response: language === 'ar' 
+          ? 'أعتذر، حدث خطأ أثناء البحث. يمكنني مساعدتك بأسئلة أخرى.'
+          : 'I apologize, there was an error during search. I can help you with other questions.'
+      };
+    }
+>>>>>>> Stashed changes
   }
-}
 
 // Enhanced fetch with timeout and retry logic
 async function fetchWithTimeout(
@@ -252,6 +331,7 @@ async function fetchWithTimeout(
       }
       
       return response;
+<<<<<<< Updated upstream
     } catch (error: any) {
       clearTimeout(timeoutId);
       
@@ -264,6 +344,21 @@ async function fetchWithTimeout(
       }
       
       console.log(`🔄 Retrying after error (attempt ${attempt + 2}/${resolvedRetries + 1}):`, error?.message || String(error));
+=======
+    } catch (error: unknown) {
+      clearTimeout(timeoutId);
+      
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new Error(`Request timeout after ${timeoutMs}ms`);
+      }
+      
+      const msg = error instanceof Error ? error.message : String(error);
+      if (attempt === retries) {
+        throw (error instanceof Error ? error : new Error(msg));
+      }
+      
+      console.log(`🔄 Retrying after error (attempt ${attempt + 2}/${retries + 1}):`, msg);
+>>>>>>> Stashed changes
       await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
     }
   }
@@ -314,7 +409,7 @@ serve(async (req) => {
 
     // Global Search pre-processing before model selection
     let browsingUsed = false;
-    let browsingData: any = null;
+    let browsingData: BrowsingData | null = null;
     let effectiveMessage: string = message;
     let effectiveTrigger: string = activeTrigger;
 
@@ -341,7 +436,7 @@ serve(async (req) => {
         console.log('🎨 IMAGE MODE:', imageMode, '| 🧪 QUALITY:', imageQuality || 'default');
 
         // Prepare options based on image mode
-        let imageOptions: any = {};
+        const imageOptions: RunwareOptions = {};
         let seedImage: string | undefined = undefined;
         let promptForImage: string = message;
 
@@ -425,7 +520,11 @@ serve(async (req) => {
       browsingUsed = true;
       browsingData = { ...baseMeta, success: true, answer: searchResult.answer || null, results: searchResult.results };
       const sourcesList = searchResult.results
+<<<<<<< Updated upstream
         .map((r: any, i: number) => `[${i + 1}] ${r.title}\n${r.url}\n${r.content}`)
+=======
+        .map((r: SearchResultItem, i: number) => `${i + 1}. ${r.title} - ${r.url}\nSummary: ${r.content}`)
+>>>>>>> Stashed changes
         .join('\n\n');
 
       effectiveMessage = (requestLanguage === 'ar'
@@ -436,6 +535,7 @@ serve(async (req) => {
       effectiveTrigger = 'general';
     }
 
+<<<<<<< Updated upstream
     // Determine model order based on override and vision
     const isVision = VisionSystem.shouldUseVisionMode(effectiveTrigger, attachedFiles);
     let modelOrder: string[];
@@ -452,8 +552,13 @@ serve(async (req) => {
           : ['openai', 'claude', 'deepseek'];
     }
     let lastError = null;
+=======
+    // Try models in order: Claude → GPT-4 → DeepSeek
+    const modelOrder = ['claude', 'gpt4', 'deepseek'];
+    let lastError: unknown | null = null;
+>>>>>>> Stashed changes
     let fallbackUsed = false;
-    let attemptedModels = [];
+    const attemptedModels: string[] = [];
     
     for (const modelName of modelOrder) {
       const selectedModel = models[modelName];
@@ -523,12 +628,21 @@ serve(async (req) => {
           }
         });
         
+<<<<<<< Updated upstream
       } catch (error) {
         console.error(`❌ ${modelName} failed:`, (error as any)?.message || String(error));
         if ((error as any)?.stack) console.error((error as any).stack);
         lastError = error;
         fallbackUsed = true;
         attemptedModels.push(`${modelName}: failed - ${((error as any)?.message || String(error))}`);
+=======
+      } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error);
+        console.error(`❌ ${modelName} failed:`, msg);
+        lastError = error as unknown;
+        fallbackUsed = true;
+        attemptedModels.push(`${modelName}: failed - ${msg}`);
+>>>>>>> Stashed changes
         
         // Continue to next model unless this is the last one
         if (modelName !== modelOrder[modelOrder.length - 1]) {
@@ -561,11 +675,21 @@ serve(async (req) => {
       }
     });
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("🚀 REQUEST ERROR:", error);
-    console.error("🚀 ERROR STACK:", error.stack);
+    const stack = error instanceof Error ? error.stack : undefined;
+    if (stack) console.error("🚀 ERROR STACK:", stack);
     
+<<<<<<< Updated upstream
     const errorMessage = requestLanguage === 'ar'
+=======
+    const preferredLanguage = (() => {
+      const h = req.headers.get('accept-language') ?? '';
+      return h.includes('ar') ? 'ar' : 'en';
+    })();
+
+    const errorMessage = preferredLanguage === 'ar' 
+>>>>>>> Stashed changes
       ? 'أعتذر، حدث خطأ مؤقت. يرجى المحاولة مرة أخرى.'
       : 'I apologize, there was a temporary issue. Please try again.';
     
@@ -583,7 +707,16 @@ serve(async (req) => {
   }
 });
 
-async function callClaude35API(message, conversationId, language = 'en', attachedFiles = [], activeTrigger = 'general', recentMessages = [], personalTouch = null, skipInternalSearch = false) {
+async function callClaude35API(
+  message: string,
+  conversationId?: string,
+  language: string = 'en',
+  attachedFiles: AttachedFile[] = [],
+  activeTrigger: string = 'general',
+  recentMessages: RecentMessageUnknown[] = [],
+  personalTouch: PersonalTouch | null = null,
+  skipInternalSearch = false
+) {
   try {
     if (!ANTHROPIC_API_KEY) {
       throw new Error('Anthropic API key not configured');
@@ -610,7 +743,7 @@ async function callClaude35API(message, conversationId, language = 'en', attache
 
     let personalizationContext = '';
     if (personalTouch) {
-      const parts = [];
+      const parts: string[] = [];
       if (personalTouch.nickname) parts.push(`User name: ${personalTouch.nickname}`);
       if (personalTouch.aiNickname) parts.push(`AI name: ${personalTouch.aiNickname}`);
       if (personalTouch.tone) parts.push(`Tone: ${personalTouch.tone}`);
@@ -626,7 +759,7 @@ async function callClaude35API(message, conversationId, language = 'en', attache
     const systemPrompt = VisionSystem.buildCompleteSystemPrompt(language, currentDate, personalTouch);
 
     // Build messages array
-    let messages = [];
+    const messages: ClaudeMessage[] = [];
 
     // Add conversation history with smart filtering - CRITICAL: No duplication of current message
     if (recentMessages && recentMessages.length > 0) {
@@ -650,8 +783,37 @@ async function callClaude35API(message, conversationId, language = 'en', attache
 
     // Handle vision mode with images using VisionSystem
     if (detectedMode === 'vision' && attachedFiles.length > 0) {
+<<<<<<< Updated upstream
       const visionMessage = VisionSystem.buildVisionMessage(message, attachedFiles, language);
       messages.push(visionMessage);
+=======
+      const imageFiles = attachedFiles.filter(file => file.type?.startsWith('image/'));
+      
+      if (imageFiles.length > 0) {
+        const content: (ClaudeTextContent | ClaudeImageContent)[] = [
+          {
+            type: "text",
+            text: language === 'ar' ? 'يرجى الرد باللغة العربية فقط. ' + message : 'Please respond in English only. ' + message
+          }
+        ];
+
+        imageFiles.forEach(file => {
+          content.push({
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: file.type,
+              data: file.data
+            }
+          });
+        });
+
+        messages.push({
+          role: "user",
+          content: content
+        });
+      }
+>>>>>>> Stashed changes
     } else {
       // Add regular text message using VisionSystem format
       const visionMessage = VisionSystem.buildVisionMessage(message, [], language);
@@ -659,23 +821,26 @@ async function callClaude35API(message, conversationId, language = 'en', attache
     }
 
     // Make API call to Claude
-    const response = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${ANTHROPIC_API_KEY}`,
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
+    const response = await fetchWithTimeout(
+      'https://api.anthropic.com/v1/messages',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${ANTHROPIC_API_KEY}`,
+          'Content-Type': 'application/json',
+          'x-api-key': ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: 'claude-3-5-sonnet-20241022',
+          max_tokens: 4000,
+          temperature: 0.7,
+          system: systemPrompt,
+          messages: messages
+        })
       },
-      body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 4000,
-        temperature: 0.7,
-        system: systemPrompt,
-        messages: messages
-      }),
-      timeoutMs: models.claude.timeout
-    });
+      models.claude.timeout
+    );
 
     if (!response.ok) {
       const errorData = await response.text();
@@ -694,13 +859,25 @@ async function callClaude35API(message, conversationId, language = 'en', attache
       throw new Error('Invalid response format from Claude API');
     }
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('🤖 CLAUDE API ERROR:', error);
     throw error;
   }
 }
 
+<<<<<<< Updated upstream
 async function callOpenAIChatAPI(message, conversationId, language = 'en', attachedFiles = [], activeTrigger = 'general', recentMessages = [], personalTouch = null) {
+=======
+async function callGPT4API(
+  message: string,
+  conversationId?: string,
+  language: string = 'en',
+  attachedFiles: AttachedFile[] = [],
+  activeTrigger: string = 'general',
+  recentMessages: RecentMessageUnknown[] = [],
+  personalTouch: PersonalTouch | null = null
+) {
+>>>>>>> Stashed changes
   try {
     if (!OPENAI_API_KEY) {
       throw new Error('OpenAI API key not configured');
@@ -715,11 +892,47 @@ async function callOpenAIChatAPI(message, conversationId, language = 'en', attac
       timeZone: 'Asia/Qatar'
     });
 
+<<<<<<< Updated upstream
     // Use VisionSystem to build complete system prompt
     const systemPrompt = VisionSystem.buildCompleteSystemPrompt(language, currentDate, personalTouch);
+=======
+    let personalizationContext = '';
+    if (personalTouch) {
+      const parts: string[] = [];
+      if (personalTouch.nickname) parts.push(`User name: ${personalTouch.nickname}`);
+      if (personalTouch.aiNickname) parts.push(`AI name: ${personalTouch.aiNickname}`);
+      if (personalTouch.tone) parts.push(`Tone: ${personalTouch.tone}`);
+      if (personalTouch.style) parts.push(`Style: ${personalTouch.style}`);
+      if (personalTouch.instruction) parts.push(`Instructions: ${personalTouch.instruction}`);
+      
+      if (parts.length > 0) {
+        personalizationContext = `\n\nPersonalization: ${parts.join(', ')}`;
+      }
+    }
+
+    const systemPrompt = language === 'ar' 
+      ? `⚠️ CRITICAL: استجب باللغة العربية فقط. لا تستخدم الإنجليزية مطلقاً. هذا أمر إجباري.
+
+أنت WAKTI AI، مساعد ذكي متخصص في الإنتاجية والتنظيم.
+التاريخ الحالي: ${currentDate}
+
+أنت هنا لجعل حياة المستخدمين أكثر تنظيماً وإنتاجية!
+
+IMPORTANT: تذكر - استخدم العربية فقط في ردك. أي استخدام للإنجليزية غير مقبول.
+${personalizationContext}`
+      : `⚠️ CRITICAL: Respond ONLY in English. Do not use Arabic at all. This is mandatory.
+
+You are WAKTI AI, an intelligent assistant specializing in productivity and organization.
+Current date: ${currentDate}
+
+You're here to make users' lives more organized and productive!
+
+IMPORTANT: Remember - use only English in your response. Any use of Arabic is unacceptable.
+${personalizationContext}`;
+>>>>>>> Stashed changes
 
     // Build messages array
-    let messages = [
+    const messages: OpenAIMessage[] = [
       { role: 'system', content: systemPrompt }
     ];
 
@@ -747,6 +960,7 @@ async function callOpenAIChatAPI(message, conversationId, language = 'en', attac
       content: languagePrefix + message
     });
 
+<<<<<<< Updated upstream
     // Always use Chat Completions for chat mode
     const openAiModel = (models.openai && models.openai.model) ? models.openai.model : 'gpt-4o-mini';
     const resp = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
@@ -763,6 +977,26 @@ async function callOpenAIChatAPI(message, conversationId, language = 'en', attac
       }),
       timeoutMs: models.openai.timeout
     });
+=======
+    // Make API call to OpenAI
+    const response = await fetchWithTimeout(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: messages,
+          max_tokens: 4000,
+          temperature: 0.7
+        })
+      },
+      models.gpt4.timeout
+    );
+>>>>>>> Stashed changes
 
     if (!resp.ok) {
       const errorData = await resp.text();
@@ -781,13 +1015,26 @@ async function callOpenAIChatAPI(message, conversationId, language = 'en', attac
       throw new Error('Invalid response format from OpenAI Chat Completions API');
     }
 
+<<<<<<< Updated upstream
   } catch (error) {
     console.error('🤖 OPENAI API ERROR:', error);
+=======
+  } catch (error: unknown) {
+    console.error('🤖 GPT-4 API ERROR:', error);
+>>>>>>> Stashed changes
     throw error;
   }
 }
 
-async function callDeepSeekAPI(message, conversationId, language = 'en', attachedFiles = [], activeTrigger = 'general', recentMessages = [], personalTouch = null) {
+async function callDeepSeekAPI(
+  message: string,
+  conversationId?: string,
+  language: string = 'en',
+  attachedFiles: AttachedFile[] = [],
+  activeTrigger: string = 'general',
+  recentMessages: RecentMessageUnknown[] = [],
+  personalTouch: PersonalTouch | null = null
+) {
   try {
     if (!DEEPSEEK_API_KEY) {
       throw new Error('DeepSeek API key not configured');
@@ -802,11 +1049,47 @@ async function callDeepSeekAPI(message, conversationId, language = 'en', attache
       timeZone: 'Asia/Qatar'
     });
 
+<<<<<<< Updated upstream
     // Use VisionSystem to build complete system prompt
     const systemPrompt = VisionSystem.buildCompleteSystemPrompt(language, currentDate, personalTouch);
+=======
+    let personalizationContext = '';
+    if (personalTouch) {
+      const parts: string[] = [];
+      if (personalTouch.nickname) parts.push(`User name: ${personalTouch.nickname}`);
+      if (personalTouch.aiNickname) parts.push(`AI name: ${personalTouch.aiNickname}`);
+      if (personalTouch.tone) parts.push(`Tone: ${personalTouch.tone}`);
+      if (personalTouch.style) parts.push(`Style: ${personalTouch.style}`);
+      if (personalTouch.instruction) parts.push(`Instructions: ${personalTouch.instruction}`);
+      
+      if (parts.length > 0) {
+        personalizationContext = `\n\nPersonalization: ${parts.join(', ')}`;
+      }
+    }
+
+    const systemPrompt = language === 'ar' 
+      ? `⚠️ CRITICAL: استجب باللغة العربية فقط. لا تستخدم الإنجليزية مطلقاً. هذا أمر إجباري.
+
+أنت WAKTI AI، مساعد ذكي متخصص في الإنتاجية والتنظيم.
+التاريخ الحالي: ${currentDate}
+
+أنت هنا لجعل حياة المستخدمين أكثر تنظيماً وإنتاجية!
+
+IMPORTANT: تذكر - استخدم العربية فقط في ردك. أي استخدام للإنجليزية غير مقبول.
+${personalizationContext}`
+      : `⚠️ CRITICAL: Respond ONLY in English. Do not use Arabic at all. This is mandatory.
+
+You are WAKTI AI, an intelligent assistant specializing in productivity and organization.
+Current date: ${currentDate}
+
+You're here to make users' lives more organized and productive!
+
+IMPORTANT: Remember - use only English in your response. Any use of Arabic is unacceptable.
+${personalizationContext}`;
+>>>>>>> Stashed changes
 
     // Build messages array
-    let messages = [
+    const messages: OpenAIMessage[] = [
       { role: 'system', content: systemPrompt }
     ];
 
@@ -835,20 +1118,23 @@ async function callDeepSeekAPI(message, conversationId, language = 'en', attache
     });
 
     // Make API call to DeepSeek
-    const response = await fetchWithTimeout('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-        'Content-Type': 'application/json'
+    const response = await fetchWithTimeout(
+      'https://api.deepseek.com/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: messages,
+          max_tokens: 4000,
+          temperature: 0.7
+        })
       },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: messages,
-        max_tokens: 4000,
-        temperature: 0.7
-      }),
-      timeoutMs: models.deepseek.timeout
-    });
+      models.deepseek.timeout
+    );
 
     if (!response.ok) {
       const errorData = await response.text();
@@ -867,7 +1153,7 @@ async function callDeepSeekAPI(message, conversationId, language = 'en', attache
       throw new Error('Invalid response format from DeepSeek API');
     }
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('🤖 DEEPSEEK API ERROR:', error);
     throw error;
   }

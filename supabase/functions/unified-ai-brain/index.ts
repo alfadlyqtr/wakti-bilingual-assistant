@@ -31,6 +31,29 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 console.log("SIMPLE VOICE TRANSLATOR: Function loaded - Record > Whisper > GPT > TTS");
 
+// Type aliases for safer request/response shapes
+type TTSRequest = {
+  text: string;
+  voice?: string;
+  language?: string;
+};
+
+type TTSResult =
+  | { success: true; audioContent: string; size: number }
+  | { success: false; error: string };
+
+type WhisperTranscriptionResult =
+  | { success: true; text: string; language: string }
+  | { success: false; error: string };
+
+type TranslationResult =
+  | { success: true; translatedText: string }
+  | { success: false; error: string };
+
+type VoiceTranslationResponse =
+  | { success: true; originalText: string; translatedText: string; sourceLanguage: string; targetLanguage: string; ttsAudio: { audioContent: string; size: number } | null; autoPlayEnabled: boolean; processingTime: number }
+  | { success: false; error: string };
+
 serve(async (req) => {
   const origin = req.headers.get('origin');
   const corsHeaders = getCorsHeaders(origin);
@@ -73,9 +96,10 @@ serve(async (req) => {
     });
 
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     console.error("SIMPLE FLOW ERROR:", error);
     return new Response(JSON.stringify({
-      error: error.message || 'Processing error',
+      error: message || 'Processing error',
       success: false
     }), {
       status: 500,
@@ -113,7 +137,7 @@ async function processVoiceTranslation(req: Request, corsHeaders: Record<string,
 
     // Step 2: Translate with GPT
     let translatedText = originalText;
-    let sourceLanguage = transcriptionResult.language || 'auto';
+    const sourceLanguage = transcriptionResult.language || 'auto';
     
     if (targetLanguage !== 'auto' && sourceLanguage !== targetLanguage) {
       const translationResult = await translateText(originalText, sourceLanguage, targetLanguage);
@@ -124,7 +148,7 @@ async function processVoiceTranslation(req: Request, corsHeaders: Record<string,
     }
 
     // Step 3: Generate TTS with OpenAI
-    let ttsAudio = null;
+    let ttsAudio: { audioContent: string; size: number } | null = null;
     if (translatedText) {
       console.log("STEP 5: Generating TTS audio");
       try {
@@ -160,10 +184,11 @@ async function processVoiceTranslation(req: Request, corsHeaders: Record<string,
     });
 
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     console.error("VOICE TRANSLATION ERROR:", error);
     return new Response(JSON.stringify({
       success: false,
-      error: error.message || 'Voice translation failed'
+      error: message || 'Voice translation failed'
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -172,7 +197,7 @@ async function processVoiceTranslation(req: Request, corsHeaders: Record<string,
 }
 
 // SIMPLE: TTS generation
-async function processTTS(requestBody: any, corsHeaders: Record<string, string>) {
+async function processTTS(requestBody: TTSRequest, corsHeaders: Record<string, string>) {
   try {
     console.log("TTS: Processing text-to-speech request");
     
@@ -205,10 +230,11 @@ async function processTTS(requestBody: any, corsHeaders: Record<string, string>)
     });
 
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     console.error("TTS ERROR:", error);
     return new Response(JSON.stringify({
       success: false,
-      error: error.message || 'TTS processing failed'
+      error: message || 'TTS processing failed'
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -217,7 +243,7 @@ async function processTTS(requestBody: any, corsHeaders: Record<string, string>)
 }
 
 // Generate TTS with OpenAI
-async function generateTTS(text: string, language: string = 'en', voice: string = 'alloy'): Promise<any> {
+async function generateTTS(text: string, language: string = 'en', voice: string = 'alloy'): Promise<TTSResult> {
   try {
     if (!OPENAI_API_KEY) {
       throw new Error('OpenAI API key not configured');
@@ -257,16 +283,17 @@ async function generateTTS(text: string, language: string = 'en', voice: string 
     };
 
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     console.error("TTS: Generation error:", error);
     return {
       success: false,
-      error: error.message
+      error: message
     };
   }
 }
 
 // Transcribe audio with Whisper
-async function transcribeWithWhisper(audioBuffer: ArrayBuffer): Promise<any> {
+async function transcribeWithWhisper(audioBuffer: ArrayBuffer): Promise<WhisperTranscriptionResult> {
   try {
     if (!OPENAI_API_KEY) {
       throw new Error('OpenAI API key not configured');
@@ -302,16 +329,17 @@ async function transcribeWithWhisper(audioBuffer: ArrayBuffer): Promise<any> {
     };
 
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     console.error("WHISPER ERROR:", error);
     return {
       success: false,
-      error: error.message
+      error: message
     };
   }
 }
 
 // Translate text with GPT
-async function translateText(text: string, sourceLanguage: string, targetLanguage: string): Promise<any> {
+async function translateText(text: string, sourceLanguage: string, targetLanguage: string): Promise<TranslationResult> {
   try {
     if (!OPENAI_API_KEY) {
       throw new Error('OpenAI API key not configured');
@@ -361,10 +389,11 @@ async function translateText(text: string, sourceLanguage: string, targetLanguag
     };
 
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     console.error("TRANSLATION ERROR:", error);
     return {
       success: false,
-      error: error.message
+      error: message
     };
   }
 }

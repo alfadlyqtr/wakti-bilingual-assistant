@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ContactSearch } from "@/components/contacts/ContactSearch";
@@ -10,18 +9,34 @@ import { t } from "@/utils/translations";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Contact, Bell, ShieldCheck } from "lucide-react";
-import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 
 // Create a client
 const queryClient = new QueryClient();
 
-export default function Contacts() {
+interface ContactsProps {
+  contactCount?: number;
+  perContactUnread?: Record<string, number>;
+  refetchUnreadCounts?: () => void;
+}
+
+export default function Contacts({ 
+  contactCount = 0, 
+  perContactUnread = {}, 
+  refetchUnreadCounts = () => {} 
+}: ContactsProps) {
   const { language } = useTheme();
   const [activeTab, setActiveTab] = useState("contacts");
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ContactsContent language={language} activeTab={activeTab} setActiveTab={setActiveTab} />
+      <ContactsContent 
+        language={language} 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab}
+        contactCount={contactCount}
+        perContactUnread={perContactUnread}
+        refetchUnreadCounts={refetchUnreadCounts}
+      />
     </QueryClientProvider>
   );
 }
@@ -30,15 +45,18 @@ export default function Contacts() {
 function ContactsContent({ 
   language, 
   activeTab, 
-  setActiveTab 
+  setActiveTab,
+  contactCount,
+  perContactUnread,
+  refetchUnreadCounts
 }: { 
   language: string; 
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  contactCount: number;
+  perContactUnread: Record<string, number>;
+  refetchUnreadCounts: () => void;
 }) {
-  // Use unified unread messages system instead of separate query
-  const { contactCount } = useUnreadMessages();
-  
   // Handler for unblock success
   const handleUnblockSuccess = () => {
     setActiveTab("contacts");
@@ -75,7 +93,10 @@ function ContactsContent({
         </TabsList>
         
         <TabsContent value="contacts" className="space-y-4 animate-fade-in">
-          <ContactList />
+          <ContactList 
+            perContactUnread={perContactUnread}
+            refetchUnreadCounts={refetchUnreadCounts}
+          />
         </TabsContent>
         
         <TabsContent value="requests" className="space-y-4 animate-fade-in">

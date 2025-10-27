@@ -397,7 +397,7 @@ Rules:
 
 function generateClarificationQuestions(taskData: any, originalText: string) {
   const missingFields = [];
-  let questions = [];
+  const questions = [];
   
   if (!taskData.due_date) {
     missingFields.push('due_date');

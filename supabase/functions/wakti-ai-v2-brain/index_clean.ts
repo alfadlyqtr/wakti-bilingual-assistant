@@ -380,7 +380,7 @@ IMPORTANT: Remember - use only English in your response. Any use of Arabic is un
 ${personalizationContext}`;
 
     // Build messages array
-    let messages = [];
+    const messages = [];
 
     // Add conversation history
     if (recentMessages && recentMessages.length > 0) {
@@ -526,7 +526,7 @@ IMPORTANT: Remember - use only English in your response. Any use of Arabic is un
 ${personalizationContext}`;
 
     // Build messages array
-    let messages = [
+    const messages = [
       { role: 'system', content: systemPrompt }
     ];
 
@@ -641,7 +641,7 @@ IMPORTANT: Remember - use only English in your response. Any use of Arabic is un
 ${personalizationContext}`;
 
     // Build messages array
-    let messages = [
+    const messages = [
       { role: 'system', content: systemPrompt }
     ];
 

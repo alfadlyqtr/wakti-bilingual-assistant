@@ -1,5 +1,9 @@
+<<<<<<< Updated upstream
 import React, { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
+=======
+import React, { useEffect, useState } from "react";
+>>>>>>> Stashed changes
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
@@ -21,18 +25,20 @@ import { MobileSlideDownNav } from "@/components/MobileSlideDownNav";
 import { t } from "@/utils/translations";
 import { Settings, User as Account, HelpCircle as Help, Users as Contacts, LogOut } from "lucide-react";
 import { UnreadBadge } from "./UnreadBadge";
-import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { WeatherButton } from "@/components/WeatherButton";
 import { useIsMobile } from "@/hooks/use-mobile";
 
-export function AppHeader() {
+interface AppHeaderProps {
+  unreadTotal?: number;
+}
+
+export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
   const { theme, setTheme, language, setLanguage, toggleLanguage } = useTheme();
   const { user, signOut } = useAuth();
   const { profile } = useUserProfile();
   const navigate = useNavigate();
   const location = useLocation();
-  const { unreadTotal } = useUnreadMessages();
   const [avatarKey, setAvatarKey] = useState(Date.now());
   
   // Check if we're on the Wakti AI V2 page

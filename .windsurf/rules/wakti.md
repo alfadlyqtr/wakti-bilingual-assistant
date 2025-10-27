@@ -5,7 +5,15 @@ trigger: always_on
 Wakti Project Rules
 Project Identity
 
+<<<<<<< Updated upstream
 Project Name: Wakti
+=======
+## Project Identity
+- **Project Name:** Wakti  
+- **Projecturl:** https://hxauxozopvpzpdygoqwf.supabase.co
+- **Supabase Project ID:** hxauxozopvpzpdygoqwf  
+- **App Name:** Wakti AI  
+>>>>>>> Stashed changes
 
 Supabase Project ID: hxauxozopvpzpdygoqwf
 
@@ -24,6 +32,7 @@ Our mission is to create an AI app people love and rely on every single day.
 With sharable Smart Tasks and subtasks, users can track real-time progress and stay organized.
 Event invites with live RSVP keep gatherings smooth and connected.
 
+<<<<<<< Updated upstream
 Powerful voice tools let users record meetings, lectures, or brainstorming sessions and instantly convert them into searchable transcripts and summaries in text or voice.
 
 Through voice cloning and translations in 60+ languages, Wakti bridges communication barriers for both text and audio.
@@ -147,3 +156,19 @@ When I ask you to debug, investigate, brainstorm, explain or suggest:
 Do not come up with rushed solutions, quick fixes, or half-baked answers.
 
 Think it through fully, then explain carefully.
+=======
+anon public
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU
+
+service_role
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NzA3MDE2NCwiZXhwIjoyMDYyNjQ2MTY0fQ.5h2M2RiaDlr44NhQPGQnnMHGMYyT-ANUawczbgwFCWU
+
+Legacy JWT secret
+zEG7tYaGSKbRRw4DNzkJTFN6HERGFKzvFQ2FZkoN7QmoKsQEvQn2av/Wr2rCHIFiKQHXpGOBpBugDkhzdPQ7tA==
+
+## Rules
+⚠️ Note: Service Role secrets and JWT secrets must never be exposed to frontend code.
+Use them only in secure server-side environments (e.g., Supabase Edge Functions, backend API).
+- ⚠️ Always obey and follow all **Global Rules (Non-Negotiable)** set in `global_rules.md`.  
+- Any backend work (Supabase, Edge Functions, DB changes) must respect both **Global Rules** and this **project file**.
+>>>>>>> Stashed changes
