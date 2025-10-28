@@ -195,7 +195,6 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
         throw new Error('No audio returned from Runware');
       }
 
-<<<<<<< HEAD
       // Always upload to Supabase Storage and insert DB row (both data: and https:)
       let storedUrl = audioURL;
       try {
@@ -235,10 +234,6 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
         // Fallback: still show playable result but allow manual Save
         setAudios((prev) => [{ url: storedUrl, mime: 'audio/mpeg', meta: {}, createdAt: Date.now(), saved: false }, ...prev]);
       }
-=======
-      // Do NOT auto-save. Show playable result and let user click Save to persist.
-      setAudios((prev) => [{ url: audioURL, mime: 'audio/mpeg', meta: {}, createdAt: Date.now(), saved: false }, ...prev]);
->>>>>>> 0ddb493e (m1)
 
       setLastError(null);
 

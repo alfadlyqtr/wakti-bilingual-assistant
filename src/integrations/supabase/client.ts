@@ -1,5 +1,5 @@
 // This file contains helper functions for interacting with Supabase
-import { createClient, Session } from '@supabase/supabase-js';
+import { createClient, Session, SupabaseClient } from '@supabase/supabase-js';
 import { TasjeelRecord, AudioUploadOptions } from '@/components/tasjeel/types';
 import type { Database } from '@/integrations/supabase/types';
 
@@ -18,15 +18,9 @@ const supabaseAnonKey =
 const effectiveUrl = supabaseUrl;
 const effectiveAnon = supabaseAnonKey;
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
 // Export the URL for use in other services
 export const SUPABASE_URL = effectiveUrl;
 
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 export const supabase = createClient<Database>(effectiveUrl, effectiveAnon, {
   auth: {
     persistSession: true,

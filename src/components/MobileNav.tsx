@@ -1,5 +1,3 @@
-<<<<<<< Updated upstream
-=======
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -177,4 +175,3 @@ export function MobileNav({
     </nav>
   );
 }
->>>>>>> Stashed changes
