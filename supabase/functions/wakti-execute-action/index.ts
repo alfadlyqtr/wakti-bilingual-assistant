@@ -263,27 +263,6 @@ async function generateImage(prompt: string | undefined, userId: string, languag
       });
     }
 
-<<<<<<< Updated upstream
-    console.log('Runware response status:', response.status, 'modelUsed:', modelUsed);
-=======
-    if (response.ok) {
-      const runwareRes: RunwareResponse = await response.json();
-      console.log("Runware response data:", runwareRes);
-      
-      // Type guard to locate image inference result
-      const isRunwareImageTask = (item: unknown): item is RunwareImageTask => {
-        return typeof item === 'object' && item !== null && (item as { taskType?: unknown }).taskType === 'imageInference';
-      };
-      const imageResult = (runwareRes.data ?? []).find(isRunwareImageTask);
-      
-      if (imageResult && imageResult.imageURL) {
-        // Create Supabase client to save image
-        const supabase = createClient(
-          Deno.env.get('SUPABASE_URL') ?? '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-        );
->>>>>>> Stashed changes
-
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Runware API error:', response.status, errorText);

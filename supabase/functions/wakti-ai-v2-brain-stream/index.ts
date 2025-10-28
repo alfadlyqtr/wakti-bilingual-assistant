@@ -1,9 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
-<<<<<<< Updated upstream
-import { executeRegularSearch } from './search.ts'
-=======
 import { executeRegularSearch } from "../wakti-ai-v2-brain/search.ts";
 import type {
   Attachment,
@@ -15,13 +12,6 @@ import type {
   SearchAPIData,
   OpenAIStreamChunk,
 } from "../_types/shared.ts";
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 
 const allowedOrigins = [
   'https://wakti.qa',
@@ -48,20 +38,50 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
+const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
 
 const _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 console.log("WAKTI AI V2 STREAMING BRAIN (TEXT-ONLY): Ready");
 
 // Build the system prompt for text chat/search with Personal Touch and intelligent formatting
-function buildSystemPrompt(language, currentDate, personalTouch, activeTrigger) {
+function buildSystemPrompt(language: string, currentDate: string, personalTouch: any, activeTrigger: string) {
   const pt = personalTouch || {};
   const ptNick = (pt.nickname || '').toString().trim() || 'none';
   const ptTone = (pt.tone || '').toString().trim() || 'neutral';
   const ptStyle = (pt.style || '').toString().trim() || 'short answers';
 
-<<<<<<< Updated upstream
-  const BASE_PROMPT = `CRITICAL MULTI-LANGUAGE RULE\n- You are multilingual. Default to the UI language "${language}".\n- If the user asks for a translation or specifies a target language, RESPOND IN THAT TARGET LANGUAGE.\n\nCRITICAL PERSONAL TOUCH ENFORCEMENT\n- Nickname: ${ptNick}. If provided, USE the nickname naturally and warmly throughout.\n- Tone: ${ptTone}. Maintain this tone consistently.\n- Style: ${ptStyle}. Shape your structure to match the style in ALL replies.\n\nCRITICAL OUTPUT FORMAT SELECTION\n- Choose ONE primary format:\n  1) Markdown table: for structured multi-item results (search, comparisons, lists with attributes).\n     Columns: Title | Source | Key Point. Keep headers short; cells concise.\n  2) Bulleted list: for steps, checklists, 1–2 results, pros/cons, short enumerations.\n  3) 1–3 sentence paragraph: for brief conversational replies or simple explanations.\n- Use Markdown links ONLY when a real URL is provided. No placeholder links.\n- Do NOT wrap normal text in code fences unless the user asks for code.\n\n${activeTrigger === 'search' ? `SEARCH BEHAVIOR (applies only when Search is active)\n- Read the injected search context carefully; synthesize a short, direct answer FIRST.\n- Deterministic formatting:\n  - If results ≥ 3 → render a Markdown table (Title | Source | Key Point).\n  - If 1–2 results → concise bulleted list with sources.\n  - If explanatory/no results → 1–3 sentence paragraph.\n- Be precise. Do NOT invent sources.\n\n` : ''}GENERAL BEHAVIOR\n- Be direct and helpful. Avoid verbose preambles and do not repeat the question unless needed.\n- Use the target language explicitly when the user requests translation.\n\nYou are WAKTI AI — date: ${currentDate}.`;
+  const BASE_PROMPT = `CRITICAL MULTI-LANGUAGE RULE
+- You are multilingual. Default to the UI language "${language}".
+- If the user asks for a translation or specifies a target language, RESPOND IN THAT TARGET LANGUAGE.
+
+CRITICAL PERSONAL TOUCH ENFORCEMENT
+- Nickname: ${ptNick}. If provided, USE the nickname naturally and warmly throughout.
+- Tone: ${ptTone}. Maintain this tone consistently.
+- Style: ${ptStyle}. Shape your structure to match the style in ALL replies.
+
+CRITICAL OUTPUT FORMAT SELECTION
+- Choose ONE primary format:
+  1) Markdown table: for structured multi-item results (search, comparisons, lists with attributes).
+     Columns: Title | Source | Key Point. Keep headers short; cells concise.
+  2) Bulleted list: for steps, checklists, 1–2 results, pros/cons, short enumerations.
+  3) 1–3 sentence paragraph: for brief conversational replies or simple explanations.
+- Use Markdown links ONLY when a real URL is provided. No placeholder links.
+- Do NOT wrap normal text in code fences unless the user asks for code.
+
+${activeTrigger === 'search' ? `SEARCH BEHAVIOR (applies only when Search is active)
+- Read the injected search context carefully; synthesize a short, direct answer FIRST.
+- Deterministic formatting:
+  - If results ≥ 3 → render a Markdown table (Title | Source | Key Point).
+  - If 1–2 results → concise bulleted list with sources.
+  - If explanatory/no results → 1–3 sentence paragraph.
+- Be precise. Do NOT invent sources.
+
+` : ''}GENERAL BEHAVIOR
+- Be direct and helpful. Avoid verbose preambles and do not repeat the question unless needed.
+- Use the target language explicitly when the user requests translation.
+
+You are WAKTI AI — date: ${currentDate}.`;
   return BASE_PROMPT;
 }
 
@@ -76,224 +96,6 @@ function convertMessagesToClaudeFormat(messages: BasicMessage[]) {
     messages: conversationMessages
   };
 }
-=======
-  try {
-    console.log("🚀 STREAMING: Processing request");
-    
-    // Authenticate user
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader) {
-      throw new Error('Authentication required');
-    }
-
-    const { data: { user } } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
-    if (!user) {
-      throw new Error('Invalid authentication');
-    }
-
-    const requestBody = await req.json() as {
-      message?: string;
-      language?: Language;
-      conversationId?: string | null;
-      activeTrigger?: ActiveTrigger;
-      attachedFiles?: Attachment[];
-    };
-    const {
-      message,
-      language = 'en',
-      conversationId = null,
-      activeTrigger = 'chat',
-      attachedFiles = []
-    } = requestBody;
-
-    // Ensure strongly typed values for downstream usage
-    const lang: Language = language ?? 'en';
-    const trig: ActiveTrigger = activeTrigger ?? 'chat';
-
-    if (!message?.trim() && !attachedFiles?.length) {
-      throw new Error('Message or attachment required');
-    }
-
-    console.log("🚀 STREAMING: Starting AI response stream");
-
-    // Process attached files for document support
-    let processedContent = message;
-    if (attachedFiles?.length > 0) {
-      const documentContent = await processDocuments(attachedFiles);
-      if (documentContent) {
-        processedContent = `${message}\n\nDocument content:\n${documentContent}`;
-      }
-    }
-
-    // Create streaming response
-    const stream = new ReadableStream({
-      async start(controller) {
-        try {
-          await streamAIResponse(processedContent, lang, trig, controller, attachedFiles);
-        } catch (error) {
-          console.error("Streaming error:", error);
-          controller.error(error);
-        }
-      }
-    });
-
-    return new Response(stream, {
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'text/event-stream; charset=utf-8',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
-    });
-
-  } catch (error) {
-    console.error("🚀 STREAMING ERROR:", error);
-    return new Response(JSON.stringify({
-      error: error.message || 'Streaming error'
-    }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
-    });
-  }
-});
-
-// Document processing function
-async function processDocuments(attachedFiles: Attachment[]): Promise<string> {
-  let documentContent = '';
-  
-  for (const file of attachedFiles) {
-    try {
-      if (file.type === 'text/plain' && file.content) {
-        // Handle TXT files
-        const textContent = atob(file.content);
-        documentContent += `\n[${file.name}]:\n${textContent}\n`;
-      } else if (file.type === 'application/pdf' && file.content) {
-        // For PDF, we'll extract text using a simple approach
-        // In production, you'd use a proper PDF parsing library
-        documentContent += `\n[${file.name}]: PDF file attached (content extraction not implemented yet)\n`;
-      } else if (file.type?.includes('document') && file.content) {
-        // Handle DOC files
-        documentContent += `\n[${file.name}]: Document file attached (content extraction not implemented yet)\n`;
-      }
-    } catch (error) {
-      console.warn(`Failed to process file ${file.name}:`, error);
-    }
-  }
-  
-  return documentContent;
-}
-
-// Ultra-fast streaming AI response
-async function streamAIResponse(
-  message: string,
-  language: Language,
-  activeTrigger: ActiveTrigger,
-  controller: ReadableStreamDefaultController,
-  attachedFiles: Attachment[] = []
-) {
-  // Choose API based on files (force OpenAI for vision)
-  let apiKey = DEEPSEEK_API_KEY;
-  let apiUrl = 'https://api.deepseek.com/v1/chat/completions';
-  let model = 'deepseek-chat';
-  
-  if (!apiKey || (attachedFiles?.length > 0 && attachedFiles.some(f => f.type?.startsWith('image/')))) {
-    apiKey = OPENAI_API_KEY;
-    apiUrl = 'https://api.openai.com/v1/chat/completions';
-    model = 'gpt-4o-mini';
-  }
-  
-  if (!apiKey) {
-    throw new Error("No AI API key configured");
-  }
-
-  const startTime = Date.now();
-  let browsingUsed = false;
-  let browsingData: SearchAPIData | null = null;
-
-  // If Search mode, run Tavily and augment the user message
-  let effectiveMessage = message;
-  if (activeTrigger === 'search') {
-    try {
-      const searchRes = await executeRegularSearch(message, language) as RegularSearchResponse;
-      if (searchRes?.success && searchRes?.data) {
-        browsingUsed = true;
-        browsingData = searchRes.data;
-        const sourcesList = Array.isArray(searchRes.data.results)
-          ? searchRes.data.results
-              .map((r, i: number) => `${i + 1}. ${r.title || 'Source'} - ${r.url || ''}`)
-              .join("\n")
-          : '';
-        const instructEn = `\n\nUse the following search context and cite sources inline like [1], [2] when relevant. Start with a concise answer, then include a Sources section listing the URLs.\n\n`;
-        const instructAr = `\n\nاستخدم السياق التالي من نتائج البحث واذكر المصادر داخل النص مثل [1] و[2] عند الحاجة. ابدأ بإجابة مختصرة، ثم أضف قسمًا للمصادر يتضمن الروابط.\n\n`;
-        const preamble = language === 'ar' ? instructAr : instructEn;
-        const sourcesHeader = language === 'ar' ? 'المصادر:' : 'Sources:';
-        const answerHeader = language === 'ar' ? 'ملخص الإجابة:' : 'Answer Summary:';
-        const answer = searchRes.data.answer ? `${answerHeader} ${searchRes.data.answer}\n\n` : '';
-        const contextBlock = searchRes.context ? `${searchRes.context}\n\n` : '';
-        const sourcesBlock = sourcesList ? `${sourcesHeader}\n${sourcesList}\n\n` : '';
-        effectiveMessage = `${message}\n\n${preamble}${answer}${contextBlock}${sourcesBlock}`.trim();
-      }
-    } catch (e) {
-      // If search fails, continue without augmentation
-      console.warn('SEARCH pre-processing failed in stream:', e);
-    }
-  }
-
-  const systemPrompt = language === 'ar' 
-    ? `أنت WAKTI، مساعد ذكي متقدم. كن ودوداً ومفيداً ومختصراً في إجاباتك. استخدم نصاً عادياً واضحاً بدون رموز زائدة.`
-    : `You are WAKTI, an advanced AI assistant. Be friendly, helpful, and concise. Use clean, plain text without excessive formatting.`;
-
-  // Prepare messages with file support
-  let userContent: AIContent = effectiveMessage;
-  
-  if (attachedFiles?.length > 0) {
-    const contentParts: Exclude<AIContent, string> = [{ type: 'text', text: effectiveMessage }];
-    
-    for (const file of attachedFiles) {
-      if (file.type?.startsWith('image/') && file.content) {
-        contentParts.push({
-          type: 'image_url',
-          image_url: {
-            url: `data:${file.type};base64,${file.content}`
-          }
-        });
-      }
-    }
-    
-    userContent = contentParts;
-  }
-
-  const messages: AIMessage[] = [
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userContent }
-  ];
-
-  console.log("🚀 STREAMING: Making API request");
-
-  const response = await fetch(apiUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model: model,
-      messages: messages,
-      temperature: 0.7,
-      max_tokens: 2048,
-      stream: true
-    })
-  });
-
-  if (!response.ok) {
-    throw new Error(`AI API failed: ${response.status}`);
-  }
-
-  const reader = response.body?.getReader();
-  if (!reader) {
-    throw new Error('No response body reader');
-  }
->>>>>>> Stashed changes
 
 // Helper function to stream Claude responses
 async function streamClaudeResponse(reader: ReadableStreamDefaultReader, controller: ReadableStreamDefaultController, encoder: TextEncoder) {
@@ -324,24 +126,10 @@ async function streamClaudeResponse(reader: ReadableStreamDefaultReader, control
           if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: parsed.delta.text, content: parsed.delta.text })}\n\n`));
           }
-<<<<<<< Updated upstream
-          
           // Claude signals completion with message_stop
           if (parsed.type === 'message_stop') {
             controller.enqueue(encoder.encode('data: [DONE]\n\n'));
             break;
-=======
-
-          try {
-            const parsed = JSON.parse(data) as OpenAIStreamChunk;
-            const content = parsed.choices?.[0]?.delta?.content;
-            
-            if (content) {
-              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ token: content })}\n\n`));
-            }
-          } catch (e) {
-            // Skip malformed JSON
->>>>>>> Stashed changes
           }
         } catch (e) {
           // Skip invalid JSON
@@ -460,7 +248,7 @@ serve(async (req) => {
         messages.push({ role: 'user', content: message });
 
         // Choose provider (text-only): OpenAI first, fallback to Claude
-        let aiProvider: 'openai' | 'claude' | 'unknown' = 'unknown';
+        let aiProvider: 'openai' | 'claude' | 'none' = 'none';
         let streamReader: ReadableStreamDefaultReader<any> | null = null;
 
         const tryOpenAI = async () => {
