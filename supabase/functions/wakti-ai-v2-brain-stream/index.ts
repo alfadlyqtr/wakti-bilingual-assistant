@@ -1,17 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
-import { executeRegularSearch } from "../wakti-ai-v2-brain/search.ts";
-import type {
-  Attachment,
-  AIMessage,
-  AIContent,
-  Language,
-  ActiveTrigger,
-  RegularSearchResponse,
-  SearchAPIData,
-  OpenAIStreamChunk,
-} from "../_types/shared.ts";
+import { executeRegularSearch } from "./search.ts";
 
 const allowedOrigins = [
   'https://wakti.qa',
@@ -23,14 +13,17 @@ const getCorsHeaders = (origin: string | null) => {
     allowedOrigins.includes(origin) ||
     origin.includes('lovable.dev') ||
     origin.includes('lovable.app') ||
-    origin.includes('lovableproject.com')
+    origin.includes('lovableproject.com') ||
+    origin.startsWith('http://localhost') ||
+    origin.startsWith('http://127.0.0.1')
   );
   
   return {
     'Access-Control-Allow-Origin': isAllowed ? origin : '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, accept, cache-control, x-request-id, x-mobile-request',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, accept, cache-control, x-request-id, x-mobile-request, x-app-name, x-auth-token, x-skip-auth, content-length',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Max-Age': '86400',
+    'Access-Control-Allow-Credentials': 'true',
   };
 };
 
