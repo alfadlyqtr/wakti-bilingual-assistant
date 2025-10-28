@@ -1,15 +1,5 @@
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-=======
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 import '../_types/deno-globals.d.ts';
 // Note: Edge function runs in Deno; utilities are not used here.
-
->>>>>>> Stashed changes
 /**
  * ENHANCED: Image generation with Arabic translation support and better error handling
  */
@@ -148,7 +138,6 @@ export async function generateImageWithRunware(
 
     const outputFormat = options?.outputFormat || 'WEBP';
 
-<<<<<<< Updated upstream
     // Helper: upload image (data URI, base64, or URL) to Runware to get imageUUID
     const uploadImageAndGetUUID = async (image: string): Promise<string> => {
       const uploadTaskUUID = crypto.randomUUID();
@@ -237,36 +226,6 @@ export async function generateImageWithRunware(
         }
       ];
     };
-=======
-    const buildPayload = (modelToUse: string) => ([
-      {
-        taskType: "authentication" as const,
-        apiKey: RUNWARE_API_KEY as string
-      },
-      {
-        taskType: "imageInference" as const,
-        taskUUID: taskUUID,
-        positivePrompt: finalPrompt,
-        ...(options?.negativePrompt ? { negativePrompt: options.negativePrompt } : {}),
-        width,
-        height,
-        model: modelToUse,
-        numberResults: 1,
-        outputFormat,
-        includeCost: true,
-        CFGScale: cfgScale,
-        steps,
-        ...(options?.seedImage ? { seedImage: options.seedImage, strength: Math.max(0, Math.min(1, strength ?? 0.8)) } : {}),
-        ...(options?.maskImage ? { maskImage: options.maskImage, maskMargin: options.maskMargin ?? 8 } : {})
-      }
-    ] as const);
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 
     const fetchWithTimeout = async (payload: ReadonlyArray<Record<string, unknown>>, timeoutMs: number = RW_TIMEOUT_MS): Promise<Response> => {
       const controller = new AbortController();
@@ -435,46 +394,11 @@ export async function generateImageWithRunware(
       throw new Error('Invalid JSON response from image generation service');
     }
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-    // Select result per task type
+    // Select result per task type and get URL
     const targetTaskType = options?.backgroundRemoval ? 'imageBackgroundRemoval' : 'imageInference';
     const imageResult = responseData?.data?.find((item: any) => item.taskType === targetTaskType);
-
-    // Try common URL fields
     const urlCandidate = imageResult?.imageURL || imageResult?.url || imageResult?.outputUrl || imageResult?.outputURL;
-
-    if (urlCandidate) {
-=======
-    const imageResult = Array.isArray(responseData?.data)
-      ? responseData.data.find((item) => (item as { taskType?: unknown }).taskType === 'imageInference')
-      : undefined;
-
-=======
-    const imageResult = Array.isArray(responseData?.data)
-      ? responseData.data.find((item) => (item as { taskType?: unknown }).taskType === 'imageInference')
-      : undefined;
-
->>>>>>> Stashed changes
-=======
-    const imageResult = Array.isArray(responseData?.data)
-      ? responseData.data.find((item) => (item as { taskType?: unknown }).taskType === 'imageInference')
-      : undefined;
-
->>>>>>> Stashed changes
-    // Safely read the imageURL from loosely-typed response
-    const imageUrl = (imageResult && typeof imageResult === 'object' && 'imageURL' in imageResult)
-      ? (imageResult as { imageURL?: unknown }).imageURL
-      : undefined;
-    if (typeof imageUrl === 'string' && imageUrl.length > 0) {
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
+    if (typeof urlCandidate === 'string' && urlCandidate.length > 0) {
       console.log('✅ IMAGE GEN: Successfully generated image');
 
       // Extract any available cost metadata without assuming exact shape
@@ -488,41 +412,14 @@ export async function generateImageWithRunware(
       const durationMs = Date.now() - startTime;
 
       const responseMessage = language === 'ar' 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
         ? `🎨 تم إنشاء الصورة بنجاح!\n\n![Generated Image](${urlCandidate})\n\n**الوصف الأصلي:** ${originalPrompt}\n**الوصف المترجم:** ${finalPrompt}`
         : `🎨 Image generated successfully!\n\n![Generated Image](${urlCandidate})\n\n**Prompt:** ${finalPrompt}`;
-=======
-        ? `🎨 تم إنشاء الصورة بنجاح!\n\n![Generated Image](${imageUrl})\n\n**الوصف الأصلي:** ${originalPrompt}\n**الوصف المترجم:** ${finalPrompt}`
-        : `🎨 Image generated successfully!\n\n![Generated Image](${imageUrl})\n\n**Prompt:** ${finalPrompt}`;
->>>>>>> Stashed changes
-=======
-        ? `🎨 تم إنشاء الصورة بنجاح!\n\n![Generated Image](${imageUrl})\n\n**الوصف الأصلي:** ${originalPrompt}\n**الوصف المترجم:** ${finalPrompt}`
-        : `🎨 Image generated successfully!\n\n![Generated Image](${imageUrl})\n\n**Prompt:** ${finalPrompt}`;
->>>>>>> Stashed changes
-=======
-        ? `🎨 تم إنشاء الصورة بنجاح!\n\n![Generated Image](${imageUrl})\n\n**الوصف الأصلي:** ${originalPrompt}\n**الوصف المترجم:** ${finalPrompt}`
-        : `🎨 Image generated successfully!\n\n![Generated Image](${imageUrl})\n\n**Prompt:** ${finalPrompt}`;
->>>>>>> Stashed changes
       
       return {
         success: true,
         error: null,
         response: responseMessage,
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
         imageUrl: urlCandidate,
-=======
-        imageUrl,
->>>>>>> Stashed changes
-=======
-        imageUrl,
->>>>>>> Stashed changes
-=======
-        imageUrl,
->>>>>>> Stashed changes
         runwareCost,
         modelUsed,
         responseTime: durationMs
