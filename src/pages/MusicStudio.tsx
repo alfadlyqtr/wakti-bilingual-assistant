@@ -8,7 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { createPortal } from 'react-dom';
 import { AudioPlayer } from '@/components/music/AudioPlayer';
-import { Info } from 'lucide-react';
+import { Info, Wand2 } from 'lucide-react';
 
 export default function MusicStudio() {
   const { language } = useTheme();
@@ -44,31 +44,73 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
   const [duration, setDuration] = useState(30); // seconds
   const [seedLocked, setSeedLocked] = useState(false);
   const [seed, setSeed] = useState<string>('');
-  // Preset styles list (expandable later)
-  const STYLE_PRESETS = useMemo<string[]>(() => [
-    // Strings & orchestral
-    'strings','string quartet','violin lead','cello warm','orchestral','symphonic','chamber','cinematic','epic','dramatic','trailer','ambient strings','pizzicato','legato','staccato','lush pads','film score',
-    // Arabic & regional
-    'soft oud','oud solo','qanun','ney flute','arabic classical','khaleeji','shaabi','tarab','nasheed','maqam hijaz','maqam rast','khaleeji pop',
-    // Genres
-    'pop','indie pop','synthpop','rock','alt rock','soft rock','metal','lofi','boom bap','trap','drill','house','deep house','progressive house','edm','trance','techno','dubstep','drum & bass','reggaeton','afrobeats','r&b','soul','jazz','jazzy','blues','country','folk','acoustic','piano','piano solo','acoustic guitar','fingerstyle','bossa nova','latin','k-pop','bollywood',
-    // Moods
-    'intimate','romantic','gentle','uplifting','calm','nostalgic','melancholic','moody','dark','bright','happy','sad','hopeful','mysterious','euphoric','energetic','chill','meditative','focus','study',
-    // Electronic textures
-    'analog synth','retro 80s','synthwave','retrowave','ambient','downtempo','future bass','glitch','IDM'
-  ], []);
+  // Preset styles list (genres only)
+  const STYLE_PRESETS = useMemo<string[]>(() => {
+    if (language === 'ar') {
+      return [
+        'آر آند بي','بوب','بوب الثمانينات','بوب التسعينات','روك','روك آند رول','سوفت روك','ميتال ثقيل','كانتري','جاز','سول','هيب هوب','راب','خليجي بوب','لاتين','ريغيتون','أفروبيتس','سينث بوب','إندي بوب','لوفاي','هاوس','ديب هاوس','ترانس','تيكنو','دبسْتِب','درَم آند بَيس','كي-بوب','بوليوود'
+      ];
+    }
+    return [
+      'R&B','pop','80s pop','90s pop','rock','rock and roll','soft rock','heavy metal','country','jazz','soul','hip hop','rap','khaleeji pop','latin','reggaeton','afrobeats','synthpop','indie pop','lofi','house','deep house','trance','techno','dubstep','drum & bass','k-pop','bollywood'
+    ];
+  }, [language]);
+
+  // Mode/Mood presets (unique values only)
+  const MODE_PRESETS = useMemo<string[]>(() => {
+    if (language === 'ar') {
+      return [
+        'سعيد', 'حزين', 'هادئ', 'مفعم بالطاقة', 'رومانسي', 'مظلم', 'ساطع', 'نوستالجي', 'تأملي', 'استرخاء', 'تركيز', 'ملحمي', 'مثير', 'غامض', 'مبهج'
+      ];
+    }
+    return [
+      'happy', 'sad', 'calm', 'energetic', 'romantic', 'dark', 'bright', 'nostalgic', 'meditative', 'relaxing', 'focus', 'epic', 'exciting', 'mysterious', 'uplifting'
+    ];
+  }, [language]);
+
+  const INSTRUMENT_PRESETS = useMemo<string[]>(() => {
+    if (language === 'ar') {
+      return [
+        'عود','قانون','ناي','رق','دربوكة','طبلة','طار','مزمار','رباب',
+        'كمان','فيولا','تشيلو','كونترباص','فرقة أوتار',
+        'بيانو','بيانو كهربائي','أورغ','أكورديون',
+        'جيتار أكوستيك','جيتار كهربائي','جيتار 12 وتر','جيتار كلاسيكي','جيتار نايلون',
+        'باص جيتار','باص وترى','سينث باص',
+        'طقم درامز','إيقاع','تومز','سنير','هاي-هات','صنجات','تصفيق يدوي',
+        'فلوت','كلارينيت','أوبوا','باسون','ساكسفون','ترومبيت','ترومبون','هورن فرنسي',
+        'هارب','سيليستا','فيبرفون','ماريمبا','زيلوفون',
+        'سينث ليد','سينث باد','باد دافئ','باد تناظري','باد أوتار','بلاك','أربجياتور'
+      ];
+    }
+    return [
+      'oud','qanun','ney','riq','darbuka','tabla','frame drum','mizmar','rebab',
+      'violin','viola','cello','contrabass','string ensemble',
+      'piano','electric piano','organ','accordion',
+      'acoustic guitar','electric guitar','12‑string guitar','classical guitar','nylon guitar',
+      'bass guitar','upright bass','synth bass',
+      'drum kit','percussion','toms','snare','hi-hat','cymbals','hand claps',
+      'flute','clarinet','oboe','bassoon','saxophone','trumpet','trombone','french horn',
+      'harp','celesta','vibraphone','marimba','xylophone',
+      'synth lead','synth pad','warm pad','analog pad','string pad','pluck','arpeggiator'
+    ];
+  }, [language]);
 
   // Include/Exclude as chip lists
   const [includeTags, setIncludeTags] = useState<string[]>([]);
-  const [excludeTags, setExcludeTags] = useState<string[]>([]);
+  const [instrumentTags, setInstrumentTags] = useState<string[]>([]);
+  const [moodTags, setMoodTags] = useState<string[]>([]);
   const [showIncludePicker, setShowIncludePicker] = useState(false);
-  const [showExcludePicker, setShowExcludePicker] = useState(false);
+  const [showInstrumentPicker, setShowInstrumentPicker] = useState(false);
+  const [showMoodPicker, setShowMoodPicker] = useState(false);
   const includeAnchorRef = useRef<HTMLDivElement | null>(null);
-  const excludeAnchorRef = useRef<HTMLDivElement | null>(null);
+  const instrumentAnchorRef = useRef<HTMLDivElement | null>(null);
+  const moodAnchorRef = useRef<HTMLDivElement | null>(null);
   const [includeRect, setIncludeRect] = useState<{top:number,left:number,width:number} | null>(null);
-  const [excludeRect, setExcludeRect] = useState<{top:number,left:number,width:number} | null>(null);
+  const [instrumentRect, setInstrumentRect] = useState<{top:number,left:number,width:number} | null>(null);
+  const [moodRect, setMoodRect] = useState<{top:number,left:number,width:number} | null>(null);
   // Minimal mode only: styles include/exclude + prompt + duration
   const [submitting, setSubmitting] = useState(false);
+  const [amping, setAmping] = useState(false);
   const [audios, setAudios] = useState<Array<{ url: string; mime: string; meta?: any; createdAt: number; saved?: boolean }>>([]);
   const [lastError, setLastError] = useState<string | null>(null);
   const [songsUsed, setSongsUsed] = useState(0);
@@ -89,14 +131,18 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
     // Remove any trailing "Include styles: ..." or "Exclude styles: ..." sentences we previously added
     return text
       .replace(/\s*Include styles:[^\.]*\.?\s*$/i, '')
-      .replace(/\s*Exclude styles:[^\.]*\.?\s*$/i, '')
+      .replace(/\s*Instruments:[^\.]*\.?\s*$/i, '')
+      .replace(/\s*Mode:[^\.]*\.?\s*$/i, '')
+      .replace(/\s*الأنماط:[^\.]*\.?\s*$/i, '')
+      .replace(/\s*الآلات:[^\.]*\.?\s*$/i, '')
       .trim();
   }
 
   function buildStylesSuffix() {
     const parts: string[] = [];
-    if (includeTags.length > 0) parts.push(`Include styles: ${includeTags.join(', ')}`);
-    if (excludeTags.length > 0) parts.push(`Exclude styles: ${excludeTags.join(', ')}`);
+    if (includeTags.length > 0) parts.push(`${language==='ar' ? 'الأنماط' : 'Include styles'}: ${includeTags.join(', ')}`);
+    if (instrumentTags.length > 0) parts.push(`${language==='ar' ? 'الآلات' : 'Instruments'}: ${instrumentTags.join(', ')}`);
+    if (moodTags.length > 0) parts.push(`${language==='ar' ? 'المزاج' : 'Mode'}: ${moodTags.join(', ')}`);
     return parts.join('. ');
   }
 
@@ -116,7 +162,35 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
       if (withSpace !== prompt) setPrompt(withSpace);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [includeTags, excludeTags]);
+  }, [includeTags, instrumentTags, moodTags, language]);
+
+  async function handleAmp() {
+    if (!prompt.trim()) return;
+    setAmping(true);
+    try {
+      const base = stripStylesSuffix(prompt);
+      const stylesLine = buildStylesSuffix();
+      // Build a compact, music-specific directive so Deepseek stays on music topic.
+      const directive = language === 'ar'
+        ? 'مهمة: حسّن هذا التوجيه لتوليد موسيقى فقط دون انحراف عن نية المستخدم. ركّز على الأسلوب والمزاج والبنية والإيقاع والسرعة والمقامات والآلات (عود، قانون، ناي، كمان، تشيلو، بيانو، جيتار، دربوكة/إيقاع، باص، طبول، سنث)، وأنماط مثل الراب وR&B والبوب والروك والخليجي والناشيد. أعد صياغته كسطر واحد موجز قابل للاستخدام مباشرة.'
+        : 'Task: Improve this prompt strictly for music generation without drifting from user intent. Focus on style, mood, structure, tempo, scales/modes, and instruments (oud, qanun, ney, violin, cello, piano, acoustic guitar, darbuka/percussion, bass, drums, synth), and styles like rap, R&B, pop, rock, khaleeji, nasheed. Return a single concise line ready to use.';
+
+      const composed = [directive, base, stylesLine].filter(Boolean).join('\n');
+      const { data, error } = await supabase.functions.invoke('prompt-amp', {
+        body: { text: composed, mode: 'music' }
+      });
+      if (error) throw error;
+      const improved = (data?.text || '').toString();
+      if (!improved) throw new Error(language==='ar' ? 'تعذّر التحسين' : 'Amp failed');
+      const capped = improved.slice(0, limit);
+      setPrompt(capped);
+      toast.success(language==='ar' ? 'تم تحسين التوجيه' : 'Prompt enhanced');
+    } catch (e: any) {
+      toast.error((language==='ar' ? 'فشل التحسين: ' : 'Amp failed: ') + (e?.message || String(e)));
+    } finally {
+      setAmping(false);
+    }
+  }
 
   const handleGenerate = async () => {
     if (overLimit) return;
@@ -130,7 +204,7 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
       startOfMonth.setDate(1);
       startOfMonth.setHours(0, 0, 0, 0);
       
-      const { count, error: countError } = await supabase
+      const { count, error: countError } = await (supabase as any)
         .from('user_music_tracks')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user.id)
@@ -149,11 +223,12 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
       // Full prompt already contains styles wording (Option A)
       const fullPrompt = prompt;
       
-      // Call Runware directly from frontend
+      // Call Runware directly from frontend (as before)
       const runwareResponse = await fetch('https://api.runware.ai/v1/inference', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          // NOTE: client-side key usage restored per request
           'Authorization': 'Bearer uS1Bbyhfcs0dAigYhXwELRxBcCndER6M'
         },
         body: JSON.stringify([{
@@ -165,70 +240,57 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
           outputFormat: 'MP3',
           deliveryMethod: 'sync',
           numberResults: 1,
-          audioSettings: {
-            sampleRate: 44100,
-            bitrate: 128
-          }
+          audioSettings: { sampleRate: 44100, bitrate: 128 }
         }])
       });
-
-      const result = await runwareResponse.json();
-      console.log('Runware full response:', result);
-      console.log('Response structure:', {
-        hasData: !!result.data,
-        isArray: Array.isArray(result),
-        keys: Object.keys(result || {}),
-        firstItem: result.data?.[0] || result[0] || result
-      });
-
-      if (!runwareResponse.ok || result.errors) {
-        throw new Error(result.errors?.[0]?.message || 'Runware API error');
-      }
-
-      // Get audio from response - can be audioURL or audioDataURI
-      const audioData = result?.data?.[0];
-      const audioURL = audioData?.audioURL || audioData?.audioDataURI;
-      console.log('Found audio:', audioURL ? 'YES' : 'NO');
       
-      if (!audioURL) {
-        console.error('Could not find audio. Full result:', JSON.stringify(result, null, 2));
-        throw new Error('No audio returned from Runware');
+      const result = await runwareResponse.json();
+      if (!runwareResponse.ok || result?.errors) {
+        throw new Error(result?.errors?.[0]?.message || 'Runware API error');
       }
-
-      // Always upload to Supabase Storage and insert DB row (both data: and https:)
-      let storedUrl = audioURL;
+      
+      // Accept audioURL or dataURI
+      const audioData = Array.isArray(result?.data) ? result.data[0] : result?.data || result;
+      const foundUrl = audioData?.audioURL || audioData?.audioDataURI || audioData?.dataURI;
+      if (!foundUrl) throw new Error('No audio returned from Runware');
+      
+      // Upload to Supabase Storage, then insert DB row
+      let storedUrl = foundUrl as string;
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error('Not authenticated');
-
-        // Fetch the audioURL (works for data: and https:)
-        const response = await fetch(audioURL);
+        
+        const response = await fetch(foundUrl);
         const blob = await response.blob();
-
-        // Upload to Supabase Storage
-        const fileName = `${user.id}/${Date.now()}.mp3`;
-        const up = await supabase.storage
-          .from('music')
-          .upload(fileName, blob, { contentType: 'audio/mpeg', upsert: false });
+        const mime = blob.type || 'audio/mpeg';
+        const ext = mime.includes('wav') ? 'wav' : mime.includes('ogg') ? 'ogg' : 'mp3';
+        const fileName = `${user.id}/${Date.now()}.${ext}`;
+        const up = await supabase.storage.from('music').upload(fileName, blob, { contentType: mime, upsert: false });
         if (up.error) throw up.error;
-
-        // Public URL
         const { data: urlData } = supabase.storage.from('music').getPublicUrl(fileName);
         storedUrl = urlData.publicUrl;
-
-        // Insert into DB
-        const ins = await supabase.from('user_music_tracks').insert({
+        
+        const ins = await (supabase as any).from('user_music_tracks').insert({
           user_id: user.id,
-          title: prompt.substring(0, 100),
-          storage_path: fileName,
-          duration_sec: Math.min(120, duration),
           prompt: prompt,
-          cost_usd: audioData?.cost || 0
+          include_styles: includeTags.length ? includeTags : null,
+          requested_duration_seconds: Math.min(120, duration),
+          provider: 'runware',
+          model: 'elevenlabs:1@1',
+          storage_path: fileName,
+          mime: mime,
+          meta: {
+            ...(audioData?.cost ? { cost_usd: audioData.cost } : {}),
+            ...(instrumentTags.length ? { instruments: instrumentTags } : {}),
+            ...(moodTags.length ? { mood: moodTags } : {})
+          } as any
         });
         if (ins.error) throw ins.error;
-
-        // Update UI after successful save
-        setAudios((prev) => [{ url: storedUrl, mime: 'audio/mpeg', meta: {}, createdAt: Date.now(), saved: true }, ...prev]);
+        // Reflect saved state and counters
+        setAudios((prev) => [{ url: storedUrl, mime, meta: {}, createdAt: Date.now(), saved: true }, ...prev]);
+        setSongsUsed((v)=>v+1);
+        setSongsRemaining((v)=>Math.max(0, v-1));
+        onSaved?.();
       } catch (saveError) {
         console.error('Storage/DB save error:', saveError);
         // Fallback: still show playable result but allow manual Save
@@ -257,7 +319,7 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
         const startOfMonth = new Date();
         startOfMonth.setDate(1);
         startOfMonth.setHours(0, 0, 0, 0);
-        const { count } = await supabase
+        const { count } = await (supabase as any)
           .from('user_music_tracks')
           .select('*', { count: 'exact', head: true })
           .eq('user_id', user.id)
@@ -276,9 +338,13 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
         const r = includeAnchorRef.current.getBoundingClientRect();
         setIncludeRect({ top: r.bottom + 4, left: r.left, width: r.width });
       }
-      if (showExcludePicker && excludeAnchorRef.current) {
-        const r = excludeAnchorRef.current.getBoundingClientRect();
-        setExcludeRect({ top: r.bottom + 4, left: r.left, width: r.width });
+      if (showInstrumentPicker && instrumentAnchorRef.current) {
+        const r = instrumentAnchorRef.current.getBoundingClientRect();
+        setInstrumentRect({ top: r.bottom + 4, left: r.left, width: r.width });
+      }
+      if (showMoodPicker && moodAnchorRef.current) {
+        const r = moodAnchorRef.current.getBoundingClientRect();
+        setMoodRect({ top: r.bottom + 4, left: r.left, width: r.width });
       }
     }
     calcRects();
@@ -290,36 +356,42 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
       window.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('resize', onResize);
     };
-  }, [showIncludePicker, showExcludePicker]);
+  }, [showIncludePicker, showInstrumentPicker, showMoodPicker]);
 
   useEffect(() => {
     function handleDocClick(ev: MouseEvent) {
       const t = ev.target as HTMLElement;
       // Close if click outside the anchor areas and outside the menus
       const menu = document.getElementById('include-picker-menu');
-      const menu2 = document.getElementById('exclude-picker-menu');
+      const menu2 = document.getElementById('instrument-picker-menu');
+      const menu3 = document.getElementById('mood-picker-menu');
       if (
         showIncludePicker &&
         !includeAnchorRef.current?.contains(t) &&
         menu && !menu.contains(t)
       ) setShowIncludePicker(false);
       if (
-        showExcludePicker &&
-        !excludeAnchorRef.current?.contains(t) &&
+        showInstrumentPicker &&
+        !instrumentAnchorRef.current?.contains(t) &&
         menu2 && !menu2.contains(t)
-      ) setShowExcludePicker(false);
+      ) setShowInstrumentPicker(false);
+      if (
+        showMoodPicker &&
+        !moodAnchorRef.current?.contains(t) &&
+        menu3 && !menu3.contains(t)
+      ) setShowMoodPicker(false);
     }
     document.addEventListener('mousedown', handleDocClick);
     return () => document.removeEventListener('mousedown', handleDocClick);
-  }, [showIncludePicker, showExcludePicker]);
+  }, [showIncludePicker, showInstrumentPicker, showMoodPicker]);
 
   return (
     <div className="space-y-4">
       <Card className="p-4 md:p-5 space-y-4 overflow-visible">
-        <div className="grid md:grid-cols-2 gap-3">
-          {/* Include */}
+        <div className="grid md:grid-cols-3 gap-3">
+          {/* Styles */}
           <div className="space-y-2 relative" ref={includeAnchorRef}>
-            <label className="text-xs font-medium block">{language === 'ar' ? 'أنماط مضمّنة' : 'Include styles'}</label>
+            <label className="text-xs font-medium block">{language === 'ar' ? 'الأنماط' : 'Styles'}</label>
             <div className="flex flex-wrap gap-2">
               {includeTags.map((tag) => (
                 <span key={tag} className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted text-sm">
@@ -331,8 +403,8 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
                   >×</button>
                 </span>
               ))}
-              <Button type="button" variant="outline" size="sm" onClick={() => { setShowIncludePicker((v)=>!v); setShowExcludePicker(false); }}>
-                {language==='ar' ? 'إضافة نمط' : 'Add style'}
+              <Button type="button" variant="outline" size="sm" onClick={() => { setShowIncludePicker((v)=>!v); setShowInstrumentPicker(false); }}>
+                {language==='ar' ? 'إضافة أنماط' : 'Add styles'}
               </Button>
             </div>
             {showIncludePicker && includeRect && createPortal(
@@ -358,36 +430,77 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
             }
           </div>
 
-          {/* Exclude */}
-          <div className="space-y-2 relative" ref={excludeAnchorRef}>
-            <label className="text-xs font-medium block">{language === 'ar' ? 'أنماط مستبعدة' : 'Exclude styles'}</label>
+          {/* Instruments */}
+          <div className="space-y-2 relative" ref={instrumentAnchorRef}>
+            <label className="text-xs font-medium block">{language === 'ar' ? 'الآلات' : 'Instruments'}</label>
             <div className="flex flex-wrap gap-2">
-              {excludeTags.map((tag) => (
+              {instrumentTags.map((tag) => (
                 <span key={tag} className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted text-sm">
                   {tag}
                   <button
                     type="button"
                     className="text-muted-foreground hover:text-foreground"
-                    onClick={() => setExcludeTags((prev) => prev.filter((t) => t !== tag))}
+                    onClick={() => setInstrumentTags((prev) => prev.filter((t) => t !== tag))}
                   >×</button>
                 </span>
               ))}
-              <Button type="button" variant="outline" size="sm" onClick={() => { setShowExcludePicker((v)=>!v); setShowIncludePicker(false); }}>
-                {language==='ar' ? 'استبعاد نمط' : 'Exclude style'}
+              <Button type="button" variant="outline" size="sm" onClick={() => { setShowInstrumentPicker((v)=>!v); setShowIncludePicker(false); }}>
+                {language==='ar' ? 'إضافة آلات' : 'Add instruments'}
               </Button>
             </div>
-            {showExcludePicker && excludeRect && createPortal(
+            {showInstrumentPicker && instrumentRect && createPortal(
               <div
-                id="exclude-picker-menu"
-                style={{ position: 'fixed', top: excludeRect.top, left: excludeRect.left, width: excludeRect.width, zIndex: 2147483647 }}
+                id="instrument-picker-menu"
+                style={{ position: 'fixed', top: instrumentRect.top, left: instrumentRect.left, width: instrumentRect.width, zIndex: 2147483647 }}
                 className="max-h-56 overflow-auto rounded-md border bg-background shadow"
               >
                 <ul className="p-2 space-y-1 text-sm">
-                  {STYLE_PRESETS.map((opt) => {
-                    const checked = excludeTags.includes(opt);
+                  {INSTRUMENT_PRESETS.map((opt) => {
+                    const checked = instrumentTags.includes(opt);
                     return (
                       <li key={opt} className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 rounded px-2 py-1"
-                        onClick={() => setExcludeTags((prev) => checked ? prev.filter(t=>t!==opt) : [...prev, opt])}
+                        onClick={() => setInstrumentTags((prev) => checked ? prev.filter(t=>t!==opt) : [...prev, opt])}
+                      >
+                        <input type="checkbox" readOnly checked={checked} />
+                        <span>{opt}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>, document.body)
+            }
+          </div>
+
+          {/* Mode/Mood */}
+          <div className="space-y-2 relative" ref={moodAnchorRef}>
+            <label className="text-xs font-medium block">{language === 'ar' ? 'المزاج' : 'Mode'}</label>
+            <div className="flex flex-wrap gap-2">
+              {moodTags.map((tag) => (
+                <span key={tag} className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted text-sm">
+                  {tag}
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={() => setMoodTags((prev) => prev.filter((t) => t !== tag))}
+                  >×</button>
+                </span>
+              ))}
+              <Button type="button" variant="outline" size="sm" onClick={() => { setShowMoodPicker((v)=>!v); setShowIncludePicker(false); setShowInstrumentPicker(false); }}>
+                {language==='ar' ? 'إضافة مزاج' : 'Add mode'}
+              </Button>
+            </div>
+            {showMoodPicker && moodRect && createPortal(
+              <div
+                id="mood-picker-menu"
+                style={{ position: 'fixed', top: moodRect.top, left: moodRect.left, width: moodRect.width, zIndex: 2147483647 }}
+                className="max-h-56 overflow-auto rounded-md border bg-background shadow"
+              >
+                <ul className="p-2 space-y-1 text-sm">
+                  {MODE_PRESETS.map((opt) => {
+                    const checked = moodTags.includes(opt);
+                    return (
+                      <li key={opt} className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 rounded px-2 py-1"
+                        onClick={() => setMoodTags((prev) => checked ? prev.filter(t=>t!==opt) : [...prev, opt])}
                       >
                         <input type="checkbox" readOnly checked={checked} />
                         <span>{opt}</span>
@@ -410,21 +523,36 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
             rows={3}
             className="flex-1"
           />
-          <Button
-            disabled={overLimit || submitting}
-            onClick={handleGenerate}
-            className="self-start"
-            aria-busy={submitting}
-          >
-            {submitting ? (
-              <span className="inline-flex items-center gap-2">
-                <span className="animate-spin">🎵</span>
-                <span>{language==='ar' ? 'جارٍ الإنشاء...' : 'Generating…'}</span>
-              </span>
-            ) : (
-              <span>{language === 'ar' ? 'إنشاء' : 'Generate'}</span>
-            )}
-          </Button>
+          <div className="flex items-center gap-2 self-start">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={amping || submitting || !prompt.trim()}
+              onClick={handleAmp}
+              aria-busy={amping}
+            >
+              {amping ? (
+                <span className="inline-flex items-center gap-1"><span className="animate-spin">✨</span><span>{language==='ar'?'تحسين…':'Amp…'}</span></span>
+              ) : (
+                <span className="inline-flex items-center gap-1"><Wand2 className="h-4 w-4" />{language==='ar'?'تحسين':'Amp'}</span>
+              )}
+            </Button>
+            <Button
+              disabled={overLimit || submitting}
+              onClick={handleGenerate}
+              className=""
+              aria-busy={submitting}
+            >
+              {submitting ? (
+                <span className="inline-flex items-center gap-2">
+                  <span className="animate-spin">🎵</span>
+                  <span>{language==='ar' ? 'جارٍ الإنشاء...' : 'Generating…'}</span>
+                </span>
+              ) : (
+                <span>{language === 'ar' ? 'إنشاء' : 'Generate'}</span>
+              )}
+            </Button>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
           <div className="inline-flex items-center gap-2">
@@ -520,13 +648,14 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
                         }
                         // Avoid duplicates: check existing by storage_path
                         if (storagePath) {
-                          const { count } = await supabase
+                          const { count } = await (supabase as any)
                             .from('user_music_tracks')
                             .select('*', { count: 'exact', head: true })
                             .eq('user_id', user.id)
                             .eq('storage_path', storagePath);
+
                           if (!count || count === 0) {
-                            await supabase.from('user_music_tracks').insert({
+                            await (supabase as any).from('user_music_tracks').insert({
                               user_id: user.id,
                               title: prompt.substring(0, 100),
                               storage_path: storagePath,
@@ -563,11 +692,12 @@ function EditorTab() {
   const load = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('user_music_tracks')
         .select('id, created_at, prompt, include_styles, exclude_styles, requested_duration_seconds, signed_url, storage_path, mime')
         .order('created_at', { ascending: false })
         .limit(50);
+
       if (error) throw error;
       // Derive a playable URL from storage_path when signed_url is missing
       const withUrls = (data || []).map((t) => {
