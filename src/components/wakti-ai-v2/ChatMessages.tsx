@@ -772,8 +772,207 @@ export function ChatMessages({
     }
     // Render assistant content using ReactMarkdown (tables, code, images)
     if (message.role === 'assistant') {
+      // Vision JSON renderer (Option B): render structured results if present
+      const vjson = (message as any)?.metadata?.visionJson || (message as any)?.metadata?.json;
+      const isVision = message.intent === 'vision';
+      const ar = language === 'ar';
+      const normalized = (vjson && typeof vjson.normalized === 'object') ? vjson.normalized : null as any;
+      const normPairs: Array<{ key: string, value: string }> = [];
+      if (normalized?.id) {
+        const id = normalized.id;
+        const fields = [
+          ['Name', id.name],
+          ['Nationality', id.nationality],
+          ['Document No.', id.document_no],
+          ['Issuer', id.issuer],
+          ['Issue Date', id.issue_date],
+          ['Expiry Date', id.expiry_date],
+        ];
+        fields.forEach(([k, v]) => { if (v) normPairs.push({ key: k as string, value: String(v) }); });
+      }
+      if (normalized?.invoice) {
+        const inv = normalized.invoice;
+        const fields = [
+          ['Vendor', inv.vendor],
+          ['Address', inv.address],
+          ['Date', inv.date],
+          ['Currency', inv.currency],
+          ['Subtotal', inv.subtotal],
+          ['Tax', inv.tax],
+          ['Total', inv.total],
+        ];
+        fields.forEach(([k, v]) => { if (v !== undefined && v !== null && String(v) !== '') normPairs.push({ key: k as string, value: String(v) }); });
+      }
+      if (normalized?.ticket) {
+        const t = normalized.ticket;
+        const fields = [
+          ['Passenger', t.passenger],
+          ['Number', t.number],
+          ['Origin', t.origin],
+          ['Destination', t.destination],
+          ['Gate/Seat', t.gate_seat],
+          ['Departure', t.departure_time],
+          ['Arrival', t.arrival_time],
+        ];
+        fields.forEach(([k, v]) => { if (v) normPairs.push({ key: k as string, value: String(v) }); });
+      }
+      const keyValues = Array.isArray(vjson?.key_values) ? vjson.key_values : [];
+      const kvsToShow = [...normPairs, ...keyValues];
+      const hasKeyValues = kvsToShow.length > 0;
+      const table0 = Array.isArray(vjson?.tables) && vjson.tables.length > 0 ? vjson.tables[0] : null as any;
+      const ocrLines = Array.isArray(vjson?.ocr?.lines) ? vjson.ocr.lines : [];
+      const showTable = !!table0 || (isVision && ocrLines.length > 0);
+
+      const renderKeyValues = () => {
+        if (!hasKeyValues) return null;
+        return (
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {kvsToShow.slice(0, 60).map((kv: any, idx: number) => (
+              <div key={idx} className="rounded-md border border-border/60 bg-white/70 dark:bg-black/20 px-2 py-1 text-xs">
+                <div className="text-muted-foreground">{kv.key}</div>
+                <div className="font-medium break-words">{kv.value}</div>
+              </div>
+            ))}
+          </div>
+        );
+      };
+
+      const renderTable = () => {
+        let headers: string[] = [];
+        let rows: string[][] = [];
+        if (table0 && Array.isArray(table0.headers) && Array.isArray(table0.rows)) {
+          headers = table0.headers as string[];
+          rows = table0.rows as string[][];
+        } else if (ocrLines && ocrLines.length > 0) {
+          headers = ar ? ['السطر', 'النص'] : ['Line', 'Text'];
+          rows = ocrLines.map((t: string, i: number) => [String(i + 1), t]);
+        }
+        if (headers.length === 0) return null;
+        return (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr>
+                  {headers.map((h, i) => (
+                    <th key={i} className="border border-border px-2 py-1 bg-muted/40 text-left whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.slice(0, 300).map((r: string[], ri: number) => (
+                  <tr key={ri}>
+                    {r.map((c: string, ci: number) => (
+                      <td key={ci} className="border border-border px-2 py-1 align-top whitespace-pre-wrap break-words">{c}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      };
+
+      const renderOCRText = () => {
+        const txt = (vjson?.ocr?.text || '') as string;
+        if (!txt) return null;
+        return (
+          <details className="mt-2">
+            <summary className="text-xs cursor-pointer text-muted-foreground">{ar ? 'النص المستخرج (فتح/إغلاق)' : 'Extracted text (toggle)'}
+            </summary>
+            <div className="mt-1 text-sm whitespace-pre-wrap break-words">{txt}</div>
+          </details>
+        );
+      };
+
+      const renderVisionStructured = () => {
+        if (!isVision || !vjson) return null;
+        const doCopyJSON = async () => {
+          try { await navigator.clipboard.writeText(JSON.stringify(vjson, null, 2)); } catch {}
+        };
+        const doExportCSV = () => {
+          let headers: string[] = [];
+          let rows: string[][] = [];
+          if (table0 && Array.isArray(table0.headers) && Array.isArray(table0.rows)) {
+            headers = table0.headers as string[];
+            rows = table0.rows as string[][];
+          } else if (ocrLines && ocrLines.length > 0) {
+            headers = ar ? ['السطر','النص'] : ['Line','Text'];
+            rows = ocrLines.map((t: string, i: number) => [String(i + 1), t]);
+          }
+          if (headers.length === 0) return;
+          const csv = [headers.join(',')].concat(rows.map(r => r.map(c => '"' + String(c).replace(/"/g,'""') + '"').join(','))).join('\n');
+          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = 'wakti-vision.csv'; document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 1200);
+        };
+        return (
+          <div className="mb-3">
+            <div className="flex gap-2 mb-2">
+              <button onClick={doCopyJSON} className="px-2 py-1 text-xs rounded-md border border-border hover:bg-muted/50">{ar ? 'نسخ JSON' : 'Copy JSON'}</button>
+              <button onClick={doExportCSV} className="px-2 py-1 text-xs rounded-md border border-border hover:bg-muted/50">{ar ? 'تصدير CSV' : 'Export CSV'}</button>
+            </div>
+            {Array.isArray(vjson?.insights) && vjson.insights.length > 0 && (
+              <div className="mb-2">
+                <div className="text-xs font-semibold text-muted-foreground">{ar ? 'أهم الملاحظات' : 'Insights'}</div>
+                <ul className="list-disc pl-5 text-sm">
+                  {vjson.insights.slice(0, 8).map((s: string, i: number) => (
+                    <li key={i} className="break-words">{s}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {Array.isArray(vjson?.validations) && vjson.validations.length > 0 && (
+              <div className="mb-2">
+                <div className="text-xs font-semibold text-muted-foreground">{ar ? 'التحقق والتنبيهات' : 'Validations'}</div>
+                <div className="mt-1 space-y-1">
+                  {vjson.validations.slice(0, 12).map((v: any, i: number) => (
+                    <div key={i} className="text-xs">
+                      <span className={`inline-block px-1 rounded mr-2 ${v.severity === 'error' ? 'bg-red-100 text-red-700' : v.severity === 'warning' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'}`}>{v.severity || 'info'}</span>
+                      <span className="text-muted-foreground">{v.field ? `${v.field}: ` : ''}</span>
+                      <span className="font-medium">{v.issue}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {hasKeyValues && (
+              <div>
+                <div className="text-xs font-semibold text-muted-foreground">{ar ? 'الحقول الرئيسية' : 'Key Fields'}</div>
+                {renderKeyValues()}
+              </div>
+            )}
+            {showTable && (
+              <div className="mt-2">
+                <div className="text-xs font-semibold text-muted-foreground">{ar ? 'النص على شكل جدول' : 'Extracted Text (Table)'}</div>
+                {renderTable()}
+              </div>
+            )}
+            {renderOCRText()}
+            {Array.isArray(vjson?.follow_ups) && vjson.follow_ups.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {vjson.follow_ups.slice(0, 6).map((q: string, i: number) => (
+                  <button
+                    key={i}
+                    className="text-xs px-2 py-1 rounded-md border border-border hover:bg-muted/50 dark:hover:bg-white/10"
+                    title={q}
+                    onClick={() => {
+                      try { window.dispatchEvent(new CustomEvent('wakti-chat-send', { detail: { text: q, intent: 'vision' } })); } catch {}
+                    }}
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      };
+
       return (
         <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-2 prose-pre:my-3 prose-table:my-3">
+          {renderVisionStructured()}
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             rehypePlugins={[rehypeRaw]}

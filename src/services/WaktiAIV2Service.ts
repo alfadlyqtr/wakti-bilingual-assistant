@@ -311,8 +311,8 @@ class WaktiAIV2ServiceClass {
 
   private async prepareVisionAttachments(files: any[]): Promise<any[]> {
     if (!Array.isArray(files) || files.length === 0) return files || [];
-    const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
-    const MAX_TOTAL_BYTES = 4 * 1024 * 1024;
+    const MAX_IMAGE_BYTES = 1.2 * 1024 * 1024; // ~1.2MB per image
+    const MAX_TOTAL_BYTES = 2.5 * 1024 * 1024; // ~2.5MB total
     const processed: any[] = [];
     const supportedTypes = ['image/jpeg', 'image/png', 'image/gif'];
     for (const f of files) {
@@ -329,7 +329,7 @@ class WaktiAIV2ServiceClass {
       }
       const bytes = this.approxBase64Bytes(raw);
       if (bytes > MAX_IMAGE_BYTES) {
-        outBase64 = await this.downscaleBase64(raw, type, 1280, 0.75);
+        outBase64 = await this.downscaleBase64(raw, type, 1024, 0.7);
       }
       processed.push({ ...f, data: outBase64, content: outBase64, type });
     }
@@ -851,6 +851,17 @@ class WaktiAIV2ServiceClass {
         const supabaseUrl = ((import.meta as any).env && (import.meta as any).env.VITE_SUPABASE_URL)
           || 'https://hxauxozopvpzpdygoqwf.supabase.co';
 
+        // Map images strictly to the backend schema: { mimeType, data }
+        const payloadImages = (visionFiles || [])
+          .map((p: any) => {
+            const mime = ((p?.type || p?.mimeType || 'image/jpeg') + '').replace('image/jpg', 'image/jpeg');
+            const base64 = typeof p?.data === 'string' && p.data
+              ? p.data
+              : (typeof p?.content === 'string' ? p.content : '');
+            return base64 ? { mimeType: mime, data: base64 } : null;
+          })
+          .filter(Boolean);
+
         const resp = await fetch(`${supabaseUrl}/functions/v1/wakti-vision-stream`, {
           method: 'POST',
           mode: 'cors',
@@ -868,7 +879,7 @@ class WaktiAIV2ServiceClass {
             language,
             personalTouch: pt,
             provider: primary,
-            images: visionFiles,
+            images: payloadImages,
             options: { ocr: true, max_tokens: 1200 }
           }),
           signal
@@ -971,26 +982,16 @@ class WaktiAIV2ServiceClass {
             const raw = typeof p.data === 'string' && p.data ? p.data : (typeof p.content === 'string' ? p.content : '');
             if (isImage && raw) clientBytesTotal += this.approxBase64Bytes(raw);
           }
-          // Upload to storage and use URLs to avoid large request bodies
-          let urlFiles: any[] = [];
+          // Send processed base64 images directly (Option A)
           try {
-            const up = await this.uploadVisionToStorage(processedFiles, userId as string, requestId);
-            urlFiles = up.map((u, idx) => ({ url: u.url, mimeType: u.mimeType, type: u.mimeType, index: idx }));
-          } catch (upErr: any) {
-            console.error('❌ Vision storage upload failed', upErr);
-            onError?.('Unable to upload images. Please try again.');
-            return { response: 'Upload failed', conversationId, metadata: { vision: 'storage_upload_failed' } } as any;
-          }
-          try {
-            // Send storage URLs (not base64) to avoid payload size issues
-            const vres = await attemptVision('claude', urlFiles);
+            const vres = await attemptVision('claude', processedFiles);
             return { response: vres.response, conversationId, metadata: vres.metadata };
           } catch (vErr: any) {
             const msg = String(vErr?.message || vErr || '').toLowerCase();
-            const shouldFallbackVision = msg.includes('overloaded') || msg.includes('529') || msg.includes('claude');
+            const shouldFallbackVision = msg.includes('overloaded') || msg.includes('529') || msg.includes('claude') || msg.includes('not_found') || msg.includes('404');
             if (shouldFallbackVision) {
-              console.warn('⚠️ Vision Claude overloaded, falling back to OpenAI Vision...');
-              const vres2 = await attemptVision('openai', urlFiles);
+              console.warn('⚠️ Vision Claude failed/overloaded, falling back to OpenAI Vision...');
+              const vres2 = await attemptVision('openai', processedFiles);
               return { response: vres2.response, conversationId, metadata: vres2.metadata };
             }
             console.warn('⚠️ Vision endpoint failed, falling back to brain stream...');

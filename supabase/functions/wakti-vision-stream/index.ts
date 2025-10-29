@@ -109,7 +109,8 @@ CRITICAL PERSONAL TOUCH ENFORCEMENT ===
 - You can analyze screenshots for study or tech support; answer Q&A from images directly
 - You can interpret diagrams/charts/plots and extract numeric summaries
 - You can compare multiple images and explain differences; state uncertainty when needed
-- Always perform OCR on visible text; be precise and grounded in the image content`;
+- Always perform OCR on visible text; be precise and grounded in the image content
+- OCR LANGUAGE POLICY: Detect language automatically; if Arabic script is present, preserve Arabic text and numerals faithfully. Set ocr.language accordingly. Normalize dates to ISO-8601.`;
 
   const TABLE_ENFORCEMENT = `
 CRITICAL TABLE MODE ENFORCEMENT ===
@@ -132,12 +133,17 @@ ${VISION_CAPS}
 ${TABLE_ENFORCEMENT}
 
 OUTPUT REQUIREMENTS:
-- Always return BOTH parts in this order:
-  PART 1 — JSON ONLY: Output a single JSON object with no surrounding quotes or code fences. Do not add backticks. Keep it compact.
-  PART 2 — SUMMARY: After the JSON, output a single short summary (1–3 sentences) in plain text.
+- First output a single JSON object only. Do not wrap with code fences or add headings. No "PART" labels.
+- After the JSON, optionally output one concise sentence summary in plain text.
+- When the user asks to "extract all the text" (or similar), include both:
+  1) ocr.text and ocr.lines with every line.
+  2) a table in tables[0] with headers ["Line","Text"] and rows for each OCR line.
+- Always include helpful follow_ups (next-step questions) when relevant.
+- When applicable, include insights (key takeaways) and validations (field checks or warnings).
 
 JSON SCHEMA GUIDANCE (use fields that apply):
 - type: "person_photo" | "screenshot" | "document" | "general_photo"
+- doc_subtype?: string  // e.g., "qatar_id", "passport", "invoice", "receipt", "boarding_pass", "chart", "table_screenshot"
 - people: [ { gender_appearance, age_range, clothing, pose, accessories, emotions, actions, context, confidence } ]
 - objects: [ { name, attributes?, confidence } ]
 - scene: { location_guess?, lighting?, time_of_day?, context_notes? }
@@ -150,6 +156,30 @@ JSON SCHEMA GUIDANCE (use fields that apply):
 - expiry_status: "expired" | "near_expiry" | "valid" | null
 - answers: [ { question: string, answer: string, confidence: number } ]
 - confidence_overall: number
+ - insights?: string[]
+ - validations?: [ { field?: string, issue: string, severity?: "info"|"warning"|"error" } ]
+ - follow_ups?: string[]
+ - actions?: [ { type: string, label: string, payload?: any } ]
+
+NORMALIZED FIELDS (if applicable):
+- normalized?: {
+    id?: { name?: string, nationality?: string, document_no?: string, issuer?: string, issue_date?: string, expiry_date?: string },
+    invoice?: { vendor?: string, address?: string, date?: string, currency?: string, subtotal?: string|number, tax?: string|number, total?: string|number },
+    ticket?: { passenger?: string, number?: string, origin?: string, destination?: string, gate_seat?: string, departure_time?: string, arrival_time?: string }
+  }
+
+DOC-TYPE AUTO-DETECTION AND NORMALIZATION:
+- Detect the document/photo type automatically and populate fields accordingly.
+- For IDs/permits/passports: fill key_values with Name, Nationality, Document No., Issuer, Issue Date, Expiry Date; extract MRZ to mrz.parsed; detect expiry_status; include barcodes.
+- For receipts/invoices/bills: vendor, address, date, currency, subtotal, tax, total; and tables[0] for line items with headers ["Item","Qty","Unit Price","Amount"].
+- For tickets/boarding passes: passenger, flight/train number, origin, destination, gate/seat, times, barcode.
+- For certificates/contracts/forms: parties, dates, identifiers, signature presence.
+- For charts/plots/tables screenshots: infer series/labels, summarize key trends; tables[0] should represent the main visible table when possible.
+- For general photos: people/objects/scene with grounded details; avoid identity claims.
+
+PERSONAL TOUCH + LANGUAGE POLICY:
+- The JSON must stay neutral and consistent; apply personal touch (nickname/tone/style) only in the optional one-sentence summary after the JSON.
+- When language is 'ar', keep both JSON content values and summary in Arabic where reasonable (field keys remain in English for consistency; table headers follow UI language). When language is 'en', keep all in English.
 
 PEOPLE DESCRIPTION POLICY:
 - Freely describe appearance, clothing, activities, and emotions.
@@ -195,6 +225,7 @@ async function streamClaudeResponse(reader: ReadableStreamDefaultReader, control
   let buffer = '';
   // JSON-first emitter state
   let jsonEmitted = false;
+  let doneSent = false;
   let sawJsonStart = false;
   let inString = false;
   let escape = false;
@@ -202,14 +233,14 @@ async function streamClaudeResponse(reader: ReadableStreamDefaultReader, control
   let jsonBuf = '';
   while (true) {
     const { done, value } = await reader.read();
-    if (done) break;
+    if (done) { break; }
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split('\n');
     buffer = lines.pop() || '';
     for (const line of lines) {
       if (!line.startsWith('data: ')) continue;
       const data = line.slice(6).trim();
-      if (data === '[DONE]') { controller.enqueue(encoder.encode('data: [DONE]\n\n')); break; }
+      if (data === '[DONE]') { controller.enqueue(encoder.encode('data: [DONE]\n\n')); doneSent = true; break; }
       try {
         const parsed = JSON.parse(data);
         if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
@@ -262,10 +293,14 @@ async function streamClaudeResponse(reader: ReadableStreamDefaultReader, control
         }
         if (parsed.type === 'message_stop') {
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          doneSent = true;
           break;
         }
       } catch {}
     }
+  }
+  if (!doneSent) {
+    try { controller.enqueue(encoder.encode('data: [DONE]\n\n')); } catch {}
   }
 }
 
@@ -293,7 +328,7 @@ serve(async (req) => {
           prompt = '',
           language = 'en',
           personalTouch = null,
-          provider = 'claude', // default to Claude for vision
+          provider = 'openai', // default to OpenAI for isolation
           model,
           images = [],
           options = { ocr: true, max_tokens: 1200 }
@@ -301,7 +336,9 @@ serve(async (req) => {
 
         // Emit meta
         try {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { requestId, provider, imagesCount: Array.isArray(images) ? images.length : 0 } })}\n\n`));
+          const meta = { requestId, provider, model: model || null, imagesCount: Array.isArray(images) ? images.length : 0 };
+          console.log('VISION: meta', meta);
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: meta })}\n\n`));
         } catch {}
 
         // Validate images
@@ -346,90 +383,153 @@ serve(async (req) => {
         const now = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Qatar' });
         const systemPrompt = buildSystemPrompt(language, now, personalTouch);
 
-        // Provider selection
+        // Provider selection with Claude → OpenAI fallback
         let streamReader: ReadableStreamDefaultReader | null = null;
-        if (provider === 'openai') {
+
+        const tryOpenAI = async () => {
           if (!OPENAI_API_KEY) throw new Error('OpenAI API key not configured');
           const messages = convertToOpenAIMessages(systemPrompt, prompt, language, norm);
-          const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model: model || 'gpt-4o', messages, temperature: 0.7, max_tokens: options?.max_tokens || 1200, stream: true })
-          });
-          if (!openaiResponse.ok) throw new Error(`OpenAI failed: ${openaiResponse.status}`);
-          streamReader = openaiResponse.body?.getReader() || null;
-
-          // Stream OpenAI with JSON-first emitter
-          const decoder2 = new TextDecoder();
-          let buf2 = '';
-          let jsonEmitted2 = false;
-          let sawJsonStart2 = false; let inString2 = false; let escape2 = false; let depth2 = 0; let jsonBuf2 = '';
-          while (true) {
-            const { done, value } = await streamReader.read();
-            if (done) break;
-            buf2 += decoder2.decode(value, { stream: true });
-            const lines = buf2.split('\n');
-            buf2 = lines.pop() || '';
-            for (const line of lines) {
-              if (!line.startsWith('data: ')) continue;
-              const data = line.slice(6);
-              if (data === '[DONE]') { controller.enqueue(encoder.encode('data: [DONE]\n\n')); break; }
-              try {
-                const parsed = JSON.parse(data);
-                const content = parsed.choices?.[0]?.delta?.content as string | undefined;
-                if (content) {
-                  if (!jsonEmitted2) {
-                    let i = 0;
-                    while (i < content.length) {
-                      const ch = content[i++];
-                      if (!sawJsonStart2) {
-                        if (ch === '{') { sawJsonStart2 = true; depth2 = 1; jsonBuf2 = '{'; continue; }
-                        continue;
-                      }
-                      jsonBuf2 += ch;
-                      if (inString2) {
-                        if (escape2) { escape2 = false; continue; }
-                        if (ch === '\\') { escape2 = true; continue; }
-                        if (ch === '"') { inString2 = false; continue; }
-                      } else {
-                        if (ch === '"') { inString2 = true; continue; }
-                        if (ch === '{') { depth2++; continue; }
-                        if (ch === '}') { depth2--; if (depth2 === 0) {
-                          try {
-                            const obj = JSON.parse(jsonBuf2);
-                            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ json: obj })}\n\n`));
-                            jsonEmitted2 = true;
-                            const rest = content.slice(i);
-                            if (rest) controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: rest, content: rest })}\n\n`));
-                          } catch (_) {
-                            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: jsonBuf2, content: jsonBuf2 })}\n\n`));
-                          }
-                          break;
-                        }}
-                      }
-                    }
-                  } else {
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: content, content })}\n\n`));
-                  }
-                }
-              } catch {}
+          const openaiModels = [
+            model || 'gpt-4o-2024-08-06',
+            'gpt-4o',
+            'gpt-4o-mini'
+          ];
+          let lastErr: any = null;
+          for (const m of openaiModels) {
+            console.log(`VISION: Trying OpenAI model=${m} req=${requestId}`);
+            const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+              body: JSON.stringify({ model: m, messages, temperature: 0.2, max_tokens: options?.max_tokens || 2000, stream: true })
+            });
+            if (!openaiResponse.ok) {
+              const msg = await openaiResponse.text();
+              console.warn(`VISION: OpenAI model=${m} failed status=${openaiResponse.status} req=${requestId} body=${msg.slice(0,180)}`);
+              lastErr = new Error(`OpenAI failed: ${openaiResponse.status} ${msg}`);
+              // Try next model on 404/400 model errors
+              if (openaiResponse.status === 404 || openaiResponse.status === 400) continue;
+              // On overload, try next; otherwise break
+              if (openaiResponse.status === 429 || openaiResponse.status === 529) continue;
+              continue;
             }
+            console.log(`VISION: OpenAI model=${m} streaming req=${requestId}`);
+            streamReader = openaiResponse.body?.getReader() || null;
+            // Stream OpenAI with JSON-first emitter
+            const decoder2 = new TextDecoder();
+            let buf2 = '';
+            let jsonEmitted2 = false;
+            let doneSent2 = false;
+            let sawJsonStart2 = false; let inString2 = false; let escape2 = false; let depth2 = 0; let jsonBuf2 = '';
+            while (true) {
+              const { done, value } = await streamReader.read();
+              if (done) { break; }
+              buf2 += decoder2.decode(value, { stream: true });
+              const lines = buf2.split('\n');
+              buf2 = lines.pop() || '';
+              for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                const data = line.slice(6);
+                if (data === '[DONE]') { controller.enqueue(encoder.encode('data: [DONE]\n\n')); doneSent2 = true; break; }
+                try {
+                  const parsed = JSON.parse(data);
+                  const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+                  if (content) {
+                    if (!jsonEmitted2) {
+                      let i = 0;
+                      while (i < content.length) {
+                        const ch = content[i++];
+                        if (!sawJsonStart2) {
+                          if (ch === '{') { sawJsonStart2 = true; depth2 = 1; jsonBuf2 = '{'; continue; }
+                          continue;
+                        }
+                        jsonBuf2 += ch;
+                        if (inString2) {
+                          if (escape2) { escape2 = false; continue; }
+                          if (ch === '\\') { escape2 = true; continue; }
+                          if (ch === '"') { inString2 = false; continue; }
+                        } else {
+                          if (ch === '"') { inString2 = true; continue; }
+                          if (ch === '{') { depth2++; continue; }
+                          if (ch === '}') { depth2--; if (depth2 === 0) {
+                            try {
+                              const obj = JSON.parse(jsonBuf2);
+                              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ json: obj })}\n\n`));
+                              jsonEmitted2 = true;
+                              const rest = content.slice(i);
+                              if (rest) controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: rest, content: rest })}\n\n`));
+                            } catch (_) {
+                              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: jsonBuf2, content: jsonBuf2 })}\n\n`));
+                            }
+                            break;
+                          }}
+                        }
+                      }
+                    } else {
+                      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: content, content })}\n\n`));
+                    }
+                  }
+                } catch {}
+              }
+            }
+            if (!doneSent2) { try { controller.enqueue(encoder.encode('data: [DONE]\n\n')); } catch {} }
+            return; // success
           }
-        } else {
+          throw lastErr || new Error('OpenAI failed');
+        };
+
+        const tryClaude = async () => {
           if (!ANTHROPIC_API_KEY) throw new Error('Claude API key not configured');
           const { system, messages } = convertToClaude(systemPrompt, prompt, language, norm);
-          const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model: model || 'claude-3-5-sonnet-20241022', system, messages, max_tokens: options?.max_tokens || 1200, stream: true })
-          });
-          if (!claudeResponse.ok) {
-            const err = await claudeResponse.text();
-            throw new Error(`Claude failed: ${claudeResponse.status} ${err}`);
+          const claudeModels = [
+            model || 'claude-sonnet-4-5-20250929',
+            'claude-3-5-sonnet-latest',
+            'claude-3-5-sonnet-20241022',
+            'claude-3-5-sonnet-20240620',
+            'claude-3-haiku-20240307'
+          ];
+          let lastErr: any = null;
+          for (const m of claudeModels) {
+            console.log(`VISION: Trying Claude model=${m} req=${requestId}`);
+            const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
+              method: 'POST',
+              headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+              body: JSON.stringify({ model: m, system, messages, temperature: 0.2, max_tokens: options?.max_tokens || 2000, stream: true })
+            });
+            if (!claudeResponse.ok) {
+              const errTxt = await claudeResponse.text();
+              console.warn(`VISION: Claude model=${m} failed status=${claudeResponse.status} req=${requestId} body=${errTxt.slice(0,180)}`);
+              lastErr = new Error(`Claude failed: ${claudeResponse.status} ${errTxt}`);
+              // Try next on 404 (model not found) or overload codes
+              if (claudeResponse.status === 404 || claudeResponse.status === 429 || claudeResponse.status === 529) continue;
+              continue;
+            }
+            console.log(`VISION: Claude model=${m} streaming req=${requestId}`);
+            streamReader = claudeResponse.body?.getReader() || null;
+            if (!streamReader) { lastErr = new Error('No stream from provider'); continue; }
+            await streamClaudeResponse(streamReader, controller, encoder);
+            return; // success
           }
-          streamReader = claudeResponse.body?.getReader() || null;
-          if (!streamReader) throw new Error('No stream from provider');
-          await streamClaudeResponse(streamReader, controller, encoder);
+          throw lastErr || new Error('Claude failed');
+        };
+
+        try {
+          // Temporarily route OpenAI first (A/B isolation), then Claude
+          await tryOpenAI();
+        } catch (firstErr) {
+          console.warn('VISION: OpenAI-first attempt failed, trying Claude...', firstErr);
+          try {
+            await tryClaude();
+          } catch (provErr) {
+            const msg = String((provErr as Error)?.message || provErr || '').toLowerCase();
+            const shouldFallback = msg.includes('not_found') || msg.includes('404') || msg.includes('overloaded') || msg.includes('529') || msg.includes('model') || msg.includes('claude');
+            // If Claude fails after OpenAI-first, give one more OpenAI try; else throw
+            if (shouldFallback) {
+              console.warn('⚠️ Vision: Claude failed after OpenAI-first, retrying OpenAI...', provErr);
+              await tryOpenAI();
+            } else {
+              throw provErr;
+            }
+          }
         }
 
         controller.close();
