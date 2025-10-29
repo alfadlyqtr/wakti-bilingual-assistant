@@ -2,6 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { executeRegularSearch } from "./search.ts";
+import { VisionSystem } from "./vision.ts";
 
 const allowedOrigins = [
   'https://wakti.qa',
@@ -150,18 +151,22 @@ serve(async (req) => {
           language = 'en', 
           recentMessages = [], 
           personalTouch = null, 
-          activeTrigger = 'general'
+          activeTrigger = 'general',
+          inputType = 'text',
+          attachedFiles = [],
+          visionPrimary,
+          visionFallback
         } = await req.json();
         const responseLanguage = language;
         
-        console.log(`🎯 TEXT REQUEST: trigger=${activeTrigger}, language=${language}`);
+        console.log(`🎯 STREAM REQUEST: trigger=${activeTrigger}, inputType=${inputType}, language=${language}`);
 
         if (!message) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Message is required' })}\n\n`));
           controller.close();
           return;
         }
-        // Build system prompt
+        // Build date once
         const currentDate = new Date().toLocaleDateString('en-US', { 
           weekday: 'long', 
           year: 'numeric', 
@@ -170,6 +175,157 @@ serve(async (req) => {
           timeZone: 'Asia/Qatar'
         });
 
+        // Detect Vision mode (explicit inputType or attached image files)
+        const useVision = (
+          (typeof inputType === 'string' && inputType === 'vision') ||
+          VisionSystem.shouldUseVisionMode(activeTrigger, Array.isArray(attachedFiles) ? attachedFiles : [])
+        );
+
+        // If Vision, handle a dedicated provider flow (Claude → OpenAI fallback)
+        if (useVision) {
+          try {
+            const systemPromptVision = VisionSystem.buildCompleteSystemPrompt(responseLanguage, currentDate, personalTouch);
+
+            let aiProvider: 'openai' | 'claude' | 'none' = 'none';
+            let streamReader: ReadableStreamDefaultReader<any> | null = null;
+
+            // Provider-specific attempts
+            const tryClaudeVision = async () => {
+              if (!ANTHROPIC_API_KEY) throw new Error('Claude API key not configured');
+              // Build Claude-style message (with base64 images)
+              const claudeMessages: any[] = [];
+              // Include a small slice of recent text history (optional, text-only)
+              try {
+                const hist = Array.isArray(recentMessages) ? recentMessages.slice(-6) : [];
+                hist.forEach((m: any) => {
+                  const r = (m?.role === 'user' || m?.role === 'assistant') ? m.role : null;
+                  const c = typeof m?.content === 'string' ? m.content : null;
+                  if (r && c) claudeMessages.push({ role: r, content: c });
+                });
+              } catch {}
+              // Append the vision user message
+              claudeMessages.push(VisionSystem.buildVisionMessage(message, attachedFiles || [], responseLanguage));
+
+              const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                  'x-api-key': ANTHROPIC_API_KEY!,
+                  'anthropic-version': '2023-06-01',
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  model: 'claude-3-5-sonnet-20241022',
+                  system: systemPromptVision,
+                  messages: claudeMessages,
+                  max_tokens: 4000,
+                  stream: true,
+                }),
+              });
+              if (!claudeResponse.ok) {
+                const t = await claudeResponse.text();
+                throw new Error(`Claude failed with status: ${claudeResponse.status} - ${t}`);
+              }
+              aiProvider = 'claude';
+              streamReader = claudeResponse.body?.getReader() || null;
+              console.log('✅ STREAMING(VISION): Using Claude');
+            };
+
+            const tryOpenAIVision = async () => {
+              if (!OPENAI_API_KEY) throw new Error('OpenAI API key not configured');
+              const model = 'gpt-4o-mini';
+              // Build OpenAI-style message (image_url entries)
+              const openaiMessages: any[] = [
+                { role: 'system', content: systemPromptVision },
+                VisionSystem.buildVisionMessage(message, attachedFiles || [], responseLanguage, 'openai')
+              ];
+
+              const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  model,
+                  messages: openaiMessages,
+                  temperature: 0.7,
+                  max_tokens: 4000,
+                  stream: true,
+                }),
+              });
+              if (!openaiResponse.ok) throw new Error(`OpenAI failed with status: ${openaiResponse.status}`);
+              aiProvider = 'openai';
+              streamReader = openaiResponse.body?.getReader() || null;
+              console.log('✅ STREAMING(VISION): Using OpenAI');
+            };
+
+            // Determine provider order
+            const primary: 'claude' | 'openai' = (visionPrimary === 'openai' || visionPrimary === 'claude') ? visionPrimary : 'claude';
+            const fallback: 'claude' | 'openai' = primary === 'claude' ? 'openai' : 'claude';
+
+            try {
+              if (primary === 'claude') {
+                await tryClaudeVision();
+              } else {
+                await tryOpenAIVision();
+              }
+            } catch (errPrimary) {
+              console.warn(`⚠️ STREAMING(VISION): ${primary} failed, attempting ${fallback} fallback...`, (errPrimary as Error).message);
+              if (fallback === 'claude') {
+                await tryClaudeVision();
+              } else {
+                await tryOpenAIVision();
+              }
+            }
+
+            if (!streamReader) throw new Error('No stream reader available (vision)');
+
+            // Stream tokens
+            if (aiProvider === 'openai') {
+              const decoder = new TextDecoder();
+              let buffer = '';
+              const reader = streamReader as ReadableStreamDefaultReader<any>;
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+                for (const line of lines) {
+                  if (line.startsWith('data: ')) {
+                    const data = line.slice(6);
+                    if (data === '[DONE]') {
+                      controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                      break;
+                    }
+                    try {
+                      const parsed = JSON.parse(data);
+                      const content = parsed.choices?.[0]?.delta?.content;
+                      if (content) {
+                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: content, content })}\n\n`));
+                      }
+                    } catch { /* ignore invalid json */ }
+                  }
+                }
+              }
+            } else if (aiProvider === 'claude') {
+              await streamClaudeResponse(streamReader as ReadableStreamDefaultReader<any>, controller, encoder);
+            }
+
+            controller.close();
+            return;
+          } catch (visionErr) {
+            console.error('🔥 STREAMING(VISION) ERROR:', visionErr);
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+              error: 'Vision service temporarily unavailable. Please try again.',
+              details: (visionErr as Error).message 
+            })}\n\n`));
+            controller.close();
+            return;
+          }
+        }
+
+        // TEXT/SEARCH PATH (original behavior)
         // Build enhanced system prompt (text-only)
         const systemPrompt = buildSystemPrompt(responseLanguage, currentDate, personalTouch, activeTrigger);
         

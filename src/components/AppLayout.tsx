@@ -4,7 +4,6 @@ import { AppHeader } from "@/components/AppHeader";
 import { DesktopLayout } from "@/components/layouts/DesktopLayout";
 import { TabletLayout } from "@/components/layouts/TabletLayout";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
-import { MobileNav } from "@/components/MobileNav";
 import { useIsMobile, useIsTablet, useIsDesktop } from "@/hooks/use-mobile";
 import { PresenceBeacon } from "@/components/PresenceBeacon";
 import { useLocation } from "react-router-dom";
@@ -95,15 +94,9 @@ export function AppLayout({ children }: AppLayoutProps) {
         <ProtectedRoute>
           <div className="min-h-screen bg-background">
             <AppHeader unreadTotal={unreadData.unreadTotal} />
-            <main className="pb-16">
+            <main>
               {children}
             </main>
-            <MobileNav 
-              taskCount={unreadData.taskCount}
-              maw3dEventCount={unreadData.maw3dEventCount}
-              contactCount={unreadData.contactCount}
-              sharedTaskCount={unreadData.sharedTaskCount}
-            />
             <PresenceBeacon />
           </div>
         </ProtectedRoute>
