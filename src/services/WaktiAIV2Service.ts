@@ -874,7 +874,7 @@ class WaktiAIV2ServiceClass {
         return { response: fullResponse, metadata };
       };
 
-      // Vision-first path (Claude way via Supabase Edge Function): send multipart/form-data
+      // Vision-first path (Claude way via Supabase Edge Function): send JSON body
       const attemptVision = async (primary: 'claude' | 'openai', visionFiles: any[]) => {
         if (!visionFiles || visionFiles.length === 0) {
           throw new Error('No images for vision');
@@ -896,37 +896,39 @@ class WaktiAIV2ServiceClass {
         const supabaseUrl = ((import.meta as any).env && (import.meta as any).env.VITE_SUPABASE_URL)
           || 'https://hxauxozopvpzpdygoqwf.supabase.co';
 
-        // Map images strictly to the backend schema: { mimeType, data }
+        // Map images strictly to the backend schema for JSON: { mimeType, base64 }
         const payloadImages = (visionFiles || [])
           .map((p: any) => {
             const mime = ((p?.type || p?.mimeType || 'image/jpeg') + '').replace('image/jpg', 'image/jpeg');
-            const base64 = typeof p?.data === 'string' && p.data
+            let base64 = typeof p?.data === 'string' && p.data
               ? p.data
               : (typeof p?.content === 'string' ? p.content : '');
-            return base64 ? { mimeType: mime, data: base64 } : null;
+            if (!base64) return null;
+            // Strip data URI prefix if present
+            const idx = base64.indexOf(',');
+            if (base64.startsWith('data:') && idx > -1) base64 = base64.slice(idx + 1);
+            return (base64 && base64.length > 100) ? { mimeType: mime, base64 } : null;
           })
-          .filter(Boolean);
+          .filter(Boolean) as { mimeType: string; base64: string }[];
 
         if (payloadImages.length === 0) {
           throw new Error('No valid images to send (all images filtered out)');
         }
 
-        // Build multipart form with original images as Files
-        const form = new FormData();
-        for (let i = 0; i < payloadImages.length; i++) {
-          const img: any = payloadImages[i];
-          const blob = this.base64ToBlob(img.data, img.mimeType);
-          const ext = img.mimeType.includes('png') ? 'png' : (img.mimeType.includes('webp') ? 'webp' : 'jpg');
-          const file = new File([blob], `image_${i}.${ext}`, { type: img.mimeType });
-          form.append('images[]', file);
-        }
-        form.append('metadata', JSON.stringify({ prompt: message, language, personalTouch: pt }));
-
         // Call Supabase Edge Function with SSE
         let resp: Response | null = null;
         for (let attempt = 1; attempt <= 2; attempt++) {
           try {
-            console.log(`🚀 VISION: Attempt ${attempt}/2 - Calling ${supabaseUrl}/functions/v1/wakti-vision-stream`);
+            console.log(`🚀 VISION(JSON): Attempt ${attempt}/2 - Calling ${supabaseUrl}/functions/v1/wakti-vision-stream`);
+            const body = {
+              requestId: requestId,
+              prompt: message,
+              language,
+              personalTouch: pt,
+              provider: 'claude',
+              images: payloadImages,
+              options: { ocr: true, max_tokens: 2000 }
+            };
             resp = await fetch(`${supabaseUrl}/functions/v1/wakti-vision-stream`, {
               method: 'POST',
               mode: 'cors',
@@ -935,9 +937,10 @@ class WaktiAIV2ServiceClass {
               headers: {
                 'Authorization': `Bearer ${session.access_token}`,
                 'Accept': 'text/event-stream',
-                'apikey': maybeAnonKey
+                'apikey': maybeAnonKey,
+                'Content-Type': 'application/json'
               },
-              body: form
+              body: JSON.stringify(body)
             });
             console.log(`📡 VISION: Response status=${resp.status} ok=${resp.ok}`);
             if (resp.ok) break;

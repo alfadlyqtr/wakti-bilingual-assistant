@@ -223,6 +223,37 @@ function convertToClaude(systemPrompt: string, prompt: string, language: string,
   return { system: systemPrompt, messages: [{ role: 'user', content }] };
 }
 
+// Extract the first complete JSON object from a text stream and any remaining summary text
+function extractJsonAndSummary(text: string): { json: any | null; summary: string } {
+  let depth = 0; let inStr = false; let esc = false; let started = false; let buf = '';
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (!started) {
+      if (ch === '{') { started = true; depth = 1; buf = '{'; }
+      continue;
+    }
+    buf += ch;
+    if (inStr) {
+      if (esc) { esc = false; }
+      else if (ch === '\\') { esc = true; }
+      else if (ch === '"') { inStr = false; }
+    } else {
+      if (ch === '"') inStr = true;
+      else if (ch === '{') depth++;
+      else if (ch === '}') { depth--; if (depth === 0) {
+        try {
+          const obj = JSON.parse(buf);
+          const rest = text.slice(i + 1).trim();
+          return { json: obj, summary: rest };
+        } catch {
+          return { json: null, summary: text };
+        }
+      } }
+    }
+  }
+  return { json: null, summary: text };
+}
+
 async function streamClaudeResponse(reader: ReadableStreamDefaultReader, controller: ReadableStreamDefaultController, encoder: TextEncoder) {
   const decoder = new TextDecoder();
   let buffer = '';
@@ -334,7 +365,8 @@ serve(async (req) => {
           provider = 'openai', // default to OpenAI for isolation
           model,
           images = [],
-          options = { ocr: true, max_tokens: 1200 }
+          options = { ocr: true, max_tokens: 1200 },
+          stream = false
         } = body || {};
 
         // Emit meta
@@ -385,6 +417,43 @@ serve(async (req) => {
 
         const now = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Qatar' });
         const systemPrompt = buildSystemPrompt(language, now, personalTouch);
+
+        // Non-streaming JSON mode
+        if (!stream) {
+          try {
+            if (!ANTHROPIC_API_KEY) throw new Error('Claude API key not configured');
+            const { system, messages } = convertToClaude(systemPrompt, prompt, language, norm);
+            const m = model || 'claude-3-5-sonnet-20241022';
+            const claudeResp = await fetch('https://api.anthropic.com/v1/messages', {
+              method: 'POST',
+              headers: {
+                'x-api-key': ANTHROPIC_API_KEY,
+                'anthropic-version': '2023-06-01',
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ model: m, system, messages, temperature: 0.2, max_tokens: options?.max_tokens || 2000, stream: false })
+            });
+            if (!claudeResp.ok) {
+              const errTxt = await claudeResp.text();
+              const err = { error: 'Claude failed', status: claudeResp.status, details: errTxt.slice(0, 300) };
+              return controller.enqueue(encoder.encode(`data: ${JSON.stringify(err)}\n\n`)), controller.close();
+            }
+            const data = await claudeResp.json();
+            const text = Array.isArray(data?.content)
+              ? (data.content.map((c: any) => c?.text || '').join(''))
+              : (data?.content?.[0]?.text || '');
+            const { json, summary } = extractJsonAndSummary(text || '');
+            const payload = { json, summary, metadata: { model: m } };
+            // Return a single JSON payload (no SSE) by closing the stream with one data event
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+            return controller.close();
+          } catch (e) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: (e as Error).message })}\n\n`));
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+            return controller.close();
+          }
+        }
 
         // Provider selection with Claude → OpenAI fallback
         let streamReader: ReadableStreamDefaultReader | null = null;
