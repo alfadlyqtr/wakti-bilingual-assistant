@@ -1,4 +1,5 @@
 import { supabase, ensurePassport, getCurrentUserId } from '@/integrations/supabase/client';
+import { analyzeVision } from './visionService';
 
 export interface AIMessage {
   id: string;
@@ -318,8 +319,53 @@ class WaktiAIV2ServiceClass {
     for (const f of files) {
       if (!f || typeof f !== 'object') { processed.push(f); continue; }
       let type = (f.type || f.mimeType || '').toString();
+      // Normalize common alias
+      if (type === 'image/jpg') type = 'image/jpeg';
+
+      // Helper to extract raw base64 and optionally mime from a data URL
+      const fromDataUrl = (u?: string): { b64: string; mime?: string } | null => {
+        if (typeof u !== 'string' || !u.startsWith('data:')) return null;
+        const commaIdx = u.indexOf(',');
+        if (commaIdx === -1) return null;
+        const header = u.slice(5, commaIdx); // e.g., image/jpeg;base64
+        const semi = header.indexOf(';');
+        const mime = semi !== -1 ? header.slice(0, semi) : header;
+        const b64 = u.slice(commaIdx + 1);
+        return { b64, mime };
+      };
+
+      // Prefer explicit raw fields
+      let rawCandidate = (typeof f.data === 'string' && f.data)
+        ? f.data
+        : (typeof f.content === 'string' && f.content)
+          ? f.content
+          : '';
+
+      // Fall back to base64 or data URLs if needed
+      if (!rawCandidate && typeof f.base64 === 'string' && f.base64) {
+        const asData = fromDataUrl(f.base64);
+        rawCandidate = asData?.b64 || (f.base64.startsWith('data:') ? '' : f.base64);
+        if (!type && asData?.mime) type = asData.mime;
+      }
+      if (!rawCandidate) {
+        const fromUrl = fromDataUrl(f.url);
+        if (fromUrl) {
+          rawCandidate = fromUrl.b64;
+          if (!type && fromUrl.mime) type = fromUrl.mime;
+        }
+      }
+      if (!rawCandidate) {
+        const fromPrev = fromDataUrl(f.preview);
+        if (fromPrev) {
+          rawCandidate = fromPrev.b64;
+          if (!type && fromPrev.mime) type = fromPrev.mime;
+        }
+      }
+
+      // Finalize type normalization
+      if (type === 'image/jpg') type = 'image/jpeg';
       const isImage = typeof type === 'string' && type.startsWith('image/');
-      const raw = typeof f.data === 'string' && f.data ? f.data : (typeof f.content === 'string' ? f.content : '');
+      const raw = rawCandidate;
       if (!isImage || !raw) { processed.push(f); continue; }
       let outBase64 = raw;
       if (type && !supportedTypes.includes(type)) {
@@ -829,135 +875,39 @@ class WaktiAIV2ServiceClass {
         return { response: fullResponse, metadata };
       };
 
-      // Vision-first path (Option A rollout): if chat upload has images, prefer new vision endpoint
+      // Vision-first path (Direct backend proxy): stream from /api/vision-stream
       const attemptVision = async (primary: 'claude' | 'openai', visionFiles: any[]) => {
-        if (!visionFiles || visionFiles.length === 0) {
-          throw new Error('No images for vision');
-        }
+        if (!visionFiles || visionFiles.length === 0) throw new Error('No images for vision');
 
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.access_token) {
-          throw new Error('No valid session for vision');
-        }
-        let maybeAnonKey;
-        try {
-          maybeAnonKey = (typeof window !== 'undefined' && (window as any).__SUPABASE_ANON_KEY)
-            || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
-        } catch (e) {
-          maybeAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
-        }
-
-        const pt = this.ensurePersonalTouch();
-        const supabaseUrl = ((import.meta as any).env && (import.meta as any).env.VITE_SUPABASE_URL)
-          || 'https://hxauxozopvpzpdygoqwf.supabase.co';
-
-        // Map images strictly to the backend schema: { mimeType, data }
-        const payloadImages = (visionFiles || [])
+        // Prepare images for direct API: { base64, mimeType }
+        const images = (visionFiles || [])
           .map((p: any) => {
             const mime = ((p?.type || p?.mimeType || 'image/jpeg') + '').replace('image/jpg', 'image/jpeg');
             const base64 = typeof p?.data === 'string' && p.data
               ? p.data
               : (typeof p?.content === 'string' ? p.content : '');
-            return base64 ? { mimeType: mime, data: base64 } : null;
+            return (base64 && base64.length > 100) ? { base64, mimeType: mime } : null;
           })
-          .filter(Boolean);
+          .filter(Boolean) as { base64: string; mimeType: string }[];
 
-        const resp = await fetch(`${supabaseUrl}/functions/v1/wakti-vision-stream`, {
-          method: 'POST',
-          mode: 'cors',
-          cache: 'no-cache',
-          credentials: 'omit',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-            'Accept': 'text/event-stream',
-            'apikey': maybeAnonKey
-          },
-          body: JSON.stringify({
-            requestId,
-            prompt: message,
-            language,
-            personalTouch: pt,
-            provider: primary,
-            images: payloadImages,
-            options: { ocr: true, max_tokens: 1200 }
-          }),
-          signal
-        });
+        if (images.length === 0) throw new Error('No valid base64 image data found');
 
-        if (!resp.ok) throw new Error(`Vision HTTP ${resp.status}`);
+        const pt = this.ensurePersonalTouch();
+        console.log(`🔍 VISION: Direct stream with ${images.length} images (proxy)`);
 
-        const reader = resp.body?.getReader();
-        if (!reader) throw new Error('No response body reader for vision');
-
-        const decoder = new TextDecoder();
-        let buffer = '';
         let fullResponse = '';
         let metadata: any = {};
         let encounteredError: string | null = null;
-        let isCompleted = false;
+        const startedAt = Date.now();
 
-        const abortHandler = async () => { try { await reader.cancel(); } catch {} };
-        if (signal) {
-          if (signal.aborted) {
-            await abortHandler();
-            throw new Error('Streaming aborted');
-          }
-          signal.addEventListener('abort', abortHandler, { once: true });
-        }
+        await analyzeVision(images, message, language, pt, {
+          onJson: (json) => { metadata = { ...metadata, visionJson: json }; },
+          onToken: (tok) => { fullResponse += tok; onToken?.(tok); },
+          onComplete: () => { metadata = { ...metadata, responseTime: Date.now() - startedAt, model: 'claude-sonnet-4-5-20250929' }; onComplete?.(metadata); },
+          onError: (err) => { encounteredError = err; }
+        });
 
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) {
-              if (!isCompleted) onComplete?.(metadata);
-              console.log(`✅ VISION: Stream closed cleanly [${requestId}] (primary=${primary})`);
-              break;
-            }
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-            for (const line of lines) {
-              if (!line.startsWith('data: ')) continue;
-              const data = line.slice(6);
-              if (data === '[DONE]') {
-                if (!isCompleted) { onComplete?.(metadata); isCompleted = true; }
-                console.log(`🏁 VISION: Received [DONE] [${requestId}] (primary=${primary})`);
-                continue;
-              }
-              try {
-                const parsed = JSON.parse(data);
-                if (parsed.error) {
-                  encounteredError = typeof parsed.error === 'string' ? parsed.error : (parsed.error?.message || 'vision_error');
-                  continue;
-                }
-                if (parsed.json && typeof parsed.json === 'object') {
-                  metadata = { ...metadata, visionJson: parsed.json };
-                  continue;
-                }
-                if (typeof parsed.token === 'string') {
-                  onToken?.(parsed.token);
-                  fullResponse += parsed.token;
-                } else if (typeof parsed.content === 'string') {
-                  onToken?.(parsed.content);
-                  fullResponse += parsed.content;
-                }
-                if (parsed.metadata && typeof parsed.metadata === 'object') {
-                  metadata = { ...metadata, ...parsed.metadata };
-                }
-              } catch {
-                onToken?.(data);
-                fullResponse += data;
-              }
-            }
-          }
-        } finally {
-          try { reader.releaseLock(); } catch {}
-          if (signal) signal.removeEventListener('abort', abortHandler as any);
-          try { localStorage.setItem('wakti_last_seen_at', String(Date.now())); } catch {}
-        }
-
-        if (encounteredError) throw new Error(String(encounteredError));
+        if (encounteredError) throw new Error(encounteredError);
         return { response: fullResponse, metadata };
       };
 

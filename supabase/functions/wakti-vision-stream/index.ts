@@ -5,21 +5,24 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 // Allowed origins (mirror brain stream behavior + dev fallbacks)
 const allowedOrigins = [
   'https://wakti.qa',
-  'https://www.wakti.qa'
+  'https://www.wakti.qa',
+  'http://localhost',
+  'http://127.0.0.1'
 ];
 
 const getCorsHeaders = (origin: string | null) => {
   const isAllowed = origin && (
-    allowedOrigins.includes(origin) ||
-    origin.includes('lovable.dev') ||
-    origin.includes('lovable.app') ||
+    allowedOrigins.some((allowed) => origin.startsWith(allowed)) || 
+    origin.includes('lovable.dev') || 
+    origin.includes('lovable.app') || 
     origin.includes('lovableproject.com')
   );
   return {
     'Access-Control-Allow-Origin': isAllowed ? origin : '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, accept, cache-control, x-request-id, x-mobile-request',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS, GET',
     'Access-Control-Max-Age': '86400',
+    'Vary': 'Origin'
   };
 };
 

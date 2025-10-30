@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: wakti-vision-proxy
+    env: node
+    plan: starter
+    region: frankfurt
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node index.mjs
+    autoDeploy: true
+    healthCheckPath: /healthz
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        value: https://wakti.qa,https://www.wakti.qa,http://localhost:8080
