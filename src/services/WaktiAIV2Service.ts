@@ -915,7 +915,7 @@ class WaktiAIV2ServiceClass {
           throw new Error('No valid images to send (all images filtered out)');
         }
 
-        // Call Supabase Edge Function with SSE
+        // Call Supabase Edge Function preferring non-streaming JSON (stream:false). Auto-fallback to SSE if server streams.
         let resp: Response | null = null;
         for (let attempt = 1; attempt <= 2; attempt++) {
           try {
@@ -926,6 +926,7 @@ class WaktiAIV2ServiceClass {
               language,
               personalTouch: pt,
               provider: 'claude',
+              stream: false,
               images: payloadImages,
               options: { ocr: true, max_tokens: 2000 }
             };
@@ -936,7 +937,7 @@ class WaktiAIV2ServiceClass {
               credentials: 'omit',
               headers: {
                 'Authorization': `Bearer ${session.access_token}`,
-                'Accept': 'text/event-stream',
+                'Accept': 'application/json',
                 'apikey': maybeAnonKey,
                 'Content-Type': 'application/json'
               },
@@ -954,6 +955,20 @@ class WaktiAIV2ServiceClass {
         const respNonNull = resp as Response;
         if (!respNonNull.ok) throw new Error(`Vision HTTP ${respNonNull.status}`);
 
+        // If server returns plain JSON, consume it directly and finish without streaming
+        const ct = (respNonNull.headers.get('content-type') || '').toLowerCase();
+        if (ct.includes('application/json')) {
+          const result = await respNonNull.json();
+          let metadata: any = {};
+          if (result?.json && typeof result.json === 'object') metadata.visionJson = result.json;
+          if (result?.metadata && typeof result.metadata === 'object') metadata = { ...metadata, ...result.metadata };
+          const summary = typeof result?.summary === 'string' ? result.summary : '';
+          if (summary) onToken?.(summary);
+          onComplete?.(metadata);
+          return { response: summary, metadata };
+        }
+
+        // Otherwise fallback to SSE streaming parsing
         const reader = respNonNull.body?.getReader();
         if (!reader) throw new Error('No response body reader for vision');
 
