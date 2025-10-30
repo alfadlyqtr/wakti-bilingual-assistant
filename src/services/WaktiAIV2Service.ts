@@ -1,5 +1,4 @@
 import { supabase, ensurePassport, getCurrentUserId } from '@/integrations/supabase/client';
-import { analyzeVision } from './visionService';
 
 export interface AIMessage {
   id: string;
@@ -875,39 +874,131 @@ class WaktiAIV2ServiceClass {
         return { response: fullResponse, metadata };
       };
 
-      // Vision-first path (Direct backend proxy): stream from /api/vision-stream
+      // Vision-first path (Claude way via Supabase Edge Function): send multipart/form-data
       const attemptVision = async (primary: 'claude' | 'openai', visionFiles: any[]) => {
-        if (!visionFiles || visionFiles.length === 0) throw new Error('No images for vision');
+        if (!visionFiles || visionFiles.length === 0) {
+          throw new Error('No images for vision');
+        }
 
-        // Prepare images for direct API: { base64, mimeType }
-        const images = (visionFiles || [])
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+          throw new Error('No valid session for vision');
+        }
+        let maybeAnonKey;
+        try {
+          maybeAnonKey = (typeof window !== 'undefined' && (window as any).__SUPABASE_ANON_KEY)
+            || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
+        } catch (e) {
+          maybeAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
+        }
+
+        const pt = this.ensurePersonalTouch();
+        const supabaseUrl = ((import.meta as any).env && (import.meta as any).env.VITE_SUPABASE_URL)
+          || 'https://hxauxozopvpzpdygoqwf.supabase.co';
+
+        // Map images strictly to the backend schema: { mimeType, data }
+        const payloadImages = (visionFiles || [])
           .map((p: any) => {
             const mime = ((p?.type || p?.mimeType || 'image/jpeg') + '').replace('image/jpg', 'image/jpeg');
             const base64 = typeof p?.data === 'string' && p.data
               ? p.data
               : (typeof p?.content === 'string' ? p.content : '');
-            return (base64 && base64.length > 100) ? { base64, mimeType: mime } : null;
+            return base64 ? { mimeType: mime, data: base64 } : null;
           })
-          .filter(Boolean) as { base64: string; mimeType: string }[];
+          .filter(Boolean);
 
-        if (images.length === 0) throw new Error('No valid base64 image data found');
+        if (payloadImages.length === 0) {
+          throw new Error('No valid images to send (all images filtered out)');
+        }
 
-        const pt = this.ensurePersonalTouch();
-        console.log(`🔍 VISION: Direct stream with ${images.length} images (proxy)`);
+        // Build multipart form with original images as Files
+        const form = new FormData();
+        for (let i = 0; i < payloadImages.length; i++) {
+          const img: any = payloadImages[i];
+          const blob = this.base64ToBlob(img.data, img.mimeType);
+          const ext = img.mimeType.includes('png') ? 'png' : (img.mimeType.includes('webp') ? 'webp' : 'jpg');
+          const file = new File([blob], `image_${i}.${ext}`, { type: img.mimeType });
+          form.append('images[]', file);
+        }
+        form.append('metadata', JSON.stringify({ prompt: message, language, personalTouch: pt }));
 
+        // Call Supabase Edge Function with SSE
+        let resp: Response | null = null;
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          try {
+            console.log(`🚀 VISION: Attempt ${attempt}/2 - Calling ${supabaseUrl}/functions/v1/wakti-vision-stream`);
+            resp = await fetch(`${supabaseUrl}/functions/v1/wakti-vision-stream`, {
+              method: 'POST',
+              mode: 'cors',
+              cache: 'no-cache',
+              credentials: 'omit',
+              headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+                'Accept': 'text/event-stream',
+                'apikey': maybeAnonKey
+              },
+              body: form
+            });
+            console.log(`📡 VISION: Response status=${resp.status} ok=${resp.ok}`);
+            if (resp.ok) break;
+            if (attempt === 2) throw new Error(`Vision HTTP ${resp.status}`);
+          } catch (e: any) {
+            console.error(`❌ VISION: Attempt ${attempt} failed:`, e.message || e);
+            if (attempt === 2) throw e;
+            await new Promise(r => setTimeout(r, 800 * attempt));
+          }
+        }
+        const respNonNull = resp as Response;
+        if (!respNonNull.ok) throw new Error(`Vision HTTP ${respNonNull.status}`);
+
+        const reader = respNonNull.body?.getReader();
+        if (!reader) throw new Error('No response body reader for vision');
+
+        const decoder = new TextDecoder();
+        let buffer = '';
         let fullResponse = '';
         let metadata: any = {};
         let encounteredError: string | null = null;
-        const startedAt = Date.now();
+        let isCompleted = false;
 
-        await analyzeVision(images, message, language, pt, {
-          onJson: (json) => { metadata = { ...metadata, visionJson: json }; },
-          onToken: (tok) => { fullResponse += tok; onToken?.(tok); },
-          onComplete: () => { metadata = { ...metadata, responseTime: Date.now() - startedAt, model: 'claude-sonnet-4-5-20250929' }; onComplete?.(metadata); },
-          onError: (err) => { encounteredError = err; }
-        });
+        const abortHandler = async () => { try { await reader.cancel(); } catch {} };
+        if (signal) {
+          if (signal.aborted) { await abortHandler(); throw new Error('Streaming aborted'); }
+          signal.addEventListener('abort', abortHandler, { once: true });
+        }
 
-        if (encounteredError) throw new Error(encounteredError);
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+              if (!isCompleted) onComplete?.(metadata);
+              console.log(`✅ VISION: Stream closed cleanly [${requestId}] (primary=${primary})`);
+              break;
+            }
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              const data = line.slice(6);
+              if (data === '[DONE]') { if (!isCompleted) { onComplete?.(metadata); isCompleted = true; } continue; }
+              try {
+                const parsed = JSON.parse(data);
+                if (parsed.error) { encounteredError = typeof parsed.error === 'string' ? parsed.error : (parsed.error?.message || 'vision_error'); continue; }
+                if (parsed.json && typeof parsed.json === 'object') { metadata = { ...metadata, visionJson: parsed.json }; continue; }
+                if (typeof parsed.token === 'string') { onToken?.(parsed.token); fullResponse += parsed.token; }
+                else if (typeof parsed.content === 'string') { onToken?.(parsed.content); fullResponse += parsed.content; }
+                if (parsed.metadata && typeof parsed.metadata === 'object') { metadata = { ...metadata, ...parsed.metadata }; }
+              } catch { onToken?.(data); fullResponse += data; }
+            }
+          }
+        } finally {
+          try { reader.releaseLock(); } catch {}
+          if (signal) signal.removeEventListener('abort', abortHandler as any);
+          try { localStorage.setItem('wakti_last_seen_at', String(Date.now())); } catch {}
+        }
+
+        if (encounteredError) throw new Error(String(encounteredError));
         return { response: fullResponse, metadata };
       };
 
