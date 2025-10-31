@@ -924,22 +924,31 @@ class WaktiAIV2ServiceClass {
             const blob = toBlob(base64, mime);
             if (!blob) throw new Error('blob_conv');
             const ext = (mime.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
-            const path = `vision/${requestId}/${Date.now()}_${i}.${ext}`;
-            const up = await supabase.storage.from(bucket).upload(path, blob, { contentType: mime, upsert: true });
+            // Use a single fixed bucket for simplicity
+            const bucketName = 'vision-uploads';
+            const uid = (userId || 'anon').toString();
+            const path = `vision/${uid}/${requestId}/${Date.now()}_${i}.${ext}`;
+            console.log('📤 VISION UPLOAD → bucket:', bucketName, 'path:', path, 'mime:', mime);
+            const up = await supabase.storage.from(bucketName).upload(path, blob, { contentType: mime, upsert: true });
             if (up?.error) throw up.error;
             // Try public URL first
-            const pub = supabase.storage.from(bucket).getPublicUrl(path);
+            const pub = supabase.storage.from(bucketName).getPublicUrl(path);
             if (pub?.data?.publicUrl) {
               uploadedUrl = pub.data.publicUrl;
             } else {
-              const signed = await supabase.storage.from(bucket).createSignedUrl(path, 600);
+              const signed = await supabase.storage.from(bucketName).createSignedUrl(path, 600);
               if (signed?.data?.signedUrl) uploadedUrl = signed.data.signedUrl;
             }
           } catch (_) {
             uploadedUrl = null;
           }
-          if (uploadedUrl) payloadImages.push({ mimeType: mime, url: uploadedUrl });
-          else payloadImages.push({ mimeType: mime, base64 });
+          if (uploadedUrl) {
+            payloadImages.push({ mimeType: mime, url: uploadedUrl });
+          } else {
+            // Do NOT fallback to base64 for large requests; fail fast to avoid EOF on body read
+            console.error('❌ VISION UPLOAD failed for image index', i, 'mime:', mime, 'request:', requestId);
+            throw new Error('vision_upload_failed');
+          }
         }
 
         if (payloadImages.length === 0) {

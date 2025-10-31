@@ -136,9 +136,11 @@ ${VISION_CAPS}
 ${TABLE_ENFORCEMENT}
 
 OUTPUT REQUIREMENTS (CONVERSATIONAL FIRST):
-- Part 1: Provide a friendly, natural response first in ${language}. Apply nickname, tone, and style.
-- Part 2: Add a few concise bullets for insights, validations, and follow_ups.
-- Tables/structured data: ONLY include when the user explicitly asks for OCR/"extract text"/"table", or when the image is clearly a document (IDs, invoices, receipts, tickets, forms, certificates). Use a compact Markdown table; no JSON by default.
+- Open with a warm greeting using the user's nickname if available. Keep the brand tone and style.
+- Part 1: Short friendly summary in ${language}.
+- Part 2: 3–5 concise bullets for key insights, validations, and follow_ups.
+- Documents: After summary and bullets, include a compact Markdown table of the main fields (only when user asks for OCR/"extract text"/"table" OR when the image is clearly a document like IDs, invoices, receipts, tickets, forms, certificates). No JSON by default.
+- Reasoning tasks (math/puzzles): Short friendly intro, then clear numbered steps, and end with a bold line: "Final Answer: ...".
 - Avoid code fences unless rendering a Markdown table. Keep it brief and helpful.
 
 JSON SCHEMA GUIDANCE (use fields that apply):
@@ -178,12 +180,13 @@ DOC-TYPE AUTO-DETECTION AND NORMALIZATION:
 - For general photos: people/objects/scene with grounded details; avoid identity claims.
 
 PERSONAL TOUCH + LANGUAGE POLICY:
-- Apply nickname, tone, and style consistently across the main response.
+- Always greet by nickname when provided, and maintain the selected tone and style.
 - When language is 'ar', write the full response in Arabic. When language is 'en', write it in English. Table headers follow UI language.
 
 PEOPLE DESCRIPTION POLICY:
 - Freely describe appearance, clothing, activities, and emotions.
 - Do NOT identify real persons by name or claim identity.
+- Disclaimer usage: Only when the image is a person/photo, append a single friendly line at the very end: "I can’t identify real people by name, but here’s a description." Do not show this disclaimer for documents, puzzles, charts, or non-person scenes.
 
 Personal Touch:
 - Nickname: ${ptNick || 'N/A'}
@@ -302,7 +305,25 @@ serve(async (req) => {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const body = await req.json();
+        // Robust body parsing to avoid EOF errors from partially closed connections
+        let bodyRaw = '';
+        try {
+          bodyRaw = await req.text();
+        } catch (e) {
+          console.error('VISION: failed to read request body text', e);
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Bad Request: unable to read body' })}\n\n`));
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          return controller.close();
+        }
+        let body: any = {};
+        try {
+          body = bodyRaw ? JSON.parse(bodyRaw) : {};
+        } catch (e) {
+          console.error('VISION: invalid JSON body', (e as Error).message);
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Bad Request: invalid JSON' })}\n\n`));
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          return controller.close();
+        }
         const {
           requestId = crypto.randomUUID(),
           prompt = '',

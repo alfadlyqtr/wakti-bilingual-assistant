@@ -33,6 +33,7 @@ const WaktiAIV2 = () => {
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const visionInFlightRef = useRef<boolean>(false);
   const { language } = useTheme();
   const { showError } = useToastHelper();
   const { isDesktop } = useIsDesktop();
@@ -172,9 +173,20 @@ const WaktiAIV2 = () => {
       showError('Please enter a message or attach a file.');
       return;
     }
+    // Prevent double-submit for Vision to avoid aborting a request while body is still uploading
+    if (trigger === 'vision') {
+      if (visionInFlightRef.current) {
+        showError('Please wait for the current vision analysis to finish.');
+        return;
+      }
+      visionInFlightRef.current = true;
+    }
     setIsLoading(true);
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+    // For non-vision requests, abort any previous in-flight request; for vision we rely on the lock above
+    if (trigger !== 'vision') {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
     }
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -390,6 +402,9 @@ const WaktiAIV2 = () => {
       setIsLoading(false);
       if (abortControllerRef.current === controller) {
         abortControllerRef.current = null;
+      }
+      if (trigger === 'vision') {
+        visionInFlightRef.current = false;
       }
     }
   }, [currentConversationId, language, sessionMessages, userProfile]);
