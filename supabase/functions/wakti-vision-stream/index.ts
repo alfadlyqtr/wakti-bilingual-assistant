@@ -135,14 +135,11 @@ ${VISION_CAPS}
 
 ${TABLE_ENFORCEMENT}
 
-OUTPUT REQUIREMENTS:
-- First output a single JSON object only. Do not wrap with code fences or add headings. No "PART" labels.
-- After the JSON, optionally output one concise sentence summary in plain text.
-- When the user asks to "extract all the text" (or similar), include both:
-  1) ocr.text and ocr.lines with every line.
-  2) a table in tables[0] with headers ["Line","Text"] and rows for each OCR line.
-- Always include helpful follow_ups (next-step questions) when relevant.
-- When applicable, include insights (key takeaways) and validations (field checks or warnings).
+OUTPUT REQUIREMENTS (CONVERSATIONAL FIRST):
+- Part 1: Provide a friendly, natural response first in ${language}. Apply nickname, tone, and style.
+- Part 2: Add a few concise bullets for insights, validations, and follow_ups.
+- Tables/structured data: ONLY include when the user explicitly asks for OCR/"extract text"/"table", or when the image is clearly a document (IDs, invoices, receipts, tickets, forms, certificates). Use a compact Markdown table; no JSON by default.
+- Avoid code fences unless rendering a Markdown table. Keep it brief and helpful.
 
 JSON SCHEMA GUIDANCE (use fields that apply):
 - type: "person_photo" | "screenshot" | "document" | "general_photo"
@@ -181,8 +178,8 @@ DOC-TYPE AUTO-DETECTION AND NORMALIZATION:
 - For general photos: people/objects/scene with grounded details; avoid identity claims.
 
 PERSONAL TOUCH + LANGUAGE POLICY:
-- The JSON must stay neutral and consistent; apply personal touch (nickname/tone/style) only in the optional one-sentence summary after the JSON.
-- When language is 'ar', keep both JSON content values and summary in Arabic where reasonable (field keys remain in English for consistency; table headers follow UI language). When language is 'en', keep all in English.
+- Apply nickname, tone, and style consistently across the main response.
+- When language is 'ar', write the full response in Arabic. When language is 'en', write it in English. Table headers follow UI language.
 
 PEOPLE DESCRIPTION POLICY:
 - Freely describe appearance, clothing, activities, and emotions.
@@ -257,14 +254,7 @@ function extractJsonAndSummary(text: string): { json: any | null; summary: strin
 async function streamClaudeResponse(reader: ReadableStreamDefaultReader, controller: ReadableStreamDefaultController, encoder: TextEncoder) {
   const decoder = new TextDecoder();
   let buffer = '';
-  // JSON-first emitter state
-  let jsonEmitted = false;
   let doneSent = false;
-  let sawJsonStart = false;
-  let inString = false;
-  let escape = false;
-  let depth = 0;
-  let jsonBuf = '';
   while (true) {
     const { done, value } = await reader.read();
     if (done) { break; }
@@ -279,51 +269,7 @@ async function streamClaudeResponse(reader: ReadableStreamDefaultReader, control
         const parsed = JSON.parse(data);
         if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
           const token = parsed.delta.text as string;
-          // Feed token into JSON-first emitter
-          if (!jsonEmitted) {
-            let i = 0;
-            while (i < token.length) {
-              const ch = token[i++];
-              if (!sawJsonStart) {
-                if (ch === '{') { sawJsonStart = true; depth = 1; jsonBuf = '{'; continue; }
-                // ignore preamble before JSON
-                continue;
-              }
-              jsonBuf += ch;
-              if (inString) {
-                if (escape) { escape = false; continue; }
-                if (ch === '\\') { escape = true; continue; }
-                if (ch === '"') { inString = false; continue; }
-              } else {
-                if (ch === '"') { inString = true; continue; }
-                if (ch === '{') { depth++; continue; }
-                if (ch === '}') { depth--; if (depth === 0) {
-                  // JSON object complete
-                  try {
-                    const obj = JSON.parse(jsonBuf);
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ json: obj })}\n\n`));
-                    jsonEmitted = true;
-                    // Any remaining part of token goes as summary
-                    const rest = token.slice(i);
-                    if (rest) controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: rest, content: rest })}\n\n`));
-                  } catch (_) {
-                    // If parse fails, fall back to streaming as text
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: jsonBuf, content: jsonBuf })}\n\n`));
-                  }
-                  break;
-                }}
-              }
-            }
-            if (!jsonEmitted && sawJsonStart) {
-              // wait for more chunks
-            }
-            if (!sawJsonStart) {
-              // No JSON yet, ignore preamble per contract
-            }
-          } else {
-            // JSON already emitted → stream summary tokens
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`));
-          }
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`));
         }
         if (parsed.type === 'message_stop') {
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
@@ -486,12 +432,10 @@ serve(async (req) => {
             }
             console.log(`VISION: OpenAI model=${m} streaming req=${requestId}`);
             streamReader = openaiResponse.body?.getReader() || null;
-            // Stream OpenAI with JSON-first emitter
+            // Stream OpenAI conversational-first: emit tokens immediately
             const decoder2 = new TextDecoder();
             let buf2 = '';
-            let jsonEmitted2 = false;
             let doneSent2 = false;
-            let sawJsonStart2 = false; let inString2 = false; let escape2 = false; let depth2 = 0; let jsonBuf2 = '';
             while (true) {
               const { done, value } = await streamReader.read();
               if (done) { break; }
@@ -506,39 +450,7 @@ serve(async (req) => {
                   const parsed = JSON.parse(data);
                   const content = parsed.choices?.[0]?.delta?.content as string | undefined;
                   if (content) {
-                    if (!jsonEmitted2) {
-                      let i = 0;
-                      while (i < content.length) {
-                        const ch = content[i++];
-                        if (!sawJsonStart2) {
-                          if (ch === '{') { sawJsonStart2 = true; depth2 = 1; jsonBuf2 = '{'; continue; }
-                          continue;
-                        }
-                        jsonBuf2 += ch;
-                        if (inString2) {
-                          if (escape2) { escape2 = false; continue; }
-                          if (ch === '\\') { escape2 = true; continue; }
-                          if (ch === '"') { inString2 = false; continue; }
-                        } else {
-                          if (ch === '"') { inString2 = true; continue; }
-                          if (ch === '{') { depth2++; continue; }
-                          if (ch === '}') { depth2--; if (depth2 === 0) {
-                            try {
-                              const obj = JSON.parse(jsonBuf2);
-                              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ json: obj })}\n\n`));
-                              jsonEmitted2 = true;
-                              const rest = content.slice(i);
-                              if (rest) controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: rest, content: rest })}\n\n`));
-                            } catch (_) {
-                              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: jsonBuf2, content: jsonBuf2 })}\n\n`));
-                            }
-                            break;
-                          }}
-                        }
-                      }
-                    } else {
-                      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: content, content })}\n\n`));
-                    }
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: content, content })}\n\n`));
                   }
                 } catch {}
               }

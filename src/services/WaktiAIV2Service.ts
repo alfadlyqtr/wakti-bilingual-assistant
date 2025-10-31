@@ -874,7 +874,7 @@ class WaktiAIV2ServiceClass {
         return { response: fullResponse, metadata };
       };
 
-      // Vision-first path (Claude way via Supabase Edge Function): send JSON body
+      // Vision-first path via Supabase Edge Function: stream SSE and honor provider
       const attemptVision = async (primary: 'claude' | 'openai', visionFiles: any[]) => {
         if (!visionFiles || visionFiles.length === 0) {
           throw new Error('No images for vision');
@@ -896,37 +896,69 @@ class WaktiAIV2ServiceClass {
         const supabaseUrl = ((import.meta as any).env && (import.meta as any).env.VITE_SUPABASE_URL)
           || 'https://hxauxozopvpzpdygoqwf.supabase.co';
 
-        // Map images strictly to the backend schema for JSON: { mimeType, base64 }
-        const payloadImages = (visionFiles || [])
-          .map((p: any) => {
-            const mime = ((p?.type || p?.mimeType || 'image/jpeg') + '').replace('image/jpg', 'image/jpeg');
-            let base64 = typeof p?.data === 'string' && p.data
-              ? p.data
-              : (typeof p?.content === 'string' ? p.content : '');
-            if (!base64) return null;
-            // Strip data URI prefix if present
+        // Prefer URL-based images: upload to Supabase Storage, then send URLs; fallback to base64 if upload fails
+        const bucket = (((import.meta as any).env && (import.meta as any).env.VITE_VISION_BUCKET) || 'vision-uploads') + '';
+        const toBlob = (b64: string, mime: string) => {
+          try {
+            const cleaned = b64.startsWith('data:') ? b64.split(',')[1] || '' : b64;
+            const bin = atob(cleaned);
+            const arr = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+            return new Blob([arr], { type: mime });
+          } catch {
+            return null;
+          }
+        };
+
+        const payloadImages: { mimeType: string; url?: string; base64?: string }[] = [];
+        for (let i = 0; i < (visionFiles || []).length; i++) {
+          const p: any = visionFiles[i];
+          const mime = ((p?.type || p?.mimeType || 'image/jpeg') + '').replace('image/jpg', 'image/jpeg');
+          let base64 = typeof p?.data === 'string' && p.data ? p.data : (typeof p?.content === 'string' ? p.content : '');
+          if (!base64 || base64.length < 100) continue;
+          // Try upload -> signed URL
+          let uploadedUrl: string | null = null;
+          try {
             const idx = base64.indexOf(',');
             if (base64.startsWith('data:') && idx > -1) base64 = base64.slice(idx + 1);
-            return (base64 && base64.length > 100) ? { mimeType: mime, base64 } : null;
-          })
-          .filter(Boolean) as { mimeType: string; base64: string }[];
+            const blob = toBlob(base64, mime);
+            if (!blob) throw new Error('blob_conv');
+            const ext = (mime.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+            const path = `vision/${requestId}/${Date.now()}_${i}.${ext}`;
+            const up = await supabase.storage.from(bucket).upload(path, blob, { contentType: mime, upsert: true });
+            if (up?.error) throw up.error;
+            // Try public URL first
+            const pub = supabase.storage.from(bucket).getPublicUrl(path);
+            if (pub?.data?.publicUrl) {
+              uploadedUrl = pub.data.publicUrl;
+            } else {
+              const signed = await supabase.storage.from(bucket).createSignedUrl(path, 600);
+              if (signed?.data?.signedUrl) uploadedUrl = signed.data.signedUrl;
+            }
+          } catch (_) {
+            uploadedUrl = null;
+          }
+          if (uploadedUrl) payloadImages.push({ mimeType: mime, url: uploadedUrl });
+          else payloadImages.push({ mimeType: mime, base64 });
+        }
 
         if (payloadImages.length === 0) {
           throw new Error('No valid images to send (all images filtered out)');
         }
 
-        // Call Supabase Edge Function preferring non-streaming JSON (stream:false). Auto-fallback to SSE if server streams.
+        // Call Supabase Edge Function with SSE streaming (stream:true). Server may still return JSON if it chooses.
         let resp: Response | null = null;
         for (let attempt = 1; attempt <= 2; attempt++) {
           try {
-            console.log(`🚀 VISION(JSON): Attempt ${attempt}/2 - Calling ${supabaseUrl}/functions/v1/wakti-vision-stream`);
+            console.log(`🚀 VISION(SSE): Attempt ${attempt}/2 - Calling ${supabaseUrl}/functions/v1/wakti-vision-stream (provider=${primary})`);
             const body = {
               requestId: requestId,
               prompt: message,
               language,
               personalTouch: pt,
-              provider: 'claude',
-              stream: false,
+              provider: primary,
+              model: primary === 'claude' ? 'claude-3-5-haiku-20241022' : 'gpt-4o',
+              stream: true,
               images: payloadImages,
               options: { ocr: true, max_tokens: 2000 }
             };
@@ -937,7 +969,7 @@ class WaktiAIV2ServiceClass {
               credentials: 'omit',
               headers: {
                 'Authorization': `Bearer ${session.access_token}`,
-                'Accept': 'application/json',
+                'Accept': 'text/event-stream',
                 'apikey': maybeAnonKey,
                 'Content-Type': 'application/json'
               },
@@ -1357,6 +1389,12 @@ class WaktiAIV2ServiceClass {
       }
 
       // Vision/chat/search accumulation via streaming method under the hood
+      // Allow callers to stream tokens by optionally providing callbacks on the "attachedFiles" arg using a convention
+      // If the caller passed functions on attachedFiles.__onToken / __onComplete / __onError, forward them through.
+      const maybeOnToken = (attachedFiles as any)?.__onToken as (token: string) => void | undefined;
+      const maybeOnComplete = (attachedFiles as any)?.__onComplete as (meta: any) => void | undefined;
+      const maybeOnError = (attachedFiles as any)?.__onError as (err: string) => void | undefined;
+
       const streamed = await this.sendStreamingMessage(
         message,
         userId,
@@ -1368,9 +1406,9 @@ class WaktiAIV2ServiceClass {
         activeTrigger,
         finalSummary,
         attachedFiles,
-        undefined,
-        undefined,
-        undefined,
+        maybeOnToken,
+        maybeOnComplete,
+        maybeOnError,
         signal
       );
 

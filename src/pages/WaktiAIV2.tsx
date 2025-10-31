@@ -252,6 +252,7 @@ const WaktiAIV2 = () => {
       } else if (inputType === 'vision') {
         let streamed = '';
         let streamMeta: any = {};
+        let firstToken = false;
         const streamedResp = await WaktiAIV2Service.sendStreamingMessage(
           messageContent,
           userProfile.id,
@@ -265,6 +266,11 @@ const WaktiAIV2 = () => {
           attachedFiles,
           (token: string) => {
             streamed += token;
+            if (!firstToken) {
+              firstToken = true;
+              setIsLoading(false);
+              setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, metadata: { ...(m.metadata || {}), loading: false } } : m));
+            }
             setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, content: streamed } : m));
           },
           (metadata: any) => { streamMeta = metadata || {}; },
@@ -289,6 +295,7 @@ const WaktiAIV2 = () => {
       else {
         let streamed = '';
         let streamMeta: any = {};
+        let firstToken = false;
         // If Search mode and message is a YouTube query, use the non-streaming YouTube path
         const ytPrefix = /^(?:\s*yt:\s*|\s*yt\s+)/i.test(messageContent || '');
         if (trigger === 'search' && ytPrefix) {
@@ -334,6 +341,11 @@ const WaktiAIV2 = () => {
           attachedFiles,
           (token: string) => {
             streamed += token;
+            if (!firstToken) {
+              firstToken = true;
+              setIsLoading(false);
+              setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, metadata: { ...(m.metadata || {}), loading: false } } : m));
+            }
             setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, content: streamed } : m));
           },
           (metadata: any) => { streamMeta = metadata || {}; },
