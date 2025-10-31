@@ -122,10 +122,35 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
+    // Revoke refresh token globally to avoid instant re-login from other tabs/devices
+    const { error } = await supabase.auth.signOut({ scope: 'global' as any });
+    if (error && !/auth session missing/i.test(error.message)) {
       toast.error(error.message);
     }
+    // Clear any app-level cached flags that might drive auto-login flows
+    try {
+      localStorage.removeItem('admin_session');
+      // Best-effort cleanup of any legacy flags your app may set
+      localStorage.removeItem('wakti_session_kicked');
+      localStorage.removeItem('wakti_session_blocked');
+      // Remove Supabase auth caches so SDK cannot auto-restore
+      for (const store of [localStorage, sessionStorage]) {
+        try {
+          const keys: string[] = [];
+          for (let i = 0; i < store.length; i++) {
+            const k = store.key(i);
+            if (!k) continue;
+            if (k.startsWith('sb-') || k.startsWith('wakti-auth')) keys.push(k);
+          }
+          keys.forEach((k) => store.removeItem(k));
+        } catch {}
+      }
+    } catch {}
+    setUser(null);
+    setSession(null);
+    try {
+      window.location.replace('/');
+    } catch {}
   };
 
   const resetPassword = async (email: string) => {
