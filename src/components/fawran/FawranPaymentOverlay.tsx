@@ -46,7 +46,7 @@ function ApplePayUI({
   const [error, setError] = useState<string | null>(null);
   const { language } = useTheme();
   const isAr = language === "ar";
-  const title = isAr ? "اشتراك Wakti AI" : "Wakti AI Subscription";
+  const title = isAr ? (<><span>اشتراك </span><span dir="ltr">Wakti AI</span></>) : "Wakti AI Subscription";
   const body1 = isAr
     ? "اشترك بأمان عبر Apple للوصول إلى جميع أدوات واكتي (12 أداة). يمكنك الإلغاء في أي وقت من إعدادات Apple ID."
     : "Subscribe securely with Apple to unlock all 12 Wakti AI tools. You can cancel anytime in your Apple ID settings.";
@@ -68,12 +68,12 @@ function ApplePayUI({
   // restore/back/logout come from parent via props
 
   return (
-    <div className="p-8 text-center space-y-5" dir={isAr ? "rtl" : "ltr"}>
-      <div className="absolute top-3 left-3">
+    <div className="p-6 md:p-8 text-center space-y-5 pb-[env(safe-area-inset-bottom,0px)]" dir={isAr ? "rtl" : "ltr"}>
+      <div className={`absolute top-3 left-3`}>
         <ThemeLanguageToggle />
       </div>
-      <h2 className="text-2xl font-bold text-enhanced-heading">{title}</h2>
-      <p className="text-muted-foreground max-w-md mx-auto">{body1}</p>
+      <h2 className="text-xl md:text-2xl font-bold text-enhanced-heading">{title}</h2>
+      <p className="text-muted-foreground max-w-md mx-auto break-words">{body1}</p>
 
       <Button
         onClick={handleClick}
@@ -81,25 +81,27 @@ function ApplePayUI({
         type="button"
         className="w-full rounded-full py-4 shadow-sm border border-primary text-primary bg-background hover:bg-primary/5"
       >
-        <span className={`flex items-center justify-center gap-2 ${isAr ? "flex-row-reverse" : ""}`}>
+        <span className={`flex items-center justify-center gap-2`}>
           <span className="text-base font-semibold">{subscribeLabel}</span>
           <span className="opacity-70">•</span>
-          <span className="text-sm">{price}</span>
+          <span className="text-sm">{isAr ? (<><span dir="rtl">95 ر.ق/شهر</span><span dir="ltr"> · ~$26 USD</span></>) : price}</span>
         </span>
       </Button>
 
-      <div className="grid grid-cols-2 gap-3 pt-3">
-        <a href="/" className="inline-flex items-center justify-center rounded-full border border-primary text-primary bg-background hover:bg-primary/5 h-10 px-4 text-sm font-medium">Back to Home</a>
-        <Button variant="destructive" type="button" onClick={() => onLogout()} className="rounded-full">Log out</Button>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3">
+        <a href="/" className="inline-flex items-center justify-center rounded-full border border-primary text-primary bg-background hover:bg-primary/5 h-10 px-4 text-sm font-medium">{isAr ? "العودة للصفحة الرئيسية" : "Back to Home"}</a>
+        <Button variant="destructive" type="button" onClick={() => onLogout()} className="rounded-full">{isAr ? "تسجيل الخروج" : "Log out"}</Button>
       </div>
       <div className="pt-2">
-        <Button variant="ghost" type="button" onClick={() => onRestore()} className="text-primary hover:underline h-auto px-2 py-1">Restore Purchases</Button>
+        <Button variant="ghost" type="button" onClick={() => onRestore()} className="text-primary hover:underline h-auto px-2 py-1">{isAr ? "استعادة المشتريات" : "Restore Purchases"}</Button>
       </div>
 
       {error && <p className="text-red-500 text-sm">{error}</p>}
 
-      <p className="text-xs text-muted-foreground pt-1">
-        Payment is charged to your Apple ID. Auto-renews unless canceled at least 24 hours before the end of the period.
+      <p className="text-xs text-muted-foreground pt-1" dir={isAr ? "rtl" : "ltr"}>
+        {isAr
+          ? "سيتم خصم الرسوم من حساب Apple ID الخاص بك. يتم التجديد تلقائيًا ما لم يتم الإلغاء قبل 24 ساعة على الأقل من نهاية الفترة."
+          : "Payment is charged to your Apple ID. Auto-renews unless canceled at least 24 hours before the end of the period."}
       </p>
     </div>
   );
@@ -109,21 +111,17 @@ export function FawranPaymentOverlay({ userEmail, onClose }: FawranPaymentOverla
   const auth: any = useAuth() as any;
   const user = auth?.user;
   const hasActiveSubscription: boolean = !!auth?.hasActiveSubscription;
-  const [isReady, setIsReady] = useState(false);
   const { language } = useTheme();
   const isAr = language === "ar";
-
-  useEffect(() => {
-    const ready = typeof window.makeInAppPurchase === "function";
-    setIsReady(ready);
-  }, []);
+  const userSubscriptionStatus = (user as any)?.subscriptionStatus;
+  const isActive = !!hasActiveSubscription || userSubscriptionStatus === "active";
 
   const handleApplePay = async () => {
     if (!user || !(user as any).id) {
       throw new Error("You must be logged in to make a purchase.");
     }
-    if (!window.makeInAppPurchase) {
-      throw new Error("Purchase function not available. Please update your app.");
+    if (typeof window.makeInAppPurchase !== "function") {
+      throw new Error("Payment is only available inside the Wakti iOS app. Please open the app to subscribe.");
     }
     const productId = "wakti_monthly_95qar";
     const consumable = false;
@@ -186,7 +184,7 @@ export function FawranPaymentOverlay({ userEmail, onClose }: FawranPaymentOverla
   };
 
   // Hide overlay when logged out, or when already subscribed
-  if (!user || hasActiveSubscription) return null;
+  if (!user || isActive) return null;
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -199,37 +197,13 @@ export function FawranPaymentOverlay({ userEmail, onClose }: FawranPaymentOverla
         >
           <X className="h-5 w-5" />
         </Button>
-        {/* If helper isn't available (web), keep the overlay visible but show a disabled Apple Pay button */}
-        {isReady ? (
-          <ApplePayUI
-            onSubscribeClick={handleApplePay}
-            onClose={onClose}
-            onRestore={handleRestore}
-            onBackHome={handleBackHome}
-            onLogout={handleLogout}
-          />
-        ) : (
-          <div className="p-8 text-center space-y-5" dir={isAr ? "rtl" : "ltr"}>
-            <div className="absolute top-3 left-3"><ThemeLanguageToggle /></div>
-            <h2 className="text-2xl font-bold text-enhanced-heading">{isAr ? "اشتراك Wakti AI" : "Wakti AI Subscription"}</h2>
-            <p className="text-muted-foreground max-w-md mx-auto">
-              {isAr
-                ? "الدفع داخل التطبيق متاح فقط على أجهزة iOS. افتح تطبيق واكتي على iPhone أو iPad للاشتراك."
-                : "Apple In‑App Purchase is available inside the iOS app. Open Wakti on your iPhone or iPad to subscribe."}
-            </p>
-            <Button disabled className="w-full rounded-full py-4 opacity-60 cursor-not-allowed border border-primary text-primary bg-background">
-              <span className={`flex items-center justify-center gap-2 ${isAr ? "flex-row-reverse" : ""}`}>
-                <span className="text-base font-semibold">{isAr ? "اشترك عبر Apple" : "Subscribe with Apple"}</span>
-                <span className="opacity-70">•</span>
-                <span className="text-sm">{isAr ? "95 ر.ق/شهر · ~$26 USD" : "95 QAR/month · ~$26 USD"}</span>
-              </span>
-            </Button>
-            <div className="grid grid-cols-2 gap-3 pt-3">
-              <a href="/" className="inline-flex items-center justify-center rounded-full border border-primary text-primary bg-background hover:bg-primary/5 h-10 px-4 text-sm font-medium">{isAr ? "العودة للصفحة الرئيسية" : "Back to Home"}</a>
-              <Button variant="destructive" type="button" onClick={handleLogout} className="rounded-full">{isAr ? "تسجيل الخروج" : "Log out"}</Button>
-            </div>
-          </div>
-        )}
+        <ApplePayUI
+          onSubscribeClick={handleApplePay}
+          onClose={onClose}
+          onRestore={handleRestore}
+          onBackHome={handleBackHome}
+          onLogout={handleLogout}
+        />
       </div>
     </div>
   );
