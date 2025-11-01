@@ -68,27 +68,27 @@ function ApplePayUI({
   // restore/back/logout come from parent via props
 
   return (
-    <div className="p-6 md:p-8 text-center space-y-5 pb-[env(safe-area-inset-bottom,0px)]" dir={isAr ? "rtl" : "ltr"}>
-      <div className={`absolute top-3 left-3`}>
+    <div className="p-4 sm:p-5 md:p-8 text-center space-y-4 md:space-y-5 pb-[env(safe-area-inset-bottom,0px)]" dir={isAr ? "rtl" : "ltr"}>
+      <div className={`absolute top-2 md:top-3 left-2 md:left-3`}>
         <ThemeLanguageToggle />
       </div>
-      <h2 className="text-xl md:text-2xl font-bold text-enhanced-heading">{title}</h2>
-      <p className="text-muted-foreground max-w-md mx-auto break-words">{body1}</p>
+      <h2 className="text-lg sm:text-xl md:text-2xl font-bold leading-tight text-enhanced-heading">{title}</h2>
+      <p className="text-sm md:text-base leading-relaxed text-muted-foreground max-w-md mx-auto break-words px-1">{body1}</p>
 
       <Button
         onClick={handleClick}
         disabled={isLoading}
         type="button"
-        className="w-full rounded-full py-4 shadow-sm border border-primary text-primary bg-background hover:bg-primary/5"
+        className="w-full rounded-full py-3 md:py-4 shadow-sm border border-primary text-primary bg-background hover:bg-primary/5"
       >
-        <span className={`flex items-center justify-center gap-2`}>
-          <span className="text-base font-semibold">{subscribeLabel}</span>
+        <span className={`flex items-center justify-center gap-2 whitespace-normal break-words text-center max-w-full leading-tight px-1`}>
+          <span className="text-sm sm:text-base font-semibold">{subscribeLabel}</span>
           <span className="opacity-70">•</span>
-          <span className="text-sm">{isAr ? (<><span dir="rtl">95 ر.ق/شهر</span><span dir="ltr"> · ~$26 USD</span></>) : price}</span>
+          <span className="text-xs sm:text-sm">{isAr ? (<><span dir="rtl">95 ر.ق/شهر</span><span dir="ltr"> · ~$26 USD</span></>) : price}</span>
         </span>
       </Button>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3 pt-2 md:pt-3">
         <a href="/" className="inline-flex items-center justify-center rounded-full border border-primary text-primary bg-background hover:bg-primary/5 h-10 px-4 text-sm font-medium">{isAr ? "العودة للصفحة الرئيسية" : "Back to Home"}</a>
         <Button variant="destructive" type="button" onClick={() => onLogout()} className="rounded-full">{isAr ? "تسجيل الخروج" : "Log out"}</Button>
       </div>
