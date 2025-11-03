@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -28,6 +28,29 @@ export function LoginForm({
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const navDoneRef = useRef(false);
+
+  useEffect(() => {
+    let mounted = true;
+    const sub = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+      if (event === 'SIGNED_IN' && session && !navDoneRef.current) {
+        navDoneRef.current = true;
+        navigate(redirectTo);
+      }
+    });
+    // Fallback: if a session already exists (slow event in WKWebView), navigate
+    supabase.auth.getSession().then(({ data }) => {
+      if (!navDoneRef.current && data?.session) {
+        navDoneRef.current = true;
+        navigate(redirectTo);
+      }
+    });
+    return () => {
+      mounted = false;
+      try { sub.data.subscription.unsubscribe(); } catch {}
+    };
+  }, [navigate, redirectTo]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,10 +77,7 @@ export function LoginForm({
       } else if (data?.user) {
         console.log("LoginForm: Login successful, user:", data.user.id);
         toast.success(language === 'en' ? 'Login Successful: Welcome back!' : 'تم تسجيل الدخول بنجاح: مرحبا بعودتك!');
-        
-        setTimeout(() => {
-          navigate(redirectTo);
-        }, 300);
+        // Navigation now handled by SIGNED_IN event / existing session fallback
       }
     } catch (err) {
       console.error("LoginForm: Unexpected error during login:", err);

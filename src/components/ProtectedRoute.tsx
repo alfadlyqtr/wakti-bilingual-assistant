@@ -23,6 +23,8 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     subscriptionDetails?: any;
   }>({ isSubscribed: false, isLoading: true, needsPayment: false });
 
+  const [hasAnySession, setHasAnySession] = useState<boolean>(!!session);
+
   // StrictMode-safe guards and timers
   const retryTimerRef = useRef<number | null>(null);
   const inFlightRef = useRef(false);
@@ -32,6 +34,20 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   // Owner accounts that bypass all restrictions
   const ownerAccounts = ['alfadly@me.com', 'alfadlyqatar@gmail.com'];
+
+  useEffect(() => {
+    let mounted = true;
+    if (session || user) {
+      if (mounted) setHasAnySession(true);
+    } else {
+      supabase.auth.getSession()
+        .then(({ data }) => {
+          if (mounted) setHasAnySession(!!data?.session);
+        })
+        .catch(() => {});
+    }
+    return () => { mounted = false; };
+  }, [session, user]);
 
   useEffect(() => {
     console.log("ProtectedRoute: Current auth state:", {
@@ -291,13 +307,13 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     };
   }, [user?.id, isLoading]);
 
-  if (isLoading) {
+  if (!hasAnySession && isLoading) {
     console.log("ProtectedRoute: Still loading - auth:", isLoading, "subscription:", subscriptionStatus.isLoading);
     return <Loading />;
   }
 
   // Proper authentication check - redirect appropriately if not authenticated
-  if (!user || !session) {
+  if (!hasAnySession) {
     console.log("ProtectedRoute: No valid user/session, redirecting to login");
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
