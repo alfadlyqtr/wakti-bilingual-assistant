@@ -101,23 +101,23 @@ export default function EventEdit() {
         end_time: event.end_time ? new Date(event.end_time).toISOString().slice(0, 16) : '',
         is_all_day: event.is_all_day || false,
         is_public: event.is_public || false,
-        rsvp_enabled: event.rsvp_enabled || false,
-        rsvp_deadline: event.rsvp_deadline ? new Date(event.rsvp_deadline).toISOString().slice(0, 16) : '',
+        rsvp_enabled: (event.event_style as any)?.rsvp_enabled ?? false,
+        rsvp_deadline: (event.event_style as any)?.rsvp_deadline ? new Date((event.event_style as any).rsvp_deadline).toISOString().slice(0, 16) : '',
       });
 
       // Set background data
       setBackgroundColor(event.background_color || '#3b82f6');
       setBackgroundImage(event.background_image || null);
-      setImageBlur(event.image_blur || 0);
+      setImageBlur((event.event_style as any)?.image_blur ?? 0);
 
       // Set text styling
       setFontSize(event.font_size || 18);
       setTextColor(event.text_color || '#ffffff');
-      setTextAlign(event.text_align || 'center');
-      setFontWeight(event.font_weight || 'normal');
-      setFontStyle(event.font_style || 'normal');
-      setTextDecoration(event.text_decoration || 'none');
-      setFontFamily(event.font_family || 'Inter');
+      setTextAlign((event.event_style as any)?.text_align ?? 'center');
+      setFontWeight((event.event_style as any)?.font_weight ?? 'normal');
+      setFontStyle((event.event_style as any)?.font_style ?? 'normal');
+      setTextDecoration((event.event_style as any)?.text_decoration ?? 'none');
+      setFontFamily((event.event_style as any)?.font_family ?? 'Inter');
     }
   }, [event, reset]);
 

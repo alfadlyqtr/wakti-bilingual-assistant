@@ -87,7 +87,7 @@ export function AdminSupportTab() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setTickets(data || []);
+      setTickets((data || []) as any as SupportTicket[]);
     } catch (error) {
       console.error('Error loading tickets:', error);
       toast.error('Failed to load support tickets');
@@ -110,7 +110,7 @@ export function AdminSupportTab() {
         .order('created_at', { ascending: true });
       
       if (error) throw error;
-      setMessages(data || []);
+      setMessages((data || []) as any as SupportMessage[]);
     } catch (error) {
       console.error('Error loading messages:', error);
       toast.error('Failed to load messages');
@@ -134,10 +134,10 @@ export function AdminSupportTab() {
         .insert({
           ticket_id: selectedTicket.id,
           sender_id: adminData.admin_id,
-          sender_role: 'staff',
+          role: 'staff',
           body: newMessage.trim(),
           attachments: []
-        });
+        } as any);
 
       if (messageError) throw messageError;
 

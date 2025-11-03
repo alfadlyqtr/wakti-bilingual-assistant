@@ -61,8 +61,8 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
       if (error && error.code !== 'PGRST116') throw error;
 
       if (data) {
-        setUserRsvp(data);
-        setSelectedResponse(data.response);
+        setUserRsvp(data as RSVPResponse);
+        setSelectedResponse(data.response as 'accepted' | 'declined' | 'maybe');
       }
     } catch (error) {
       console.error('Error fetching user RSVP:', error);

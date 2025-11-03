@@ -22,8 +22,8 @@ interface Event {
   end_time: string;
   is_all_day: boolean;
   is_public: boolean;
-  created_by: string;
-  background_type: 'color' | 'gradient' | 'image' | 'ai';
+  organizer_id?: string;
+  background_type?: 'color' | 'gradient' | 'image' | 'ai';
   background_color?: string;
   background_gradient?: string;
   background_image?: string;
@@ -104,11 +104,11 @@ export default function EventView({ standalone = false }: EventViewProps) {
       setEvent(data);
 
       // Fetch creator's name with better fallback
-      if (data.created_by) {
+      if (data.organizer_id) {
         const { data: profileData } = await supabase
           .from('profiles')
           .select('display_name, username')
-          .eq('id', data.created_by)
+          .eq('id', data.organizer_id)
           .single();
         
         if (profileData) {
@@ -122,7 +122,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
           const { data: userData } = await supabase.auth.getUser();
           console.log('User data for ownership check:', userData);
           if (userData.user) {
-            setIsOwner(userData.user.id === data.created_by);
+            setIsOwner(userData.user.id === data.organizer_id);
           }
         } catch (authError) {
           console.log('Auth error (non-critical):', authError);

@@ -20,7 +20,7 @@ interface RSVPSectionProps {
 
 interface RSVPResponse {
   id: string;
-  response: 'going' | 'not_going' | 'maybe';
+  response: string;
   guest_name?: string;
   guest_email?: string;
   user_id?: string;
@@ -59,14 +59,14 @@ export default function RSVPSection({ eventId, rsvpEnabled, rsvpDeadline, isPubl
 
       if (error) throw error;
 
-      setRsvps(data || []);
+      setRsvps((data || []) as RSVPResponse[]);
       
       // Find user's RSVP if authenticated
       if (user) {
         const currentUserRsvp = data?.find(rsvp => rsvp.user_id === user.id);
-        setUserRsvp(currentUserRsvp || null);
+        setUserRsvp(currentUserRsvp ? currentUserRsvp as RSVPResponse : null);
         if (currentUserRsvp) {
-          setSelectedResponse(currentUserRsvp.response);
+          setSelectedResponse(currentUserRsvp.response as any);
         }
       }
     } catch (error) {
