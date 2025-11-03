@@ -7,6 +7,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import AdminRoute from "@/components/auth/AdminRoute";
 import { GiftNotificationProvider } from "@/components/notifications/GiftNotificationProvider";
 import { AppLayout } from "@/components/AppLayout";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 
 
 // Import all your existing components
@@ -275,6 +276,7 @@ function App() {
             </BrowserRouter>
           </AuthProvider>
           <Toaster />
+          <SpeedInsights />
         </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>
