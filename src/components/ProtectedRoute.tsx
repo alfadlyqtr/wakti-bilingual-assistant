@@ -346,13 +346,40 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     };
   }, [user?.id, isLoading]);
 
-  if (!hasAnySession && isLoading) {
-    console.log("ProtectedRoute: Still loading - auth:", isLoading, "subscription:", subscriptionStatus.isLoading);
-    return <Loading />;
+  let effectiveHasSession = hasAnySession;
+  try {
+    const ts = Number(sessionStorage.getItem('wakti_recent_login') || '0');
+    if (!Number.isNaN(ts) && Date.now() - ts < 10000) {
+      effectiveHasSession = true;
+    }
+  } catch {}
+
+  if (!effectiveHasSession && isLoading) {
+    console.log("ProtectedRoute: Still loading - rendering children with auth banner");
+    return (
+      <>
+        <div
+          style={{
+            position: 'fixed',
+            top: 'calc(var(--app-header-h, 64px))',
+            left: 0,
+            right: 0,
+            zIndex: 2147483000,
+            display: 'flex',
+            justifyContent: 'center'
+          }}
+        >
+          <div className="mx-auto mt-2 px-3 py-1 rounded-full text-xs bg-primary/10 text-primary shadow-sm">
+            Signing you in…
+          </div>
+        </div>
+        {children}
+      </>
+    );
   }
 
   // Proper authentication check - redirect appropriately if not authenticated
-  if (!hasAnySession) {
+  if (!effectiveHasSession) {
     console.log("ProtectedRoute: No valid user/session, redirecting to login");
     return <Navigate to="/login" state={{ from: location }} replace />;
   }

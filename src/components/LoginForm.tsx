@@ -77,7 +77,11 @@ export function LoginForm({
       } else if (data?.user) {
         console.log("LoginForm: Login successful, user:", data.user.id);
         toast.success(language === 'en' ? 'Login Successful: Welcome back!' : 'تم تسجيل الدخول بنجاح: مرحبا بعودتك!');
-        // Navigation now handled by SIGNED_IN event / existing session fallback
+        try { sessionStorage.setItem('wakti_recent_login', String(Date.now())); } catch {}
+        if (!navDoneRef.current) {
+          navDoneRef.current = true;
+          navigate(redirectTo);
+        }
       }
     } catch (err) {
       console.error("LoginForm: Unexpected error during login:", err);
