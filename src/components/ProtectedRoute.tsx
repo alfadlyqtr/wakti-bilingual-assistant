@@ -24,6 +24,8 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   }>({ isSubscribed: false, isLoading: true, needsPayment: false });
 
   const [hasAnySession, setHasAnySession] = useState<boolean>(!!session);
+  const sessionPollRef = useRef<number | null>(null);
+  const sessionPollDeadlineRef = useRef<number>(0);
 
   // StrictMode-safe guards and timers
   const retryTimerRef = useRef<number | null>(null);
@@ -48,6 +50,43 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     }
     return () => { mounted = false; };
   }, [session, user]);
+
+  useEffect(() => {
+    if (hasAnySession) {
+      if (sessionPollRef.current) {
+        window.clearInterval(sessionPollRef.current);
+        sessionPollRef.current = null;
+      }
+      return;
+    }
+    sessionPollDeadlineRef.current = Date.now() + 8000;
+    if (sessionPollRef.current) return;
+    sessionPollRef.current = window.setInterval(async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (data?.session) {
+          setHasAnySession(true);
+          if (sessionPollRef.current) {
+            window.clearInterval(sessionPollRef.current);
+            sessionPollRef.current = null;
+          }
+          return;
+        }
+      } catch {}
+      if (Date.now() > sessionPollDeadlineRef.current) {
+        if (sessionPollRef.current) {
+          window.clearInterval(sessionPollRef.current);
+          sessionPollRef.current = null;
+        }
+      }
+    }, 250);
+    return () => {
+      if (sessionPollRef.current) {
+        window.clearInterval(sessionPollRef.current);
+        sessionPollRef.current = null;
+      }
+    };
+  }, [hasAnySession]);
 
   useEffect(() => {
     console.log("ProtectedRoute: Current auth state:", {
