@@ -77,8 +77,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
         await ensurePassport();
         console.log("ProtectedRoute: Fetching subscription status from database...");
 
-        // Use a 5s timeout to avoid indefinite loading
-        const timeoutMs = 5000;
+        const timeoutMs = 3000;
         let timedOut = false;
         const timeoutPromise = new Promise((resolve) => setTimeout(() => { timedOut = true; resolve('timeout'); }, timeoutMs));
         const fetchPromise = (async () => {
@@ -292,8 +291,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     };
   }, [user?.id, isLoading]);
 
-  // Show loading while auth or subscription status is loading
-  if (isLoading || subscriptionStatus.isLoading) {
+  if (isLoading) {
     console.log("ProtectedRoute: Still loading - auth:", isLoading, "subscription:", subscriptionStatus.isLoading);
     return <Loading />;
   }
@@ -302,6 +300,30 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   if (!user || !session) {
     console.log("ProtectedRoute: No valid user/session, redirecting to login");
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (subscriptionStatus.isLoading) {
+    console.log("ProtectedRoute: Subscription pending - rendering optimistically");
+    return (
+      <>
+        <div
+          style={{
+            position: 'fixed',
+            top: 'calc(var(--app-header-h, 64px))',
+            left: 0,
+            right: 0,
+            zIndex: 2147483000,
+            display: 'flex',
+            justifyContent: 'center'
+          }}
+        >
+          <div className="mx-auto mt-2 px-3 py-1 rounded-full text-xs bg-primary/10 text-primary shadow-sm">
+            Verifying subscription…
+          </div>
+        </div>
+        {children}
+      </>
+    );
   }
 
   // STRICT ENFORCEMENT: Block access if no valid subscription
