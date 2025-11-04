@@ -52,40 +52,65 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    // Set loading to true.
+    setLoading(true);
+    let subscription: { unsubscribe: () => void } | undefined;
 
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event, session?.user?.id);
-      
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
+    try {
+      // 1. Try to get the initial session
+      supabase.auth.getSession()
+        .then(({ data: { session } }) => {
+          setSession(session);
+          setUser(session?.user ?? null);
+          setLoading(false); // Set loading false on success
+        })
+        .catch((error) => {
+          console.error("Error in getSession promise:", error);
+          setLoading(false); // Set loading false on promise rejection
+        });
+    } catch (error) {
+      console.error("CRITICAL: getSession() threw synchronous error:", error);
+      setLoading(false); // Set loading false on synchronous error
+    }
+    
+    // 2. Subscribe to auth changes
+    // This is separated so that even if getSession() fails,
+    // the listener is still attached.
+    try {
+      const { data } = supabase.auth.onAuthStateChange(
+        (event, session) => {
+          console.log('Auth state changed:', event, session?.user?.id);
+          
+          // We must set all 3 states here.
+          setSession(session);
+          setUser(session?.user ?? null);
+          setLoading(false); // This is the key. Set loading to false on any auth event.
 
-      if (event === 'SIGNED_IN' && session?.user) {
-        console.log('User signed in, initializing services...');
-        // Services will be initialized by useUnreadMessages in AppLayout
-      }
+          if (event === 'SIGNED_IN' && session?.user) {
+            console.log('User signed in, initializing services...');
+          }
 
-      if (event === 'SIGNED_OUT') {
-        console.log('User signed out, cleaning up...');
-        setUser(null);
-        setSession(null);
-      }
+          if (event === 'SIGNED_OUT') {
+            console.log('User signed out, cleaning up...');
+            setUser(null);
+            setSession(null);
+          }
 
-      if (event === 'TOKEN_REFRESHED') {
-        console.log('Token refreshed for user:', session?.user?.id);
-      }
-    });
+          if (event === 'TOKEN_REFRESHED') {
+            console.log('Token refreshed for user:', session?.user?.id);
+          }
+        }
+      );
+      subscription = data.subscription;
 
-    return () => subscription.unsubscribe();
+    } catch (error) {
+      console.error("CRITICAL: Failed to subscribe to onAuthStateChange", error);
+    }
+
+    // 3. Cleanup
+    return () => {
+      try { subscription?.unsubscribe(); } catch {}
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
