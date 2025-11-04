@@ -687,7 +687,7 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
 function EditorTab() {
   const { language } = useTheme();
   const [loading, setLoading] = useState(false);
-  const [tracks, setTracks] = useState<Array<{ id: string; created_at: string; prompt: string | null; include_styles: string[] | null; exclude_styles: string[] | null; requested_duration_seconds: number | null; signed_url: string | null; storage_path: string | null; mime: string | null }>>([]);
+  const [tracks, setTracks] = useState<Array<{ id: string; created_at: string; prompt: string | null; include_styles: string[] | null; exclude_styles: string[] | null; requested_duration_seconds: number | null; signed_url: string | null; storage_path: string | null; mime: string | null; play_url?: string | null }>>([]);
 
   const load = async () => {
     setLoading(true);
@@ -699,14 +699,27 @@ function EditorTab() {
         .limit(50);
 
       if (error) throw error;
-      // Derive a playable URL from storage_path when signed_url is missing
-      const withUrls = (data || []).map((t) => {
-        if (!t.signed_url && t.storage_path) {
-          const { data: urlData } = supabase.storage.from('music').getPublicUrl(t.storage_path);
-          return { ...t, signed_url: urlData.publicUrl };
+      // Always derive a playable URL from storage_path. Prefer a signed URL to work with private buckets.
+      const withUrls = await Promise.all((data || []).map(async (t) => {
+        let playUrl: string | null = null;
+        if (t.storage_path) {
+          // Try signed URL first (handles private buckets)
+          try {
+            const signed = await supabase.storage.from('music').createSignedUrl(t.storage_path, 3600);
+            if (!signed.error && signed.data?.signedUrl) {
+              playUrl = signed.data.signedUrl;
+            }
+          } catch (_) { /* ignore and try public */ }
+          if (!playUrl) {
+            const { data: urlData } = supabase.storage.from('music').getPublicUrl(t.storage_path);
+            playUrl = urlData?.publicUrl || null;
+          }
+        } else if (t.signed_url && /^https?:\/\//i.test(t.signed_url)) {
+          // Fallback to signed_url only if it looks absolute
+          playUrl = t.signed_url;
         }
-        return t;
-      });
+        return { ...t, play_url: playUrl };
+      }));
       setTracks(withUrls);
     } catch (e) {
       // noop
@@ -740,12 +753,12 @@ function EditorTab() {
               <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                 {(t.include_styles||[]).map((s)=> <span key={s} className="px-2 py-0.5 rounded-full bg-muted">{s}</span>)}
               </div>
-              {t.signed_url && (
+              {t.play_url && (
                 <div className="space-y-3">
-                  <AudioPlayer src={t.signed_url} className="w-full" />
+                  <AudioPlayer src={t.play_url} className="w-full" />
                   <div className="flex justify-end">
                     <a
-                      href={t.signed_url}
+                      href={t.play_url}
                       download={`track-${t.id}.mp3`}
                       className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-accent transition-colors"
                     >
