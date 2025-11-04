@@ -6,7 +6,7 @@ import { Copy, Clock, CheckCircle, ArrowLeft, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { ThemeLanguageToggle } from '@/components/ThemeLanguageToggle';
-import type { PlanType } from './FawranPaymentOverlay';
+type PlanType = 'monthly' | 'yearly';
 
 interface PaymentInstructionsProps {
   selectedPlan: PlanType;

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useTheme } from "@/providers/ThemeProvider";
-import type { PlanType } from './FawranPaymentOverlay';
+type PlanType = 'monthly' | 'yearly';
 
 interface PlanSelectionProps {
   onPlanSelect: (plan: PlanType) => void;

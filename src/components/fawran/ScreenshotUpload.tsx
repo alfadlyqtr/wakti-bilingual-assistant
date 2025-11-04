@@ -9,7 +9,7 @@ import { Upload, FileImage, AlertCircle, ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useTheme } from "@/providers/ThemeProvider";
-import type { PlanType } from './FawranPaymentOverlay';
+type PlanType = 'monthly' | 'yearly';
 
 interface ScreenshotUploadProps {
   userEmail: string;

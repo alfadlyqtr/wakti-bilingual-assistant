@@ -35,7 +35,8 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const lastUserIdRef = useRef<string | null>(null);
 
   // Owner accounts that bypass all restrictions
-  const ownerAccounts = ['alfadly@me.com', 'alfadlyqatar@gmail.com'];
+  const ownerAccounts = ['alfadly@me.com', 'alfadlyqatar@gmail.com', 'alfadly@tmw.qa'];
+  const ownerEmails = ownerAccounts.map(e => e.toLowerCase());
 
   useEffect(() => {
     let mounted = true;
@@ -117,7 +118,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
       }
 
       // Check if user is an owner account
-      if (ownerAccounts.includes(user.email || '')) {
+      if (ownerEmails.includes((user.email || '').toLowerCase())) {
         console.log('ProtectedRoute: Owner account detected, bypassing subscription checks');
         setSubscriptionStatus({ 
           isSubscribed: true, 

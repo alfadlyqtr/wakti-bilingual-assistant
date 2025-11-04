@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';

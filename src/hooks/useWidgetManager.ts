@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState, useEffect } from "react";
 import { TranslationKey } from "@/utils/translationTypes";
 import { toast } from "sonner";

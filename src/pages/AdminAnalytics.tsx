@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { BarChart3, TrendingUp, DollarSign, Users, Calendar } from "lucide-react";

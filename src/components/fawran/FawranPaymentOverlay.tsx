@@ -12,6 +12,7 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 
+export type PlanType = 'monthly' | 'yearly';
 declare global {
   interface Window {
     makeInAppPurchase?: (
@@ -110,11 +111,8 @@ function ApplePayUI({
 export function FawranPaymentOverlay({ userEmail, onClose }: FawranPaymentOverlayProps) {
   const auth: any = useAuth() as any;
   const user = auth?.user;
-  const hasActiveSubscription: boolean = !!auth?.hasActiveSubscription;
   const { language } = useTheme();
   const isAr = language === "ar";
-  const userSubscriptionStatus = (user as any)?.subscriptionStatus;
-  const isActive = !!hasActiveSubscription || userSubscriptionStatus === "active";
 
   const handleApplePay = async () => {
     if (!user || !(user as any).id) {
