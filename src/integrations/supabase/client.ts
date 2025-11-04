@@ -18,6 +18,46 @@ const supabaseAnonKey =
 const effectiveUrl = supabaseUrl;
 const effectiveAnon = supabaseAnonKey;
 
+// Provide a storage object that works even when WebView blocks web storage
+type MinimalStorage = {
+  getItem: (key: string) => string | null;
+  setItem: (key: string, value: string) => void;
+  removeItem: (key: string) => void;
+};
+
+function createSafeStorage(): MinimalStorage {
+  // Prefer localStorage if available and writable
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const k = '__wakti_storage_probe__';
+      window.localStorage.setItem(k, '1');
+      window.localStorage.removeItem(k);
+      return window.localStorage;
+    }
+  } catch (_) {}
+
+  // Fallback to sessionStorage if available and writable
+  try {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      const k = '__wakti_storage_probe__';
+      window.sessionStorage.setItem(k, '1');
+      window.sessionStorage.removeItem(k);
+      return window.sessionStorage;
+    }
+  } catch (_) {}
+
+  // Final fallback: in-memory map (per-page lifecycle)
+  const mem = new Map<string, string>();
+  const memoryStorage: MinimalStorage = {
+    getItem: (key: string) => (mem.has(key) ? (mem.get(key) as string) : null),
+    setItem: (key: string, value: string) => { mem.set(key, value); },
+    removeItem: (key: string) => { mem.delete(key); },
+  };
+  return memoryStorage;
+}
+
+const safeStorage = createSafeStorage();
+
 // Export the URL for use in other services
 export const SUPABASE_URL = effectiveUrl;
 
@@ -27,8 +67,8 @@ export const supabase = createClient<Database>(effectiveUrl, effectiveAnon, {
     // Ensure tokens refresh and session detection on redirects
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    // Use stable storage + key to avoid accidental cross-app collisions
-    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    // Use safe storage wrapper to survive WKWebView/preview restrictions
+    storage: safeStorage as any,
     storageKey: 'wakti-auth'
   }
 });
