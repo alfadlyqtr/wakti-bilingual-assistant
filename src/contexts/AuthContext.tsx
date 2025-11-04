@@ -92,6 +92,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // 2) Always subscribe to auth changes
     try {
       const { data } = supabase.auth.onAuthStateChange((event, session) => {
+        
+        // === PART 2: RESPECT MANUAL AUTH LOCK ===
+        if ((window as any).__MANUAL_AUTH_LOCK) {
+          if (event === 'SIGNED_IN' && !session) {
+            console.warn('AuthContext: Ignoring unreliable NULL session event post-login.');
+            return; // IGNORE THE BAD EVENT
+          }
+          // Unlock after 5 seconds
+          setTimeout(() => { (window as any).__MANUAL_AUTH_LOCK = false; }, 5000);
+        }
+        // ========================================
+        
         console.log('AuthContext: onAuthStateChange event fired:', event);
         window.clearTimeout(loadingTimer);
         setSession(session);

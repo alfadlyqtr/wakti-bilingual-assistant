@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Button } from "@/components/ui/button";
@@ -18,31 +18,13 @@ export default function Login() {
   const location = useLocation();
   const { language } = useTheme();
   const { user, session, isLoading: authLoading } = useAuth();
-  const navigationInProgress = useRef(false);
   
   // Get the location state to know where to redirect after login
   const locationState = location.state as LocationState;
   const from = locationState?.from || "/dashboard";
 
-  // Add effect to check auth state and redirect if already logged in
-  useEffect(() => {
-    console.log("Login: Auth state check", { 
-      user: !!user, 
-      session: !!session, 
-      authLoading,
-      currentPath: location.pathname,
-      redirectTo: from
-    });
-    
-    if (user && session && !authLoading && !navigationInProgress.current) {
-      console.log("Login: User already authenticated, redirecting to:", from);
-      navigationInProgress.current = true;
-      setTimeout(() => {
-        navigate(from);
-        navigationInProgress.current = false;
-      }, 100);
-    }
-  }, [user, session, authLoading, navigate, location.pathname, from]);
+  // Navigation is now handled synchronously in LoginForm.tsx
+  // This useEffect has been removed to eliminate the 100ms race condition
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-indigo-950/30 dark:via-background dark:to-purple-950/30">

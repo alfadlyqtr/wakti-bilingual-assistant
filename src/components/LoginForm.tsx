@@ -64,11 +64,20 @@ export function LoginForm({
           const rt = (data as any)?.session?.refresh_token;
           if (at && rt) {
             await supabase.auth.setSession({ access_token: at, refresh_token: rt });
+            
+            // === SET MANUAL AUTH LOCK ===
+            // Set a 5-second "lock" to ignore bad auth events
+            try { (window as any).__MANUAL_AUTH_LOCK = true; } catch {}
+            
             // Manually update AuthContext because onAuthStateChange is not firing in iOS WebView
             console.log("LoginForm: Manually updating AuthContext.");
             try { setAuthUser(data.user); } catch {}
             try { setAuthSession((data as any)?.session ?? null); } catch {}
             try { setAuthLoading(false); } catch {}
+            
+            // === SYNCHRONOUS NAVIGATION ===
+            console.log("LoginForm: Synchronous navigation to", redirectTo);
+            navigate(redirectTo);
           }
         } catch (err) {
           console.error("LoginForm: Error during setSession or context update", err);
