@@ -15,14 +15,23 @@ export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
+    // Reset states when src changes
+    setError(null);
+    setIsLoading(true);
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+
     const handleLoadedMetadata = () => {
       setDuration(audio.duration);
       setIsLoading(false);
+      setError(null);
     };
 
     const handleTimeUpdate = () => {
@@ -36,20 +45,33 @@ export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
 
     const handleCanPlay = () => {
       setIsLoading(false);
+      setError(null);
+    };
+
+    const handleError = (e: ErrorEvent | Event) => {
+      console.error('[AudioPlayer] Load error:', { src, error: e });
+      setIsLoading(false);
+      setIsPlaying(false);
+      const errorMsg = language === 'ar' 
+        ? 'فشل تحميل الملف الصوتي' 
+        : 'Failed to load audio file';
+      setError(errorMsg);
     };
 
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('canplay', handleCanPlay);
+    audio.addEventListener('error', handleError);
 
     return () => {
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('canplay', handleCanPlay);
+      audio.removeEventListener('error', handleError);
     };
-  }, [src]);
+  }, [src, language]);
 
   const togglePlay = async () => {
     const audio = audioRef.current;
@@ -98,44 +120,53 @@ export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
     <div className={`flex items-center gap-3 ${className}`}>
       <audio ref={audioRef} src={src} preload="metadata" />
       
-      <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={togglePlay}
-          disabled={isLoading}
-          className="h-9 w-9"
-        >
-          {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-        </Button>
-        
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={rewind}
-          disabled={isLoading}
-          className="h-9 w-9"
-          title={language === 'ar' ? 'الرجوع 10 ثوان' : 'Rewind 10s'}
-        >
-          <RotateCcw className="h-4 w-4" />
-        </Button>
-      </div>
+      {error ? (
+        <div className="flex-1 flex items-center gap-2 text-sm text-red-600 bg-red-50 dark:bg-red-950/20 px-3 py-2 rounded-md">
+          <span>⚠️</span>
+          <span>{error}</span>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={togglePlay}
+              disabled={isLoading}
+              className="h-9 w-9"
+            >
+              {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+            </Button>
+            
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={rewind}
+              disabled={isLoading}
+              className="h-9 w-9"
+              title={language === 'ar' ? 'الرجوع 10 ثوان' : 'Rewind 10s'}
+            >
+              <RotateCcw className="h-4 w-4" />
+            </Button>
+          </div>
 
-      <div className="flex-1 flex items-center gap-2">
-        <div
-          className="flex-1 h-2 bg-muted rounded-full cursor-pointer overflow-hidden"
-          onClick={handleProgressClick}
-        >
-          <div
-            className="h-full bg-primary transition-all duration-100"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-        
-        <div className="text-xs text-muted-foreground whitespace-nowrap min-w-[80px] text-right">
-          {formatTime(currentTime)} / {formatTime(duration)}
-        </div>
-      </div>
+          <div className="flex-1 flex items-center gap-2">
+            <div
+              className="flex-1 h-2 bg-muted rounded-full cursor-pointer overflow-hidden"
+              onClick={handleProgressClick}
+            >
+              <div
+                className="h-full bg-primary transition-all duration-100"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            
+            <div className="text-xs text-muted-foreground whitespace-nowrap min-w-[80px] text-right">
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

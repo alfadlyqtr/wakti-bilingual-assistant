@@ -612,14 +612,26 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
             {audios.map((a, idx) => (
               <div key={a.createdAt + '-' + idx} className="space-y-3 p-3 rounded-lg border bg-card">
                 <AudioPlayer src={a.url} className="w-full" />
-                <div className="flex items-center gap-2 justify-end">
+                <div className="flex items-center gap-2 justify-end flex-wrap">
                   <a
                     href={a.url}
-                    download={`track-${a.createdAt}.mp3`}
+                    download={`wakti-music-${a.createdAt}.mp3`}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-accent transition-colors"
                   >
                     {language==='ar' ? 'تنزيل' : 'Download'}
                   </a>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(a.url);
+                      toast.success(language==='ar' ? 'تم نسخ الرابط' : 'URL copied');
+                    }}
+                  >
+                    {language==='ar' ? 'نسخ الرابط' : 'Copy URL'}
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
@@ -699,41 +711,23 @@ function EditorTab() {
         .limit(50);
 
       if (error) throw error;
-      // Always derive a playable URL from storage_path. Prefer a signed URL to work consistently.
+      // Simplified URL construction: use simple public URLs for public bucket
       const withUrls = await Promise.all((data || []).map(async (t) => {
         let playUrl: string | null = null;
         if (t.storage_path) {
-          // First try signed URL (works even if bucket policy changes)
-          try {
-            const signed = await supabase.storage.from('music').createSignedUrl(t.storage_path, 3600);
-            if (!signed.error && signed.data?.signedUrl) {
-              playUrl = signed.data.signedUrl;
-            }
-          } catch (_) { /* ignore */ }
-          // Fallback to deterministic public URL if signing fails
-          if (!playUrl) {
-            const base = SUPABASE_URL.replace(/\/$/, '');
-            const path = t.storage_path.startsWith('/') ? t.storage_path.slice(1) : t.storage_path;
-            playUrl = `${base}/storage/v1/object/public/music/${path}`;
-          }
+          // Use simple public URL (bucket is public, no auth needed)
+          const base = SUPABASE_URL.replace(/\/$/, '');
+          const path = t.storage_path.startsWith('/') ? t.storage_path.slice(1) : t.storage_path;
+          playUrl = `${base}/storage/v1/object/public/music/${path}`;
+          console.log('[MusicStudio] Generated URL:', { id: t.id, storage_path: t.storage_path, play_url: playUrl });
         } else if (t.signed_url && /^https?:\/\//i.test(t.signed_url)) {
           // Fallback to signed_url only if it looks absolute
           playUrl = t.signed_url;
-        }
-        // Normalize to absolute URL to avoid SPA catch-all rewrites
-        if (playUrl && !/^https?:\/\//i.test(playUrl)) {
-          playUrl = `${SUPABASE_URL.replace(/\/$/, '')}${playUrl.startsWith('/') ? '' : '/'}${playUrl}`;
-        }
-        // Ensure apikey only for deterministic public URLs (not for signed URLs)
-        if (playUrl && playUrl.includes('/storage/v1/object/public/music/') && !/[?&](token|signature)=/i.test(playUrl)) {
-          const hasQuery = playUrl.includes('?');
-          const hasApiKey = /[?&]apikey=/.test(playUrl);
-          if (!hasApiKey) {
-            playUrl = playUrl + (hasQuery ? '&' : '?') + `apikey=${encodeURIComponent(SUPABASE_ANON_KEY)}`;
-          }
+          console.log('[MusicStudio] Using signed_url:', { id: t.id, play_url: playUrl });
+        } else {
+          console.warn('[MusicStudio] No valid URL source:', { id: t.id, storage_path: t.storage_path, signed_url: t.signed_url });
         }
         const row = { ...t, play_url: playUrl } as typeof t & { play_url: string | null };
-        try { console.debug('[MusicStudio] track url', { id: row.id, storage_path: row.storage_path, signed_url: row.signed_url, play_url: row.play_url }); } catch (_) {}
         return row;
       }));
       setTracks(withUrls);
@@ -772,14 +766,26 @@ function EditorTab() {
               {t.play_url && (
                 <div className="space-y-3">
                   <AudioPlayer src={t.play_url} className="w-full" />
-                  <div className="flex justify-end">
+                  <div className="flex items-center gap-2 justify-end flex-wrap">
                     <a
                       href={t.play_url}
-                      download={`track-${t.id}.mp3`}
+                      download={`wakti-music-${t.id}.mp3`}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-accent transition-colors"
                     >
                       {language==='ar' ? 'تنزيل' : 'Download'}
                     </a>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText(t.play_url || '');
+                        toast.success(language==='ar' ? 'تم نسخ الرابط' : 'URL copied');
+                      }}
+                    >
+                      {language==='ar' ? 'نسخ الرابط' : 'Copy URL'}
+                    </Button>
                   </div>
                 </div>
               )}
