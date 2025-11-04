@@ -78,6 +78,13 @@ export function LoginForm({
         console.log("LoginForm: Login successful, user:", data.user.id);
         toast.success(language === 'en' ? 'Login Successful: Welcome back!' : 'تم تسجيل الدخول بنجاح: مرحبا بعودتك!');
         try { sessionStorage.setItem('wakti_recent_login', String(Date.now())); } catch {}
+        try {
+          const at = (data as any)?.session?.access_token;
+          const rt = (data as any)?.session?.refresh_token;
+          if (at && rt) {
+            await supabase.auth.setSession({ access_token: at, refresh_token: rt });
+          }
+        } catch {}
         if (!navDoneRef.current) {
           navDoneRef.current = true;
           navigate(redirectTo);
