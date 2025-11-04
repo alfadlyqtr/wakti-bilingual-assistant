@@ -16,6 +16,10 @@ interface AuthContextType {
   updateProfile: (updates: { full_name?: string; avatar_url?: string }) => Promise<{ error: any }>;
   updateEmail: (email: string) => Promise<{ error: any }>;
   updatePassword: (password: string) => Promise<{ error: any }>;
+  // Expose setters to allow manual context update when auth events don't fire
+  setUser: React.Dispatch<React.SetStateAction<User | null>>;
+  setSession: React.Dispatch<React.SetStateAction<Session | null>>;
+  setLoading: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 // SAFE default for when AuthProvider is not mounted (e.g., admin/public routes)
@@ -32,6 +36,9 @@ const defaultAuthContextValue: AuthContextType = {
   updateProfile: async () => ({ error: null }),
   updateEmail: async () => ({ error: null }),
   updatePassword: async () => ({ error: null }),
+  setUser: () => {},
+  setSession: () => {},
+  setLoading: () => {},
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -233,6 +240,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     updateProfile,
     updateEmail,
     updatePassword,
+    setUser,
+    setSession,
+    setLoading,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

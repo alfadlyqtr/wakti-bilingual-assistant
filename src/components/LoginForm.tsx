@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, Mail, Lock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
 interface LoginFormProps {
@@ -23,6 +24,7 @@ export function LoginForm({
 }: LoginFormProps) {
   const navigate = useNavigate();
   const { language } = useTheme();
+  const { setUser: setAuthUser, setSession: setAuthSession, setLoading: setAuthLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -62,8 +64,15 @@ export function LoginForm({
           const rt = (data as any)?.session?.refresh_token;
           if (at && rt) {
             await supabase.auth.setSession({ access_token: at, refresh_token: rt });
+            // Manually update AuthContext because onAuthStateChange is not firing in iOS WebView
+            console.log("LoginForm: Manually updating AuthContext.");
+            try { setAuthUser(data.user); } catch {}
+            try { setAuthSession((data as any)?.session ?? null); } catch {}
+            try { setAuthLoading(false); } catch {}
           }
-        } catch {}
+        } catch (err) {
+          console.error("LoginForm: Error during setSession or context update", err);
+        }
       }
     } catch (err) {
       console.error("LoginForm: Unexpected error during login:", err);
