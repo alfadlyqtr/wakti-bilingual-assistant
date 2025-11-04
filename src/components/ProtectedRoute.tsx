@@ -27,6 +27,9 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const sessionPollRef = useRef<number | null>(null);
   const sessionPollDeadlineRef = useRef<number>(0);
 
+  // TEMPORARY: disable subscription/IAP enforcement for preview unblock
+  const TEMP_DISABLE_SUBSCRIPTION_CHECKS = true;
+
   // StrictMode-safe guards and timers
   const retryTimerRef = useRef<number | null>(null);
   const inFlightRef = useRef(false);
@@ -101,6 +104,9 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   }, [isLoading, user, session, location.pathname]);
 
   useEffect(() => {
+    if (TEMP_DISABLE_SUBSCRIPTION_CHECKS) {
+      return;
+    }
     const checkSubscriptionStatus = async () => {
       if (inFlightRef.current) return; // prevent concurrent runs (StrictMode double effects)
       inFlightRef.current = true;
@@ -383,6 +389,12 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   if (!effectiveHasSession) {
     console.log("ProtectedRoute: No valid user/session, redirecting to login");
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // TEMPORARY: after auth, allow access immediately (skip subscription/IAP)
+  if (TEMP_DISABLE_SUBSCRIPTION_CHECKS) {
+    console.log("ProtectedRoute: TEMP DISABLE - allowing access after auth");
+    return <>{children}</>;
   }
 
   if (subscriptionStatus.isLoading) {
