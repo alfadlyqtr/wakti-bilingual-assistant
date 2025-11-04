@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useTheme } from '@/providers/ThemeProvider';
-import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { createPortal } from 'react-dom';
 import { AudioPlayer } from '@/components/music/AudioPlayer';
@@ -714,6 +714,15 @@ function EditorTab() {
         // Normalize to absolute URL to avoid SPA catch-all rewrites
         if (playUrl && !/^https?:\/\//i.test(playUrl)) {
           playUrl = `${SUPABASE_URL.replace(/\/$/, '')}${playUrl.startsWith('/') ? '' : '/'}${playUrl}`;
+        }
+        // Ensure apikey param for environments that enforce it on storage public endpoints
+        if (playUrl && playUrl.includes(SUPABASE_URL)) {
+          const hasQuery = playUrl.includes('?');
+          const hasApiKey = /[?&]apikey=/.test(playUrl);
+          const hasToken = /[?&](token|signature)=/.test(playUrl);
+          if (!hasApiKey && !hasToken) {
+            playUrl = playUrl + (hasQuery ? '&' : '?') + `apikey=${encodeURIComponent(SUPABASE_ANON_KEY)}`;
+          }
         }
         const row = { ...t, play_url: playUrl } as typeof t & { play_url: string | null };
         try { console.debug('[MusicStudio] track url', { id: row.id, storage_path: row.storage_path, signed_url: row.signed_url, play_url: row.play_url }); } catch (_) {}

@@ -60,6 +60,7 @@ const safeStorage = createSafeStorage();
 
 // Export the URL for use in other services
 export const SUPABASE_URL = effectiveUrl;
+export const SUPABASE_ANON_KEY = effectiveAnon;
 
 export const supabase = createClient<Database>(effectiveUrl, effectiveAnon, {
   auth: {
