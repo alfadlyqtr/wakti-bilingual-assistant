@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useTheme } from '@/providers/ThemeProvider';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { createPortal } from 'react-dom';
 import { AudioPlayer } from '@/components/music/AudioPlayer';
@@ -703,22 +703,21 @@ function EditorTab() {
       const withUrls = await Promise.all((data || []).map(async (t) => {
         let playUrl: string | null = null;
         if (t.storage_path) {
-          // Try signed URL first (handles private buckets)
-          try {
-            const signed = await supabase.storage.from('music').createSignedUrl(t.storage_path, 3600);
-            if (!signed.error && signed.data?.signedUrl) {
-              playUrl = signed.data.signedUrl;
-            }
-          } catch (_) { /* ignore and try public */ }
-          if (!playUrl) {
-            const { data: urlData } = supabase.storage.from('music').getPublicUrl(t.storage_path);
-            playUrl = urlData?.publicUrl || null;
-          }
+          // Bucket is public – construct a deterministic absolute URL to avoid SPA rewrites.
+          const base = SUPABASE_URL.replace(/\/$/, '');
+          const path = t.storage_path.startsWith('/') ? t.storage_path.slice(1) : t.storage_path;
+          playUrl = `${base}/storage/v1/object/public/music/${path}`;
         } else if (t.signed_url && /^https?:\/\//i.test(t.signed_url)) {
           // Fallback to signed_url only if it looks absolute
           playUrl = t.signed_url;
         }
-        return { ...t, play_url: playUrl };
+        // Normalize to absolute URL to avoid SPA catch-all rewrites
+        if (playUrl && !/^https?:\/\//i.test(playUrl)) {
+          playUrl = `${SUPABASE_URL.replace(/\/$/, '')}${playUrl.startsWith('/') ? '' : '/'}${playUrl}`;
+        }
+        const row = { ...t, play_url: playUrl } as typeof t & { play_url: string | null };
+        try { console.debug('[MusicStudio] track url', { id: row.id, storage_path: row.storage_path, signed_url: row.signed_url, play_url: row.play_url }); } catch (_) {}
+        return row;
       }));
       setTracks(withUrls);
     } catch (e) {
