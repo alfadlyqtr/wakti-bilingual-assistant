@@ -1,4 +1,3 @@
-// @ts-nocheck
 
 import { supabase } from "@/integrations/supabase/client";
 import { Maw3dEvent, Maw3dRsvp, CreateEventFormData } from "@/types/maw3d";

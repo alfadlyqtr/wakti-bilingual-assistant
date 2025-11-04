@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { supabase, ensurePassport, getCurrentUserId } from '@/integrations/supabase/client';
 
 export interface AIMessage {

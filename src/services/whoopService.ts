@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { supabase } from "@/integrations/supabase/client";
 
 const STATE_KEY = "whoop_oauth_state";

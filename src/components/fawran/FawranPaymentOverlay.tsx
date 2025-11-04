@@ -181,8 +181,8 @@ export function FawranPaymentOverlay({ userEmail, onClose }: FawranPaymentOverla
     }
   };
 
-  // Hide overlay when logged out
-  if (!user) return null;
+  // Hide overlay when logged out, or when already subscribed
+  if (!user || isActive) return null;
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
