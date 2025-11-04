@@ -9,6 +9,7 @@ import { GiftNotificationProvider } from "@/components/notifications/GiftNotific
 import { AppLayout } from "@/components/AppLayout";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { Analytics } from "@vercel/analytics/react";
+import AuthDebug from "@/components/debug/AuthDebug";
 
 
 // Import all your existing components
@@ -80,6 +81,7 @@ function App() {
           <AuthProvider>
             <BrowserRouter>
               <div className="min-h-screen bg-background font-sans antialiased">
+              <AuthDebug />
               <Routes>
                 {/* Admin routes */}
                 <Route path="/mqtr" element={<AdminLogin />} />
