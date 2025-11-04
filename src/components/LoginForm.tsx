@@ -1,5 +1,5 @@
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -28,29 +28,8 @@ export function LoginForm({
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const navDoneRef = useRef(false);
 
-  useEffect(() => {
-    let mounted = true;
-    const sub = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
-      if (event === 'SIGNED_IN' && session && !navDoneRef.current) {
-        navDoneRef.current = true;
-        navigate(redirectTo);
-      }
-    });
-    // Fallback: if a session already exists (slow event in WKWebView), navigate
-    supabase.auth.getSession().then(({ data }) => {
-      if (!navDoneRef.current && data?.session) {
-        navDoneRef.current = true;
-        navigate(redirectTo);
-      }
-    });
-    return () => {
-      mounted = false;
-      try { sub.data.subscription.unsubscribe(); } catch {}
-    };
-  }, [navigate, redirectTo]);
+  // Navigation is now state-driven by the router/AuthContext. No side-effects here.
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,10 +64,6 @@ export function LoginForm({
             await supabase.auth.setSession({ access_token: at, refresh_token: rt });
           }
         } catch {}
-        if (!navDoneRef.current) {
-          navDoneRef.current = true;
-          navigate(redirectTo);
-        }
       }
     } catch (err) {
       console.error("LoginForm: Unexpected error during login:", err);
