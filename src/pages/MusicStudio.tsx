@@ -699,14 +699,23 @@ function EditorTab() {
         .limit(50);
 
       if (error) throw error;
-      // Always derive a playable URL from storage_path. Prefer a signed URL to work with private buckets.
+      // Always derive a playable URL from storage_path. Prefer a signed URL to work consistently.
       const withUrls = await Promise.all((data || []).map(async (t) => {
         let playUrl: string | null = null;
         if (t.storage_path) {
-          // Bucket is public – construct a deterministic absolute URL to avoid SPA rewrites.
-          const base = SUPABASE_URL.replace(/\/$/, '');
-          const path = t.storage_path.startsWith('/') ? t.storage_path.slice(1) : t.storage_path;
-          playUrl = `${base}/storage/v1/object/public/music/${path}`;
+          // First try signed URL (works even if bucket policy changes)
+          try {
+            const signed = await supabase.storage.from('music').createSignedUrl(t.storage_path, 3600);
+            if (!signed.error && signed.data?.signedUrl) {
+              playUrl = signed.data.signedUrl;
+            }
+          } catch (_) { /* ignore */ }
+          // Fallback to deterministic public URL if signing fails
+          if (!playUrl) {
+            const base = SUPABASE_URL.replace(/\/$/, '');
+            const path = t.storage_path.startsWith('/') ? t.storage_path.slice(1) : t.storage_path;
+            playUrl = `${base}/storage/v1/object/public/music/${path}`;
+          }
         } else if (t.signed_url && /^https?:\/\//i.test(t.signed_url)) {
           // Fallback to signed_url only if it looks absolute
           playUrl = t.signed_url;
@@ -715,12 +724,11 @@ function EditorTab() {
         if (playUrl && !/^https?:\/\//i.test(playUrl)) {
           playUrl = `${SUPABASE_URL.replace(/\/$/, '')}${playUrl.startsWith('/') ? '' : '/'}${playUrl}`;
         }
-        // Ensure apikey param for environments that enforce it on storage public endpoints
-        if (playUrl && playUrl.includes(SUPABASE_URL)) {
+        // Ensure apikey only for deterministic public URLs (not for signed URLs)
+        if (playUrl && playUrl.includes('/storage/v1/object/public/music/') && !/[?&](token|signature)=/i.test(playUrl)) {
           const hasQuery = playUrl.includes('?');
           const hasApiKey = /[?&]apikey=/.test(playUrl);
-          const hasToken = /[?&](token|signature)=/.test(playUrl);
-          if (!hasApiKey && !hasToken) {
+          if (!hasApiKey) {
             playUrl = playUrl + (hasQuery ? '&' : '?') + `apikey=${encodeURIComponent(SUPABASE_ANON_KEY)}`;
           }
         }
