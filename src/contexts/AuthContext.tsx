@@ -52,63 +52,55 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set loading to true.
-    setLoading(true);
     let subscription: { unsubscribe: () => void } | undefined;
+    let loadingTimer: number;
 
+    // Force loading=false after 2s if getSession() hangs
+    loadingTimer = window.setTimeout(() => {
+      console.log('AuthContext: Forcing loading state to false after timeout.');
+      setLoading(false);
+    }, 2000);
+
+    // 1) Try to get initial session (but don't rely on it)
     try {
-      // 1. Try to get the initial session
       supabase.auth.getSession()
         .then(({ data: { session } }) => {
+          console.log('AuthContext: getSession() succeeded.');
+          window.clearTimeout(loadingTimer);
           setSession(session);
           setUser(session?.user ?? null);
-          setLoading(false); // Set loading false on success
+          setLoading(false);
         })
         .catch((error) => {
-          console.error("Error in getSession promise:", error);
-          setLoading(false); // Set loading false on promise rejection
+          console.error('AuthContext: getSession() promise failed:', error);
+          window.clearTimeout(loadingTimer);
+          setLoading(false);
         });
     } catch (error) {
-      console.error("CRITICAL: getSession() threw synchronous error:", error);
-      setLoading(false); // Set loading false on synchronous error
+      console.error('AuthContext: getSession() threw synchronous error:', error);
+      window.clearTimeout(loadingTimer);
+      setLoading(false);
     }
-    
-    // 2. Subscribe to auth changes
-    // This is separated so that even if getSession() fails,
-    // the listener is still attached.
+
+    // 2) Always subscribe to auth changes
     try {
-      const { data } = supabase.auth.onAuthStateChange(
-        (event, session) => {
-          console.log('Auth state changed:', event, session?.user?.id);
-          
-          // We must set all 3 states here.
-          setSession(session);
-          setUser(session?.user ?? null);
-          setLoading(false); // This is the key. Set loading to false on any auth event.
-
-          if (event === 'SIGNED_IN' && session?.user) {
-            console.log('User signed in, initializing services...');
-          }
-
-          if (event === 'SIGNED_OUT') {
-            console.log('User signed out, cleaning up...');
-            setUser(null);
-            setSession(null);
-          }
-
-          if (event === 'TOKEN_REFRESHED') {
-            console.log('Token refreshed for user:', session?.user?.id);
-          }
-        }
-      );
+      const { data } = supabase.auth.onAuthStateChange((event, session) => {
+        console.log('AuthContext: onAuthStateChange event fired:', event);
+        window.clearTimeout(loadingTimer);
+        setSession(session);
+        setUser(session?.user ?? null);
+        setLoading(false);
+      });
       subscription = data.subscription;
-
     } catch (error) {
-      console.error("CRITICAL: Failed to subscribe to onAuthStateChange", error);
+      console.error('CRITICAL: Failed to subscribe to onAuthStateChange', error);
+      window.clearTimeout(loadingTimer);
+      setLoading(false);
     }
 
-    // 3. Cleanup
+    // 3) Cleanup
     return () => {
+      try { window.clearTimeout(loadingTimer); } catch {}
       try { subscription?.unsubscribe(); } catch {}
     };
   }, []);
