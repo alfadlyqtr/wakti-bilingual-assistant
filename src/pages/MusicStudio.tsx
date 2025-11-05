@@ -8,7 +8,7 @@ import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/integrations/supaba
 import { toast } from 'sonner';
 import { createPortal } from 'react-dom';
 import { AudioPlayer } from '@/components/music/AudioPlayer';
-import { Info, Wand2 } from 'lucide-react';
+import { Info, Wand2, Trash2 } from 'lucide-react';
 
 // Helper function to download audio files on mobile
 const handleDownload = async (url: string, filename: string) => {
@@ -238,30 +238,62 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
   const handleGenerate = async () => {
     if (overLimit) return;
     setSubmitting(true);
+    let placeholderRecordId: string | null = null;
+    
     try {
       // Check song count quota (5 songs per month)
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
       
-      const startOfMonth = new Date();
-      startOfMonth.setDate(1);
-      startOfMonth.setHours(0, 0, 0, 0);
+      const now = new Date();
+      const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
       
-      const { count, error: countError } = await (supabase as any)
+      // Fetch actual data instead of using count with head:true
+      const { data: existingTracks, error: countError } = await (supabase as any)
         .from('user_music_tracks')
-        .select('*', { count: 'exact', head: true })
+        .select('id')
         .eq('user_id', user.id)
         .gte('created_at', startOfMonth.toISOString());
       
       if (countError) throw countError;
       
-      const songsThisMonth = count || 0;
-      const songsRemainingLocal = 5 - songsThisMonth;
+      const songsThisMonth = existingTracks?.length || 0;
       
       if (songsThisMonth >= 5) {
         toast.error(language==='ar' ? 'لقد وصلت إلى الحد الأقصى 5 أغاني شهريا' : 'Monthly limit reached: 5 songs per month');
         return;
       }
+      
+      // INSERT PLACEHOLDER RECORD FIRST - This ensures the generation counts toward limit
+      // even if something fails later (network, storage, etc.)
+      const placeholderFileName = `${user.id}/${Date.now()}_pending.mp3`;
+      const { data: placeholderData, error: placeholderError } = await (supabase as any)
+        .from('user_music_tracks')
+        .insert({
+          user_id: user.id,
+          prompt: prompt,
+          include_styles: includeTags.length ? includeTags : null,
+          requested_duration_seconds: Math.min(120, duration),
+          provider: 'runware',
+          model: 'elevenlabs:1@1',
+          storage_path: placeholderFileName,
+          signed_url: null, // Will update after successful generation
+          mime: 'audio/mpeg',
+          meta: {
+            status: 'generating',
+            ...(instrumentTags.length ? { instruments: instrumentTags } : {}),
+            ...(moodTags.length ? { mood: moodTags } : {})
+          } as any
+        })
+        .select('id')
+        .single();
+      
+      if (placeholderError) throw placeholderError;
+      placeholderRecordId = placeholderData?.id;
+      
+      // Update UI counter immediately
+      setSongsUsed((v) => v + 1);
+      setSongsRemaining((v) => Math.max(0, v - 1));
       
       // Full prompt already contains styles wording (Option A)
       const fullPrompt = prompt;
@@ -297,7 +329,7 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
       const foundUrl = audioData?.audioURL || audioData?.audioDataURI || audioData?.dataURI;
       if (!foundUrl) throw new Error('No audio returned from Runware');
       
-      // Upload to Supabase Storage, then insert DB row
+      // Upload to Supabase Storage, then UPDATE the placeholder record
       let storedUrl = foundUrl as string;
       try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -313,30 +345,42 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
         const { data: urlData } = supabase.storage.from('music').getPublicUrl(fileName);
         storedUrl = urlData.publicUrl;
         
-        const ins = await (supabase as any).from('user_music_tracks').insert({
-          user_id: user.id,
-          prompt: prompt,
-          include_styles: includeTags.length ? includeTags : null,
-          requested_duration_seconds: Math.min(120, duration),
-          provider: 'runware',
-          model: 'elevenlabs:1@1',
-          storage_path: fileName,
-          mime: mime,
-          meta: {
-            ...(audioData?.cost ? { cost_usd: audioData.cost } : {}),
-            ...(instrumentTags.length ? { instruments: instrumentTags } : {}),
-            ...(moodTags.length ? { mood: moodTags } : {})
-          } as any
-        });
-        if (ins.error) throw ins.error;
-        // Reflect saved state and counters
+        // UPDATE the placeholder record with actual data
+        if (placeholderRecordId) {
+          const { error: updateError } = await (supabase as any)
+            .from('user_music_tracks')
+            .update({
+              storage_path: fileName,
+              signed_url: storedUrl,
+              mime: mime,
+              meta: {
+                status: 'completed',
+                ...(audioData?.cost ? { cost_usd: audioData.cost } : {}),
+                ...(instrumentTags.length ? { instruments: instrumentTags } : {}),
+                ...(moodTags.length ? { mood: moodTags } : {})
+              } as any
+            })
+            .eq('id', placeholderRecordId);
+          
+          if (updateError) throw updateError;
+        }
+        
+        // Reflect saved state (counter already updated above)
         setAudios((prev) => [{ url: storedUrl, mime, meta: {}, createdAt: Date.now(), saved: true }, ...prev]);
-        setSongsUsed((v)=>v+1);
-        setSongsRemaining((v)=>Math.max(0, v-1));
         onSaved?.();
       } catch (saveError) {
         console.error('Storage/DB save error:', saveError);
-        // Fallback: still show playable result but allow manual Save
+        // Even if save fails, the placeholder record exists and counts toward limit
+        // Mark as failed in DB
+        if (placeholderRecordId) {
+          await (supabase as any)
+            .from('user_music_tracks')
+            .update({
+              meta: { status: 'failed', error: String(saveError) } as any
+            })
+            .eq('id', placeholderRecordId);
+        }
+        // Still show playable result
         setAudios((prev) => [{ url: storedUrl, mime: 'audio/mpeg', meta: {}, createdAt: Date.now(), saved: false }, ...prev]);
       }
 
@@ -347,6 +391,19 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
       const msg = e?.message || String(e);
       console.error('Music generate error:', e);
       setLastError(msg);
+      
+      // Mark placeholder as failed if it exists
+      // Keep the record so it counts toward monthly limit (user consumed an API attempt)
+      if (placeholderRecordId) {
+        await (supabase as any)
+          .from('user_music_tracks')
+          .update({
+            meta: { status: 'failed', error: msg } as any
+          })
+          .eq('id', placeholderRecordId)
+          .catch((err: any) => console.error('Failed to update placeholder:', err));
+      }
+      
       toast.error((language==='ar' ? 'فشل العملية: ' : 'Operation failed: ') + msg);
     } finally {
       setSubmitting(false);
@@ -358,19 +415,30 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
     (async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-        const startOfMonth = new Date();
-        startOfMonth.setDate(1);
-        startOfMonth.setHours(0, 0, 0, 0);
-        const { count } = await (supabase as any)
+        if (!user) {
+          console.log('[MusicStudio] No user found');
+          return;
+        }
+        console.log('[MusicStudio] User ID:', user.id);
+        const now = new Date();
+        const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
+        console.log('[MusicStudio] Start of month (UTC):', startOfMonth.toISOString());
+        
+        // Fetch actual data instead of using count with head:true
+        const { data, error } = await (supabase as any)
           .from('user_music_tracks')
-          .select('*', { count: 'exact', head: true })
+          .select('id')
           .eq('user_id', user.id)
           .gte('created_at', startOfMonth.toISOString());
-        const used = count || 0;
+        
+        console.log('[MusicStudio] Query result:', { dataLength: data?.length, error });
+        const used = data?.length || 0;
+        console.log('[MusicStudio] Setting songs used:', used);
         setSongsUsed(used);
         setSongsRemaining(Math.max(0, 5 - used));
-      } catch (_) {}
+      } catch (e) {
+        console.error('[MusicStudio] Error loading usage:', e);
+      }
     })();
   }, []);
 
@@ -774,6 +842,42 @@ function EditorTab() {
 
   useEffect(() => { load(); }, []);
 
+  const handleDelete = async (trackId: string, storagePath: string | null) => {
+    const confirmMsg = language === 'ar' 
+      ? 'هل أنت متأكد من حذف هذا المقطع؟' 
+      : 'Are you sure you want to delete this track?';
+    
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      // Delete from database
+      const { error: dbError } = await (supabase as any)
+        .from('user_music_tracks')
+        .delete()
+        .eq('id', trackId);
+
+      if (dbError) throw dbError;
+
+      // Delete from storage if storage_path exists
+      if (storagePath) {
+        const { error: storageError } = await supabase.storage
+          .from('music')
+          .remove([storagePath]);
+        
+        if (storageError) {
+          console.warn('Storage deletion failed:', storageError);
+          // Don't throw - DB deletion succeeded
+        }
+      }
+
+      // Update UI
+      setTracks(prev => prev.filter(t => t.id !== trackId));
+      toast.success(language === 'ar' ? 'تم الحذف بنجاح' : 'Deleted successfully');
+    } catch (e: any) {
+      toast.error((language === 'ar' ? 'فشل الحذف: ' : 'Delete failed: ') + (e?.message || String(e)));
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -817,6 +921,14 @@ function EditorTab() {
                       }}
                     >
                       {language==='ar' ? 'نسخ الرابط' : 'Copy URL'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDelete(t.id, t.storage_path)}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20"
+                    >
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
