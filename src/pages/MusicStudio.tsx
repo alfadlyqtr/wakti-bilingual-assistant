@@ -13,19 +13,42 @@ import { Info, Wand2 } from 'lucide-react';
 // Helper function to download audio files on mobile
 const handleDownload = async (url: string, filename: string) => {
   try {
+    // Detect iOS
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    
     const response = await fetch(url);
     const blob = await response.blob();
+    
+    // On iOS, use Share API if available for better UX
+    if (isIOS && navigator.share && navigator.canShare) {
+      const file = new File([blob], filename, { type: 'audio/mpeg' });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'Wakti Music',
+          text: 'Download your music'
+        });
+        return;
+      }
+    }
+    
+    // Fallback: Standard download approach
     const objectUrl = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = objectUrl;
     link.download = filename;
+    link.style.display = 'none';
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(objectUrl);
+    
+    // Cleanup after a short delay
+    setTimeout(() => {
+      document.body.removeChild(link);
+      URL.revokeObjectURL(objectUrl);
+    }, 100);
   } catch (error) {
     console.error('Download failed:', error);
-    // Fallback to opening in new tab
+    // Last resort: open in new tab
     window.open(url, '_blank');
   }
 };
