@@ -10,12 +10,32 @@ import { createPortal } from 'react-dom';
 import { AudioPlayer } from '@/components/music/AudioPlayer';
 import { Info, Wand2 } from 'lucide-react';
 
+// Helper function to download audio files on mobile
+const handleDownload = async (url: string, filename: string) => {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(objectUrl);
+  } catch (error) {
+    console.error('Download failed:', error);
+    // Fallback to opening in new tab
+    window.open(url, '_blank');
+  }
+};
+
 export default function MusicStudio() {
   const { language } = useTheme();
   const [activeTab, setActiveTab] = useState<'compose' | 'editor'>('compose');
 
   return (
-    <div className="w-full max-w-6xl mx-auto p-4 md:p-6 space-y-4">
+    <div className="w-full max-w-6xl mx-auto p-3 md:p-6 pb-20 md:pb-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl md:text-2xl font-bold">{language === 'ar' ? 'استوديو الموسيقى' : 'Music Studio'}</h1>
         <div />
@@ -610,18 +630,16 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
             </div>
 
             {audios.map((a, idx) => (
-              <div key={a.createdAt + '-' + idx} className="space-y-3 p-3 rounded-lg border bg-card">
+              <div key={a.createdAt + '-' + idx} className="space-y-3 p-3 md:p-4 rounded-lg border bg-card">
                 <AudioPlayer src={a.url} className="w-full" />
                 <div className="flex items-center gap-2 justify-end flex-wrap">
-                  <a
-                    href={a.url}
-                    download={`wakti-music-${a.createdAt}.mp3`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-accent transition-colors"
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onPointerUp={() => handleDownload(a.url, `wakti-music-${a.createdAt}.mp3`)}
                   >
                     {language==='ar' ? 'تنزيل' : 'Download'}
-                  </a>
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
@@ -752,9 +770,9 @@ function EditorTab() {
           <p className="text-sm text-muted-foreground">{language==='ar' ? 'لا توجد عناصر محفوظة بعد.' : 'No saved items yet.'}</p>
         </Card>
       ) : (
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="space-y-4 md:grid md:grid-cols-2 md:gap-4 md:space-y-0">
           {tracks.map((t) => (
-            <Card key={t.id} className="p-4 md:p-5 space-y-2">
+            <Card key={t.id} className="p-3 md:p-5 space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-xs text-muted-foreground">{new Date(t.created_at).toLocaleString()}</div>
                 <div className="text-xs text-muted-foreground">{t.requested_duration_seconds ? `${t.requested_duration_seconds}s` : ''}</div>
@@ -767,15 +785,13 @@ function EditorTab() {
                 <div className="space-y-3">
                   <AudioPlayer src={t.play_url} className="w-full" />
                   <div className="flex items-center gap-2 justify-end flex-wrap">
-                    <a
-                      href={t.play_url}
-                      download={`wakti-music-${t.id}.mp3`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-accent transition-colors"
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onPointerUp={() => handleDownload(t.play_url || '', `wakti-music-${t.id}.mp3`)}
                     >
                       {language==='ar' ? 'تنزيل' : 'Download'}
-                    </a>
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
