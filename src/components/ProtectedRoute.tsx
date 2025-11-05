@@ -13,7 +13,7 @@ interface ProtectedRouteProps {
 const CACHE_TTL_MS = 30 * 60 * 1000;
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, session, isLoading } = useAuth();
+  const { user, session, isLoading, lastLoginTimestamp } = useAuth();
   const location = useLocation();
   const [subscriptionStatus, setSubscriptionStatus] = useState<{
     isSubscribed: boolean;
@@ -354,12 +354,32 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   }, [user?.id, isLoading]);
 
   let effectiveHasSession = hasAnySession;
-  try {
-    const ts = Number(sessionStorage.getItem('wakti_recent_login') || '0');
-    if (!Number.isNaN(ts) && Date.now() - ts < 10000) {
-      effectiveHasSession = true;
-    }
-  } catch {}
+  
+  // Check multiple sources for recent login (in order of reliability)
+  // 1. AuthContext state (most reliable)
+  if (lastLoginTimestamp && Date.now() - lastLoginTimestamp < 10000) {
+    effectiveHasSession = true;
+  }
+  
+  // 2. localStorage (persists across sessions)
+  if (!effectiveHasSession) {
+    try {
+      const ts = Number(localStorage.getItem('wakti_recent_login') || '0');
+      if (!Number.isNaN(ts) && Date.now() - ts < 10000) {
+        effectiveHasSession = true;
+      }
+    } catch {}
+  }
+  
+  // 3. sessionStorage (fallback)
+  if (!effectiveHasSession) {
+    try {
+      const ts = Number(sessionStorage.getItem('wakti_recent_login') || '0');
+      if (!Number.isNaN(ts) && Date.now() - ts < 10000) {
+        effectiveHasSession = true;
+      }
+    } catch {}
+  }
 
   if (!effectiveHasSession && isLoading) {
     console.log("ProtectedRoute: Still loading - rendering children with auth banner");

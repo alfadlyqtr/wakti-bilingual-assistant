@@ -24,7 +24,7 @@ export function LoginForm({
 }: LoginFormProps) {
   const navigate = useNavigate();
   const { language } = useTheme();
-  const { setUser: setAuthUser, setSession: setAuthSession, setLoading: setAuthLoading } = useAuth();
+  const { setUser: setAuthUser, setSession: setAuthSession, setLoading: setAuthLoading, setLastLoginTimestamp } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -58,7 +58,10 @@ export function LoginForm({
       } else if (data?.user) {
         console.log("LoginForm: Login successful, user:", data.user.id);
         toast.success(language === 'en' ? 'Login Successful: Welcome back!' : 'تم تسجيل الدخول بنجاح: مرحبا بعودتك!');
-        try { sessionStorage.setItem('wakti_recent_login', String(Date.now())); } catch {}
+        const loginTimestamp = Date.now();
+        // Store in both localStorage and sessionStorage for maximum compatibility
+        try { localStorage.setItem('wakti_recent_login', String(loginTimestamp)); } catch {}
+        try { sessionStorage.setItem('wakti_recent_login', String(loginTimestamp)); } catch {}
         try {
           const at = (data as any)?.session?.access_token;
           const rt = (data as any)?.session?.refresh_token;
@@ -74,6 +77,7 @@ export function LoginForm({
             try { setAuthUser(data.user); } catch {}
             try { setAuthSession((data as any)?.session ?? null); } catch {}
             try { setAuthLoading(false); } catch {}
+            try { setLastLoginTimestamp(loginTimestamp); } catch {}
             
             // === DELAYED NAVIGATION ===
             // Small delay to let React finish state update before ProtectedRoute checks

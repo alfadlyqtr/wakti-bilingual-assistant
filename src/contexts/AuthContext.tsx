@@ -8,6 +8,7 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   isLoading: boolean; // Alias for loading
+  lastLoginTimestamp: number | null; // Timestamp of last successful login
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
@@ -20,6 +21,7 @@ interface AuthContextType {
   setUser: React.Dispatch<React.SetStateAction<User | null>>;
   setSession: React.Dispatch<React.SetStateAction<Session | null>>;
   setLoading: React.Dispatch<React.SetStateAction<boolean>>;
+  setLastLoginTimestamp: React.Dispatch<React.SetStateAction<number | null>>;
 }
 
 // SAFE default for when AuthProvider is not mounted (e.g., admin/public routes)
@@ -28,6 +30,7 @@ const defaultAuthContextValue: AuthContextType = {
   session: null,
   loading: false,
   isLoading: false,
+  lastLoginTimestamp: null,
   signIn: async () => ({ error: null }),
   signUp: async () => ({ error: null }),
   signOut: async () => {},
@@ -39,6 +42,7 @@ const defaultAuthContextValue: AuthContextType = {
   setUser: () => {},
   setSession: () => {},
   setLoading: () => {},
+  setLastLoginTimestamp: () => {},
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -57,6 +61,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [lastLoginTimestamp, setLastLoginTimestamp] = useState<number | null>(null);
 
   useEffect(() => {
     let subscription: { unsubscribe: () => void } | undefined;
@@ -244,6 +249,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     session,
     loading,
     isLoading: loading, // Alias for loading
+    lastLoginTimestamp,
     signIn,
     signUp,
     signOut,
@@ -255,6 +261,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setUser,
     setSession,
     setLoading,
+    setLastLoginTimestamp,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
