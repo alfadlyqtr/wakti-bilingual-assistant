@@ -10,7 +10,7 @@ interface AudioPlayerProps {
 
 export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
   const { language } = useTheme();
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -18,47 +18,22 @@ export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
+    if (!src) {
+      setError(language === 'ar' ? 'لا يوجد ملف صوتي' : 'No audio URL');
+      return;
+    }
 
-    // Reset states when src changes
-    setError(null);
-    setIsLoading(true);
-    setIsPlaying(false);
-    setCurrentTime(0);
-    setDuration(0);
+    // Create audio element directly (same as Tasjeel)
+    const audio = new Audio(src);
+    audioRef.current = audio;
 
-    // Force load the audio
-    audio.load();
-    
-    // iOS Safari hack: Try to play/pause immediately to wake up audio system
-    // This doesn't actually play audio but forces Safari to load the file
-    const wakeUpAudio = async () => {
-      try {
-        audio.muted = true;
-        const playPromise = audio.play();
-        if (playPromise) {
-          await playPromise;
-          audio.pause();
-          audio.currentTime = 0;
-          audio.muted = false;
-        }
-      } catch (e) {
-        // Ignore errors from this hack
-        audio.muted = false;
-      }
-    };
-    wakeUpAudio();
-
-    const handleLoadedMetadata = () => {
-      console.log('[AudioPlayer] Loaded metadata:', { src, duration: audio.duration });
-      setDuration(audio.duration);
-      setIsLoading(false);
-      setError(null);
+    // Set up event listeners
+    const handlePlay = () => {
+      setIsPlaying(true);
     };
 
-    const handleTimeUpdate = () => {
-      setCurrentTime(audio.currentTime);
+    const handlePause = () => {
+      setIsPlaying(false);
     };
 
     const handleEnded = () => {
@@ -66,112 +41,55 @@ export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
       setCurrentTime(0);
     };
 
-    const handleCanPlay = () => {
-      console.log('[AudioPlayer] Can play:', src);
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+    };
+
+    const handleLoadedMetadata = () => {
+      setDuration(audio.duration);
       setIsLoading(false);
       setError(null);
     };
 
-    const handlePlaying = () => {
-      console.log('[AudioPlayer] Playing event');
-      setIsPlaying(true);
-    };
-
-    const handlePause = () => {
-      console.log('[AudioPlayer] Pause event');
-      setIsPlaying(false);
-    };
-
-    const handleStalled = () => {
-      console.warn('[AudioPlayer] Stalled:', src);
-    };
-
-    const handleWaiting = () => {
-      console.log('[AudioPlayer] Waiting for data...');
-    };
-
-    const handleError = (e: ErrorEvent | Event) => {
-      console.error('[AudioPlayer] Load error:', { src, error: e, audioError: audio.error });
+    const handleError = () => {
+      console.error('[AudioPlayer] Error loading audio:', src);
       setIsLoading(false);
       setIsPlaying(false);
-      const errorMsg = language === 'ar' 
-        ? 'فشل تحميل الملف الصوتي' 
-        : 'Failed to load audio file';
-      setError(errorMsg);
+      setError(language === 'ar' ? 'فشل تحميل الملف الصوتي' : 'Failed to load audio');
     };
 
-    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-    audio.addEventListener('timeupdate', handleTimeUpdate);
-    audio.addEventListener('ended', handleEnded);
-    audio.addEventListener('canplay', handleCanPlay);
-    audio.addEventListener('playing', handlePlaying);
+    audio.addEventListener('play', handlePlay);
     audio.addEventListener('pause', handlePause);
-    audio.addEventListener('stalled', handleStalled);
-    audio.addEventListener('waiting', handleWaiting);
+    audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('error', handleError);
 
+    // Load the audio
+    audio.load();
+
+    // Cleanup
     return () => {
-      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('timeupdate', handleTimeUpdate);
-      audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('canplay', handleCanPlay);
-      audio.removeEventListener('playing', handlePlaying);
+      audio.pause();
+      audio.removeEventListener('play', handlePlay);
       audio.removeEventListener('pause', handlePause);
-      audio.removeEventListener('stalled', handleStalled);
-      audio.removeEventListener('waiting', handleWaiting);
+      audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('error', handleError);
     };
   }, [src, language]);
 
-  const togglePlay = async () => {
-    const audio = audioRef.current;
-    if (!audio) return;
+  const togglePlay = () => {
+    if (!audioRef.current) return;
 
-    try {
-      if (isPlaying) {
-        console.log('[AudioPlayer] Pausing audio');
-        audio.pause();
-        setIsPlaying(false);
-      } else {
-        console.log('[AudioPlayer] Attempting to play:', { 
-          src, 
-          readyState: audio.readyState, 
-          networkState: audio.networkState,
-          paused: audio.paused,
-          currentSrc: audio.currentSrc
-        });
-        
-        // If audio hasn't loaded yet, try to load it first
-        if (audio.readyState < 2) {
-          console.log('[AudioPlayer] Audio not ready, loading...');
-          audio.load();
-          // Wait a bit for load to start
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-        
-        const playPromise = audio.play();
-        if (playPromise !== undefined) {
-          await playPromise;
-          console.log('[AudioPlayer] Play successful');
-          setIsPlaying(true);
-        }
-      }
-    } catch (error: any) {
-      console.error('[AudioPlayer] Playback error:', error);
-      setIsPlaying(false);
-      
-      // More specific error messages
-      let errorMsg = language === 'ar' ? 'فشل تشغيل الصوت' : 'Failed to play audio';
-      if (error.name === 'NotAllowedError') {
-        errorMsg = language === 'ar' 
-          ? 'يرجى التفاعل مع الصفحة أولاً' 
-          : 'Please interact with the page first';
-      } else if (error.name === 'NotSupportedError') {
-        errorMsg = language === 'ar' 
-          ? 'تنسيق الصوت غير مدعوم' 
-          : 'Audio format not supported';
-      }
-      setError(errorMsg);
+    if (isPlaying) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play().catch(err => {
+        console.error('[AudioPlayer] Play error:', err);
+        setError(language === 'ar' ? 'فشل تشغيل الصوت' : 'Failed to play audio');
+      });
     }
   };
 
@@ -202,8 +120,6 @@ export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
 
   return (
     <div className={`flex items-center gap-3 ${className}`}>
-      <audio ref={audioRef} src={src} preload="auto" crossOrigin="anonymous" />
-      
       {error ? (
         <div className="flex-1 flex items-center gap-2 text-sm text-red-600 bg-red-50 dark:bg-red-950/20 px-3 py-2 rounded-md">
           <span>⚠️</span>
