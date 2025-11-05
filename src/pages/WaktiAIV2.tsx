@@ -34,6 +34,8 @@ const WaktiAIV2 = () => {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const visionInFlightRef = useRef<boolean>(false);
+  const lastTriggerRef = useRef<string>('chat');
+  const safetyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { language } = useTheme();
   const { showError } = useToastHelper();
   const { isDesktop } = useIsDesktop();
@@ -182,14 +184,30 @@ const WaktiAIV2 = () => {
       visionInFlightRef.current = true;
     }
     setIsLoading(true);
-    // For non-vision requests, abort any previous in-flight request; for vision we rely on the lock above
+    
+    // OPTION B FIX: Only abort if sending another message in the SAME mode
+    // This prevents aborting completed image requests when switching to chat mode
     if (trigger !== 'vision') {
-      if (abortControllerRef.current) {
+      if (abortControllerRef.current && lastTriggerRef.current === trigger) {
+        console.log(`🛑 Aborting previous ${trigger} request (same mode)`);
         abortControllerRef.current.abort();
       }
     }
     const controller = new AbortController();
     abortControllerRef.current = controller;
+    lastTriggerRef.current = trigger;
+    
+    // OPTION C FIX: Safety timeout to prevent stuck loading state on mobile
+    // Clear any existing timeout first
+    if (safetyTimeoutRef.current) {
+      clearTimeout(safetyTimeoutRef.current);
+    }
+    safetyTimeoutRef.current = setTimeout(() => {
+      if (isLoading) {
+        console.warn('⏱️ SAFETY TIMEOUT: Forcing isLoading=false after 10s (mobile network issue?)');
+        setIsLoading(false);
+      }
+    }, 10000);
 
     let convId = currentConversationId;
     if (!convId) {
@@ -400,6 +418,13 @@ const WaktiAIV2 = () => {
       });
     } finally {
       setIsLoading(false);
+      
+      // Clear safety timeout since request completed
+      if (safetyTimeoutRef.current) {
+        clearTimeout(safetyTimeoutRef.current);
+        safetyTimeoutRef.current = null;
+      }
+      
       if (abortControllerRef.current === controller) {
         abortControllerRef.current = null;
       }

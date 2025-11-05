@@ -310,12 +310,66 @@ export function ConversationsList({
               <div className="text-xs font-medium text-muted-foreground mb-1">{language === 'ar' ? 'المحادثات المحفوظة سحابيًا' : 'Saved to Cloud'}</div>
               <div className="space-y-1">
                 {cloudConvos.map((c) => (
-                  <div key={c.id} className="flex items-center justify-between p-2 rounded-md border gap-2">
-                    <div className="min-w-0 flex-1">
+                  <div key={c.id} className="flex items-center justify-between p-2 rounded-md border gap-2 hover:bg-accent/50 cursor-pointer transition-colors">
+                    <div 
+                      className="min-w-0 flex-1"
+                      onClick={async () => {
+                        try {
+                          console.log('☁️ Loading cloud conversation:', c.id);
+                          const loaded = await SavedConversationsService.loadSavedConversation(c.id);
+                          if (loaded && loaded.messages && Array.isArray(loaded.messages)) {
+                            console.log('✅ Cloud conversation loaded:', loaded.messages.length, 'messages');
+                            
+                            // Save current conversation before switching
+                            if (currentConversationId && sessionMessages.length > 0) {
+                              const { EnhancedFrontendMemory } = await import('@/services/EnhancedFrontendMemory');
+                              EnhancedFrontendMemory.archiveCurrentConversation(sessionMessages, currentConversationId);
+                            }
+                            
+                            // Convert cloud messages to proper format with Date objects
+                            const convertedMessages = loaded.messages.map((msg: any) => ({
+                              ...msg,
+                              timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
+                            }));
+                            
+                            // Create a new local conversation ID for this cloud conversation
+                            const { EnhancedFrontendMemory } = await import('@/services/EnhancedFrontendMemory');
+                            const localConvId = `cloud-${c.id}`;
+                            
+                            // IMPORTANT: Archive it first so handleSelectConversation can find it
+                            EnhancedFrontendMemory.archiveCurrentConversation(convertedMessages, localConvId);
+                            
+                            // Now use the existing handler to load it (it will find it in archived conversations)
+                            onSelectConversation(localConvId);
+                            
+                            // Close the drawer after selection
+                            onClose?.();
+                            
+                            toast({
+                              title: language === 'ar' ? 'تم التحميل ✓' : 'Loaded ✓',
+                              description: language === 'ar' ? `تم تحميل ${loaded.messages.length} رسالة من السحابة` : `Loaded ${loaded.messages.length} messages from cloud`
+                            });
+                          } else {
+                            toast({
+                              title: language === 'ar' ? 'خطأ' : 'Error',
+                              description: language === 'ar' ? 'لم يتم العثور على المحادثة' : 'Conversation not found',
+                              variant: 'destructive'
+                            });
+                          }
+                        } catch (err: any) {
+                          console.error('❌ Failed to load cloud conversation:', err);
+                          toast({
+                            title: language === 'ar' ? 'فشل التحميل' : 'Load failed',
+                            description: err?.message || (language === 'ar' ? 'تعذر تحميل المحادثة' : 'Could not load conversation'),
+                            variant: 'destructive'
+                          });
+                        }
+                      }}
+                    >
                       <div className="text-sm font-medium truncate">{c.title}</div>
                       <div className="text-xs text-muted-foreground">{new Date(c.last_message_at).toLocaleString(language === 'ar' ? 'ar' : 'en')}</div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                       <button
                         className="text-xs px-2 py-1 rounded-md border hover:bg-blue-50 text-blue-700 border-blue-200"
                         onClick={async () => {

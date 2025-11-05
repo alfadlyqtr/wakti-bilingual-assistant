@@ -15,7 +15,7 @@ export const getWidgetOrder = () => {
   }
   
   // Default order
-  const defaultOrder = ['calendar', 'tr', 'maw3d', 'quote'];
+  const defaultOrder = ['calendar', 'journal', 'tr', 'whoop', 'maw3d', 'quote'];
   console.log('Using default widget order:', defaultOrder);
   return defaultOrder;
 };
@@ -34,7 +34,9 @@ export const saveWidgetOrder = async (newOrder: string[]) => {
 export function getWidgetVisibilityFromProfile(widgetsDbPrefs: any) {
   return {
     calendar: widgetsDbPrefs?.calendarWidget !== false,
+    journal: widgetsDbPrefs?.journalWidget !== false,
     tr: (widgetsDbPrefs?.tasksWidget !== false) || (widgetsDbPrefs?.remindersWidget !== false),
+    whoop: widgetsDbPrefs?.whoopWidget !== false,
     maw3d: widgetsDbPrefs?.maw3dWidget !== false,
     quote: widgetsDbPrefs?.quoteWidget !== false,
   };
@@ -96,7 +98,9 @@ export const getUserPreferences = () => {
   // Default preferences - all visible
   return {
     calendar: true,
+    journal: true,
     tr: true,
+    whoop: true,
     maw3d: true,
     quote: true,
   };

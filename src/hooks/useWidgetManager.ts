@@ -56,7 +56,6 @@ type WidgetType = {
 
 type WidgetVisibilitySettings = {
   showCalendarWidget: boolean;
-  showTasksWidget: boolean;
   showTRWidget: boolean;
   showMaw3dWidget: boolean;
   showQuoteWidget: boolean;
@@ -69,7 +68,6 @@ export const useWidgetManager = (language: "en" | "ar") => {
   const [widgets, setWidgets] = useState<WidgetType[]>([]);
   const [widgetSettings, setWidgetSettings] = useState<WidgetVisibilitySettings>({
     showCalendarWidget: true,
-    showTasksWidget: true,
     showTRWidget: true,
     showMaw3dWidget: true,
     showQuoteWidget: true,
@@ -107,7 +105,6 @@ export const useWidgetManager = (language: "en" | "ar") => {
         const widgetPrefs = settingsPayload.widgets ?? {};
         setWidgetSettings({
           showCalendarWidget: widgetPrefs.showCalendarWidget !== false,
-          showTasksWidget: widgetPrefs.showTasksWidget !== false,
           showTRWidget: widgetPrefs.showTRWidget !== false,
           showMaw3dWidget: widgetPrefs.showMaw3dWidget !== false,
           showQuoteWidget: widgetPrefs.showQuoteWidget !== false,
@@ -137,6 +134,25 @@ export const useWidgetManager = (language: "en" | "ar") => {
       active = false;
     };
   }, [user]);
+
+  // Live update widget visibility when Settings dispatches the custom event
+  useEffect(() => {
+    const handleWidgetSettingsChanged = (e: any) => {
+      const prefs = (e && e.detail) || {};
+      setWidgetSettings({
+        showCalendarWidget: prefs.showCalendarWidget !== false,
+        // Respect the single combined toggle strictly on live changes
+        showTRWidget: prefs.showTRWidget !== false,
+        showMaw3dWidget: prefs.showMaw3dWidget !== false,
+        showQuoteWidget: prefs.showQuoteWidget !== false,
+        showWhoopWidget: prefs.showWhoopWidget !== false,
+        showJournalWidget: prefs.showJournalWidget !== false,
+      });
+    };
+
+    window.addEventListener('widgetSettingsChanged', handleWidgetSettingsChanged as any);
+    return () => window.removeEventListener('widgetSettingsChanged', handleWidgetSettingsChanged as any);
+  }, []);
 
   useEffect(() => {
     if (!user) {
@@ -217,8 +233,23 @@ export const useWidgetManager = (language: "en" | "ar") => {
           .map((id) => widgetMap[id])
           .filter((widget): widget is WidgetType => Boolean(widget));
 
+        // Fallback: if all widgets in ordered list are invisible but some toggles are ON,
+        // rebuild from widgetMap ensuring visible ones are present
+        const anyVisibleFlag = (
+          widgetSettings.showCalendarWidget ||
+          widgetSettings.showTRWidget ||
+          widgetSettings.showMaw3dWidget ||
+          widgetSettings.showQuoteWidget ||
+          widgetSettings.showWhoopWidget ||
+          widgetSettings.showJournalWidget
+        );
+        const anyVisibleInList = orderedWidgets.some(w => w.visible);
+        const finalWidgets = (!anyVisibleInList && anyVisibleFlag)
+          ? effectiveOrder.map(id => widgetMap[id]).filter(Boolean) as WidgetType[]
+          : orderedWidgets;
+
         if (!cancelled) {
-          setWidgets(orderedWidgets);
+          setWidgets(finalWidgets);
         }
       } catch (error) {
         console.error("Error initializing widgets:", error);
@@ -234,7 +265,6 @@ export const useWidgetManager = (language: "en" | "ar") => {
     language,
     user,
     widgetSettings.showCalendarWidget,
-    widgetSettings.showTasksWidget,
     widgetSettings.showTRWidget,
     widgetSettings.showMaw3dWidget,
     widgetSettings.showQuoteWidget,

@@ -39,12 +39,13 @@ export default function Settings() {
 
   // Widget visibility settings
   const [widgetSettings, setWidgetSettings] = useState({
-    showTasksWidget: true,
     showCalendarWidget: true,
     showEventsWidget: true,
     showQuoteWidget: true,
     showMaw3dWidget: true,
     showTRWidget: true,
+    showWhoopWidget: true,
+    showJournalWidget: true,
   });
 
   // Privacy settings
@@ -69,9 +70,13 @@ export default function Settings() {
         .single();
 
       if (profile?.settings?.widgets) {
+        const widgets = profile.settings.widgets as any;
+        // Merge legacy showTasksWidget into the combined showTRWidget
+        const mergedShowTR = (widgets.showTRWidget !== false) || (widgets.showTasksWidget === true);
         setWidgetSettings(prev => ({
           ...prev,
-          ...profile.settings.widgets
+          ...widgets,
+          showTRWidget: mergedShowTR,
         }));
       }
 
@@ -354,19 +359,7 @@ export default function Settings() {
                 <div className="flex items-center justify-between rounded-md border p-4">
                   <div className="space-y-1">
                     <p className="text-sm font-medium">
-                      {language === "ar" ? "إظهار المهام المعلقة" : "Show pending tasks"}
-                    </p>
-                  </div>
-                  <Switch 
-                    checked={widgetSettings.showTasksWidget}
-                    onCheckedChange={(checked) => updateWidgetSetting('showTasksWidget', checked)}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between rounded-md border p-4">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">
-                      {language === "ar" ? "إظهار التذكيرات المعلقة" : "Show pending reminders"}
+                      {language === "ar" ? "إظهار المهام والتذكيرات" : "Show Tasks & Reminders"}
                     </p>
                   </div>
                   <Switch 
@@ -406,8 +399,20 @@ export default function Settings() {
                     </p>
                   </div>
                   <Switch 
-                    checked={(widgetSettings as any).showWhoopWidget ?? true}
-                    onCheckedChange={(checked) => updateWidgetSetting('showWhoopWidget' as any, checked)}
+                    checked={widgetSettings.showWhoopWidget}
+                    onCheckedChange={(checked) => updateWidgetSetting('showWhoopWidget', checked)}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between rounded-md border p-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">
+                      {language === "ar" ? "إظهار يوميات وقطي" : "Show Today's Journal"}
+                    </p>
+                  </div>
+                  <Switch 
+                    checked={widgetSettings.showJournalWidget}
+                    onCheckedChange={(checked) => updateWidgetSetting('showJournalWidget', checked)}
                   />
                 </div>
               </CardContent>
