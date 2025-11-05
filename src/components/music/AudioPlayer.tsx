@@ -131,7 +131,7 @@ export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
             <Button
               variant="outline"
               size="icon"
-              onPointerUp={togglePlay}
+              onClick={togglePlay}
               disabled={isLoading}
               className="h-9 w-9"
             >
@@ -141,7 +141,7 @@ export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
             <Button
               variant="outline"
               size="icon"
-              onPointerUp={rewind}
+              onClick={rewind}
               disabled={isLoading}
               className="h-9 w-9"
               title={language === 'ar' ? 'الرجوع 10 ثوان' : 'Rewind 10s'}
