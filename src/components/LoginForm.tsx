@@ -75,9 +75,13 @@ export function LoginForm({
             try { setAuthSession((data as any)?.session ?? null); } catch {}
             try { setAuthLoading(false); } catch {}
             
-            // === SYNCHRONOUS NAVIGATION ===
-            console.log("LoginForm: Synchronous navigation to", redirectTo);
-            navigate(redirectTo);
+            // === DELAYED NAVIGATION ===
+            // Small delay to let React finish state update before ProtectedRoute checks
+            console.log("LoginForm: Scheduling navigation to", redirectTo);
+            setTimeout(() => {
+              console.log("LoginForm: Navigating now to", redirectTo);
+              navigate(redirectTo);
+            }, 100);
           }
         } catch (err) {
           console.error("LoginForm: Error during setSession or context update", err);
