@@ -3,6 +3,10 @@ import { supabase, ensurePassport } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { waktiToast } from '@/services/waktiToast';
 
+// FEATURE FLAG: Set to true to re-enable real-time subscriptions
+// Currently disabled to test if WebSocket blocking in appetize.io causes crash
+const ENABLE_REALTIME_SUBSCRIPTIONS = false;
+
 // Global deduplication to prevent multiple concurrent instances
 let globalSetupInProgress = false;
 let globalUserId: string | null = null;
@@ -20,6 +24,23 @@ export function useUnreadMessages() {
 
   useEffect(() => {
     if (!user?.id) return;
+
+    // If real-time subscriptions are disabled, just fetch initial counts
+    if (!ENABLE_REALTIME_SUBSCRIPTIONS) {
+      console.log('⚠️ Real-time subscriptions disabled - fetching initial counts only');
+      const fetchInitial = async () => {
+        try {
+          await ensurePassport();
+          await fetchUnreadCounts();
+        } catch (e) {
+          console.error('Error fetching initial counts:', e);
+        }
+      };
+      fetchInitial();
+      return () => {
+        console.log('🧹 Cleanup (subscriptions disabled)');
+      };
+    }
 
     // Global deduplication - only allow one instance per user
     if (globalSetupInProgress || globalUserId === user.id) {
