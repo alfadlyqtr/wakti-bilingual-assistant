@@ -5,7 +5,7 @@ import { waktiToast } from '@/services/waktiToast';
 
 // FEATURE FLAG: Set to true to re-enable real-time subscriptions
 // Currently disabled to test if WebSocket blocking in appetize.io causes crash
-const ENABLE_REALTIME_SUBSCRIPTIONS = false;
+const ENABLE_REALTIME_SUBSCRIPTIONS = true;
 
 // Global deduplication to prevent multiple concurrent instances
 let globalSetupInProgress = false;

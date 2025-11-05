@@ -10,6 +10,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { Analytics } from "@vercel/analytics/react";
 import AuthDebug from "@/components/debug/AuthDebug";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 
 // Import all your existing components
@@ -137,52 +138,72 @@ function App() {
                 {/* Protected user routes - AuthProvider is mounted once at top level */}
                 <Route path="/dashboard" element={
                   <GiftNotificationProvider>
-                    <AppLayout><Dashboard /></AppLayout>
+                    <ErrorBoundary>
+                      <AppLayout><Dashboard /></AppLayout>
+                    </ErrorBoundary>
                   </GiftNotificationProvider>
                 } />
                 <Route path="/account" element={
                   <GiftNotificationProvider>
-                    <AppLayout><Account /></AppLayout>
+                    <ErrorBoundary>
+                      <AppLayout><Account /></AppLayout>
+                    </ErrorBoundary>
                   </GiftNotificationProvider>
                 } />
                 <Route path="/settings" element={
                   <GiftNotificationProvider>
-                    <AppLayout><Settings /></AppLayout>
+                    <ErrorBoundary>
+                      <AppLayout><Settings /></AppLayout>
+                    </ErrorBoundary>
                   </GiftNotificationProvider>
                 } />
                 <Route path="/tasks-reminders" element={
                   <GiftNotificationProvider>
-                    <AppLayout><TasksReminders /></AppLayout>
+                    <ErrorBoundary>
+                      <AppLayout><TasksReminders /></AppLayout>
+                    </ErrorBoundary>
                   </GiftNotificationProvider>
                 } />
                 <Route path="/tr" element={
                   <GiftNotificationProvider>
-                    <AppLayout><TasksReminders /></AppLayout>
+                    <ErrorBoundary>
+                      <AppLayout><TasksReminders /></AppLayout>
+                    </ErrorBoundary>
                   </GiftNotificationProvider>
                 } />
                 <Route path="/wakti-ai" element={
                   <GiftNotificationProvider>
-                    <AppLayout><WaktiAi /></AppLayout>
+                    <ErrorBoundary>
+                      <AppLayout><WaktiAi /></AppLayout>
+                    </ErrorBoundary>
                   </GiftNotificationProvider>
                 } />
                 <Route path="/wakti-ai-v2" element={
                   <GiftNotificationProvider>
-                    <AppLayout><WaktiAIV2 /></AppLayout>
+                    <ErrorBoundary>
+                      <AppLayout><WaktiAIV2 /></AppLayout>
+                    </ErrorBoundary>
                   </GiftNotificationProvider>
                 } />
                 <Route path="/calendar" element={
                   <GiftNotificationProvider>
-                    <AppLayout><Calendar /></AppLayout>
+                    <ErrorBoundary>
+                      <AppLayout><Calendar /></AppLayout>
+                    </ErrorBoundary>
                   </GiftNotificationProvider>
                 } />
                 <Route path="/journal" element={
                   <GiftNotificationProvider>
-                    <AppLayout><Journal /></AppLayout>
+                    <ErrorBoundary>
+                      <AppLayout><Journal /></AppLayout>
+                    </ErrorBoundary>
                   </GiftNotificationProvider>
                 } />
                 <Route path="/music" element={
                   <GiftNotificationProvider>
-                    <AppLayout><MusicStudio /></AppLayout>
+                    <ErrorBoundary>
+                      <AppLayout><MusicStudio /></AppLayout>
+                    </ErrorBoundary>
                   </GiftNotificationProvider>
                 } />
                 <Route path="/games/letters/create" element={
@@ -217,7 +238,9 @@ function App() {
                 } />
                 <Route path="/contacts" element={
                   <GiftNotificationProvider>
-                    <AppLayout><Contacts /></AppLayout>
+                    <ErrorBoundary>
+                      <AppLayout><Contacts /></AppLayout>
+                    </ErrorBoundary>
                   </GiftNotificationProvider>
                 } />
                 <Route path="/maw3d" element={
