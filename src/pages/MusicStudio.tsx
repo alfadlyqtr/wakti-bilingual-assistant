@@ -712,6 +712,7 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
                               user_id: user.id,
                               title: prompt.substring(0, 100),
                               storage_path: storagePath,
+                              signed_url: publicUrl,  // Save the full URL like Tasjeel does!
                               duration_sec: Math.min(120, duration),
                               prompt: prompt,
                             });
@@ -752,25 +753,17 @@ function EditorTab() {
         .limit(50);
 
       if (error) throw error;
-      // Simplified URL construction: use simple public URLs for public bucket
-      const withUrls = await Promise.all((data || []).map(async (t) => {
-        let playUrl: string | null = null;
-        if (t.storage_path) {
-          // Use simple public URL (bucket is public, no auth needed)
+      // Simple approach like Tasjeel: use signed_url directly from database
+      const withUrls = (data || []).map((t) => {
+        // Use signed_url directly if available, otherwise construct from storage_path as fallback
+        let playUrl: string | null = t.signed_url;
+        if (!playUrl && t.storage_path) {
           const base = SUPABASE_URL.replace(/\/$/, '');
           const path = t.storage_path.startsWith('/') ? t.storage_path.slice(1) : t.storage_path;
           playUrl = `${base}/storage/v1/object/public/music/${path}`;
-          console.log('[MusicStudio] Generated URL:', { id: t.id, storage_path: t.storage_path, play_url: playUrl });
-        } else if (t.signed_url && /^https?:\/\//i.test(t.signed_url)) {
-          // Fallback to signed_url only if it looks absolute
-          playUrl = t.signed_url;
-          console.log('[MusicStudio] Using signed_url:', { id: t.id, play_url: playUrl });
-        } else {
-          console.warn('[MusicStudio] No valid URL source:', { id: t.id, storage_path: t.storage_path, signed_url: t.signed_url });
         }
-        const row = { ...t, play_url: playUrl } as typeof t & { play_url: string | null };
-        return row;
-      }));
+        return { ...t, play_url: playUrl } as typeof t & { play_url: string | null };
+      });
       setTracks(withUrls);
     } catch (e) {
       // noop
