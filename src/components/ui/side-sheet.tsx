@@ -32,6 +32,7 @@ export function SideSheet({
   useEffect(() => {
     if (open) setLastOpenedAt(Date.now());
   }, [open]);
+
   // Track viewport for mobile-specific sizing
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -57,12 +58,17 @@ export function SideSheet({
         aria-hidden
         // Mobile: between header and bottom tabs; Desktop/Tablet: full height next to sidebar
         className={cn(
-          'fixed inset-x-0 z-[12000] md:z-[850] bg-black/20 backdrop-blur-md ios-reduce-blur transition-opacity duration-300',
+          'fixed inset-x-0 z-[12000] md:z-[998] bg-black/50 backdrop-blur-2xl saturate-150 transition-opacity duration-300',
           'top-[var(--app-header-h)] bottom-0',
-          'md:top-0 md:bottom-0 md:left-[var(--current-sidebar-width,0px)] md:right-0',
+          'md:top-0 md:bottom-0 md:right-0',
           open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none',
           overlayClassName,
         )}
+        style={{ 
+          backdropFilter: 'blur(16px) saturate(150%)', 
+          WebkitBackdropFilter: 'blur(16px) saturate(150%)',
+          left: isMobile ? 0 : 'calc(var(--current-sidebar-width, 70px) + 0.5rem)'
+        }}
         onPointerDown={() => {
           // Prevent the tap that opened the sheet from immediately closing it
           if (Date.now() - lastOpenedAt < 250) return;
@@ -76,7 +82,7 @@ export function SideSheet({
         aria-modal="true"
         // Desktop/Tablet: full height; Mobile: constrained between header and tabs
         className={cn(
-          'fixed inset-x-auto z-[12010] md:z-[900] bg-background focus:outline-none flex flex-col shadow-2xl',
+          'fixed inset-x-auto z-[12010] md:z-[12010] bg-background focus:outline-none flex flex-col',
           // Compact width on mobile; fixed width on desktop
           'w-[360px] max-w-[92vw] md:w-96',
           // Rounded edges visible on mobile
@@ -88,10 +94,10 @@ export function SideSheet({
           // Force horizontal slide only
           'translate-y-0',
           open
-            ? 'translate-x-0'
+            ? 'translate-x-0 opacity-100 pointer-events-auto shadow-2xl'
             : side === 'right'
-              ? 'translate-x-full'
-              : '-translate-x-full',
+              ? 'translate-x-full opacity-0 pointer-events-none shadow-none'
+              : '-translate-x-[110%] opacity-0 pointer-events-none shadow-none',
           'transition-transform duration-300 ease-out',
           className,
         )}

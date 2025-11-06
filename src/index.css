@@ -102,7 +102,7 @@
     --tablet-sidebar-mini-width: 60px;
     --tablet-bottom-nav-h: 60px;
     /* Dynamic sidebar widths (updated by JavaScript) */
-    --current-sidebar-width: 240px;
+    --current-sidebar-width: 70px;
     --current-tablet-sidebar-width: 60px;
   }
 
@@ -478,12 +478,41 @@ textarea::placeholder {
   html {
     scroll-padding-top: calc(var(--app-header-h) + var(--app-content-gap));
   }
-  
+
   /* Desktop/Tablet scroll padding for floating headers */
   @media (min-width: 768px) {
     html {
       scroll-padding-top: 140px; /* Account for floating header height + spacing + extra buffer */
     }
+  }
+
+  /* When drawer is open, force a visible blur/dim on the app content as a fallback
+     (useful on browsers/environments where backdrop-filter is limited). The
+     SideSheet is portaled to <body>, so this will not blur the panel itself. */
+  html.drawer-blur .app-layout-desktop,
+  html.drawer-blur .app-layout-tablet,
+  html.drawer-blur #root {
+    filter: blur(12px) saturate(115%) brightness(0.95);
+    transition: filter 200ms ease;
+  }
+
+  /* Chat input may be portaled to body; blur it too when drawer is open */
+  html.drawer-blur .chat-input-container {
+    filter: blur(12px) saturate(115%) brightness(0.95);
+    transition: filter 200ms ease;
+  }
+
+  /* Sidebar expanded fallback: blur/dim background while the sidebar is open */
+  html.sidebar-blur .app-layout-desktop,
+  html.sidebar-blur .app-layout-tablet,
+  html.sidebar-blur #root {
+    filter: blur(12px) saturate(115%) brightness(0.95);
+    transition: filter 200ms ease;
+  }
+
+  html.sidebar-blur .chat-input-container {
+    filter: blur(12px) saturate(115%) brightness(0.95);
+    transition: filter 200ms ease;
   }
 
   /* Spacing is handled in AppLayout <main> via pt/pb using the variables above */
@@ -506,7 +535,7 @@ textarea::placeholder {
     bottom: 0 !important;
     left: 0 !important;
     right: 0 !important;
-    z-index: 9999 !important;
+    z-index: 800 !important; /* Keep below SideSheet (>=12010) and header overlays */
     padding-bottom: env(safe-area-inset-bottom, 0px) !important;
     background: var(--background, #111827) !important;
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3) !important;
@@ -626,7 +655,7 @@ header.app-header-fixed,
 .app-layout-tablet header, .app-layout-tablet .header {
   position: fixed !important;
   top: 0 !important;
-  left: calc(var(--sidebar-width, 240px) + 0.5rem) !important; /* Account for sidebar width */
+  left: calc(var(--current-sidebar-width, var(--sidebar-width, 240px)) + 0.5rem) !important; /* Account for dynamic sidebar width */
   right: 1rem !important;
   z-index: 100 !important;
   background-color: hsl(var(--background)) !important;
@@ -635,7 +664,7 @@ header.app-header-fixed,
   height: var(--app-header-h, 56px) !important;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12) !important;
   border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
-  width: calc(100% - var(--sidebar-width, 240px) - 1.5rem) !important; /* Set explicit width */
+  width: calc(100% - var(--current-sidebar-width, var(--sidebar-width, 240px)) - 1.5rem) !important; /* Set explicit width */
 }
 
 /* Ensure the DesktopHeader container itself is fixed */
@@ -652,8 +681,8 @@ header.app-header-fixed,
   position: fixed !important;
   top: 0 !important;
   z-index: 100 !important;
-  width: calc(100% - var(--sidebar-width, 240px) - 1.5rem) !important;
-  left: calc(var(--sidebar-width, 240px) + 0.5rem) !important;
+  width: calc(100% - var(--current-sidebar-width, var(--sidebar-width, 240px)) - 1.5rem) !important;
+  left: calc(var(--current-sidebar-width, var(--sidebar-width, 240px)) + 0.5rem) !important;
   right: 1rem !important;
   pointer-events: auto !important;
   margin: 0 !important;
@@ -662,8 +691,8 @@ header.app-header-fixed,
 
 /* Tablet fixed header adjustment */
 .app-layout-tablet .fixed-header {
-  width: calc(100% - var(--tablet-sidebar-width, 180px) - 1.5rem) !important;
-  left: calc(var(--tablet-sidebar-width, 180px) + 0.5rem) !important;
+  width: calc(100% - var(--current-sidebar-width, var(--sidebar-width, 240px)) - 1.5rem) !important;
+  left: calc(var(--current-sidebar-width, var(--sidebar-width, 240px)) + 0.5rem) !important;
 }
 
 /* Make containers responsive to screen size */
@@ -687,8 +716,8 @@ header.app-header-fixed,
   /* Fix container width for Wakti AI chat input */
   .app-layout-desktop .chat-input-container,
   .app-layout-tablet .chat-input-container {
-    width: calc(100% - var(--current-sidebar-width, var(--sidebar-width, 240px)) - 2rem) !important;
-    left: calc(var(--current-sidebar-width, var(--sidebar-width, 240px)) + 1rem) !important;
+    width: calc(100% - var(--current-sidebar-width, var(--sidebar-width, 240px)) - 1.5rem) !important;
+    left: calc(var(--current-sidebar-width, var(--sidebar-width, 240px)) + 0.5rem) !important;
     right: 1rem !important;
     margin: 0 !important;
   }

@@ -38,7 +38,7 @@ interface NavItemProps {
 }
 
 export function DesktopSidebar() {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
   const { language } = useTheme();
@@ -112,15 +112,24 @@ export function DesktopSidebar() {
     );
   }, [isCollapsed]);
 
+
   return (
     <>
       {/* Desktop/Tablet mask to hide underlying content under the curved sidebar edge */}
       <div
         id="desktop-sidebar-mask"
         className="hidden md:block fixed inset-y-0 left-0 z-[998] bg-background pointer-events-none"
-        style={{ width: 'calc(var(--current-sidebar-width, 240px) + 1.75rem)', left: 0, right: 'auto' }}
+        style={{ width: 'calc(var(--current-sidebar-width, 240px) + 0.5rem)', left: 0, right: 'auto' }}
         aria-hidden
       />
+      {/* Blur/dim overlay while sidebar is expanded - blocks interactions behind */}
+      {!isCollapsed && (
+        <div
+          className="hidden md:block fixed inset-y-0 right-0 z-[998] bg-black/50 backdrop-blur-2xl transition-opacity duration-200"
+          style={{ left: 'calc(var(--current-sidebar-width, 240px) + 0.5rem)', backdropFilter: 'blur(16px) saturate(150%)', WebkitBackdropFilter: 'blur(16px) saturate(150%)', backgroundColor: 'rgba(0,0,0,0.45)' }}
+          onClick={toggleCollapse}
+        />
+      )}
       <motion.aside
       id="desktop-sidebar"
       className="fixed left-4 top-4 bottom-4 z-[999] rounded-[2rem] shadow-2xl"

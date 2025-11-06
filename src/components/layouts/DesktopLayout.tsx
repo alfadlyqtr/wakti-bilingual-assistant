@@ -20,7 +20,7 @@ export function DesktopLayout({ children }: DesktopLayoutProps) {
         {/* Content column: full height flex with header and scrollable main */}
         <div
           className="w-full h-screen flex flex-col transition-all duration-300"
-          style={{ paddingLeft: 'calc(var(--current-sidebar-width, 240px) + 2rem)' }}
+          style={{ paddingLeft: 'calc(var(--current-sidebar-width, 240px) + 0.5rem)' }}
         >
           {/* Header: fixed position, separate from scrollable content */}
           <header className="fixed-header">

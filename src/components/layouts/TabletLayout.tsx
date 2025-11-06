@@ -1,8 +1,7 @@
 import React from "react";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { TabletHeader } from "@/components/TabletHeader";
-import { TabletSidebar } from "@/components/TabletSidebar";
-import { TabletBottomNav } from "@/components/TabletBottomNav";
+import { DesktopSidebar } from "@/components/DesktopSidebar";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 
 interface TabletLayoutProps {
@@ -16,12 +15,12 @@ export function TabletLayout({ children }: TabletLayoutProps) {
   return (
     <ProtectedRoute>
       <div className="h-screen bg-background w-full app-layout-tablet overflow-hidden" dir="ltr" data-layout-dir="ltr">
-        {/* Sidebar remains as-is; content is padded to accommodate it */}
-        <TabletSidebar />
-        {/* Content column: full height, header/top + scrollable middle + bottom nav */}
+        {/* Sidebar: use the same component as desktop for consistent visuals/behavior */}
+        <DesktopSidebar />
+        {/* Content column: full height, header/top + scrollable middle */}
         <div
           className="w-full h-screen flex flex-col transition-all duration-300"
-          style={{ paddingLeft: 'calc(var(--current-tablet-sidebar-width, 60px) + 1.5rem)' }}
+          style={{ paddingLeft: 'calc(var(--current-sidebar-width, 240px) + 0.75rem)' }}
         >
           {/* Header: fixed position, separate from scrollable content */}
           <header className="fixed-header">
@@ -33,10 +32,6 @@ export function TabletLayout({ children }: TabletLayoutProps) {
               {children}
             </div>
           </main>
-          {/* Bottom nav: non-shrinking */}
-          <div className="flex-shrink-0">
-            <TabletBottomNav />
-          </div>
         </div>
       </div>
     </ProtectedRoute>

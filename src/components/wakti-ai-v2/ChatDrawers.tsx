@@ -47,25 +47,27 @@ export function ChatDrawers({
 
   return (
     <>
-      {/* Extra Drawer - left side */}
-      <SideSheet open={showConversations} onOpenChange={setShowConversations} side="left">
-        <div className="sr-only" id="extra-drawer-title">{language === 'ar' ? 'إضافي' : 'Extra'}</div>
-        <div className="sr-only" id="extra-drawer-desc">
-          {language === 'ar' ? 'لوحة تحتوي على المحادثات السابقة والإعدادات' : 'Panel containing previous conversations and settings'}
-        </div>
-        <ExtraPanel
-          conversations={conversations}
-          currentConversationId={currentConversationId}
-          onSelectConversation={onSelectConversation}
-          onDeleteConversation={onDeleteConversation}
-          onRefresh={fetchConversations}
-          onClose={() => setShowConversations(false)}
-          onNewConversation={onNewConversation}
-          onClearChat={onClearChat}
-          sessionMessages={sessionMessages}
-          isLoading={isLoading}
-        />
-      </SideSheet>
+      {/* Extra Drawer - left side (unmounted when closed) */}
+      {showConversations && (
+        <SideSheet open={showConversations} onOpenChange={setShowConversations} side="left">
+          <div className="sr-only" id="extra-drawer-title">{language === 'ar' ? 'إضافي' : 'Extra'}</div>
+          <div className="sr-only" id="extra-drawer-desc">
+            {language === 'ar' ? 'لوحة تحتوي على المحادثات السابقة والإعدادات' : 'Panel containing previous conversations and settings'}
+          </div>
+          <ExtraPanel
+            conversations={conversations}
+            currentConversationId={currentConversationId}
+            onSelectConversation={onSelectConversation}
+            onDeleteConversation={onDeleteConversation}
+            onRefresh={fetchConversations}
+            onClose={() => setShowConversations(false)}
+            onNewConversation={onNewConversation}
+            onClearChat={onClearChat}
+            sessionMessages={sessionMessages}
+            isLoading={isLoading}
+          />
+        </SideSheet>
+      )}
 
       {/* Quick Actions drawer removed – quick modes shown inline in ChatInput */}
     </>
