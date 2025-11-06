@@ -239,11 +239,12 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
             <div className="mt-2">
               <input
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/jpg,image/png,image/webp,image/heic"
                 onChange={handleImageUpload}
                 className="hidden"
                 id="background-upload"
                 disabled={uploadingImage}
+                multiple={false}
               />
               <Button
                 onClick={() => document.getElementById('background-upload')?.click()}

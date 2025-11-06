@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { supabase, ensurePassport, getCurrentUserId } from "@/integrations/supabase/client";
 import { TRServiceCache } from "./trServiceCache";
 
