@@ -702,7 +702,7 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
         {audios.length === 0 ? (
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">
-              {language==='ar' ? 'ستظهر أحدث المشاريع هنا بعد الإنشاء.' : 'Recent projects will appear here after generation.'}
+              {language==='ar' ? 'سيتم حفظ الموسيقى المُنشأة كمشاريع في علامة التبويب المحفوظات' : 'generated music will be saved as projects in the Save tab'}
             </p>
             {lastError && (
               <p className="text-sm text-red-600">{lastError}</p>
