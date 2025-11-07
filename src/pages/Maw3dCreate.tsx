@@ -135,11 +135,11 @@ export default function Maw3dCreate() {
   const navigate = useNavigate();
   const location = useLocation();
   const { language, theme } = useTheme();
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
   
   // Form state
   const [selectedTemplate, setSelectedTemplate] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   
   // Collapsible states - all closed by default
@@ -299,6 +299,8 @@ export default function Maw3dCreate() {
   useEffect(() => {
     const loadForEdit = async () => {
       if (!editId) return;
+      if (isLoading) return; // wait for auth to resolve
+      if (!user) return;     // no user yet or not signed in
       try {
         const { data, error } = await supabase
           .from('maw3d_events')
@@ -306,7 +308,7 @@ export default function Maw3dCreate() {
           .eq('id', editId)
           .single();
         if (error) throw error;
-        if (data.created_by !== user?.id) {
+        if (data.created_by !== user.id) {
           toast.error('You are not authorized to edit this event');
           navigate('/maw3d');
           return;
@@ -397,7 +399,7 @@ export default function Maw3dCreate() {
     };
     loadForEdit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editId]);
+  }, [editId, isLoading, user]);
 
   // Apply template when selected
   useEffect(() => {
@@ -421,7 +423,7 @@ export default function Maw3dCreate() {
       return;
     }
 
-    setIsLoading(true);
+    setIsSaving(true);
     
     try {
       // Prepare base event data
@@ -500,7 +502,7 @@ export default function Maw3dCreate() {
       console.error("Unexpected error creating event:", error);
       toast.error("Unexpected error occurred while creating the event");
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
   };
 
@@ -579,11 +581,11 @@ export default function Maw3dCreate() {
             <Button 
               type="submit" 
               form="event-form"
-              disabled={isLoading}
+              disabled={isSaving}
               className="group px-6 py-2.5 bg-gradient-primary hover:shadow-glow transition-all duration-300 hover:scale-105 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus className="w-4 h-4 mr-2 transition-transform duration-300 group-hover:rotate-90" />
-              <span>{editId ? (isLoading ? t('saving', language) : t('saveChanges', language)) : (isLoading ? t('creating', language) : t('createEvent', language))}</span>
+              <span>{editId ? (isSaving ? t('saving', language) : t('saveChanges', language)) : (isSaving ? t('creating', language) : t('createEvent', language))}</span>
             </Button>
           </div>
         </div>

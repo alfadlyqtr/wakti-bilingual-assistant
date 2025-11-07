@@ -31,17 +31,18 @@ export default function Maw3dEdit() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { language } = useTheme();
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [event, setEvent] = useState<EventData | null>(null);
 
   useEffect(() => {
-    if (id) {
-      fetchEvent();
-    }
-  }, [id]);
+    if (!id) return;
+    if (isLoading) return; // wait for auth to resolve
+    if (!user) return;     // no user yet or not signed in
+    fetchEvent();
+  }, [id, isLoading, user]);
 
   const fetchEvent = async () => {
     try {
@@ -53,7 +54,7 @@ export default function Maw3dEdit() {
 
       if (error) throw error;
 
-      if (data.created_by !== user?.id) {
+      if (data.created_by !== user.id) {
         toast.error(language === 'ar' ? 'غير مصرح لك بتعديل هذا الحدث' : 'You are not authorized to edit this event');
         navigate('/maw3d');
         return;

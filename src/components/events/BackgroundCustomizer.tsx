@@ -90,7 +90,6 @@ export default function BackgroundCustomizer({
     input.accept = 'image/*';
     // Prefer back camera on mobile if available
     // Note: not all browsers honor capture; harmless when ignored
-    (input as any).capture = 'environment';
     input.onchange = (e: any) => handleImageUpload(e as any);
     input.click();
   };
@@ -101,38 +100,35 @@ export default function BackgroundCustomizer({
       return;
     }
 
-    // Build a system-style prompt to bias models away from putting any text on the image
-    const systemPrompt = `Generate a beautiful, high-quality background image for an event card.
-    Requirements:
-    - No text, words, watermarks, logos, captions, or typography in any language
-    - Modern, vibrant, visually appealing
-    - Works well behind overlaid UI text (good contrast, no clutter)
-    - 16:9 composition if possible
-    Description: ${aiPrompt}`;
-
     console.log('[AI BG] User prompt:', aiPrompt);
-    console.log('[AI BG] Final prompt sent:', systemPrompt);
 
     setIsGenerating(true);
     try {
-      const { data, error } = await supabase.functions.invoke('generate-event-image', {
+      const { data, error } = await supabase.functions.invoke('generate-maw3d-background', {
         body: {
-          prompt: systemPrompt,
-          // Hints some providers support
-          no_text: true,
-          negative_prompt: 'text, watermark, caption, logo, words, letters, typography, subtitles, arabic text, english text',
-          width: 1280,
-          height: 720,
+          prompt: aiPrompt
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('[AI BG] Supabase function error:', error);
+        throw error;
+      }
 
+      if (!data || !data.imageUrl) {
+        console.error('[AI BG] No imageUrl in response:', data);
+        throw new Error('No image URL returned');
+      }
+
+      console.log('[AI BG] Success! Image URL:', data.imageUrl);
       onBackgroundImageChange(data.imageUrl);
       toast.success('Background generated successfully');
     } catch (error) {
-      console.error('Error generating background:', error);
-      toast.error('Error generating background');
+      console.error('[AI BG] Full error object:', error);
+      console.error('[AI BG] Error name:', (error as any)?.name);
+      console.error('[AI BG] Error message:', (error as any)?.message);
+      console.error('[AI BG] Error context:', (error as any)?.context);
+      toast.error(`Error generating background: ${(error as any)?.message || 'Unknown error'}`);
     } finally {
       setIsGenerating(false);
     }
@@ -298,7 +294,6 @@ export default function BackgroundCustomizer({
                 accept="image/*"
                 // Hint for mobile devices to use back camera when possible
                 // Some browsers ignore this attribute; safe to include
-                capture="environment"
                 onChange={handleImageUpload}
                 className="hidden"
               />

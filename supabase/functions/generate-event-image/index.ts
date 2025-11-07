@@ -1,5 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 // ENHANCED CORS CONFIGURATION FOR PRODUCTION
 const allowedOrigins = [
@@ -11,7 +12,9 @@ const allowedOrigins = [
   'http://localhost:8080',
   'http://127.0.0.1:8080',
   'http://localhost:5173',
-  'http://127.0.0.1:5173'
+  'http://127.0.0.1:5173',
+  'http://localhost:60477',
+  'http://127.0.0.1:60477'
 ];
 
 const getCorsHeaders = (origin: string | null) => {
@@ -131,10 +134,35 @@ serve(async (req) => {
         }
 
         const openaiData = await openaiResponse.json()
-        
+
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')
+        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+        if (!supabaseUrl || !supabaseServiceKey) {
+          throw new Error('Supabase configuration missing')
+        }
+        const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+        const imageResponse = await fetch(openaiData.data[0].url)
+        if (!imageResponse.ok) {
+          throw new Error('Failed to download generated image')
+        }
+        const imageBlob = await imageResponse.blob()
+        const detectedType = imageResponse.headers.get('content-type') ?? 'image/webp'
+        const fileExt = detectedType.includes('png') ? 'png' : detectedType.includes('jpeg') ? 'jpg' : detectedType.includes('gif') ? 'gif' : detectedType.includes('webp') ? 'webp' : 'webp'
+        const fileName = `ai-generated/${crypto.randomUUID()}.${fileExt}`
+        const { error: uploadError } = await supabase.storage
+          .from('event-images')
+          .upload(fileName, imageBlob, { contentType: detectedType, upsert: false })
+        if (uploadError) {
+          throw new Error(`Failed to save image: ${uploadError.message}`)
+        }
+        const { data: urlData } = supabase.storage
+          .from('event-images')
+          .getPublicUrl(fileName)
+
         return new Response(
           JSON.stringify({ 
-            imageUrl: openaiData.data[0].url,
+            imageUrl: urlData.publicUrl,
             provider: 'openai'
           }),
           { 
@@ -259,9 +287,34 @@ serve(async (req) => {
 
     console.log('Successfully generated image via Runware')
 
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Supabase configuration missing')
+    }
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+    const imageResponse = await fetch(imageResult.imageURL)
+    if (!imageResponse.ok) {
+      throw new Error('Failed to download generated image')
+    }
+    const imageBlob = await imageResponse.blob()
+    const detectedType = imageResponse.headers.get('content-type') ?? 'image/webp'
+    const fileExt = detectedType.includes('png') ? 'png' : detectedType.includes('jpeg') ? 'jpg' : detectedType.includes('gif') ? 'gif' : detectedType.includes('webp') ? 'webp' : 'webp'
+    const fileName = `ai-generated/${crypto.randomUUID()}.${fileExt}`
+    const { error: uploadError } = await supabase.storage
+      .from('event-images')
+      .upload(fileName, imageBlob, { contentType: detectedType, upsert: false })
+    if (uploadError) {
+      throw new Error(`Failed to save image: ${uploadError.message}`)
+    }
+    const { data: urlData } = supabase.storage
+      .from('event-images')
+      .getPublicUrl(fileName)
+
     return new Response(
       JSON.stringify({ 
-        imageUrl: imageResult.imageURL,
+        imageUrl: urlData.publicUrl,
         provider: 'runware',
         modelUsed
       }),

@@ -188,9 +188,9 @@ const WaktiAIV2 = () => {
     // OPTION B FIX: Only abort if sending another message in the SAME mode
     // This prevents aborting completed image requests when switching to chat mode
     if (trigger !== 'vision') {
-      if (abortControllerRef.current && lastTriggerRef.current === trigger) {
-        console.log(`🛑 Aborting previous ${trigger} request (same mode)`);
-        abortControllerRef.current.abort();
+      if (abortControllerRef.current) {
+        console.log(`🛑 Aborting previous ${lastTriggerRef.current || 'unknown'} request before starting ${trigger}`);
+        try { abortControllerRef.current.abort(); } catch {}
       }
     }
     const controller = new AbortController();

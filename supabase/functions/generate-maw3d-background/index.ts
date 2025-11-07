@@ -8,7 +8,12 @@ const allowedOrigins = [
   'https://wakti.qa',
   'https://www.wakti.qa',
   'https://lovable.dev',
-  'https://5332ebb7-6fae-483f-a0cc-4262a2a445a1.lovableproject.com'
+  'https://5332ebb7-6fae-483f-a0cc-4262a2a445a1.lovableproject.com',
+  // Dev/local
+  'http://localhost:8080',
+  'http://127.0.0.1:8080',
+  'http://localhost:60477',
+  'http://127.0.0.1:60477'
 ];
 
 const getCorsHeaders = (origin: string | null) => {
