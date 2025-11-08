@@ -13,6 +13,7 @@ interface ProtectedRouteProps {
 const CACHE_TTL_MS = 30 * 60 * 1000;
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
+  const DEV = !!(import.meta && import.meta.env && import.meta.env.DEV);
   const { user, session, isLoading, lastLoginTimestamp } = useAuth();
   const location = useLocation();
   const [subscriptionStatus, setSubscriptionStatus] = useState<{
@@ -92,8 +93,10 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     };
   }, [hasAnySession]);
 
+  const lastAuthStateRef = useRef<string>("");
   useEffect(() => {
-    console.log("ProtectedRoute: Current auth state:", {
+    if (!DEV) return;
+    const snapshot = JSON.stringify({
       isLoading,
       hasUser: !!user,
       hasSession: !!session,
@@ -101,7 +104,11 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
       userEmail: user?.email,
       userId: user?.id
     });
-  }, [isLoading, user, session, location.pathname]);
+    if (snapshot !== lastAuthStateRef.current) {
+      lastAuthStateRef.current = snapshot;
+      console.log("ProtectedRoute: Current auth state:", JSON.parse(snapshot));
+    }
+  }, [DEV, isLoading, user, session, location.pathname]);
 
   useEffect(() => {
     if (TEMP_DISABLE_SUBSCRIPTION_CHECKS) {
@@ -381,8 +388,15 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     } catch {}
   }
 
+  const loggedStillLoadingRef = useRef<string>("");
   if (!effectiveHasSession && isLoading) {
-    console.log("ProtectedRoute: Still loading - rendering children with auth banner");
+    if (DEV) {
+      const key = location.pathname;
+      if (loggedStillLoadingRef.current !== key) {
+        loggedStillLoadingRef.current = key;
+        console.log("ProtectedRoute: Still loading - rendering children with auth banner");
+      }
+    }
     return (
       <>
         <div
@@ -407,18 +421,18 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   // Proper authentication check - redirect appropriately if not authenticated
   if (!effectiveHasSession) {
-    console.log("ProtectedRoute: No valid user/session, redirecting to login");
+    if (DEV) console.log("ProtectedRoute: No valid user/session, redirecting to login");
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   // TEMPORARY: after auth, allow access immediately (skip subscription/IAP)
   if (TEMP_DISABLE_SUBSCRIPTION_CHECKS) {
-    console.log("ProtectedRoute: TEMP DISABLE - allowing access after auth");
+    if (DEV) console.log("ProtectedRoute: TEMP DISABLE - allowing access after auth");
     return <>{children}</>;
   }
 
   if (subscriptionStatus.isLoading) {
-    console.log("ProtectedRoute: Subscription pending - rendering optimistically");
+    if (DEV) console.log("ProtectedRoute: Subscription pending - rendering optimistically");
     return (
       <>
         <div
@@ -443,7 +457,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   // STRICT ENFORCEMENT: Block access if no valid subscription
   if (!subscriptionStatus.isSubscribed || subscriptionStatus.needsPayment) {
-    console.log("ProtectedRoute: User blocked - no valid subscription:", {
+    if (DEV) console.log("ProtectedRoute: User blocked - no valid subscription:", {
       email: user.email,
       isSubscribed: subscriptionStatus.isSubscribed,
       needsPayment: subscriptionStatus.needsPayment
@@ -461,6 +475,6 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
-  console.log("ProtectedRoute: User has valid subscription, allowing access");
+  if (DEV) console.log("ProtectedRoute: User has valid subscription, allowing access");
   return <>{children}</>;
 }

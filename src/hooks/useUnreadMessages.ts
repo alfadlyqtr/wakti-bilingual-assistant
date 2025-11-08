@@ -13,6 +13,7 @@ let globalUserId: string | null = null;
 let globalCleanupFn: (() => void) | null = null;
 
 export function useUnreadMessages() {
+  const DEV = !!(import.meta && import.meta.env && import.meta.env.DEV);
   const { user } = useAuth();
   const [unreadTotal, setUnreadTotal] = useState(0);
   const [contactCount, setContactCount] = useState(0);
@@ -27,7 +28,7 @@ export function useUnreadMessages() {
 
     // If real-time subscriptions are disabled, just fetch initial counts
     if (!ENABLE_REALTIME_SUBSCRIPTIONS) {
-      console.log('⚠️ Real-time subscriptions disabled - fetching initial counts only');
+      if (DEV) console.log('⚠️ Real-time subscriptions disabled - fetching initial counts only');
       const fetchInitial = async () => {
         try {
           await ensurePassport();
@@ -38,13 +39,13 @@ export function useUnreadMessages() {
       };
       fetchInitial();
       return () => {
-        console.log('🧹 Cleanup (subscriptions disabled)');
+        if (DEV) console.log('🧹 Cleanup (subscriptions disabled)');
       };
     }
 
     // Global deduplication - only allow one instance per user
     if (globalSetupInProgress || globalUserId === user.id) {
-      console.log('⏭️ Unread subscriptions already running for user:', user.id);
+      if (DEV) console.log('⏭️ Unread subscriptions already running for user:', user.id);
       return;
     }
 
@@ -60,7 +61,7 @@ export function useUnreadMessages() {
       try {
         await ensurePassport();
 
-        console.log('👀 Setting up unread message tracking for user:', user.id);
+        if (DEV) console.log('👀 Setting up unread message tracking for user:', user.id);
 
         // Get initial counts
         await fetchUnreadCounts();
@@ -99,7 +100,7 @@ export function useUnreadMessages() {
               fetchUnreadCounts();
             })
             .subscribe();
-          console.log('✅ Messages channel subscribed');
+          if (DEV) console.log('✅ Messages channel subscribed');
         } catch (e) {
           console.warn('⚠️ Failed to subscribe to messages channel (non-fatal):', e);
         }
@@ -129,7 +130,7 @@ export function useUnreadMessages() {
               fetchUnreadCounts();
             })
             .subscribe();
-          console.log('✅ Contacts channel subscribed');
+          if (DEV) console.log('✅ Contacts channel subscribed');
         } catch (e) {
           console.warn('⚠️ Failed to subscribe to contacts channel (non-fatal):', e);
         }
@@ -166,7 +167,7 @@ export function useUnreadMessages() {
               }
             })
             .subscribe();
-          console.log('✅ Maw3d channel subscribed');
+          if (DEV) console.log('✅ Maw3d channel subscribed');
         } catch (e) {
           console.warn('⚠️ Failed to subscribe to maw3d channel (non-fatal):', e);
         }
@@ -210,7 +211,7 @@ export function useUnreadMessages() {
               }
             })
             .subscribe();
-          console.log('✅ Shared task channel subscribed');
+          if (DEV) console.log('✅ Shared task channel subscribed');
         } catch (e) {
           console.warn('⚠️ Failed to subscribe to shared task channel (non-fatal):', e);
         }
@@ -222,7 +223,7 @@ export function useUnreadMessages() {
     setup();
 
     const cleanup = () => {
-      console.log('🧹 Cleaning up unread message subscriptions');
+      if (DEV) console.log('🧹 Cleaning up unread message subscriptions');
       if (messagesChannel) supabase.removeChannel(messagesChannel);
       if (contactsChannel) supabase.removeChannel(contactsChannel);
       if (maw3dChannel) supabase.removeChannel(maw3dChannel);
@@ -240,12 +241,13 @@ export function useUnreadMessages() {
     return cleanup;
   }, [user?.id]);
 
+  const lastCountsRef = useRef<string>("");
   const fetchUnreadCounts = async () => {
     if (!user) return;
 
     try {
       await ensurePassport();
-      console.log('📊 Fetching unread counts for user:', user.id);
+      if (DEV) console.log('📊 Fetching unread counts for user:', user.id);
       
       // Messages count
       const { count: messageCount } = await supabase
@@ -254,7 +256,7 @@ export function useUnreadMessages() {
         .eq('recipient_id', user.id)
         .eq('is_read', false);
 
-      console.log('📨 Total unread messages:', messageCount);
+      if (DEV) console.log('📨 Total unread messages:', messageCount);
 
       // Per-contact unread counts with detailed logging
       const { data: perContactData, error: perContactError } = await supabase
@@ -267,14 +269,14 @@ export function useUnreadMessages() {
         console.error('❌ Error fetching per-contact unread:', perContactError);
       }
 
-      console.log('📊 Per-contact unread data:', perContactData);
+      if (DEV) console.log('📊 Per-contact unread data:', perContactData);
 
       const perContactCounts: Record<string, number> = {};
       perContactData?.forEach(msg => {
         perContactCounts[msg.sender_id] = (perContactCounts[msg.sender_id] || 0) + 1;
       });
 
-      console.log('📊 Per-contact unread counts:', perContactCounts);
+      if (DEV) console.log('📊 Per-contact unread counts:', perContactCounts);
 
       // Contact requests count
       const { count: contactRequestCount } = await supabase
@@ -310,13 +312,24 @@ export function useUnreadMessages() {
       setTaskCount(0); // Regular task count if needed
       setPerContactUnread(perContactCounts);
 
-      console.log('📊 Final unread counts updated:', {
-        messages: messageCount,
-        contacts: contactRequestCount,
-        events: eventRsvpCount,
-        sharedTasks: sharedTaskResponseCount,
-        perContact: perContactCounts
-      });
+      if (DEV) {
+        const snapshot = JSON.stringify({
+          messages: messageCount,
+          contacts: contactRequestCount,
+          events: eventRsvpCount,
+          sharedTasks: sharedTaskResponseCount
+        });
+        if (snapshot !== lastCountsRef.current) {
+          lastCountsRef.current = snapshot;
+          console.log('📊 Final unread counts updated:', {
+            messages: messageCount,
+            contacts: contactRequestCount,
+            events: eventRsvpCount,
+            sharedTasks: sharedTaskResponseCount,
+            perContact: perContactCounts
+          });
+        }
+      }
 
     } catch (error) {
       console.error('❌ Error fetching unread counts:', error);

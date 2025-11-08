@@ -82,12 +82,13 @@ export default function MusicStudio() {
 function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
   const { language } = useTheme();
 
-  // Inputs
-  const [prompt, setPrompt] = useState('');
+  // Inputs (split prompt)
+  const [title, setTitle] = useState('');
+  const [styleText, setStyleText] = useState('');
+  const [lyricsText, setLyricsText] = useState('');
   const [variations, setVariations] = useState(1);
   const [duration, setDuration] = useState(30); // seconds
-  const [seedLocked, setSeedLocked] = useState(false);
-  const [seed, setSeed] = useState<string>('');
+  
   // Preset styles list (genres only)
   const STYLE_PRESETS = useMemo<string[]>(() => {
     if (language === 'ar') {
@@ -171,9 +172,12 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
   const [songsUsed, setSongsUsed] = useState(0);
   const [songsRemaining, setSongsRemaining] = useState(5);
 
+  // Guard to ensure monthly usage loads only once (avoids StrictMode double-run logs)
+  const usageLoadedRef = useRef(false);
+
   // Open the Amp options modal
   function handleAmp() {
-    if (!prompt.trim()) return;
+    if (!styleText.trim() && !lyricsText.trim() && !title.trim()) return;
     setShowAmpModal(true);
   }
 
@@ -233,27 +237,19 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
     )
   );
 
-  // 3000 character cap across request fields (prompt only; styles do NOT count)
+  // Caps: style max 350, lyrics gets remaining up to overall 800 (title excluded from cap)
+  const limit = 800;
+  const styleCap = 350;
   const totalChars = useMemo(() => {
     const count = (s: string) => Array.from(s || '').length;
-    return count(prompt || '');
-  }, [prompt]);
-
-  const limit = 500;
-  const remaining = Math.max(0, limit - totalChars);
+    return count(styleText || '') + count(lyricsText || '');
+  }, [styleText, lyricsText]);
+  const remainingOverall = Math.max(0, limit - totalChars);
+  const lyricsCap = Math.max(0, limit - Array.from(styleText || '').length);
   const overLimit = totalChars > limit;
 
-  // Helpers to mirror styles into the prompt as plain wording (Option A)
-  function stripStylesSuffix(text: string) {
-    // Remove any trailing "Include styles: ..." or "Exclude styles: ..." sentences we previously added
-    return text
-      .replace(/\s*Include styles:[^\.]*\.?\s*$/i, '')
-      .replace(/\s*Instruments:[^\.]*\.?\s*$/i, '')
-      .replace(/\s*Mode:[^\.]*\.?\s*$/i, '')
-      .replace(/\s*الأنماط:[^\.]*\.?\s*$/i, '')
-      .replace(/\s*الآلات:[^\.]*\.?\s*$/i, '')
-      .trim();
-  }
+  // Helpers
+  function stripStylesSuffix(text: string) { return (text || '').trim(); }
 
   function buildStylesSuffix() {
     const parts: string[] = [];
@@ -263,30 +259,23 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
     return parts.join('. ');
   }
 
-  // Sync chips -> prompt wording whenever styles change
+  // No more mirroring chips into a single prompt; we compose at send-time
+
+  // Ensure lyrics never exceed current cap when style changes
   useEffect(() => {
-    const suffix = buildStylesSuffix();
-    const base = stripStylesSuffix(prompt);
-    const withSpace = suffix ? (base ? base + '. ' : '') + suffix : base;
-    // Enforce 500-char cap by truncating base if needed
-    if (withSpace.length > limit) {
-      const suffixLen = suffix.length + (base ? 2 : 0); // ". " if base not empty
-      const maxBase = Math.max(0, limit - (suffix ? suffixLen : 0));
-      const trimmedBase = base.slice(0, maxBase);
-      const rebuilt = suffix ? (trimmedBase ? trimmedBase + '. ' : '') + suffix : trimmedBase;
-      if (rebuilt !== prompt) setPrompt(rebuilt);
-    } else {
-      if (withSpace !== prompt) setPrompt(withSpace);
+    const cap = Math.max(0, limit - Array.from(styleText || '').length);
+    if (Array.from(lyricsText || '').length > cap) {
+      setLyricsText(Array.from(lyricsText).slice(0, cap).join(''));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [includeTags, instrumentTags, moodTags, language]);
+  }, [styleText]);
 
   // New: AMP submit with options
   async function handleAmpSubmit() {
-    if (!prompt.trim()) return;
+    if (!styleText.trim() && !lyricsText.trim() && !title.trim()) return;
     setAmping(true);
     try {
-      const base = stripStylesSuffix(prompt);
+      const baseSummary = stripStylesSuffix(styleText);
+      const baseLyrics = stripStylesSuffix(lyricsText);
       // Build an intent-preserving directive for music with selected options
       const wantsArabic = langChoice === 'ar' || (langChoice === 'auto' && language === 'ar');
       const includeBits: string[] = [];
@@ -316,19 +305,22 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
         ? 'مهمة: حسّن هذا التوجيه لتوليد موسيقى فقط دون انحراف عن نية المستخدم. ركّز على الأسلوب والمزاج والبنية والإيقاع والسرعة والمقامات والآلات. أعد صياغته كسطر واحد موجز وجاهز للاستخدام.'
         : 'Task: Improve this strictly for music generation without drifting from user intent. Focus on style, mood, structure, tempo, scales/modes, and instruments. Return a single concise, production-ready line.';
 
-      const directive = [directiveCore, includeLine, safetyLine, lyricsLine, languageHint].filter(Boolean).join('\n');
+      const durationLine = wantsArabic ? `المدة المستهدفة: ${Math.min(120, duration)} ثانية` : `Target duration: ${Math.min(120, duration)}s`;
+      const titleLine = title ? (wantsArabic ? `العنوان: ${title}` : `Title: ${title}`) : '';
       const stylesLine = buildStylesSuffix();
-
-      const composed = [directive, base, stylesLine].filter(Boolean).join('\n');
+      const contentLine = wantsArabic ? `ملخص الأسلوب: ${baseSummary}` : `Style brief: ${baseSummary}`;
+      const lyricsContent = baseLyrics ? (wantsArabic ? `الكلمات:\n${baseLyrics}` : `Lyrics:\n${baseLyrics}`) : '';
+      const directive = [directiveCore, includeLine, safetyLine, lyricsLine, languageHint, durationLine].filter(Boolean).join('\n');
+      const composed = [directive, titleLine, contentLine, stylesLine, lyricsContent].filter(Boolean).join('\n');
       const { data, error } = await supabase.functions.invoke('prompt-amp', {
         body: { text: composed, mode: 'music' }
       });
       if (error) throw error;
       const improved = (data?.text || '').toString();
       if (!improved) throw new Error(language==='ar' ? 'تعذّر التحسين' : 'Amp failed');
-      const capped = improved.slice(0, limit);
+      const capped = improved.slice(0, styleCap);
       setShowAmpModal(false);
-      setPrompt(capped);
+      setStyleText(capped);
       toast.success(language==='ar' ? 'تم تحسين التوجيه' : 'Prompt enhanced');
     } catch (e: any) {
       toast.error((language==='ar' ? 'فشل التحسين: ' : 'Amp failed: ') + (e?.message || String(e)));
@@ -366,20 +358,28 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
         return;
       }
       
-      // INSERT PLACEHOLDER RECORD FIRST - This ensures the generation counts toward limit
-      // even if something fails later (network, storage, etc.)
+      // Compose final prompt from split fields and chips (reusable)
+      const wantsArabicGen = langChoice === 'ar' || (langChoice === 'auto' && language === 'ar');
+      const stylesLineGen = buildStylesSuffix();
+      const titleLineGen = title ? (wantsArabicGen ? `العنوان: ${title}` : `Title: ${title}`) : '';
+      const durationLineGen = wantsArabicGen ? `المدة المستهدفة: ${Math.min(120, duration)} ثانية` : `Target duration: ${Math.min(120, duration)}s`;
+      const contentLineGen = styleText ? (wantsArabicGen ? `ملخص الأسلوب: ${styleText}` : `Style brief: ${styleText}`) : '';
+      const lyricsContentGen = lyricsText ? (wantsArabicGen ? `الكلمات:\n${lyricsText}` : `Lyrics:\n${lyricsText}`) : '';
+      const fullPrompt = [titleLineGen, contentLineGen, stylesLineGen, durationLineGen, lyricsContentGen].filter(Boolean).join('\n');
+
+      // INSERT PLACEHOLDER RECORD FIRST - ensures the generation counts toward limit
       const placeholderFileName = `${user.id}/${Date.now()}_pending.mp3`;
       const { data: placeholderData, error: placeholderError } = await (supabase as any)
         .from('user_music_tracks')
         .insert({
           user_id: user.id,
-          prompt: prompt,
+          prompt: fullPrompt,
           include_styles: includeTags.length ? includeTags : null,
           requested_duration_seconds: Math.min(120, duration),
           provider: 'runware',
           model: 'elevenlabs:1@1',
           storage_path: placeholderFileName,
-          signed_url: null, // Will update after successful generation
+          signed_url: null,
           mime: 'audio/mpeg',
           meta: {
             status: 'generating',
@@ -397,8 +397,7 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
       setSongsUsed((v) => v + 1);
       setSongsRemaining((v) => Math.max(0, v - 1));
       
-      // Full prompt already contains styles wording (Option A)
-      const fullPrompt = prompt;
+      // fullPrompt already composed above
       
       // Call Runware directly from frontend (as before)
       const runwareResponse = await fetch('https://api.runware.ai/v1/inference', {
@@ -512,30 +511,40 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
     }
   };
 
-  // Load monthly usage on mount
+  // Load monthly usage on mount (guarded)
   useEffect(() => {
+    if (usageLoadedRef.current) return;
+    usageLoadedRef.current = true;
     (async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
-          console.log('[MusicStudio] No user found');
+          if (import.meta && import.meta.env && import.meta.env.DEV) {
+            console.log('[MusicStudio] No user found');
+          }
           return;
         }
-        console.log('[MusicStudio] User ID:', user.id);
+        if (import.meta && import.meta.env && import.meta.env.DEV) {
+          console.log('[MusicStudio] User ID:', user.id);
+        }
         const now = new Date();
         const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
-        console.log('[MusicStudio] Start of month (UTC):', startOfMonth.toISOString());
-        
+        if (import.meta && import.meta.env && import.meta.env.DEV) {
+          console.log('[MusicStudio] Start of month (UTC):', startOfMonth.toISOString());
+        }
         // Fetch actual data instead of using count with head:true
         const { data, error } = await (supabase as any)
           .from('user_music_tracks')
           .select('id')
           .eq('user_id', user.id)
           .gte('created_at', startOfMonth.toISOString());
-        
-        console.log('[MusicStudio] Query result:', { dataLength: data?.length, error });
+        if (import.meta && import.meta.env && import.meta.env.DEV) {
+          console.log('[MusicStudio] Query result:', { dataLength: data?.length, error });
+        }
         const used = data?.length || 0;
-        console.log('[MusicStudio] Setting songs used:', used);
+        if (import.meta && import.meta.env && import.meta.env.DEV) {
+          console.log('[MusicStudio] Setting songs used:', used);
+        }
         setSongsUsed(used);
         setSongsRemaining(Math.max(0, 5 - used));
       } catch (e) {
@@ -729,19 +738,47 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
       </Card>
 
       <Card className="p-4 md:p-5 space-y-3">
-        <div className="flex flex-col md:flex-row md:items-start gap-3">
-          <Textarea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder={language === 'ar' ? 'اكتب التوجيه...' : 'Prompt...'}
-            rows={3}
-            className="flex-1"
-          />
+        <div className="space-y-3">
+          <div className="flex flex-col md:flex-row gap-3">
+            <Input
+              value={title}
+              onChange={(e)=> setTitle(e.target.value.slice(0,100))}
+              placeholder={language==='ar' ? 'عنوان قصير (اختياري)' : 'Short title (optional)'}
+              className="md:w-1/3"
+            />
+            <div className="flex-1 flex flex-col gap-2">
+              <Textarea
+                value={styleText}
+                onChange={(e) => setStyleText(Array.from(e.target.value).slice(0, styleCap).join(''))}
+                placeholder={language === 'ar' ? 'وصف الأسلوب/الفكرة (حتى 350 حرفًا)' : 'Style/idea brief (up to 350 chars)'}
+                rows={3}
+                className="w-full"
+              />
+              <div className="text-xs text-muted-foreground flex justify-between">
+                <span>{language==='ar' ? 'الأسلوب' : 'Style'}: {Array.from(styleText).length} / {styleCap}</span>
+                <span>{language==='ar' ? 'الكل المتبقي' : 'Total remaining'}: {remainingOverall}</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Textarea
+              value={lyricsText}
+              onChange={(e) => setLyricsText(Array.from(e.target.value).slice(0, lyricsCap).join(''))}
+              placeholder={language === 'ar' ? 'الكلمات (اختياري — سيُستخدم المتبقي من الحروف)' : 'Lyrics (optional — uses remaining characters)'}
+              rows={4}
+              className="w-full"
+            />
+            <div className="text-xs text-muted-foreground">
+              {language==='ar'
+                ? `الكلمات: ${Array.from(lyricsText).length} / ${lyricsCap}`
+                : `Lyrics: ${Array.from(lyricsText).length} / ${lyricsCap}`}
+            </div>
+          </div>
           <div className="flex items-center gap-2 self-start">
             <Button
               variant="outline"
               size="sm"
-              disabled={amping || submitting || !prompt.trim()}
+              disabled={amping || submitting || (!styleText.trim() && !lyricsText.trim() && !title.trim())}
               onClick={handleAmp}
               aria-busy={amping}
             >
@@ -781,19 +818,11 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
               <option value={90}>↔ 1:30</option>
               <option value={120}>↔ 2:00</option>
             </select>
-            <button
-              type="button"
-              aria-label={seedLocked ? (language==='ar'?'إلغاء قفل البذرة':'Unlock seed') : (language==='ar'?'قفل البذرة':'Lock seed')}
-              className="px-2 py-1 rounded-md border hover:bg-accent hover:text-accent-foreground transition"
-              onClick={() => setSeedLocked((v)=>!v)}
-              title={seedLocked ? (language==='ar'?'إلغاء قفل البذرة':'Unlock seed') : (language==='ar'?'قفل البذرة':'Lock seed')}
-            >
-              {seedLocked ? '🔒' : '🔓'}
-            </button>
+            
             {submitting && <span className="text-emerald-600 animate-spin">🎵</span>}
           </div>
           <div className={`ml-auto font-medium ${overLimit ? 'text-red-600' : 'text-emerald-600'}`}>
-            {language === 'ar' ? `المتبقي ${remaining} / 500` : `${remaining} / 500 remaining`}
+            {language === 'ar' ? `المتبقي الكلي ${remainingOverall} من ${limit}` : `Total remaining ${remainingOverall} / ${limit}`}
           </div>
           <div className="font-medium">
             {language === 'ar' ? `تم الاستخدام: ${songsUsed} من 5 هذا الشهر` : `Used ${songsUsed} of 5 this month`}
@@ -879,13 +908,19 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
                             .eq('storage_path', storagePath);
 
                           if (!count || count === 0) {
+                            const wantsArabic = langChoice === 'ar' || (langChoice === 'auto' && language === 'ar');
+                            const stylesLine = buildStylesSuffix();
+                            const titleLine = title ? (wantsArabic ? `العنوان: ${title}` : `Title: ${title}`) : '';
+                            const contentLine = styleText ? (wantsArabic ? `ملخص الأسلوب: ${styleText}` : `Style brief: ${styleText}`) : '';
+                            const lyricsContent = lyricsText ? (wantsArabic ? `الكلمات:\n${lyricsText}` : `Lyrics:\n${lyricsText}`) : '';
+                            const savePrompt = [titleLine, contentLine, stylesLine, lyricsContent].filter(Boolean).join('\n');
                             await (supabase as any).from('user_music_tracks').insert({
                               user_id: user.id,
-                              title: prompt.substring(0, 100),
+                              title: (title || (styleText + ' ' + (lyricsText ? lyricsText.slice(0,40) : ''))).substring(0, 100),
                               storage_path: storagePath,
-                              signed_url: publicUrl,  // Save the full URL like Tasjeel does!
+                              signed_url: publicUrl,
                               duration_sec: Math.min(120, duration),
-                              prompt: prompt,
+                              prompt: savePrompt,
                             });
                           }
                         }

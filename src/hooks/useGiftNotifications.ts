@@ -12,6 +12,7 @@ interface GiftNotification {
 }
 
 export function useGiftNotifications() {
+  const DEV = !!(import.meta && import.meta.env && import.meta.env.DEV);
   const { user, loading } = useAuth();
   const [currentGift, setCurrentGift] = useState<GiftNotification | null>(null);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
@@ -20,7 +21,7 @@ export function useGiftNotifications() {
     // CRITICAL: Wait for auth to complete AND user to be logged in
     if (loading || !user?.id) return;
 
-    console.log('Gift notification system ready - setting up listener for user:', user.id);
+    if (DEV) console.log('Gift notification system ready - setting up listener for user:', user.id);
 
     // Listen for new notifications of type 'admin_gifts'
     const channel = supabase
@@ -34,13 +35,13 @@ export function useGiftNotifications() {
           filter: `user_id=eq.${user.id}`
         },
         (payload) => {
-          console.log('New notification received:', payload);
+          if (DEV) console.log('New notification received:', payload);
           
           const notification = payload.new;
           
           // Check if this is an admin gift notification
           if (notification.type === 'admin_gifts' && notification.data) {
-            console.log('Gift notification detected:', notification);
+            if (DEV) console.log('Gift notification detected:', notification);
             
             const giftData = notification.data;
             
@@ -58,12 +59,12 @@ export function useGiftNotifications() {
         }
       )
       .subscribe((status) => {
-        console.log('Gift notification subscription status:', status);
+        if (DEV) console.log('Gift notification subscription status:', status);
       });
 
     // Cleanup
     return () => {
-      console.log('Cleaning up gift notification listener');
+      if (DEV) console.log('Cleaning up gift notification listener');
       supabase.removeChannel(channel);
     };
   }, [user?.id, loading]);

@@ -1,5 +1,5 @@
 
-import React from "react";
+import React, { useRef, useEffect } from "react";
 
 interface UnreadBadgeProps {
   count: number;
@@ -9,11 +9,20 @@ interface UnreadBadgeProps {
 }
 
 export function UnreadBadge({ count, size = "md", blink = false, className = "" }: UnreadBadgeProps) {
-  // Debug logging
-  console.log(`🔍 UnreadBadge render: count=${count}, size=${size}, blink=${blink}`);
+  const DEV = !!(import.meta && import.meta.env && import.meta.env.DEV);
+  const lastCountRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!DEV) return;
+    if (lastCountRef.current !== count) {
+      lastCountRef.current = count;
+      console.log(`🔍 UnreadBadge render: count=${count}, size=${size}, blink=${blink}`);
+    }
+  }, [DEV, count, size, blink]);
   
   if (!count || count < 1) {
-    console.log(`🔍 UnreadBadge not rendering: count is ${count}`);
+    if (DEV && lastCountRef.current !== count) {
+      console.log(`🔍 UnreadBadge not rendering: count is ${count}`);
+    }
     return null;
   }
 
@@ -21,7 +30,9 @@ export function UnreadBadge({ count, size = "md", blink = false, className = "" 
   const sz = size === "sm" ? "h-3 w-3 text-[9px] min-w-[13px]" : "h-5 w-5 text-xs min-w-[20px]";
   const blinkClass = blink ? "animate-blink" : "";
 
-  console.log(`🔍 UnreadBadge rendering with display=${display}, classes=${sz} ${blinkClass}`);
+  if (DEV && lastCountRef.current !== count) {
+    console.log(`🔍 UnreadBadge rendering with display=${display}, classes=${sz} ${blinkClass}`);
+  }
 
   return (
     <span

@@ -32,7 +32,7 @@
     <script type="module">
       const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
       if (key) {
-        const url = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places,marker&v=beta`;
+        const url = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places,marker&v=beta&loading=async`;
         const s = document.createElement('script');
         s.src = url;
         s.async = true;
