@@ -57,6 +57,7 @@ export default function MusicStudio() {
   const { language } = useTheme();
   const [activeTab, setActiveTab] = useState<'compose' | 'editor'>('compose');
 
+
   return (
     <div className="w-full max-w-6xl mx-auto p-3 md:p-6 pb-20 md:pb-6 space-y-4">
       <div className="flex items-center justify-between">
@@ -154,10 +155,83 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
   // Minimal mode only: styles include/exclude + prompt + duration
   const [submitting, setSubmitting] = useState(false);
   const [amping, setAmping] = useState(false);
+  // Amp options modal state
+  const [showAmpModal, setShowAmpModal] = useState(false);
+  const [lyricsMode, setLyricsMode] = useState<'preserve'|'continue'|'generate'>('preserve');
+  const [includeTempo, setIncludeTempo] = useState(true);
+  const [includeKey, setIncludeKey] = useState(false);
+  const [includeTimeSig, setIncludeTimeSig] = useState(false);
+  const [includeStructure, setIncludeStructure] = useState(true);
+  const [includeInstrumentsOpt, setIncludeInstrumentsOpt] = useState(true);
+  const [langChoice, setLangChoice] = useState<'auto'|'en'|'ar'>('auto');
+  const [noGenreDrift, setNoGenreDrift] = useState(true);
+  const [noNewInstruments, setNoNewInstruments] = useState(true);
   const [audios, setAudios] = useState<Array<{ url: string; mime: string; meta?: any; createdAt: number; saved?: boolean }>>([]);
   const [lastError, setLastError] = useState<string | null>(null);
   const [songsUsed, setSongsUsed] = useState(0);
   const [songsRemaining, setSongsRemaining] = useState(5);
+
+  // Open the Amp options modal
+  function handleAmp() {
+    if (!prompt.trim()) return;
+    setShowAmpModal(true);
+  }
+
+  // Amp options modal (lives inside ComposeTab)
+  const ampModal = (
+    showAmpModal && createPortal(
+      <div className="fixed inset-0 z-[2147483647] flex items-center justify-center">
+        <div className="absolute inset-0 bg-black/50" onClick={()=>setShowAmpModal(false)} />
+        <div className="relative w-[92vw] max-w-md rounded-lg border bg-background p-4 shadow-xl">
+          <h3 className="font-semibold mb-3">{language==='ar'?'إعدادات التحسين (AMP)':'Amp options'}</h3>
+          <div className="space-y-3 text-sm">
+            <div>
+              <div className="font-medium mb-1">{language==='ar'?'وضع الكلمات':'Lyrics mode'}</div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <label className="inline-flex items-center gap-2"><input type="radio" name="lyricsMode" checked={lyricsMode==='preserve'} onChange={()=>setLyricsMode('preserve')} />{language==='ar'?'حافظ عليها':'Preserve'}</label>
+                <label className="inline-flex items-center gap-2"><input type="radio" name="lyricsMode" checked={lyricsMode==='continue'} onChange={()=>setLyricsMode('continue')} />{language==='ar'?'أكملها':'Continue'}</label>
+                <label className="inline-flex items-center gap-2"><input type="radio" name="lyricsMode" checked={lyricsMode==='generate'} onChange={()=>setLyricsMode('generate')} />{language==='ar'?'أنشئ كاملة':'Generate full'}</label>
+              </div>
+            </div>
+
+            <div>
+              <div className="font-medium mb-1">{language==='ar'?'تضمين في السطر':'Include in line'}</div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="inline-flex items-center gap-2"><input type="checkbox" checked={includeTempo} onChange={(e)=>setIncludeTempo(e.target.checked)} />{language==='ar'?'السرعة/BPM':'Tempo/BPM'}</label>
+                <label className="inline-flex items-center gap-2"><input type="checkbox" checked={includeKey} onChange={(e)=>setIncludeKey(e.target.checked)} />{language==='ar'?'المقام/السلم':'Key/Scale/Mode'}</label>
+                <label className="inline-flex items-center gap-2"><input type="checkbox" checked={includeTimeSig} onChange={(e)=>setIncludeTimeSig(e.target.checked)} />{language==='ar'?'الميزان':'Time signature'}</label>
+                <label className="inline-flex items-center gap-2"><input type="checkbox" checked={includeStructure} onChange={(e)=>setIncludeStructure(e.target.checked)} />{language==='ar'?'البنية':'Structure'}</label>
+                <label className="inline-flex items-center gap-2"><input type="checkbox" checked={includeInstrumentsOpt} onChange={(e)=>setIncludeInstrumentsOpt(e.target.checked)} />{language==='ar'?'الآلات':'Instrumentation'}</label>
+              </div>
+            </div>
+
+            <div>
+              <div className="font-medium mb-1">{language==='ar'?'اللغة':'Language'}</div>
+              <div className="grid grid-cols-3 gap-2">
+                <label className="inline-flex items-center gap-2"><input type="radio" name="langChoice" checked={langChoice==='auto'} onChange={()=>setLangChoice('auto')} />Auto</label>
+                <label className="inline-flex items-center gap-2"><input type="radio" name="langChoice" checked={langChoice==='en'} onChange={()=>setLangChoice('en')} />English</label>
+                <label className="inline-flex items-center gap-2"><input type="radio" name="langChoice" checked={langChoice==='ar'} onChange={()=>setLangChoice('ar')} />العربية</label>
+              </div>
+            </div>
+
+            <div>
+              <div className="font-medium mb-1">{language==='ar'?'السلامة':'Safety'}</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <label className="inline-flex items-center gap-2"><input type="checkbox" checked={noGenreDrift} onChange={(e)=>setNoGenreDrift(e.target.checked)} />{language==='ar'?'ممنوع انحراف النوع/الأسلوب':'No genre drift'}</label>
+                <label className="inline-flex items-center gap-2"><input type="checkbox" checked={noNewInstruments} onChange={(e)=>setNoNewInstruments(e.target.checked)} />{language==='ar'?'لا آلات جديدة غير مذكورة':'No new instruments'}</label>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={()=>setShowAmpModal(false)}>{language==='ar'?'إلغاء':'Cancel'}</Button>
+            <Button size="sm" onClick={handleAmpSubmit} aria-busy={amping}>{language==='ar'?'تحسين':'Amp'}</Button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )
+  );
 
   // 3000 character cap across request fields (prompt only; styles do NOT count)
   const totalChars = useMemo(() => {
@@ -207,16 +281,43 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [includeTags, instrumentTags, moodTags, language]);
 
-  async function handleAmp() {
+  // New: AMP submit with options
+  async function handleAmpSubmit() {
     if (!prompt.trim()) return;
     setAmping(true);
     try {
       const base = stripStylesSuffix(prompt);
+      // Build an intent-preserving directive for music with selected options
+      const wantsArabic = langChoice === 'ar' || (langChoice === 'auto' && language === 'ar');
+      const includeBits: string[] = [];
+      if (includeTempo) includeBits.push(wantsArabic ? 'السرعة/BPM' : 'tempo/BPM');
+      if (includeKey) includeBits.push(wantsArabic ? 'المقام/السلم' : 'key/scale/mode');
+      if (includeTimeSig) includeBits.push(wantsArabic ? 'الميزان' : 'time signature');
+      if (includeStructure) includeBits.push(wantsArabic ? 'البنية' : 'structure');
+      if (includeInstrumentsOpt) includeBits.push(wantsArabic ? 'الآلات' : 'instrumentation');
+      const includeLine = includeBits.length ? (wantsArabic ? `ضمّن في السطر: ${includeBits.join(', ')}` : `Include in line: ${includeBits.join(', ')}`) : '';
+
+      const safetyBits: string[] = [];
+      if (noGenreDrift) safetyBits.push(wantsArabic ? 'ممنوع الانحراف عن النوع/الأسلوب' : 'no genre/style drift');
+      if (noNewInstruments) safetyBits.push(wantsArabic ? 'لا تضف آلات غير مذكورة' : 'no adding new instruments unless missing');
+      const safetyLine = safetyBits.length ? (wantsArabic ? `سلامة: ${safetyBits.join(', ')}` : `Safety: ${safetyBits.join(', ')}`) : '';
+
+      const lyricsLine = (
+        lyricsMode === 'preserve'
+          ? (wantsArabic ? 'الكلمات: إن وجدت فاحفظها حرفيًا.' : 'Lyrics: if provided, preserve verbatim.')
+          : lyricsMode === 'continue'
+            ? (wantsArabic ? 'الكلمات: إن كانت موجودة فأكملها بنفس اللغة والمزاج والوزن.' : 'Lyrics: if provided, continue in same language, mood, and meter.')
+            : (wantsArabic ? 'الكلمات: أنشئ كلمات كاملة موجزة قابلة للغناء تتماشى مع الأسلوب والمزاج والآلات.' : 'Lyrics: generate concise, singable full lyrics aligned to style, mood, and instruments.')
+      );
+
+      const languageHint = langChoice === 'auto' ? '' : (wantsArabic ? 'استخدم العربية.' : 'Use English.');
+
+      const directiveCore = wantsArabic
+        ? 'مهمة: حسّن هذا التوجيه لتوليد موسيقى فقط دون انحراف عن نية المستخدم. ركّز على الأسلوب والمزاج والبنية والإيقاع والسرعة والمقامات والآلات. أعد صياغته كسطر واحد موجز وجاهز للاستخدام.'
+        : 'Task: Improve this strictly for music generation without drifting from user intent. Focus on style, mood, structure, tempo, scales/modes, and instruments. Return a single concise, production-ready line.';
+
+      const directive = [directiveCore, includeLine, safetyLine, lyricsLine, languageHint].filter(Boolean).join('\n');
       const stylesLine = buildStylesSuffix();
-      // Build a compact, music-specific directive so Deepseek stays on music topic.
-      const directive = language === 'ar'
-        ? 'مهمة: حسّن هذا التوجيه لتوليد موسيقى فقط دون انحراف عن نية المستخدم. ركّز على الأسلوب والمزاج والبنية والإيقاع والسرعة والمقامات والآلات (عود، قانون، ناي، كمان، تشيلو، بيانو، جيتار، دربوكة/إيقاع، باص، طبول، سنث)، وأنماط مثل الراب وR&B والبوب والروك والخليجي والناشيد. أعد صياغته كسطر واحد موجز قابل للاستخدام مباشرة.'
-        : 'Task: Improve this prompt strictly for music generation without drifting from user intent. Focus on style, mood, structure, tempo, scales/modes, and instruments (oud, qanun, ney, violin, cello, piano, acoustic guitar, darbuka/percussion, bass, drums, synth), and styles like rap, R&B, pop, rock, khaleeji, nasheed. Return a single concise line ready to use.';
 
       const composed = [directive, base, stylesLine].filter(Boolean).join('\n');
       const { data, error } = await supabase.functions.invoke('prompt-amp', {
@@ -226,6 +327,7 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
       const improved = (data?.text || '').toString();
       if (!improved) throw new Error(language==='ar' ? 'تعذّر التحسين' : 'Amp failed');
       const capped = improved.slice(0, limit);
+      setShowAmpModal(false);
       setPrompt(capped);
       toast.success(language==='ar' ? 'تم تحسين التوجيه' : 'Prompt enhanced');
     } catch (e: any) {
@@ -498,6 +600,7 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
 
   return (
     <div className="space-y-4">
+      {ampModal}
       <Card className="p-4 md:p-5 space-y-4 overflow-visible">
         <div className="grid md:grid-cols-3 gap-3">
           {/* Styles */}
