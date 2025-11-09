@@ -3,7 +3,6 @@ import { useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase, ensurePassport } from "@/integrations/supabase/client";
 import Loading from "@/components/ui/loading";
-import { FawranPaymentOverlay } from "@/components/fawran/FawranPaymentOverlay";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -462,17 +461,8 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
       isSubscribed: subscriptionStatus.isSubscribed,
       needsPayment: subscriptionStatus.needsPayment
     });
-    
-    // Show Fawran payment overlay
-    return (
-      <FawranPaymentOverlay 
-        userEmail={user.email || ''} 
-        onClose={() => {
-          // Refresh the page to re-check subscription status
-          window.location.reload();
-        }}
-      />
-    );
+    // Option A: Allow access when authenticated (no overlay)
+    return <>{children}</>;
   }
 
   if (DEV) console.log("ProtectedRoute: User has valid subscription, allowing access");

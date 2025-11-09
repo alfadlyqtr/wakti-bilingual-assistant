@@ -378,131 +378,7 @@ export default function Account() {
     }
   };
 
-  // Billing section component
-  const BillingSection = ({ language }: { language: string }) => {
-    if (isLoadingSubscription) {
-      return (
-        <Card>
-          <CardContent className="flex items-center justify-center py-8">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-              <p className="text-muted-foreground">{t("loading", language)}</p>
-            </div>
-          </CardContent>
-        </Card>
-      );
-    }
-
-    const profile = subscriptionData?.profile;
-    const subscriptions = subscriptionData?.subscriptions || [];
-
-    return (
-      <>
-        {/* Current Subscription Status */}
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("subscriptionInfo", language)}</CardTitle>
-            <CardDescription>
-              {language === 'ar' ? 'معلومات الاشتراك الحالي' : 'Current subscription information'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {profile?.is_subscribed ? (
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-5 w-5 text-green-500" />
-                  <span className="font-medium text-green-700 dark:text-green-400">
-                    {language === 'ar' ? 'اشتراك نشط' : 'Active Subscription'}
-                  </span>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">{language === 'ar' ? 'الخطة' : 'Plan'}</p>
-                    <p className="font-medium">{profile.plan_name || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">{language === 'ar' ? 'الحالة' : 'Status'}</p>
-                    <p className="font-medium capitalize">{profile.subscription_status || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">{language === 'ar' ? 'بدء الاشتراك' : 'Started'}</p>
-                    <p className="font-medium">
-                      {profile.billing_start_date 
-                        ? new Date(profile.billing_start_date).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US')
-                        : 'N/A'
-                      }
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">{language === 'ar' ? 'التجديد التالي' : 'Next Billing'}</p>
-                    <p className="font-medium">
-                      {profile.next_billing_date 
-                        ? new Date(profile.next_billing_date).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US')
-                        : 'N/A'
-                      }
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">{language === 'ar' ? 'طريقة الدفع' : 'Payment Method'}</p>
-                    <p className="font-medium capitalize">{profile.payment_method || 'N/A'}</p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center justify-center py-8">
-                <div className="text-center">
-                  <XCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-lg font-medium text-muted-foreground">
-                    {language === 'ar' ? 'لا يوجد اشتراك نشط' : 'No active subscription'}
-                  </p>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    {language === 'ar' ? 'يرجى الاشتراك للوصول لجميع الميزات' : 'Please subscribe to access all features'}
-                  </p>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Payment History */}
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("paymentHistory", language)}</CardTitle>
-            <CardDescription>
-              {language === 'ar' ? 'سجل المدفوعات والاشتراكات' : 'Payment and subscription history'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {subscriptions.length > 0 ? (
-              <div className="space-y-3">
-                {subscriptions.map((subscription) => (
-                  <div key={subscription.id} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div className="space-y-1">
-                      <p className="font-medium text-sm">{subscription.plan_name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {language === 'ar' ? 'بدأ في' : 'Started'}: {new Date(subscription.start_date).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US')}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium text-sm">{subscription.billing_amount} {subscription.billing_currency}</p>
-                      <p className="text-xs text-muted-foreground capitalize">{subscription.status}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-4">
-                <p className="text-muted-foreground">
-                  {language === 'ar' ? 'لا يوجد سجل مدفوعات' : 'No payment history found'}
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </>
-    );
-  };
+  
   
   return (
     <PageContainer showHeader={false}>
@@ -797,7 +673,6 @@ export default function Account() {
           </TabsContent>
 
           <TabsContent value="billing" className="space-y-6">
-            <BillingSection language={language} />
           </TabsContent>
         </Tabs>
       </div>
