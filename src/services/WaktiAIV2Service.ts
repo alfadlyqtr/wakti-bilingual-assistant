@@ -583,6 +583,8 @@ class WaktiAIV2ServiceClass {
     signal?: AbortSignal
   ) {
     try {
+      // Gate for emergency non-streaming fallback (disabled by default; streaming stays streaming)
+      const ENABLE_CORS_FALLBACK = false;
       if (!userId) {
         await ensurePassport();
         userId = await getCurrentUserId();
@@ -707,7 +709,40 @@ class WaktiAIV2ServiceClass {
             if (response.ok) break;
 
             if (attempt === maxRetries) {
-              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+              // On last attempt, try non-streaming fallback before throwing
+              const status = response.status;
+              const statusText = response.statusText;
+              const isGatewayish = [504, 502, 522, 524].includes(status);
+              if (ENABLE_CORS_FALLBACK && isGatewayish) {
+                try {
+                  const supabaseUrl = ((import.meta as any).env && (import.meta as any).env.VITE_SUPABASE_URL) || 'https://hxauxozopvpzpdygoqwf.supabase.co';
+                  const fallbackResp = await fetch(`${supabaseUrl}/functions/v1/text-generator`, {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${session.access_token}`,
+                      'Content-Type': 'application/json',
+                      'apikey': maybeAnonKey
+                    },
+                    body: JSON.stringify({
+                      message,
+                      language,
+                      conversationId,
+                      activeTrigger,
+                      recentMessages: enhancedMessages,
+                      conversationSummary: finalSummary,
+                      personalTouch: pt
+                    })
+                  });
+                  if (fallbackResp.ok) {
+                    const json = await fallbackResp.json().catch(()=>({}));
+                    const respText = (json?.response || json?.text || '').toString();
+                    onToken?.(respText);
+                    onComplete?.(json?.metadata || {});
+                    return { response: respText, metadata: json?.metadata || {} } as any;
+                  }
+                } catch {}
+              }
+              throw new Error(`HTTP ${status}: ${statusText}`);
             }
 
             // Brief delay before retry on mobile networks
@@ -715,6 +750,38 @@ class WaktiAIV2ServiceClass {
 
           } catch (error: any) {
             if (attempt === maxRetries || error.name === 'AbortError') {
+              // On last attempt with a network/CORS style error, try non-streaming fallback once
+              const msg = String(error?.message || error || '').toLowerCase();
+              const looksCorsish = msg.includes('failed to fetch') || msg.includes('cors');
+              if (ENABLE_CORS_FALLBACK && attempt === maxRetries && looksCorsish) {
+                try {
+                  const supabaseUrl = ((import.meta as any).env && (import.meta as any).env.VITE_SUPABASE_URL) || 'https://hxauxozopvpzpdygoqwf.supabase.co';
+                  const fallbackResp = await fetch(`${supabaseUrl}/functions/v1/text-generator`, {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${session.access_token}`,
+                      'Content-Type': 'application/json',
+                      'apikey': maybeAnonKey
+                    },
+                    body: JSON.stringify({
+                      message,
+                      language,
+                      conversationId,
+                      activeTrigger,
+                      recentMessages: enhancedMessages,
+                      conversationSummary: finalSummary,
+                      personalTouch: this.ensurePersonalTouch()
+                    })
+                  });
+                  if (fallbackResp.ok) {
+                    const json = await fallbackResp.json().catch(()=>({}));
+                    const respText = (json?.response || json?.text || '').toString();
+                    onToken?.(respText);
+                    onComplete?.(json?.metadata || {});
+                    return { response: respText, metadata: json?.metadata || {} } as any;
+                  }
+                } catch {}
+              }
               throw error;
             }
             console.warn(`🔄 Retry attempt ${attempt}/${maxRetries} for mobile request [${requestId}]`);

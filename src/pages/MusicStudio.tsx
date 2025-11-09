@@ -164,9 +164,17 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
   const [includeTimeSig, setIncludeTimeSig] = useState(false);
   const [includeStructure, setIncludeStructure] = useState(true);
   const [includeInstrumentsOpt, setIncludeInstrumentsOpt] = useState(true);
+  const [includeVocalsOpt, setIncludeVocalsOpt] = useState(true);
   const [langChoice, setLangChoice] = useState<'auto'|'en'|'ar'>('auto');
   const [noGenreDrift, setNoGenreDrift] = useState(true);
   const [noNewInstruments, setNoNewInstruments] = useState(true);
+  const [vocalType, setVocalType] = useState<'auto'|'none'|'female'|'male'>('auto');
+  // Tuning controls
+  const [creativity, setCreativity] = useState<number>(50); // 0-100
+  const [rhymeMode, setRhymeMode] = useState<'off'|'rhyme'|'syllables'|'both'>('off');
+  const [hookEmphasis, setHookEmphasis] = useState<boolean>(true);
+  const [producerIntensity, setProducerIntensity] = useState<number>(3); // 1-5
+  const [advancedOpen, setAdvancedOpen] = useState<boolean>(false);
   const [audios, setAudios] = useState<Array<{ url: string; mime: string; meta?: any; createdAt: number; saved?: boolean }>>([]);
   const [lastError, setLastError] = useState<string | null>(null);
   const [songsUsed, setSongsUsed] = useState(0);
@@ -178,6 +186,10 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
   // Open the Amp options modal
   function handleAmp() {
     if (!styleText.trim() && !lyricsText.trim() && !title.trim()) return;
+    if (hasBannedInput()) {
+      toast.error(language==='ar' ? 'تحتوي المدخلات على ألفاظ غير مسموحة.' : 'Inputs contain disallowed words.');
+      return;
+    }
     setShowAmpModal(true);
   }
 
@@ -191,24 +203,13 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
           <div className="space-y-3 text-sm">
             <div>
               <div className="font-medium mb-1">{language==='ar'?'وضع الكلمات':'Lyrics mode'}</div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                <label className="inline-flex items-center gap-2"><input type="radio" name="lyricsMode" checked={lyricsMode==='preserve'} onChange={()=>setLyricsMode('preserve')} />{language==='ar'?'حافظ عليها':'Preserve'}</label>
-                <label className="inline-flex items-center gap-2"><input type="radio" name="lyricsMode" checked={lyricsMode==='continue'} onChange={()=>setLyricsMode('continue')} />{language==='ar'?'أكملها':'Continue'}</label>
-                <label className="inline-flex items-center gap-2"><input type="radio" name="lyricsMode" checked={lyricsMode==='generate'} onChange={()=>setLyricsMode('generate')} />{language==='ar'?'أنشئ كاملة':'Generate full'}</label>
+              <div className="grid grid-cols-3 gap-2">
+                <label className="inline-flex items-center gap-2"><input type="radio" name="lyricsMode" checked={lyricsMode==='preserve'} onChange={()=>setLyricsMode('preserve')} />{language==='ar'?'حفظ':'Preserve'}</label>
+                <label className="inline-flex items-center gap-2"><input type="radio" name="lyricsMode" checked={lyricsMode==='continue'} onChange={()=>setLyricsMode('continue')} />{language==='ar'?'متابعة':'Continue'}</label>
+                <label className="inline-flex items-center gap-2"><input type="radio" name="lyricsMode" checked={lyricsMode==='generate'} onChange={()=>setLyricsMode('generate')} />{language==='ar'?'توليد كامل':'Generate full'}</label>
               </div>
             </div>
-
-            <div>
-              <div className="font-medium mb-1">{language==='ar'?'تضمين في السطر':'Include in line'}</div>
-              <div className="grid grid-cols-2 gap-2">
-                <label className="inline-flex items-center gap-2"><input type="checkbox" checked={includeTempo} onChange={(e)=>setIncludeTempo(e.target.checked)} />{language==='ar'?'السرعة/BPM':'Tempo/BPM'}</label>
-                <label className="inline-flex items-center gap-2"><input type="checkbox" checked={includeKey} onChange={(e)=>setIncludeKey(e.target.checked)} />{language==='ar'?'المقام/السلم':'Key/Scale/Mode'}</label>
-                <label className="inline-flex items-center gap-2"><input type="checkbox" checked={includeTimeSig} onChange={(e)=>setIncludeTimeSig(e.target.checked)} />{language==='ar'?'الميزان':'Time signature'}</label>
-                <label className="inline-flex items-center gap-2"><input type="checkbox" checked={includeStructure} onChange={(e)=>setIncludeStructure(e.target.checked)} />{language==='ar'?'البنية':'Structure'}</label>
-                <label className="inline-flex items-center gap-2"><input type="checkbox" checked={includeInstrumentsOpt} onChange={(e)=>setIncludeInstrumentsOpt(e.target.checked)} />{language==='ar'?'الآلات':'Instrumentation'}</label>
-              </div>
-            </div>
-
+            {/* Basic: Language, Safety master, Producer intensity, Creativity */}
             <div>
               <div className="font-medium mb-1">{language==='ar'?'اللغة':'Language'}</div>
               <div className="grid grid-cols-3 gap-2">
@@ -219,17 +220,90 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
             </div>
 
             <div>
-              <div className="font-medium mb-1">{language==='ar'?'السلامة':'Safety'}</div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                <label className="inline-flex items-center gap-2"><input type="checkbox" checked={noGenreDrift} onChange={(e)=>setNoGenreDrift(e.target.checked)} />{language==='ar'?'ممنوع انحراف النوع/الأسلوب':'No genre drift'}</label>
-                <label className="inline-flex items-center gap-2"><input type="checkbox" checked={noNewInstruments} onChange={(e)=>setNoNewInstruments(e.target.checked)} />{language==='ar'?'لا آلات جديدة غير مذكورة':'No new instruments'}</label>
+              <div className="font-medium mb-1">{language==='ar'?'السلامة (مبسّطة)':'Safety (simple)'}</div>
+              <label className="inline-flex items-center gap-2"><input type="checkbox" checked={noGenreDrift && noNewInstruments} onChange={(e)=>{setNoGenreDrift(e.target.checked); setNoNewInstruments(e.target.checked);}} />{language==='ar'?'ثبّت النوع والآلات المختارة':'Lock style and instruments'}</label>
+            </div>
+
+            <div className="space-y-2">
+              <div className="font-medium">{language==='ar'?'شدة الإنتاج':'Producer preset'}</div>
+              <div className="flex items-center gap-3">
+                <label className="min-w-28 text-muted-foreground text-xs">{language==='ar'?'القيمة':'Value'}</label>
+                <input type="range" min={1} max={5} step={1} value={producerIntensity} onChange={(e)=>setProducerIntensity(parseInt(e.target.value||'3'))} />
+                <span className="text-xs">{producerIntensity}</span>
               </div>
             </div>
+
+            <div className="space-y-2">
+              <div className="font-medium">{language==='ar'?'إبداع الكلمات':'Lyrics creativity'}</div>
+              <div className="flex items-center gap-3">
+                <label className="min-w-28 text-muted-foreground text-xs">{language==='ar'?'الإبداع':'Creativity'}</label>
+                <input type="range" min={0} max={100} step={5} value={creativity} onChange={(e)=>setCreativity(parseInt(e.target.value||'50'))} />
+                <span className="text-xs">{creativity}</span>
+              </div>
+            </div>
+
+            {/* Advanced drawer toggle */}
+            <button type="button" className="text-sm underline" onClick={()=>setAdvancedOpen(v=>!v)}>
+              {advancedOpen ? (language==='ar'?'إخفاء الإعدادات المتقدمة':'Hide advanced') : (language==='ar'?'إظهار الإعدادات المتقدمة':'Show advanced')}
+            </button>
+
+            {advancedOpen && (
+              <div className="mt-2 space-y-3">
+                <div>
+                  <div className="font-medium mb-1">{language==='ar'?'تضمين في السطر':'Include in line'}</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="inline-flex items-center gap-2"><input type="checkbox" checked={includeTempo} onChange={(e)=>setIncludeTempo(e.target.checked)} />{language==='ar'?'السرعة/BPM':'Tempo/BPM'}</label>
+                    <label className="inline-flex items-center gap-2"><input type="checkbox" checked={includeKey} onChange={(e)=>setIncludeKey(e.target.checked)} />{language==='ar'?'المقام/السلم':'Key/Scale/Mode'}</label>
+                    <label className="inline-flex items-center gap-2"><input type="checkbox" checked={includeTimeSig} onChange={(e)=>setIncludeTimeSig(e.target.checked)} />{language==='ar'?'الميزان':'Time signature'}</label>
+                    <label className="inline-flex items-center gap-2"><input type="checkbox" checked={includeStructure} onChange={(e)=>setIncludeStructure(e.target.checked)} />{language==='ar'?'البنية':'Structure'}</label>
+                    <label className="inline-flex items-center gap-2"><input type="checkbox" checked={includeInstrumentsOpt} onChange={(e)=>setIncludeInstrumentsOpt(e.target.checked)} />{language==='ar'?'الآلات':'Instrumentation'}</label>
+                    <label className="inline-flex items-center gap-2"><input type="checkbox" checked={includeVocalsOpt} onChange={(e)=>setIncludeVocalsOpt(e.target.checked)} />{language==='ar'?'الغناء/الصوت':'Vocals'}</label>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="font-medium mb-1">{language==='ar'?'السلامة (تفصيلي)':'Safety (advanced)'}</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <label className="inline-flex items-center gap-2"><input type="checkbox" checked={noGenreDrift} onChange={(e)=>setNoGenreDrift(e.target.checked)} />{language==='ar'?'ممنوع انحراف النوع/الأسلوب':'No genre drift'}</label>
+                    <label className="inline-flex items-center gap-2"><input type="checkbox" checked={noNewInstruments} onChange={(e)=>setNoNewInstruments(e.target.checked)} />{language==='ar'?'لا آلات جديدة غير مذكورة':'No new instruments'}</label>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="font-medium">{language==='ar'?'الكورس':'Hook/chorus'}</div>
+                  <label className="inline-flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={hookEmphasis} onChange={(e)=>setHookEmphasis(e.target.checked)} />
+                    {language==='ar'?'تركيز على اللازمة/الكورس':'Hook emphasis'}
+                  </label>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="font-medium">{language==='ar'?'قافية ومقاطع':'Rhyme & Syllables'}</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="inline-flex items-center gap-2"><input type="radio" name="rhymeMode" checked={rhymeMode==='off'} onChange={()=>setRhymeMode('off')} />{language==='ar'?'بدون':'Off'}</label>
+                    <label className="inline-flex items-center gap-2"><input type="radio" name="rhymeMode" checked={rhymeMode==='rhyme'} onChange={()=>setRhymeMode('rhyme')} />{language==='ar'?'قافية':'Rhyme'}</label>
+                    <label className="inline-flex items-center gap-2"><input type="radio" name="rhymeMode" checked={rhymeMode==='syllables'} onChange={()=>setRhymeMode('syllables')} />{language==='ar'?'مقاطع محكمة':'Tight syllables'}</label>
+                    <label className="inline-flex items-center gap-2"><input type="radio" name="rhymeMode" checked={rhymeMode==='both'} onChange={()=>setRhymeMode('both')} />{language==='ar'?'قافية + مقاطع':'Rhyme + Syllables'}</label>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="mt-4 flex justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={()=>setShowAmpModal(false)}>{language==='ar'?'إلغاء':'Cancel'}</Button>
-            <Button size="sm" onClick={handleAmpSubmit} aria-busy={amping}>{language==='ar'?'تحسين':'Amp'}</Button>
+            <Button variant="outline" size="sm" onClick={()=>setShowAmpModal(false)} disabled={amping}>
+              {language==='ar'?'إلغاء':'Cancel'}
+            </Button>
+            <Button size="sm" onClick={handleAmpSubmit} disabled={amping} aria-busy={amping}>
+              {amping ? (
+                <span className="inline-flex items-center gap-2">
+                  <span className="animate-spin">✨</span>
+                  <span>{language==='ar'?'...يجري التحسين':'Amping...'}</span>
+                </span>
+              ) : (
+                <span>{language==='ar'?'تحسين':'Amp'}</span>
+              )}
+            </Button>
           </div>
         </div>
       </div>,
@@ -240,12 +314,19 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
   // Caps: style max 350, lyrics gets remaining up to overall 800 (title excluded from cap)
   const limit = 800;
   const styleCap = 350;
+  const lyricsFixedCap = 450;
   const totalChars = useMemo(() => {
     const count = (s: string) => Array.from(s || '').length;
     return count(styleText || '') + count(lyricsText || '');
   }, [styleText, lyricsText]);
   const remainingOverall = Math.max(0, limit - totalChars);
-  const lyricsCap = Math.max(0, limit - Array.from(styleText || '').length);
+  const styleLen = useMemo(() => Array.from(styleText || '').length, [styleText]);
+  const lyricsCap = useMemo(() => {
+    const leftoverFromStyle = Math.max(0, styleCap - styleLen);
+    const base = lyricsFixedCap + leftoverFromStyle; // reallocate unused style chars
+    const maxAllowedByTotal = Math.max(0, limit - styleLen);
+    return Math.min(base, maxAllowedByTotal);
+  }, [styleLen]);
   const overLimit = totalChars > limit;
 
   // Helpers
@@ -256,18 +337,186 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
     if (includeTags.length > 0) parts.push(`${language==='ar' ? 'الأنماط' : 'Include styles'}: ${includeTags.join(', ')}`);
     if (instrumentTags.length > 0) parts.push(`${language==='ar' ? 'الآلات' : 'Instruments'}: ${instrumentTags.join(', ')}`);
     if (moodTags.length > 0) parts.push(`${language==='ar' ? 'المزاج' : 'Mode'}: ${moodTags.join(', ')}`);
+    // Only enforce vocals in style line when explicitly Female/Male (not auto/none)
+    if (vocalType === 'female') parts.push(`${language==='ar' ? 'الصوت' : 'Vocals'}: ${language==='ar' ? 'صوت أنثوي' : 'Female voice'}`);
+    if (vocalType === 'male') parts.push(`${language==='ar' ? 'الصوت' : 'Vocals'}: ${language==='ar' ? 'صوت ذكوري' : 'Male voice'}`);
     return parts.join('. ');
+  }
+
+  // Duration-aware max lyric lines
+  function getMaxLyricLines(sec: number) {
+    if (sec <= 30) return 6;      // short hook/verse
+    if (sec <= 60) return 10;     // verse + hook
+    if (sec <= 90) return 14;     // verse + hook + bridge (short)
+    return 18;                    // up to 2:00
+  }
+  const maxLyricLines = useMemo(() => getMaxLyricLines(Math.min(120, Math.max(10, duration || 30))), [duration]);
+  const lyricLineCount = useMemo(() => (lyricsText ? lyricsText.split(/\r?\n/).filter(l => l.trim()).length : 0), [lyricsText]);
+
+  // Arrangement mapping per duration (producer-style roadmap)
+  function getArrangementBrief(sec: number, wantsAr: boolean) {
+    const s = Math.min(120, Math.max(10, sec || 30));
+    if (s <= 30) {
+      return wantsAr
+        ? 'خريطة التوزيع: 0–4 ثانية مقدمة مُفلترة → 4–12 ثانية مقطع أول (آلات أقل) → 12–18 ثانية ما قبل اللازمة (تصاعد/رايزر) → 18–28 ثانية اللازمة (كامل الطقم وصوت أعرض) → 28–30 ثانية نهاية قصيرة واضحة.'
+        : 'Arrangement: 0–4s filtered intro → 4–12s verse (minimal instruments) → 12–18s pre-chorus (build/riser) → 18–28s chorus (full kit, wider stereo) → 28–30s button ending.';
+    }
+    if (s <= 60) {
+      return wantsAr
+        ? 'خريطة التوزيع: مقدمة قصيرة → مقطع أول → ما قبل اللازمة → اللازمة 1 → مقطع/انتقال → اللازمة 2 → خاتمة.'
+        : 'Arrangement: short intro → verse → pre-chorus → chorus 1 → interlude/transition → chorus 2 → outro.';
+    }
+    if (s <= 90) {
+      return wantsAr
+        ? 'خريطة التوزيع: مقدمة → مقطع → ما قبل اللازمة → اللازمة → جسر قصير → اللازمة (أعرض) → خاتمة.'
+        : 'Arrangement: intro → verse → pre-chorus → chorus → short bridge → bigger chorus → outro.';
+    }
+    return wantsAr
+      ? 'خريطة التوزيع: مقدمة → مقطع → ما قبل اللازمة → اللازمة → جسر → اللازمة النهائية (أعرض وأعلى طاقة) → خاتمة.'
+      : 'Arrangement: intro → verse → pre-chorus → chorus → bridge → final chorus (wider/louder) → outro.';
+  }
+
+  // Post-process helpers to reduce repetition in lyrics
+  function normalizeLine(s: string) {
+    return (s || '')
+      .toLowerCase()
+      .replace(/[^a-zA-Z\u0600-\u06FF0-9\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+  function firstNWords(s: string, n: number) {
+    if (!s) return '';
+    const parts = s.split(' ').filter(Boolean);
+    return parts.slice(0, Math.max(1, n)).join(' ');
+  }
+  function dedupeLines(lines: string[]) {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    const seenStarts = new Set<string>();
+    let repeatUsed = false; // allow one intentional repeat (chorus) later via filter
+    let lastKept: string | null = null;
+    for (const line of lines) {
+      const norm = normalizeLine(line);
+      if (!norm) continue;
+      const start = firstNWords(norm, 3);
+      const isExactRepeat = seen.has(norm);
+      const startsRepeat = start && seenStarts.has(start);
+      // Allow ONE non-adjacent repeat (probable chorus), only if line budget big enough (>=6)
+      const allowChorus = maxLyricLines >= 6;
+      if ((isExactRepeat || startsRepeat)) {
+        if (!repeatUsed && allowChorus && lastKept && normalizeLine(lastKept) !== norm) {
+          repeatUsed = true;
+          out.push(line);
+          lastKept = line;
+          continue;
+        }
+        continue;
+      }
+      seen.add(norm);
+      if (start) seenStarts.add(start);
+      out.push(line);
+      lastKept = line;
+    }
+    return out;
+  }
+
+  // Banned-terms guard (blocks AMP/Generate if present in style/title/lyrics)
+  const BANNED_PATTERNS: RegExp[] = [
+    // Strong profanity
+    /\bfuck(?:ing|ed)?\b/i, /mother\s*fuck(?:er|in[g]?)\b/i, /\bmofo\b/i, /f\W*off/i,
+    /\bshit\b/i, /bull\s*shit/i, /dip\s*shit/i,
+    /ass\s*hole/i, /arse\s*hole/i, /dumb\s*ass/i, /jack\s*ass/i,
+    /\bbitch(?:y)?\b/i, /son\s*of\s*a\s*bitch/i,
+    /\bbastard\b/i, /dick\s*head/i, /\bdick\b/i, /\bprick\b/i,
+    /\bpussy\b/i, /cock\s*sucker/i, /c\W*sucker/i,
+    /\btits?\b/i, /titties/i, /\bwanker\b/i, /\btosser\b/i,
+    // Sexual/explicit
+    /blow\s*job/i, /hand\s*job/i, /rim\s*job/i,
+    /\bcum\b/i, /cumm?ing/i, /\bjizz\b/i,
+    /\bdildo\b/i, /vibrator/i,
+    /\bporn(?:o|star)?\b/i,
+    /gang\s*bang/i, /hard\s*core/i,
+    /\banal\b/i, /deep\s*throat/i,
+    /\bnaked\b/i, /\bnude\b/i, /boob(?:ies)?/i,
+    // Violent/graphic
+    /kill\s*yourself|\bkys\b/i, /\bgo\s*die\b/i, /die\s*in\s*a\s*fire|\bdiaf\b/i,
+    /\bgore\b/i, /blood\s*bath/i, /\brape\b/i, /mutilat(?:e|ion)/i, /decapitat(?:e|ion)/i,
+    // Abbreviations/variants
+    /f\W*\**\W*c\W*k/i, /sh[!1\*]t/i, /b[!i]tch/i, /a[$@]{1,2}|\bazz\b|\b@?ss\b/i, /d[!1]ck/i,
+    /p\W*\**\W*ssy|pu55y/i, /mf(?:er|’er|er)|mthrfkr/i, /\bstfu\b/i, /\bgtfo\b/i
+  ];
+  function hasBannedInput() {
+    const text = [title, styleText, lyricsText].join(' \n ');
+    return BANNED_PATTERNS.some((re) => re.test(text));
+  }
+
+  // Anti-cliché blacklist for lyrics post-filter
+  const CLICHE_PATTERNS: RegExp[] = [
+    /sunbeams?\s+dance/i,
+    /favorite\s+chair/i,
+    /by\s+the\s+door/i,
+    /gentle\s+breeze/i,
+    /holding\s+hands?\s+by\s+the\s+shore/i,
+    /stars?\s+align/i,
+    /heart\s+of\s+gold/i,
+    /dreams?\s+come\s+true/i,
+    /follow\s+your\s+heart/i,
+    /walk\s+into\s+the\s+light/i,
+    /dance\s+the\s+night\s+away/i,
+    /under\s+the\s+moonlight/i,
+    /endless\s+sky/i,
+    /broken\s+heart/i,
+    /tears?\s+fall/i,
+    /forever\s+and\s+ever/i,
+    /dreams?\s+tonight/i,
+    /make\s+me\s+feel\s+alive/i,
+    /light\s+up\s+my\s+world/i,
+    /waiting\s+for\s+you/i
+  ];
+  function isClicheLine(s: string) {
+    return CLICHE_PATTERNS.some((re) => re.test(s));
+  }
+
+  // Compact, read-only summary for UI display
+  const includedSummary = useMemo(() => {
+    const bits: string[] = [];
+    if (includeTags.length) bits.push(`${language==='ar' ? 'الأنماط' : 'Styles'}: ${includeTags.join(', ')}`);
+    if (instrumentTags.length) bits.push(`${language==='ar' ? 'الآلات' : 'Instruments'}: ${instrumentTags.join(', ')}`);
+    if (moodTags.length) bits.push(`${language==='ar' ? 'المزاج' : 'Mode'}: ${moodTags.join(', ')}`);
+    if (vocalType === 'female') bits.push(`${language==='ar' ? 'الصوت' : 'Vocals'}: ${language==='ar' ? 'أنثوي' : 'Female voice'}`);
+    if (vocalType === 'male') bits.push(`${language==='ar' ? 'الصوت' : 'Vocals'}: ${language==='ar' ? 'ذكوري' : 'Male voice'}`);
+    if (vocalType === 'none') bits.push(`${language==='ar' ? 'الصوت' : 'Vocals'}: ${language==='ar' ? 'بدون' : 'None'}`);
+    return bits.join(' · ');
+  }, [includeTags, instrumentTags, moodTags, vocalType, language]);
+
+  // Insert chips into style text on demand (optional)
+  function insertChipsIntoStyle() {
+    const toInsert = buildStylesSuffix();
+    if (!toInsert) return;
+    const exists = (styleText || '').includes(toInsert);
+    const base = exists ? styleText : (styleText ? `${styleText}\n${toInsert}` : toInsert);
+    const capped = Array.from(base).slice(0, styleCap).join('');
+    setStyleText(capped);
   }
 
   // No more mirroring chips into a single prompt; we compose at send-time
 
   // Ensure lyrics never exceed current cap when style changes
   useEffect(() => {
-    const cap = Math.max(0, limit - Array.from(styleText || '').length);
+    const cap = lyricsCap;
     if (Array.from(lyricsText || '').length > cap) {
       setLyricsText(Array.from(lyricsText).slice(0, cap).join(''));
     }
-  }, [styleText]);
+  }, [styleText, lyricsCap]);
+
+  // Ensure lyrics respect current duration line budget when duration changes
+  useEffect(() => {
+    if (!lyricsText) return;
+    const lines = lyricsText.split(/\r?\n/);
+    const limited = lines.slice(0, maxLyricLines).join('\n');
+    const capped = Array.from(limited).slice(0, lyricsCap).join('');
+    if (capped !== lyricsText) setLyricsText(capped);
+  }, [maxLyricLines, lyricsCap]);
 
   // New: AMP submit with options
   async function handleAmpSubmit() {
@@ -284,6 +533,7 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
       if (includeTimeSig) includeBits.push(wantsArabic ? 'الميزان' : 'time signature');
       if (includeStructure) includeBits.push(wantsArabic ? 'البنية' : 'structure');
       if (includeInstrumentsOpt) includeBits.push(wantsArabic ? 'الآلات' : 'instrumentation');
+      if (includeVocalsOpt) includeBits.push(wantsArabic ? 'الغناء/الصوت' : 'vocals');
       const includeLine = includeBits.length ? (wantsArabic ? `ضمّن في السطر: ${includeBits.join(', ')}` : `Include in line: ${includeBits.join(', ')}`) : '';
 
       const safetyBits: string[] = [];
@@ -299,29 +549,182 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
             : (wantsArabic ? 'الكلمات: أنشئ كلمات كاملة موجزة قابلة للغناء تتماشى مع الأسلوب والمزاج والآلات.' : 'Lyrics: generate concise, singable full lyrics aligned to style, mood, and instruments.')
       );
 
+      // Vocals constraint: auto = no constraint; none = forbid; female/male = require
+      const vocalsLine = (
+        vocalType === 'none'
+          ? (wantsArabic ? 'لا تستخدم غناء/صوت بشري.' : 'Do not use vocals/lead voice.')
+          : vocalType === 'female'
+            ? (wantsArabic ? 'استخدم صوتًا أنثويًا للغناء الرئيسي.' : 'Use a female lead vocal.')
+            : vocalType === 'male'
+              ? (wantsArabic ? 'استخدم صوتًا ذكوريًا للغناء الرئيسي.' : 'Use a male lead vocal.')
+              : ''
+      );
+
       const languageHint = langChoice === 'auto' ? '' : (wantsArabic ? 'استخدم العربية.' : 'Use English.');
 
       const directiveCore = wantsArabic
-        ? 'مهمة: حسّن هذا التوجيه لتوليد موسيقى فقط دون انحراف عن نية المستخدم. ركّز على الأسلوب والمزاج والبنية والإيقاع والسرعة والمقامات والآلات. أعد صياغته كسطر واحد موجز وجاهز للاستخدام.'
-        : 'Task: Improve this strictly for music generation without drifting from user intent. Focus on style, mood, structure, tempo, scales/modes, and instruments. Return a single concise, production-ready line.';
+        ? 'مهمة: حسّن هذا التوجيه لتوليد موسيقى فقط دون انحراف عن نية المستخدم. أعد صياغته كسطر موجز بأسلوب منتج موسيقي (ملخص موسيقي طبيعي وليس قائمة متطلبات). ركّز على الأسلوب والمزاج والبنية والإيقاع والسرعة والمقامات والآلات. تجنب اقتباس نص المستخدم أو العنوان حرفيًا.'
+        : 'Task: Improve this strictly for music generation without drifting from user intent. Rewrite as a concise producer-style musical brief (natural, not a requirements list). Focus on style, mood, structure, tempo, scales/modes, and instruments. Avoid quoting the user text or title verbatim.';
 
-      const durationLine = wantsArabic ? `المدة المستهدفة: ${Math.min(120, duration)} ثانية` : `Target duration: ${Math.min(120, duration)}s`;
+      const durationTarget = Math.min(120, duration);
+      const durationLine = wantsArabic ? `المدة المستهدفة: ${durationTarget} ثانية` : `Target duration: ${durationTarget}s`;
+      const arrangementLine = getArrangementBrief(durationTarget, wantsArabic);
       const titleLine = title ? (wantsArabic ? `العنوان: ${title}` : `Title: ${title}`) : '';
       const stylesLine = buildStylesSuffix();
+      const mustUseChips = wantsArabic
+        ? 'التزم بالأنماط والآلات والمزاج المحدد أعلاه. لا تضف عناصر جديدة إذا كانت السلامة مفعلة.'
+        : 'Honor the selected styles, instruments, and mood above. Do not add new elements if safety is on.';
+      const prodIntensityLine = wantsArabic
+        ? `شدة المنتج: ${producerIntensity} من 5`
+        : `Producer intensity: ${producerIntensity} of 5`;
+      const hookLine = hookEmphasis
+        ? (wantsArabic ? 'ركز على لازمـة/كورَس قوي وواضح وأوسع من باقي المقاطع.' : 'Emphasize a strong, clear hook/chorus that is wider than other sections.')
+        : '';
+      const producerNotes = wantsArabic
+        ? 'سلوك المنتج: أعطِ إيقاعًا واضحًا (كِك/سنير محدد)، تحكمًا في كثافة الهاتس، سلوك الباس (808 بزحلقة أو لحنية)، لَيد ذو موتيف واضح وملء المساحات بين العبارات، انتقالات (فِلز/رايزر/دروب)، وتباين ديناميكي بين المقاطع. اجعل اللازمة أوسع وأعلى إدراكًا للصوت.'
+        : 'Producer behavior: clear groove (defined kick/snare), controllable hat density, bass behavior (808 with glide or melodic), a lead with a clear motif and inter-phrase fills, transitions (fills/risers/drops), and dynamic contrast between sections. Make the chorus wider and ~+2–3 dB perceived.';
       const contentLine = wantsArabic ? `ملخص الأسلوب: ${baseSummary}` : `Style brief: ${baseSummary}`;
       const lyricsContent = baseLyrics ? (wantsArabic ? `الكلمات:\n${baseLyrics}` : `Lyrics:\n${baseLyrics}`) : '';
-      const directive = [directiveCore, includeLine, safetyLine, lyricsLine, languageHint, durationLine].filter(Boolean).join('\n');
-      const composed = [directive, titleLine, contentLine, stylesLine, lyricsContent].filter(Boolean).join('\n');
+      const directive = [
+        directiveCore,
+        includeLine,
+        safetyLine,
+        mustUseChips,
+        producerNotes,
+        hookLine,
+        prodIntensityLine,
+        arrangementLine,
+        // Intentionally omit lyricsLine from music brief to avoid lyric leakage
+        vocalsLine,
+        languageHint,
+        durationLine
+      ].filter(Boolean).join('\n');
+      // Do NOT pass lyrics into the brief step to avoid echoing lyrics in style line
+      const composed = [directive, titleLine, contentLine, stylesLine].filter(Boolean).join('\n');
       const { data, error } = await supabase.functions.invoke('prompt-amp', {
         body: { text: composed, mode: 'music' }
       });
       if (error) throw error;
       const improved = (data?.text || '').toString();
       if (!improved) throw new Error(language==='ar' ? 'تعذّر التحسين' : 'Amp failed');
-      const capped = improved.slice(0, styleCap);
+      // Sanitize: strip lyric-like constructs (quotes, slash-separated lines, newlines to spaces)
+      const sanitized = improved
+        .replace(/\"[^\"\\]*(?:\\.[^\"\\]*)*\"/g, '')
+        .replace(/\s*\/\s*/g, ', ')
+        .replace(/\n{2,}/g, '\n')
+        .replace(/\n/g, ' ')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+      const capped = sanitized.slice(0, styleCap);
       setShowAmpModal(false);
       setStyleText(capped);
       toast.success(language==='ar' ? 'تم تحسين التوجيه' : 'Prompt enhanced');
+
+      // New: handle lyrics actions
+      // Prefer continue if user provided seed lyrics
+      // If user provided seed lyrics: Preserve -> Continue, else if no lyrics: force Generate
+      const effectiveLyricsMode = baseLyrics
+        ? (lyricsMode === 'preserve' ? 'continue' : lyricsMode)
+        : 'generate';
+      if (effectiveLyricsMode === 'continue' || effectiveLyricsMode === 'generate') {
+        // Build a focused lyrics directive
+        const wantsArabicL = langChoice === 'ar' || (langChoice === 'auto' && language === 'ar');
+        const vocHeader = '';
+        const titleLineL = title ? (wantsArabicL ? `العنوان: ${title}` : `Title: ${title}`) : '';
+        const stylesLineL = buildStylesSuffix();
+        const chipsLyricHint = (includeTags.length || instrumentTags.length || moodTags.length)
+          ? (wantsArabicL
+              ? 'ادمج الأنماط والآلات والمزاج المحدد بوضوح داخل الكلمات دون مخالفتها.'
+              : 'Explicitly weave the selected styles, instruments, and mood into the lyrics without contradicting them.')
+          : '';
+        const seedLyrics = effectiveLyricsMode === 'continue' ? (baseLyrics || '') : '';
+        const taskLine = effectiveLyricsMode === 'continue'
+          ? (wantsArabicL
+              ? 'أكمل هذه الكلمات بنفس اللغة والمزاج والإيقاع مع احترام موضوع العنوان. احتفظ بالأسطر المقدَّمة كما هي دون تعديل، وابنِ عليها. اجعل كل سطر واضحًا وقابلًا للغناء دون تكرار. أعد فقط النص النهائي للكلمات.'
+              : 'Continue these lyrics in the same language, mood, and meter, honoring the title theme. Preserve any provided lines verbatim and build upon them. Make each line clear and singable with no repetition. Return only the final lyrics text.')
+          : (wantsArabicL
+              ? 'أنشئ كلمات كاملة موجزة قابلة للغناء مستوحاة من العنوان/الأسلوب/الآلات/المزاج. احترم موضوع العنوان، وادمج الاختيارات أعلاه داخل المعاني دون مخالفة. اجعل كل سطر مميزًا دون تكرار. أعِد فقط النص النهائي للكلمات.'
+              : 'Generate concise, singable full lyrics inspired by the title/style/instrumentation/mood. Honor the title theme and integrate the above choices into the meaning without contradicting them. Ensure each line is distinct with no repetition. Return only the final lyrics text.');
+        const langHintL = langChoice === 'auto' ? '' : (wantsArabicL ? 'استخدم العربية.' : 'Use English.');
+        const creativityLine = wantsArabicL
+          ? `الإبداع: ${creativity}/100 — زد الجرأة المجازية تدريجيًا مع الحفاظ على الوضوح.`
+          : `Creativity: ${creativity}/100 — increase metaphorical boldness while staying clear.`;
+        const poetLine = wantsArabicL
+          ? 'اكتب بصوت شاعر/كاتب أغاني ماهر: صور جديدة، مجازات رشيقة، لغة طبيعية قابلة للغناء.'
+          : 'Write in the voice of a skilled poet‑songwriter: fresh imagery, elegant metaphors, natural singable language.';
+        const rhymeLine = (
+          rhymeMode === 'rhyme' ? (wantsArabicL ? 'فضّل قوافي خفيفة في نهايات الأسطر (AABB/ABAB).' : 'Prefer light end rhymes (AABB/ABAB).') :
+          rhymeMode === 'syllables' ? (wantsArabicL ? 'حافظ على نافذة مقاطع 7–10 لكل سطر.' : 'Keep a 7–10 syllable window per line.') :
+          rhymeMode === 'both' ? (wantsArabicL ? 'قافية خفيفة مع نافذة مقاطع 7–10 لكل سطر.' : 'Use light end rhymes and keep 7–10 syllables per line.') :
+          ''
+        );
+        const durationSeconds = Math.min(120, duration);
+        const durationLineL = wantsArabicL ? `المدة المستهدفة: ${durationSeconds} ثانية` : `Target duration: ${durationSeconds}s`;
+        const noRepeatL = wantsArabicL
+          ? 'لا تكرر أي سطر، ولا تعكس العنوان أو الملخص حرفيًا. تجنب الحشو والكليشيهات إلا إذا طُلب.'
+          : 'Do not repeat any line, and do not echo the title or brief verbatim. Avoid filler/clichés unless requested.';
+        const lineBudget = wantsArabicL
+          ? `أعد بالضبط ${maxLyricLines} أسطر قصيرة قابلة للغناء.`
+          : `Return exactly ${maxLyricLines} lines, using short, singable lines.`;
+        const outShape = wantsArabicL
+          ? 'أعِد الأسطر فقط مفصولة بأسطر جديدة، دون عناوين أقسام أو شروح.'
+          : 'Output ONLY those lines separated by newlines; no headings or commentary.';
+        const titleOnce = wantsArabicL
+          ? 'اذكر عبارة العنوان مرة واحدة فقط كسطر اللازمة/الكورس.'
+          : 'Mention the title phrase exactly once as a hook/chorus line.';
+        const homeDetail = wantsArabicL
+          ? 'ضمّن تفصيلاً منزليًا ملموسًا واحدًا على الأقل (مثال: ضوء الشرفة، مفاتيح في الوعاء، ألواح أرضية مهترئة).'
+          : 'Include at least one concrete home detail (e.g., porch light, keys in the bowl, worn floorboards).';
+        // Build FACTS block (English markers to match server prompt expectations)
+        const arrangementHint = getArrangementBrief(durationSeconds, wantsArabicL);
+        const factsLines: string[] = [];
+        if (title) factsLines.push(`Title: ${title}`);
+        if (includeTags.length) factsLines.push(`Styles: ${includeTags.join(', ')}`);
+        if (instrumentTags.length) factsLines.push(`Instruments: ${instrumentTags.join(', ')}`);
+        if (moodTags.length) factsLines.push(`Mood: ${moodTags.join(', ')}`);
+        factsLines.push(`Duration: ${durationSeconds}s`);
+        factsLines.push(`Arrangement: ${arrangementHint}`);
+        const factsBlock = `FACTS:\n${factsLines.join('\n')}`;
+
+        // Optional SEED block (English marker)
+        const seedBlock = seedLyrics ? `\n\nSEED LYRICS:\n${seedLyrics}` : '';
+
+        // Final lyric prompt: start with FACTS, then directives, then optional SEED block
+        const directives = [taskLine, noRepeatL, chipsLyricHint, creativityLine, poetLine, rhymeLine, langHintL, lineBudget, outShape, titleOnce, homeDetail].filter(Boolean).join('\n');
+        const lyricPrompt = [factsBlock, '', directives].join('\n') + seedBlock;
+
+        const { data: ldata, error: lerror } = await supabase.functions.invoke('prompt-amp', {
+          body: { text: lyricPrompt, mode: 'lyrics' }
+        });
+        if (!lerror) {
+          const generated = (ldata?.text || '').toString().trim();
+          if (generated) {
+            // Split, trim, drop lines that start with the title words, de-duplicate, enforce line budget, then char cap
+            const rawLines = generated.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+            const titleStart = title ? firstNWords(normalizeLine(title), 3) : '';
+            let processed: string[] = [];
+            if (rawLines.length > 0 && titleStart) {
+              // Only block the first generated line from starting with the title words; allow later chorus to use it
+              const first = rawLines[0];
+              const rest = rawLines.slice(1);
+              const firstOk = firstNWords(normalizeLine(first), 3) !== titleStart;
+              processed = (firstOk ? [first] : []).concat(rest);
+            } else {
+              processed = rawLines;
+            }
+            const uniqueLines = dedupeLines(processed).slice(0, maxLyricLines);
+            const limited = uniqueLines.join('\n');
+            if (effectiveLyricsMode === 'continue' && baseLyrics) {
+              const appended = `${baseLyrics}\n${limited}`;
+              const cappedLyrics = Array.from(appended).slice(0, lyricsCap).join('');
+              setLyricsText(cappedLyrics);
+            } else {
+              const cappedLyrics = Array.from(limited).slice(0, lyricsCap).join('');
+              setLyricsText(cappedLyrics);
+            }
+          }
+        }
+      }
     } catch (e: any) {
       toast.error((language==='ar' ? 'فشل التحسين: ' : 'Amp failed: ') + (e?.message || String(e)));
     } finally {
@@ -362,10 +765,32 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
       const wantsArabicGen = langChoice === 'ar' || (langChoice === 'auto' && language === 'ar');
       const stylesLineGen = buildStylesSuffix();
       const titleLineGen = title ? (wantsArabicGen ? `العنوان: ${title}` : `Title: ${title}`) : '';
-      const durationLineGen = wantsArabicGen ? `المدة المستهدفة: ${Math.min(120, duration)} ثانية` : `Target duration: ${Math.min(120, duration)}s`;
+      const durationTargetGen = Math.min(120, duration);
+      const durationLineGen = wantsArabicGen ? `المدة المستهدفة: ${durationTargetGen} ثانية` : `Target duration: ${durationTargetGen}s`;
+      const arrangementLineGen = getArrangementBrief(durationTargetGen, wantsArabicGen);
       const contentLineGen = styleText ? (wantsArabicGen ? `ملخص الأسلوب: ${styleText}` : `Style brief: ${styleText}`) : '';
       const lyricsContentGen = lyricsText ? (wantsArabicGen ? `الكلمات:\n${lyricsText}` : `Lyrics:\n${lyricsText}`) : '';
-      const fullPrompt = [titleLineGen, contentLineGen, stylesLineGen, durationLineGen, lyricsContentGen].filter(Boolean).join('\n');
+      // Apply vocals rule for generation: none forbids vocals, female/male encourage; auto = no constraint
+      const vocalsLineGen = vocalType === 'none'
+        ? (wantsArabicGen ? 'لا تستخدم غناء/صوت بشري.' : 'Do not use vocals/lead voice.')
+        : vocalType === 'female'
+          ? (wantsArabicGen ? 'استخدم صوتًا أنثويًا للغناء الرئيسي.' : 'Use a female lead vocal.')
+          : vocalType === 'male'
+            ? (wantsArabicGen ? 'استخدم صوتًا ذكوريًا للغناء الرئيسي.' : 'Use a male lead vocal.')
+            : '';
+      const producerNotesGen = wantsArabicGen
+        ? 'ملاحظات المنتج: موتيف لَيد واضح، انتقالات بين الأقسام (فِلز/رايزر)، وتباين ديناميكي قوي. اجعل اللازمة أوسع وأعلى إدراكًا للصوت.'
+        : 'Producer notes: clear lead motif, transitions between sections (fills/risers), and strong dynamic contrast. Make the chorus wider and louder in perception.';
+      const prodIntensityGen = wantsArabicGen
+        ? `شدة المنتج: ${producerIntensity} من 5`
+        : `Producer intensity: ${producerIntensity} of 5`;
+      const hookLineGen = hookEmphasis
+        ? (wantsArabicGen ? 'ركّز على لازمـة قوية وواضحة.' : 'Emphasize a strong, clear hook.')
+        : '';
+      const honorChipsGen = wantsArabicGen
+        ? 'التزم بالأنماط والآلات والمزاج المحدد. لا تضف عناصر جديدة إذا كانت السلامة مفعلة.'
+        : 'Honor the selected styles, instruments, and mood. Do not add new elements if safety is on.';
+      const fullPrompt = [titleLineGen, contentLineGen, stylesLineGen, honorChipsGen, producerNotesGen, hookLineGen, prodIntensityGen, arrangementLineGen, durationLineGen, vocalsLineGen, lyricsContentGen].filter(Boolean).join('\n');
 
       // INSERT PLACEHOLDER RECORD FIRST - ensures the generation counts toward limit
       const placeholderFileName = `${user.id}/${Date.now()}_pending.mp3`;
@@ -743,7 +1168,8 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
             <Input
               value={title}
               onChange={(e)=> setTitle(e.target.value.slice(0,100))}
-              placeholder={language==='ar' ? 'عنوان قصير (اختياري)' : 'Short title (optional)'}
+              placeholder={language==='ar' ? 'العنوان (مطلوب)' : 'Title (required)'}
+              required
               className="md:w-1/3"
             />
             <div className="flex-1 flex flex-col gap-2">
@@ -754,31 +1180,79 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
                 rows={3}
                 className="w-full"
               />
-              <div className="text-xs text-muted-foreground flex justify-between">
+              <div className="text-xs text-muted-foreground flex justify-start">
                 <span>{language==='ar' ? 'الأسلوب' : 'Style'}: {Array.from(styleText).length} / {styleCap}</span>
-                <span>{language==='ar' ? 'الكل المتبقي' : 'Total remaining'}: {remainingOverall}</span>
+              </div>
+              {(includeTags.length>0 || instrumentTags.length>0 || moodTags.length>0 || vocalType!=='auto') && (
+                <div className="text-xs text-muted-foreground flex items-start justify-between gap-2">
+                  <div className="truncate" title={includedSummary}>
+                    <span className="font-medium">{language==='ar' ? 'المضمَّن:' : 'Included:'}</span> {includedSummary}
+                  </div>
+                  <button
+                    type="button"
+                    className="px-2 py-0.5 rounded border hover:bg-muted text-foreground"
+                    onClick={insertChipsIntoStyle}
+                  >
+                    {language==='ar' ? 'إدراج في الأسلوب' : 'Insert into Style'}
+                  </button>
+                </div>
+              )}
+
+              {/* Vocals selector */}
+              <div className="space-y-2">
+                <label className="text-xs font-medium block">{language === 'ar' ? 'الصوت' : 'Vocals'}</label>
+                <div className="flex flex-wrap gap-3 text-sm">
+                  <label className="inline-flex items-center gap-2">
+                    <input type="radio" name="vocalType" checked={vocalType==='auto'} onChange={()=>setVocalType('auto')} />
+                    {language==='ar' ? 'تلقائي' : 'Auto'}
+                  </label>
+                  <label className="inline-flex items-center gap-2">
+                    <input type="radio" name="vocalType" checked={vocalType==='none'} onChange={()=>setVocalType('none')} />
+                    {language==='ar' ? 'بدون' : 'None'}
+                  </label>
+                  <label className="inline-flex items-center gap-2">
+                    <input type="radio" name="vocalType" checked={vocalType==='female'} onChange={()=>setVocalType('female')} />
+                    {language==='ar' ? 'صوت أنثوي' : 'Female voice'}
+                  </label>
+                  <label className="inline-flex items-center gap-2">
+                    <input type="radio" name="vocalType" checked={vocalType==='male'} onChange={()=>setVocalType('male')} />
+                    {language==='ar' ? 'صوت ذكوري' : 'Male voice'}
+                  </label>
+                </div>
+              </div>
+
+              <Textarea
+                value={lyricsText}
+                onChange={(e) => {
+                  // First enforce line budget, then char cap
+                  const raw = e.target.value || '';
+                  const lines = raw.split(/\r?\n/);
+                  const limitedLines = lines.slice(0, maxLyricLines);
+                  const joined = limitedLines.join('\n');
+                  const capped = Array.from(joined).slice(0, lyricsCap).join('');
+                  setLyricsText(capped);
+                }}
+                placeholder={language === 'ar' ? 'الكلمات (حتى 450 حرفًا)' : 'Lyrics (up to 450 chars)'}
+                rows={4}
+                className="w-full"
+              />
+              <div className="text-xs text-muted-foreground flex justify-between">
+                <span>
+                  {language==='ar'
+                    ? `الكلمات: ${Array.from(lyricsText).length} / ${lyricsCap}`
+                    : `Lyrics: ${Array.from(lyricsText).length} / ${lyricsCap}`}
+                </span>
+                <span>
+                  {language==='ar'
+                    ? `الأسطر: ${lyricLineCount} / ${maxLyricLines}`
+                    : `Lines: ${lyricLineCount} / ${maxLyricLines}`}
+                </span>
               </div>
             </div>
-          </div>
-          <div className="flex flex-col gap-2">
-            <Textarea
-              value={lyricsText}
-              onChange={(e) => setLyricsText(Array.from(e.target.value).slice(0, lyricsCap).join(''))}
-              placeholder={language === 'ar' ? 'الكلمات (اختياري — سيُستخدم المتبقي من الحروف)' : 'Lyrics (optional — uses remaining characters)'}
-              rows={4}
-              className="w-full"
-            />
-            <div className="text-xs text-muted-foreground">
-              {language==='ar'
-                ? `الكلمات: ${Array.from(lyricsText).length} / ${lyricsCap}`
-                : `Lyrics: ${Array.from(lyricsText).length} / ${lyricsCap}`}
-            </div>
-          </div>
-          <div className="flex items-center gap-2 self-start">
             <Button
               variant="outline"
               size="sm"
-              disabled={amping || submitting || (!styleText.trim() && !lyricsText.trim() && !title.trim())}
+              disabled={amping || submitting || !title.trim()}
               onClick={handleAmp}
               aria-busy={amping}
             >
@@ -789,7 +1263,7 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
               )}
             </Button>
             <Button
-              disabled={overLimit || submitting}
+              disabled={overLimit || submitting || !title.trim()}
               onClick={handleGenerate}
               className=""
               aria-busy={submitting}
