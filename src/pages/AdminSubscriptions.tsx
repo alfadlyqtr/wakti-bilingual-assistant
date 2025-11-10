@@ -167,7 +167,6 @@ export default function AdminSubscriptions() {
         p_billing_amount: activationData.isGift ? 0 : activationData.billingAmount,
         p_billing_currency: 'QAR',
         p_payment_method: activationData.isGift ? 'gift' : activationData.paymentMethod,
-        p_fawran_payment_id: null,
         p_is_gift: activationData.isGift,
         p_gift_duration: activationData.isGift ? activationData.giftDuration : null,
         p_gift_given_by: activationData.isGift ? adminId : null
@@ -179,7 +178,6 @@ export default function AdminSubscriptions() {
         p_billing_amount: activationData.isGift ? 0 : activationData.billingAmount,
         p_billing_currency: 'QAR',
         p_payment_method: activationData.isGift ? 'gift' : activationData.paymentMethod,
-        p_fawran_payment_id: null,
         p_is_gift: activationData.isGift,
         p_gift_duration: activationData.isGift ? activationData.giftDuration : null,
         p_gift_given_by: activationData.isGift ? adminId : null
@@ -311,8 +309,6 @@ export default function AdminSubscriptions() {
       return <Gift className="h-4 w-4 text-accent-purple" />;
     }
     switch (method) {
-      case 'fawran':
-        return <Smartphone className="h-4 w-4 text-accent-green" />;
       case 'manual':
         return <UserCog className="h-4 w-4 text-accent-orange" />;
       default:
@@ -325,12 +321,10 @@ export default function AdminSubscriptions() {
       return 'Gift Subscription';
     }
     switch (method) {
-      case 'fawran':
-        return 'Fawran (AI-Verified)';
       case 'manual':
         return 'Manual Admin';
       default:
-        return 'Legacy/Unknown';
+        return 'Manual/Legacy';
     }
   };
 
@@ -339,8 +333,6 @@ export default function AdminSubscriptions() {
       return 'text-accent-purple';
     }
     switch (method) {
-      case 'fawran':
-        return 'text-accent-green';
       case 'manual':
         return 'text-accent-orange';
       default:
@@ -472,13 +464,7 @@ export default function AdminSubscriptions() {
               <span className="text-lg font-bold text-accent-purple">{giftSubscriptionsCount}</span>
             </div>
             
-            <div className="flex items-center justify-between p-3 border border-border/30 rounded-lg hover:bg-accent/5 transition-colors">
-              <div className="flex items-center gap-3">
-                <Smartphone className="h-4 w-4 text-accent-cyan" />
-                <span className="text-sm font-medium">Fawran Users</span>
-              </div>
-              <span className="text-lg font-bold text-accent-cyan">{users.filter(u => u.payment_method === 'fawran').length}</span>
-            </div>
+            
           </div>
         </div>
 

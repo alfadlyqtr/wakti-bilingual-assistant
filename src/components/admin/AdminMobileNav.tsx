@@ -32,13 +32,6 @@ export const AdminMobileNav = () => {
       color: 'text-accent-blue'
     },
     {
-      id: 'fawran',
-      path: '/admin/fawran-payments',
-      icon: Receipt,
-      label: 'Fawran',
-      color: 'text-accent-purple'
-    },
-    {
       id: 'quotas',
       path: '/admin/quotas',
       icon: Gift,
@@ -50,7 +43,7 @@ export const AdminMobileNav = () => {
   return (
     <nav className="fixed bottom-0 left-0 right-0 border-t border-white/10 bg-[#0c0f14]/90 backdrop-blur-xl px-2 py-2 z-40">
       <div className="max-w-4xl mx-auto">
-        <div className="grid grid-cols-5 gap-1">
+        <div className="grid grid-cols-4 gap-1">
           {navItems.map(({ id, path, icon: Icon, label, color }) => (
             <Button
               key={id}

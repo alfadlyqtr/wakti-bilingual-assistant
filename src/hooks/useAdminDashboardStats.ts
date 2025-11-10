@@ -12,23 +12,7 @@ interface AdminDashboardStats {
   monthlyRevenue: number;
   newUsersThisMonth: number;
   pendingMessages: number;
-  fawranStats: {
-    totalPayments: number;
-    pendingPayments: number;
-    approvedPayments: number;
-    rejectedPayments: number;
-    autoApprovedPayments: number;
-    manualReviewedPayments: number;
-    avgProcessingTimeMs: number;
-    tamperingDetected: number;
-    duplicateDetected: number;
-    timeValidationFailed: number;
-  };
-  paymentMethodDistribution: {
-    fawran: number;
-    manual: number;
-    gift: number;
-  };
+  
 }
 
 interface RecentActivity {
@@ -49,20 +33,7 @@ export const useAdminDashboardStats = () => {
     unconfirmedAccounts: 0,
     monthlyRevenue: 0,
     newUsersThisMonth: 0,
-    pendingMessages: 0,
-    fawranStats: {
-      totalPayments: 0,
-      pendingPayments: 0,
-      approvedPayments: 0,
-      rejectedPayments: 0,
-      autoApprovedPayments: 0,
-      manualReviewedPayments: 0,
-      avgProcessingTimeMs: 0,
-      tamperingDetected: 0,
-      duplicateDetected: 0,
-      timeValidationFailed: 0
-    },
-    paymentMethodDistribution: { fawran: 0, manual: 0, gift: 0 }
+    pendingMessages: 0
   });
   
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
@@ -79,34 +50,7 @@ export const useAdminDashboardStats = () => {
         throw dashboardError;
       }
 
-      // Get Fawran payment stats using the new SQL function
-      const { data: fawranStats, error: fawranError } = await supabase.rpc('get_fawran_payment_stats');
-      if (fawranError) {
-        console.error('[DEBUG] Fawran stats error:', fawranError);
-        throw fawranError;
-      }
-
-      // Get payment method distribution using the new SQL function
-      const { data: paymentMethodData, error: paymentError } = await supabase.rpc('get_payment_method_stats');
-      if (paymentError) {
-        console.error('[DEBUG] Payment method stats error:', paymentError);
-        throw paymentError;
-      }
-
       const mainStats = dashboardStats?.[0] || {};
-      const fawranStatsData = fawranStats?.[0] || {};
-      
-      // Process payment method distribution
-      const paymentMethodDistribution = { fawran: 0, manual: 0, gift: 0 };
-      paymentMethodData?.forEach((method: any) => {
-        if (method.payment_method === 'fawran') {
-          paymentMethodDistribution.fawran = method.user_count;
-        } else if (method.payment_method === 'gift') {
-          paymentMethodDistribution.gift = method.user_count;
-        } else {
-          paymentMethodDistribution.manual += method.user_count;
-        }
-      });
 
       setStats({
         totalUsers: mainStats.total_users || 0,
@@ -117,28 +61,14 @@ export const useAdminDashboardStats = () => {
         unconfirmedAccounts: mainStats.unconfirmed_accounts || 0,
         monthlyRevenue: Number(mainStats.monthly_revenue) || 0,
         newUsersThisMonth: mainStats.new_users_this_month || 0,
-        pendingMessages: mainStats.pending_messages || 0,
-        fawranStats: {
-          totalPayments: fawranStatsData.total_payments || 0,
-          pendingPayments: fawranStatsData.pending_payments || 0,
-          approvedPayments: fawranStatsData.approved_payments || 0,
-          rejectedPayments: fawranStatsData.rejected_payments || 0,
-          autoApprovedPayments: fawranStatsData.auto_approved_payments || 0,
-          manualReviewedPayments: fawranStatsData.manual_reviewed_payments || 0,
-          avgProcessingTimeMs: Number(fawranStatsData.avg_processing_time_ms) || 0,
-          tamperingDetected: fawranStatsData.tampering_detected_count || 0,
-          duplicateDetected: fawranStatsData.duplicate_detected_count || 0,
-          timeValidationFailed: fawranStatsData.time_validation_failed_count || 0
-        },
-        paymentMethodDistribution
+        pendingMessages: mainStats.pending_messages || 0
       });
 
       console.log('[DEBUG] Stats updated successfully:', {
         totalUsers: mainStats.total_users,
         giftSubscriptions: mainStats.gift_subscriptions,
         expiringSoon: mainStats.expiring_soon,
-        monthlyRevenue: mainStats.monthly_revenue,
-        fawranPayments: fawranStatsData.total_payments
+        monthlyRevenue: mainStats.monthly_revenue
       });
 
     } catch (error) {

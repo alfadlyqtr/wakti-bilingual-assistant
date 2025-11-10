@@ -6,18 +6,12 @@ import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
 import { useAdminDashboardStats } from "@/hooks/useAdminDashboardStats";
 import { EnhancedStatsCards } from "@/components/admin/EnhancedStatsCards";
 import { ScrollableRecentActivity } from "@/components/admin/ScrollableRecentActivity";
-import { PaymentSystemStatus } from "@/components/admin/PaymentSystemStatus";
-import { FawranStatsCards } from "@/components/admin/FawranStatsCards";
-import { FawranSystemTest } from "@/components/admin/FawranSystemTest";
+ 
 
 export default function AdminDashboard() {
   const { stats, recentActivity, isLoading, refetch } = useAdminDashboardStats();
 
-  const autoApprovalRate = stats.fawranStats.totalPayments > 0 
-    ? Math.round((stats.fawranStats.autoApprovedPayments / stats.fawranStats.totalPayments) * 100)
-    : 0;
-
-  const avgProcessingTime = Math.round(stats.fawranStats.avgProcessingTimeMs / 1000) || 0;
+  
 
   return (
     <div className="min-h-screen bg-[#0c0f14] text-white/90">
@@ -101,35 +95,7 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Enhanced Payment System Status */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-white/90">Payment System Health</h2>
-            <div className="text-xs text-muted-foreground">
-              Auto-approval: {autoApprovalRate}% • Avg processing: {avgProcessingTime}s
-            </div>
-          </div>
-          <PaymentSystemStatus fawranStats={stats.fawranStats} />
-        </div>
-
-        {/* Fawran System Diagnostics - Only show if no payments detected */}
-        {stats.fawranStats.totalPayments === 0 && (
-          <div className="space-y-4">
-            <h2 className="text-xl font-semibold text-white/90">System Diagnostics</h2>
-            <FawranSystemTest />
-          </div>
-        )}
         
-        {/* Detailed Fawran Stats */}
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold text-white/90">Fawran Payment Intelligence</h2>
-          <FawranStatsCards 
-            stats={stats.fawranStats} 
-            autoApprovalRate={autoApprovalRate}
-            avgProcessingTime={avgProcessingTime}
-            isLoading={isLoading} 
-          />
-        </div>
       </div>
 
       {/* Admin Mobile Navigation */}

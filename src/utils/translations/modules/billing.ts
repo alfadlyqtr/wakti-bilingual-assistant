@@ -16,18 +16,4 @@ export const billing = {
   paymentHistory: "Subscription History",
   noPaymentHistory: "No subscription history available",
   
-  // Fawran Payment
-  fawranPayment: "Fawran Payment",
-  paymentInstructions: "Payment Instructions",
-  paymentProofUpload: "Upload Payment Proof",
-  fawranAlias: "Fawran Alias: alfadlyqtr or Abdullah Hassoun",
-  uploadScreenshot: "Upload payment screenshot",
-  emailAddress: "Email Address",
-  submitPaymentProof: "Submit Payment Proof",
-  paymentProofSubmitted: "Payment proof submitted successfully",
-  paymentUnderReview: "Payment under review",
-  
-  // Status Messages
-  paymentSystemUpdate: "New Fawran payment system active",
-  comingSoon: "Fawran instant payments available",
 };

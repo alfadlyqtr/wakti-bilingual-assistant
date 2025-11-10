@@ -16,18 +16,4 @@ export const billingAr = {
   paymentHistory: "سجل الاشتراكات",
   noPaymentHistory: "لا يوجد سجل اشتراكات",
   
-  // Fawran Payment
-  fawranPayment: "دفع فوران",
-  paymentInstructions: "تعليمات الدفع",
-  paymentProofUpload: "رفع إثبات الدفع",
-  fawranAlias: "عنوان فوران: alfadlyqtr أو عبدالله حسون",
-  uploadScreenshot: "رفع لقطة شاشة الدفع",
-  emailAddress: "البريد الإلكتروني",
-  submitPaymentProof: "إرسال إثبات الدفع",
-  paymentProofSubmitted: "تم إرسال إثبات الدفع بنجاح",
-  paymentUnderReview: "الدفع قيد المراجعة",
-  
-  // Status Messages
-  paymentSystemUpdate: "نظام دفع فوران الجديد نشط",
-  comingSoon: "مدفوعات فوران الفورية متاحة",
 };

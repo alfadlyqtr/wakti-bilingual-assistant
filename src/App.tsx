@@ -53,7 +53,6 @@ import AdminSubscriptions from "./pages/AdminSubscriptions";
 import AdminQuotas from "./pages/AdminQuotas";
 import AdminAnalytics from "./pages/AdminAnalytics";
 import AdminSettings from "./pages/AdminSettings";
-import AdminFawranPayments from "./pages/AdminFawranPayments";
 import VoiceTTS from "./pages/VoiceTTS";
 import VoiceStudio from "./pages/VoiceStudio";
 import TextGenerator from "./pages/TextGenerator";
@@ -91,7 +90,6 @@ function App() {
                 <Route path="/admin/users" element={<AdminRoute><AdminUsers /></AdminRoute>} />
                 <Route path="/admin/messages" element={<AdminRoute><AdminMessages /></AdminRoute>} />
                 <Route path="/admin/subscriptions" element={<AdminRoute><AdminSubscriptions /></AdminRoute>} />
-                <Route path="/admin/fawran-payments" element={<AdminRoute><AdminFawranPayments /></AdminRoute>} />
                 <Route path="/admin/quotas" element={<AdminRoute><AdminQuotas /></AdminRoute>} />
                 <Route path="/admin/analytics" element={<AdminRoute><AdminAnalytics /></AdminRoute>} />
                 <Route path="/admin-settings" element={<AdminRoute><AdminSettings /></AdminRoute>} />

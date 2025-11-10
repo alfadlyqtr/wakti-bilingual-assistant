@@ -9,31 +9,13 @@ interface AdminStats {
   pendingMessages: number;
   monthlyRevenue: number;
   newUsersThisMonth: number;
-  pendingFawranPayments: number;
-  autoApprovalRate: number;
-  avgProcessingTime: number;
   giftSubscriptions: number;
-  paymentMethodDistribution: {
-    fawran: number;
-    manual: number;
-    gift: number;
-  };
-  fawranStats: {
-    totalPayments: number;
-    pendingPayments: number;
-    approvedPayments: number;
-    rejectedPayments: number;
-    autoApprovedPayments: number;
-    manualReviewedPayments: number;
-    tamperingDetected: number;
-    duplicateDetected: number;
-    timeValidationFailed: number;
-  };
+  
 }
 
 interface AdminActivity {
   id: string;
-  type: 'user_signup' | 'subscription_activated' | 'fawran_payment' | 'message_received' | 'gift_given';
+  type: 'user_signup' | 'subscription_activated' | 'message_received' | 'gift_given';
   title: string;
   description: string;
   timestamp: string;
@@ -59,22 +41,8 @@ export const useRealTimeAdminData = () => {
     pendingMessages: 0,
     monthlyRevenue: 0,
     newUsersThisMonth: 0,
-    pendingFawranPayments: 0,
-    autoApprovalRate: 0,
-    avgProcessingTime: 0,
     giftSubscriptions: 0,
-    paymentMethodDistribution: { fawran: 0, manual: 0, gift: 0 },
-    fawranStats: {
-      totalPayments: 0,
-      pendingPayments: 0,
-      approvedPayments: 0,
-      rejectedPayments: 0,
-      autoApprovedPayments: 0,
-      manualReviewedPayments: 0,
-      tamperingDetected: 0,
-      duplicateDetected: 0,
-      timeValidationFailed: 0
-    }
+    
   });
   
   const [recentActivity, setRecentActivity] = useState<AdminActivity[]>([]);
@@ -129,45 +97,6 @@ export const useRealTimeAdminData = () => {
 
       const pendingMessages = messages?.length || 0;
 
-      // Get Fawran statistics
-      const { data: fawranStatsData } = await supabase.rpc('get_fawran_payment_stats');
-      const fawranStats = fawranStatsData?.[0] || {
-        total_payments: 0,
-        pending_payments: 0,
-        approved_payments: 0,
-        rejected_payments: 0,
-        auto_approved_payments: 0,
-        manual_reviewed_payments: 0,
-        avg_processing_time_ms: 0,
-        tampering_detected_count: 0,
-        duplicate_detected_count: 0,
-        time_validation_failed_count: 0
-      };
-
-      // Get payment method distribution (Clean version - NO PayPal)
-      const { data: paymentMethodData } = await supabase.rpc('get_payment_method_stats');
-      const paymentMethodDistribution = {
-        fawran: 0,
-        manual: 0,
-        gift: 0
-      };
-
-      paymentMethodData?.forEach((method: any) => {
-        if (method.payment_method === 'fawran') {
-          paymentMethodDistribution.fawran = method.user_count;
-        } else if (method.payment_method === 'gift') {
-          paymentMethodDistribution.gift = method.user_count;
-        } else {
-          // All other methods (manual, legacy, etc.) are grouped as manual
-          paymentMethodDistribution.manual += method.user_count;
-        }
-      });
-
-      // Calculate auto-approval rate
-      const autoApprovalRate = fawranStats.total_payments > 0 
-        ? Math.round((fawranStats.auto_approved_payments / fawranStats.total_payments) * 100)
-        : 0;
-
       setStats({
         totalUsers,
         activeUsers,
@@ -175,22 +104,7 @@ export const useRealTimeAdminData = () => {
         pendingMessages,
         monthlyRevenue,
         newUsersThisMonth,
-        pendingFawranPayments: fawranStats.pending_payments,
-        autoApprovalRate,
-        avgProcessingTime: Math.round(fawranStats.avg_processing_time_ms / 1000) || 0,
-        giftSubscriptions,
-        paymentMethodDistribution,
-        fawranStats: {
-          totalPayments: fawranStats.total_payments,
-          pendingPayments: fawranStats.pending_payments,
-          approvedPayments: fawranStats.approved_payments,
-          rejectedPayments: fawranStats.rejected_payments,
-          autoApprovedPayments: fawranStats.auto_approved_payments,
-          manualReviewedPayments: fawranStats.manual_reviewed_payments,
-          tamperingDetected: fawranStats.tampering_detected_count,
-          duplicateDetected: fawranStats.duplicate_detected_count,
-          timeValidationFailed: fawranStats.time_validation_failed_count
-        }
+        giftSubscriptions
       });
 
     } catch (error) {
@@ -223,25 +137,7 @@ export const useRealTimeAdminData = () => {
         });
       });
 
-      // Get recent Fawran payments
-      const { data: fawranPayments } = await supabase
-        .from('pending_fawran_payments')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-      fawranPayments?.forEach(payment => {
-        activities.push({
-          id: payment.id,
-          type: 'fawran_payment',
-          title: 'Fawran Payment Received',
-          description: `${payment.email} - ${payment.amount} QAR (${payment.plan_type})`,
-          timestamp: payment.created_at,
-          user_email: payment.email,
-          amount: payment.amount,
-          status: payment.status
-        });
-      });
+      
 
       // Get recent user signups
       const { data: newUsers } = await supabase
@@ -302,14 +198,6 @@ export const useRealTimeAdminData = () => {
     refetch();
     
     // Set up real-time subscriptions
-    const fawranSubscription = supabase
-      .channel('admin-fawran-payments')
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'pending_fawran_payments' },
-        () => refetch()
-      )
-      .subscribe();
-
     const profilesSubscription = supabase
       .channel('admin-profiles')
       .on('postgres_changes',
@@ -327,7 +215,6 @@ export const useRealTimeAdminData = () => {
       .subscribe();
 
     return () => {
-      fawranSubscription.unsubscribe();
       profilesSubscription.unsubscribe();
       subscriptionsSubscription.unsubscribe();
     };
@@ -338,12 +225,10 @@ export const useRealTimeAdminData = () => {
     id: activity.id,
     type: activity.type === 'user_signup' ? 'user_registration' as const : 
           activity.type === 'subscription_activated' ? 'subscription_activation' as const :
-          activity.type === 'gift_given' ? 'subscription_activation' as const :
-          activity.type === 'fawran_payment' ? 'contact_submission' as const : 'task_creation' as const,
+          activity.type === 'gift_given' ? 'subscription_activation' as const : 'task_creation' as const,
     message: activity.title + (activity.description ? ` - ${activity.description}` : ''),
     timestamp: activity.timestamp,
-    status: activity.type === 'fawran_payment' ? 'warning' as const : 
-            activity.type === 'subscription_activated' ? 'success' as const :
+    status: activity.type === 'subscription_activated' ? 'success' as const :
             activity.type === 'gift_given' ? 'success' as const : 'info' as const
   }));
 
