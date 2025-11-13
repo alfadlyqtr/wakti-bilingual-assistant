@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { purchasesLogin, purchasesLogout, purchasesWarmup } from '@/integrations/natively/purchasesBridge';
 
 interface AuthContextType {
   user: User | null;
@@ -62,6 +63,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastLoginTimestamp, setLastLoginTimestamp] = useState<number | null>(null);
+
+  // Warm up Natively Purchases SDK if present (no-op on web)
+  useEffect(() => {
+    try { purchasesWarmup(); } catch {}
+  }, []);
 
   useEffect(() => {
     let subscription: { unsubscribe: () => void } | undefined;
@@ -129,21 +135,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, []);
 
+  // free_access_start_at is now set manually via welcome popup (not auto-set on login)
+
+  // Identify logged-in user in RevenueCat (via Natively SDK). No-op on web.
   useEffect(() => {
-    if (!user?.id) return;
-    (async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, free_access_start_at')
-        .eq('id', user.id)
-        .single();
-      if (!error && data && data.free_access_start_at == null) {
-        await supabase
-          .from('profiles')
-          .update({ free_access_start_at: new Date().toISOString() })
-          .eq('id', user.id);
+    try {
+      if (user?.id) {
+        purchasesLogin(user.id, user.email || '');
       }
-    })();
+    } catch {}
   }, [user?.id]);
 
   const signIn = async (email: string, password: string) => {
@@ -185,6 +185,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (error && !/auth session missing/i.test(error.message)) {
       toast.error(error.message);
     }
+    // Detach user identity from RevenueCat on native builds (no-op on web)
+    try { purchasesLogout(); } catch {}
     // Clear any app-level cached flags that might drive auto-login flows
     try {
       localStorage.removeItem('admin_session');

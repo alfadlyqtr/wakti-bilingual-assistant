@@ -3,15 +3,18 @@ import { useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase, ensurePassport } from "@/integrations/supabase/client";
 import Loading from "@/components/ui/loading";
+import { useUserProfile } from "@/hooks/useUserProfile";
+import { showPaywallIfNeeded } from "@/integrations/natively/purchasesBridge";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
+  CustomPaywallModal?: React.ComponentType<{ open: boolean; onOpenChange: (open: boolean) => void }>;
 }
 
 // Cache TTL: 30 minutes
 const CACHE_TTL_MS = 30 * 60 * 1000;
 
-export default function ProtectedRoute({ children }: ProtectedRouteProps) {
+export default function ProtectedRoute({ children, CustomPaywallModal }: ProtectedRouteProps) {
   const DEV = !!(import.meta && import.meta.env && import.meta.env.DEV);
   const { user, session, isLoading, lastLoginTimestamp } = useAuth();
   const location = useLocation();
@@ -22,13 +25,14 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     needsPayment: boolean;
     subscriptionDetails?: any;
   }>({ isSubscribed: false, isLoading: true, needsPayment: false });
+  const [showPaywall, setShowPaywall] = useState(false);
 
   const [hasAnySession, setHasAnySession] = useState<boolean>(!!session);
   const sessionPollRef = useRef<number | null>(null);
   const sessionPollDeadlineRef = useRef<number>(0);
 
-  // TEMPORARY: disable subscription/IAP enforcement for preview unblock
-  const TEMP_DISABLE_SUBSCRIPTION_CHECKS = true;
+  // Enable subscription/IAP enforcement
+  const TEMP_DISABLE_SUBSCRIPTION_CHECKS = false;
 
   // StrictMode-safe guards and timers
   const retryTimerRef = useRef<number | null>(null);
@@ -38,7 +42,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const lastUserIdRef = useRef<string | null>(null);
 
   // Owner accounts that bypass all restrictions
-  const ownerAccounts = ['alfadly@me.com', 'alfadlyqatar@gmail.com', 'alfadly@tmw.qa'];
+  const ownerAccounts = ['alfadly@me.com', 'alfadlyqatar@gmail.com'];
   const ownerEmails = ownerAccounts.map(e => e.toLowerCase());
 
   useEffect(() => {
@@ -424,7 +428,26 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // TEMPORARY: after auth, allow access immediately (skip subscription/IAP)
+  // Check access and trigger paywall if needed
+  const { isSubscribed, isAccessExpired } = useUserProfile();
+  
+  useEffect(() => {
+    if (TEMP_DISABLE_SUBSCRIPTION_CHECKS) return;
+    if (!user?.id) return;
+    if (isSubscribed) {
+      setShowPaywall(false);
+      return;
+    }
+    if (!isAccessExpired) {
+      setShowPaywall(false);
+      return;
+    }
+    
+    // User's free period has expired and they're not subscribed
+    if (DEV) console.log("ProtectedRoute: Triggering paywall - access expired");
+    setShowPaywall(true);
+  }, [user?.id, isSubscribed, isAccessExpired, TEMP_DISABLE_SUBSCRIPTION_CHECKS, DEV]);
+  
   if (TEMP_DISABLE_SUBSCRIPTION_CHECKS) {
     if (DEV) console.log("ProtectedRoute: TEMP DISABLE - allowing access after auth");
     return <>{children}</>;
@@ -466,5 +489,12 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   if (DEV) console.log("ProtectedRoute: User has valid subscription, allowing access");
-  return <>{children}</>;
+  return (
+    <>
+      {CustomPaywallModal && (
+        <CustomPaywallModal open={showPaywall} onOpenChange={setShowPaywall} />
+      )}
+      {children}
+    </>
+  );
 }
