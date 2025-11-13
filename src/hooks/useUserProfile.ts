@@ -15,6 +15,10 @@ interface UserProfile {
   country_code?: string;
   city?: string;
   updated_at?: string;
+  // Subscription/grace fields
+  is_subscribed: boolean;
+  free_access_start_at?: string | null;
+  revenuecat_id?: string | null;
 }
 
 export function useUserProfile() {
@@ -153,6 +157,26 @@ export function useUserProfile() {
     loading,
     error,
     refetch: fetchProfile,
-    createProfileIfMissing
+    createProfileIfMissing,
+    // Access flags
+    get isSubscribed() {
+      return (profile?.is_subscribed ?? false);
+    },
+    get isGracePeriod() {
+      const isSubscribed = (profile?.is_subscribed ?? false);
+      if (isSubscribed) return false;
+      const start = profile?.free_access_start_at ? Date.parse(profile.free_access_start_at) : null;
+      if (start == null) return true; // not set yet -> treat as grace
+      const elapsedMin = Math.floor((Date.now() - start) / 60000);
+      return elapsedMin < 30;
+    },
+    get isAccessExpired() {
+      const isSubscribed = (profile?.is_subscribed ?? false);
+      if (isSubscribed) return false;
+      const start = profile?.free_access_start_at ? Date.parse(profile.free_access_start_at) : null;
+      if (start == null) return false; // not set counts as grace, not expired
+      const elapsedMin = Math.floor((Date.now() - start) / 60000);
+      return elapsedMin >= 30;
+    }
   };
 }

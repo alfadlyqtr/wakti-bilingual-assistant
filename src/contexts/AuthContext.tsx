@@ -129,6 +129,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!user?.id) return;
+    (async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, free_access_start_at')
+        .eq('id', user.id)
+        .single();
+      if (!error && data && data.free_access_start_at == null) {
+        await supabase
+          .from('profiles')
+          .update({ free_access_start_at: new Date().toISOString() })
+          .eq('id', user.id);
+      }
+    })();
+  }, [user?.id]);
+
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
       email,

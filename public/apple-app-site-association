@@ -1,0 +1,10 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appID": "456A4R8J4V.qa.wakti.ai",
+        "paths": ["*"]
+      }
+    ]
+  }
+}

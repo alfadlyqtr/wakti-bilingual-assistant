@@ -1389,10 +1389,12 @@ export type Database = {
           first_name: string | null
           id: string
           is_logged_in: boolean | null
-          is_subscribed: boolean | null
+          is_subscribed: boolean
           is_suspended: boolean | null
           last_name: string | null
           last_seen: string | null
+          free_access_start_at: string | null
+          revenuecat_id: string | null
           next_billing_date: string | null
           notification_preferences: Json | null
           payment_method: string | null
@@ -1421,10 +1423,12 @@ export type Database = {
           first_name?: string | null
           id: string
           is_logged_in?: boolean | null
-          is_subscribed?: boolean | null
+          is_subscribed?: boolean
           is_suspended?: boolean | null
           last_name?: string | null
           last_seen?: string | null
+          free_access_start_at?: string | null
+          revenuecat_id?: string | null
           next_billing_date?: string | null
           notification_preferences?: Json | null
           payment_method?: string | null
@@ -1453,10 +1457,12 @@ export type Database = {
           first_name?: string | null
           id?: string
           is_logged_in?: boolean | null
-          is_subscribed?: boolean | null
+          is_subscribed?: boolean
           is_suspended?: boolean | null
           last_name?: string | null
           last_seen?: string | null
+          free_access_start_at?: string | null
+          revenuecat_id?: string | null
           next_billing_date?: string | null
           notification_preferences?: Json | null
           payment_method?: string | null
