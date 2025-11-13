@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Camera, Upload, X, Loader2 } from 'lucide-react';
@@ -292,6 +292,11 @@ export function ProfileImageUpload() {
 
   // Get avatar URL from profile data with cache-busting
   const avatarUrl = profile?.avatar_url ? getCacheBustedAvatarUrl(profile.avatar_url) : undefined;
+
+  // Reset error when avatar URL changes so new images render after a previous load error
+  useEffect(() => {
+    setAvatarError(false);
+  }, [avatarUrl]);
 
   return (
     <div className="flex flex-col items-center space-y-4">

@@ -444,14 +444,16 @@ export function AppLayout({ children }: AppLayoutProps) {
   if (isMobile) {
     return (
       <UnreadContext.Provider value={unreadData}>
-        {/* Elevate Radix popper content when paywall is open */}
+        {/* When paywall is open, disable header interactions and keep it under the modal */}
         <style>
-          {`body.paywall-open [data-radix-popper-content-wrapper]{z-index:1200 !important;}`}
+          {`
+            body.paywall-open .app-header-fixed{pointer-events:none !important; z-index:0 !important;}
+          `}
         </style>
         <ProtectedRoute CustomPaywallModal={CustomPaywallModal}>
           <WelcomeTrialPopup />
           <div className="min-h-screen bg-background">
-            <div className="relative z-[1100] pointer-events-auto">
+            <div className="relative">
               <AppHeader unreadTotal={unreadData.unreadTotal} />
             </div>
             <main>
@@ -472,7 +474,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         </style>
         <ProtectedRoute CustomPaywallModal={CustomPaywallModal}>
           <WelcomeTrialPopup />
-          <div className="relative z-[1100] pointer-events-auto">
+          <div className="relative">
             <AppHeader unreadTotal={unreadData.unreadTotal} />
           </div>
           <PresenceBeacon />
@@ -486,11 +488,13 @@ export function AppLayout({ children }: AppLayoutProps) {
   return (
     <UnreadContext.Provider value={unreadData}>
       <style>
-        {`body.paywall-open [data-radix-popper-content-wrapper]{z-index:1200 !important;}`}
+        {`
+          body.paywall-open .app-header-fixed{pointer-events:none !important; z-index:0 !important;}
+        `}
       </style>
       <ProtectedRoute CustomPaywallModal={CustomPaywallModal}>
         <WelcomeTrialPopup />
-        <div className="relative z-[1100] pointer-events-auto">
+        <div className="relative">
           <AppHeader unreadTotal={unreadData.unreadTotal} />
         </div>
         <PresenceBeacon />

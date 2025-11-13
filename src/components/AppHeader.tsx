@@ -206,21 +206,37 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
   const headerEl = (
     <header
       className={cn(
-        "h-16 border-b border-border",
-        "glue-fixed glue-top glue-z shadow-md",
-        "solid-bg app-header-fixed",
+        "h-16 border-b border-transparent",
+        "glue-fixed glue-top z-[990]", // firmly below sidebar (z 999) and its mask (z 998)
+        "app-header-fixed",
         language === 'ar' ? 'font-arabic' : ''
       )}
       style={{
         height: 'var(--app-header-h)',
         width: '100%',
-        backgroundColor: 'hsl(var(--background))'
+        backgroundColor: 'transparent'
       }}
     >
-      <div className={cn(
-        "container relative flex items-center justify-between",
-        isMobile ? "h-14 py-3" : "h-16 py-3"
-      )}>
+      <div className={cn("w-full", isMobile ? "h-14 py-2 px-2" : "h-16 py-2 px-4")}>
+        <div
+          className={cn(
+            "relative flex items-center justify-between",
+            isMobile
+              ? "mx-0 bg-background/90 border-b border-border shadow-md rounded-none"
+              : "rounded-2xl border border-border/60 bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70 shadow-sm px-4"
+          )}
+          style={
+            isMobile
+              ? undefined
+              : {
+                  marginLeft: 'calc(var(--current-sidebar-width, var(--sidebar-mini-width, 70px)) + 0.75rem)',
+                  marginRight: '0.75rem',
+                  width: 'calc(100% - (var(--current-sidebar-width, var(--sidebar-mini-width, 70px)) + 1.5rem))',
+                  overflow: 'hidden',
+                  borderRadius: '1rem'
+                }
+          }
+        >
         <div className="flex items-center gap-3">
           {isMobile ? (
             <div ref={logoRef}>
@@ -334,6 +350,7 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+        </div>
         </div>
       </div>
       

@@ -195,7 +195,7 @@ export default function Signup() {
       privacyPolicy: "Privacy Policy",
       and: "and",
       termsOfService: "Terms of Service",
-      passwordRequirements: "Must be at least 6 characters, contain one uppercase letter and one number",
+      passwordRequirements: "At least 6 characters, include one uppercase letter and one digit",
       selectCountry: "Select your country",
       // Placeholders
       namePlaceholder: "Your Name",
@@ -224,7 +224,7 @@ export default function Signup() {
       privacyPolicy: "سياسة الخصوصية",
       and: "و",
       termsOfService: "شروط الخدمة",
-      passwordRequirements: "يجب أن تكون 6 أحرف على الأقل، تحتوي على حرف كبير ورقم",
+      passwordRequirements: "على الأقل 6 أحرف، تحتوي على حرف كبير واحد ورقم واحد",
       selectCountry: "اختر بلدك",
       // Placeholders
       namePlaceholder: "اسمك",
