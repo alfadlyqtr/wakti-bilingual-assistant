@@ -478,14 +478,13 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   }
 
   // STRICT ENFORCEMENT: Block access if no valid subscription
-  if (!subscriptionStatus.isSubscribed || subscriptionStatus.needsPayment) {
+  if (!subscriptionStatus.isLoading && (!subscriptionStatus.isSubscribed || subscriptionStatus.needsPayment)) {
     if (DEV) console.log("ProtectedRoute: User blocked - no valid subscription:", {
       email: user.email,
       isSubscribed: subscriptionStatus.isSubscribed,
       needsPayment: subscriptionStatus.needsPayment
     });
-    // Option A: Allow access when authenticated (no overlay)
-    return <>{children}</>;
+    // Do not early-return. Let rendering fall through so the CustomPaywallModal can display.
   }
 
   if (DEV) console.log("ProtectedRoute: User has valid subscription, allowing access");
