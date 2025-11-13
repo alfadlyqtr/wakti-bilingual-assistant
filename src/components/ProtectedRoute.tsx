@@ -434,19 +434,34 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   useEffect(() => {
     if (TEMP_DISABLE_SUBSCRIPTION_CHECKS) return;
     if (!user?.id) return;
+
+    // If user is subscribed, never show paywall
     if (isSubscribed) {
       setShowPaywall(false);
       return;
     }
+
+    // If on account billing, allow access to manage payment
+    const isAccount = location.pathname.startsWith('/account');
+    if (isAccount) {
+      const params = new URLSearchParams(location.search || '');
+      const tab = (params.get('tab') || '').toLowerCase();
+      if (tab === 'billing') {
+        setShowPaywall(false);
+        return;
+      }
+    }
+
+    // If access not expired yet, keep paywall hidden
     if (!isAccessExpired) {
       setShowPaywall(false);
       return;
     }
-    
-    // User's free period has expired and they're not subscribed
-    if (DEV) console.log("ProtectedRoute: Triggering paywall - access expired");
+
+    // Else: user's free period has expired and they're not subscribed
+    if (DEV) console.log("ProtectedRoute: Triggering paywall - access expired (route:", location.pathname, location.search, ")");
     setShowPaywall(true);
-  }, [user?.id, isSubscribed, isAccessExpired, TEMP_DISABLE_SUBSCRIPTION_CHECKS, DEV]);
+  }, [user?.id, isSubscribed, isAccessExpired, location.pathname, location.search, TEMP_DISABLE_SUBSCRIPTION_CHECKS, DEV]);
   
   if (TEMP_DISABLE_SUBSCRIPTION_CHECKS) {
     if (DEV) console.log("ProtectedRoute: TEMP DISABLE - allowing access after auth");

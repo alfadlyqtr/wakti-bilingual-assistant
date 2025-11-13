@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Button } from "@/components/ui/button";
@@ -36,9 +36,31 @@ import { supabase } from "@/integrations/supabase/client";
 export default function Account() {
   const { user, updateProfile, updateEmail, updatePassword, signOut } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { language } = useTheme();
   const queryClient = useQueryClient();
-  
+  // Active tab synced with URL (?tab=profile|billing) without loops/flicker
+  const initialTab = (() => {
+    const params = new URLSearchParams(location.search || '');
+    const tab = (params.get('tab') || '').toLowerCase();
+    return tab === 'billing' ? 'billing' : 'profile';
+  })();
+  const [activeTab, setActiveTab] = useState<'profile' | 'billing'>(initialTab);
+  useEffect(() => {
+    const params = new URLSearchParams(location.search || '');
+    const tab = (params.get('tab') || '').toLowerCase();
+    const urlTab: 'profile' | 'billing' = tab === 'billing' ? 'billing' : 'profile';
+    if (urlTab !== activeTab) setActiveTab(urlTab);
+  }, [location.search]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search || '');
+    if ((params.get('tab') || 'profile') !== activeTab) {
+      params.set('tab', activeTab);
+      navigate(`${location.pathname}?${params.toString()}`, { replace: true });
+    }
+  }, [activeTab]);
+
   // Account states
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
@@ -387,7 +409,7 @@ export default function Account() {
           {t("account", language)}
         </h1>
         
-        <Tabs defaultValue="profile" className="space-y-4">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'profile' | 'billing')} className="space-y-4">
           <TabsList className="grid w-full grid-cols-2 h-auto p-1">
             <TabsTrigger value="profile" className="flex flex-col items-center gap-1 p-3">
               <User className="h-4 w-4" />

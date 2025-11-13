@@ -1,5 +1,7 @@
 
 export const billingAr = {
+  // Generic label
+  billing: "الفوترة",
   // Subscription Info
   subscriptionInfo: "معلومات الاشتراك",
   planName: "اسم الخطة",

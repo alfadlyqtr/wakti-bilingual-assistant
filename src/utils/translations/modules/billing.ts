@@ -1,5 +1,7 @@
 
 export const billing = {
+  // Generic label
+  billing: "Billing",
   // Subscription Info
   subscriptionInfo: "Subscription Information",
   planName: "Plan Name",

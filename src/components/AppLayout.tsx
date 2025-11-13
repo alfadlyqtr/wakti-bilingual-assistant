@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Sparkles, RefreshCw, LogOut, Home, Shield } from "lucide-react";
+import { Logo3D } from "@/components/Logo3D";
 import { toast } from "sonner";
 
 interface AppLayoutProps {
@@ -60,6 +61,18 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [price, setPrice] = useState<{ qar?: string; usd?: string }>({});
+
+  useEffect(() => {
+    // When paywall is open, allow header popovers to appear above overlay
+    if (open) {
+      document.body.classList.add('paywall-open');
+    } else {
+      document.body.classList.remove('paywall-open');
+    }
+    return () => {
+      document.body.classList.remove('paywall-open');
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -117,9 +130,11 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
 
   const copy = {
     en: {
-      title: 'WAKTI AI Premium',
+      title: 'WAKTI AI',
       subtitle: 'Your 30-minute trial has ended. Subscribe to continue.',
       features: [
+        'WAKTI AI',
+        'WAKTI AI Search',
         'Image Generator',
         'Tasks & Reminders',
         'Maw3d Events',
@@ -140,12 +155,14 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
       home: 'Back to Home',
       terms: 'Terms & Privacy',
       en: 'English',
-      ar: 'Arabic'
+      ar: 'العربية'
     },
     ar: {
-      title: 'WAKTI AI المميز',
+      title: 'WAKTI AI',
       subtitle: 'انتهت فترة التجربة المجانية. اشترك للمتابعة.',
       features: [
+        'وقتي AI',
+        'بحث وقتي AI',
         'مولد الصور',
         'المهام والتذكيرات',
         'مواعيد Maw3d',
@@ -165,7 +182,7 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
       logout: 'تسجيل الخروج',
       home: 'العودة للرئيسية',
       terms: 'الشروط والخصوصية',
-      en: 'الإنجليزية',
+      en: 'English',
       ar: 'العربية'
     },
   };
@@ -175,34 +192,34 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="sm:max-w-md bg-gradient-to-br from-background via-background to-accent/5 border-accent/20"
+        className="w-[85vw] max-w-[85vw] sm:w-full sm:max-w-md bg-gradient-to-br from-background via-background to-accent/5 border-accent/20 max-h-[85vh] overflow-y-auto rounded-xl"
+        dir={language === 'ar' ? 'rtl' : 'ltr'}
+        hideCloseButton
+        onEscapeKeyDown={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => e.preventDefault()}
       >
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <img src="/assets/wakti-eye-soft.svg" alt="WAKTI" className="w-7 h-7" />
-            <h2 className="text-2xl font-bold">{txt.title}</h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              className={`px-2 py-1 text-xs rounded-full border ${language === 'en' ? 'bg-accent/20 border-accent text-foreground' : 'text-muted-foreground'}`}
-              onClick={() => setLanguage?.('en')}
-            >{copy.en.en}</button>
-            <button
-              className={`px-2 py-1 text-xs rounded-full border ${language === 'ar' ? 'bg-accent/20 border-accent text-foreground' : 'text-muted-foreground'}`}
-              onClick={() => setLanguage?.('ar')}
-            >{copy.en.ar}</button>
-          </div>
+          <Logo3D size="sm" className="w-8 h-8" />
+          {(() => {
+            const other = language === 'ar' ? 'en' : 'ar';
+            const label = other === 'en' ? 'English' : 'العربية';
+            return (
+              <button
+                className="px-3 py-1 text-xs rounded-full border bg-accent/20 border-accent text-foreground"
+                onClick={() => setLanguage?.(other as any)}
+              >{label}</button>
+            );
+          })()}
         </div>
         <DialogHeader>
-          <DialogDescription className="text-base pt-2">
+          <DialogDescription className="text-base pt-2 font-semibold text-accent-blue">
             {txt.subtitle}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           {/* Features */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             {txt.features.map((feature, i) => (
               <div key={i} className="flex items-center gap-2 text-sm rounded-md bg-accent/5 px-2 py-1">
                 <div className="w-1.5 h-1.5 rounded-full bg-accent-green" />
@@ -214,15 +231,46 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
           {/* Price */}
           <div className="bg-accent/10 rounded-lg p-4 text-center space-y-1">
             <p className="text-sm text-muted-foreground">{txt.trial}</p>
-            <div className="flex items-center justify-center gap-3">
-              <p className="text-2xl font-bold text-primary">{price.qar || 'QAR 95/month'}</p>
-              <span className="text-muted-foreground">•</span>
-              <p className="text-lg text-muted-foreground">{price.usd || '$25/month'}</p>
-            </div>
+            {(() => {
+              const normalize = (s?: string) => s || '';
+              if (language === 'ar') {
+                // Arabic: show USD as '25 دولار أمريكي/شهر', QAR as 'ر.ق 95/شهر'
+                const usdRaw = normalize(price.usd).replace('/month', '/شهر').trim();
+                const qarRaw = normalize(price.qar).replace('/month', '/شهر').replace('QAR', 'ر.ق').trim();
+                const usd = usdRaw ? usdRaw.replace('$', '') + ' دولار أمريكي/شهر' : '25 دولار أمريكي/شهر';
+                const qar = qarRaw || 'ر.ق 95/شهر';
+                return (
+                  <div className="flex items-center justify-center gap-3">
+                    <p className="text-lg text-muted-foreground">{usd}</p>
+                    <span className="text-muted-foreground">•</span>
+                    <p className="text-2xl font-bold text-primary">{qar}</p>
+                  </div>
+                );
+              } else {
+                // English: keep QAR primary, add small 'USD' tag
+                const qar = normalize(price.qar) || 'QAR 95/month';
+                const usd = normalize(price.usd) || '$25/month';
+                return (
+                  <div className="flex items-center justify-center gap-3">
+                    <p className="text-2xl font-bold text-primary">{qar}</p>
+                    <span className="text-muted-foreground">•</span>
+                    <p className="text-lg text-muted-foreground">{usd} <span className="text-xs align-middle opacity-70">USD</span></p>
+                  </div>
+                );
+              }
+            })()}
           </div>
 
           {/* Actions */}
           <div className="space-y-2 pt-2">
+            <Button
+              onClick={() => { onOpenChange(false); navigate('/account?tab=billing'); }}
+              variant="outline"
+              className="w-full"
+            >
+              {language === 'ar' ? 'الفوترة' : 'Billing'}
+            </Button>
+
             <Button
               onClick={handleSubscribe}
               disabled={loading}
@@ -250,6 +298,19 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
               )}
               {txt.restore}
             </Button>
+
+            {/* Terms */}
+            <div className="text-center pt-1">
+              <a
+                href="https://wakti.qa/privacy-terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-muted-foreground hover:text-primary inline-flex items-center gap-1"
+              >
+                <Shield className="w-3 h-3" />
+                {txt.terms}
+              </a>
+            </div>
           </div>
 
           {/* Secondary actions */}
@@ -262,19 +323,6 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
               <LogOut className="w-4 h-4 mr-1" />
               {txt.logout}
             </Button>
-          </div>
-
-          {/* Terms */}
-          <div className="text-center pt-2">
-            <a
-              href="https://wakti.qa/privacy-terms"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-muted-foreground hover:text-primary inline-flex items-center gap-1"
-            >
-              <Shield className="w-3 h-3" />
-              {txt.terms}
-            </a>
           </div>
         </div>
       </DialogContent>
@@ -396,10 +444,16 @@ export function AppLayout({ children }: AppLayoutProps) {
   if (isMobile) {
     return (
       <UnreadContext.Provider value={unreadData}>
+        {/* Elevate Radix popper content when paywall is open */}
+        <style>
+          {`body.paywall-open [data-radix-popper-content-wrapper]{z-index:1200 !important;}`}
+        </style>
         <ProtectedRoute CustomPaywallModal={CustomPaywallModal}>
           <WelcomeTrialPopup />
           <div className="min-h-screen bg-background">
-            <AppHeader unreadTotal={unreadData.unreadTotal} />
+            <div className="relative z-[1100] pointer-events-auto">
+              <AppHeader unreadTotal={unreadData.unreadTotal} />
+            </div>
             <main>
               {children}
             </main>
@@ -413,8 +467,14 @@ export function AppLayout({ children }: AppLayoutProps) {
   if (isTablet) {
     return (
       <UnreadContext.Provider value={unreadData}>
+        <style>
+          {`body.paywall-open [data-radix-popper-content-wrapper]{z-index:1200 !important;}`}
+        </style>
         <ProtectedRoute CustomPaywallModal={CustomPaywallModal}>
           <WelcomeTrialPopup />
+          <div className="relative z-[1100] pointer-events-auto">
+            <AppHeader unreadTotal={unreadData.unreadTotal} />
+          </div>
           <PresenceBeacon />
           <TabletLayout>{children}</TabletLayout>
         </ProtectedRoute>
@@ -425,8 +485,14 @@ export function AppLayout({ children }: AppLayoutProps) {
   // Desktop
   return (
     <UnreadContext.Provider value={unreadData}>
+      <style>
+        {`body.paywall-open [data-radix-popper-content-wrapper]{z-index:1200 !important;}`}
+      </style>
       <ProtectedRoute CustomPaywallModal={CustomPaywallModal}>
         <WelcomeTrialPopup />
+        <div className="relative z-[1100] pointer-events-auto">
+          <AppHeader unreadTotal={unreadData.unreadTotal} />
+        </div>
         <PresenceBeacon />
         <DesktopLayout>{children}</DesktopLayout>
       </ProtectedRoute>
