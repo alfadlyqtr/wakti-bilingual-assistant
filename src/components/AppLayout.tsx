@@ -54,7 +54,7 @@ interface CustomPaywallModalProps {
 }
 
 function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
-  const { language } = useTheme();
+  const { language, setLanguage } = useTheme();
   const { signOut } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -117,14 +117,21 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
 
   const copy = {
     en: {
-      title: 'Unlock Wakti AI Premium',
+      title: 'WAKTI AI Premium',
       subtitle: 'Your 30-minute trial has ended. Subscribe to continue.',
       features: [
-        'Unlimited AI conversations',
-        'Voice cloning & translations',
-        'Smart tasks & events',
-        'Image & video generation',
-        'Priority support',
+        'Image Generator',
+        'Tasks & Reminders',
+        'Maw3d Events',
+        'Tasjeel Voice Recorder',
+        'Contacts & Messaging',
+        'Vitality',
+        'WAKTI Journal',
+        'Smart Text Generator',
+        'AI Games',
+        'Voice Cloning',
+        'Music Generation',
+        'Voice Translation',
       ],
       trial: '3-day free trial, then',
       subscribe: 'Start Free Trial',
@@ -132,16 +139,25 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
       logout: 'Logout',
       home: 'Back to Home',
       terms: 'Terms & Privacy',
+      en: 'English',
+      ar: 'Arabic'
     },
     ar: {
-      title: 'افتح Wakti AI المميز',
+      title: 'WAKTI AI المميز',
       subtitle: 'انتهت فترة التجربة المجانية. اشترك للمتابعة.',
       features: [
-        'محادثات AI غير محدودة',
-        'استنساخ الصوت والترجمة',
-        'مهام وأحداث ذكية',
-        'إنشاء صور وفيديو',
-        'دعم أولوية',
+        'مولد الصور',
+        'المهام والتذكيرات',
+        'مواعيد Maw3d',
+        'تسجيل (Tasjeel) مسجل الصوت',
+        'جهات الاتصال والرسائل',
+        'الحيوية',
+        'دفتر يوميات وقطي',
+        'مولد النص الذكي',
+        'ألعاب الذكاء الاصطناعي',
+        'استنساخ الصوت',
+        'إنشاء الموسيقى',
+        'ترجمة الصوت',
       ],
       trial: 'تجربة مجانية 3 أيام، ثم',
       subscribe: 'ابدأ التجربة المجانية',
@@ -149,6 +165,8 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
       logout: 'تسجيل الخروج',
       home: 'العودة للرئيسية',
       terms: 'الشروط والخصوصية',
+      en: 'الإنجليزية',
+      ar: 'العربية'
     },
   };
 
@@ -160,11 +178,23 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
         className="sm:max-w-md bg-gradient-to-br from-background via-background to-accent/5 border-accent/20"
         onPointerDownOutside={(e) => e.preventDefault()}
       >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <img src="/assets/wakti-eye-soft.svg" alt="WAKTI" className="w-7 h-7" />
+            <h2 className="text-2xl font-bold">{txt.title}</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              className={`px-2 py-1 text-xs rounded-full border ${language === 'en' ? 'bg-accent/20 border-accent text-foreground' : 'text-muted-foreground'}`}
+              onClick={() => setLanguage?.('en')}
+            >{copy.en.en}</button>
+            <button
+              className={`px-2 py-1 text-xs rounded-full border ${language === 'ar' ? 'bg-accent/20 border-accent text-foreground' : 'text-muted-foreground'}`}
+              onClick={() => setLanguage?.('ar')}
+            >{copy.en.ar}</button>
+          </div>
+        </div>
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-            <Sparkles className="w-6 h-6 text-accent-purple" />
-            {txt.title}
-          </DialogTitle>
           <DialogDescription className="text-base pt-2">
             {txt.subtitle}
           </DialogDescription>
@@ -172,9 +202,9 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
 
         <div className="space-y-4 py-4">
           {/* Features */}
-          <div className="space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {txt.features.map((feature, i) => (
-              <div key={i} className="flex items-center gap-2 text-sm">
+              <div key={i} className="flex items-center gap-2 text-sm rounded-md bg-accent/5 px-2 py-1">
                 <div className="w-1.5 h-1.5 rounded-full bg-accent-green" />
                 <span>{feature}</span>
               </div>
