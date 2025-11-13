@@ -223,7 +223,7 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
             "relative flex items-center justify-between",
             isMobile
               ? "mx-0 bg-background/90 border-b border-border shadow-md rounded-none"
-              : "rounded-2xl border border-border/60 bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70 shadow-sm px-4"
+              : "mx-auto max-w-[1280px] rounded-[2rem] border border-border/60 bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/70 shadow-lg px-4"
           )}
           style={
             isMobile

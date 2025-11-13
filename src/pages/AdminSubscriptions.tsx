@@ -704,13 +704,15 @@ export default function AdminSubscriptions() {
           
           {/* Debug Info in Modal */}
           {selectedUser && (
-            <div className="text-xs bg-gray-100 p-2 rounded mb-4">
-              <strong>Debug Info:</strong><br/>
-              User ID: {selectedUser.id}<br/>
-              Email: {selectedUser.email}<br/>
-              Currently Subscribed: {selectedUser.is_subscribed ? 'Yes' : 'No'}<br/>
-              Status: {selectedUser.subscription_status || 'N/A'}
-            </div>
+            <details className="text-xs bg-muted/30 p-2 rounded mb-3 text-muted-foreground">
+              <summary className="cursor-pointer select-none">Debug Info</summary>
+              <div className="mt-2 space-y-1">
+                <div>User ID: {selectedUser.id}</div>
+                <div>Email: {selectedUser.email}</div>
+                <div>Currently Subscribed: {selectedUser.is_subscribed ? 'Yes' : 'No'}</div>
+                <div>Status: {selectedUser.subscription_status || 'N/A'}</div>
+              </div>
+            </details>
           )}
           
           <div className="space-y-4">
@@ -742,7 +744,7 @@ export default function AdminSubscriptions() {
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="z-[2000]">
                     <SelectItem value="1_week">1 Week Gift (7 days)</SelectItem>
                     <SelectItem value="2_weeks">2 Weeks Gift (14 days)</SelectItem>
                     <SelectItem value="1_month">1 Month Gift (30 days)</SelectItem>
@@ -770,7 +772,7 @@ export default function AdminSubscriptions() {
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="z-[2000]">
                       <SelectItem value="Monthly Plan">Monthly Plan (60 QAR)</SelectItem>
                       <SelectItem value="Yearly Plan">Yearly Plan (600 QAR)</SelectItem>
                     </SelectContent>
@@ -786,7 +788,7 @@ export default function AdminSubscriptions() {
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="z-[3000]">
                       <SelectItem value="manual">Manual Admin Activation</SelectItem>
                       <SelectItem value="fawran">Fawran (when linked to payment)</SelectItem>
                     </SelectContent>
