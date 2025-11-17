@@ -738,26 +738,21 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
     let placeholderRecordId: string | null = null;
     
     try {
-      // Check song count quota (5 songs per month)
+      // Check music generation quota via RPC
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
       
-      const now = new Date();
-      const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
+      const { data: quotaCheck, error: quotaError } = await (supabase as any).rpc('can_generate_music');
+      if (quotaError) throw quotaError;
       
-      // Fetch actual data instead of using count with head:true
-      const { data: existingTracks, error: countError } = await (supabase as any)
-        .from('user_music_tracks')
-        .select('id')
-        .eq('user_id', user.id)
-        .gte('created_at', startOfMonth.toISOString());
-      
-      if (countError) throw countError;
-      
-      const songsThisMonth = existingTracks?.length || 0;
-      
-      if (songsThisMonth >= 5) {
-        toast.error(language==='ar' ? 'لقد وصلت إلى الحد الأقصى 5 أغاني شهريا' : 'Monthly limit reached: 5 songs per month');
+      if (!quotaCheck?.can_generate) {
+        const used = quotaCheck?.generated || 0;
+        const limit = quotaCheck?.limit || 5;
+        toast.error(
+          language === 'ar' 
+            ? `لقد وصلت إلى الحد الأقصى: ${used} من ${limit} أغاني هذا الشهر`
+            : `Monthly limit reached: ${used} of ${limit} songs this month`
+        );
         return;
       }
       

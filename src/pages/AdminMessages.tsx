@@ -251,6 +251,20 @@ export default function AdminMessages() {
               </div>
             </CardContent>
           </Card>
+
+          <Card className="bg-gradient-card border-border/50 hover:border-accent-purple/30 transition-all duration-300">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-enhanced-heading flex items-center text-sm">
+                <Shield className="h-4 w-4 mr-2 text-accent-purple" />
+                Account Deletion
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-accent-purple">
+                {messages.filter(m => m.submission_type === 'account_delete').length}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Enhanced Search and Filter Controls */}
@@ -297,6 +311,7 @@ export default function AdminMessages() {
                     <SelectItem value="feedback">Feedback</SelectItem>
                     <SelectItem value="support">Support</SelectItem>
                     <SelectItem value="abuse">Abuse Report</SelectItem>
+                    <SelectItem value="account_delete">Account Delete</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -334,13 +349,16 @@ export default function AdminMessages() {
                             <Badge 
                               variant={
                                 message.submission_type === 'abuse' ? 'destructive' :
-                                message.submission_type === 'feedback' ? 'secondary' : 'outline'
+                                message.submission_type === 'feedback' ? 'secondary' :
+                                message.submission_type === 'account_delete' ? 'default' :
+                                'outline'
                               }
                               className="text-xs"
                             >
                               {message.submission_type === 'contact' ? 'Contact' : 
                                message.submission_type === 'feedback' ? 'Feedback' : 
                                message.submission_type === 'support' ? 'Support' :
+                               message.submission_type === 'account_delete' ? 'Account Delete' :
                                'Abuse Report'}
                             </Badge>
                             <Badge 

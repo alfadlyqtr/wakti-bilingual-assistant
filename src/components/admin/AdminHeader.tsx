@@ -1,4 +1,5 @@
 
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -14,10 +15,27 @@ interface AdminHeaderProps {
 
 export const AdminHeader = ({ title, subtitle, icon, children }: AdminHeaderProps) => {
   const navigate = useNavigate();
+  const [impersonationInfo, setImpersonationInfo] = useState<{ userEmail?: string; reason?: string } | null>(null);
 
   const handleBackToAdmin = () => {
     console.log('Admin Header - navigating back to admin dashboard');
     navigate('/admindash');
+  };
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('admin_impersonation_context');
+      if (raw) {
+        setImpersonationInfo(JSON.parse(raw));
+      }
+    } catch {
+      setImpersonationInfo(null);
+    }
+  }, []);
+
+  const clearImpersonation = () => {
+    try { localStorage.removeItem('admin_impersonation_context'); } catch {}
+    setImpersonationInfo(null);
   };
 
   const handleLogout = async () => {
@@ -77,6 +95,25 @@ export const AdminHeader = ({ title, subtitle, icon, children }: AdminHeaderProp
             {children}
           </div>
         </div>
+
+        {impersonationInfo && (
+          <div className="mt-2 text-xs flex items-center justify-between rounded-md border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-yellow-100">
+            <div className="flex flex-col">
+              <span className="font-medium">Acting on behalf of {impersonationInfo.userEmail || 'selected user'}</span>
+              {impersonationInfo.reason && (
+                <span className="text-[11px] text-yellow-200/80">Reason: {impersonationInfo.reason}</span>
+              )}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-[10px] h-6 px-2 border-yellow-500/60 text-yellow-100 hover:bg-yellow-500/20"
+              onClick={clearImpersonation}
+            >
+              Clear
+            </Button>
+          </div>
+        )}
       </div>
     </header>
   );

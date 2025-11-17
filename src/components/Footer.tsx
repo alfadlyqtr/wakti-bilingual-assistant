@@ -25,6 +25,13 @@ export function Footer() {
               {t("contactUs", language)}
             </Link>
             <span className="text-muted-foreground">•</span>
+            <Link 
+              to="/account-delete" 
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {t("deleteAccount", language)}
+            </Link>
+            <span className="text-muted-foreground">•</span>
             <a 
               href="https://tmw.qa" 
               target="_blank" 

@@ -31,6 +31,19 @@ export default function AdminUsers() {
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showSuspendConfirm, setShowSuspendConfirm] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [userDetails, setUserDetails] = useState<any | null>(null);
+  const [isImpersonating, setIsImpersonating] = useState(false);
+  const [featureUsage, setFeatureUsage] = useState<any[] | null>(null);
+  const [usageMonth, setUsageMonth] = useState<string>(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  });
+  const [usageScope, setUsageScope] = useState<'month' | 'lifetime'>('lifetime');
+  const [showSubs, setShowSubs] = useState(false);
 
   useEffect(() => {
     loadUsers();
@@ -231,7 +244,93 @@ export default function AdminUsers() {
                       Status: {user.is_suspended ? 'Suspended' : 'Active'}
                     </p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        setSelectedUser(user);
+                        setShowDetails(true);
+                        setDetailsLoading(true);
+                        setUserDetails(null);
+                        setFeatureUsage(null);
+                        try {
+                          const { data, error } = await (supabase as any).rpc('admin_get_user_full_profile', {
+                            p_user_id: user.id,
+                            p_plan_name: null,
+                            p_from: null,
+                            p_to: null,
+                          });
+                          if (error) {
+                            console.error('[AdminUsers] Failed to load user details:', error);
+                            toast.error(`Failed to load user details: ${error.message}`);
+                          } else {
+                            setUserDetails(data);
+                            try {
+                              const { data: fu, error: fue } = await (supabase as any).rpc('admin_get_user_usage', {
+                                p_user_id: user.id,
+                                p_scope: usageScope,
+                                p_month: usageMonth,
+                              });
+                              if (!fue && Array.isArray(fu)) {
+                                setFeatureUsage(fu);
+                              } else {
+                                setFeatureUsage([]);
+                              }
+                            } catch (e) {
+                              console.error('[AdminUsers] Feature usage fetch error:', e);
+                              setFeatureUsage([]);
+                            }
+                          }
+                        } catch (err) {
+                          console.error('[AdminUsers] Exception loading user details:', err);
+                          toast.error('Error loading user details');
+                        } finally {
+                          setDetailsLoading(false);
+                        }
+                      }}
+                    >
+                      Details
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={isImpersonating}
+                      onClick={async () => {
+                        setIsImpersonating(true);
+                        try {
+                          const reason = `Admin viewing user context from Users page`;
+                          const { data, error } = await (supabase as any).rpc('admin_start_impersonation', {
+                            p_user_id: user.id,
+                            p_reason: reason,
+                          });
+                          if (error) {
+                            console.error('[AdminUsers] Failed to start impersonation:', error);
+                            toast.error(`Failed to log impersonation: ${error.message}`);
+                          } else {
+                            const context = {
+                              userEmail: user.email,
+                              reason,
+                              eventId: data?.event_id,
+                              startedAt: data?.started_at,
+                            };
+                            try {
+                              localStorage.setItem('admin_impersonation_context', JSON.stringify(context));
+                            } catch {
+                              // ignore storage errors
+                            }
+                            toast.success(`Impersonation context started for ${user.email}`);
+                          }
+                        } catch (err) {
+                          console.error('[AdminUsers] Exception starting impersonation:', err);
+                          toast.error('Error starting impersonation context');
+                        } finally {
+                          setIsImpersonating(false);
+                        }
+                      }}
+                    >
+                      Impersonation
+                    </Button>
                     <Button 
                       variant="outline" 
                       size="sm"
@@ -301,6 +400,188 @@ export default function AdminUsers() {
             </Button>
             <Button variant="destructive" onClick={handleDeleteUser}>
               Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* User Details Dialog */}
+      <Dialog open={showDetails} onOpenChange={(open) => {
+        setShowDetails(open);
+        if (!open) {
+          setUserDetails(null);
+          setFeatureUsage(null);
+        }
+      }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>User Details</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            {detailsLoading && (
+              <div className="text-sm text-muted-foreground">Loading details...</div>
+            )}
+            {!detailsLoading && !userDetails && (
+              <div className="text-sm text-muted-foreground">No details available.</div>
+            )}
+            {!detailsLoading && userDetails && (
+              <div className="space-y-4 text-sm">
+                <div className="border rounded-md p-3">
+                  <h4 className="font-semibold mb-2">Profile</h4>
+                  <div className="grid grid-cols-2 gap-y-1">
+                    <span className="text-muted-foreground">Name</span>
+                    <span>{userDetails.profile?.display_name || '—'}</span>
+                    <span className="text-muted-foreground">Email</span>
+                    <span>{userDetails.profile?.email || '—'}</span>
+                    <span className="text-muted-foreground">Status</span>
+                    <span>{userDetails.profile?.is_suspended ? 'Suspended' : 'Active'}</span>
+                    <span className="text-muted-foreground">Created</span>
+                    <span>{userDetails.profile?.created_at ? new Date(userDetails.profile.created_at).toLocaleString() : '—'}</span>
+                  </div>
+                </div>
+
+                <div className="border rounded-md p-3">
+                  <h4 className="font-semibold mb-2">Voice Usage</h4>
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">Used</span>
+                    <span className="ml-2 font-medium">{(() => { const v = featureUsage?.find((u:any) => u.feature === 'voice')?.used ?? 0; return v?.toLocaleString?.() ?? v; })()} characters</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <h4 className="font-semibold">Usage Period</h4>
+                  {usageScope === 'month' && (
+                    <input
+                      type="month"
+                      value={usageMonth}
+                      onChange={async (e) => {
+                        const value = e.target.value; // YYYY-MM
+                        setUsageMonth(value);
+                        try {
+                          const { data: fu, error: fue } = await (supabase as any).rpc('admin_get_user_usage', {
+                            p_user_id: selectedUser?.id,
+                            p_scope: usageScope,
+                            p_month: value,
+                          });
+                          if (!fue && Array.isArray(fu)) {
+                            setFeatureUsage(fu);
+                          } else {
+                            setFeatureUsage([]);
+                          }
+                        } catch (e) {
+                          console.error('[AdminUsers] Feature usage fetch error (month change):', e);
+                          setFeatureUsage([]);
+                        }
+                      }}
+                      className="h-8 rounded border px-2 text-xs bg-background"
+                    />
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    className={`px-2 py-1 rounded text-xs border ${usageScope === 'month' ? 'bg-accent text-accent-foreground' : 'bg-background'}`}
+                    onClick={async () => {
+                      setUsageScope('month');
+                      try {
+                        const { data: fu, error: fue } = await (supabase as any).rpc('admin_get_user_usage', {
+                          p_user_id: selectedUser?.id,
+                          p_scope: 'month',
+                          p_month: usageMonth,
+                        });
+                        if (!fue && Array.isArray(fu)) setFeatureUsage(fu); else setFeatureUsage([]);
+                      } catch (e) { setFeatureUsage([]); }
+                    }}
+                  >
+                    This Month
+                  </button>
+                  <button
+                    className={`px-2 py-1 rounded text-xs border ${usageScope === 'lifetime' ? 'bg-accent text-accent-foreground' : 'bg-background'}`}
+                    onClick={async () => {
+                      setUsageScope('lifetime');
+                      try {
+                        const { data: fu, error: fue } = await (supabase as any).rpc('admin_get_user_usage', {
+                          p_user_id: selectedUser?.id,
+                          p_scope: 'lifetime',
+                          p_month: usageMonth,
+                        });
+                        if (!fue && Array.isArray(fu)) setFeatureUsage(fu); else setFeatureUsage([]);
+                      } catch (e) { setFeatureUsage([]); }
+                    }}
+                  >
+                    Lifetime
+                  </button>
+                </div>
+
+                <div className="border rounded-md p-3">
+                  <h4 className="font-semibold mb-2">Feature Usage {usageScope === 'lifetime' ? '(lifetime)' : '(this month)'}
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    {(() => {
+                      const get = (key: string) => featureUsage?.find((u:any) => u.feature === key) || {};
+                      const rows = [
+                        { key: 'voice', label: 'Voice', value: (get('voice').used ?? 0), unit: 'characters' },
+                        { key: 'chat', label: 'Chat', value: (get('chat').used ?? 0), unit: 'tokens' },
+                        { key: 'images', label: 'Images', value: (get('images').used ?? 0), unit: 'images' },
+                        { key: 'search', label: 'Search', value: (get('search').used ?? 0), unit: 'searches', extra: get('search') },
+                        { key: 'music', label: 'Music', value: (get('music').tracks ?? 0), unit: 'tracks', extra: get('music') },
+                        { key: 'voice_translation', label: 'Voice translation', value: (get('voice_translation').used ?? 0), unit: 'translations' },
+                      ];
+                      return rows.map((r, idx) => (
+                        <div key={idx} className="flex items-center justify-between">
+                          <span className="text-muted-foreground">{r.label}</span>
+                          <span className="font-medium">
+                            {r.key === 'music' ? `${r.value} tracks${r.extra?.chars_used ? ` • ${r.extra.chars_used} chars` : ''}` :
+                             r.key === 'search' ? `${r.value} searches${(r.extra?.extra_regular||0)+(r.extra?.extra_advanced||0) > 0 ? ` • ${r.extra?.extra_regular||0} extra • ${r.extra?.extra_advanced||0} advanced` : ''}` :
+                             `${r.value} ${r.unit}`}
+                          </span>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </div>
+
+                <div className="border rounded-md p-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-semibold">Subscriptions</h4>
+                    <button className="text-xs underline" onClick={() => setShowSubs(!showSubs)}>
+                      {showSubs ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                  {showSubs && (
+                    Array.isArray(userDetails.subscriptions) && userDetails.subscriptions.length > 0 ? (
+                      <div className="space-y-2 mt-2">
+                        {userDetails.subscriptions.map((s: any, idx: number) => (
+                          <div key={idx} className="border border-border/50 rounded p-2 text-xs">
+                            <div className="flex items-center justify-between">
+                              <div className="font-medium">{s.plan_name || 'Plan'}</div>
+                              <span className={`text-xs px-2 py-0.5 rounded ${s.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-muted text-foreground/70'}`}>{s.status}</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-y-1 mt-2">
+                              <span className="text-muted-foreground">Amount</span>
+                              <span>{(s.billing_amount ?? 0).toFixed ? s.billing_amount.toFixed(2) : s.billing_amount} {s.billing_currency || ''}</span>
+                              <span className="text-muted-foreground">Start</span>
+                              <span>{s.start_date ? new Date(s.start_date).toLocaleDateString() : '—'}</span>
+                              <span className="text-muted-foreground">Next Billing</span>
+                              <span>{s.next_billing_date ? new Date(s.next_billing_date).toLocaleDateString() : '—'}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground mt-2">No subscriptions found.</p>
+                    )
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={() => {
+              setShowDetails(false);
+              setUserDetails(null);
+            }}>
+              Close
             </Button>
           </div>
         </DialogContent>

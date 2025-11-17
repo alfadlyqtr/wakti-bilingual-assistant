@@ -31,6 +31,60 @@ export default function AdminAnalytics() {
     dailyActiveUsers: 0
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
+  const [showTrend, setShowTrend] = useState(false);
+  const [trendData, setTrendData] = useState<{ month_start: string; total_revenue: number }[]>([]);
+
+  const exportRevenueCsv = async () => {
+    try {
+      setIsExporting(true);
+      const { data, error } = await (supabase as any).rpc('admin_export_revenue_analytics', {
+        p_from: null,
+        p_to: null,
+      });
+      if (error) throw error;
+
+      const rows = Array.isArray(data) ? data : [];
+      if (rows.length === 0) {
+        toast.info('No revenue data to export');
+        return;
+      }
+
+      const header = ['user_id','plan_name','status','billing_amount','billing_currency','billing_cycle','start_date','next_billing_date','is_gift'];
+      const csvLines = [header.join(',')].concat(
+        rows.map((r: any) => header.map((h) => JSON.stringify(r[h] ?? '')).join(','))
+      );
+      const blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'wakti_revenue_export.csv');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success('Revenue data exported');
+    } catch (err) {
+      console.error('[AdminAnalytics] Error exporting revenue:', err);
+      toast.error('Failed to export revenue data');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const loadRevenueTrend = async () => {
+    try {
+      const { data, error } = await (supabase as any).rpc('admin_get_revenue_timeseries', {
+        p_months_back: 6,
+      });
+      if (error) throw error;
+      setTrendData(data || []);
+      setShowTrend(true);
+    } catch (err) {
+      console.error('[AdminAnalytics] Error loading trend:', err);
+      toast.error('Failed to load revenue trend');
+    }
+  };
 
   useEffect(() => {
     loadAnalytics();
@@ -128,7 +182,28 @@ export default function AdminAnalytics() {
       <div className="p-3 sm:p-6 pb-24 space-y-6 sm:space-y-8">
         {/* Revenue Analytics */}
         <div>
-          <h2 className="text-lg sm:text-2xl font-bold text-enhanced-heading mb-4 sm:mb-6">Revenue Analytics</h2>
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
+            <h2 className="text-lg sm:text-2xl font-bold text-enhanced-heading">Revenue Analytics</h2>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={exportRevenueCsv}
+                disabled={isExporting}
+              >
+                {isExporting ? 'Exporting...' : 'Export CSV'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={loadRevenueTrend}
+              >
+                View Trend
+              </Button>
+            </div>
+          </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             <Card className="enhanced-card">
               <CardHeader className="pb-2 sm:pb-3">
@@ -298,6 +373,39 @@ export default function AdminAnalytics() {
           </CardContent>
         </Card>
       </div>
+
+      {showTrend && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-background rounded-lg shadow-lg max-w-md w-full p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Monthly Revenue Trend</h3>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={() => setShowTrend(false)}
+              >
+                Close
+              </Button>
+            </div>
+            <div className="space-y-2 max-h-80 overflow-y-auto text-xs">
+              {trendData.length === 0 ? (
+                <p className="text-muted-foreground">No trend data available.</p>
+              ) : (
+                trendData.map((row) => (
+                  <div
+                    key={row.month_start}
+                    className="flex items-center justify-between border-b border-border/40 pb-1 last:border-b-0"
+                  >
+                    <span>{new Date(row.month_start).toLocaleDateString(undefined, { year: 'numeric', month: 'short' })}</span>
+                    <span className="font-semibold">{row.total_revenue.toFixed(2)} QAR</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Admin Mobile Navigation */}
       <AdminMobileNav />

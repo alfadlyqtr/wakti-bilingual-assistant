@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Gift, Search, Plus, Mic, Filter, Users } from "lucide-react";
+import { Gift, Search, Plus, Mic, Filter, Users, Music, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -32,6 +32,19 @@ export default function AdminQuotas() {
   const [isLoading, setIsLoading] = useState(true);
   const [isGifting, setIsGifting] = useState(false);
   const [showAllUsers, setShowAllUsers] = useState(false);
+  const [featureType, setFeatureType] = useState<'voice' | 'music'>('voice');
+  const [musicUsageMonth, setMusicUsageMonth] = useState<string>(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  });
+  const [musicMonthlyUsage, setMusicMonthlyUsage] = useState<{ generated: number; extra_generations: number; base_limit: number; total_limit: number } | null>(null);
+  const [userMusicUsage, setUserMusicUsage] = useState<Record<string, { generated: number; total_limit: number }>>({});
+  const [trialAction, setTrialAction] = useState<'reset' | 'extend'>('reset');
+  const [trialMinutes, setTrialMinutes] = useState('30');
+  const [isAdjustingTrial, setIsAdjustingTrial] = useState(false);
+  const [userTrialStatus, setUserTrialStatus] = useState<{ elapsed: number; remaining: number; expired: boolean } | null>(null);
 
   console.log('--- RENDER CYCLE ---');
   console.log('State [users]:', users);
@@ -54,65 +67,136 @@ export default function AdminQuotas() {
     filterAndDisplayUsers();
   }, [users, searchTerm, filterType, showAllUsers]);
 
+  useEffect(() => {
+    const run = async () => {
+      if (featureType === 'music' && selectedUser) {
+        try {
+          const { data, error } = await (supabase as any).rpc('admin_get_music_generations_monthly', {
+            p_user_id: selectedUser.id,
+            p_month: musicUsageMonth,
+          });
+          if (!error) setMusicMonthlyUsage(data as any);
+          else setMusicMonthlyUsage({ generated: 0, extra_generations: 0, base_limit: 5, total_limit: 5 });
+        } catch {
+          setMusicMonthlyUsage({ generated: 0, extra_generations: 0, base_limit: 5, total_limit: 5 });
+        }
+      } else {
+        setMusicMonthlyUsage(null);
+      }
+    };
+    run();
+  }, [featureType, selectedUser, musicUsageMonth]);
+
+  // Load trial status when user is selected
+  useEffect(() => {
+    const loadTrialStatus = async () => {
+      if (!selectedUser) {
+        setUserTrialStatus(null);
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('free_access_start_at, is_subscribed')
+          .eq('id', selectedUser.id)
+          .single();
+        
+        if (error || !data) {
+          setUserTrialStatus(null);
+          return;
+        }
+
+        if (data.is_subscribed) {
+          setUserTrialStatus({ elapsed: 0, remaining: 0, expired: false });
+          return;
+        }
+
+        const startAt = data.free_access_start_at;
+        if (!startAt) {
+          setUserTrialStatus({ elapsed: 0, remaining: 30, expired: false });
+          return;
+        }
+
+        const start = new Date(startAt).getTime();
+        const now = Date.now();
+        const elapsedMs = now - start;
+        const elapsedMin = Math.floor(elapsedMs / 60000);
+        const remainingMin = Math.max(0, 30 - elapsedMin);
+        const expired = elapsedMin >= 30;
+
+        setUserTrialStatus({ elapsed: elapsedMin, remaining: remainingMin, expired });
+      } catch (err) {
+        console.error('Error loading trial status:', err);
+        setUserTrialStatus(null);
+      }
+    };
+    loadTrialStatus();
+  }, [selectedUser]);
+
   const loadUsers = async () => {
     try {
       setIsLoading(true);
       console.log('🔄 Loading users and voice usage data...');
 
-      const { data: usersData, error: usersError } = await supabase
-        .from('profiles')
-        .select(`
-          id,
-          email,
-          display_name,
-          is_subscribed,
-          subscription_status,
-          user_voice_usage (
-            characters_used,
-            characters_limit,
-            extra_characters
-          )
-        `)
-        .neq('display_name', '[DELETED USER]')
-        .order('email');
+      const { data: quotasData, error: quotasError } = await (supabase as any).rpc('admin_get_voice_quotas', {
+        p_user_id: null,
+      });
 
-      if (usersError) {
-        console.error('❌ Error loading users:', usersError);
-        throw usersError;
+      if (quotasError) {
+        console.error('❌ Error loading voice quotas:', quotasError);
+        throw quotasError;
       }
 
-      if (!usersData || usersData.length === 0) {
+      if (!quotasData || quotasData.length === 0) {
         console.log('No users found');
         setUsers([]);
         return;
       }
 
-      console.log('✅ Users loaded:', usersData.length);
+      console.log('✅ Voice quotas loaded:', quotasData.length);
 
-      const formattedUsers: User[] = usersData.map(user => {
-        // user_voice_usage can be an array, so we take the first element or provide defaults.
-        const voiceUsage = Array.isArray(user.user_voice_usage) ? user.user_voice_usage[0] : user.user_voice_usage;
-
+      const formattedUsers: User[] = quotasData.map((row: any) => {
         const userData = {
-          id: user.id,
-          email: user.email || "No email",
-          full_name: user.display_name || "No name",
-          voice_characters_used: voiceUsage?.characters_used || 0,
-          voice_characters_limit: voiceUsage?.characters_limit || 10000,
-          voice_extra_characters: voiceUsage?.extra_characters || 0,
-          is_subscribed: user.is_subscribed || false,
-          subscription_status: user.subscription_status || 'inactive',
+          id: row.user_id,
+          email: row.email || "No email",
+          full_name: row.display_name || "No name",
+          voice_characters_used: row.used || 0,
+          voice_characters_limit: row.base_limit || 0,
+          voice_extra_characters: row.gift_extra || 0,
+          is_subscribed: !!row.is_subscribed,
+          subscription_status: row.subscription_status || 'inactive',
         };
-
-        if (user.email === 'alfadly@tmw.qa') {
-          console.log('🎯 alfadly@tmw.qa data after direct join:', userData);
+        if (row.email === 'alfadly@tmw.qa') {
+          console.log('🎯 alfadly@tmw.qa data via admin_get_voice_quotas:', userData);
         }
-
         return userData;
       });
 
       console.log('✅ Combined user data successfully:', formattedUsers.length);
       setUsers(formattedUsers);
+
+      // Load music usage for all users (current month)
+      const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+      const musicUsageMap: Record<string, { generated: number; total_limit: number }> = {};
+      
+      for (const user of formattedUsers) {
+        try {
+          const { data: musicData } = await (supabase as any).rpc('admin_get_music_generations_monthly', {
+            p_user_id: user.id,
+            p_month: currentMonth,
+          });
+          if (musicData) {
+            musicUsageMap[user.id] = {
+              generated: musicData.generated || 0,
+              total_limit: musicData.total_limit || 5
+            };
+          }
+        } catch (err) {
+          console.error(`Failed to load music usage for ${user.email}:`, err);
+          musicUsageMap[user.id] = { generated: 0, total_limit: 5 };
+        }
+      }
+      setUserMusicUsage(musicUsageMap);
     } catch (err) {
       console.error('❌ Error in loadUsers:', err);
       toast.error('Failed to load user quotas');
@@ -165,42 +249,57 @@ export default function AdminQuotas() {
     }
 
     const amount = parseInt(quotaAmount);
-    if (isNaN(amount) || amount <= 0) {
-      toast.error('Please enter a valid quota amount');
+    if (isNaN(amount) || amount === 0) {
+      toast.error('Please enter a non-zero quota amount');
       return;
     }
 
     setIsGifting(true);
 
     try {
-      const adminSession = localStorage.getItem('admin_session');
-      if (!adminSession) {
-        toast.error('Admin session not found');
-        return;
+      let error: any = null;
+      if (featureType === 'music') {
+        const { error: e } = await (supabase as any).rpc('admin_adjust_music_generations', {
+          p_user_id: selectedUser.id,
+          p_month: musicUsageMonth,
+          p_delta: amount,
+          p_reason: amount > 0 ? 'Admin gifted music generations' : 'Admin revoked music generations'
+        });
+        error = e;
+      } else {
+        const { error: e } = await (supabase as any).rpc('admin_adjust_feature_quota', {
+          p_user_id: selectedUser.id,
+          p_feature: 'voice',
+          p_delta: amount,
+          p_reason: amount > 0 ? 'Admin gifted voice characters' : 'Admin revoked voice characters',
+        });
+        error = e;
       }
-
-      const session = JSON.parse(adminSession);
-      const adminId = session.admin_id;
-
-      const { data, error } = await supabase.rpc('admin_gift_voice_credits', {
-        p_user_id: selectedUser.id,
-        p_characters: amount,
-        p_admin_id: adminId
-      });
 
       if (error) throw error;
 
-      // Update local state
-      setUsers(prev => prev.map(user => 
-        user.id === selectedUser.id 
-          ? { ...user, voice_extra_characters: data[0]?.new_extra_characters || user.voice_extra_characters }
-          : user
-      ));
-
-      // Reload users to get updated data
+      // Reload users to get updated data from the database
       await loadUsers();
+      // Refresh music usage if relevant
+      if (featureType === 'music' && selectedUser) {
+        try {
+          const { data: mu } = await (supabase as any).rpc('admin_get_music_generations_monthly', {
+            p_user_id: selectedUser.id,
+            p_month: musicUsageMonth,
+          });
+          setMusicMonthlyUsage(mu as any);
+        } catch {}
+      }
 
-      toast.success(`Gifted ${amount} voice characters to ${selectedUser.email}`);
+      if (amount > 0) {
+        toast.success(featureType === 'music'
+          ? `Gifted ${amount} extra music generations to ${selectedUser.email} (${musicUsageMonth})`
+          : `Gifted ${amount} voice characters to ${selectedUser.email}`);
+      } else {
+        toast.success(featureType === 'music'
+          ? `Revoked ${Math.abs(amount)} music generations from ${selectedUser.email} (${musicUsageMonth})`
+          : `Revoked ${Math.abs(amount)} voice characters from ${selectedUser.email}`);
+      }
       setSelectedUser(null);
       setQuotaAmount("");
     } catch (err) {
@@ -208,6 +307,57 @@ export default function AdminQuotas() {
       toast.error('Failed to gift quota');
     } finally {
       setIsGifting(false);
+    }
+  };
+
+  const handleAdjustTrial = async () => {
+    if (!selectedUser) {
+      toast.error('Please select a user first');
+      return;
+    }
+    const minutes = parseInt(trialMinutes);
+    if (isNaN(minutes) || minutes <= 0) {
+      toast.error('Please enter a valid number of minutes');
+      return;
+    }
+    setIsAdjustingTrial(true);
+    try {
+      const { data, error } = await (supabase as any).rpc('admin_adjust_trial', {
+        p_user_id: selectedUser.id,
+        p_action: trialAction,
+        p_minutes: minutes,
+      });
+      if (error) throw error;
+      
+      // Refresh trial status
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('free_access_start_at, is_subscribed')
+        .eq('id', selectedUser.id)
+        .single();
+      
+      if (profileData) {
+        const startAt = profileData.free_access_start_at;
+        if (startAt && !profileData.is_subscribed) {
+          const start = new Date(startAt).getTime();
+          const now = Date.now();
+          const elapsedMin = Math.floor((now - start) / 60000);
+          const remainingMin = Math.max(0, 30 - elapsedMin);
+          const expired = elapsedMin >= 30;
+          setUserTrialStatus({ elapsed: elapsedMin, remaining: remainingMin, expired });
+        }
+      }
+      
+      toast.success(
+        trialAction === 'reset'
+          ? `Reset 30-min trial for ${selectedUser.email}`
+          : `Extended trial by ${minutes} minutes for ${selectedUser.email}`
+      );
+    } catch (err) {
+      console.error('Error adjusting trial:', err);
+      toast.error('Failed to adjust trial');
+    } finally {
+      setIsAdjustingTrial(false);
     }
   };
 
@@ -224,9 +374,9 @@ export default function AdminQuotas() {
       {/* Fixed Header */}
       <div className="flex-shrink-0">
         <AdminHeader
-          title="Voice Quota Management"
-          subtitle="Gift voice credits to users"
-          icon={<Gift className="h-6 w-6 sm:h-8 sm:w-8 text-accent-purple" />}
+          title={featureType === 'music' ? 'Music Allowance Management' : 'Voice Quota Management'}
+          subtitle={featureType === 'music' ? 'Gift/Reset music minutes for users' : 'Gift voice credits to users'}
+          icon={featureType === 'music' ? <Music className="h-6 w-6 sm:h-8 sm:w-8 text-accent-purple" /> : <Gift className="h-6 w-6 sm:h-8 sm:w-8 text-accent-purple" />}
         />
       </div>
 
@@ -234,7 +384,7 @@ export default function AdminQuotas() {
       <div className="flex-1 overflow-y-auto px-3 sm:px-6 pb-32 pt-4">
         <div className="space-y-4 sm:space-y-6 max-w-full">
           {/* Search and Filter Controls */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
               <Input
@@ -245,6 +395,16 @@ export default function AdminQuotas() {
               />
             </div>
             
+            <Select value={featureType} onValueChange={(v: any) => setFeatureType(v)}>
+              <SelectTrigger className="h-9 sm:h-10">
+                <SelectValue placeholder="Feature" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="voice">Voice</SelectItem>
+                <SelectItem value="music">Music</SelectItem>
+              </SelectContent>
+            </Select>
+
             <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
               <SelectTrigger className="h-9 sm:h-10">
                 <SelectValue placeholder="Filter users" />
@@ -292,40 +452,135 @@ export default function AdminQuotas() {
               <CardHeader className="pb-3 sm:pb-6">
                 <CardTitle className="text-enhanced-heading flex items-center text-sm sm:text-base">
                   <Gift className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-accent-purple" />
-                  Gift Voice Credits
+                  {featureType === 'music' ? 'Manage Music Minutes' : 'Gift Voice Credits'}
                 </CardTitle>
                 <CardDescription className="text-xs sm:text-sm">
                   Selected: <strong>{selectedUser.email}</strong>
-                  <br />
-                  Current: {selectedUser.voice_characters_used.toLocaleString()} / {(selectedUser.voice_characters_limit + selectedUser.voice_extra_characters).toLocaleString()} characters
-                  {selectedUser.voice_extra_characters > 0 && (
-                    <span className="text-accent-purple"> (includes {selectedUser.voice_extra_characters.toLocaleString()} gifted)</span>
+                  {featureType === 'voice' && (
+                    <>
+                      <br />
+                      Current: {selectedUser.voice_characters_used.toLocaleString()} / {(selectedUser.voice_characters_limit + selectedUser.voice_extra_characters).toLocaleString()} characters
+                      {selectedUser.voice_extra_characters > 0 && (
+                        <span className="text-accent-purple"> (includes {selectedUser.voice_extra_characters.toLocaleString()} gifted)</span>
+                      )}
+                    </>
+                  )}
+                  {featureType === 'music' && (
+                    <>
+                      <br />
+                      {musicMonthlyUsage ? (
+                        <>{musicMonthlyUsage.generated} out of {musicMonthlyUsage.total_limit} ({musicUsageMonth}){musicMonthlyUsage.extra_generations > 0 && ` • +${musicMonthlyUsage.extra_generations} gifted`}</>
+                      ) : (
+                        <>This month ({musicUsageMonth}): loading…</>
+                      )}
+                    </>
                   )}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 sm:space-y-4">
+                {featureType === 'music' && (
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs sm:text-sm font-medium">Month</Label>
+                    <Input type="month" value={musicUsageMonth} onChange={(e) => setMusicUsageMonth(e.target.value)} className="h-9 sm:h-10 text-xs sm:text-sm w-[140px]" />
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
-                    <Label className="text-xs sm:text-sm font-medium">Amount (Characters)</Label>
+                    <Label className="text-xs sm:text-sm font-medium">Amount ({featureType === 'music' ? 'Generations' : 'Characters'})</Label>
                     <Input
                       type="number"
-                      placeholder="e.g., 5000"
+                      placeholder={featureType === 'music' ? 'e.g., 5' : 'e.g., 5000'}
                       value={quotaAmount}
                       onChange={(e) => setQuotaAmount(e.target.value)}
                       className="input-enhanced h-9 sm:h-10 text-xs sm:text-sm"
                     />
                   </div>
                   
-                  <div className="flex items-end">
+                  <div className="flex items-end gap-2">
                     <Button
                       onClick={giftQuota}
                       disabled={!quotaAmount || isGifting}
                       className="btn-enhanced w-full h-9 sm:h-10 text-xs sm:text-sm"
                     >
-                      {isGifting ? 'Gifting...' : (
+                      {isGifting ? 'Applying...' : (
                         <>
                           <Plus className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
-                          Gift Credits
+                          {featureType === 'music' ? 'Gift Generations' : 'Gift Credits'}
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* 30-Minute Trial Management */}
+          {selectedUser && (
+            <Card className="enhanced-card border-accent-blue/50 bg-gradient-to-r from-accent-blue/5 to-accent-purple/5">
+              <CardHeader className="pb-3 sm:pb-6">
+                <CardTitle className="text-enhanced-heading flex items-center text-sm sm:text-base">
+                  <Clock className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-accent-blue" />
+                  30-Minute Trial Management
+                </CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
+                  Selected: <strong>{selectedUser.email}</strong>
+                  {selectedUser.is_subscribed && (
+                    <Badge className="ml-2 bg-green-500">Subscribed</Badge>
+                  )}
+                  {!selectedUser.is_subscribed && userTrialStatus && (
+                    <>
+                      <br />
+                      {userTrialStatus.expired ? (
+                        <Badge variant="destructive" className="mt-1">Trial Expired ({userTrialStatus.elapsed} min used)</Badge>
+                      ) : (
+                        <Badge variant="secondary" className="mt-1 bg-green-500/10 text-green-600 border-green-500/20">
+                          {userTrialStatus.remaining} min remaining
+                        </Badge>
+                      )}
+                    </>
+                  )}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 sm:space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                  <div>
+                    <Label className="text-xs sm:text-sm font-medium">Action</Label>
+                    <Select value={trialAction} onValueChange={(v: any) => setTrialAction(v)}>
+                      <SelectTrigger className="h-9 sm:h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="reset">Reset (30 min)</SelectItem>
+                        <SelectItem value="extend">Extend</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  {trialAction === 'extend' && (
+                    <div>
+                      <Label className="text-xs sm:text-sm font-medium">Minutes</Label>
+                      <Input
+                        type="number"
+                        placeholder="e.g., 30"
+                        value={trialMinutes}
+                        onChange={(e) => setTrialMinutes(e.target.value)}
+                        className="input-enhanced h-9 sm:h-10 text-xs sm:text-sm"
+                      />
+                    </div>
+                  )}
+                  
+                  <div className="flex items-end">
+                    <Button
+                      onClick={handleAdjustTrial}
+                      disabled={isAdjustingTrial}
+                      className="btn-enhanced w-full h-9 sm:h-10 text-xs sm:text-sm"
+                    >
+                      {isAdjustingTrial ? 'Applying...' : (
+                        <>
+                          <Clock className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
+                          {trialAction === 'reset' ? 'Reset Trial' : 'Extend Trial'}
                         </>
                       )}
                     </Button>
@@ -377,35 +632,58 @@ export default function AdminQuotas() {
                         </div>
                       </div>
 
-                      {/* Voice Quota Display - FIXED CALCULATION */}
-                      <div className="pt-2 border-t border-border/50">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <Mic className="h-3 w-3 text-accent-blue flex-shrink-0" />
-                          <span className="text-xs font-medium">Voice Usage</span>
-                          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-accent-blue transition-all duration-300"
-                              style={{ 
-                                width: `${Math.min(usagePercentage, 100)}%` 
-                              }}
-                            />
+                      {/* Voice & Music Quota Display */}
+                      <div className="pt-2 border-t border-border/50 space-y-3">
+                        {/* Voice Usage */}
+                        <div>
+                          <div className="flex items-center space-x-2 mb-2">
+                            <Mic className="h-3 w-3 text-accent-blue flex-shrink-0" />
+                            <span className="text-xs font-medium">Voice Usage</span>
+                            <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-accent-blue transition-all duration-300"
+                                style={{ 
+                                  width: `${Math.min(usagePercentage, 100)}%` 
+                                }}
+                              />
+                            </div>
                           </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <Badge variant="outline" className="text-xs justify-center">
-                            {user.voice_characters_used.toLocaleString()} / {totalLimit.toLocaleString()}
-                          </Badge>
-                          {user.voice_extra_characters > 0 && (
-                            <Badge variant="secondary" className="text-xs justify-center bg-accent-purple/10 text-accent-purple border-accent-purple/20">
-                              +{user.voice_extra_characters.toLocaleString()} gifted
+                          <div className="grid grid-cols-2 gap-2">
+                            <Badge variant="outline" className="text-xs justify-center">
+                              {user.voice_characters_used.toLocaleString()} / {totalLimit.toLocaleString()}
                             </Badge>
-                          )}
-                        </div>
-                        {user.voice_extra_characters > 0 && (
-                          <div className="text-xs text-muted-foreground mt-1 text-center">
-                            Base: {user.voice_characters_limit.toLocaleString()} + Gifted: {user.voice_extra_characters.toLocaleString()} = Total: {totalLimit.toLocaleString()}
+                            {user.voice_extra_characters > 0 && (
+                              <Badge variant="secondary" className="text-xs justify-center bg-accent-purple/10 text-accent-purple border-accent-purple/20">
+                                +{user.voice_extra_characters.toLocaleString()} gifted
+                              </Badge>
+                            )}
                           </div>
-                        )}
+                        </div>
+
+                        {/* Music Usage */}
+                        {(() => {
+                          const musicData = userMusicUsage[user.id] || { generated: 0, total_limit: 5 };
+                          const musicPercentage = (musicData.generated / musicData.total_limit) * 100;
+                          return (
+                            <div>
+                              <div className="flex items-center space-x-2 mb-2">
+                                <Music className="h-3 w-3 text-accent-purple flex-shrink-0" />
+                                <span className="text-xs font-medium">Music Usage</span>
+                                <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                                  <div 
+                                    className="h-full bg-accent-purple transition-all duration-300"
+                                    style={{ 
+                                      width: `${Math.min(musicPercentage, 100)}%` 
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                              <Badge variant="outline" className="text-xs justify-center">
+                                {musicData.generated} / {musicData.total_limit} songs
+                              </Badge>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   </CardContent>

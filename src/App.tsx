@@ -39,6 +39,7 @@ import SharedTask from "./pages/SharedTask";
 import ContactUs from "./pages/ContactUs";
 import Help from "./pages/Help";
 import PrivacyTerms from "./pages/PrivacyTerms";
+import AccountDelete from "./pages/AccountDelete";
 import Confirmed from "./pages/Confirmed";
 import NotFound from "./pages/NotFound";
 import SessionEnded from "./pages/SessionEnded";
@@ -53,6 +54,7 @@ import AdminSubscriptions from "./pages/AdminSubscriptions";
 import AdminQuotas from "./pages/AdminQuotas";
 import AdminAnalytics from "./pages/AdminAnalytics";
 import AdminSettings from "./pages/AdminSettings";
+import AdminAuditLog from "./pages/AdminAuditLog";
 import VoiceTTS from "./pages/VoiceTTS";
 import VoiceStudio from "./pages/VoiceStudio";
 import TextGenerator from "./pages/TextGenerator";
@@ -92,6 +94,7 @@ function App() {
                 <Route path="/admin/subscriptions" element={<AdminRoute><AdminSubscriptions /></AdminRoute>} />
                 <Route path="/admin/quotas" element={<AdminRoute><AdminQuotas /></AdminRoute>} />
                 <Route path="/admin/analytics" element={<AdminRoute><AdminAnalytics /></AdminRoute>} />
+                <Route path="/admin/audit-log" element={<AdminRoute><AdminAuditLog /></AdminRoute>} />
                 <Route path="/admin-settings" element={<AdminRoute><AdminSettings /></AdminRoute>} />
                 
                 {/* Public routes - no auth provider needed */}
@@ -124,6 +127,7 @@ function App() {
                   </GiftNotificationProvider>
                 } />
                 <Route path="/privacy-terms" element={<PrivacyTerms />} />
+                <Route path="/account-delete" element={<AccountDelete />} />
                 <Route path="/confirmed" element={<Confirmed />} />
                 <Route path="/session-ended" element={<SessionEnded />} />
                 
