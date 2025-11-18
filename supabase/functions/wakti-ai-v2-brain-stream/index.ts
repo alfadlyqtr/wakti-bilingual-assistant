@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { executeRegularSearch } from "./search.ts";
 import { VisionSystem } from "./vision.ts";
+import { buildTextContent, streamGemini } from "../_shared/gemini.ts";
 
 const allowedOrigins = [
   'https://wakti.qa',
@@ -396,9 +397,34 @@ serve(async (req) => {
         // Regular text message: do NOT enforce hard language prefix so translations can work regardless of UI language
         messages.push({ role: 'user', content: message });
 
-        // Choose provider (text-only): OpenAI first, fallback to Claude
-        let aiProvider: 'openai' | 'claude' | 'none' = 'none';
+        // Choose provider (text-only): Gemini first, then OpenAI, then Claude
+        let aiProvider: 'gemini' | 'openai' | 'claude' | 'none' = 'none';
         let streamReader: ReadableStreamDefaultReader<any> | null = null;
+
+        const tryGemini = async () => {
+          // Stream via helper and emit same SSE token format
+          const sysMsg = messages.find((m) => m.role === 'system')?.content || '';
+          const userMsgs = messages.filter((m) => m.role !== 'system');
+          const contents = [] as any[];
+          if (sysMsg) contents.push(buildTextContent('user', sysMsg));
+          for (const m of userMsgs) {
+            if (typeof (m as any)?.content === 'string') {
+              contents.push(buildTextContent(m.role === 'assistant' ? 'model' : 'user', (m as any).content));
+            }
+          }
+          aiProvider = 'gemini';
+          const encoder = new TextEncoder();
+          await streamGemini(
+            'gemini-2.5-flash-lite',
+            contents,
+            (token) => {
+              try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`)); } catch {}
+            },
+            sysMsg,
+            { temperature: activeTrigger === 'search' ? 0.3 : 0.7, maxOutputTokens: 4000 },
+            []
+          );
+        };
 
         const tryOpenAI = async () => {
           if (!OPENAI_API_KEY) throw new Error('OpenAI API key not configured');
@@ -454,12 +480,17 @@ serve(async (req) => {
         };
 
         try {
-          // OpenAI first, fallback to Claude
+          // Gemini first, then OpenAI, then Claude
           try {
-            await tryOpenAI();
-          } catch (errOpenAI) {
-            console.warn('⚠️ STREAMING: OpenAI failed, attempting Claude fallback...', (errOpenAI as Error).message);
-            await tryClaude();
+            await tryGemini();
+          } catch (errGemini) {
+            console.warn('⚠️ STREAMING: Gemini failed, attempting OpenAI...', (errGemini as Error).message);
+            try {
+              await tryOpenAI();
+            } catch (errOpenAI) {
+              console.warn('⚠️ STREAMING: OpenAI failed, attempting Claude...', (errOpenAI as Error).message);
+              await tryClaude();
+            }
           }
         } catch (finalErr) {
           console.error('❌ STREAMING: All providers failed', (finalErr as Error).message);
@@ -467,6 +498,11 @@ serve(async (req) => {
         }
 
         // STREAM THE RESPONSE
+        // Gemini path already streamed tokens directly via helper
+        if (aiProvider === 'gemini') {
+          try { controller.close(); } catch {}
+          return;
+        }
         if (!streamReader) {
           throw new Error('No stream reader available');
         }

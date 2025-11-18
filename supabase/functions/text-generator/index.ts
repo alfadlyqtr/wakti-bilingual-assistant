@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { generateGemini } from "../_shared/gemini.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,6 +9,7 @@ const corsHeaders = {
 
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
 
 // Content type configurations
 const contentConfig = {
@@ -174,11 +176,51 @@ serve(async (req) => {
 
     let generatedText: string | undefined;
 
-    // Try OpenAI (preferred model) first if available
-    if (OPENAI_API_KEY) {
+    // Try Gemini first if available
+    if (GEMINI_API_KEY) {
       try {
-        console.log(`🎯 Text Generator: Trying OpenAI ${genParams.model}`);
-        const startOpenAI = Date.now();
+        console.log("🎯 Text Generator: Attempting Gemini (gemini-2.5-flash-lite)");
+        const startGemini = Date.now();
+        const result = await generateGemini(
+          'gemini-2.5-flash-lite',
+          [{ role: 'user', parts: [{ text: prompt }] }],
+          systemPrompt,
+          { temperature: genParams.temperature, maxOutputTokens: genParams.max_tokens },
+          []
+        );
+        const geminiDuration = Date.now() - startGemini;
+        console.log(`🎯 Text Generator: Gemini request completed in ${geminiDuration}ms`);
+
+        const content = result?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        if (content) {
+          generatedText = content;
+          console.log("🎯 Text Generator: Successfully generated text, length:", generatedText.length, "model: gemini-2.5-flash-lite");
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              generatedText,
+              mode,
+              language,
+              modelUsed: 'gemini-2.5-flash-lite',
+              temperatureUsed: genParams.temperature,
+              contentType: contentType || null
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        } else {
+          console.warn("🎯 Text Generator: Gemini returned no content");
+        }
+      } catch (e) {
+        console.warn("🎯 Text Generator: Gemini request threw error:", e);
+      }
+    }
+
+    // Fallback to OpenAI if Gemini failed or unavailable
+    if (OPENAI_API_KEY && !generatedText) {
+      try {
+        console.log("🎯 Text Generator: Attempting OpenAI", genParams.model);
+        const startOpenai = Date.now();
         const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
           headers: {
@@ -195,7 +237,7 @@ serve(async (req) => {
             max_tokens: genParams.max_tokens,
           }),
         });
-        const openaiDuration = Date.now() - startOpenAI;
+        const openaiDuration = Date.now() - startOpenai;
         console.log(`🎯 Text Generator: OpenAI request completed in ${openaiDuration}ms with status ${openaiResponse.status}`);
 
         if (openaiResponse.ok) {

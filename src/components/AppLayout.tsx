@@ -337,6 +337,7 @@ function WelcomeTrialPopup() {
   const [showPopup, setShowPopup] = useState(false);
   const [loading, setLoading] = useState(false);
   const [serverStartAt, setServerStartAt] = useState<string | null>(null);
+  const [minutesOffer, setMinutesOffer] = useState<number>(30);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -348,6 +349,15 @@ function WelcomeTrialPopup() {
         .single();
       const startAt: string | null = data?.free_access_start_at ?? null;
       setServerStartAt(startAt);
+      // Compute minutes to show in popup
+      if (startAt == null) {
+        setMinutesOffer(30);
+      } else {
+        const startMs = Date.parse(startAt);
+        const elapsedMin = Math.floor((Date.now() - startMs) / 60000);
+        const remaining = Math.max(0, 30 - elapsedMin);
+        setMinutesOffer(remaining || 30);
+      }
       const lsKey = `trial_popup_seen_for_start_at:${user.id}`;
       const lastSeen = localStorage.getItem(lsKey);
       // Show if not started yet OR admin reset changed start_at value we haven't acknowledged yet
@@ -390,7 +400,7 @@ function WelcomeTrialPopup() {
         <DialogHeader>
           <DialogTitle className="text-xl">Welcome to Wakti AI! 🎉</DialogTitle>
           <DialogDescription className="text-base pt-2">
-            Enjoy <strong>30 minutes of full access</strong> to explore all features.
+            Enjoy <strong>{minutesOffer} minutes of full access</strong> to explore all features.
             After that, subscribe to continue using Wakti AI.
           </DialogDescription>
         </DialogHeader>

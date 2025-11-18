@@ -2,6 +2,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
+import { generateGemini } from "../_shared/gemini.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,8 +13,10 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
+const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GOOGLE_GENAI_API_KEY');
 
 console.log("🌐 VOICE CLONE TRANSLATOR: Function loaded");
+console.log("🌐 Gemini API Key available:", !!GEMINI_API_KEY);
 console.log("🌐 DeepSeek API Key available:", !!DEEPSEEK_API_KEY);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -28,12 +31,12 @@ serve(async (req) => {
   try {
     console.log('🌐 === Translation Request Started ===');
     
-    // Check if API key is available
-    if (!DEEPSEEK_API_KEY) {
-      console.error('🌐 DEEPSEEK_API_KEY not found in environment');
+    // Check if at least one API key is available
+    if (!GEMINI_API_KEY && !DEEPSEEK_API_KEY) {
+      console.error('🌐 No translation API key found in environment');
       return new Response(JSON.stringify({
         success: false,
-        error: 'DeepSeek API key not configured'
+        error: 'Translation API key not configured'
       }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -98,76 +101,85 @@ serve(async (req) => {
 
     // Prepare the translation prompt
     const translationPrompt = `Translate the following text to ${target_language}. Return ONLY the translation, nothing else. Do not add any explanations, comments, or additional text.\n\nText to translate: ${original_text}`;
+    const systemPrompt = `You are a professional translator. Translate text accurately to the requested language. Return ONLY the translation without any additional text, explanations, or formatting.`;
 
-    console.log(`🌐 Calling DeepSeek API...`);
+    let translatedText: string | undefined;
 
-    // Call DeepSeek API
-    let deepSeekResponse;
-    try {
-      console.log('🌐 Making request to DeepSeek API...');
-      deepSeekResponse = await fetch('https://api.deepseek.com/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: [
-            {
-              role: 'system',
-              content: `You are a professional translator. Translate text accurately to the requested language. Return ONLY the translation without any additional text, explanations, or formatting.`
-            },
-            {
-              role: 'user',
-              content: translationPrompt
-            }
-          ],
-          max_tokens: 2000,
-          temperature: 0.1,
-          stream: false
-        }),
-      });
-    } catch (fetchError) {
-      console.error('🌐 Network error calling DeepSeek API:', fetchError);
-      return new Response(JSON.stringify({
-        success: false,
-        error: 'Network error connecting to translation service'
-      }), {
-        status: 503,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
+    // Try Gemini first if available
+    if (GEMINI_API_KEY) {
+      try {
+        console.log('🌐 Attempting Gemini translation...');
+        const result = await generateGemini(
+          'gemini-2.5-flash-lite',
+          [{ role: 'user', parts: [{ text: translationPrompt }] }],
+          systemPrompt,
+          { temperature: 0.1, maxOutputTokens: 2000 },
+          []
+        );
+        const content = result?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        if (content) {
+          translatedText = content;
+          console.log('🌐 Gemini translation successful:', { translatedLength: translatedText.length });
+        } else {
+          console.warn('🌐 Gemini returned no content');
+        }
+      } catch (geminiError) {
+        console.warn('🌐 Gemini translation failed:', geminiError);
+      }
     }
 
-    console.log(`🌐 DeepSeek API response status: ${deepSeekResponse.status}`);
+    // Fallback to DeepSeek if Gemini failed or unavailable
+    if (!translatedText && DEEPSEEK_API_KEY) {
+      try {
+        console.log('🌐 Falling back to DeepSeek API...');
+        const deepSeekResponse = await fetch('https://api.deepseek.com/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'deepseek-chat',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: translationPrompt }
+            ],
+            max_tokens: 2000,
+            temperature: 0.1,
+            stream: false
+          }),
+        });
 
-    if (!deepSeekResponse.ok) {
-      const errorText = await deepSeekResponse.text();
-      console.error('🌐 DeepSeek API error:', {
-        status: deepSeekResponse.status,
-        statusText: deepSeekResponse.statusText,
-        error: errorText
-      });
-      return new Response(JSON.stringify({
-        success: false,
-        error: `DeepSeek API error: ${deepSeekResponse.status} - ${errorText}`
-      }), {
-        status: 502,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
+        console.log(`🌐 DeepSeek API response status: ${deepSeekResponse.status}`);
+
+        if (!deepSeekResponse.ok) {
+          const errorText = await deepSeekResponse.text();
+          console.error('🌐 DeepSeek API error:', {
+            status: deepSeekResponse.status,
+            statusText: deepSeekResponse.statusText,
+            error: errorText
+          });
+          throw new Error(`DeepSeek API error: ${deepSeekResponse.status} - ${errorText}`);
+        }
+
+        const result = await deepSeekResponse.json();
+        console.log('🌐 DeepSeek API response received:', {
+          hasChoices: !!result.choices,
+          choicesLength: result.choices?.length || 0
+        });
+
+        translatedText = result.choices?.[0]?.message?.content?.trim();
+        if (translatedText) {
+          console.log('🌐 DeepSeek translation successful:', { translatedLength: translatedText.length });
+        }
+      } catch (deepseekError) {
+        console.error('🌐 DeepSeek translation failed:', deepseekError);
+      }
     }
-
-    const result = await deepSeekResponse.json();
-    console.log('🌐 DeepSeek API response received:', {
-      hasChoices: !!result.choices,
-      choicesLength: result.choices?.length || 0
-    });
-
-    const translatedText = result.choices?.[0]?.message?.content?.trim();
 
     if (!translatedText) {
-      console.error('🌐 No translation received from DeepSeek:', result);
-      throw new Error('No translation received from DeepSeek API');
+      console.error('🌐 No translation received from any provider');
+      throw new Error('No translation received from translation services');
     }
 
     console.log(`🌐 Translation successful:`, {

@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
+import { buildTextContent, streamGemini } from "../_shared/gemini.ts";
 
 // Allowed origins (mirror brain stream behavior + dev fallbacks)
 const allowedOrigins = [
@@ -422,8 +423,35 @@ serve(async (req) => {
           }
         }
 
-        // Provider selection with Claude → OpenAI fallback
+        // Provider selection with Gemini → OpenAI → Claude fallback
         let streamReader: ReadableStreamDefaultReader | null = null;
+
+        const tryGeminiVision = async () => {
+          const systemText = systemPrompt;
+          const contents: any[] = [];
+          if (systemText) contents.push(buildTextContent('user', systemText));
+          // Build a single user message with prompt and inline images
+          const promptText = `${language === 'ar' ? 'يرجى الرد باللغة العربية فقط.' : 'Please respond in English only.'} ${prompt || ''}`.trim();
+          const userParts: any[] = [{ text: promptText }];
+          for (const img of norm) {
+            if (img?.base64 && img?.mimeType) {
+              userParts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } });
+            }
+          }
+          contents.push({ role: 'user', parts: userParts });
+
+          const encoder = new TextEncoder();
+          await streamGemini(
+            'gemini-2.5-flash-lite',
+            contents,
+            (token) => {
+              try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`)); } catch { /* ignore */ }
+            },
+            systemText,
+            { temperature: 0.2, maxOutputTokens: options?.max_tokens || 2000 },
+            []
+          );
+        };
 
         const tryOpenAI = async () => {
           if (!OPENAI_API_KEY) throw new Error('OpenAI API key not configured');
@@ -518,23 +546,32 @@ serve(async (req) => {
         };
 
         try {
-          // Temporarily route OpenAI first (A/B isolation), then Claude
-          await tryOpenAI();
-        } catch (firstErr) {
-          console.warn('VISION: OpenAI-first attempt failed, trying Claude...', firstErr);
+          // Gemini primary
           try {
-            await tryClaude();
-          } catch (provErr) {
-            const msg = String((provErr as Error)?.message || provErr || '').toLowerCase();
-            const shouldFallback = msg.includes('not_found') || msg.includes('404') || msg.includes('overloaded') || msg.includes('529') || msg.includes('model') || msg.includes('claude');
-            // If Claude fails after OpenAI-first, give one more OpenAI try; else throw
-            if (shouldFallback) {
-              console.warn('⚠️ Vision: Claude failed after OpenAI-first, retrying OpenAI...', provErr);
+            await tryGeminiVision();
+          } catch (errGem) {
+            console.warn('VISION: Gemini failed, trying OpenAI...', (errGem as Error).message);
+            try {
               await tryOpenAI();
-            } else {
-              throw provErr;
+            } catch (firstErr) {
+              console.warn('VISION: OpenAI attempt failed, trying Claude...', firstErr);
+              try {
+                await tryClaude();
+              } catch (provErr) {
+                const msg = String((provErr as Error)?.message || provErr || '').toLowerCase();
+                const shouldFallback = msg.includes('not_found') || msg.includes('404') || msg.includes('overloaded') || msg.includes('529') || msg.includes('model') || msg.includes('claude');
+                if (shouldFallback) {
+                  console.warn('⚠️ Vision: Claude failed, retrying OpenAI...', provErr);
+                  await tryOpenAI();
+                } else {
+                  throw provErr;
+                }
+              }
             }
           }
+        } catch (error) {
+          console.error('🔥 VISION STREAM ERROR:', error);
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Vision service temporarily unavailable', details: (error as Error).message })}\n\n`));
         }
 
         controller.close();

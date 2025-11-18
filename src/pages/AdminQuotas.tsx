@@ -33,6 +33,12 @@ export default function AdminQuotas() {
   const [isGifting, setIsGifting] = useState(false);
   const [showAllUsers, setShowAllUsers] = useState(false);
   const [featureType, setFeatureType] = useState<'voice' | 'music'>('voice');
+  const [voiceUsageMonth, setVoiceUsageMonth] = useState<string>(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  });
   const [musicUsageMonth, setMusicUsageMonth] = useState<string>(() => {
     const d = new Date();
     const y = d.getFullYear();
@@ -124,17 +130,33 @@ export default function AdminQuotas() {
       });
 
       console.log('✅ Combined user data successfully:', formattedUsers.length);
+      // Overlay this month's voice extras (monthly, non-carryover)
+      const currentMonth = voiceUsageMonth || new Date().toISOString().slice(0,7);
+      for (const u of formattedUsers) {
+        try {
+          const { data: vmonth } = await (supabase as any).rpc('admin_get_voice_characters_monthly', {
+            p_user_id: u.id,
+            p_month: currentMonth,
+          });
+          if (vmonth) {
+            // Use monthly extra for display
+            u.voice_extra_characters = vmonth.extra_characters || 0;
+          }
+        } catch (e) {
+          // ignore per-user failure
+        }
+      }
       setUsers(formattedUsers);
 
       // Load music usage for all users (current month)
-      const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+      const musicMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
       const musicUsageMap: Record<string, { generated: number; total_limit: number }> = {};
       
       for (const user of formattedUsers) {
         try {
           const { data: musicData } = await (supabase as any).rpc('admin_get_music_generations_monthly', {
             p_user_id: user.id,
-            p_month: currentMonth,
+            p_month: musicMonth,
           });
           if (musicData) {
             musicUsageMap[user.id] = {
@@ -218,11 +240,11 @@ export default function AdminQuotas() {
         });
         error = e;
       } else {
-        const { error: e } = await (supabase as any).rpc('admin_adjust_feature_quota', {
+        const { error: e } = await (supabase as any).rpc('admin_adjust_voice_characters', {
           p_user_id: selectedUser.id,
-          p_feature: 'voice',
+          p_month: voiceUsageMonth,
           p_delta: amount,
-          p_reason: amount > 0 ? 'Admin gifted voice characters' : 'Admin revoked voice characters',
+          p_reason: amount > 0 ? 'Admin gifted voice characters (monthly)' : 'Admin revoked voice characters (monthly)',
         });
         error = e;
       }
@@ -245,11 +267,11 @@ export default function AdminQuotas() {
       if (amount > 0) {
         toast.success(featureType === 'music'
           ? `Gifted ${amount} extra music generations to ${selectedUser.email} (${musicUsageMonth})`
-          : `Gifted ${amount} voice characters to ${selectedUser.email}`);
+          : `Gifted ${amount} monthly voice characters to ${selectedUser.email} (${voiceUsageMonth})`);
       } else {
         toast.success(featureType === 'music'
           ? `Revoked ${Math.abs(amount)} music generations from ${selectedUser.email} (${musicUsageMonth})`
-          : `Revoked ${Math.abs(amount)} voice characters from ${selectedUser.email}`);
+          : `Revoked ${Math.abs(amount)} monthly voice characters from ${selectedUser.email} (${voiceUsageMonth})`);
       }
       setSelectedUser(null);
       setQuotaAmount("");

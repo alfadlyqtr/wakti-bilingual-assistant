@@ -178,10 +178,40 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
   const [audios, setAudios] = useState<Array<{ url: string; mime: string; meta?: any; createdAt: number; saved?: boolean }>>([]);
   const [lastError, setLastError] = useState<string | null>(null);
   const [songsUsed, setSongsUsed] = useState(0);
+  const [songsLimit, setSongsLimit] = useState(5);
   const [songsRemaining, setSongsRemaining] = useState(5);
 
   // Guard to ensure monthly usage loads only once (avoids StrictMode double-run logs)
   const usageLoadedRef = useRef(false);
+
+  // Helper to refresh music quota state from backend
+  const refreshMusicQuota = async () => {
+    try {
+      const { data, error } = await (supabase as any).rpc('can_generate_music');
+      if (!error && data) {
+        const used = data.generated ?? 0;
+        const limit = data.limit ?? 5;
+        setSongsUsed(used);
+        setSongsLimit(limit);
+        setSongsRemaining(Math.max(0, limit - used));
+      }
+    } catch {}
+  };
+
+  // Load current month's music usage and dynamic limit (base 5 + gifted extras)
+  useEffect(() => {
+    if (usageLoadedRef.current) return;
+    usageLoadedRef.current = true;
+    refreshMusicQuota();
+    // Also refresh when tab gains focus (e.g., after admin gifts)
+    const onVisibility = () => { if (document.visibilityState === 'visible') refreshMusicQuota(); };
+    window.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', onVisibility as any);
+    return () => {
+      window.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', onVisibility as any);
+    };
+  }, []);
 
   // Open the Amp options modal
   function handleAmp() {
@@ -1291,10 +1321,10 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
             {submitting && <span className="text-emerald-600 animate-spin">🎵</span>}
           </div>
           <div className={`ml-auto font-medium ${overLimit ? 'text-red-600' : 'text-emerald-600'}`}>
-            {language === 'ar' ? `المتبقي الكلي ${remainingOverall} من ${limit}` : `Total remaining ${remainingOverall} / ${limit}`}
+            {language === 'ar' ? `المتبقي الكلي ${remainingOverall} من ${songsLimit}` : `Total remaining ${remainingOverall} / ${songsLimit}`}
           </div>
           <div className="font-medium">
-            {language === 'ar' ? `تم الاستخدام: ${songsUsed} من 5 هذا الشهر` : `Used ${songsUsed} of 5 this month`}
+            {language === 'ar' ? `تم الاستخدام: ${songsUsed} من ${songsLimit} هذا الشهر` : `Used ${songsUsed} of ${songsLimit} this month`}
           </div>
         </div>
       </Card>
