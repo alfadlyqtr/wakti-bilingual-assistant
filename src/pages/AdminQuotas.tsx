@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Gift, Search, Plus, Mic, Filter, Users, Music, Clock } from "lucide-react";
+import { Gift, Search, Plus, Mic, Filter, Users, Music } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -41,10 +41,6 @@ export default function AdminQuotas() {
   });
   const [musicMonthlyUsage, setMusicMonthlyUsage] = useState<{ generated: number; extra_generations: number; base_limit: number; total_limit: number } | null>(null);
   const [userMusicUsage, setUserMusicUsage] = useState<Record<string, { generated: number; total_limit: number }>>({});
-  const [trialAction, setTrialAction] = useState<'reset' | 'extend'>('reset');
-  const [trialMinutes, setTrialMinutes] = useState('30');
-  const [isAdjustingTrial, setIsAdjustingTrial] = useState(false);
-  const [userTrialStatus, setUserTrialStatus] = useState<{ elapsed: number; remaining: number; expired: boolean } | null>(null);
 
   console.log('--- RENDER CYCLE ---');
   console.log('State [users]:', users);
@@ -87,51 +83,6 @@ export default function AdminQuotas() {
     run();
   }, [featureType, selectedUser, musicUsageMonth]);
 
-  // Load trial status when user is selected
-  useEffect(() => {
-    const loadTrialStatus = async () => {
-      if (!selectedUser) {
-        setUserTrialStatus(null);
-        return;
-      }
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('free_access_start_at, is_subscribed')
-          .eq('id', selectedUser.id)
-          .single();
-        
-        if (error || !data) {
-          setUserTrialStatus(null);
-          return;
-        }
-
-        if (data.is_subscribed) {
-          setUserTrialStatus({ elapsed: 0, remaining: 0, expired: false });
-          return;
-        }
-
-        const startAt = data.free_access_start_at;
-        if (!startAt) {
-          setUserTrialStatus({ elapsed: 0, remaining: 30, expired: false });
-          return;
-        }
-
-        const start = new Date(startAt).getTime();
-        const now = Date.now();
-        const elapsedMs = now - start;
-        const elapsedMin = Math.floor(elapsedMs / 60000);
-        const remainingMin = Math.max(0, 30 - elapsedMin);
-        const expired = elapsedMin >= 30;
-
-        setUserTrialStatus({ elapsed: elapsedMin, remaining: remainingMin, expired });
-      } catch (err) {
-        console.error('Error loading trial status:', err);
-        setUserTrialStatus(null);
-      }
-    };
-    loadTrialStatus();
-  }, [selectedUser]);
 
   const loadUsers = async () => {
     try {
@@ -310,56 +261,6 @@ export default function AdminQuotas() {
     }
   };
 
-  const handleAdjustTrial = async () => {
-    if (!selectedUser) {
-      toast.error('Please select a user first');
-      return;
-    }
-    const minutes = parseInt(trialMinutes);
-    if (isNaN(minutes) || minutes <= 0) {
-      toast.error('Please enter a valid number of minutes');
-      return;
-    }
-    setIsAdjustingTrial(true);
-    try {
-      const { data, error } = await (supabase as any).rpc('admin_adjust_trial', {
-        p_user_id: selectedUser.id,
-        p_action: trialAction,
-        p_minutes: minutes,
-      });
-      if (error) throw error;
-      
-      // Refresh trial status
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('free_access_start_at, is_subscribed')
-        .eq('id', selectedUser.id)
-        .single();
-      
-      if (profileData) {
-        const startAt = profileData.free_access_start_at;
-        if (startAt && !profileData.is_subscribed) {
-          const start = new Date(startAt).getTime();
-          const now = Date.now();
-          const elapsedMin = Math.floor((now - start) / 60000);
-          const remainingMin = Math.max(0, 30 - elapsedMin);
-          const expired = elapsedMin >= 30;
-          setUserTrialStatus({ elapsed: elapsedMin, remaining: remainingMin, expired });
-        }
-      }
-      
-      toast.success(
-        trialAction === 'reset'
-          ? `Reset 30-min trial for ${selectedUser.email}`
-          : `Extended trial by ${minutes} minutes for ${selectedUser.email}`
-      );
-    } catch (err) {
-      console.error('Error adjusting trial:', err);
-      toast.error('Failed to adjust trial');
-    } finally {
-      setIsAdjustingTrial(false);
-    }
-  };
 
   if (isLoading) {
     return (
@@ -516,79 +417,7 @@ export default function AdminQuotas() {
             </Card>
           )}
 
-          {/* 30-Minute Trial Management */}
-          {selectedUser && (
-            <Card className="enhanced-card border-accent-blue/50 bg-gradient-to-r from-accent-blue/5 to-accent-purple/5">
-              <CardHeader className="pb-3 sm:pb-6">
-                <CardTitle className="text-enhanced-heading flex items-center text-sm sm:text-base">
-                  <Clock className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-accent-blue" />
-                  30-Minute Trial Management
-                </CardTitle>
-                <CardDescription className="text-xs sm:text-sm">
-                  Selected: <strong>{selectedUser.email}</strong>
-                  {selectedUser.is_subscribed && (
-                    <Badge className="ml-2 bg-green-500">Subscribed</Badge>
-                  )}
-                  {!selectedUser.is_subscribed && userTrialStatus && (
-                    <>
-                      <br />
-                      {userTrialStatus.expired ? (
-                        <Badge variant="destructive" className="mt-1">Trial Expired ({userTrialStatus.elapsed} min used)</Badge>
-                      ) : (
-                        <Badge variant="secondary" className="mt-1 bg-green-500/10 text-green-600 border-green-500/20">
-                          {userTrialStatus.remaining} min remaining
-                        </Badge>
-                      )}
-                    </>
-                  )}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3 sm:space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                  <div>
-                    <Label className="text-xs sm:text-sm font-medium">Action</Label>
-                    <Select value={trialAction} onValueChange={(v: any) => setTrialAction(v)}>
-                      <SelectTrigger className="h-9 sm:h-10">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="reset">Reset (30 min)</SelectItem>
-                        <SelectItem value="extend">Extend</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  {trialAction === 'extend' && (
-                    <div>
-                      <Label className="text-xs sm:text-sm font-medium">Minutes</Label>
-                      <Input
-                        type="number"
-                        placeholder="e.g., 30"
-                        value={trialMinutes}
-                        onChange={(e) => setTrialMinutes(e.target.value)}
-                        className="input-enhanced h-9 sm:h-10 text-xs sm:text-sm"
-                      />
-                    </div>
-                  )}
-                  
-                  <div className="flex items-end">
-                    <Button
-                      onClick={handleAdjustTrial}
-                      disabled={isAdjustingTrial}
-                      className="btn-enhanced w-full h-9 sm:h-10 text-xs sm:text-sm"
-                    >
-                      {isAdjustingTrial ? 'Applying...' : (
-                        <>
-                          <Clock className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
-                          {trialAction === 'reset' ? 'Reset Trial' : 'Extend Trial'}
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          
 
           {/* Users List */}
           <div className="grid gap-2 sm:gap-4">

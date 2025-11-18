@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useEffect, useState } from "react";
-import { Shield, Users, Search, Filter, CheckCircle, XCircle, AlertTriangle, RefreshCw, Smartphone, UserCog, UserX, CreditCard, Calendar, Gift } from "lucide-react";
+import { Shield, Users, Search, Filter, CheckCircle, XCircle, AlertTriangle, RefreshCw, Smartphone, UserCog, UserX, CreditCard, Calendar, Gift, Clock, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -63,6 +63,37 @@ export default function AdminSubscriptions() {
     isGift: false,
     giftDuration: "1_week"
   });
+  // Trial management local state (per-user minutes input)
+  const [trialMinutesInput, setTrialMinutesInput] = useState<Record<string, string>>({});
+
+  const getTrialStatus = (user: any) => {
+    if (user?.is_subscribed) return { label: "Subscribed", remaining: 0, expired: false, notStarted: false };
+    const startAt = user?.free_access_start_at as string | null;
+    if (!startAt) return { label: "Trial not started", remaining: 30, expired: false, notStarted: true };
+    const start = Date.parse(startAt);
+    const elapsedMin = Math.floor((Date.now() - start) / 60000);
+    const remaining = Math.max(0, 30 - elapsedMin);
+    const expired = elapsedMin >= 30;
+    return { label: expired ? `Trial expired (${elapsedMin} min used)` : `${remaining} min remaining`, remaining, expired, notStarted: false };
+  };
+
+  const handleAdjustTrial = async (user: any, action: 'reset' | 'extend') => {
+    try {
+      const minutesStr = trialMinutesInput[user.id] ?? '30';
+      const minutes = Math.max(1, parseInt(minutesStr || '30'));
+      const { error } = await (supabase as any).rpc('admin_adjust_trial', {
+        p_user_id: user.id,
+        p_action: action,
+        p_minutes: minutes,
+      });
+      if (error) throw error;
+      toast.success(action === 'reset' ? `Reset 30-min trial for ${user.email}` : `Extended trial by ${minutes} minutes for ${user.email}`);
+      await loadData();
+    } catch (err: any) {
+      console.error('Adjust trial failed:', err);
+      toast.error(`Failed to adjust trial: ${err?.message || 'Unknown error'}`);
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -580,6 +611,19 @@ export default function AdminSubscriptions() {
                               {remainingTime}
                             </Badge>
                           )}
+                          {!user.is_subscribed && (
+                            (() => {
+                              const t = getTrialStatus(user);
+                              return (
+                                <Badge
+                                  variant={t.expired ? 'destructive' : 'secondary'}
+                                  className={`text-xs w-full justify-center ${t.expired ? '' : 'bg-green-500/10 text-green-700 border-green-500/20'}`}
+                                >
+                                  {t.label}
+                                </Badge>
+                              );
+                            })()
+                          )}
                         </div>
                       </div>
 
@@ -662,6 +706,38 @@ export default function AdminSubscriptions() {
                         </Button>
                       )}
                     </div>
+
+                    {/* 30-Minute Trial Management (unsubscribed only) */}
+                    {!user.is_subscribed && (
+                      <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => { e.stopPropagation(); handleAdjustTrial(user, 'reset'); }}
+                          className="text-xs"
+                        >
+                          <Clock className="h-3 w-3 mr-1" /> Reset Trial
+                        </Button>
+                        <div className="flex gap-2 items-center sm:col-span-2">
+                          <Input
+                            type="number"
+                            min={1}
+                            placeholder="minutes (e.g., 60)"
+                            value={trialMinutesInput[user.id] ?? ''}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => setTrialMinutesInput(prev => ({ ...prev, [user.id]: e.target.value }))}
+                            className="h-8 text-xs"
+                          />
+                          <Button
+                            size="sm"
+                            onClick={(e) => { e.stopPropagation(); handleAdjustTrial(user, 'extend'); }}
+                            className="text-xs"
+                          >
+                            <Plus className="h-3 w-3 mr-1" /> Extend Trial
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
