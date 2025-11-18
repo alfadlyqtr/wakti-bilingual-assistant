@@ -336,6 +336,7 @@ function WelcomeTrialPopup() {
   const { user } = useAuth();
   const [showPopup, setShowPopup] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [serverStartAt, setServerStartAt] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -345,8 +346,15 @@ function WelcomeTrialPopup() {
         .select('free_access_start_at')
         .eq('id', user.id)
         .single();
-      if (data && data.free_access_start_at == null) {
+      const startAt: string | null = data?.free_access_start_at ?? null;
+      setServerStartAt(startAt);
+      const lsKey = `trial_popup_seen_for_start_at:${user.id}`;
+      const lastSeen = localStorage.getItem(lsKey);
+      // Show if not started yet OR admin reset changed start_at value we haven't acknowledged yet
+      if (startAt === null || lastSeen !== (startAt || '')) {
         setShowPopup(true);
+      } else {
+        setShowPopup(false);
       }
     })();
   }, [user?.id]);
@@ -355,10 +363,19 @@ function WelcomeTrialPopup() {
     if (!user?.id) return;
     setLoading(true);
     try {
-      await supabase
-        .from('profiles')
-        .update({ free_access_start_at: new Date().toISOString() })
-        .eq('id', user.id);
+      const lsKey = `trial_popup_seen_for_start_at:${user.id}`;
+      if (serverStartAt == null) {
+        // Start the trial now
+        const nowIso = new Date().toISOString();
+        await supabase
+          .from('profiles')
+          .update({ free_access_start_at: nowIso })
+          .eq('id', user.id);
+        localStorage.setItem(lsKey, nowIso);
+      } else {
+        // Trial already set (e.g., admin reset). Just acknowledge so popup won't reappear.
+        localStorage.setItem(lsKey, serverStartAt);
+      }
       setShowPopup(false);
     } catch (error) {
       console.error('Error starting trial:', error);
