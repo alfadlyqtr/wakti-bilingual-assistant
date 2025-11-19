@@ -360,18 +360,14 @@ export async function fetchCompactMetrics(forceFresh = false) {
   const userId = await getCurrentUserId();
   if (!userId) return null;
 
-  // FIX: Add cache-busting timestamp to force fresh queries
-  const cacheBust = forceFresh ? Date.now() : 0;
-  const recentDate = new Date(Date.now() - 86400000 * 7).toISOString(); // Last 7 days
-
   // Fetch ALL available WHOOP data fields - comprehensive extraction
   const [sleepRes, recRes, cycleRes, profileRes, bodyRes] = await Promise.all([
-    // SLEEP: Pull ALL sleep fields including score data + cache busting
-    supabase.from("whoop_sleep").select("*").eq("user_id", userId).gte("start", recentDate).order("start", { ascending: false }).limit(5),
-    // RECOVERY: Pull ALL recovery fields including score data + cache busting
-    supabase.from("whoop_recovery").select("*").eq("user_id", userId).gte("created_at", recentDate).order("created_at", { ascending: false }).limit(1),
-    // CYCLE: Pull ALL cycle fields including score data + cache busting
-    supabase.from("whoop_cycles").select("*").eq("user_id", userId).gte("start", recentDate).order("start", { ascending: false }).limit(1),
+    // SLEEP: Pull ALL sleep fields including score data (latest first)
+    supabase.from("whoop_sleep").select("*").eq("user_id", userId).order("start", { ascending: false }).limit(5),
+    // RECOVERY: Pull ALL recovery fields including score data (latest first)
+    supabase.from("whoop_recovery").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(1),
+    // CYCLE: Pull ALL cycle fields including score data (latest first)
+    supabase.from("whoop_cycles").select("*").eq("user_id", userId).order("start", { ascending: false }).limit(1),
     // USER PROFILE: Pull user profile data
     supabase.from("whoop_user_profiles").select("*").eq("user_id", userId).maybeSingle(),
     // USER BODY: Pull body measurements

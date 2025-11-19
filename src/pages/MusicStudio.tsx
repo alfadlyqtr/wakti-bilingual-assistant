@@ -1184,6 +1184,29 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
               </div>, document.body)
             }
           </div>
+
+          {/* Vocals selector (moved into main card) */}
+          <div className="space-y-2">
+            <label className="text-xs font-medium block">{language === 'ar' ? 'الصوت' : 'Vocals'}</label>
+            <div className="flex flex-wrap gap-3 text-sm">
+              <label className="inline-flex items-center gap-2">
+                <input type="radio" name="vocalType" checked={vocalType==='auto'} onChange={()=>setVocalType('auto')} />
+                {language==='ar' ? 'تلقائي' : 'Auto'}
+              </label>
+              <label className="inline-flex items-center gap-2">
+                <input type="radio" name="vocalType" checked={vocalType==='none'} onChange={()=>setVocalType('none')} />
+                {language==='ar' ? 'بدون' : 'None'}
+              </label>
+              <label className="inline-flex items-center gap-2">
+                <input type="radio" name="vocalType" checked={vocalType==='female'} onChange={()=>setVocalType('female')} />
+                {language==='ar' ? 'صوت أنثوي' : 'Female voice'}
+              </label>
+              <label className="inline-flex items-center gap-2">
+                <input type="radio" name="vocalType" checked={vocalType==='male'} onChange={()=>setVocalType('male')} />
+                {language==='ar' ? 'صوت ذكوري' : 'Male voice'}
+              </label>
+            </div>
+          </div>
         </div>
       </Card>
 
@@ -1222,29 +1245,6 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
                   </button>
                 </div>
               )}
-
-              {/* Vocals selector */}
-              <div className="space-y-2">
-                <label className="text-xs font-medium block">{language === 'ar' ? 'الصوت' : 'Vocals'}</label>
-                <div className="flex flex-wrap gap-3 text-sm">
-                  <label className="inline-flex items-center gap-2">
-                    <input type="radio" name="vocalType" checked={vocalType==='auto'} onChange={()=>setVocalType('auto')} />
-                    {language==='ar' ? 'تلقائي' : 'Auto'}
-                  </label>
-                  <label className="inline-flex items-center gap-2">
-                    <input type="radio" name="vocalType" checked={vocalType==='none'} onChange={()=>setVocalType('none')} />
-                    {language==='ar' ? 'بدون' : 'None'}
-                  </label>
-                  <label className="inline-flex items-center gap-2">
-                    <input type="radio" name="vocalType" checked={vocalType==='female'} onChange={()=>setVocalType('female')} />
-                    {language==='ar' ? 'صوت أنثوي' : 'Female voice'}
-                  </label>
-                  <label className="inline-flex items-center gap-2">
-                    <input type="radio" name="vocalType" checked={vocalType==='male'} onChange={()=>setVocalType('male')} />
-                    {language==='ar' ? 'صوت ذكوري' : 'Male voice'}
-                  </label>
-                </div>
-              </div>
 
               <Textarea
                 value={lyricsText}

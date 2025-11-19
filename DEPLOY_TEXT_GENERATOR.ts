@@ -25,7 +25,12 @@ async function generateGemini(
   const key = getGeminiApiKey();
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
   const body: any = { contents };
-  if (systemInstruction) body.system_instruction = { role: "user", parts: [{ text: systemInstruction }] };
+  try {
+    console.log(`[GEMINI_TEXT_DEBUG] Using key prefix: ${key.slice(0, 6)}***`);
+    console.log(`[GEMINI_TEXT_DEBUG] URL: ${url}`);
+    console.log(`[GEMINI_TEXT_DEBUG] Payload roles: ${contents.map((c) => c.role).join(', ')}`);
+  } catch {}
+  if (systemInstruction) body.system_instruction = { parts: [{ text: systemInstruction }] };
   if (generationConfig) body.generationConfig = generationConfig;
   if (safetySettings) body.safetySettings = safetySettings;
 

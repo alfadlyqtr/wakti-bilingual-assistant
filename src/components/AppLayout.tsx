@@ -5,6 +5,7 @@ import { DesktopLayout } from "@/components/layouts/DesktopLayout";
 import { TabletLayout } from "@/components/layouts/TabletLayout";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { useIsMobile, useIsTablet, useIsDesktop } from "@/hooks/use-mobile";
+import { useUserProfile } from "@/hooks/useUserProfile";
 import { PresenceBeacon } from "@/components/PresenceBeacon";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -338,36 +339,49 @@ function WelcomeTrialPopup() {
   const [loading, setLoading] = useState(false);
   const [serverStartAt, setServerStartAt] = useState<string | null>(null);
   const [minutesOffer, setMinutesOffer] = useState<number>(30);
+  const { profile, isSubscribed, isGracePeriod, isAccessExpired } = useUserProfile();
+  const location = useLocation();
+  const allowedPaths = ['/', '/dashboard', '/wakti-ai'];
+  const isAllowedRoute = allowedPaths.includes(location.pathname);
 
   useEffect(() => {
     if (!user?.id) return;
-    (async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('free_access_start_at')
-        .eq('id', user.id)
-        .single();
-      const startAt: string | null = data?.free_access_start_at ?? null;
-      setServerStartAt(startAt);
-      // Compute minutes to show in popup
-      if (startAt == null) {
-        setMinutesOffer(30);
-      } else {
-        const startMs = Date.parse(startAt);
-        const elapsedMin = Math.floor((Date.now() - startMs) / 60000);
-        const remaining = Math.max(0, 30 - elapsedMin);
-        setMinutesOffer(remaining || 30);
-      }
-      const lsKey = `trial_popup_seen_for_start_at:${user.id}`;
-      const lastSeen = localStorage.getItem(lsKey);
-      // Show if not started yet OR admin reset changed start_at value we haven't acknowledged yet
-      if (startAt === null || lastSeen !== (startAt || '')) {
-        setShowPopup(true);
-      } else {
-        setShowPopup(false);
-      }
-    })();
-  }, [user?.id]);
+
+    // Only show trial popup on specific core routes (e.g. dashboard and WAKTI AI)
+    if (!isAllowedRoute) {
+      setShowPopup(false);
+      return;
+    }
+
+    // If user is subscribed or access is fully expired, never show the trial popup
+    if (isSubscribed || isAccessExpired) {
+      setShowPopup(false);
+      return;
+    }
+
+    const startAt: string | null = profile?.free_access_start_at ?? null;
+    setServerStartAt(startAt);
+
+    // Compute minutes to show in popup based on current start time
+    if (startAt == null) {
+      setMinutesOffer(30);
+    } else {
+      const startMs = Date.parse(startAt);
+      const elapsedMin = Math.floor((Date.now() - startMs) / 60000);
+      const remaining = Math.max(0, 30 - elapsedMin);
+      setMinutesOffer(remaining || 30);
+    }
+
+    const lsKey = `trial_popup_seen_for_start_at:${user.id}`;
+    const lastSeen = localStorage.getItem(lsKey);
+
+    // Only show popup while in grace period and user hasn't acknowledged this start_at yet
+    if (isGracePeriod && (startAt === null || lastSeen !== (startAt || ""))) {
+      setShowPopup(true);
+    } else {
+      setShowPopup(false);
+    }
+  }, [user?.id, profile?.free_access_start_at, isSubscribed, isGracePeriod, isAccessExpired, isAllowedRoute]);
 
   const handleStartTrial = async () => {
     if (!user?.id) return;
@@ -393,6 +407,8 @@ function WelcomeTrialPopup() {
       setLoading(false);
     }
   };
+
+  if (!isAllowedRoute) return null;
 
   return (
     <Dialog open={showPopup} onOpenChange={() => {}}>

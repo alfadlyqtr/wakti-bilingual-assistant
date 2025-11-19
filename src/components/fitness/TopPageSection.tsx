@@ -16,6 +16,7 @@ interface TopPageSectionProps {
   onToggleAutoSync: (enabled: boolean) => void;
   metrics?: any;
   sleepHours?: number;
+  dataFromDate?: string | null;
 }
 
 export function TopPageSection({
@@ -26,13 +27,18 @@ export function TopPageSection({
   onSync,
   onDisconnect,
   metrics,
-  sleepHours
+  sleepHours,
+  dataFromDate
 }: TopPageSectionProps) {
   const { language } = useTheme();
 
   const lastSyncText = lastSyncedAt 
     ? new Date(lastSyncedAt).toLocaleString(language === 'ar' ? 'ar-SA' : 'en-US')
     : language === 'ar' ? 'لم يتم المزامنة مطلقاً' : 'Never synced';
+
+  const dataFromText = dataFromDate
+    ? new Date(dataFromDate).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US')
+    : null;
 
   // Get WHOOP user data
   const userName = metrics?.profile?.first_name && metrics?.profile?.last_name
@@ -95,6 +101,13 @@ export function TopPageSection({
             <div className="text-xs text-gray-700 dark:text-gray-400 font-medium mt-0.5">
               {language === 'ar' ? 'آخر مزامنة:' : 'Last sync:'} {lastSyncText}
             </div>
+            {dataFromText && (
+              <div className="text-[11px] text-gray-600 dark:text-gray-500 mt-0.5">
+                {language === 'ar'
+                  ? `عرض البيانات من: ${dataFromText}`
+                  : `Showing data from: ${dataFromText}`}
+              </div>
+            )}
           </div>
         </div>
 

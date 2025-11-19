@@ -148,6 +148,31 @@ export function WhoopDetails({ metrics, lastUpdated }: WhoopDetailsProps) {
   const strainData = metrics?.cycle?.data?.score;
   const workoutData = metrics?.workout?.data?.score;
 
+  // Compute latest data date from available WHOOP metrics
+  let latestDataDate: string | null = null;
+  try {
+    const dates: Date[] = [];
+    if (metrics?.sleep?.start) dates.push(new Date(metrics.sleep.start));
+    if (metrics?.cycle && (metrics as any).cycle_start) {
+      // Fallback if a flat cycle_start field ever exists
+      // @ts-ignore
+      dates.push(new Date((metrics as any).cycle_start));
+    }
+    if ((metrics as any)?.cycle?.start) {
+      // Some shapes may include a flat start on cycle
+      // @ts-ignore
+      dates.push(new Date((metrics as any).cycle.start));
+    }
+    // Recovery rows in compact metrics usually come from whoop_recovery.created_at
+    // but here we may not have that flat field, so we skip if missing.
+    if (dates.length > 0) {
+      const maxDate = dates.reduce((max, d) => (d > max ? d : max), dates[0]);
+      latestDataDate = maxDate.toISOString();
+    }
+  } catch {
+    latestDataDate = null;
+  }
+
   return (
     <Card id="whoop-details" className="rounded-2xl p-6 bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-pink-500/10 border-indigo-500/20 shadow-xl">
       {/* Compact Summary Cards - Exactly Like Your Screenshot */}
@@ -398,8 +423,15 @@ export function WhoopDetails({ metrics, lastUpdated }: WhoopDetailsProps) {
       {/* Last Updated */}
       <div className="text-center text-xs text-muted-foreground mt-6">
         {language === 'ar' ? '📅 آخر تحديث: ' : '📅 Last updated: '} 
-        {lastUpdated ? new Date(lastUpdated).toLocaleString() : '--'}
+        {lastUpdated ? new Date(lastUpdated).toLocaleString(language === 'ar' ? 'ar-SA' : 'en-US') : '--'}
       </div>
+      {latestDataDate && (
+        <div className="text-center text-[11px] text-muted-foreground mt-1">
+          {language === 'ar'
+            ? `عرض البيانات من: ${new Date(latestDataDate).toLocaleDateString('ar-SA')}`
+            : `Showing data from: ${new Date(latestDataDate).toLocaleDateString('en-US')}`}
+        </div>
+      )}
     </Card>
   );
 }

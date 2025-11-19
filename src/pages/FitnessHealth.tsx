@@ -469,44 +469,15 @@ export default function FitnessHealth() {
     return null;
   }, [metrics, sleepStages]);
 
-  const sleepEfficiency = useMemo(() => {
-    const sleep = metrics?.sleep;
-    if (!sleep) return null as number | null;
-    if (sleep.sleep_efficiency_pct) {
-      return Math.round(sleep.sleep_efficiency_pct);
-    }
-    const stages = sleepStages;
-    if (!stages) return null;
-    const asleep = stages.deep + stages.rem + stages.light;
-    const total = stages.total;
-    if (!total || total === 0) return null;
-    return Math.round((asleep / total) * 100);
-  }, [metrics, sleepStages]);
-
-  const todayStats = useMemo(() => {
-    const rec = metrics?.recovery;
-    const cyc = metrics?.cycle;
-    const w = metrics?.workout;
-    const kcal = w?.data?.score?.kilojoule ? Math.round((w.data.score.kilojoule||0)/4.184) : null;
-    const wAvgHr = w?.data?.score?.average_heart_rate ?? null;
-    
-    // Extract from FLAT columns FIRST (database structure), then nested as fallback
-    const recoveryScore = rec?.score ?? rec?.data?.score?.recovery_score ?? null;
-    const hrvMs = rec?.hrv_ms ?? rec?.data?.score?.hrv_rmssd_milli ?? null;
-    const rhrBpm = rec?.rhr_bpm ?? rec?.data?.score?.resting_heart_rate ?? null;
-    const dayStrain = cyc?.day_strain ?? cyc?.data?.score?.strain ?? null;
-    const trainingLoad = cyc?.training_load ?? cyc?.data?.score?.training_load ?? null;
-    const avgHrBpm = cyc?.avg_hr_bpm ?? cyc?.data?.score?.average_heart_rate ?? wAvgHr ?? null;
-    
-    return {
-      recovery: recoveryScore,
-      hrv: hrvMs,
-      rhr: rhrBpm,
-      strain: dayStrain,
-      load: trainingLoad,
-      avgHr: avgHrBpm,
-      kcal,
-    };
+  const latestDataDate = useMemo(() => {
+    if (!metrics) return null as string | null;
+    const dates: Date[] = [];
+    if (metrics.sleep?.start) dates.push(new Date(metrics.sleep.start));
+    if (metrics.cycle?.start) dates.push(new Date(metrics.cycle.start));
+    if (metrics.recovery?.created_at) dates.push(new Date(metrics.recovery.created_at));
+    if (!dates.length) return null as string | null;
+    const maxDate = dates.reduce((max, d) => (d > max ? d : max), dates[0]);
+    return maxDate.toISOString();
   }, [metrics]);
 
   return (
@@ -534,8 +505,9 @@ export default function FitnessHealth() {
         }}
         metrics={metrics}
         sleepHours={sleepHours}
+        dataFromDate={latestDataDate}
       />
-            {loading ? (
+      {loading ? (
         <Card className="rounded-2xl p-12 bg-white/5 border-white/10 text-center">
           <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-purple-400" />
           <p className="text-muted-foreground">
