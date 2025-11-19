@@ -829,6 +829,7 @@ class WaktiAIV2ServiceClass {
             for (const line of lines) {
               if (!line.startsWith('data: ')) continue;
               const data = line.slice(6);
+              console.log('🔍 SSE RAW:', data);
 
               if (data === '[DONE]') {
                 if (!isCompleted) { onComplete?.(metadata); isCompleted = true; }
@@ -838,6 +839,7 @@ class WaktiAIV2ServiceClass {
 
               try {
                 const parsed = JSON.parse(data);
+                console.log('🔍 SSE PARSED:', parsed);
                 if (parsed.error) {
                   const errObj = parsed.error;
                   const errMsg = typeof errObj === 'string'
@@ -1167,13 +1169,14 @@ class WaktiAIV2ServiceClass {
         }
 
         // Normal chat path (or vision fallback to brain)
+        // Backend auto-tries Gemini → OpenAI → Claude
         const res = await attemptStream('claude');
         return { response: res.response, conversationId, metadata: res.metadata };
       } catch (err: any) {
         const msg = String(err?.message || err || '').toLowerCase();
         const shouldFallback = msg.includes('overloaded') || msg.includes('529') || msg.includes('claude');
         if (shouldFallback) {
-          console.warn('⚠️ Claude overloaded, auto-falling back to OpenAI Vision...');
+          console.warn('⚠️ Claude overloaded, auto-falling back to OpenAI...');
           const res2 = await attemptStream('openai');
           return { response: res2.response, conversationId, metadata: res2.metadata };
         }

@@ -441,6 +441,8 @@ serve(async (req) => {
           contents.push({ role: 'user', parts: userParts });
 
           const encoder = new TextEncoder();
+          // Emit providerUsed once before token stream
+          try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'gemini' })}\n\n`)); } catch { /* ignore */ }
           await streamGemini(
             'gemini-2.5-flash-lite',
             contents,
@@ -480,6 +482,8 @@ serve(async (req) => {
               continue;
             }
             console.log(`VISION: OpenAI model=${m} streaming req=${requestId}`);
+            // Emit providerUsed once before token stream
+            try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'openai' })}\n\n`)); } catch { /* ignore */ }
             streamReader = openaiResponse.body?.getReader() || null;
             // Stream OpenAI conversational-first: emit tokens immediately
             const decoder2 = new TextDecoder();
@@ -537,6 +541,8 @@ serve(async (req) => {
               continue;
             }
             console.log(`VISION: Claude model=${m} streaming req=${requestId}`);
+            // Emit providerUsed once before token stream
+            try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'claude' })}\n\n`)); } catch { /* ignore */ }
             streamReader = claudeResponse.body?.getReader() || null;
             if (!streamReader) { lastErr = new Error('No stream from provider'); continue; }
             await streamClaudeResponse(streamReader, controller, encoder);

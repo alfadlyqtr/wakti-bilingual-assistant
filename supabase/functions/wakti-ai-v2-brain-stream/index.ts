@@ -414,6 +414,8 @@ serve(async (req) => {
           }
           aiProvider = 'gemini';
           const encoder = new TextEncoder();
+          // Emit providerUsed once before token stream
+          try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'gemini' })}\n\n`)); } catch {}
           await streamGemini(
             'gemini-2.5-flash-lite',
             contents,
@@ -448,6 +450,8 @@ serve(async (req) => {
           if (!openaiResponse.ok) throw new Error(`OpenAI failed with status: ${openaiResponse.status}`);
           aiProvider = 'openai';
           streamReader = openaiResponse.body?.getReader() || null;
+          // Emit providerUsed once before token stream
+          try { controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ providerUsed: 'openai' })}\n\n`)); } catch {}
           console.log('✅ STREAMING: Using OpenAI');
         };
 
@@ -476,6 +480,8 @@ serve(async (req) => {
           }
           aiProvider = 'claude';
           streamReader = claudeResponse.body?.getReader() || null;
+          // Emit providerUsed once before token stream
+          try { controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ providerUsed: 'claude' })}\n\n`)); } catch {}
           console.log('✅ STREAMING: Using Claude');
         };
 
