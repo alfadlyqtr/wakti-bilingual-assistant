@@ -27,6 +27,24 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="theme-color" content="#0c0f14" />
+
+    <!-- Natively SDK (required for native features inside Natively shell) -->
+    <script
+      async
+      onload="nativelyOnLoad()"
+      src="https://cdn.jsdelivr.net/npm/natively@2.15.3/natively-frontend.min.js"
+    ></script>
+    <script>
+      function nativelyOnLoad() {
+        try {
+          if (window?.natively?.setDebug) {
+            window.natively.setDebug(true);
+          }
+        } catch (err) {
+          console.warn("Natively SDK debug toggle failed", err);
+        }
+      }
+    </script>
     <!-- Google Maps JavaScript API (Places) -->
     <!-- Dynamically load with Vite env so the key is correctly injected; use v=beta for vector + Map ID support -->
     <script type="module">
