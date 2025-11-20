@@ -362,6 +362,8 @@ function WelcomeTrialPopup() {
     const startAt: string | null = profile?.free_access_start_at ?? null;
     setServerStartAt(startAt);
 
+    const startAtEpoch = startAt ? Math.floor(Date.parse(startAt) / 1000) : null;
+
     // Compute minutes to show in popup based on current start time
     if (startAt == null) {
       setMinutesOffer(30);
@@ -373,10 +375,14 @@ function WelcomeTrialPopup() {
     }
 
     const lsKey = `trial_popup_seen_for_start_at:${user.id}`;
-    const lastSeen = localStorage.getItem(lsKey);
+    const lastSeenRaw = localStorage.getItem(lsKey);
+    const lastSeenEpoch = lastSeenRaw ? Number(lastSeenRaw) : null;
+
+    const hasSeenCurrentStart =
+      startAtEpoch != null && !Number.isNaN(startAtEpoch) && lastSeenEpoch === startAtEpoch;
 
     // Only show popup while in grace period and user hasn't acknowledged this start_at yet
-    if (isGracePeriod && (startAt === null || lastSeen !== (startAt || ""))) {
+    if (isGracePeriod && (startAtEpoch == null || !hasSeenCurrentStart)) {
       setShowPopup(true);
     } else {
       setShowPopup(false);
@@ -390,15 +396,22 @@ function WelcomeTrialPopup() {
       const lsKey = `trial_popup_seen_for_start_at:${user.id}`;
       if (serverStartAt == null) {
         // Start the trial now
-        const nowIso = new Date().toISOString();
+        const now = new Date();
+        const normalizedMs = Math.floor(now.getTime() / 1000) * 1000;
+        const normalizedIso = new Date(normalizedMs).toISOString();
         await supabase
           .from('profiles')
-          .update({ free_access_start_at: nowIso })
+          .update({ free_access_start_at: normalizedIso })
           .eq('id', user.id);
-        localStorage.setItem(lsKey, nowIso);
+        localStorage.setItem(lsKey, String(Math.floor(normalizedMs / 1000)));
       } else {
         // Trial already set (e.g., admin reset). Just acknowledge so popup won't reappear.
-        localStorage.setItem(lsKey, serverStartAt);
+        const serverEpoch = Math.floor(Date.parse(serverStartAt) / 1000);
+        if (!Number.isNaN(serverEpoch)) {
+          localStorage.setItem(lsKey, String(serverEpoch));
+        } else {
+          localStorage.removeItem(lsKey);
+        }
       }
       setShowPopup(false);
     } catch (error) {
