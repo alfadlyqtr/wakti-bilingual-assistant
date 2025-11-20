@@ -517,9 +517,6 @@ export function AppLayout({ children }: AppLayoutProps) {
         </style>
         <ProtectedRoute CustomPaywallModal={CustomPaywallModal}>
           <WelcomeTrialPopup />
-          <div className="relative">
-            <AppHeader unreadTotal={unreadData.unreadTotal} />
-          </div>
           <PresenceBeacon />
           <TabletLayout>{children}</TabletLayout>
         </ProtectedRoute>
@@ -537,9 +534,6 @@ export function AppLayout({ children }: AppLayoutProps) {
       </style>
       <ProtectedRoute CustomPaywallModal={CustomPaywallModal}>
         <WelcomeTrialPopup />
-        <div className="relative">
-          <AppHeader unreadTotal={unreadData.unreadTotal} />
-        </div>
         <PresenceBeacon />
         <DesktopLayout>{children}</DesktopLayout>
       </ProtectedRoute>

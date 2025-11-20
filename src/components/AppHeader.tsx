@@ -217,26 +217,25 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
         backgroundColor: 'transparent'
       }}
     >
-      <div className={cn("w-full", isMobile ? "h-14 py-2 px-2" : "h-16 py-2 px-4")}>
-        <div
-          className={cn(
-            "relative flex items-center justify-between",
-            isMobile
-              ? "mx-0 bg-background/90 border-b border-border shadow-md rounded-none"
-              : "mx-auto max-w-[1280px] rounded-[2rem] border border-border/60 bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/70 shadow-lg px-4"
-          )}
-          style={
-            isMobile
-              ? undefined
-              : {
-                  marginLeft: 'calc(var(--current-sidebar-width, var(--sidebar-mini-width, 70px)) + 0.75rem)',
-                  marginRight: '0.75rem',
-                  width: 'calc(100% - (var(--current-sidebar-width, var(--sidebar-mini-width, 70px)) + 1.5rem))',
-                  overflow: 'hidden',
-                  borderRadius: '1rem'
-                }
-          }
-        >
+      <div
+        className={cn(
+          "relative flex items-center justify-between",
+          isMobile
+            ? "mx-0 h-14 rounded-none border-b border-border bg-background/90 px-2 py-2 shadow-md"
+            : "mx-auto h-16 max-w-[1280px] rounded-[2rem] border border-border/60 bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/70 px-4 py-2"
+        )}
+        style={
+          isMobile
+            ? undefined
+            : {
+                marginLeft: 'calc(var(--current-sidebar-width, var(--sidebar-mini-width, 70px)) + 0.75rem)',
+                marginRight: '0.75rem',
+                width: 'calc(100% - (var(--current-sidebar-width, var(--sidebar-mini-width, 70px)) + 1.5rem))',
+                overflow: 'hidden',
+                borderRadius: '1rem'
+              }
+        }
+      >
         <div className="flex items-center gap-3">
           {isMobile ? (
             <div ref={logoRef}>
@@ -279,17 +278,36 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
             </Tooltip>
           </TooltipProvider>
           
-          {/* Theme Toggle Button - always functional */}
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-            className="rounded-full h-8 w-8 p-0"
+          {/* Theme Toggle - custom animation */}
+          <label
+            className="theme-toggle ml-1"
+            aria-label={language === 'ar' ? 'تبديل السمة' : 'Toggle theme'}
           >
-            <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-            <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-            <span className="sr-only">Toggle theme</span>
-          </Button>
+            <input
+              type="checkbox"
+              className="theme-toggle__checkbox"
+              checked={theme === 'dark'}
+              onChange={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+            />
+            <span className="theme-toggle__track" role="presentation">
+              <span className="theme-toggle__background">
+                <span className="theme-toggle__clouds" aria-hidden />
+                <span className="theme-toggle__stars" aria-hidden>
+                  <span className="theme-toggle__star" />
+                  <span className="theme-toggle__star" />
+                  <span className="theme-toggle__star" />
+                </span>
+              </span>
+              <span className="theme-toggle__thumb">
+                <span className="theme-toggle__sun" aria-hidden />
+                <span className="theme-toggle__moon" aria-hidden>
+                  <span className="theme-toggle__crater theme-toggle__crater--lg" />
+                  <span className="theme-toggle__crater theme-toggle__crater--md" />
+                  <span className="theme-toggle__crater theme-toggle__crater--sm" />
+                </span>
+              </span>
+            </span>
+          </label>
           
           {/* User Menu - Made smaller */}
           <DropdownMenu open={userMenuOpen} onOpenChange={setUserMenuOpen}>
@@ -350,7 +368,6 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-        </div>
         </div>
       </div>
       

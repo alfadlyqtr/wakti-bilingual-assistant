@@ -13,11 +13,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo3D } from "@/components/Logo3D";
 import { t } from "@/utils/translations";
-import { Settings, User as Account, HelpCircle as Help, Users as Contacts, LogOut } from "lucide-react";
+import { Settings, User as Account, HelpCircle as Help, Users as Contacts, LogOut, Calendar, CalendarClock, Mic, Sparkles, ListTodo } from "lucide-react";
 import { UnreadBadge } from "./UnreadBadge";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { useUserProfile } from "@/hooks/useUserProfile";
@@ -63,6 +62,49 @@ export function DesktopHeader() {
   // Get avatar URL from profile data with cache-busting
   const avatarUrl = profile?.avatar_url ? getCacheBustedAvatarUrl(profile.avatar_url) : undefined;
   
+  // Determine current page info
+  const getPageTitleWithIcon = () => {
+    const path = location.pathname;
+
+    const routes: Record<string, { title: string; icon: React.ComponentType<any> | null; colorClass: string }> = {
+      "/dashboard": {
+        title: language === "ar" ? "لوحة التحكم" : "Dashboard",
+        icon: null,
+        colorClass: ""
+      },
+      "/calendar": {
+        title: language === "ar" ? "التقويم" : "Calendar",
+        icon: Calendar,
+        colorClass: "nav-icon-calendar"
+      },
+      "/wakti-ai": {
+        title: language === "ar" ? "WAKTI AI" : "WAKTI AI",
+        icon: Sparkles,
+        colorClass: "nav-icon-ai"
+      },
+      "/tasjeel": {
+        title: language === "ar" ? "تسجيل" : "Tasjeel",
+        icon: Mic,
+        colorClass: "text-cyan-500"
+      },
+      "/tr": {
+        title: "T & R",
+        icon: ListTodo,
+        colorClass: "nav-icon-tr"
+      },
+      "/maw3d": {
+        title: t("maw3dEvents", language),
+        icon: CalendarClock,
+        colorClass: "nav-icon-maw3d"
+      }
+    };
+
+    return routes[path] || { title: "", icon: null, colorClass: "" };
+  };
+
+  const pageInfo = getPageTitleWithIcon();
+  const PageIcon = pageInfo.icon;
+
   // Define menu items with icons
   const menuItems = [
     { 
@@ -106,8 +148,17 @@ export function DesktopHeader() {
         {/* Glass reflection overlay */}
         <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-white/20 via-transparent to-transparent opacity-30 pointer-events-none" />
         
-        {/* Empty left space for balance */}
-        <div className="flex-1"></div>
+        <div className="flex items-center gap-3 relative z-10">
+          <Link to="/dashboard" className="flex items-center">
+            <Logo3D size="sm" />
+          </Link>
+          {pageInfo.title && (
+            <div className="flex items-center gap-2">
+              {PageIcon && <PageIcon className={cn("h-5 w-5", pageInfo.colorClass)} />}
+              <h1 className={cn("text-lg font-medium", pageInfo.colorClass)}>{pageInfo.title}</h1>
+            </div>
+          )}
+        </div>
 
         <div className="flex items-center space-x-4 relative z-10">
           {/* Weather Button */}
@@ -131,31 +182,47 @@ export function DesktopHeader() {
             </span>
           </Button>
           
-          {/* Theme Toggle Button */}
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-            className="rounded-xl h-9 w-9 p-0 bg-white/10 dark:bg-white/5 border border-white/20 dark:border-white/10 hover:bg-white/20 dark:hover:bg-white/10 backdrop-blur-sm shadow-lg transition-all duration-300 hover:scale-105"
-            style={{
-              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 4px 12px rgba(0, 0, 0, 0.15)'
-            }}
+          {/* Theme Toggle */}
+          <label
+            className="theme-toggle ml-1"
+            aria-label={language === 'ar' ? 'تبديل السمة' : 'Toggle theme'}
           >
-            <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-            <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-            <span className="sr-only">Toggle theme</span>
-          </Button>
+            <input
+              type="checkbox"
+              className="theme-toggle__checkbox"
+              checked={theme === 'dark'}
+              onChange={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+            />
+            <span className="theme-toggle__track" role="presentation">
+              <span className="theme-toggle__background">
+                <span className="theme-toggle__clouds" aria-hidden />
+                <span className="theme-toggle__stars" aria-hidden>
+                  <span className="theme-toggle__star" />
+                  <span className="theme-toggle__star" />
+                  <span className="theme-toggle__star" />
+                </span>
+              </span>
+              <span className="theme-toggle__thumb">
+                <span className="theme-toggle__sun" aria-hidden />
+                <span className="theme-toggle__moon" aria-hidden>
+                  <span className="theme-toggle__crater theme-toggle__crater--lg" />
+                  <span className="theme-toggle__crater theme-toggle__crater--md" />
+                  <span className="theme-toggle__crater theme-toggle__crater--sm" />
+                </span>
+              </span>
+            </span>
+          </label>
           
           {/* User Menu */}
           <DropdownMenu open={userMenuOpen} onOpenChange={setUserMenuOpen}>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-9 w-9 p-0 rounded-xl relative bg-white/10 dark:bg-white/5 border border-white/20 dark:border-white/10 hover:bg-white/20 dark:hover:bg-white/10 backdrop-blur-sm shadow-lg transition-all duration-300 hover:scale-105"
+              <Button variant="ghost" className="h-[45px] w-[45px] p-0 rounded-xl relative bg-white/10 dark:bg-white/5 border border-white/20 dark:border-white/10 hover:bg-white/20 dark:hover:bg-white/10 backdrop-blur-sm shadow-lg transition-all duration-300 hover:scale-105"
                       style={{
                         boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 4px 12px rgba(0, 0, 0, 0.15)'
                       }}>
                 <span className="relative">
                   <Avatar 
-                    className="h-8 w-8"
+                    className="h-full w-full"
                     key={`${profile?.avatar_url || 'no-avatar'}-${avatarKey}`}
                   >
                     <AvatarImage src={avatarUrl} />

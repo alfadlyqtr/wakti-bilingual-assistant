@@ -104,6 +104,12 @@ export default function FitnessHealth() {
   }, [allWorkoutsHist, timeRange]);
 
   useEffect(() => {
+    // Wait for auth to be ready before fetching WHOOP data
+    if (!user?.id) {
+      console.log('[Auth Debug] Waiting for user auth to be ready...');
+      return;
+    }
+
     (async () => {
       try {
         const st = await getWhoopStatus();
@@ -151,7 +157,23 @@ export default function FitnessHealth() {
               try {
                 setSyncing(true);
                 const res = await triggerUserSync();
-                toast.success(`Synced: ${res?.counts?.cycles||0} cycles, ${res?.counts?.sleeps||0} sleeps, ${res?.counts?.workouts||0} workouts, ${res?.counts?.recoveries||0} recoveries`);
+                const counts = res?.counts || {};
+                const totalSynced =
+                  (counts.cycles || 0) +
+                  (counts.sleeps || 0) +
+                  (counts.workouts || 0) +
+                  (counts.recoveries || 0);
+
+                if (totalSynced > 0) {
+                  toast.success(`Synced: ${counts.cycles || 0} cycles, ${counts.sleeps || 0} sleeps, ${counts.workouts || 0} workouts, ${counts.recoveries || 0} recoveries`);
+                } else {
+                  toast.info(
+                    language === 'ar'
+                      ? 'تم ربط WHOOP بحسابك، لكن أحدث بياناتك لا تصل إلى واكتي بعد. بمجرد تفعيلها من جانب WHOOP ستظهر بياناتك هنا تلقائيًّا.'
+                      : "WHOOP is linked to your account, but your latest data isn’t coming through from their side yet. Once they turn it on for this app, Wakti will update your dashboard.",
+                    { duration: 8000 }
+                  );
+                }
                 
                 // FIX: Add 2-second delay to allow database commits to complete
                 await new Promise(resolve => setTimeout(resolve, 2000));
@@ -219,7 +241,7 @@ export default function FitnessHealth() {
       }
       setLoading(false);
     })();
-  }, [autoSync]);
+  }, [user?.id, autoSync]);
 
   // Time range filtering is now done via useMemo - no need to re-fetch data
   // Old approach: Re-fetch data from API on every time range change
@@ -311,7 +333,23 @@ export default function FitnessHealth() {
       setAllCycleHist(cyc);
       setAllWorkoutsHist(wks.map((w:any)=>({ start: w.start, strain: w.strain ?? null, kcal: w.kcal ?? null })));
       setStatus({ connected: true, lastSyncedAt: new Date().toISOString() });
-      toast.success(`Synced: ${res?.counts?.cycles||0} cycles, ${res?.counts?.sleeps||0} sleeps, ${res?.counts?.workouts||0} workouts, ${res?.counts?.recoveries||0} recoveries`);
+      const countsManual = res?.counts || {};
+      const totalManual =
+        (countsManual.cycles || 0) +
+        (countsManual.sleeps || 0) +
+        (countsManual.workouts || 0) +
+        (countsManual.recoveries || 0);
+
+      if (totalManual > 0) {
+        toast.success(`Synced: ${countsManual.cycles || 0} cycles, ${countsManual.sleeps || 0} sleeps, ${countsManual.workouts || 0} workouts, ${countsManual.recoveries || 0} recoveries`);
+      } else {
+        toast.info(
+          language === 'ar'
+            ? 'تم ربط WHOOP بحسابك، لكن لا توجد بيانات جديدة.'
+            : "WHOOP is linked to your account, but no new data was synced.",
+          { duration: 8000 }
+        );
+      }
     } catch (e: any) {
       console.error('sync error', e);
       if (e?.message?.includes('refresh failed') || e?.message?.includes('400')) {
@@ -478,6 +516,26 @@ export default function FitnessHealth() {
     if (!dates.length) return null as string | null;
     const maxDate = dates.reduce((max, d) => (d > max ? d : max), dates[0]);
     return maxDate.toISOString();
+  }, [metrics]);
+
+  const sleepEfficiency = useMemo(() => {
+    const sleep = metrics?.sleep;
+    if (!sleep) return null;
+    const stages = sleepStages;
+    if (!stages || stages.total === 0) return null;
+    const awake = stages.awake || 0;
+    const total = stages.total;
+    return Math.round(((total - awake) / total) * 100);
+  }, [metrics, sleepStages]);
+
+  const todayStats = useMemo(() => {
+    return {
+      recovery: metrics?.recovery?.score ?? metrics?.recovery?.data?.score?.recovery_score ?? 0,
+      hrv: metrics?.recovery?.hrv_ms ?? metrics?.recovery?.data?.score?.hrv_rmssd_milli ?? 0,
+      rhr: metrics?.recovery?.rhr_bpm ?? metrics?.recovery?.data?.score?.resting_heart_rate ?? 0,
+      strain: metrics?.cycle?.day_strain ?? metrics?.cycle?.data?.score?.strain ?? 0,
+      kcal: metrics?.workout?.data?.score?.kilojoule ? Math.round((metrics.workout.data.score.kilojoule || 0) / 4.184) : 0,
+    };
   }, [metrics]);
 
   return (

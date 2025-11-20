@@ -8,6 +8,7 @@ import {
   Calendar,
   CalendarClock,
   Mic,
+  AudioLines,
   HeartPulse,
   Sparkles,
   ListTodo,
@@ -53,7 +54,7 @@ export function DesktopSidebar() {
     { icon: ListTodo, label: "tasks", path: "/tr", badge: 0 },
     { icon: Sparkles, label: "wakti_ai", path: "/wakti-ai" },
     { icon: HeartPulse, label: "vitality", path: "/fitness" },
-    { icon: Mic, label: "tasjeel", path: "/tasjeel" },
+    { icon: AudioLines as unknown as IconComponent, label: "tasjeel", path: "/tasjeel" },
     { icon: Music as unknown as IconComponent, label: "music", path: "/music" },
     { icon: Gamepad2 as unknown as IconComponent, label: "games", path: "/games" },
   ];

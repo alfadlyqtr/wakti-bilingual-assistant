@@ -52,6 +52,11 @@ async function fetchCollection(url: string, accessToken: string, params: Record<
     if (!res.ok) {
       const t = await res.text();
       console.warn("WHOOP fetch non-200", url, res.status, t);
+      if (res.status === 401) {
+        const err: any = new Error(`401 Unauthorized for ${url}`);
+        err.status = 401;
+        throw err;
+      }
       break;
     }
     const json = await res.json();
@@ -148,6 +153,7 @@ serve(async (req: Request) => {
     }
 
     let totalCycles = 0, totalSleeps = 0, totalWorkouts = 0, totalRecoveries = 0;
+    let reconnectNeeded = false;
     for (const u of users) {
       try {
         let accessToken = u.access_token;
@@ -182,6 +188,35 @@ serve(async (req: Request) => {
           });
         }
 
+        // Helper to refresh and persist once
+        const refreshAndPersist = async () => {
+          const rt = await refreshTokenFn(refreshToken, whoopClientId, whoopClientSecret);
+          accessToken = rt.access_token;
+          refreshToken = rt.refresh_token || refreshToken;
+          const expires_at = new Date(Date.now() + (rt.expires_in || 3600) * 1000).toISOString();
+          await admin.from("user_whoop_tokens").update({ access_token: accessToken, refresh_token: refreshToken, expires_at }).eq("user_id", u.user_id);
+          console.log("whoop-sync: token refreshed after 401", { userId: u.user_id, newPrefix: accessToken?.substring(0, 20) });
+        };
+
+        // Wrapper to retry once on 401
+        const withRetry401 = async <T>(runner: () => Promise<T>): Promise<T> => {
+          try { return await runner(); } catch (e: any) {
+            if (e?.status === 401 || String(e?.message || e).includes('401')) {
+              console.warn('whoop-sync: got 401, attempting refresh-and-retry');
+              try {
+                await refreshAndPersist();
+                return await runner();
+              } catch (e2: any) {
+                if (e2?.status === 401 || String(e2?.message || e2).includes('401')) {
+                  reconnectNeeded = true;
+                }
+                throw e2;
+              }
+            }
+            throw e;
+          }
+        };
+
         // Always fetch last 6 months to support time range filtering in UI
         const start = startParam || isoDaysAgo(180);
         const end = endParam || new Date().toISOString();
@@ -199,32 +234,22 @@ serve(async (req: Request) => {
         });
 
         const [cycles, sleeps, workouts, recoveries, userProfile, userBody] = await Promise.all([
-          fetchCollection(CYCLE_URL, accessToken, { ...commonParams }),
-          fetchCollection(SLEEP_URL, accessToken, { ...commonParams }),
-          fetchCollection(WORKOUT_URL, accessToken, { ...commonParams }),
-          fetchCollection(RECOVERY_URL, accessToken, { ...commonParams }),
+          withRetry401(() => fetchCollection(CYCLE_URL, accessToken, { ...commonParams })),
+          withRetry401(() => fetchCollection(SLEEP_URL, accessToken, { ...commonParams })),
+          withRetry401(() => fetchCollection(WORKOUT_URL, accessToken, { ...commonParams })),
+          withRetry401(() => fetchCollection(RECOVERY_URL, accessToken, { ...commonParams })),
           // Fetch user profile and body measurements (no date params needed)
-          fetch(USER_PROFILE_URL, { headers: { Authorization: `Bearer ${accessToken}` } }).then(async r => {
+          withRetry401(async () => {
+            const r = await fetch(USER_PROFILE_URL, { headers: { Authorization: `Bearer ${accessToken}` } });
             console.log('USER_PROFILE_URL response status:', r.status);
-            if (r.ok) {
-              const data = await r.json();
-              console.log('USER_PROFILE data:', JSON.stringify(data));
-              return data;
-            }
-            const errorText = await r.text();
-            console.error('USER_PROFILE_URL error:', r.status, errorText);
-            return null;
+            if (r.status === 401) { const err: any = new Error('401 profile'); err.status = 401; throw err; }
+            if (!r.ok) return null; return await r.json();
           }),
-          fetch(USER_BODY_URL, { headers: { Authorization: `Bearer ${accessToken}` } }).then(async r => {
+          withRetry401(async () => {
+            const r = await fetch(USER_BODY_URL, { headers: { Authorization: `Bearer ${accessToken}` } });
             console.log('USER_BODY_URL response status:', r.status);
-            if (r.ok) {
-              const data = await r.json();
-              console.log('USER_BODY data:', JSON.stringify(data));
-              return data;
-            }
-            const errorText = await r.text();
-            console.error('USER_BODY_URL error:', r.status, errorText);
-            return null;
+            if (r.status === 401) { const err: any = new Error('401 body'); err.status = 401; throw err; }
+            if (!r.ok) return null; return await r.json();
           }),
         ]);
         totalCycles += cycles.length;
@@ -404,7 +429,7 @@ serve(async (req: Request) => {
       }
     }
 
-    return new Response(JSON.stringify({ success: true, users: users.length, counts: { cycles: totalCycles, sleeps: totalSleeps, workouts: totalWorkouts, recoveries: totalRecoveries } }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ success: true, users: users.length, counts: { cycles: totalCycles, sleeps: totalSleeps, workouts: totalWorkouts, recoveries: totalRecoveries }, reconnectNeeded }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error("whoop-sync error", e);
     return new Response(JSON.stringify({ error: "internal_error" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });

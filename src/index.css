@@ -642,12 +642,14 @@ textarea::placeholder {
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3) !important;
 }
 
-/* Ensure AppHeader is also solid on mobile */
-header.app-header-fixed,
-.app-header-fixed {
-  background: hsl(var(--background)) !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
+/* Ensure AppHeader is solid only on smaller screens */
+@media (max-width: 768px) {
+  header.app-header-fixed,
+  .app-header-fixed {
+    background: hsl(var(--background)) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
 }
 
 /* Desktop header - account for sidebar and fixed positioning */
@@ -658,12 +660,9 @@ header.app-header-fixed,
   left: calc(var(--current-sidebar-width, var(--sidebar-width, 240px)) + 0.5rem) !important; /* Account for dynamic sidebar width */
   right: 1rem !important;
   z-index: 100 !important;
-  background-color: hsl(var(--background)) !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
+  background-color: transparent !important;
+  background: transparent !important;
   height: var(--app-header-h, 56px) !important;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12) !important;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
   width: calc(100% - var(--current-sidebar-width, var(--sidebar-width, 240px)) - 1.5rem) !important; /* Set explicit width */
 }
 
@@ -947,6 +946,248 @@ body.keyboard-visible {
 .touch-manipulation {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* === Theme toggle (AppHeader) === */
+.theme-toggle {
+  --track-width: 110px;
+  --track-height: 45px;
+  --track-radius: calc(var(--track-height) / 2);
+  --thumb-size: 34px;
+  --thumb-offset: 6px;
+  --cloud-size: calc(var(--track-height) * 0.45);
+  --cloud-left: calc(var(--track-height) * 0.15);
+  --cloud-bottom: calc(var(--track-height) * -0.35);
+  --star-size: calc(var(--track-height) * 0.22);
+  --star-gap: calc(var(--track-height) * 0.08);
+  --stars-left: calc(var(--track-height) * 0.18);
+  --stars-top: calc(var(--track-height) * -0.7);
+  --moon-crater-lg: calc(var(--thumb-size) * 0.4);
+  --moon-crater-md: calc(var(--thumb-size) * 0.26);
+  --moon-crater-sm: calc(var(--thumb-size) * 0.18);
+  --moon-crater-lg-left: calc(var(--thumb-size) * 0.2);
+  --moon-crater-lg-top: calc(var(--thumb-size) * 0.4);
+  --moon-crater-md-left: calc(var(--thumb-size) * 0.68);
+  --moon-crater-md-top: calc(var(--thumb-size) * 0.58);
+  --moon-crater-sm-left: calc(var(--thumb-size) * 0.54);
+  --moon-crater-sm-top: calc(var(--thumb-size) * 0.24);
+  --day-bg: #3d7eae;
+  --night-bg: #1d1f2c;
+  --cloud-color: #f3fdff;
+  --cloud-glow: #aacadf;
+  --sun-color: #ecca2f;
+  --sun-highlight: rgba(254, 255, 239, 0.61);
+  --sun-shadow: #a1872a;
+  --moon-color: #c4c9d1;
+  --moon-shadow: #969696;
+  --crater-color: #959db1;
+  --transition: 0.5s cubic-bezier(0, -0.02, 0.4, 1.25);
+  --thumb-transition: 0.35s cubic-bezier(0, -0.02, 0.35, 1.17);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+}
+
+.theme-toggle,
+.theme-toggle *,
+.theme-toggle *::before,
+.theme-toggle *::after {
+  box-sizing: border-box;
+}
+
+.theme-toggle__checkbox {
+  display: none;
+}
+
+.theme-toggle__track {
+  width: var(--track-width);
+  height: var(--track-height);
+  border-radius: var(--track-radius);
+  background: var(--day-bg);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  overflow: hidden;
+  box-shadow:
+    0px -3px 4px rgba(0, 0, 0, 0.25),
+    0px 3px 6px rgba(255, 255, 255, 0.94),
+    inset 0px 3px 6px rgba(0, 0, 0, 0.2),
+    inset 0px -3px 6px rgba(0, 0, 0, 0.18);
+  transition: var(--transition);
+}
+
+.theme-toggle__background {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.theme-toggle__clouds {
+  position: absolute;
+  width: var(--cloud-size);
+  height: var(--cloud-size);
+  left: var(--cloud-left);
+  bottom: var(--cloud-bottom);
+  border-radius: 999px;
+  background: var(--cloud-color);
+  box-shadow:
+    calc(var(--cloud-size) * 1.1) calc(var(--cloud-size) * 0.35) var(--cloud-color),
+    calc(var(--cloud-size) * -0.35) calc(var(--cloud-size) * -0.35) var(--cloud-glow),
+    calc(var(--cloud-size) * 1.5) calc(var(--cloud-size) * 0.4) var(--cloud-color),
+    calc(var(--cloud-size) * 0.55) calc(var(--cloud-size) * -0.12) var(--cloud-glow),
+    calc(var(--cloud-size) * 2.3) 0 var(--cloud-color),
+    calc(var(--cloud-size) * 1.3) calc(var(--cloud-size) * -0.08) var(--cloud-glow),
+    calc(var(--cloud-size) * 3) calc(var(--cloud-size) * 0.32) var(--cloud-color),
+    calc(var(--cloud-size) * 2.1) calc(var(--cloud-size) * -0.32) var(--cloud-glow),
+    calc(var(--cloud-size) * 3.6) calc(var(--cloud-size) * -0.05) var(--cloud-color),
+    calc(var(--cloud-size) * 2.6) 0 var(--cloud-glow),
+    calc(var(--cloud-size) * 4.5) calc(var(--cloud-size) * -0.3) var(--cloud-color),
+    calc(var(--cloud-size) * 3.3) calc(var(--cloud-size) * -0.42) var(--cloud-glow),
+    calc(var(--cloud-size) * 4.6) calc(var(--cloud-size) * -1.7) 0 calc(var(--cloud-size) * 0.4) var(--cloud-color),
+    calc(var(--cloud-size) * 4) calc(var(--cloud-size) * -0.6) var(--cloud-glow),
+    calc(var(--cloud-size) * 4.2) calc(var(--cloud-size) * -2.1) 0 calc(var(--cloud-size) * 0.4) var(--cloud-glow);
+  transition: var(--transition);
+}
+
+.theme-toggle__stars {
+  position: absolute;
+  top: var(--stars-top);
+  left: var(--stars-left);
+  width: calc(var(--star-size) * 4.5);
+  display: flex;
+  gap: var(--star-gap);
+  color: #fff;
+  transition: var(--transition);
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.9));
+}
+
+.theme-toggle__star {
+  width: var(--star-size);
+  height: var(--star-size);
+  background: currentColor;
+  border-radius: 50%;
+  opacity: 0.9;
+}
+
+.theme-toggle__star:nth-child(2) {
+  width: calc(var(--star-size) * 0.8);
+  height: calc(var(--star-size) * 0.8);
+  margin-top: calc(var(--star-size) * 0.75);
+  opacity: 0.75;
+}
+
+.theme-toggle__star:nth-child(3) {
+  width: calc(var(--star-size) * 0.7);
+  height: calc(var(--star-size) * 0.7);
+  margin-top: calc(var(--star-size) * -0.35);
+  opacity: 0.62;
+}
+
+.theme-toggle__thumb {
+  position: absolute;
+  left: var(--thumb-offset);
+  top: calc((var(--track-height) - var(--thumb-size)) / 2);
+  width: var(--thumb-size);
+  height: var(--thumb-size);
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--thumb-transition);
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.25));
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.theme-toggle__sun {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--sun-color);
+  box-shadow:
+    inset 0.062em 0.062em 0 var(--sun-highlight),
+    inset 0em -0.062em 0 var(--sun-shadow),
+    0 0.125em 0.125em rgba(0, 0, 0, 0.25);
+  transition: var(--transition);
+}
+
+.theme-toggle__moon {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--moon-color);
+  box-shadow:
+    inset 0.062em 0.062em 0 var(--sun-highlight),
+    inset 0em -0.062em 0 var(--moon-shadow);
+  transform: translateX(100%);
+  transition: var(--transition);
+}
+
+.theme-toggle__crater {
+  position: absolute;
+  border-radius: 999px;
+  background: var(--crater-color);
+  box-shadow: inset 0 0.031em 0.062em rgba(0, 0, 0, 0.25);
+}
+
+.theme-toggle__crater--lg {
+  width: var(--moon-crater-lg);
+  height: var(--moon-crater-lg);
+  top: var(--moon-crater-lg-top);
+  left: var(--moon-crater-lg-left);
+}
+
+.theme-toggle__crater--md {
+  width: var(--moon-crater-md);
+  height: var(--moon-crater-md);
+  top: var(--moon-crater-md-top);
+  left: var(--moon-crater-md-left);
+}
+
+.theme-toggle__crater--sm {
+  width: var(--moon-crater-sm);
+  height: var(--moon-crater-sm);
+  top: var(--moon-crater-sm-top);
+  left: var(--moon-crater-sm-left);
+}
+
+@media (max-width: 768px) {
+  .theme-toggle {
+    --track-width: 44px;
+    --track-height: 25px;
+    --thumb-size: 18px;
+    --thumb-offset: 3px;
+  }
+}
+
+.theme-toggle__checkbox:checked + .theme-toggle__track {
+  background: var(--night-bg);
+}
+
+.theme-toggle__checkbox:checked + .theme-toggle__track .theme-toggle__thumb {
+  left: calc(var(--track-width) - var(--thumb-size) - var(--thumb-offset));
+}
+
+.theme-toggle__checkbox:checked + .theme-toggle__track .theme-toggle__sun {
+  opacity: 0;
+}
+
+.theme-toggle__checkbox:checked + .theme-toggle__track .theme-toggle__moon {
+  transform: translateX(0);
+}
+
+.theme-toggle__checkbox:checked + .theme-toggle__track .theme-toggle__clouds {
+  bottom: -4em;
+}
+
+.theme-toggle__checkbox:checked + .theme-toggle__track .theme-toggle__stars {
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 /* iOS-specific: reduce heavy blur on fixed bars to avoid jank/freezes */
