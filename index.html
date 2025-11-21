@@ -43,6 +43,12 @@
         } catch (err) {
           console.warn("Natively SDK debug toggle failed", err);
         }
+        try {
+          window.__nativelyReady = true;
+          window.dispatchEvent(new Event('natively-ready'));
+        } catch (err) {
+          console.warn("Natively SDK ready event failed", err);
+        }
       }
     </script>
     <!-- Google Maps JavaScript API (Places) -->

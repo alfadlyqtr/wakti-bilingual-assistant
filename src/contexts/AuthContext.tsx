@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -135,16 +135,40 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, []);
 
-  // free_access_start_at is now set manually via welcome popup (not auto-set on login)
+  // Track when the Natively SDK finishes loading inside the WebView
+  const [nativelyReady, setNativelyReady] = useState<boolean>(
+    typeof window !== 'undefined' ? Boolean((window as any).__nativelyReady) : false
+  );
+
+  const handleNativelyReady = useCallback(() => {
+    setNativelyReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if ((window as any).__nativelyReady) {
+      setNativelyReady(true);
+      return;
+    }
+    window.addEventListener('natively-ready', handleNativelyReady);
+    return () => {
+      window.removeEventListener('natively-ready', handleNativelyReady);
+    };
+  }, [handleNativelyReady]);
 
   // Identify logged-in user in RevenueCat (via Natively SDK). No-op on web.
   useEffect(() => {
+    if (!nativelyReady) return;
     try {
       if (user?.id) {
         purchasesLogin(user.id, user.email || '');
+      } else {
+        purchasesLogout();
       }
-    } catch {}
-  }, [user?.id]);
+    } catch (error) {
+      console.warn('AuthContext: Natively identify failed', error);
+    }
+  }, [nativelyReady, user?.id, user?.email]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
