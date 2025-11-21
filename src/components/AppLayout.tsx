@@ -85,7 +85,7 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
         if (pkg?.product) {
           setPrice({
             qar: pkg.product.priceString || 'QAR 95/month',
-            usd: pkg.product.priceUSD || '$25/month',
+            usd: pkg.product.priceUSD || '$24.99/month',
           });
         }
       }
@@ -250,7 +250,7 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
               } else {
                 // English: keep QAR primary, add small 'USD' tag
                 const qar = normalize(price.qar) || 'QAR 95/month';
-                const usd = normalize(price.usd) || '$25/month';
+                const usd = normalize(price.usd) || '$24.99/month';
                 return (
                   <div className="flex items-center justify-center gap-3">
                     <p className="text-2xl font-bold text-primary">{qar}</p>

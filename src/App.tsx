@@ -57,6 +57,7 @@ import AdminSettings from "./pages/AdminSettings";
 import AdminAuditLog from "./pages/AdminAuditLog";
 import VoiceTTS from "./pages/VoiceTTS";
 import VoiceStudio from "./pages/VoiceStudio";
+import NatDev from "./pages/NatDev";
 import TextGenerator from "./pages/TextGenerator";
 import GameMode from "./pages/GameMode";
 import Games from "./pages/Games";
@@ -106,6 +107,7 @@ function App() {
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/reset-success" element={<ResetSuccess />} />
                 <Route path="/contact" element={<ContactUs />} />
+                <Route path="/nat-dev" element={<NatDev />} />
                 <Route path="/help" element={
                   <GiftNotificationProvider>
                     <Help />
