@@ -390,7 +390,7 @@ serve(async (req) => {
         messages.push({ role: 'user', content: message });
 
         let streamReader: any = null;
-        let aiProvider: 'gemini' | 'openai' | 'claude' = 'none';
+        let aiProvider: 'gemini' | 'openai' | 'claude' = 'openai';
 
         const tryGemini = async () => {
           const sysMsg = messages.find((m) => m.role === 'system')?.content || '';
@@ -404,9 +404,15 @@ serve(async (req) => {
           aiProvider = 'gemini'; // FIXED: Set provider before streaming
           const modelCode = 'gemini-2.5-flash-lite';
           try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'gemini' })}\n\n`)); } catch {}
+          let geminiTokenCount = 0;
           await streamGemini(modelCode, contents, (token) => {
+            geminiTokenCount++;
             try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`)); } catch {}
           }, sysMsg, { temperature: activeTrigger === 'search' ? 0.3 : 0.7, maxOutputTokens: 65536 }, []);
+          if (geminiTokenCount === 0) {
+            console.error('❌ Gemini returned no tokens, triggering fallback');
+            throw new Error('Gemini produced no tokens');
+          }
         };
 
         const tryOpenAI = async () => {

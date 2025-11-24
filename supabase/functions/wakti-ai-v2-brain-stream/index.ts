@@ -1,134 +1,205 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
-import { executeRegularSearch } from "./search.ts";
-import { VisionSystem } from "./vision.ts";
-import { buildTextContent, streamGemini } from "../_shared/gemini.ts";
 
 const allowedOrigins = [
   'https://wakti.qa',
-  'https://www.wakti.qa'
+  'https://www.wakti.qa',
+  'http://localhost:8080',
+  'http://127.0.0.1:54063'
 ];
 
-const getCorsHeaders = (origin: string | null) => {
+const getCorsHeaders = (origin) => {
   const isAllowed = origin && (
-    allowedOrigins.includes(origin) ||
+    allowedOrigins.some(allowed => origin.startsWith(allowed)) ||
     origin.includes('lovable.dev') ||
     origin.includes('lovable.app') ||
-    origin.includes('lovableproject.com') ||
-    origin.startsWith('http://localhost') ||
-    origin.startsWith('http://127.0.0.1')
+    origin.includes('lovableproject.com')
   );
-  
+
   return {
     'Access-Control-Allow-Origin': isAllowed ? origin : '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, accept, cache-control, x-request-id, x-mobile-request, x-app-name, x-auth-token, x-skip-auth, content-length',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, accept, cache-control, x-request-id',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Max-Age': '86400',
-    'Access-Control-Allow-Credentials': 'true',
+    'Access-Control-Max-Age': '86400'
   };
 };
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
-const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
 
-const _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+console.log("WAKTI AI V2 STREAMING BRAIN: Ready");
 
-console.log("WAKTI AI V2 STREAMING BRAIN (TEXT-ONLY): Ready");
-
-// Build the system prompt for text chat/search with Personal Touch and intelligent formatting
-function buildSystemPrompt(language: string, currentDate: string, personalTouch: any, activeTrigger: string) {
-  const pt = personalTouch || {};
-  const ptNick = (pt.nickname || '').toString().trim() || 'none';
-  const ptTone = (pt.tone || '').toString().trim() || 'neutral';
-  const ptStyle = (pt.style || '').toString().trim() || 'short answers';
-
-  const BASE_PROMPT = `CRITICAL MULTI-LANGUAGE RULE
-- You are multilingual. Default to the UI language "${language}".
-- If the user asks for a translation or specifies a target language, RESPOND IN THAT TARGET LANGUAGE.
-
-CRITICAL PERSONAL TOUCH ENFORCEMENT
-- Nickname: ${ptNick}. If provided, USE the nickname naturally and warmly throughout.
-- Tone: ${ptTone}. Maintain this tone consistently.
-- Style: ${ptStyle}. Shape your structure to match the style in ALL replies.
-
-CRITICAL OUTPUT FORMAT SELECTION
-- Choose ONE primary format:
-  1) Markdown table: for structured multi-item results (search, comparisons, lists with attributes).
-     Columns: Title | Source | Key Point. Keep headers short; cells concise.
-  2) Bulleted list: for steps, checklists, 1–2 results, pros/cons, short enumerations.
-  3) 1–3 sentence paragraph: for brief conversational replies or simple explanations.
-- Use Markdown links ONLY when a real URL is provided. No placeholder links.
-- Do NOT wrap normal text in code fences unless the user asks for code.
-
-${activeTrigger === 'search' ? `SEARCH BEHAVIOR (applies only when Search is active)
-- Read the injected search context carefully; synthesize a short, direct answer FIRST.
-- Deterministic formatting:
-  - If results ≥ 3 → render a Markdown table (Title | Source | Key Point).
-  - If 1–2 results → concise bulleted list with sources.
-  - If explanatory/no results → 1–3 sentence paragraph.
-- Be precise. Do NOT invent sources.
-
-` : ''}GENERAL BEHAVIOR
-- Be direct and helpful. Avoid verbose preambles and do not repeat the question unless needed.
-- Use the target language explicitly when the user requests translation.
-
-You are WAKTI AI — date: ${currentDate}.`;
-  return BASE_PROMPT;
+// === GEMINI HELPER ===
+function getGeminiApiKey() {
+  const k = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
+  if (!k) throw new Error("Gemini API key not configured");
+  return k;
 }
 
-// Helper function to convert OpenAI message format to Claude format
-type BasicMessage = { role: 'system' | 'user' | 'assistant'; content: string };
-function convertMessagesToClaudeFormat(messages: BasicMessage[]) {
-  const systemMessage = messages.find(m => m.role === 'system');
-  const conversationMessages = messages.filter(m => m.role !== 'system');
-  
+function buildTextContent(role, text) {
+  return { role, parts: [{ text }] };
+}
+
+async function streamGemini(model, contents, onToken, systemInstruction, generationConfig) {
+  const key = getGeminiApiKey();
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
+  const body = { contents };
+  if (systemInstruction) body.system_instruction = { parts: [{ text: systemInstruction }] };
+  if (generationConfig) body.generationConfig = generationConfig;
+
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "text/event-stream",
+      "x-goog-api-key": key,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!resp.ok || !resp.body) {
+    const t = await resp.text().catch(() => "");
+    throw new Error(`Gemini error: ${resp.status} - ${t}`);
+  }
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+    for (const line of lines) {
+      if (!line.startsWith("data:")) continue;
+      const data = line.slice(5).trim();
+      if (!data || data === "[DONE]") continue;
+      try {
+        const parsed = JSON.parse(data);
+        const cands = parsed?.candidates;
+        if (Array.isArray(cands) && cands.length > 0) {
+          const parts = cands[0]?.content?.parts || [];
+          for (const p of parts) {
+            const text = typeof p?.text === "string" ? p.text : undefined;
+            if (text) onToken(text);
+          }
+        }
+      } catch { /* ignore */ }
+    }
+  }
+}
+
+// Build system prompt with Personal Touch
+function buildSystemPrompt(language, currentDate, personalTouch, activeTrigger) {
+  const pt = personalTouch || {};
+  const userNick = (pt.nickname || '').toString().trim();
+  const aiNick = (pt.ai_nickname || '').toString().trim();
+  const tone = (pt.tone || 'neutral').toString().trim();
+  const style = (pt.style || 'short answers').toString().trim();
+
+  let personalSection = '';
+  if (userNick || aiNick) {
+    personalSection = `\nCRITICAL PERSONAL TOUCH ENFORCEMENT\n`;
+    if (userNick) {
+      personalSection += `- User nickname: "${userNick}". USE this nickname naturally and warmly in your responses.\n`;
+    }
+    if (aiNick) {
+      personalSection += `- Your AI nickname: "${aiNick}". When referring to yourself, use this nickname.\n`;
+    }
+    personalSection += `- Tone: ${tone}. Maintain this tone consistently.\n`;
+    personalSection += `- Style: ${style}. Shape your responses to match this style.\n`;
+  }
+
+  return `CRITICAL IDENTITY
+You are WAKTI AI — the ultimate productivity AI app built to simplify life, boost creativity, and make technology feel human.
+
+ABOUT WAKTI:
+- Purpose: Empower individuals and teams with intelligent tools that simplify daily life, enhance productivity, and remove barriers to creativity and communication.
+- Mission: Create an AI app people love and rely on every single day — the intelligent digital partner for modern life.
+
+WAKTI FEATURES:
+- Smart Tasks & Subtasks: Sharable tasks with real-time progress tracking
+- Event Invites: Live RSVP for gatherings
+- Voice Tools: Record meetings/lectures, convert to searchable transcripts and summaries
+- Voice Cloning & Translation: 60+ languages for text and audio
+- AI Chat: Intelligent conversation and assistance
+- Smart Search: Powerful web search integration
+- Content Generation: Text, images, and videos
+
+WHO MADE WAKTI:
+- Created by: TMW (The Modern Web)
+- Location: Doha, Qatar
+- Website: tmw.qa
+
+ABOUT TMW (The Modern Web):
+- Tagline: "Your Web, Your Success"
+- Services: AI chatbots, professional website design, AI-powered website builder, WordPress hosting, website security, NFC cards, domain registration
+- Specialty: Modern web solutions with AI-powered tools
+- Key Features: Best pricing, super easy to use, dedicated support
+
+When asked "who made you": Say "I was made by TMW (The Modern Web), a web solutions company based in Doha, Qatar. Visit tmw.qa to learn more."
+When asked "what is TMW": Say "TMW (The Modern Web) is a modern web solutions company in Doha, Qatar that specializes in AI chatbots, website design, hosting, and AI-powered tools. Their website is tmw.qa."
+When asked "tell me about TMW": Explain their services, AI-powered website builder, hosting solutions, and their mission to help businesses establish their online presence.
+
+CRITICAL MULTI-LANGUAGE RULE
+- You are multilingual. Default to the UI language "${language}".
+- If the user asks for a translation or specifies a target language, RESPOND IN THAT TARGET LANGUAGE.
+${personalSection}
+CRITICAL OUTPUT FORMAT
+- Markdown table: for structured multi-item results (≥3 items with attributes).
+- Bulleted list: for steps, checklists, 1–2 results.
+- Paragraph: for conversational replies.
+- Use Markdown links ONLY when a real URL is provided.
+
+${activeTrigger === 'search' ? `SEARCH BEHAVIOR
+- Read search context carefully; synthesize a direct answer.
+- FORCE TABLE if ≥3 results, BULLETS if 1–2.
+` : ''}
+You are WAKTI AI — date: ${currentDate}.`;
+}
+
+function convertMessagesToClaudeFormat(messages) {
+  const systemMessage = messages.find((m) => m.role === 'system');
+  const conversationMessages = messages.filter((m) => m.role !== 'system');
   return {
     system: systemMessage?.content || '',
     messages: conversationMessages
   };
 }
 
-// Helper function to stream Claude responses
-async function streamClaudeResponse(reader: ReadableStreamDefaultReader, controller: ReadableStreamDefaultController, encoder: TextEncoder) {
+async function streamClaudeResponse(reader, controller, encoder) {
   const decoder = new TextDecoder();
   let buffer = '';
-  
+
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-    
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split('\n');
     buffer = lines.pop() || '';
-    
+
     for (const line of lines) {
       if (line.startsWith('data: ')) {
         const data = line.slice(6).trim();
-        
         if (data === '[DONE]') {
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           break;
         }
-        
         try {
           const parsed = JSON.parse(data);
-          
-          // Claude sends content in delta events
           if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: parsed.delta.text, content: parsed.delta.text })}\n\n`));
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+              token: parsed.delta.text,
+              content: parsed.delta.text
+            })}\n\n`));
           }
-          // Claude signals completion with message_stop
           if (parsed.type === 'message_stop') {
             controller.enqueue(encoder.encode('data: [DONE]\n\n'));
             break;
           }
-        } catch (e) {
-          // Skip invalid JSON
-        }
+        } catch { /* ignore */ }
       }
     }
   }
@@ -146,6 +217,19 @@ serve(async (req) => {
   const stream = new ReadableStream({
     async start(controller) {
       try {
+        // Defensive body parsing to handle connection drops and incomplete payloads
+        let body: any = {};
+        try {
+          const bodyText = await req.text();
+          body = bodyText ? JSON.parse(bodyText) : {};
+        } catch (bodyErr) {
+          console.error('🔥 BODY PARSE ERROR:', (bodyErr as Error).message);
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Invalid request body or connection interrupted' })}\n\n`));
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          controller.close();
+          return;
+        }
+
         const { 
           message, 
           conversationId: _conversationId, 
@@ -157,7 +241,7 @@ serve(async (req) => {
           attachedFiles = [],
           visionPrimary,
           visionFallback
-        } = await req.json();
+        } = body;
         const responseLanguage = language;
         
         console.log(`🎯 STREAM REQUEST: trigger=${activeTrigger}, inputType=${inputType}, language=${language}`);
@@ -416,16 +500,21 @@ serve(async (req) => {
           const encoder = new TextEncoder();
           // Emit providerUsed once before token stream
           try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'gemini' })}\n\n`)); } catch {}
+          let geminiTokenCount = 0;
           await streamGemini(
             'gemini-2.5-flash-lite',
             contents,
             (token) => {
+              geminiTokenCount++;
               try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`)); } catch {}
             },
             sysMsg,
             { temperature: activeTrigger === 'search' ? 0.3 : 0.7, maxOutputTokens: 4000 },
             []
           );
+          if (geminiTokenCount === 0) {
+            throw new Error('Gemini produced no tokens');
+          }
         };
 
         const tryOpenAI = async () => {

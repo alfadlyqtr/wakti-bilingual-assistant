@@ -46,18 +46,19 @@ export async function generateGemini(
   safetySettings?: any[]
 ): Promise<any> {
   const key = getGeminiApiKey();
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
-  const body: any = {
-    contents,
-  };
-  if (systemInstruction) body.system_instruction = { role: "user", parts: [{ text: systemInstruction }] };
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+  const body: any = { contents };
+  if (systemInstruction) body.system_instruction = { parts: [{ text: systemInstruction }] };
   if (generationConfig) body.generationConfig = generationConfig;
   if (safetySettings) body.safetySettings = safetySettings;
 
   const resp = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": key,
+    },
+    body: JSON.stringify(body),
   });
   if (!resp.ok) {
     const t = await resp.text();
@@ -75,16 +76,20 @@ export async function streamGemini(
   safetySettings?: any[]
 ): Promise<void> {
   const key = getGeminiApiKey();
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${key}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
   const body: any = { contents };
-  if (systemInstruction) body.system_instruction = { role: "user", parts: [{ text: systemInstruction }] };
+  if (systemInstruction) body.system_instruction = { parts: [{ text: systemInstruction }] };
   if (generationConfig) body.generationConfig = generationConfig;
   if (safetySettings) body.safetySettings = safetySettings;
 
   const resp = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
-    body: JSON.stringify(body)
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "text/event-stream",
+      "x-goog-api-key": key,
+    },
+    body: JSON.stringify(body),
   });
   if (!resp.ok || !resp.body) {
     const t = await resp.text().catch(() => "");
