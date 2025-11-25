@@ -342,28 +342,40 @@ const Tasjeel: React.FC = () => {
     }
   };
   
-  // Start recording function with explicit codec options
+  // Start recording function with mobile-friendly codec options
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       
-      // Define codec options with explicit mime type
-      const options = {
-        mimeType: 'audio/webm;codecs=opus',
-        audioBitsPerSecond: 128000
-      };
+      // Try mobile-friendly formats first (mp4/AAC works on iOS + desktop)
+      const codecOptions = [
+        { mimeType: 'audio/mp4', audioBitsPerSecond: 128000 },
+        { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: 128000 }
+      ];
       
       let mediaRecorder;
+      let selectedMimeType = '';
       
-      // Create MediaRecorder with codec options if supported
-      try {
-        mediaRecorder = new MediaRecorder(stream, options);
-        console.log("Using preferred codec: audio/webm;codecs=opus");
-      } catch (e) {
-        // Fallback to browser default if preferred codec not supported
-        console.log("Preferred codec not supported, using browser default");
+      // Try each codec in order of preference
+      for (const options of codecOptions) {
+        if (MediaRecorder.isTypeSupported(options.mimeType)) {
+          try {
+            mediaRecorder = new MediaRecorder(stream, options);
+            selectedMimeType = options.mimeType;
+            console.log(`✅ Using mobile-friendly codec: ${options.mimeType}`);
+            break;
+          } catch (e) {
+            console.warn(`Failed to use ${options.mimeType}, trying next...`);
+          }
+        }
+      }
+      
+      // Fallback to browser default if none of the preferred codecs work
+      if (!mediaRecorder) {
+        console.log("Using browser default codec");
         mediaRecorder = new MediaRecorder(stream);
-        console.log("Using codec: ", mediaRecorder.mimeType);
+        selectedMimeType = mediaRecorder.mimeType;
+        console.log("Default codec: ", selectedMimeType);
       }
       
       mediaRecorderRef.current = mediaRecorder;
@@ -450,8 +462,23 @@ const Tasjeel: React.FC = () => {
         type: audioBlob.type
       });
       
+      // Determine file extension and content type based on actual MIME type
+      let fileExtension = 'webm';
+      let contentType = 'audio/webm';
+      
+      if (actualMimeType.includes('audio/mp4') || actualMimeType.includes('audio/m4a')) {
+        fileExtension = 'm4a';
+        contentType = 'audio/mp4';
+      } else if (actualMimeType.includes('audio/mpeg') || actualMimeType.includes('audio/mp3')) {
+        fileExtension = 'mp3';
+        contentType = 'audio/mpeg';
+      } else if (actualMimeType.includes('audio/webm')) {
+        fileExtension = 'webm';
+        contentType = 'audio/webm';
+      }
+      
       const uniqueId = uuidv4();
-      const fileName = `recording-${uniqueId}.webm`;
+      const fileName = `recording-${uniqueId}.${fileExtension}`;
       
       // Use correct bucket name with underscores instead of spaces
       const bucketId = "tasjeel_recordings";
@@ -464,7 +491,9 @@ const Tasjeel: React.FC = () => {
         bucket: bucketId,
         path: filePath,
         size: audioBlob.size,
-        type: audioBlob.type
+        type: audioBlob.type,
+        contentType,
+        extension: fileExtension
       });
       
       // Upload to Supabase storage with explicit error handling
@@ -472,7 +501,7 @@ const Tasjeel: React.FC = () => {
         .storage
         .from(bucketId)
         .upload(filePath, audioBlob, {
-          contentType: "audio/webm",
+          contentType,
           cacheControl: "3600"
         });
         

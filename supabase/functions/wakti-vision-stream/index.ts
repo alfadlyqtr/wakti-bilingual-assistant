@@ -1,7 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
-import { buildTextContent, streamGemini } from "../_shared/gemini.ts";
 
 // Allowed origins (mirror brain stream behavior + dev fallbacks)
 const allowedOrigins = [
@@ -35,6 +34,76 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 console.log("WAKTI VISION STREAM: Ready");
+
+// === GEMINI HELPER (inlined, no external import) ===
+function getGeminiApiKey() {
+  const k = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
+  if (!k) throw new Error("Gemini API key not configured");
+  return k;
+}
+
+function buildTextContent(role: string, text: string) {
+  return { role, parts: [{ text }] };
+}
+
+async function streamGemini(
+  model: string,
+  contents: any[],
+  onToken: (token: string) => void,
+  systemInstruction?: string,
+  generationConfig?: { temperature?: number; maxOutputTokens?: number }
+) {
+  const key = getGeminiApiKey();
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
+  const body: any = { contents };
+  if (systemInstruction) body.system_instruction = { parts: [{ text: systemInstruction }] };
+  if (generationConfig) body.generationConfig = generationConfig;
+
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "text/event-stream",
+      "x-goog-api-key": key,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!resp.ok || !resp.body) {
+    const t = await resp.text().catch(() => "");
+    throw new Error(`Gemini error: ${resp.status} - ${t}`);
+  }
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+    for (const line of lines) {
+      if (!line.startsWith("data:")) continue;
+      const data = line.slice(5).trim();
+      if (!data || data === "[DONE]") continue;
+      try {
+        const parsed = JSON.parse(data);
+        const cands = parsed?.candidates;
+        if (Array.isArray(cands) && cands.length > 0) {
+          const parts = cands[0]?.content?.parts || [];
+          for (const p of parts) {
+            const text = typeof p?.text === "string" ? p.text : undefined;
+            if (text) onToken(text);
+          }
+        }
+      } catch {
+        // ignore parse errors on individual SSE chunks
+      }
+    }
+  }
+}
 
 // --- Helpers ---
 function normalizeImage(input: { mimeType?: string; dataBase64?: string; url?: string } ) {
@@ -450,8 +519,7 @@ serve(async (req) => {
               try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`)); } catch { /* ignore */ }
             },
             systemText,
-            { temperature: 0.2, maxOutputTokens: options?.max_tokens || 2000 },
-            []
+            { temperature: 0.2, maxOutputTokens: options?.max_tokens || 2000 }
           );
         };
 

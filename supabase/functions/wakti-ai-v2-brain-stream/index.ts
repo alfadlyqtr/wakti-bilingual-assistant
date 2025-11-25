@@ -153,9 +153,39 @@ CRITICAL OUTPUT FORMAT
 - Paragraph: for conversational replies.
 - Use Markdown links ONLY when a real URL is provided.
 
-${activeTrigger === 'search' ? `SEARCH BEHAVIOR
-- Read search context carefully; synthesize a direct answer.
-- FORCE TABLE if ≥3 results, BULLETS if 1–2.
+${activeTrigger === 'search' ? `
+CRITICAL SEARCH FORMATTING RULES (NON-NEGOTIABLE)
+You are in SEARCH MODE. You will receive search results in the conversation.
+
+FORMATTING ENFORCEMENT:
+- NEVER respond with a single long paragraph. This is FORBIDDEN.
+- If the user's style is "short answers": Use 1-2 sentence intro + max 3 short bullet points.
+- If the user's style is "detailed": Use 2-3 sentence intro + 5-7 bullet points.
+- If the user's style contains "bullet": Use minimal intro + only bullet points for content.
+- If there are 3 or more distinct events/items: Use a Markdown table with columns like: Event | Key Detail | Source (optional).
+- If there are 1-2 items: Use bullet points, NOT a table.
+- ALWAYS start with a greeting using the user's nickname if provided (e.g., "Here's what's happening today, ${userNick || 'friend'}:").
+
+CONTENT RULES:
+- Base your answer ONLY on the search results provided.
+- Do NOT invent events, dates, or facts not in the search results.
+- Keep each bullet point or table row concise (1-2 sentences max).
+- If search results are unclear or incomplete, say so instead of guessing.
+
+EXAMPLE OUTPUT (3+ items, table format):
+Here's what's happening today, abdullah:
+
+| Event | Key Detail |
+| --- | --- |
+| Mobile World Congress 2025 | Launched in Doha with 32 digital projects |
+| Global Platform for Disaster Risk | Opens at Qatar National Convention Centre |
+| 12th World Innovation Summit | Focuses on AI in education |
+
+EXAMPLE OUTPUT (1-2 items, bullets):
+Here's what's happening today, abdullah:
+
+- Mobile World Congress 2025 launched in Doha, showcasing 32 edge digital projects from 17 governments.
+- The 12th World Innovation Summit for Education opened, focusing on AI's role in transforming learning.
 ` : ''}
 You are WAKTI AI — date: ${currentDate}.`;
 }
@@ -205,6 +235,114 @@ async function streamClaudeResponse(reader, controller, encoder) {
   }
 }
 
+
+async function executeRegularSearch(query, language = 'en') {
+  const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
+  
+  console.log('🔍 SEARCH: Starting search for:', query.substring(0, 50));
+  
+  if (!TAVILY_API_KEY) {
+    return {
+      success: false,
+      error: 'Search service not configured',
+      data: null,
+      context: ''
+    };
+  }
+
+  try {
+    // Recency heuristic: if the query implies breaking/very recent info, prefer 'day'
+    const freshIntent = /\b(today|latest|now|live|breaking|scores?|result|this\s*(week|day)|tonight|just\s*now|update[sd]?|news)\b/i.test(query);
+    const time_range = freshIntent ? 'day' : 'week';
+
+    const searchPayload = {
+      api_key: TAVILY_API_KEY,
+      query: query,
+      search_depth: "advanced",
+      time_range,
+      include_answer: "advanced",
+      include_raw_content: true,
+      chunks_per_source: 5,
+      follow_up_questions: true,
+      max_results: 5
+    };
+
+    const response = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(searchPayload)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ SEARCH API ERROR:', response.status, errorText);
+      throw new Error(`Search API error: ${response.status}`);
+    }
+
+    // Safe JSON parsing with validation
+    const responseText = await response.text();
+    if (!responseText || responseText.trim() === '') {
+      throw new Error('Empty response from search service');
+    }
+
+    let searchData;
+    try {
+      searchData = JSON.parse(responseText);
+    } catch (jsonError) {
+      console.error('❌ SEARCH JSON parsing error:', jsonError);
+      console.error('❌ Raw response:', responseText.substring(0, 200));
+      throw new Error('Invalid JSON response from search service');
+    }
+
+    // Extract information safely
+    const results = Array.isArray(searchData.results) ? searchData.results : [];
+    const answer = searchData.answer || '';
+    const followUpQuestions = Array.isArray(searchData.follow_up_questions) ? searchData.follow_up_questions : [];
+    
+    // Build context from search results
+    let context = '';
+    if (answer) {
+      context += `Search Answer: ${answer}\n\n`;
+    }
+    
+    if (results.length > 0) {
+      context += 'Search Results:\n';
+      results.forEach((result, index) => {
+        if (result && typeof result === 'object') {
+          context += `${index + 1}. ${result.title || 'No title'}\n`;
+          context += `   ${result.content || 'No content'}\n`;
+          context += `   Source: ${result.url || 'No URL'}\n\n`;
+        }
+      });
+    }
+
+    console.log(`✅ SEARCH: Found ${results.length} results`);
+    return {
+      success: true,
+      error: null,
+      data: {
+        answer,
+        results,
+        followUpQuestions,
+        query,
+        total_results: results.length
+      },
+      context: context.trim()
+    };
+
+  } catch (error) {
+    console.error('❌ SEARCH: Critical error:', error);
+    
+    return {
+      success: false,
+      error: 'Search failed',
+      data: null,
+      context: '',
+      details: error.message
+    };
+  }
+}
+
 serve(async (req) => {
   const origin = req.headers.get('origin');
   const corsHeaders = getCorsHeaders(origin);
@@ -217,14 +355,14 @@ serve(async (req) => {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        // Defensive body parsing to handle connection drops and incomplete payloads
-        let body: any = {};
+        // Defensive body parsing
+        let body = {};
         try {
           const bodyText = await req.text();
           body = bodyText ? JSON.parse(bodyText) : {};
         } catch (bodyErr) {
-          console.error('🔥 BODY PARSE ERROR:', (bodyErr as Error).message);
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Invalid request body or connection interrupted' })}\n\n`));
+          console.error('🔥 BODY PARSE ERROR:', bodyErr.message);
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Invalid request body' })}\n\n`));
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
           return;
@@ -232,274 +370,104 @@ serve(async (req) => {
 
         const { 
           message, 
-          conversationId: _conversationId, 
           language = 'en', 
           recentMessages = [], 
           personalTouch = null, 
-          activeTrigger = 'general',
-          inputType = 'text',
-          attachedFiles = [],
-          visionPrimary,
-          visionFallback
+          activeTrigger = 'general'
         } = body;
-        const responseLanguage = language;
-        
-        console.log(`🎯 STREAM REQUEST: trigger=${activeTrigger}, inputType=${inputType}, language=${language}`);
+
+        console.log(`🎯 REQUEST: trigger=${activeTrigger}, lang=${language}`);
 
         if (!message) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Message is required' })}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Message required' })}\n\n`));
           controller.close();
           return;
         }
-        // Build date once
+
         const currentDate = new Date().toLocaleDateString('en-US', { 
-          weekday: 'long', 
-          year: 'numeric', 
-          month: 'long', 
-          day: 'numeric',
-          timeZone: 'Asia/Qatar'
+          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Qatar'
         });
 
-        // Detect Vision mode (explicit inputType or attached image files)
-        const useVision = (
-          (typeof inputType === 'string' && inputType === 'vision') ||
-          VisionSystem.shouldUseVisionMode(activeTrigger, Array.isArray(attachedFiles) ? attachedFiles : [])
-        );
-
-        // If Vision, handle a dedicated provider flow (Claude → OpenAI fallback)
-        if (useVision) {
-          try {
-            const systemPromptVision = VisionSystem.buildCompleteSystemPrompt(responseLanguage, currentDate, personalTouch);
-
-            let aiProvider: 'openai' | 'claude' | 'none' = 'none';
-            let streamReader: ReadableStreamDefaultReader<any> | null = null;
-
-            // Provider-specific attempts
-            const tryClaudeVision = async () => {
-              if (!ANTHROPIC_API_KEY) throw new Error('Claude API key not configured');
-              // Build Claude-style message (with base64 images)
-              const claudeMessages: any[] = [];
-              // Include a small slice of recent text history (optional, text-only)
-              try {
-                const hist = Array.isArray(recentMessages) ? recentMessages.slice(-6) : [];
-                hist.forEach((m: any) => {
-                  const r = (m?.role === 'user' || m?.role === 'assistant') ? m.role : null;
-                  const c = typeof m?.content === 'string' ? m.content : null;
-                  if (r && c) claudeMessages.push({ role: r, content: c });
-                });
-              } catch {}
-              // Append the vision user message
-              claudeMessages.push(VisionSystem.buildVisionMessage(message, attachedFiles || [], responseLanguage));
-
-              const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
-                method: 'POST',
-                headers: {
-                  'x-api-key': ANTHROPIC_API_KEY!,
-                  'anthropic-version': '2023-06-01',
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  model: 'claude-3-5-sonnet-20241022',
-                  system: systemPromptVision,
-                  messages: claudeMessages,
-                  max_tokens: 4000,
-                  stream: true,
-                }),
-              });
-              if (!claudeResponse.ok) {
-                const t = await claudeResponse.text();
-                throw new Error(`Claude failed with status: ${claudeResponse.status} - ${t}`);
-              }
-              aiProvider = 'claude';
-              streamReader = claudeResponse.body?.getReader() || null;
-              console.log('✅ STREAMING(VISION): Using Claude');
-            };
-
-            const tryOpenAIVision = async () => {
-              if (!OPENAI_API_KEY) throw new Error('OpenAI API key not configured');
-              const model = 'gpt-4o-mini';
-              // Build OpenAI-style message (image_url entries)
-              const openaiMessages: any[] = [
-                { role: 'system', content: systemPromptVision },
-                VisionSystem.buildVisionMessage(message, attachedFiles || [], responseLanguage, 'openai')
-              ];
-
-              const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${OPENAI_API_KEY}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  model,
-                  messages: openaiMessages,
-                  temperature: 0.7,
-                  max_tokens: 4000,
-                  stream: true,
-                }),
-              });
-              if (!openaiResponse.ok) throw new Error(`OpenAI failed with status: ${openaiResponse.status}`);
-              aiProvider = 'openai';
-              streamReader = openaiResponse.body?.getReader() || null;
-              console.log('✅ STREAMING(VISION): Using OpenAI');
-            };
-
-            // Determine provider order
-            const primary: 'claude' | 'openai' = (visionPrimary === 'openai' || visionPrimary === 'claude') ? visionPrimary : 'claude';
-            const fallback: 'claude' | 'openai' = primary === 'claude' ? 'openai' : 'claude';
-
-            try {
-              if (primary === 'claude') {
-                await tryClaudeVision();
-              } else {
-                await tryOpenAIVision();
-              }
-            } catch (errPrimary) {
-              console.warn(`⚠️ STREAMING(VISION): ${primary} failed, attempting ${fallback} fallback...`, (errPrimary as Error).message);
-              if (fallback === 'claude') {
-                await tryClaudeVision();
-              } else {
-                await tryOpenAIVision();
-              }
-            }
-
-            if (!streamReader) throw new Error('No stream reader available (vision)');
-
-            // Stream tokens
-            if (aiProvider === 'openai') {
-              const decoder = new TextDecoder();
-              let buffer = '';
-              const reader = streamReader as ReadableStreamDefaultReader<any>;
-              while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n');
-                buffer = lines.pop() || '';
-                for (const line of lines) {
-                  if (line.startsWith('data: ')) {
-                    const data = line.slice(6);
-                    if (data === '[DONE]') {
-                      controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-                      break;
-                    }
-                    try {
-                      const parsed = JSON.parse(data);
-                      const content = parsed.choices?.[0]?.delta?.content;
-                      if (content) {
-                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: content, content })}\n\n`));
-                      }
-                    } catch { /* ignore invalid json */ }
-                  }
-                }
-              }
-            } else if (aiProvider === 'claude') {
-              await streamClaudeResponse(streamReader as ReadableStreamDefaultReader<any>, controller, encoder);
-            }
-
-            controller.close();
-            return;
-          } catch (visionErr) {
-            console.error('🔥 STREAMING(VISION) ERROR:', visionErr);
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-              error: 'Vision service temporarily unavailable. Please try again.',
-              details: (visionErr as Error).message 
-            })}\n\n`));
-            controller.close();
-            return;
-          }
-        }
-
-        // TEXT/SEARCH PATH (original behavior)
-        // Build enhanced system prompt (text-only)
-        const systemPrompt = buildSystemPrompt(responseLanguage, currentDate, personalTouch, activeTrigger);
+        // Build enhanced system prompt
+        const systemPrompt = buildSystemPrompt(language, currentDate, personalTouch, activeTrigger);
         
-        // Log personalization application
-        console.log('🎨 PERSONAL TOUCH APPLIED:', {
-          hasPersonalization: !!personalTouch,
-          nickname: personalTouch?.nickname || 'none',
-          tone: personalTouch?.tone || 'default',
-          style: personalTouch?.style || 'default'
-        });
-
-        // Build messages array
-        const messages: BasicMessage[] = [
+        const messages = [
           { role: 'system', content: systemPrompt }
         ];
 
+        // Add history
         if (recentMessages && recentMessages.length > 0) {
-          const historyMessages = (recentMessages as BasicMessage[]).slice(-6);
-          historyMessages.forEach((msg: BasicMessage) => {
+          const historyMessages = recentMessages.slice(-6);
+          historyMessages.forEach((msg) => {
             if (msg.role === 'user' || msg.role === 'assistant') {
-              messages.push({
-                role: msg.role,
-                content: msg.content
-              });
+              messages.push({ role: msg.role, content: msg.content });
             }
           });
-          console.log(`🧠 STREAMING: Using ${historyMessages.length} messages from conversation history`);
         }
         
         // Inject web search context when in Search mode
         if (activeTrigger === 'search') {
           try {
-            const s = await executeRegularSearch(message, responseLanguage);
-            if (s?.success && s?.context) {
-              // Emit metadata to the client with lightweight summary of search
+            const s = await executeRegularSearch(message, language);
+            
+            if (s?.success) {
+              // Emit metadata
               try {
                 const metaPayload = {
                   metadata: {
                     search: {
                       answer: s.data?.answer || null,
                       total: s.data?.total_results || 0,
-                      results: Array.isArray(s.data?.results) ? s.data.results.slice(0, 5) : []
+                      results: Array.isArray(s.data?.results) ? s.data.results.slice(0, 5) : [],
+                      followUpQuestions: s.data?.followUpQuestions || []
                     }
                   }
                 };
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify(metaPayload)}\n\n`));
               } catch {}
-              
-              const ctxPrefix = responseLanguage === 'ar'
-                ? 'استخدم فقط نتائج البحث التالية للإجابة. لا تذكر أي مصادر أخرى مثل ويكيبيديا:\n'
-                : 'Use ONLY the following search results to answer. Do NOT mention any other sources like Wikipedia:\n';
-              messages.push({
-                role: 'user',
-                content: ctxPrefix + s.context
-              });
-              // Re-assert PT + deterministic formatting right after context
-              const reminder = `REMINDER — ENFORCE PT + FORMAT\n- Use nickname if provided. Keep tone "${(personalTouch?.tone||'neutral')}" and style "${(personalTouch?.style||'short answers')}".\n- Apply deterministic format rules for search: table (≥3 results), bullets (1–2), or short paragraph otherwise.\n- Be concise and precise.`;
-              messages.push({ role: 'system', content: reminder });
-              console.log('🔎 STREAMING: Web search context injected');
-            } else {
-              console.log('🔎 STREAMING: No web search context available or search disabled');
+
+              // Inject Tavily context into LLM conversation
+              if (s.context) {
+                const ctxPrefix = language === 'ar'
+                  ? 'استخدم نتائج البحث التالية للإجابة:\n'
+                  : 'Use the following search results to answer:\n';
+                
+                // Combine search context with user query in one message
+                const combinedMessage = `${ctxPrefix}${s.context}\n\nUser question: ${message}`;
+                messages.push({ role: 'user', content: combinedMessage });
+                console.log('🔎 SEARCH: Context + query combined into single message');
+              } else {
+                // No search context, just add user message normally
+                messages.push({ role: 'user', content: message });
+              }
             }
           } catch (e) {
-            console.warn('⚠️ STREAMING: Web search injection failed:', e);
+            console.warn('⚠️ SEARCH ERROR:', e);
+            // If search fails, still add user message
+            messages.push({ role: 'user', content: message });
           }
+        } else {
+          // Not search mode, add user message normally
+          messages.push({ role: 'user', content: message });
         }
-         
-        // Regular text message: do NOT enforce hard language prefix so translations can work regardless of UI language
-        messages.push({ role: 'user', content: message });
 
-        // Choose provider (text-only): Gemini first, then OpenAI, then Claude
-        let aiProvider: 'gemini' | 'openai' | 'claude' | 'none' = 'none';
-        let streamReader: ReadableStreamDefaultReader<any> | null = null;
+        let aiProvider = 'none';
+        let streamReader = null;
 
         const tryGemini = async () => {
-          // Stream via helper and emit same SSE token format
           const sysMsg = messages.find((m) => m.role === 'system')?.content || '';
           const userMsgs = messages.filter((m) => m.role !== 'system');
-          const contents = [] as any[];
+          const contents = [];
           if (sysMsg) contents.push(buildTextContent('user', sysMsg));
           for (const m of userMsgs) {
-            if (typeof (m as any)?.content === 'string') {
-              contents.push(buildTextContent(m.role === 'assistant' ? 'model' : 'user', (m as any).content));
+            if (typeof m?.content === 'string') {
+              contents.push(buildTextContent(m.role === 'assistant' ? 'model' : 'user', m.content));
             }
           }
+          
           aiProvider = 'gemini';
-          const encoder = new TextEncoder();
-          // Emit providerUsed once before token stream
           try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'gemini' })}\n\n`)); } catch {}
+          
           let geminiTokenCount = 0;
           await streamGemini(
             'gemini-2.5-flash-lite',
@@ -509,9 +477,9 @@ serve(async (req) => {
               try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`)); } catch {}
             },
             sysMsg,
-            { temperature: activeTrigger === 'search' ? 0.3 : 0.7, maxOutputTokens: 4000 },
-            []
+            { temperature: activeTrigger === 'search' ? 0.3 : 0.7, maxOutputTokens: 4000 }
           );
+          
           if (geminiTokenCount === 0) {
             throw new Error('Gemini produced no tokens');
           }
@@ -519,36 +487,34 @@ serve(async (req) => {
 
         const tryOpenAI = async () => {
           if (!OPENAI_API_KEY) throw new Error('OpenAI API key not configured');
-          const model = 'gpt-4o-mini';
-          console.log(`🤖 STREAMING: Attempting OpenAI (${model})...`);
-          const temperature = activeTrigger === 'search' ? 0.3 : 0.7;
-          const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+          console.log('🤖 Trying OpenAI...');
+          const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${OPENAI_API_KEY}`,
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              model,
+              model: 'gpt-4o-mini',
               messages,
-              temperature,
+              temperature: activeTrigger === 'search' ? 0.3 : 0.7,
               max_tokens: 4000,
               stream: true,
             }),
           });
-          if (!openaiResponse.ok) throw new Error(`OpenAI failed with status: ${openaiResponse.status}`);
+          if (!response.ok) throw new Error(`OpenAI failed: ${response.status}`);
+          
           aiProvider = 'openai';
-          streamReader = openaiResponse.body?.getReader() || null;
-          // Emit providerUsed once before token stream
-          try { controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ providerUsed: 'openai' })}\n\n`)); } catch {}
-          console.log('✅ STREAMING: Using OpenAI');
+          streamReader = response.body?.getReader() || null;
+          try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'openai' })}\n\n`)); } catch {}
+          console.log('✅ OpenAI');
         };
 
         const tryClaude = async () => {
           if (!ANTHROPIC_API_KEY) throw new Error('Claude API key not configured');
+          console.log('🤖 Trying Claude...');
           const { system, messages: claudeMessages } = convertMessagesToClaudeFormat(messages);
-          console.log('🤖 STREAMING: Attempting Claude...');
-          const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
+          const response = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers: {
               'x-api-key': ANTHROPIC_API_KEY,
@@ -563,59 +529,46 @@ serve(async (req) => {
               stream: true,
             }),
           });
-          if (!claudeResponse.ok) {
-            const errorText = await claudeResponse.text();
-            throw new Error(`Claude failed with status: ${claudeResponse.status} - ${errorText}`);
-          }
+          if (!response.ok) throw new Error(`Claude failed: ${response.status}`);
+          
           aiProvider = 'claude';
-          streamReader = claudeResponse.body?.getReader() || null;
-          // Emit providerUsed once before token stream
-          try { controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ providerUsed: 'claude' })}\n\n`)); } catch {}
-          console.log('✅ STREAMING: Using Claude');
+          streamReader = response.body?.getReader() || null;
+          try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'claude' })}\n\n`)); } catch {}
+          console.log('✅ Claude');
         };
 
         try {
-          // Gemini first, then OpenAI, then Claude
           try {
             await tryGemini();
           } catch (errGemini) {
-            console.warn('⚠️ STREAMING: Gemini failed, attempting OpenAI...', (errGemini as Error).message);
+            console.warn('⚠️ Gemini failed, trying OpenAI...', errGemini.message);
             try {
               await tryOpenAI();
             } catch (errOpenAI) {
-              console.warn('⚠️ STREAMING: OpenAI failed, attempting Claude...', (errOpenAI as Error).message);
+              console.warn('⚠️ OpenAI failed, trying Claude...', errOpenAI.message);
               await tryClaude();
             }
           }
         } catch (finalErr) {
-          console.error('❌ STREAMING: All providers failed', (finalErr as Error).message);
+          console.error('❌ All providers failed', finalErr.message);
           throw finalErr;
         }
 
-        // STREAM THE RESPONSE
-        // Gemini path already streamed tokens directly via helper
         if (aiProvider === 'gemini') {
           try { controller.close(); } catch {}
           return;
         }
-        if (!streamReader) {
-          throw new Error('No stream reader available');
-        }
+        if (!streamReader) throw new Error('No stream reader available');
 
         if (aiProvider === 'openai') {
-          // Handle OpenAI streaming format
           const decoder = new TextDecoder();
           let buffer = '';
-          
-          const reader = streamReader as ReadableStreamDefaultReader<any>;
           while (true) {
-            const { done, value } = await reader.read();
+            const { done, value } = await streamReader.read();
             if (done) break;
-
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split('\n');
             buffer = lines.pop() || '';
-
             for (const line of lines) {
               if (line.startsWith('data: ')) {
                 const data = line.slice(6);
@@ -623,31 +576,24 @@ serve(async (req) => {
                   controller.enqueue(encoder.encode('data: [DONE]\n\n'));
                   break;
                 }
-
                 try {
                   const parsed = JSON.parse(data);
                   const content = parsed.choices?.[0]?.delta?.content;
                   if (content) {
                     controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: content, content })}\n\n`));
                   }
-                } catch (_e) {
-                  // Skip invalid JSON
-                }
+                } catch {}
               }
             }
           }
         } else if (aiProvider === 'claude') {
-          // Handle Claude streaming format
-          await streamClaudeResponse(streamReader as ReadableStreamDefaultReader<any>, controller, encoder);
+          await streamClaudeResponse(streamReader, controller, encoder);
         }
 
         controller.close();
       } catch (error) {
-        console.error('🔥 STREAMING ERROR:', error);
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-          error: 'AI service temporarily unavailable. Please try again.',
-          details: (error as Error).message 
-        })}\n\n`));
+        console.error('🔥 ERROR:', error);
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Service unavailable' })}\n\n`));
         controller.close();
       }
     },
