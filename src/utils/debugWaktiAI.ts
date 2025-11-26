@@ -130,9 +130,3 @@ export class WaktiAIDebugger {
 
 // Export a singleton instance
 export const waktiAIDebugger = new WaktiAIDebugger();
-
-// Expose to window for console debugging
-if (typeof window !== 'undefined') {
-  (window as any).waktiAIDebugger = waktiAIDebugger;
-  (window as any).testWaktiAI = () => waktiAIDebugger.quickHealthCheck();
-}

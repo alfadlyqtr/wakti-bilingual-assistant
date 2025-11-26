@@ -40,13 +40,6 @@ export function Footer() {
             >
               Made by TMW
             </a>
-            <span className="text-muted-foreground">•</span>
-            <Link 
-              to="/nat-dev" 
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Natively-dev team
-            </Link>
           </div>
           <p className="text-xs text-muted-foreground text-center">
             © 2025 WAKTI. {t("allRightsReserved", language)}

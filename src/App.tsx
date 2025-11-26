@@ -9,7 +9,6 @@ import { GiftNotificationProvider } from "@/components/notifications/GiftNotific
 import { AppLayout } from "@/components/AppLayout";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { Analytics } from "@vercel/analytics/react";
-import AuthDebug from "@/components/debug/AuthDebug";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
 
@@ -57,7 +56,6 @@ import AdminSettings from "./pages/AdminSettings";
 import AdminAuditLog from "./pages/AdminAuditLog";
 import VoiceTTS from "./pages/VoiceTTS";
 import VoiceStudio from "./pages/VoiceStudio";
-import NatDev from "./pages/NatDev";
 import TextGenerator from "./pages/TextGenerator";
 import GameMode from "./pages/GameMode";
 import Games from "./pages/Games";
@@ -84,7 +82,6 @@ function App() {
           <AuthProvider>
             <BrowserRouter>
               <div className="min-h-screen bg-background font-sans antialiased">
-              <AuthDebug />
               <Routes>
                 {/* Admin routes */}
                 <Route path="/mqtr" element={<AdminLogin />} />
@@ -107,7 +104,6 @@ function App() {
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/reset-success" element={<ResetSuccess />} />
                 <Route path="/contact" element={<ContactUs />} />
-                <Route path="/nat-dev" element={<NatDev />} />
                 <Route path="/help" element={
                   <GiftNotificationProvider>
                     <Help />
