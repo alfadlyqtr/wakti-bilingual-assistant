@@ -39,8 +39,27 @@ const AudioControls: React.FC<AudioControlsProps> = ({ audioUrl, onPlaybackChang
       return;
     }
 
-    // Create audio element
-    const audio = new Audio(audioUrl);
+    // Normalize and clean the URL to avoid issues like leading spaces or encoded prefixes
+    let cleanUrl = (audioUrl || '').trim();
+    try {
+      // Decode once to handle cases like '%20https://...'
+      cleanUrl = decodeURIComponent(cleanUrl).trim();
+    } catch {
+      // If decode fails, continue with trimmed version
+    }
+
+    // Explicitly strip a leading space marker if it survived encoding
+    if (cleanUrl.startsWith(' ')) {
+      cleanUrl = cleanUrl.trimStart();
+    }
+
+    // Also handle a raw '%20' prefix that wasn't part of normal encoding
+    if (cleanUrl.startsWith('%20')) {
+      cleanUrl = cleanUrl.slice(3).trimStart();
+    }
+
+    // Create audio element with the cleaned URL
+    const audio = new Audio(cleanUrl);
     audioRef.current = audio;
 
     // Set up event listeners
