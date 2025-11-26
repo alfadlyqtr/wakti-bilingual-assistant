@@ -72,6 +72,25 @@ const WaktiAIV2 = () => {
     handleRefreshConversations();
   }, [currentConversationId, sessionMessages, handleRefreshConversations]);
 
+  // When the active mode (chat/search/vision) changes, make sure any in-flight
+  // stream is cancelled and the loading flags are reset. This prevents cases
+  // where a previous Vision stream leaves the UI stuck when switching back to Chat.
+  useEffect(() => {
+    try {
+      if (abortControllerRef.current) {
+        console.log(`🛑 Aborting in-flight request due to mode change -> ${activeTrigger}`);
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    } catch {}
+
+    // Clear loading state and any stale vision-in-flight flag when mode changes
+    setIsLoading(false);
+    if (activeTrigger !== 'vision') {
+      visionInFlightRef.current = false;
+    }
+  }, [activeTrigger]);
+
   useEffect(() => {
     loadUserProfile();
     loadPersonalTouch();
