@@ -30,6 +30,7 @@ export const ReminderList: React.FC<ReminderListProps> = ({
   const [editingReminder, setEditingReminder] = useState<TRReminder | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [error, setError] = useState<string>('');
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   console.log('ReminderList - Rendered with propReminders:', propReminders?.length);
 
@@ -110,24 +111,29 @@ export const ReminderList: React.FC<ReminderListProps> = ({
     }
   };
 
-  const handleDeleteReminder = async (reminder: TRReminder) => {
-    if (window.confirm(t('confirmDeleteReminder', language))) {
-      try {
-        console.log('ReminderList - Deleting reminder:', reminder.id);
-        await TRService.deleteReminder(reminder.id);
-        toast.success(t('reminderDeleted', language));
-        
-        if (onRemindersChanged) {
-          onRemindersChanged();
-        } else {
-          loadReminders();
-        }
-        onReminderUpdate?.();
-      } catch (error) {
-        console.error('ReminderList - Error deleting reminder:', error);
-        toast.error(t('errorDeleting', language));
-      }
+  const handleDeleteClick = async (reminder: TRReminder) => {
+    // Two-step inline confirmation: first tap arms, second tap confirms
+    if (pendingDeleteId !== reminder.id) {
+      setPendingDeleteId(reminder.id);
+      return;
     }
+
+    try {
+      console.log('ReminderList - Deleting reminder:', reminder.id);
+      await TRService.deleteReminder(reminder.id);
+      toast.success(t('reminderDeleted', language));
+      
+      if (onRemindersChanged) {
+        onRemindersChanged();
+      } else {
+        loadReminders();
+      }
+      onReminderUpdate?.();
+    } catch (error) {
+      console.error('ReminderList - Error deleting reminder:', error);
+      toast.error(t('errorDeleting', language));
+    }
+    setPendingDeleteId(null);
   };
 
   const handleFormClose = () => {
@@ -196,9 +202,16 @@ export const ReminderList: React.FC<ReminderListProps> = ({
 
   if (reminders.length === 0) {
     return (
-      <div className="text-center py-8 text-muted-foreground">
-        <Calendar className="w-12 h-12 mx-auto mb-4 opacity-50" />
-        <p>{t('noReminders', language)}</p>
+      <div className="flex flex-col items-center justify-center py-16 px-4 text-center text-muted-foreground">
+        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-dashed border-primary/40 bg-primary/5">
+          <Calendar className="w-6 h-6 text-primary" />
+        </div>
+        <p className="text-sm mb-1 font-medium">{t('noReminders', language)}</p>
+        <p className="text-xs max-w-xs">
+          {language === 'ar'
+            ? 'قم بإنشاء أول تذكير لك وسيظهر هنا مع التاريخ والوقت حتى لا تنسى.'
+            : 'Create your first reminder and it will appear here with date and time so you never forget.'}
+        </p>
       </div>
     );
   }
@@ -254,11 +267,13 @@ export const ReminderList: React.FC<ReminderListProps> = ({
                       {t('snooze', language)}
                     </DropdownMenuItem>
                     <DropdownMenuItem 
-                      onClick={() => handleDeleteReminder(reminder)}
+                      onClick={() => handleDeleteClick(reminder)}
                       className="text-destructive focus:text-destructive"
                     >
                       <Trash2 className="h-4 w-4 mr-2" />
-                      {t('delete', language)}
+                      {pendingDeleteId === reminder.id
+                        ? (language === 'ar' ? 'اضغط مرة أخرى للتأكيد' : 'Tap again to confirm')
+                        : t('delete', language)}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
