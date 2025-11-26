@@ -126,7 +126,12 @@ export default function TasksReminders() {
               <TabsTrigger value="reminders">
                 {t('reminders', language)} ({reminders.length})
               </TabsTrigger>
-              <TabsTrigger value="activity">{t('activityMonitor', language)}</TabsTrigger>
+              <TabsTrigger
+                value="activity"
+                className="text-[11px] leading-snug whitespace-normal px-3 py-2 sm:text-sm sm:leading-tight"
+              >
+                {t('activityMonitor', language)}
+              </TabsTrigger>
             </TabsList>
 
             {/* Tasks Tab */}
@@ -173,6 +178,24 @@ export default function TasksReminders() {
                 <div className="text-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
                   <p className="text-sm text-muted-foreground mt-2">{t('loadingTasks', language)}</p>
+                </div>
+              ) : tasks.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 px-4 text-center text-muted-foreground">
+                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-dashed border-primary/40 bg-primary/5">
+                    <ListTodo className="h-6 w-6 text-primary" />
+                  </div>
+                  <p className="text-sm mb-1 font-medium">
+                    {language === 'ar' ? 'لا توجد مهام بعد' : 'No tasks yet'}
+                  </p>
+                  <p className="text-xs mb-4 max-w-xs">
+                    {language === 'ar'
+                      ? 'ابدأ بإضافة أول مهمة لك، وسيتم عرضها هنا بشكل منظم مع التذكيرات والمتابعة.'
+                      : 'Start by creating your first task. It will appear here with reminders and activity tracking.'}
+                  </p>
+                  <Button size="sm" onClick={handleCreateTask} className="mt-1">
+                    <Plus className="w-4 h-4 mr-2" />
+                    {t('createTask', language)}
+                  </Button>
                 </div>
               ) : (
                 <TaskList 

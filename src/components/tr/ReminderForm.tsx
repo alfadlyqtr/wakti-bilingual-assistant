@@ -18,12 +18,13 @@ import { t } from '@/utils/translations';
 import { TRService, TRReminder } from '@/services/trService';
 import { toast } from 'sonner';
 
-// Updated schema to make due_date optional
 const reminderSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional(),
-  due_date: z.string().optional(), // Made optional
-  due_time: z.string().optional(),
+  // Date remains optional, user can create a reminder without a date.
+  due_date: z.string().optional(),
+  // Time is required per user request (non-optional)
+  due_time: z.string().min(1, 'Due time is required'),
 });
 
 type ReminderFormData = z.infer<typeof reminderSchema>;
@@ -201,65 +202,68 @@ export function ReminderForm({ isOpen, onClose, reminder, onReminderSaved }: Rem
             />
           </div>
 
-          {/* Due Date - Now Optional with Fixed Calendar */}
+          {/* Due Date & Time - same row for better mobile/desktop layout */}
           <div className="space-y-2">
-            <Label htmlFor="due_date">{t('dueDate', language)} {language === 'ar' ? '(اختياري)' : '(optional)'}</Label>
-            <Controller
-              name="due_date"
-              control={control}
-              render={({ field }) => (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !field.value && "text-muted-foreground"
-                      )}
-                      disabled={isLoading}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {field.value ? (
-                        (() => {
-                          const date = parseDate(field.value);
-                          return date ? format(date, "PPP") : field.value;
-                        })()
-                      ) : (
-                        <span>{t('selectDate', language)}</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 z-60" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={parseDate(field.value)}
-                      onSelect={(date) => {
-                        const formattedDate = date ? formatDateForInput(date) : '';
-                        field.onChange(formattedDate);
-                        console.log('ReminderForm - Date selected:', formattedDate);
-                      }}
-                      initialFocus
-                      className="pointer-events-auto"
-                    />
-                  </PopoverContent>
-                </Popover>
-              )}
-            />
-          </div>
-
-          {/* Due Time - Only show if date is selected */}
-          {watchedDueDate && (
-            <div className="space-y-2">
-              <Label htmlFor="due_time">{t('dueTime', language)}</Label>
-              <Input
-                id="due_time"
-                type="time"
-                {...register('due_time')}
-                disabled={isLoading}
+            <Label htmlFor="due_time">
+              {t('dueDate', language)} / {t('dueTime', language)}
+            </Label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Controller
+                name="due_date"
+                control={control}
+                render={({ field }) => (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !field.value && "text-muted-foreground"
+                        )}
+                        disabled={isLoading}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {field.value ? (
+                          (() => {
+                            const date = parseDate(field.value);
+                            return date ? format(date, "PPP") : field.value;
+                          })()
+                        ) : (
+                          <span>{t('selectDate', language)}</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 z-[9999]" align="start" side="bottom">
+                      <Calendar
+                        mode="single"
+                        selected={parseDate(field.value)}
+                        onSelect={(date) => {
+                          const formattedDate = date ? formatDateForInput(date) : '';
+                          field.onChange(formattedDate);
+                          console.log('ReminderForm - Date selected:', formattedDate);
+                        }}
+                        initialFocus
+                        className="pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                )}
               />
+
+              <div className="flex-1 min-w-[120px]">
+                <Input
+                  id="due_time"
+                  type="time"
+                  {...register('due_time')}
+                  disabled={isLoading}
+                />
+                {errors.due_time && (
+                  <p className="mt-1 text-xs text-destructive">{errors.due_time.message}</p>
+                )}
+              </div>
             </div>
-          )}
+          </div>
 
           {/* Form Actions */}
           <div className="flex gap-2 pt-4">
