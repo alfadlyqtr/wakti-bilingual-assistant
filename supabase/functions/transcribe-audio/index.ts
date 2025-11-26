@@ -202,13 +202,29 @@ serve(async (req) => {
       );
     }
 
-    console.log('Audio file downloaded, size:', audioData.size);
+    console.log('Audio file downloaded, size:', audioData.size, 'type:', (audioData as Blob).type || 'unknown');
 
     // Convert the audio data to a form that can be sent to OpenAI (GPT-4o transcribe)
     const formData = new FormData();
-    // Keep filename and content-type explicit for best format detection
-    const audioBlob = new Blob([audioData], { type: 'audio/webm' });
-    formData.append('file', audioBlob, 'audio.webm');
+    // IMPORTANT: Use the real MIME type from storage so OpenAI decodes correctly
+    const storageMime = (audioData as Blob).type || 'audio/webm';
+
+    let uploadMime = storageMime;
+    let uploadExt = 'webm';
+
+    if (storageMime.includes('audio/mp4') || storageMime.includes('audio/m4a')) {
+      uploadMime = 'audio/mp4';
+      uploadExt = 'm4a';
+    } else if (storageMime.includes('audio/mpeg') || storageMime.includes('audio/mp3')) {
+      uploadMime = 'audio/mpeg';
+      uploadExt = 'mp3';
+    } else if (storageMime.includes('audio/webm')) {
+      uploadMime = 'audio/webm';
+      uploadExt = 'webm';
+    }
+
+    const audioBlob = new Blob([audioData], { type: uploadMime });
+    formData.append('file', audioBlob, `audio.${uploadExt}`);
     // Use GPT-4o transcribe for better multilingual code-switching (AR/EN and mixed).
     formData.append('model', 'gpt-4o-transcribe');
     // Optional language hint (e.g., 'ar' or 'en')
