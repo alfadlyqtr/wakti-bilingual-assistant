@@ -179,116 +179,72 @@ serve(async (req: Request) => {
 
     const body = await req.json().catch(() => ({}));
     const image_base64_raw = body?.image_base64 as string | undefined;
-    const images_base64_raw = body?.images_base64 as string[] | undefined;
     const user_prompt = body?.user_prompt as string | undefined;
     const user_id = body?.user_id as string | undefined;
 
-    // Support both single image (backwards compat) and multiple images
-    const imagesToProcess: string[] = [];
-    if (images_base64_raw && Array.isArray(images_base64_raw)) {
-      imagesToProcess.push(...images_base64_raw);
-    } else if (image_base64_raw) {
-      imagesToProcess.push(image_base64_raw);
-    }
-
-    if (imagesToProcess.length === 0 || !user_prompt || !user_id) {
+    if (!image_base64_raw || !user_prompt || !user_id) {
       return new Response(
         JSON.stringify({ error: "Missing params", code: "BAD_REQUEST_MISSING_PARAMS" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    if (imagesToProcess.length > 3) {
-      return new Response(
-        JSON.stringify({ error: "Too many images (max 3)", code: "TOO_MANY_IMAGES" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const { base64, mimeHint } = stripDataUrlPrefix(image_base64_raw);
+    const inputBytes = decodeBase64ToUint8Array(base64);
+    const { mime } = detectMimeAndExt(inputBytes, mimeHint);
+    const inputDataUrl = `data:${mime};base64,${base64}`;
 
-    // Process all images
-    const results: Array<{ url: string; index: number }> = [];
-    const errors: Array<{ index: number; error: string }> = [];
+    const rw = await callRunwareI2I(user_prompt, inputDataUrl);
+    const node = pickFirstResultNode(rw) || rw;
 
-    for (let i = 0; i < imagesToProcess.length; i++) {
+    let outBytes: Uint8Array | null = null;
+    let outExt = "jpg";
+    let outMime = "image/jpeg";
+    let directUrl: string | null = null;
+
+    const imageDataUrl = node?.dataURI || node?.dataUrl || node?.data_uri;
+    const url = node?.imageURL || node?.URL || node?.url;
+
+    if (imageDataUrl) {
+      const { base64: b64Out } = stripDataUrlPrefix(imageDataUrl);
+      outBytes = decodeBase64ToUint8Array(b64Out);
+      outMime = (imageDataUrl.split(";")[0]?.split(":")[1]) || outMime;
+      outExt = outMime.includes("png") ? "png" : outMime.includes("webp") ? "webp" : "jpg";
+    } else if (url) {
       try {
-        const image_base64_raw = imagesToProcess[i];
-        const { base64, mimeHint } = stripDataUrlPrefix(image_base64_raw);
-        const inputBytes = decodeBase64ToUint8Array(base64);
-        const { mime } = detectMimeAndExt(inputBytes, mimeHint);
-        const inputDataUrl = `data:${mime};base64,${base64}`;
-
-        const rw = await callRunwareI2I(user_prompt, inputDataUrl);
-        const node = pickFirstResultNode(rw) || rw;
-
-        let outBytes: Uint8Array | null = null;
-        let outExt = "jpg";
-        let outMime = "image/jpeg";
-        let directUrl: string | null = null;
-
-        const imageDataUrl = node?.dataURI || node?.dataUrl || node?.data_uri;
-        const url = node?.imageURL || node?.URL || node?.url;
-
-        if (imageDataUrl) {
-          const { base64: b64Out } = stripDataUrlPrefix(imageDataUrl);
-          outBytes = decodeBase64ToUint8Array(b64Out);
-          outMime = (imageDataUrl.split(";")[0]?.split(":")[1]) || outMime;
-          outExt = outMime.includes("png") ? "png" : outMime.includes("webp") ? "webp" : "jpg";
-        } else if (url) {
-          try {
-            const fr = await fetch(url);
-            const arr = new Uint8Array(await fr.arrayBuffer());
-            outBytes = arr;
-            outMime = fr.headers.get("content-type") || outMime;
-            outExt = outMime.includes("png") ? "png" : outMime.includes("webp") ? "webp" : "jpg";
-          } catch {
-            directUrl = url;
-          }
-        }
-
-        if (outBytes) {
-          const fileName = `image2image/${user_id}-${Date.now()}-${i}.${outExt}`;
-          const { error: uploadError } = await supabase.storage
-            .from("wakti-ai-v2")
-            .upload(fileName, outBytes, { contentType: outMime, upsert: true });
-          if (!uploadError) {
-            const { data: publicUrl } = supabase.storage.from("wakti-ai-v2").getPublicUrl(fileName);
-            results.push({ url: publicUrl.publicUrl, index: i });
-          } else {
-            errors.push({ index: i, error: "Upload failed" });
-          }
-        } else if (directUrl) {
-          results.push({ url: directUrl, index: i });
-        } else {
-          errors.push({ index: i, error: "No image returned from Runware" });
-        }
-      } catch (err: any) {
-        errors.push({ index: i, error: err?.message || String(err) });
+        const fr = await fetch(url);
+        const arr = new Uint8Array(await fr.arrayBuffer());
+        outBytes = arr;
+        outMime = fr.headers.get("content-type") || outMime;
+        outExt = outMime.includes("png") ? "png" : outMime.includes("webp") ? "webp" : "jpg";
+      } catch {
+        directUrl = url;
       }
     }
 
-    // Return results
-    if (results.length > 0) {
-      // Backwards compatibility: if single image, return old format
-      if (imagesToProcess.length === 1 && results.length === 1) {
+    if (outBytes) {
+      const fileName = `image2image/${user_id}-${Date.now()}.${outExt}`;
+      const { error: uploadError } = await supabase.storage
+        .from("wakti-ai-v2")
+        .upload(fileName, outBytes, { contentType: outMime, upsert: true });
+      if (!uploadError) {
+        const { data: publicUrl } = supabase.storage.from("wakti-ai-v2").getPublicUrl(fileName);
         return new Response(
-          JSON.stringify({ success: true, url: results[0].url, model: "runware:106@1" }),
+          JSON.stringify({ success: true, url: publicUrl.publicUrl, model: "runware:106@1" }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      // Multi-image: return array format
+    }
+
+    if (directUrl) {
       return new Response(
-        JSON.stringify({ 
-          success: true, 
-          results: results.map(r => ({ url: r.url })),
-          errors: errors.length > 0 ? errors : undefined,
-          model: "runware:106@1" 
-        }),
+        JSON.stringify({ success: true, url: directUrl, model: "runware:106@1" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     return new Response(
-      JSON.stringify({ error: "All images failed", code: "ALL_FAILED", errors }),
+      JSON.stringify({ error: "RUNWARE_NO_IMAGE", code: "RUNWARE_NO_IMAGE", details: { keys: Object.keys(node || {}) } }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err: any) {

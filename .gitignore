@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+
+.windsurf/rules/kluster-code-verify.md
+.kluster

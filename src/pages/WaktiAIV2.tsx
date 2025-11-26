@@ -72,20 +72,11 @@ const WaktiAIV2 = () => {
     handleRefreshConversations();
   }, [currentConversationId, sessionMessages, handleRefreshConversations]);
 
-  // When the active mode (chat/search/vision) changes, make sure any in-flight
-  // stream is cancelled and the loading flags are reset. This prevents cases
-  // where a previous Vision stream leaves the UI stuck when switching back to Chat.
+  // When the active mode changes, clear loading state but DON'T abort
+  // Aborting here causes "signal is aborted without reason" errors
+  // because the mode change happens BEFORE handleSendMessage creates the new controller
   useEffect(() => {
-    try {
-      if (abortControllerRef.current) {
-        console.log(`🛑 Aborting in-flight request due to mode change -> ${activeTrigger}`);
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
-      }
-    } catch {}
-
-    // Clear loading state and any stale vision-in-flight flag when mode changes
-    setIsLoading(false);
+    // Only clear loading state, don't abort
     if (activeTrigger !== 'vision') {
       visionInFlightRef.current = false;
     }
@@ -204,14 +195,8 @@ const WaktiAIV2 = () => {
     }
     setIsLoading(true);
     
-    // OPTION B FIX: Only abort if sending another message in the SAME mode
-    // This prevents aborting completed image requests when switching to chat mode
-    if (trigger !== 'vision') {
-      if (abortControllerRef.current) {
-        console.log(`🛑 Aborting previous ${lastTriggerRef.current || 'unknown'} request before starting ${trigger}`);
-        try { abortControllerRef.current.abort(); } catch {}
-      }
-    }
+    // Create new AbortController for this request
+    // Don't abort previous requests - let them complete naturally
     const controller = new AbortController();
     abortControllerRef.current = controller;
     lastTriggerRef.current = trigger;
@@ -449,6 +434,7 @@ const WaktiAIV2 = () => {
       }
       if (trigger === 'vision') {
         visionInFlightRef.current = false;
+        setActiveTrigger('chat'); // Reset to chat mode after vision completes
       }
     }
   }, [currentConversationId, language, sessionMessages, userProfile]);

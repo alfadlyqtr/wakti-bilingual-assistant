@@ -736,7 +736,7 @@ export function ChatInput({
               uploadedFiles={uploadedFiles}
               isUploading={isUploading}
               disabled={isUploading}
-              maxFiles={3}
+              maxFiles={1}
             />
           ) : (
             <SimplifiedFileUpload

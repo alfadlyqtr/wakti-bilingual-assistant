@@ -130,61 +130,40 @@ export function ImageModeFileUpload({
       />
 
       {uploadedFiles.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-          {uploadedFiles.map((file, index) => (
+        <div className="space-y-2">
+          {uploadedFiles.map((file) => (
             <div
               key={file.id}
-              className="relative group rounded-lg border border-border/50 bg-white/70 dark:bg-neutral-900/40 backdrop-blur-md shadow-sm overflow-hidden"
+              className="flex items-center justify-between p-2 rounded-md border border-border/50 bg-white/70 dark:bg-neutral-900/40 backdrop-blur-md shadow-sm"
             >
-              {/* Large image preview */}
-              <img
-                src={file.preview || file.url}
-                alt={file.name}
-                className="w-full h-32 object-cover"
-                onError={(e) => {
-                  // Fallback to icon if image fails
-                  (e.currentTarget as HTMLImageElement).style.display = 'none';
-                }}
-              />
-              {/* Image number badge */}
-              <div className="absolute top-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded-md">
-                {index + 1}
+              <div className="flex items-center space-x-2">
+                {/* Small image preview (prefer base64 preview, fallback to object URL) */}
+                <img
+                  src={file.preview || file.url}
+                  alt={file.name}
+                  className="w-12 h-12 rounded-md object-cover border border-border/50"
+                  onError={(e) => {
+                    // Fallback to icon if image fails
+                    (e.currentTarget as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+                <span className="text-sm truncate max-w-[200px]">
+                  {file.name}
+                </span>
               </div>
-              {/* Remove button */}
               <button
                 type="button"
                 onClick={() => {
                   try { if (file.url) URL.revokeObjectURL(file.url); } catch {}
                   onRemoveFile(file.id);
                 }}
-                className="absolute top-2 right-2 bg-red-500/80 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="text-muted-foreground hover:text-foreground"
                 disabled={disabled || isUploading}
-                aria-label={language === 'ar' ? 'حذف الصورة' : 'Remove image'}
               >
                 <X className="h-4 w-4" />
-              </button>              {/* File name at bottom */}
-              <div className="p-2 bg-gradient-to-t from-black/60 to-transparent absolute bottom-0 left-0 right-0">
-                <span className="text-xs text-white truncate block">
-                  {file.name}
-                </span>
-              </div>
+              </button>
             </div>
           ))}
-          
-          {/* Add more button if under max */}
-          {uploadedFiles.length < maxFiles && (
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={disabled || isUploading}
-              className="h-32 rounded-lg border-2 border-dashed border-border/50 bg-white/40 dark:bg-neutral-900/20 hover:bg-white/60 dark:hover:bg-neutral-900/40 flex flex-col items-center justify-center gap-2 transition-colors"
-            >
-              <ImageIcon className="h-8 w-8 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">
-                {language === 'ar' ? 'إضافة صورة' : 'Add image'}
-              </span>
-            </button>
-          )}
         </div>
       )}
     </div>

@@ -495,20 +495,50 @@ serve(async (req) => {
         // Provider selection with Gemini → OpenAI → Claude fallback
         let streamReader: ReadableStreamDefaultReader | null = null;
 
-        const tryGeminiVision = async () => {
+        const tryGeminiVision = async ()=>{
           const systemText = systemPrompt;
-          const contents: any[] = [];
+          const contents = [];
           if (systemText) contents.push(buildTextContent('user', systemText));
-          // Build a single user message with prompt and inline images
           const promptText = `${language === 'ar' ? 'يرجى الرد باللغة العربية فقط.' : 'Please respond in English only.'} ${prompt || ''}`.trim();
-          const userParts: any[] = [{ text: promptText }];
-          for (const img of norm) {
+          const userParts = [
+            {
+              text: promptText
+            }
+          ];
+          // Gemini requires base64 images, so fetch URLs and convert
+          for (const img of norm){
             if (img?.base64 && img?.mimeType) {
-              userParts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } });
+              userParts.push({
+                inlineData: {
+                  mimeType: img.mimeType,
+                  data: img.base64
+                }
+              });
+            } else if (img?.url) {
+              // Fetch the URL and convert to base64
+              try {
+                const imgResp = await fetch(img.url);
+                if (!imgResp.ok) throw new Error(`Failed to fetch image: ${imgResp.status}`);
+                const imgBlob = await imgResp.blob();
+                const imgBuffer = await imgBlob.arrayBuffer();
+                const imgBase64 = btoa(String.fromCharCode(...new Uint8Array(imgBuffer)));
+                userParts.push({
+                  inlineData: {
+                    mimeType: img.mimeType || 'image/jpeg',
+                    data: imgBase64
+                  }
+                });
+              } catch (fetchErr) {
+                console.error('Failed to fetch image URL for Gemini:', fetchErr);
+                throw new Error('Failed to fetch image for Gemini');
+              }
             }
           }
-          contents.push({ role: 'user', parts: userParts });
-
+          contents.push({
+            role: 'user',
+            parts: userParts
+          });
+          
           const encoder = new TextEncoder();
           // Emit providerUsed once before token stream
           try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'gemini' })}\n\n`)); } catch { /* ignore */ }
@@ -645,14 +675,22 @@ serve(async (req) => {
           }
         } catch (error) {
           console.error('🔥 VISION STREAM ERROR:', error);
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Vision service temporarily unavailable', details: (error as Error).message })}\n\n`));
+          try {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Vision service temporarily unavailable', details: (error as Error).message })}\n\n`));
+          } catch {}
         }
 
-        controller.close();
+        try {
+          controller.close();
+        } catch (closeErr) {
+          console.error('Controller already closed:', closeErr);
+        }
       } catch (error) {
-        console.error('🔥 VISION STREAM ERROR:', error);
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Vision service temporarily unavailable', details: (error as Error).message })}\n\n`));
-        controller.close();
+        console.error('🔥 VISION STREAM OUTER ERROR:', error);
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Vision service temporarily unavailable', details: (error as Error).message })}\n\n`));
+          controller.close();
+        } catch {}
       }
     }
   });

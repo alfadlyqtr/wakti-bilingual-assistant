@@ -40,22 +40,41 @@ class WaktiAIV2ServiceClass {
   private async convertImage(base64Data: string, mimeType: string): Promise<{ data: string; type: string }> {
     if (!this.isBrowser()) return { data: base64Data, type: mimeType || 'image/jpeg' };
     const src = base64Data.startsWith('data:') ? base64Data : `data:${mimeType || 'image/jpeg'};base64,${base64Data}`;
-    return await new Promise<{ data: string; type: string }>((resolve) => {
+    return await new Promise<{ data: string; type: string }>((resolve, reject) => {
       const img = new Image();
+      const timeout = setTimeout(() => {
+        console.error('❌ Image conversion timeout');
+        reject(new Error('Image conversion timeout'));
+      }, 10000); // 10s timeout
+      
       img.onload = () => {
-        const w = img.width || 1;
-        const h = img.height || 1;
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1, w);
-        canvas.height = Math.max(1, h);
-        const ctx = canvas.getContext('2d');
-        if (!ctx) { resolve({ data: base64Data, type: mimeType || 'image/jpeg' }); return; }
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        const out = canvas.toDataURL('image/jpeg', 0.9);
-        const b64 = out.split(',')[1] || '';
-        resolve({ data: b64 || base64Data, type: 'image/jpeg' });
+        clearTimeout(timeout);
+        try {
+          const w = img.width || 1;
+          const h = img.height || 1;
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, w);
+          canvas.height = Math.max(1, h);
+          const ctx = canvas.getContext('2d');
+          if (!ctx) { 
+            console.error('❌ Failed to get canvas context');
+            resolve({ data: base64Data, type: mimeType || 'image/jpeg' }); 
+            return; 
+          }
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const out = canvas.toDataURL('image/jpeg', 0.9);
+          const b64 = out.split(',')[1] || '';
+          resolve({ data: b64 || base64Data, type: 'image/jpeg' });
+        } catch (err) {
+          console.error('❌ Image conversion error:', err);
+          resolve({ data: base64Data, type: mimeType || 'image/jpeg' });
+        }
       };
-      img.onerror = () => resolve({ data: base64Data, type: mimeType || 'image/jpeg' });
+      img.onerror = (err) => {
+        clearTimeout(timeout);
+        console.error('❌ Image load error:', err);
+        resolve({ data: base64Data, type: mimeType || 'image/jpeg' });
+      };
       img.src = src;
     });
   }
@@ -946,6 +965,11 @@ class WaktiAIV2ServiceClass {
 
       // Vision-first path via Supabase Edge Function: stream SSE and honor provider
       const attemptVision = async (primary: 'claude' | 'openai', visionFiles: any[]) => {
+        // Check if aborted before starting any work
+        if (signal?.aborted) {
+          throw new Error('Vision request aborted before start');
+        }
+
         if (!visionFiles || visionFiles.length === 0) {
           throw new Error('No images for vision');
         }
