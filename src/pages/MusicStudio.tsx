@@ -961,47 +961,9 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
     }
   };
 
-  // Load monthly usage on mount (guarded)
-  useEffect(() => {
-    if (usageLoadedRef.current) return;
-    usageLoadedRef.current = true;
-    (async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          if (import.meta && import.meta.env && import.meta.env.DEV) {
-            console.log('[MusicStudio] No user found');
-          }
-          return;
-        }
-        if (import.meta && import.meta.env && import.meta.env.DEV) {
-          console.log('[MusicStudio] User ID:', user.id);
-        }
-        const now = new Date();
-        const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
-        if (import.meta && import.meta.env && import.meta.env.DEV) {
-          console.log('[MusicStudio] Start of month (UTC):', startOfMonth.toISOString());
-        }
-        // Fetch actual data instead of using count with head:true
-        const { data, error } = await (supabase as any)
-          .from('user_music_tracks')
-          .select('id')
-          .eq('user_id', user.id)
-          .gte('created_at', startOfMonth.toISOString());
-        if (import.meta && import.meta.env && import.meta.env.DEV) {
-          console.log('[MusicStudio] Query result:', { dataLength: data?.length, error });
-        }
-        const used = data?.length || 0;
-        if (import.meta && import.meta.env && import.meta.env.DEV) {
-          console.log('[MusicStudio] Setting songs used:', used);
-        }
-        setSongsUsed(used);
-        setSongsRemaining(Math.max(0, 5 - used));
-      } catch (e) {
-        console.error('[MusicStudio] Error loading usage:', e);
-      }
-    })();
-  }, []);
+  // Load monthly usage on mount is now handled by refreshMusicQuota() in the earlier useEffect
+  // This duplicate useEffect was counting ALL rows (including failed ones) and causing false quota blocks
+  // Removed to rely solely on the backend can_generate_music() RPC which correctly filters by status
 
   // Position and outside-click handling for pickers
   useEffect(() => {
