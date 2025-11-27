@@ -80,7 +80,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setLoading(false);
     }, 2000);
 
-    // 1) Try to get initial session (but don't rely on it)
+    // 1) Try to get initial session with graceful 400/401 error handling
     try {
       supabase.auth.getSession()
         .then(({ data: { session } }) => {
@@ -93,6 +93,31 @@ export function AuthProvider({ children }: AuthProviderProps) {
         .catch((error) => {
           console.error('AuthContext: getSession() promise failed:', error);
           window.clearTimeout(loadingTimer);
+          
+          // Gracefully handle 400/401 errors (invalid tokens)
+          // Clear storage and set logged out state without showing error
+          if (error?.status === 400 || error?.status === 401 || 
+              error?.message?.includes('Invalid Refresh Token') ||
+              error?.message?.includes('refresh_token')) {
+            console.log('[Auth] Clearing invalid session tokens');
+            try {
+              // Clear all auth storage
+              if (typeof window !== 'undefined') {
+                localStorage.removeItem('wakti-auth');
+                for (const store of [localStorage, sessionStorage]) {
+                  const keys: string[] = [];
+                  for (let i = 0; i < store.length; i++) {
+                    const k = store.key(i);
+                    if (k?.startsWith('sb-')) keys.push(k);
+                  }
+                  keys.forEach(k => store.removeItem(k));
+                }
+              }
+            } catch {}
+            setSession(null);
+            setUser(null);
+          }
+          
           setLoading(false);
         });
     } catch (error) {

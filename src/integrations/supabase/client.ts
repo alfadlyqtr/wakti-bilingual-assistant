@@ -58,6 +58,48 @@ function createSafeStorage(): MinimalStorage {
 
 const safeStorage = createSafeStorage();
 
+/**
+ * Pre-validate and clear stale auth tokens to prevent 400 errors
+ * This runs BEFORE Supabase SDK tries to auto-refresh invalid tokens
+ */
+export function clearStaleTokensBeforeInit(): void {
+  try {
+    const authData = safeStorage.getItem('wakti-auth');
+    if (!authData) return; // No stored auth, nothing to clear
+    
+    const parsed = JSON.parse(authData);
+    const expiresAt = parsed?.expires_at; // Unix timestamp in seconds
+    
+    if (!expiresAt) return; // No expiry info, let SDK handle it
+    
+    const nowSec = Math.floor(Date.now() / 1000);
+    
+    // If token is expired, clear it BEFORE SDK tries to refresh
+    if (nowSec >= expiresAt) {
+      console.log('[Auth] Clearing expired token to prevent 400 error');
+      safeStorage.removeItem('wakti-auth');
+      // Also clear any other Supabase auth keys
+      try {
+        if (typeof window !== 'undefined') {
+          for (const store of [localStorage, sessionStorage]) {
+            const keys: string[] = [];
+            for (let i = 0; i < store.length; i++) {
+              const k = store.key(i);
+              if (k?.startsWith('sb-')) keys.push(k);
+            }
+            keys.forEach(k => store.removeItem(k));
+          }
+        }
+      } catch {}
+    }
+  } catch (error) {
+    console.warn('[Auth] Error checking stale tokens:', error);
+  }
+}
+
+// Clear stale tokens before creating the client
+clearStaleTokensBeforeInit();
+
 // Export the URL for use in other services
 export const SUPABASE_URL = effectiveUrl;
 export const SUPABASE_ANON_KEY = effectiveAnon;
