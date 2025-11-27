@@ -1794,6 +1794,7 @@ export type Database = {
           suspended_at: string | null
           suspended_by: string | null
           suspension_reason: string | null
+          trial_popup_shown: boolean | null
           updated_at: string | null
           username: string | null
         }
@@ -1828,6 +1829,7 @@ export type Database = {
           suspended_at?: string | null
           suspended_by?: string | null
           suspension_reason?: string | null
+          trial_popup_shown?: boolean | null
           updated_at?: string | null
           username?: string | null
         }
@@ -1862,6 +1864,7 @@ export type Database = {
           suspended_at?: string | null
           suspended_by?: string | null
           suspension_reason?: string | null
+          trial_popup_shown?: boolean | null
           updated_at?: string | null
           username?: string | null
         }

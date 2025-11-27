@@ -19,6 +19,7 @@ interface UserProfile {
   is_subscribed: boolean;
   free_access_start_at?: string | null;
   revenuecat_id?: string | null;
+  trial_popup_shown?: boolean | null;
 }
 
 export function useUserProfile() {
@@ -166,9 +167,15 @@ export function useUserProfile() {
       const isSubscribed = (profile?.is_subscribed ?? false);
       if (isSubscribed) return false;
       const start = profile?.free_access_start_at ? Date.parse(profile.free_access_start_at) : null;
-      if (start == null) return true; // not set yet -> treat as grace
+      if (start == null) return false; // NOT STARTED = not grace, not expired
       const elapsedMin = Math.floor((Date.now() - start) / 60000);
       return elapsedMin < 30;
+    },
+    get hasTrialStarted() {
+      return profile?.free_access_start_at != null;
+    },
+    get hasSeenTrialPopup() {
+      return profile?.trial_popup_shown ?? false;
     },
     get isAccessExpired() {
       const isSubscribed = (profile?.is_subscribed ?? false);
