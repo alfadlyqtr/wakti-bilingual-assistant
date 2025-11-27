@@ -99,40 +99,11 @@ export function LoginForm({
     }
   };
 
-  const handleAppleLogin = async () => {
-    setErrorMsg(null);
-    setIsLoading(true);
-    console.log("LoginForm: Attempting Apple login");
-    
-    try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'apple',
-        options: {
-          redirectTo: window.location.origin,
-        }
-      });
-
-      if (error) {
-        console.error("LoginForm: Apple login error:", error);
-        setErrorMsg(error.message);
-        toast.error(language === 'en' ? 'Apple Login Failed: ' + error.message : 'فشل تسجيل الدخول عبر Apple: ' + error.message);
-      }
-      // Note: Successful OAuth redirect happens automatically
-    } catch (err) {
-      console.error("LoginForm: Unexpected error during Apple login:", err);
-      setErrorMsg(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
-    } finally {
-      // Don't turn off loading immediately if redirecting
-      setTimeout(() => setIsLoading(false), 2000);
-    }
-  };
 
   // Translations
   const translations = {
     en: {
       login: "Login",
-      appleLogin: "Sign in with Apple",
-      orContinueWith: "Or continue with",
       email: "Email",
       password: "Password",
       forgotPassword: "Forgot Password?",
@@ -144,8 +115,6 @@ export function LoginForm({
     },
     ar: {
       login: "تسجيل الدخول",
-      appleLogin: "تسجيل الدخول عبر Apple",
-      orContinueWith: "أو تابع باستخدام",
       email: "البريد الإلكتروني",
       password: "كلمة المرور",
       forgotPassword: "نسيت كلمة المرور؟",
@@ -247,32 +216,6 @@ export function LoginForm({
           {isLoading ? t.loading : t.login}
         </Button>
       </form>
-
-      <div className="mt-6">
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t" />
-          </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-background px-2 text-muted-foreground">
-              {t.orContinueWith}
-            </span>
-          </div>
-        </div>
-
-        <Button
-          variant="outline"
-          type="button"
-          className="w-full mt-4 py-6 text-base shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2"
-          onClick={handleAppleLogin}
-          disabled={isLoading}
-        >
-          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.127 3.675-.552 9.12 1.519 12.12 1.014 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.99 3.915-.99 1.832 0 2.383.99 3.929.94 1.57-.063 2.568-1.427 3.537-2.85 1.106-1.626 1.556-3.204 1.588-3.286-.035-.017-3.082-1.177-3.113-4.695-.031-2.935 2.538-4.34 2.653-4.421-1.445-2.116-3.678-2.349-4.463-2.386-2.03-.049-3.736 1.159-4.436 1.159m3.422-5.446c.85-1.03 1.423-2.45 1.267-3.87-1.223.05-2.705.815-3.585 1.841-.783.912-1.472 2.391-1.286 3.82 1.36.109 2.753-.76 3.604-1.791" />
-          </svg>
-          {t.appleLogin}
-        </Button>
-      </div>
 
       {showSignupLink && (
         <div className="mt-6 text-center">
