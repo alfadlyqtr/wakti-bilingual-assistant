@@ -29,7 +29,6 @@ export default function Signup() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState<Date | undefined>(undefined);
-  const [dobInputValue, setDobInputValue] = useState("");
   const [country, setCountry] = useState("");
   const [city, setCity] = useState("");
   // Reset city when country changes
@@ -165,30 +164,6 @@ export default function Signup() {
     }
   };
 
-
-  const handleDobInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setDobInputValue(value);
-
-    if (value) {
-      const newDate = new Date(value);
-      if (!isNaN(newDate.getTime())) {
-        setDateOfBirth(newDate);
-      }
-    } else {
-      setDateOfBirth(undefined);
-    }
-  };
-
-  const handleCalendarDateSelect = (date: Date | undefined) => {
-    setDateOfBirth(date);
-    if (date) {
-      setDobInputValue(date.toISOString().split("T")[0]);
-    } else {
-      setDobInputValue("");
-    }
-  };
-
   const translations = {
     en: {
       appName: "WAKTI",
@@ -259,10 +234,10 @@ export default function Signup() {
 
   return (
     <>
-      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-indigo-950/30 dark:via-background dark:to-purple-950/30">
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-indigo-950/30 dark:via-background dark:to-purple-950/30 overflow-x-hidden">
         {/* Header */}
         <header className="sticky top-0 z-10 bg-white/80 dark:bg-background/80 backdrop-blur-sm border-b border-border/50">
-          <div className="container mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="container mx-auto px-3 sm:px-4 py-3 flex items-center justify-between">
             <div className="flex items-center">
               <Button
                 variant="ghost"
@@ -279,7 +254,7 @@ export default function Signup() {
         </header>
 
         {/* Main Content */}
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-3 sm:px-4 py-8 overflow-x-hidden">
           <div className="flex min-h-[calc(100vh-120px)] flex-col justify-center">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -303,7 +278,7 @@ export default function Signup() {
                 )}
               </div>
 
-              <form onSubmit={handleSignup} className="space-y-6">
+              <form onSubmit={handleSignup} className="space-y-6 w-full overflow-x-hidden">
                 <div className="space-y-2">
                   <Label htmlFor="name" className="text-base">{t.name}<span className="text-red-500 ml-1" aria-hidden="true">*</span></Label>
                   <div className="relative">
@@ -427,46 +402,33 @@ export default function Signup() {
                 
                 <div className="space-y-2">
                   <Label htmlFor="dateOfBirth" className="text-base">{t.dateOfBirth}</Label>
-                  <div className="space-y-2">
-                    <Input
-                      id="dob"
-                      type="date"
-                      value={dobInputValue}
-                      onChange={handleDobInputChange}
-                      max={new Date().toISOString().split('T')[0]}
-                      min="1900-01-01"
-                      className="w-full text-base"
-                      disabled={isLoading}
-                      placeholder={language === 'ar' ? 'اختر التاريخ' : 'Select date'}
-                    />
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal py-6 text-base shadow-sm",
-                            !dateOfBirth && "text-muted-foreground"
-                          )}
-                          disabled={isLoading}
-                        >
-                          <CalendarIcon className="mr-2 h-5 w-5" />
-                          {dateOfBirth ? format(dateOfBirth, "PPP") : <span>{t.dobPlaceholder}</span>}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar
-                          mode="single"
-                          selected={dateOfBirth}
-                          onSelect={handleCalendarDateSelect}
-                          disabled={(date) =>
-                            date > new Date() || date < new Date("1900-01-01")
-                          }
-                          initialFocus
-                          className="p-3 pointer-events-auto"
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal py-6 text-base shadow-sm",
+                          !dateOfBirth && "text-muted-foreground"
+                        )}
+                        disabled={isLoading}
+                      >
+                        <CalendarIcon className="mr-2 h-5 w-5 flex-shrink-0" />
+                        {dateOfBirth ? format(dateOfBirth, "PPP") : <span>{t.dobPlaceholder}</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={dateOfBirth}
+                        onSelect={setDateOfBirth}
+                        disabled={(date) =>
+                          date > new Date() || date < new Date("1900-01-01")
+                        }
+                        initialFocus
+                        className="p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 
                 {/* Password + Confirm Password in one row */}
