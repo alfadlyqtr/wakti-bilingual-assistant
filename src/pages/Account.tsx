@@ -24,7 +24,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { AlertTriangle, Check, MessageSquare, Flag, CalendarIcon, User, CreditCard, CheckCircle, XCircle } from "lucide-react";
+import { AlertTriangle, Check, MessageSquare, Flag, CalendarIcon, User, CreditCard, CheckCircle, XCircle, Clock } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
@@ -32,6 +32,48 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+
+// TrialCountdown Component - Shows remaining time of 30-minute trial
+const TrialCountdown = ({ startAt, language }: { startAt: string; language: string }) => {
+  const [timeLeft, setTimeLeft] = useState('');
+  
+  useEffect(() => {
+    const calculateTimeLeft = () => {
+      const start = new Date(startAt).getTime();
+      const trialEnd = start + (30 * 60 * 1000); // 30 minutes
+      const now = Date.now();
+      const diff = trialEnd - now;
+      
+      if (diff <= 0) {
+        setTimeLeft(language === 'en' ? 'Trial ended' : 'انتهت الفترة التجريبية');
+        return;
+      }
+      
+      const minutes = Math.floor(diff / 60000);
+      const seconds = Math.floor((diff % 60000) / 1000);
+      setTimeLeft(`${minutes}:${seconds.toString().padStart(2, '0')}`);
+    };
+    
+    calculateTimeLeft();
+    const interval = setInterval(calculateTimeLeft, 1000);
+    return () => clearInterval(interval);
+  }, [startAt, language]);
+  
+  return (
+    <div className="text-3xl font-bold text-center tabular-nums">
+      {timeLeft}
+    </div>
+  );
+};
+
+// Helper function to open native subscription management
+const openManageSubscriptions = () => {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const url = isIOS 
+    ? 'https://apps.apple.com/account/subscriptions'
+    : 'https://play.google.com/store/account/subscriptions';
+  window.open(url, '_blank');
+};
 
 export default function Account() {
   const { user, updateProfile, updateEmail, updatePassword, signOut } = useAuth();
@@ -110,7 +152,7 @@ export default function Account() {
       
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('is_subscribed, subscription_status, plan_name, next_billing_date, billing_start_date, payment_method')
+        .select('is_subscribed, subscription_status, plan_name, next_billing_date, billing_start_date, payment_method, free_access_start_at')
         .eq('id', user.id)
         .single();
 
@@ -695,6 +737,54 @@ export default function Account() {
           </TabsContent>
 
           <TabsContent value="billing" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CreditCard className="h-5 w-5" />
+                  {t("billing", language)}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* STATE 1: Trial Active - Show Timer */}
+                {!subscriptionData?.profile?.is_subscribed && subscriptionData?.profile?.free_access_start_at && (
+                  <div className="text-center space-y-3 py-4">
+                    <div className="flex items-center justify-center gap-2 text-amber-500">
+                      <Clock className="h-5 w-5" />
+                      <span className="font-medium">
+                        {language === 'en' ? 'Free Trial Active' : 'الفترة التجريبية المجانية نشطة'}
+                      </span>
+                    </div>
+                    <TrialCountdown startAt={subscriptionData.profile.free_access_start_at} language={language} />
+                  </div>
+                )}
+                
+                {/* STATE 2: Subscribed - Show Status + Manage Button */}
+                {subscriptionData?.profile?.is_subscribed && (
+                  <div className="text-center space-y-4 py-4">
+                    <div className="flex items-center justify-center gap-2 text-green-500">
+                      <CheckCircle className="h-5 w-5" />
+                      <span className="font-medium">
+                        {language === 'en' ? 'You are subscribed' : 'أنت مشترك'}
+                      </span>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      onClick={openManageSubscriptions}
+                      className="w-full max-w-xs"
+                    >
+                      {language === 'en' ? 'Manage Subscription' : 'إدارة الاشتراك'}
+                    </Button>
+                  </div>
+                )}
+                
+                {/* STATE 3: No Subscription, No Trial */}
+                {!subscriptionData?.profile?.is_subscribed && !subscriptionData?.profile?.free_access_start_at && (
+                  <p className="text-muted-foreground text-center py-8">
+                    {language === 'en' ? 'No active subscription' : 'لا يوجد اشتراك نشط'}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
