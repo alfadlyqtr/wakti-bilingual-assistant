@@ -170,25 +170,6 @@ export async function getCurrentUserId(): Promise<string | null> {
   const { data: { session } } = await supabase.auth.getSession();
   return session?.user?.id ?? null;
 }
-
-// One-time connectivity check (no UI impact). Logs minimal status to console.
-declare global {
-  interface Window { __SUPABASE_CHECKED__?: boolean }
-}
-
-if (typeof window !== 'undefined' && !window.__SUPABASE_CHECKED__) {
-  window.__SUPABASE_CHECKED__ = true;
-  supabase.auth.getSession()
-    .then(({ data, error }) => {
-      if (error) {
-        console.error('[Supabase] Connectivity check failed:', error?.message || error);
-      } else {
-        console.log('[Supabase] Client initialized. Session present:', !!data?.session);
-      }
-    })
-    .catch((e) => console.error('[Supabase] Connectivity error:', e?.message || e));
-}
-
 // Define types for edge function payloads
 interface TranscribeAudioPayload {
   audioUrl: string;
