@@ -18,9 +18,10 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Sparkles, RefreshCw, LogOut, Home, Shield } from "lucide-react";
+import { Sparkles, RefreshCw, LogOut, Home, Shield, Clock } from "lucide-react";
 import { Logo3D } from "@/components/Logo3D";
 import { toast } from "sonner";
 
@@ -333,111 +334,102 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
 
 export { CustomPaywallModal };
 
+// WelcomeTrialPopup - shown ONCE per user lifetime to inform them of 30-min trial
 function WelcomeTrialPopup() {
+  const { profile, isSubscribed, hasSeenTrialPopup, refetch } = useUserProfile();
   const { user } = useAuth();
-  const [showPopup, setShowPopup] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [serverStartAt, setServerStartAt] = useState<string | null>(null);
-  const [minutesOffer, setMinutesOffer] = useState<number>(30);
-  const { profile, isSubscribed, isGracePeriod, isAccessExpired } = useUserProfile();
   const location = useLocation();
-  const allowedPaths = ['/', '/dashboard', '/wakti-ai'];
-  const isAllowedRoute = allowedPaths.includes(location.pathname);
+  const [isOpen, setIsOpen] = useState(false);
+  const [isStartingTrial, setIsStartingTrial] = useState(false);
 
+  const allowedRoutes = ['/', '/dashboard', '/wakti-ai'];
+  const shouldShowPopup = allowedRoutes.includes(location.pathname);
+
+  // Show popup ONLY if:
+  // 1. User is logged in
+  // 2. User is NOT subscribed
+  // 3. User is on allowed route
+  // 4. trial_popup_shown === false (from DATABASE)
   useEffect(() => {
-    if (!user?.id) return;
-
-    // Only show trial popup on specific core routes (e.g. dashboard and WAKTI AI)
-    if (!isAllowedRoute) {
-      setShowPopup(false);
-      return;
-    }
-
-    // If user is subscribed or access is fully expired, never show the trial popup
-    if (isSubscribed || isAccessExpired) {
-      setShowPopup(false);
-      return;
-    }
-
-    const startAt: string | null = profile?.free_access_start_at ?? null;
-    setServerStartAt(startAt);
-
-    const startAtEpoch = startAt ? Math.floor(Date.parse(startAt) / 1000) : null;
-
-    // Compute minutes to show in popup based on current start time
-    if (startAt == null) {
-      setMinutesOffer(30);
+    if (
+      user &&
+      !isSubscribed &&
+      shouldShowPopup &&
+      !hasSeenTrialPopup
+    ) {
+      setIsOpen(true);
     } else {
-      const startMs = Date.parse(startAt);
-      const elapsedMin = Math.floor((Date.now() - startMs) / 60000);
-      const remaining = Math.max(0, 30 - elapsedMin);
-      setMinutesOffer(remaining || 30);
+      setIsOpen(false);
     }
-
-    const lsKey = `trial_popup_seen_for_start_at:${user.id}`;
-    const lastSeenRaw = localStorage.getItem(lsKey);
-    const lastSeenEpoch = lastSeenRaw ? Number(lastSeenRaw) : null;
-
-    const hasSeenCurrentStart =
-      startAtEpoch != null && !Number.isNaN(startAtEpoch) && lastSeenEpoch === startAtEpoch;
-
-    // Only show popup while in grace period and user hasn't acknowledged this start_at yet
-    if (isGracePeriod && (startAtEpoch == null || !hasSeenCurrentStart)) {
-      setShowPopup(true);
-    } else {
-      setShowPopup(false);
-    }
-  }, [user?.id, profile?.free_access_start_at, isSubscribed, isGracePeriod, isAccessExpired, isAllowedRoute]);
+  }, [user, isSubscribed, shouldShowPopup, hasSeenTrialPopup]);
 
   const handleStartTrial = async () => {
     if (!user?.id) return;
-    setLoading(true);
+    
+    setIsStartingTrial(true);
     try {
-      const lsKey = `trial_popup_seen_for_start_at:${user.id}`;
-      if (serverStartAt == null) {
-        // Start the trial now
-        const now = new Date();
-        const normalizedMs = Math.floor(now.getTime() / 1000) * 1000;
-        const normalizedIso = new Date(normalizedMs).toISOString();
-        await supabase
-          .from('profiles')
-          .update({ free_access_start_at: normalizedIso })
-          .eq('id', user.id);
-        localStorage.setItem(lsKey, String(Math.floor(normalizedMs / 1000)));
-      } else {
-        // Trial already set (e.g., admin reset). Just acknowledge so popup won't reappear.
-        const serverEpoch = Math.floor(Date.parse(serverStartAt) / 1000);
-        if (!Number.isNaN(serverEpoch)) {
-          localStorage.setItem(lsKey, String(serverEpoch));
-        } else {
-          localStorage.removeItem(lsKey);
-        }
+      // Update BOTH fields in a single atomic database update
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          free_access_start_at: new Date().toISOString(),
+          trial_popup_shown: true
+        })
+        .eq('id', user.id);
+
+      if (error) {
+        console.error('Error starting trial:', error);
+        toast.error('Failed to start trial. Please try again.');
+        return;
       }
-      setShowPopup(false);
+
+      // Refetch profile to get updated data
+      await refetch();
+      
+      // Close popup
+      setIsOpen(false);
+      toast.success('Your 30-minute trial has started!');
     } catch (error) {
       console.error('Error starting trial:', error);
+      toast.error('Failed to start trial. Please try again.');
     } finally {
-      setLoading(false);
+      setIsStartingTrial(false);
     }
   };
 
-  if (!isAllowedRoute) return null;
+  if (!shouldShowPopup) return null;
 
   return (
-    <Dialog open={showPopup} onOpenChange={() => {}}>
-      <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
+    <Dialog open={isOpen} onOpenChange={(open) => !isStartingTrial && setIsOpen(open)}>
+      <DialogContent 
+        className="sm:max-w-md bg-background border-border"
+        hideCloseButton
+      >
         <DialogHeader>
-          <DialogTitle className="text-xl">Welcome to Wakti AI! 🎉</DialogTitle>
-          <DialogDescription className="text-base pt-2">
-            Enjoy <strong>{minutesOffer} minutes of full access</strong> to explore all features.
-            After that, subscribe to continue using Wakti AI.
-          </DialogDescription>
+          <DialogTitle className="text-xl font-bold text-center">
+            Welcome to Wakti AI! 🎉
+          </DialogTitle>
         </DialogHeader>
-        <div className="flex justify-end pt-4">
-          <Button onClick={handleStartTrial} disabled={loading}>
-            {loading ? 'Starting...' : 'OK, Start Trial'}
-          </Button>
+        <div className="space-y-4 py-4">
+          <p className="text-center text-muted-foreground">
+            Enjoy <strong>30 minutes of full access</strong> to explore all features. After that, subscribe to continue using Wakti AI.
+          </p>
+          <div className="flex items-center justify-center gap-2 p-3 bg-primary/10 rounded-lg">
+            <Clock className="w-5 h-5 text-primary" />
+            <span className="font-semibold text-primary">
+              30 minute free trial
+            </span>
+          </div>
         </div>
+        <DialogFooter className="sm:justify-center">
+          <Button 
+            onClick={handleStartTrial}
+            disabled={isStartingTrial}
+            className="w-full sm:w-auto"
+          >
+            {isStartingTrial ? 'Starting...' : 'OK, Start Trial'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
