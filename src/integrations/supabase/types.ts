@@ -55,6 +55,48 @@ export type Database = {
           },
         ]
       }
+      admin_impersonation_events: {
+        Row: {
+          admin_id: string
+          ended_at: string | null
+          id: string
+          reason: string | null
+          started_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_id: string
+          ended_at?: string | null
+          id?: string
+          reason?: string | null
+          started_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_id?: string
+          ended_at?: string | null
+          id?: string
+          reason?: string | null
+          started_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_impersonation_events_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_impersonation_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       admin_messages: {
         Row: {
           admin_id: string
@@ -89,6 +131,51 @@ export type Database = {
             columns: ["admin_id"]
             isOneToOne: false
             referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_quota_gift_events: {
+        Row: {
+          admin_id: string
+          created_at: string
+          delta: number
+          feature: string
+          id: string
+          reason: string | null
+          user_id: string
+        }
+        Insert: {
+          admin_id: string
+          created_at?: string
+          delta: number
+          feature: string
+          id?: string
+          reason?: string | null
+          user_id: string
+        }
+        Update: {
+          admin_id?: string
+          created_at?: string
+          delta?: number
+          feature?: string
+          id?: string
+          reason?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_quota_gift_events_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_quota_gift_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -985,6 +1072,309 @@ export type Database = {
         }
         Relationships: []
       }
+      letters_answers: {
+        Row: {
+          animal: string | null
+          duration_ms: number | null
+          game_code: string
+          id: string
+          name: string | null
+          place: string | null
+          plant: string | null
+          round_id: string
+          submitted_at: string | null
+          thing: string | null
+          user_id: string | null
+        }
+        Insert: {
+          animal?: string | null
+          duration_ms?: number | null
+          game_code: string
+          id?: string
+          name?: string | null
+          place?: string | null
+          plant?: string | null
+          round_id: string
+          submitted_at?: string | null
+          thing?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          animal?: string | null
+          duration_ms?: number | null
+          game_code?: string
+          id?: string
+          name?: string | null
+          place?: string | null
+          plant?: string | null
+          round_id?: string
+          submitted_at?: string | null
+          thing?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "letters_answers_game_code_fkey"
+            columns: ["game_code"]
+            isOneToOne: false
+            referencedRelation: "letters_games"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "letters_answers_round_id_fkey"
+            columns: ["round_id"]
+            isOneToOne: false
+            referencedRelation: "letters_rounds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      letters_games: {
+        Row: {
+          code: string
+          countdown_sec: number | null
+          countdown_start_at: string | null
+          created_at: string
+          current_round_no: number | null
+          end_on_first_submit: boolean
+          hints_enabled: boolean
+          host_name: string | null
+          host_user_id: string | null
+          language: string | null
+          letter_mode: string | null
+          manual_letter: string | null
+          max_players: number
+          phase: string | null
+          round_duration_sec: number
+          rounds_total: number | null
+          started_at: string | null
+          submit_ends_round: boolean
+          title: string
+          validation_mode: string
+        }
+        Insert: {
+          code: string
+          countdown_sec?: number | null
+          countdown_start_at?: string | null
+          created_at?: string
+          current_round_no?: number | null
+          end_on_first_submit?: boolean
+          hints_enabled?: boolean
+          host_name?: string | null
+          host_user_id?: string | null
+          language?: string | null
+          letter_mode?: string | null
+          manual_letter?: string | null
+          max_players?: number
+          phase?: string | null
+          round_duration_sec?: number
+          rounds_total?: number | null
+          started_at?: string | null
+          submit_ends_round?: boolean
+          title: string
+          validation_mode?: string
+        }
+        Update: {
+          code?: string
+          countdown_sec?: number | null
+          countdown_start_at?: string | null
+          created_at?: string
+          current_round_no?: number | null
+          end_on_first_submit?: boolean
+          hints_enabled?: boolean
+          host_name?: string | null
+          host_user_id?: string | null
+          language?: string | null
+          letter_mode?: string | null
+          manual_letter?: string | null
+          max_players?: number
+          phase?: string | null
+          round_duration_sec?: number
+          rounds_total?: number | null
+          started_at?: string | null
+          submit_ends_round?: boolean
+          title?: string
+          validation_mode?: string
+        }
+        Relationships: []
+      }
+      letters_hints_used: {
+        Row: {
+          game_code: string
+          id: string
+          round_no: number
+          used_at: string
+          user_id: string
+        }
+        Insert: {
+          game_code: string
+          id?: string
+          round_no: number
+          used_at?: string
+          user_id: string
+        }
+        Update: {
+          game_code?: string
+          id?: string
+          round_no?: number
+          used_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      letters_players: {
+        Row: {
+          game_code: string
+          joined_at: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          game_code: string
+          joined_at?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          game_code?: string
+          joined_at?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "letters_players_game_code_fkey"
+            columns: ["game_code"]
+            isOneToOne: false
+            referencedRelation: "letters_games"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      letters_round_scores: {
+        Row: {
+          base: number
+          bonus: number
+          fields: Json | null
+          game_code: string
+          id: string
+          round_id: string
+          total: number
+          user_id: string | null
+        }
+        Insert: {
+          base?: number
+          bonus?: number
+          fields?: Json | null
+          game_code: string
+          id?: string
+          round_id: string
+          total?: number
+          user_id?: string | null
+        }
+        Update: {
+          base?: number
+          bonus?: number
+          fields?: Json | null
+          game_code?: string
+          id?: string
+          round_id?: string
+          total?: number
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "letters_round_scores_game_code_fkey"
+            columns: ["game_code"]
+            isOneToOne: false
+            referencedRelation: "letters_games"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "letters_round_scores_round_id_fkey"
+            columns: ["round_id"]
+            isOneToOne: false
+            referencedRelation: "letters_rounds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      letters_rounds: {
+        Row: {
+          duration_sec: number | null
+          ended_at: string | null
+          game_code: string
+          id: string
+          letter: string
+          round_no: number
+          scored_at: string | null
+          start_at: string | null
+          started_at: string | null
+          status: string
+        }
+        Insert: {
+          duration_sec?: number | null
+          ended_at?: string | null
+          game_code: string
+          id?: string
+          letter: string
+          round_no: number
+          scored_at?: string | null
+          start_at?: string | null
+          started_at?: string | null
+          status?: string
+        }
+        Update: {
+          duration_sec?: number | null
+          ended_at?: string | null
+          game_code?: string
+          id?: string
+          letter?: string
+          round_no?: number
+          scored_at?: string | null
+          start_at?: string | null
+          started_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "letters_rounds_game_code_fkey"
+            columns: ["game_code"]
+            isOneToOne: false
+            referencedRelation: "letters_games"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      letters_totals: {
+        Row: {
+          game_code: string
+          id: string
+          total: number
+          user_id: string | null
+        }
+        Insert: {
+          game_code: string
+          id?: string
+          total?: number
+          user_id?: string | null
+        }
+        Update: {
+          game_code?: string
+          id?: string
+          total?: number
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "letters_totals_game_code_fkey"
+            columns: ["game_code"]
+            isOneToOne: false
+            referencedRelation: "letters_games"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
       maw3d_events: {
         Row: {
           audio_artist: string | null
@@ -1211,7 +1601,90 @@ export type Database = {
         }
         Relationships: []
       }
-      notification_queue: never
+      notification_history: {
+        Row: {
+          body: string
+          data: Json | null
+          deep_link: string | null
+          delivery_status: string
+          id: string
+          notification_type: string
+          progressier_response: Json | null
+          sent_at: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          data?: Json | null
+          deep_link?: string | null
+          delivery_status?: string
+          id?: string
+          notification_type: string
+          progressier_response?: Json | null
+          sent_at?: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          data?: Json | null
+          deep_link?: string | null
+          delivery_status?: string
+          id?: string
+          notification_type?: string
+          progressier_response?: Json | null
+          sent_at?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      notification_queue: {
+        Row: {
+          attempts: number | null
+          body: string
+          created_at: string
+          data: Json | null
+          deep_link: string | null
+          id: string
+          notification_type: string
+          scheduled_for: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          attempts?: number | null
+          body: string
+          created_at?: string
+          data?: Json | null
+          deep_link?: string | null
+          id?: string
+          notification_type: string
+          scheduled_for?: string | null
+          sent_at?: string | null
+          status?: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          attempts?: number | null
+          body?: string
+          created_at?: string
+          data?: Json | null
+          deep_link?: string | null
+          id?: string
+          notification_type?: string
+          scheduled_for?: string | null
+          sent_at?: string | null
+          status?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       pending_fawran_payments: {
         Row: {
           account_created_at: string | null
@@ -1304,18 +1777,18 @@ export type Database = {
           email_confirmed: boolean | null
           fawran_payment_id: string | null
           first_name: string | null
+          free_access_start_at: string | null
           id: string
           is_logged_in: boolean | null
-          is_subscribed: boolean
+          is_subscribed: boolean | null
           is_suspended: boolean | null
           last_name: string | null
           last_seen: string | null
-          free_access_start_at: string | null
-          revenuecat_id: string | null
           next_billing_date: string | null
           notification_preferences: Json | null
           payment_method: string | null
           plan_name: string | null
+          revenuecat_id: string | null
           settings: Json | null
           subscription_status: string | null
           suspended_at: string | null
@@ -1338,18 +1811,18 @@ export type Database = {
           email_confirmed?: boolean | null
           fawran_payment_id?: string | null
           first_name?: string | null
+          free_access_start_at?: string | null
           id: string
           is_logged_in?: boolean | null
-          is_subscribed?: boolean
+          is_subscribed?: boolean | null
           is_suspended?: boolean | null
           last_name?: string | null
           last_seen?: string | null
-          free_access_start_at?: string | null
-          revenuecat_id?: string | null
           next_billing_date?: string | null
           notification_preferences?: Json | null
           payment_method?: string | null
           plan_name?: string | null
+          revenuecat_id?: string | null
           settings?: Json | null
           subscription_status?: string | null
           suspended_at?: string | null
@@ -1372,18 +1845,18 @@ export type Database = {
           email_confirmed?: boolean | null
           fawran_payment_id?: string | null
           first_name?: string | null
+          free_access_start_at?: string | null
           id?: string
           is_logged_in?: boolean | null
-          is_subscribed?: boolean
+          is_subscribed?: boolean | null
           is_suspended?: boolean | null
           last_name?: string | null
           last_seen?: string | null
-          free_access_start_at?: string | null
-          revenuecat_id?: string | null
           next_billing_date?: string | null
           notification_preferences?: Json | null
           payment_method?: string | null
           plan_name?: string | null
+          revenuecat_id?: string | null
           settings?: Json | null
           subscription_status?: string | null
           suspended_at?: string | null
@@ -2006,6 +2479,47 @@ export type Database = {
           },
         ]
       }
+      user_feature_quotas: {
+        Row: {
+          base_limit: number
+          created_at: string
+          feature: string
+          gift_extra: number
+          id: string
+          updated_at: string
+          used: number
+          user_id: string
+        }
+        Insert: {
+          base_limit?: number
+          created_at?: string
+          feature: string
+          gift_extra?: number
+          id?: string
+          updated_at?: string
+          used?: number
+          user_id: string
+        }
+        Update: {
+          base_limit?: number
+          created_at?: string
+          feature?: string
+          gift_extra?: number
+          id?: string
+          updated_at?: string
+          used?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_feature_quotas_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_memory_context: {
         Row: {
           ai_nickname: string | null
@@ -2069,6 +2583,150 @@ export type Database = {
           user_expertise?: string[] | null
           user_id?: string
           working_patterns?: string | null
+        }
+        Relationships: []
+      }
+      user_music_generations_quotas: {
+        Row: {
+          extra_generations: number
+          monthly_date: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          extra_generations?: number
+          monthly_date: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          extra_generations?: number
+          monthly_date?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_music_minutes_quotas: {
+        Row: {
+          extra_minutes: number
+          monthly_date: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          extra_minutes?: number
+          monthly_date: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          extra_minutes?: number
+          monthly_date?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_music_quota: {
+        Row: {
+          chars_used: number
+          period_start: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          chars_used?: number
+          period_start: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          chars_used?: number
+          period_start?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_music_tracks: {
+        Row: {
+          created_at: string
+          exclude_styles: string[] | null
+          id: string
+          include_styles: string[] | null
+          meta: Json | null
+          mime: string | null
+          model: string | null
+          prompt: string | null
+          provider: string | null
+          requested_duration_seconds: number | null
+          signed_url: string | null
+          storage_path: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          exclude_styles?: string[] | null
+          id?: string
+          include_styles?: string[] | null
+          meta?: Json | null
+          mime?: string | null
+          model?: string | null
+          prompt?: string | null
+          provider?: string | null
+          requested_duration_seconds?: number | null
+          signed_url?: string | null
+          storage_path?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          exclude_styles?: string[] | null
+          id?: string
+          include_styles?: string[] | null
+          meta?: Json | null
+          mime?: string | null
+          model?: string | null
+          prompt?: string | null
+          provider?: string | null
+          requested_duration_seconds?: number | null
+          signed_url?: string | null
+          storage_path?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_personal_touch: {
+        Row: {
+          ai_nickname: string
+          instruction: string
+          nickname: string
+          pt_version: number
+          style: string
+          tone: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ai_nickname?: string
+          instruction?: string
+          nickname?: string
+          pt_version?: number
+          style?: string
+          tone?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ai_nickname?: string
+          instruction?: string
+          nickname?: string
+          pt_version?: number
+          style?: string
+          tone?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -2190,6 +2848,27 @@ export type Database = {
           device_info?: string | null
           is_active?: boolean | null
           session_token?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_voice_characters_quotas: {
+        Row: {
+          extra_characters: number
+          monthly_date: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          extra_characters?: number
+          monthly_date: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          extra_characters?: number
+          monthly_date?: string
           updated_at?: string
           user_id?: string
         }
@@ -2710,9 +3389,9 @@ export type Database = {
       }
     }
     Functions: {
-      admin_activate_subscription: {
-        Args:
-          | {
+      admin_activate_subscription:
+        | {
+            Args: {
               p_billing_amount: number
               p_billing_currency?: string
               p_fawran_payment_id?: string
@@ -2723,7 +3402,10 @@ export type Database = {
               p_plan_name: string
               p_user_id: string
             }
-          | {
+            Returns: Json
+          }
+        | {
+            Args: {
               p_billing_amount?: number
               p_billing_currency?: string
               p_fawran_payment_id?: string
@@ -2732,7 +3414,142 @@ export type Database = {
               p_plan_name: string
               p_user_id: string
             }
+            Returns: boolean
+          }
+      admin_adjust_feature_quota: {
+        Args: {
+          p_delta: number
+          p_feature: string
+          p_reason?: string
+          p_user_id: string
+        }
         Returns: Json
+      }
+      admin_adjust_music_generations: {
+        Args: {
+          p_delta: number
+          p_month: string
+          p_reason?: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      admin_adjust_music_minutes: {
+        Args: {
+          p_delta: number
+          p_month: string
+          p_reason?: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      admin_adjust_trial: {
+        Args: { p_action: string; p_minutes?: number; p_user_id: string }
+        Returns: Json
+      }
+      admin_adjust_voice_characters: {
+        Args: {
+          p_delta: number
+          p_month: string
+          p_reason?: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      admin_export_revenue_analytics: {
+        Args: { p_from?: string; p_to?: string }
+        Returns: {
+          billing_amount: number
+          billing_currency: string
+          billing_cycle: string
+          is_gift: boolean
+          next_billing_date: string
+          plan_name: string
+          start_date: string
+          status: string
+          user_id: string
+        }[]
+      }
+      admin_get_music_generations_monthly: {
+        Args: { p_month: string; p_user_id: string }
+        Returns: Json
+      }
+      admin_get_music_usage_monthly: {
+        Args: { p_month: string; p_user_id: string }
+        Returns: Json
+      }
+      admin_get_revenue_timeseries: {
+        Args: { p_months_back?: number }
+        Returns: {
+          month_start: string
+          total_revenue: number
+        }[]
+      }
+      admin_get_user_all_usage: {
+        Args: { p_month?: string; p_user_id: string }
+        Returns: Json
+      }
+      admin_get_user_full_profile:
+        | {
+            Args: {
+              p_from?: string
+              p_plan_name?: string
+              p_to?: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_from?: string
+              p_plan_type?: string
+              p_to?: string
+              p_user_id: string
+            }
+            Returns: {
+              billing_amount: number
+              billing_currency: string
+              billing_cycle: string
+              characters_limit: number
+              characters_used: number
+              display_name: string
+              email: string
+              extra_characters: number
+              gift_duration: string
+              gift_given_by: string
+              is_gift: boolean
+              is_subscribed: boolean
+              next_billing_date: string
+              profile_id: string
+              profile_plan_name: string
+              start_date: string
+              subscription_id: string
+              subscription_plan_name: string
+              subscription_status: string
+              subscription_status_detail: string
+            }[]
+          }
+      admin_get_user_usage: {
+        Args: { p_month?: string; p_scope?: string; p_user_id: string }
+        Returns: Json
+      }
+      admin_get_voice_characters_monthly: {
+        Args: { p_month: string; p_user_id: string }
+        Returns: Json
+      }
+      admin_get_voice_quotas: {
+        Args: { p_user_id?: string }
+        Returns: {
+          base_limit: number
+          display_name: string
+          email: string
+          gift_extra: number
+          is_subscribed: boolean
+          subscription_status: string
+          total_limit: number
+          used: number
+          user_id: string
+        }[]
       }
       admin_gift_translation_credits: {
         Args: { p_admin_id: string; p_translations: number; p_user_id: string }
@@ -2747,6 +3564,14 @@ export type Database = {
           new_extra_characters: number
           success: boolean
         }[]
+      }
+      admin_reset_music_free_minutes: {
+        Args: { p_month: string; p_user_id: string }
+        Returns: Json
+      }
+      admin_start_impersonation: {
+        Args: { p_reason: string; p_user_id: string }
+        Returns: Json
       }
       admin_update_storage_bucket: {
         Args: {
@@ -2769,10 +3594,8 @@ export type Database = {
           session_token: string
         }[]
       }
-      backfill_missing_profiles: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
+      backfill_missing_profiles: { Args: never; Returns: number }
+      can_generate_music: { Args: never; Returns: Json }
       can_users_message: {
         Args: { recipient_id: string; sender_id: string }
         Returns: boolean
@@ -2781,66 +3604,85 @@ export type Database = {
         Args: { profile_id: string; viewer_id: string }
         Returns: boolean
       }
-      check_browsing_quota: {
-        Args: { p_user_id: string }
-        Returns: number
+      check_browsing_quota: { Args: { p_user_id: string }; Returns: number }
+      cleanup_expired_ai_data: { Args: never; Returns: undefined }
+      cleanup_expired_chat_history: { Args: never; Returns: undefined }
+      cleanup_expired_maw3d_events: { Args: never; Returns: undefined }
+      cleanup_expired_summaries: { Args: never; Returns: undefined }
+      cleanup_expired_voice_clones: { Args: never; Returns: undefined }
+      cleanup_old_conversation_summaries: { Args: never; Returns: undefined }
+      cleanup_old_conversations: { Args: never; Returns: undefined }
+      cleanup_old_messages: { Args: never; Returns: undefined }
+      deactivate_expired_gift_subscriptions: { Args: never; Returns: undefined }
+      ensure_user_feature_quota: {
+        Args: { p_feature: string; p_user_id: string }
+        Returns: {
+          base_limit: number
+          created_at: string
+          feature: string
+          gift_extra: number
+          id: string
+          updated_at: string
+          used: number
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "user_feature_quotas"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
-      cleanup_expired_ai_data: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
+      ensure_user_music_generations_quota: {
+        Args: { p_month: string; p_user_id: string }
+        Returns: {
+          extra_generations: number
+          monthly_date: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "user_music_generations_quotas"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
-      cleanup_expired_chat_history: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
+      ensure_user_music_minutes_quota: {
+        Args: { p_month: string; p_user_id: string }
+        Returns: {
+          extra_minutes: number
+          monthly_date: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "user_music_minutes_quotas"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
-      cleanup_expired_maw3d_events: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
+      ensure_user_voice_characters_quota: {
+        Args: { p_month: string; p_user_id: string }
+        Returns: {
+          extra_characters: number
+          monthly_date: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "user_voice_characters_quotas"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
-      cleanup_expired_summaries: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      cleanup_expired_voice_clones: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      cleanup_old_conversation_summaries: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      cleanup_old_conversations: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      cleanup_old_messages: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      deactivate_expired_gift_subscriptions: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      format_timestamp: {
-        Args: { ts: string }
-        Returns: string
-      }
-      generate_event_short_id: {
-        Args: { event_uuid: string }
-        Returns: string
-      }
-      generate_maw3d_short_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
-      generate_task_short_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
-      generate_tr_share_link: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
+      format_timestamp: { Args: { ts: string }; Returns: string }
+      generate_event_short_id: { Args: { event_uuid: string }; Returns: string }
+      generate_maw3d_short_id: { Args: never; Returns: string }
+      generate_task_short_id: { Args: never; Returns: string }
+      generate_tr_share_link: { Args: never; Returns: string }
       get_admin_by_auth_id: {
         Args: { auth_user_id: string }
         Returns: {
@@ -2853,7 +3695,7 @@ export type Database = {
         }[]
       }
       get_admin_dashboard_stats: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           active_subscriptions: number
           expiring_soon: number
@@ -2866,12 +3708,9 @@ export type Database = {
           unsubscribed_users: number
         }[]
       }
-      get_current_user_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
+      get_current_user_id: { Args: never; Returns: string }
       get_fawran_payment_stats: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           approved_payments: number
           auto_approved_payments: number
@@ -2932,31 +3771,11 @@ export type Database = {
         }[]
       }
       get_payment_method_stats: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           payment_method: string
           user_count: number
         }[]
-      }
-      gtrgm_compress: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      gtrgm_decompress: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      gtrgm_in: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      gtrgm_options: {
-        Args: { "": unknown }
-        Returns: undefined
-      }
-      gtrgm_out: {
-        Args: { "": unknown }
-        Returns: unknown
       }
       increment_regular_search_usage: {
         Args: { p_user_id: string }
@@ -2990,17 +3809,46 @@ export type Database = {
           translation_count: number
         }[]
       }
-      is_admin: {
-        Args: Record<PropertyKey, never>
+      is_admin: { Args: never; Returns: boolean }
+      is_letters_host: { Args: { gid: string }; Returns: boolean }
+      is_letters_member: { Args: { gid: string }; Returns: boolean }
+      is_staff: { Args: { uid: string }; Returns: boolean }
+      is_valid_admin: { Args: { user_id?: string }; Returns: boolean }
+      letters_ai_suggest: {
+        Args: {
+          p_categories?: string[]
+          p_lang: string
+          p_letter: string
+          p_pick?: number
+        }
+        Returns: Json
+      }
+      letters_is_real_word: {
+        Args: { p_lang: string; p_term_norm: string }
         Returns: boolean
       }
-      is_staff: {
-        Args: { uid: string }
-        Returns: boolean
+      letters_leipzig_ingest: {
+        Args: { p_items: Json; p_lang: string }
+        Returns: number
       }
-      is_valid_admin: {
-        Args: { user_id?: string }
-        Returns: boolean
+      letters_pick_random_letter: { Args: { p_lang: string }; Returns: string }
+      letters_round_create: {
+        Args: {
+          p_duration?: number
+          p_game_id: string
+          p_letter?: string
+          p_number?: number
+        }
+        Returns: string
+      }
+      letters_round_finish: { Args: { p_round_id: string }; Returns: undefined }
+      letters_round_start: { Args: { p_round_id: string }; Returns: undefined }
+      letters_validate_words: {
+        Args: { p_lang: string; p_terms: string[] }
+        Returns: {
+          is_real: boolean
+          term_norm: string
+        }[]
       }
       log_ai_usage: {
         Args: {
@@ -3011,22 +3859,13 @@ export type Database = {
         }
         Returns: undefined
       }
-      maintain_conversation_limit: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      maintain_conversation_limit: { Args: never; Returns: undefined }
       mark_messages_as_read: {
         Args: { other_user_id: string }
         Returns: undefined
       }
-      process_expired_subscriptions: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      process_stuck_fawran_payments: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
+      process_expired_subscriptions: { Args: never; Returns: Json }
+      process_stuck_fawran_payments: { Args: never; Returns: Json }
       process_translation_credits_purchase: {
         Args: { p_amount: number; p_transaction_id: string; p_user_id: string }
         Returns: boolean
@@ -3097,10 +3936,7 @@ export type Database = {
         }
         Returns: boolean
       }
-      reset_monthly_voice_quotas: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
+      reset_monthly_voice_quotas: { Args: never; Returns: Json }
       resolve_duplicate_subscription: {
         Args: {
           p_keep_payment_id: string
@@ -3118,22 +3954,9 @@ export type Database = {
         }
         Returns: string
       }
-      set_limit: {
-        Args: { "": number }
-        Returns: number
-      }
-      setup_notification_cron_job: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      show_limit: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
-      show_trgm: {
-        Args: { "": string }
-        Returns: string[]
-      }
+      setup_notification_cron_job: { Args: never; Returns: Json }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       soft_delete_user: {
         Args: { p_admin_id: string; p_user_id: string }
         Returns: boolean
@@ -3146,14 +3969,8 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: Json
       }
-      unsuspend_user: {
-        Args: { p_user_id: string }
-        Returns: boolean
-      }
-      update_overdue_tasks: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      unsuspend_user: { Args: { p_user_id: string }; Returns: boolean }
+      update_overdue_tasks: { Args: never; Returns: undefined }
       update_voice_activity: {
         Args: { p_voice_id: string }
         Returns: undefined
@@ -3210,10 +4027,7 @@ export type Database = {
           user_id: string
         }[]
       }
-      user_can_access_task: {
-        Args: { task_id: string }
-        Returns: boolean
-      }
+      user_can_access_task: { Args: { task_id: string }; Returns: boolean }
       user_is_conversation_participant: {
         Args: { conversation_id: string }
         Returns: boolean
