@@ -31,21 +31,14 @@ export function validateEmail(email: string): string | null {
   return null; // No errors
 }
 
-// Password validation
+// Password validation - relaxed to match Supabase settings (6 characters minimum only)
 export function validatePassword(password: string): string | null {
   if (!password) {
     return "Password cannot be empty";
   }
   
   if (password.length < 6) {
-    return "Password must be at least 6 characters, contain one uppercase letter and one number";
-  }
-  
-  const hasUpperCase = /[A-Z]/.test(password);
-  const hasNumber = /\d/.test(password);
-  
-  if (!hasUpperCase || !hasNumber) {
-    return "Password must be at least 6 characters, contain one uppercase letter and one number";
+    return "Password must be at least 6 characters";
   }
   
   return null; // No errors

@@ -124,6 +124,19 @@ export default function Signup() {
       
       if (error) {
         console.error("Signup error:", error);
+        
+        // Handle weak password 422 error specifically to prevent Natively error screen
+        if (error.status === 422 || 
+            error.message?.toLowerCase().includes('weak') ||
+            error.message?.toLowerCase().includes('easy to guess')) {
+          const weakPasswordMsg = language === 'en' 
+            ? 'Please choose a different password. Try making it more unique.'
+            : 'يرجى اختيار كلمة مرور مختلفة. حاول جعلها أكثر تميزًا.';
+          setErrorMsg(weakPasswordMsg);
+          return; // Don't show toast - just inline error
+        }
+        
+        // Other errors
         setErrorMsg(error.message);
         toast.error(language === 'en' ? 'Signup Failed: ' + error.message : 'فشل إنشاء الحساب: ' + error.message);
       } else if (data?.user) {
@@ -221,7 +234,7 @@ export default function Signup() {
       privacyPolicy: "Privacy Policy",
       and: "and",
       termsOfService: "Terms of Service",
-      passwordRequirements: "At least 6 characters, include one uppercase letter and one digit",
+      passwordRequirements: "At least 6 characters",
       selectCountry: "Select your country",
       appleSignup: "Sign up with Apple",
       orContinueWith: "Or continue with",
@@ -252,7 +265,7 @@ export default function Signup() {
       privacyPolicy: "سياسة الخصوصية",
       and: "و",
       termsOfService: "شروط الخدمة",
-      passwordRequirements: "على الأقل 6 أحرف، تحتوي على حرف كبير واحد ورقم واحد",
+      passwordRequirements: "على الأقل 6 أحرف",
       selectCountry: "اختر بلدك",
       appleSignup: "التسجيل عبر Apple",
       orContinueWith: "أو تابع باستخدام",
