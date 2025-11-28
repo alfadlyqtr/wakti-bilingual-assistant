@@ -488,7 +488,7 @@ const WaktiAIV2 = () => {
         }}
       >
         {activeTrigger === 'image' && activeImageMode === 'draw-after-bg' ? (
-          <DrawAfterBGCanvas />
+          <DrawAfterBGCanvas prompt={message} />
         ) : (
           <ChatMessages
             sessionMessages={sessionMessages}
@@ -510,41 +510,39 @@ const WaktiAIV2 = () => {
         )}
       </div>
 
-        {!(activeTrigger === 'image' && activeImageMode === 'draw-after-bg') && (
-          portalRoot ? createPortal(
-            <div className='chat-input-container solid-bg glass-edge'>
-              <ChatInput
-                message={message}
-                setMessage={setMessage}
-                isLoading={canSendMessage ? isLoading : true}
-                sessionMessages={sessionMessages}
-                onSendMessage={handleSendMessage}
-                onClearChat={handleClearChat}
-                onOpenPlusDrawer={() => setIsSidebarOpen(true)}
-                onOpenConversations={() => setShowConversations(true)}
-                activeTrigger={activeTrigger}
-                onTriggerChange={setActiveTrigger}
-                onImageModeChange={setActiveImageMode}
-              />
-            </div>,
-            portalRoot
-          ) : (
-            <div className='chat-input-container solid-bg glass-edge'>
-              <ChatInput
-                message={message}
-                setMessage={setMessage}
-                isLoading={canSendMessage ? isLoading : true}
-                sessionMessages={sessionMessages}
-                onSendMessage={handleSendMessage}
-                onClearChat={handleClearChat}
-                onOpenPlusDrawer={() => setIsSidebarOpen(true)}
-                onOpenConversations={() => setShowConversations(true)}
-                activeTrigger={activeTrigger}
-                onTriggerChange={setActiveTrigger}
-                onImageModeChange={setActiveImageMode}
-              />
-            </div>
-          )
+        {portalRoot ? createPortal(
+          <div className='chat-input-container solid-bg glass-edge'>
+            <ChatInput
+              message={message}
+              setMessage={setMessage}
+              isLoading={canSendMessage ? isLoading : true}
+              sessionMessages={sessionMessages}
+              onSendMessage={handleSendMessage}
+              onClearChat={handleClearChat}
+              onOpenPlusDrawer={() => setIsSidebarOpen(true)}
+              onOpenConversations={() => setShowConversations(true)}
+              activeTrigger={activeTrigger}
+              onTriggerChange={setActiveTrigger}
+              onImageModeChange={setActiveImageMode}
+            />
+          </div>,
+          portalRoot
+        ) : (
+          <div className='chat-input-container solid-bg glass-edge'>
+            <ChatInput
+              message={message}
+              setMessage={setMessage}
+              isLoading={canSendMessage ? isLoading : true}
+              sessionMessages={sessionMessages}
+              onSendMessage={handleSendMessage}
+              onClearChat={handleClearChat}
+              onOpenPlusDrawer={() => setIsSidebarOpen(true)}
+              onOpenConversations={() => setShowConversations(true)}
+              activeTrigger={activeTrigger}
+              onTriggerChange={setActiveTrigger}
+              onImageModeChange={setActiveImageMode}
+            />
+          </div>
         )}
     </div>
   );
