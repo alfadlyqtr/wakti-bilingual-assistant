@@ -50,6 +50,8 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
 
   // Render generated image on background canvas
   useEffect(() => {
+    console.log('🔄 lastGeneratedImage changed:', lastGeneratedImage ? 'HAS URL' : 'NO URL', lastGeneratedImage);
+    
     if (!lastGeneratedImage || !bgCanvasRef.current) return;
 
     const bgCanvas = bgCanvasRef.current;
@@ -57,16 +59,22 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
     if (!bgCtx) return;
 
     const img = new Image();
+    img.crossOrigin = 'anonymous'; // Try to handle CORS
+    
     img.onload = () => {
-      console.log('🖼️ Loading image from URL:', lastGeneratedImage);
+      console.log('✅ Image loaded successfully, drawing to canvas');
       bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
       bgCtx.drawImage(img, 0, 0, bgCanvas.width, bgCanvas.height);
-      console.log('✅ Background image rendered successfully');
+      toast.success('Drawing enhanced!');
     };
+    
     img.onerror = (err) => {
-      console.error('❌ Failed to load image from URL:', lastGeneratedImage, err);
-      toast.error('Failed to display generated image');
+      console.error('❌ Image failed to load:', err);
+      console.error('❌ Failed URL was:', lastGeneratedImage);
+      toast.error('Failed to load generated image');
     };
+    
+    console.log('🔄 Setting img.src to:', lastGeneratedImage);
     img.src = lastGeneratedImage;
   }, [lastGeneratedImage]);
 
@@ -242,6 +250,18 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseLeave}
         />
+        
+        {/* DEBUG: Test if image URL loads at all */}
+        {lastGeneratedImage && (
+          <img 
+            src={lastGeneratedImage} 
+            alt="Debug test" 
+            className="absolute bottom-2 right-2 w-20 h-20 border-2 border-green-500 object-cover"
+            style={{ zIndex: 999 }}
+            onLoad={() => console.log('✅ DEBUG img tag loaded successfully')}
+            onError={() => console.error('❌ DEBUG img tag failed')}
+          />
+        )}
       </div>
 
       {/* Controls */}
