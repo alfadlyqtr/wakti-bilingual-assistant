@@ -64,13 +64,13 @@ serve(async (req) => {
         console.log(`🎨 Triggering fal.ai generation (strength: ${strength})`);
 
         // Use the fal.ai subscribe method with credentials
-        const result = await fal.subscribe("fal-ai/flux/dev", {
+        const result = await fal.subscribe("fal-ai/fast-lightning-sdxl/image-to-image", {
           input: {
             image_url: data.imageBase64, // base64 data URI
-            prompt: data.prompt,
-            strength: strength,
-            num_inference_steps: 28,
-            guidance_scale: 3.5,
+            prompt: `sketch drawing style: ${data.prompt}`,
+            strength: Math.min(strength * 0.6, 0.5), // Lower strength to preserve sketch
+            num_inference_steps: 4,
+            guidance_scale: 2.0,
             output_format: "jpeg",
             enable_safety_checker: false
           },

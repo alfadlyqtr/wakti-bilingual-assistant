@@ -16,7 +16,7 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [strength, setStrength] = useState(0.7);
+  const [strength, setStrength] = useState(0.5);
   const lastGenerationTimeRef = useRef<number>(0);
   const generationIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -251,8 +251,8 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
           </label>
           <input
             type="range"
-            min="0.6"
-            max="0.8"
+            min="0.3"
+            max="0.6"
             step="0.05"
             value={strength}
             onChange={(e) => setStrength(parseFloat(e.target.value))}
