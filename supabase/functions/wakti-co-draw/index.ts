@@ -60,8 +60,8 @@ serve(async (req) => {
 
         console.log(`🎨 Triggering fal.ai generation (strength: ${strength})`);
 
-        // Use the fal.ai subscribe method with credentials
-        const result = await fal.subscribe("fal-ai/fast-lightning-sdxl/image-to-image", {
+        // Use the fal.ai run method with credentials
+        const result = await fal.run("fal-ai/fast-lightning-sdxl/image-to-image", {
           input: {
             image_url: data.imageBase64, // base64 data URI
             prompt: data.prompt,
@@ -71,22 +71,16 @@ serve(async (req) => {
             output_format: "jpeg",
             enable_safety_checker: false
           },
-          credentials: FAL_KEY,
-          logs: true,
-          onQueueUpdate: (update) => {
-            console.log('Queue update:', update.status);
-            socket.send(JSON.stringify({
-              type: 'progress',
-              status: update.status
-            }));
-          }
+          credentials: FAL_KEY
         });
         
-        if (result.data && result.data.images && result.data.images.length > 0) {
+        console.log('🎨 Generation result:', result);
+        
+        if (result && result.images && result.images.length > 0) {
           console.log('✅ Generation complete');
           socket.send(JSON.stringify({
             type: 'image',
-            data: result.data.images[0].url
+            data: result.images[0].url
           }));
         } else {
           console.error('❌ No images in response');
