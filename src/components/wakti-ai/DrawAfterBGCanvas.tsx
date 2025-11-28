@@ -74,7 +74,19 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
     if (!canvas) return null;
 
     try {
-      return canvas.toDataURL('image/jpeg', 0.8);
+      // Render onto an offscreen canvas with a solid white background
+      // so the model sees a white sketch instead of transparency (which becomes black in JPEG).
+      const exportCanvas = document.createElement('canvas');
+      exportCanvas.width = canvas.width;
+      exportCanvas.height = canvas.height;
+      const exportCtx = exportCanvas.getContext('2d');
+      if (!exportCtx) return null;
+
+      exportCtx.fillStyle = '#ffffff';
+      exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+      exportCtx.drawImage(canvas, 0, 0);
+
+      return exportCanvas.toDataURL('image/jpeg', 0.9);
     } catch (err) {
       console.error('Failed to capture canvas:', err);
       return null;
