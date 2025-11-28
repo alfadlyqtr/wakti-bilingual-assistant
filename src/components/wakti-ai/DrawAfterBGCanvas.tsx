@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Loader2, Trash2 } from 'lucide-react';
 import { useDrawAfterBG } from '@/hooks/useDrawAfterBG';
@@ -8,7 +8,11 @@ interface DrawAfterBGCanvasProps {
   prompt: string;
 }
 
-export const DrawAfterBGCanvas: React.FC<DrawAfterBGCanvasProps> = ({ prompt }) => {
+export interface DrawAfterBGCanvasRef {
+  triggerManualGeneration: () => void;
+}
+
+export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCanvasProps>(({ prompt }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -85,6 +89,7 @@ export const DrawAfterBGCanvas: React.FC<DrawAfterBGCanvasProps> = ({ prompt }) 
 
     if (!prompt.trim()) {
       console.log('⏸️ No prompt provided');
+      toast.error('Please enter a prompt to enhance your drawing');
       return;
     }
 
@@ -98,6 +103,11 @@ export const DrawAfterBGCanvas: React.FC<DrawAfterBGCanvasProps> = ({ prompt }) 
     sendGenerationRequest(imageBase64, prompt, strength);
   }, [prompt, strength, captureCanvasAsBase64, sendGenerationRequest]);
 
+  // Expose triggerGeneration to parent via ref
+  useImperativeHandle(ref, () => ({
+    triggerManualGeneration: triggerGeneration
+  }), [triggerGeneration]);
+
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
@@ -105,8 +115,11 @@ export const DrawAfterBGCanvas: React.FC<DrawAfterBGCanvasProps> = ({ prompt }) 
 
     setIsDrawing(true);
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    // Scale coordinates based on canvas internal size vs display size
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
 
     ctx.beginPath();
     ctx.moveTo(x, y);
@@ -120,8 +133,11 @@ export const DrawAfterBGCanvas: React.FC<DrawAfterBGCanvasProps> = ({ prompt }) 
     if (!canvas || !ctx) return;
 
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    // Scale coordinates based on canvas internal size vs display size
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
 
     ctx.lineTo(x, y);
     ctx.stroke();
@@ -243,4 +259,6 @@ export const DrawAfterBGCanvas: React.FC<DrawAfterBGCanvasProps> = ({ prompt }) 
       </div>
     </div>
   );
-};
+});
+
+DrawAfterBGCanvas.displayName = 'DrawAfterBGCanvas';

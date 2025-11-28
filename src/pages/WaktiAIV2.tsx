@@ -8,7 +8,7 @@ import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
 import { ChatInput, ImageMode } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { ConversationSidebar } from '@/components/wakti-ai-v2/ConversationSidebar';
-import { DrawAfterBGCanvas } from '@/components/wakti-ai/DrawAfterBGCanvas';
+import { DrawAfterBGCanvas, DrawAfterBGCanvasRef } from '@/components/wakti-ai/DrawAfterBGCanvas';
 import { cn } from '@/lib/utils';
 import { createPortal } from 'react-dom';
 import { useIsDesktop } from '@/hooks/use-mobile';
@@ -38,6 +38,7 @@ const WaktiAIV2 = () => {
   const visionInFlightRef = useRef<boolean>(false);
   const lastTriggerRef = useRef<string>('chat');
   const safetyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const drawCanvasRef = useRef<DrawAfterBGCanvasRef>(null);
   const { language } = useTheme();
   const { showError } = useToastHelper();
   const { isDesktop } = useIsDesktop();
@@ -183,6 +184,12 @@ const WaktiAIV2 = () => {
     imageMode?: string,
     imageQuality?: 'fast' | 'best_fast'
   ) => {
+    // Special handling for draw-after-bg mode - trigger generation in canvas
+    if (trigger === 'image' && imageMode === 'draw-after-bg') {
+      drawCanvasRef.current?.triggerManualGeneration();
+      return;
+    }
+
     if (!messageContent.trim() && (!attachedFiles || attachedFiles.length === 0)) {
       showError('Please enter a message or attach a file.');
       return;
@@ -488,7 +495,7 @@ const WaktiAIV2 = () => {
         }}
       >
         {activeTrigger === 'image' && activeImageMode === 'draw-after-bg' ? (
-          <DrawAfterBGCanvas prompt={message} />
+          <DrawAfterBGCanvas ref={drawCanvasRef} prompt={message} />
         ) : (
           <ChatMessages
             sessionMessages={sessionMessages}
