@@ -628,6 +628,7 @@ export function ChatInput({
   // Determine if send button should be enabled
   const hasArabic = (s: string) => /[\u0600-\u06FF]/.test(s || '');
   const isArabicI2I = activeTrigger === 'image' && imageMode === 'image2image' && hasArabic(message);
+  // In draw-after-bg mode, prompt is required for generation
   const canSend = (message.trim().length > 0 || uploadedFiles.length > 0) && !isLoading && !isUploading && isTextareaEnabled && !isArabicI2I;
 
   // Get appropriate placeholder text
@@ -1063,8 +1064,8 @@ export function ChatInput({
                               ? (language === 'ar' ? 'صورة إلى صورة' : 'Image2Image')
                               : imageMode === 'background-removal'
                                 ? (language === 'ar' ? 'إزالة الخلفية' : 'BG Removal')
-                                : imageMode === 'draw-after-bg'
-                                  ? (language === 'ar' ? 'الرسم بعد إزالة الخلفية' : 'Draw After BG')
+                                 : imageMode === 'draw-after-bg'
+                                  ? (language === 'ar' ? 'رسم' : 'Draw')
                                   : (language === 'ar' ? 'نص إلى صورة' : 'Text2Image')}
                           </span>
                           <ChevronDown className="h-3 w-3" />
@@ -1087,7 +1088,7 @@ export function ChatInput({
                                   <button onPointerUp={() => { setImageMode('text2image'); onImageModeChange?.('text2image'); setImageMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'نص إلى صورة' : 'Text2Image'}</button>
                                   <button onPointerUp={() => { setImageMode('image2image'); onImageModeChange?.('image2image'); setImageMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'صورة إلى صورة' : 'Image2Image'}</button>
                                   <button onPointerUp={() => { setImageMode('background-removal'); onImageModeChange?.('background-removal'); setImageMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'إزالة الخلفية' : 'BG Removal'}</button>
-                                  <button onPointerUp={() => { setImageMode('draw-after-bg'); onImageModeChange?.('draw-after-bg'); setImageMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'الرسم بعد إزالة الخلفية' : 'Draw After BG'}</button>
+                                  <button onPointerUp={() => { setImageMode('draw-after-bg'); onImageModeChange?.('draw-after-bg'); setImageMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'رسم' : 'Draw'}</button>
                                 </div>
                               </motion.div>
                             )}
@@ -1095,8 +1096,8 @@ export function ChatInput({
                           document.body
                         )}
 
-                        {/* Seed image upload for Image Mode submodes that require an input image */}
-                        {imageMode !== 'text2image' && (
+                        {/* Seed image upload for Image Mode submodes that require an input image (excluding draw-after-bg) */}
+                        {imageMode !== 'text2image' && imageMode !== 'draw-after-bg' && (
                           <button
                             type="button"
                             className="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-orange-50 dark:bg-orange-950/40 border border-orange-200/70 dark:border-orange-800/60 text-orange-900 dark:text-orange-200 shadow-sm"
