@@ -86,11 +86,11 @@ serve(async (req) => {
         
         console.log('🎨 Generation result:', result);
         
-        if (result && result.images && result.images.length > 0) {
+        if (result?.data?.images && result.data.images.length > 0) {
           console.log('✅ Generation complete');
           socket.send(JSON.stringify({
             type: 'image',
-            data: result.images[0].url
+            data: result.data.images[0].url
           }));
         } else {
           console.error('❌ No images in response');
