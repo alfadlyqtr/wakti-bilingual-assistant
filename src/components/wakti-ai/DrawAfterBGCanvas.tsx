@@ -58,12 +58,13 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
 
     const img = new Image();
     img.onload = () => {
+      console.log('🖼️ Loading image from URL:', lastGeneratedImage);
       bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
       bgCtx.drawImage(img, 0, 0, bgCanvas.width, bgCanvas.height);
-      console.log('🖼️ Background image rendered from URL:', lastGeneratedImage);
+      console.log('✅ Background image rendered successfully');
     };
     img.onerror = (err) => {
-      console.error('Failed to load generated image from URL:', lastGeneratedImage, err);
+      console.error('❌ Failed to load image from URL:', lastGeneratedImage, err);
       toast.error('Failed to display generated image');
     };
     img.src = lastGeneratedImage;

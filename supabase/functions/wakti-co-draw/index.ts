@@ -66,9 +66,9 @@ serve(async (req) => {
         // Use the fal.ai subscribe method with credentials
         const result = await fal.subscribe("fal-ai/fast-lightning-sdxl/image-to-image", {
           input: {
-            image_url: data.imageBase64, // base64 data URI
-            prompt: `simple clean line-art sketch on a white background. Keep and refine the existing drawing while following this instruction: ${data.prompt}`,
-            strength: Math.min(strength * 0.6, 0.5), // Lower strength to preserve sketch
+            image_url: data.imageBase64,
+            prompt: `Add to this sketch: ${data.prompt}. Keep the sketch style and existing lines.`,
+            strength: 0.35,
             num_inference_steps: 4,
             guidance_scale: 2.0,
             output_format: "jpeg",
