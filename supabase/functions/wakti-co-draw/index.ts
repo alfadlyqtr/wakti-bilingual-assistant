@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import * as fal from "npm:@fal-ai/client@latest";
+import { fal } from "npm:@fal-ai/client@latest";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -29,6 +29,9 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
+
+  // Configure fal.ai client with our API key
+  fal.config({ credentials: FAL_KEY });
 
   console.log('🚀 WebSocket upgrade requested for wakti-co-draw');
 
@@ -60,8 +63,8 @@ serve(async (req) => {
 
         console.log(`🎨 Triggering fal.ai generation (strength: ${strength})`);
 
-        // Use the fal.ai run method with credentials
-        const result = await fal.run("fal-ai/fast-lightning-sdxl/image-to-image", {
+        // Use the fal.ai subscribe method with credentials
+        const result = await fal.subscribe("fal-ai/fast-lightning-sdxl/image-to-image", {
           input: {
             image_url: data.imageBase64, // base64 data URI
             prompt: data.prompt,
@@ -71,7 +74,14 @@ serve(async (req) => {
             output_format: "jpeg",
             enable_safety_checker: false
           },
-          credentials: FAL_KEY
+          logs: true,
+          onQueueUpdate: (update) => {
+            console.log('Queue update:', update.status);
+            socket.send(JSON.stringify({
+              type: 'progress',
+              status: update.status
+            }));
+          }
         });
         
         console.log('🎨 Generation result:', result);
