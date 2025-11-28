@@ -70,7 +70,7 @@ serve(async (req) => {
         for await (const update of fal.subscribe("fal-ai/fast-lightning-sdxl/image-to-image", {
           input: {
             image_url: data.imageBase64,
-            prompt: `Add to this sketch: ${data.prompt}. Keep the sketch style and existing lines.`,
+            prompt: `A highly detailed, cinematic, professional digital painting of ${data.prompt}, enhancing the original doodle while strictly adhering to the sketch lines. Volumetric lighting, hyper-detailed, 8k, concept art.`,
             strength: strength,
             num_inference_steps: 4,
             guidance_scale: 2.0,
