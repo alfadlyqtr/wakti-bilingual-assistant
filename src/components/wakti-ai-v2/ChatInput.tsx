@@ -36,7 +36,7 @@ const textareaHighlight = (activeTrigger: string) => {
   }
 };
 
-export type ImageMode = 'text2image' | 'image2image' | 'background-removal';
+export type ImageMode = 'text2image' | 'image2image' | 'background-removal' | 'draw-after-bg';
 
 interface ChatInputProps {
   message: string;
@@ -49,6 +49,7 @@ interface ChatInputProps {
   onOpenConversations?: () => void;
   activeTrigger: string;
   onTriggerChange?: (trigger: string) => void;
+  onImageModeChange?: (mode: ImageMode) => void;
   showVideoUpload?: boolean;
   setShowVideoUpload?: (show: boolean) => void;
   videoCategory?: string;
@@ -66,6 +67,7 @@ export function ChatInput({
   onOpenConversations,
   activeTrigger,
   onTriggerChange,
+  onImageModeChange,
   showVideoUpload = false,
   setShowVideoUpload,
   videoCategory = 'custom',
@@ -1061,7 +1063,9 @@ export function ChatInput({
                               ? (language === 'ar' ? 'صورة إلى صورة' : 'Image2Image')
                               : imageMode === 'background-removal'
                                 ? (language === 'ar' ? 'إزالة الخلفية' : 'BG Removal')
-                                : (language === 'ar' ? 'نص إلى صورة' : 'Text2Image')}
+                                : imageMode === 'draw-after-bg'
+                                  ? (language === 'ar' ? 'الرسم بعد إزالة الخلفية' : 'Draw After BG')
+                                  : (language === 'ar' ? 'نص إلى صورة' : 'Text2Image')}
                           </span>
                           <ChevronDown className="h-3 w-3" />
                         </button>
@@ -1080,9 +1084,10 @@ export function ChatInput({
                                 onPointerDown={(e) => e.stopPropagation()}
                               >
                                 <div className="rounded-2xl border border-white/60 dark:border-white/10 bg-gradient-to-b from-white/90 to-white/70 dark:from-neutral-900/80 dark:to-neutral-900/60 backdrop-blur-3xl shadow-[0_18px_40px_rgba(0,0,0,0.12)] ring-1 ring-white/25 dark:ring-white/5 py-1">
-                                  <button onPointerUp={() => { setImageMode('text2image'); setImageMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'نص إلى صورة' : 'Text2Image'}</button>
-                                  <button onPointerUp={() => { setImageMode('image2image'); setImageMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'صورة إلى صورة' : 'Image2Image'}</button>
-                                  <button onPointerUp={() => { setImageMode('background-removal'); setImageMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'إزالة الخلفية' : 'BG Removal'}</button>
+                                  <button onPointerUp={() => { setImageMode('text2image'); onImageModeChange?.('text2image'); setImageMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'نص إلى صورة' : 'Text2Image'}</button>
+                                  <button onPointerUp={() => { setImageMode('image2image'); onImageModeChange?.('image2image'); setImageMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'صورة إلى صورة' : 'Image2Image'}</button>
+                                  <button onPointerUp={() => { setImageMode('background-removal'); onImageModeChange?.('background-removal'); setImageMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'إزالة الخلفية' : 'BG Removal'}</button>
+                                  <button onPointerUp={() => { setImageMode('draw-after-bg'); onImageModeChange?.('draw-after-bg'); setImageMenuPos(null); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5">{language === 'ar' ? 'الرسم بعد إزالة الخلفية' : 'Draw After BG'}</button>
                                 </div>
                               </motion.div>
                             )}

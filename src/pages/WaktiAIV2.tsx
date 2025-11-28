@@ -5,9 +5,10 @@ import { EnhancedFrontendMemory, ConversationMetadata } from '@/services/Enhance
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { supabase } from '@/integrations/supabase/client';
 import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
-import { ChatInput } from '@/components/wakti-ai-v2/ChatInput';
+import { ChatInput, ImageMode } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { ConversationSidebar } from '@/components/wakti-ai-v2/ConversationSidebar';
+import { DrawAfterBGCanvas } from '@/components/wakti-ai/DrawAfterBGCanvas';
 import { cn } from '@/lib/utils';
 import { createPortal } from 'react-dom';
 import { useIsDesktop } from '@/hooks/use-mobile';
@@ -30,6 +31,7 @@ const WaktiAIV2 = () => {
   const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [inputReservePx, setInputReservePx] = useState<number>(120);
+  const [activeImageMode, setActiveImageMode] = useState<ImageMode>('text2image');
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -485,56 +487,64 @@ const WaktiAIV2 = () => {
           paddingBottom: '6px'
         }}
       >
-        <ChatMessages
-          sessionMessages={sessionMessages}
-          isLoading={isLoading}
-          activeTrigger={activeTrigger}
-          scrollAreaRef={scrollAreaRef}
-          userProfile={userProfile}
-          personalTouch={personalTouch}
-          showTaskConfirmation={showTaskConfirmation}
-          pendingTaskData={pendingTaskData}
-          pendingReminderData={pendingReminderData}
-          taskConfirmationLoading={taskConfirmationLoading}
-          onTaskConfirmation={handleConfirmTask}
-          onReminderConfirmation={handleConfirmReminder}
-          onCancelTaskConfirmation={handleDeclineTask}
-          conversationId={currentConversationId}
-          isNewConversation={isNewConversation}
-        />
+        {activeTrigger === 'image' && activeImageMode === 'draw-after-bg' ? (
+          <DrawAfterBGCanvas />
+        ) : (
+          <ChatMessages
+            sessionMessages={sessionMessages}
+            isLoading={isLoading}
+            activeTrigger={activeTrigger}
+            scrollAreaRef={scrollAreaRef}
+            userProfile={userProfile}
+            personalTouch={personalTouch}
+            showTaskConfirmation={showTaskConfirmation}
+            pendingTaskData={pendingTaskData}
+            pendingReminderData={pendingReminderData}
+            taskConfirmationLoading={taskConfirmationLoading}
+            onTaskConfirmation={handleConfirmTask}
+            onReminderConfirmation={handleConfirmReminder}
+            onCancelTaskConfirmation={handleDeclineTask}
+            conversationId={currentConversationId}
+            isNewConversation={isNewConversation}
+          />
+        )}
       </div>
 
-        {portalRoot ? createPortal(
-          <div className='chat-input-container solid-bg glass-edge'>
-            <ChatInput
-              message={message}
-              setMessage={setMessage}
-              isLoading={canSendMessage ? isLoading : true}
-              sessionMessages={sessionMessages}
-              onSendMessage={handleSendMessage}
-              onClearChat={handleClearChat}
-              onOpenPlusDrawer={() => setIsSidebarOpen(true)}
-              onOpenConversations={() => setShowConversations(true)}
-              activeTrigger={activeTrigger}
-              onTriggerChange={setActiveTrigger}
-            />
-          </div>,
-          portalRoot
-        ) : (
-          <div className='chat-input-container solid-bg glass-edge'>
-            <ChatInput
-              message={message}
-              setMessage={setMessage}
-              isLoading={canSendMessage ? isLoading : true}
-              sessionMessages={sessionMessages}
-              onSendMessage={handleSendMessage}
-              onClearChat={handleClearChat}
-              onOpenPlusDrawer={() => setIsSidebarOpen(true)}
-              onOpenConversations={() => setShowConversations(true)}
-              activeTrigger={activeTrigger}
-              onTriggerChange={setActiveTrigger}
-            />
-          </div>
+        {!(activeTrigger === 'image' && activeImageMode === 'draw-after-bg') && (
+          portalRoot ? createPortal(
+            <div className='chat-input-container solid-bg glass-edge'>
+              <ChatInput
+                message={message}
+                setMessage={setMessage}
+                isLoading={canSendMessage ? isLoading : true}
+                sessionMessages={sessionMessages}
+                onSendMessage={handleSendMessage}
+                onClearChat={handleClearChat}
+                onOpenPlusDrawer={() => setIsSidebarOpen(true)}
+                onOpenConversations={() => setShowConversations(true)}
+                activeTrigger={activeTrigger}
+                onTriggerChange={setActiveTrigger}
+                onImageModeChange={setActiveImageMode}
+              />
+            </div>,
+            portalRoot
+          ) : (
+            <div className='chat-input-container solid-bg glass-edge'>
+              <ChatInput
+                message={message}
+                setMessage={setMessage}
+                isLoading={canSendMessage ? isLoading : true}
+                sessionMessages={sessionMessages}
+                onSendMessage={handleSendMessage}
+                onClearChat={handleClearChat}
+                onOpenPlusDrawer={() => setIsSidebarOpen(true)}
+                onOpenConversations={() => setShowConversations(true)}
+                activeTrigger={activeTrigger}
+                onTriggerChange={setActiveTrigger}
+                onImageModeChange={setActiveImageMode}
+              />
+            </div>
+          )
         )}
     </div>
   );
