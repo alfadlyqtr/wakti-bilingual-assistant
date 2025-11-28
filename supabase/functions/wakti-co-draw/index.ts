@@ -63,12 +63,12 @@ serve(async (req) => {
 
         console.log(`🎨 Triggering fal.ai generation (strength: ${strength})`);
 
-        // Use the fal.ai subscribe method with credentials
-        const result = await fal.subscribe("fal-ai/fast-lightning-sdxl/image-to-image", {
+        // Use the fal.ai subscribe method with .get() to await final result
+        const finalResult = await fal.subscribe("fal-ai/fast-lightning-sdxl/image-to-image", {
           input: {
             image_url: data.imageBase64,
             prompt: `Add to this sketch: ${data.prompt}. Keep the sketch style and existing lines.`,
-            strength: 0.35,
+            strength: strength, // Use client's strength value
             num_inference_steps: 4,
             guidance_scale: 2.0,
             output_format: "jpeg",
@@ -82,15 +82,15 @@ serve(async (req) => {
               status: update.status
             }));
           }
-        });
+        }).get(); // Wait for final result
         
-        console.log('🎨 Generation result:', result);
+        console.log('🎨 Generation result:', finalResult);
         
-        if (result?.data?.images && result.data.images.length > 0) {
+        if (finalResult?.images && finalResult.images.length > 0) {
           console.log('✅ Generation complete');
           socket.send(JSON.stringify({
             type: 'image',
-            data: result.data.images[0].url
+            data: finalResult.images[0].url
           }));
         } else {
           console.error('❌ No images in response');
