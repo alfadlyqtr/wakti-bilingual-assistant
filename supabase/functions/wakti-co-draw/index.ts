@@ -63,11 +63,8 @@ serve(async (req) => {
 
         console.log(`🎨 Triggering fal.ai generation (strength: ${strength})`);
 
-        // Correctly handle the async iterator stream
-        let finalResult = null;
-        
-        // Iterate over the stream to get the final result object
-        for await (const update of fal.subscribe("fal-ai/fast-lightning-sdxl/image-to-image", {
+        // Simply await the result - fal.subscribe returns a Promise, not an async iterable
+        const result = await fal.subscribe("fal-ai/fast-lightning-sdxl/image-to-image", {
           input: {
             image_url: data.imageBase64,
             prompt: `A highly detailed, cinematic, professional digital painting of ${data.prompt}, enhancing the original doodle while strictly adhering to the sketch lines. Volumetric lighting, hyper-detailed, 8k, concept art.`,
@@ -85,18 +82,15 @@ serve(async (req) => {
               status: update.status
             }));
           }
-        })) {
-          // The final result is the last item yielded by the stream
-          finalResult = update;
-        }
+        });
         
-        console.log('🎨 Generation result:', finalResult);
+        console.log('🎨 Generation result:', result);
         
-        if (finalResult?.images && finalResult.images.length > 0) {
+        if (result?.data?.images && result.data.images.length > 0) {
           console.log('✅ Generation complete');
           socket.send(JSON.stringify({
             type: 'image',
-            data: finalResult.images[0].url
+            data: result.data.images[0].url
           }));
         } else {
           console.error('❌ No images in response');
