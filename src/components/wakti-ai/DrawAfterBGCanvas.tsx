@@ -1,19 +1,17 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Loader2, Trash2, Sparkles } from 'lucide-react';
+import { Loader2, Trash2 } from 'lucide-react';
 import { useDrawAfterBG } from '@/hooks/useDrawAfterBG';
 import { toast } from 'sonner';
 
 interface DrawAfterBGCanvasProps {
-  onClose?: () => void;
+  prompt: string;
 }
 
-export const DrawAfterBGCanvas: React.FC<DrawAfterBGCanvasProps> = ({ onClose }) => {
+export const DrawAfterBGCanvas: React.FC<DrawAfterBGCanvasProps> = ({ prompt }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [prompt, setPrompt] = useState('');
   const [strength, setStrength] = useState(0.7);
   const lastGenerationTimeRef = useRef<number>(0);
   const generationIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -178,7 +176,7 @@ export const DrawAfterBGCanvas: React.FC<DrawAfterBGCanvasProps> = ({ onClose })
   }, [isDrawing, prompt, isConnected, triggerGeneration]);
 
   return (
-    <div className="flex flex-col gap-4 w-full max-w-4xl mx-auto p-4">
+    <div className="flex flex-col gap-4 w-full h-full p-4">
       {/* Status Banner */}
       <div className="flex items-center justify-between bg-muted p-3 rounded-lg">
         <div className="flex items-center gap-2">
@@ -196,7 +194,7 @@ export const DrawAfterBGCanvas: React.FC<DrawAfterBGCanvasProps> = ({ onClose })
       </div>
 
       {/* Canvas Container */}
-      <div className="relative border-2 border-border rounded-lg overflow-hidden bg-background">
+      <div className="relative flex-1 border-2 border-border rounded-lg overflow-hidden bg-background">
         {/* Background canvas for AI-generated images */}
         <canvas
           ref={bgCanvasRef}
@@ -217,67 +215,31 @@ export const DrawAfterBGCanvas: React.FC<DrawAfterBGCanvasProps> = ({ onClose })
       </div>
 
       {/* Controls */}
-      <div className="flex flex-col gap-3">
-        <div className="flex gap-2">
-          <Input
-            type="text"
-            placeholder="Describe what you want to create..."
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 flex-1">
+          <label className="text-sm text-muted-foreground whitespace-nowrap">
+            Strength: {strength.toFixed(2)}
+          </label>
+          <input
+            type="range"
+            min="0.6"
+            max="0.8"
+            step="0.05"
+            value={strength}
+            onChange={(e) => setStrength(parseFloat(e.target.value))}
             className="flex-1"
-            disabled={!isConnected}
           />
-          <Button
-            onClick={triggerGeneration}
-            disabled={!isConnected || !prompt.trim() || isGenerating}
-            className="gap-2"
-          >
-            {isGenerating ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Sparkles className="w-4 h-4" />
-            )}
-            Enhance
-          </Button>
         </div>
-
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 flex-1">
-            <label className="text-sm text-muted-foreground whitespace-nowrap">
-              Strength: {strength.toFixed(2)}
-            </label>
-            <input
-              type="range"
-              min="0.6"
-              max="0.8"
-              step="0.05"
-              value={strength}
-              onChange={(e) => setStrength(parseFloat(e.target.value))}
-              className="flex-1"
-            />
-          </div>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={clearCanvas}
-            className="gap-2"
-          >
-            <Trash2 className="w-4 h-4" />
-            Clear
-          </Button>
-        </div>
-      </div>
-
-      {/* Instructions */}
-      <div className="text-xs text-muted-foreground p-3 bg-muted rounded-lg">
-        <p><strong>How it works:</strong></p>
-        <ul className="list-disc list-inside mt-1 space-y-1">
-          <li>Draw your sketch on the canvas</li>
-          <li>Enter a prompt describing what you want</li>
-          <li>AI will enhance your drawing in real-time as you draw</li>
-          <li>Adjust strength to control how much the AI transforms your sketch</li>
-        </ul>
+        
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={clearCanvas}
+          className="gap-2"
+        >
+          <Trash2 className="w-4 h-4" />
+          Clear
+        </Button>
       </div>
     </div>
   );
