@@ -63,12 +63,15 @@ serve(async (req) => {
 
         console.log(`🎨 Triggering fal.ai generation (strength: ${strength})`);
 
-        // Use the fal.ai subscribe method with .get() to await final result
-        const finalResult = await fal.subscribe("fal-ai/fast-lightning-sdxl/image-to-image", {
+        // Correctly handle the async iterator stream
+        let finalResult = null;
+        
+        // Iterate over the stream to get the final result object
+        for await (const update of fal.subscribe("fal-ai/fast-lightning-sdxl/image-to-image", {
           input: {
             image_url: data.imageBase64,
             prompt: `Add to this sketch: ${data.prompt}. Keep the sketch style and existing lines.`,
-            strength: strength, // Use client's strength value
+            strength: strength,
             num_inference_steps: 4,
             guidance_scale: 2.0,
             output_format: "jpeg",
@@ -82,7 +85,10 @@ serve(async (req) => {
               status: update.status
             }));
           }
-        }).get(); // Wait for final result
+        })) {
+          // The final result is the last item yielded by the stream
+          finalResult = update;
+        }
         
         console.log('🎨 Generation result:', finalResult);
         
