@@ -37,8 +37,10 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
     bgCanvas.width = width;
     bgCanvas.height = height;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { alpha: true });
     if (ctx) {
+      // Clear with transparency
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.lineWidth = 3;
@@ -218,11 +220,11 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
           style={{ zIndex: 1 }}
         />
         
-        {/* Drawing canvas (foreground) */}
+        {/* Drawing canvas (foreground) - transparent to show background */}
         <canvas
           ref={canvasRef}
           className="absolute inset-0 w-full h-full cursor-crosshair"
-          style={{ zIndex: 2 }}
+          style={{ zIndex: 2, backgroundColor: 'transparent' }}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
