@@ -194,7 +194,7 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="w-[85vw] max-w-[85vw] sm:w-full sm:max-w-md bg-gradient-to-br from-background via-background to-accent/5 border-accent/20 max-h-[85vh] overflow-y-auto rounded-xl touch-none"
+        className="w-[95vw] max-w-[95vw] sm:w-[90vw] sm:max-w-[500px] bg-gradient-to-br from-background via-background to-accent/5 border-accent/20 max-h-[90vh] overflow-y-auto rounded-xl touch-none"
         dir={language === 'ar' ? 'rtl' : 'ltr'}
         hideCloseButton
         onEscapeKeyDown={(e) => e.preventDefault()}
