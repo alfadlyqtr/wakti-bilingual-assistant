@@ -69,10 +69,15 @@ const TrialCountdown = ({ startAt, language }: { startAt: string; language: stri
 // Helper function to open native subscription management
 const openManageSubscriptions = () => {
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  const url = isIOS 
-    ? 'https://apps.apple.com/account/subscriptions'
-    : 'https://play.google.com/store/account/subscriptions';
-  window.open(url, '_blank');
+  
+  if (isIOS) {
+    // Use the App Store deep link scheme for iOS
+    // This opens the native subscription management screen
+    window.location.href = 'itms-apps://apps.apple.com/account/subscriptions';
+  } else {
+    // For Android, open Play Store subscriptions
+    window.location.href = 'https://play.google.com/store/account/subscriptions';
+  }
 };
 
 export default function Account() {
