@@ -318,7 +318,7 @@ export default function Signup() {
                         <SelectTrigger className="pl-10 py-6 text-base shadow-sm">
                           <SelectValue placeholder={t.selectCountry} />
                         </SelectTrigger>
-                        <SelectContent className="max-h-60">
+                        <SelectContent className="max-h-60 max-w-[calc(100vw-2rem)]">
                           {countries.map((c) => (
                             <SelectItem key={c.code} value={c.code}>
                               {language === 'ar' ? c.nameAr : c.name}
@@ -407,7 +407,7 @@ export default function Signup() {
                       <Button
                         variant="outline"
                         className={cn(
-                          "w-full justify-start text-left font-normal py-6 text-base shadow-sm",
+                          "w-full max-w-full justify-start text-left font-normal py-6 text-base shadow-sm",
                           !dateOfBirth && "text-muted-foreground"
                         )}
                         disabled={isLoading}
@@ -416,7 +416,7 @@ export default function Signup() {
                         {dateOfBirth ? format(dateOfBirth, "PPP") : <span>{t.dobPlaceholder}</span>}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
+                    <PopoverContent className="w-auto p-0 max-w-[calc(100vw-2rem)]" align="center">
                       <Calendar
                         mode="single"
                         selected={dateOfBirth}

@@ -145,7 +145,7 @@ export default function Account() {
   });
 
   // Fetch subscription data
-  const { data: subscriptionData, isLoading: isLoadingSubscription } = useQuery({
+  const { data: subscriptionData, isLoading: isLoadingSubscription, error: subscriptionError } = useQuery({
     queryKey: ['subscription', user?.id],
     queryFn: async () => {
       if (!user?.id) return null;
@@ -745,43 +745,83 @@ export default function Account() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* STATE 1: Trial Active - Show Timer */}
-                {!subscriptionData?.profile?.is_subscribed && subscriptionData?.profile?.free_access_start_at && (
-                  <div className="text-center space-y-3 py-4">
-                    <div className="flex items-center justify-center gap-2 text-amber-500">
-                      <Clock className="h-5 w-5" />
-                      <span className="font-medium">
-                        {language === 'en' ? 'Free Trial Active' : 'الفترة التجريبية المجانية نشطة'}
-                      </span>
-                    </div>
-                    <TrialCountdown startAt={subscriptionData.profile.free_access_start_at} language={language} />
-                  </div>
-                )}
-                
-                {/* STATE 2: Subscribed - Show Status + Manage Button */}
-                {subscriptionData?.profile?.is_subscribed && (
-                  <div className="text-center space-y-4 py-4">
-                    <div className="flex items-center justify-center gap-2 text-green-500">
-                      <CheckCircle className="h-5 w-5" />
-                      <span className="font-medium">
-                        {language === 'en' ? 'You are subscribed' : 'أنت مشترك'}
-                      </span>
+                {/* ERROR STATE: Show error message with retry button */}
+                {subscriptionError ? (
+                  <div className="text-center py-8 space-y-4">
+                    <XCircle className="h-12 w-12 text-destructive mx-auto" />
+                    <div className="space-y-2">
+                      <p className="font-medium text-destructive">
+                        {language === 'en' ? 'Failed to load billing information' : 'فشل تحميل معلومات الفواتير'}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {language === 'en' ? 'Please check your connection and try again' : 'يرجى التحقق من اتصالك والمحاولة مرة أخرى'}
+                      </p>
                     </div>
                     <Button 
                       variant="outline" 
-                      onClick={openManageSubscriptions}
-                      className="w-full max-w-xs"
+                      size="sm" 
+                      onClick={() => queryClient.invalidateQueries({ queryKey: ['subscription'] })}
                     >
-                      {language === 'en' ? 'Manage Subscription' : 'إدارة الاشتراك'}
+                      {language === 'en' ? 'Retry' : 'إعادة المحاولة'}
                     </Button>
                   </div>
-                )}
-                
-                {/* STATE 3: No Subscription, No Trial */}
-                {!subscriptionData?.profile?.is_subscribed && !subscriptionData?.profile?.free_access_start_at && (
-                  <p className="text-muted-foreground text-center py-8">
-                    {language === 'en' ? 'No active subscription' : 'لا يوجد اشتراك نشط'}
-                  </p>
+                ) : isLoadingSubscription ? (
+                  /* LOADING STATE: Show spinner while fetching data */
+                  <div className="text-center py-8 space-y-3">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                    <p className="text-sm text-muted-foreground">
+                      {language === 'en' ? 'Loading billing information...' : 'جاري تحميل معلومات الفواتير...'}
+                    </p>
+                  </div>
+                ) : (
+                  /* DATA STATES: Show appropriate content based on subscription status */
+                  <>
+                    {/* STATE 1: Trial Active - Show Timer */}
+                    {subscriptionData?.profile && !subscriptionData.profile.is_subscribed && subscriptionData.profile.free_access_start_at && (
+                      <div className="text-center space-y-3 py-4">
+                        <div className="flex items-center justify-center gap-2 text-amber-500">
+                          <Clock className="h-5 w-5" />
+                          <span className="font-medium">
+                            {language === 'en' ? 'Free Trial Active' : 'الفترة التجريبية المجانية نشطة'}
+                          </span>
+                        </div>
+                        <TrialCountdown startAt={subscriptionData.profile.free_access_start_at} language={language} />
+                      </div>
+                    )}
+                    
+                    {/* STATE 2: Subscribed - Show Status + Manage Button */}
+                    {subscriptionData?.profile?.is_subscribed && (
+                      <div className="text-center space-y-4 py-4">
+                        <div className="flex items-center justify-center gap-2 text-green-500">
+                          <CheckCircle className="h-5 w-5" />
+                          <span className="font-medium">
+                            {language === 'en' ? 'You are subscribed' : 'أنت مشترك'}
+                          </span>
+                        </div>
+                        <Button 
+                          variant="outline" 
+                          onClick={openManageSubscriptions}
+                          className="w-full max-w-xs"
+                        >
+                          {language === 'en' ? 'Manage Subscription' : 'إدارة الاشتراك'}
+                        </Button>
+                      </div>
+                    )}
+                    
+                    {/* STATE 3: No Subscription, No Trial */}
+                    {subscriptionData?.profile && !subscriptionData.profile.is_subscribed && !subscriptionData.profile.free_access_start_at && (
+                      <p className="text-muted-foreground text-center py-8">
+                        {language === 'en' ? 'No active subscription' : 'لا يوجد اشتراك نشط'}
+                      </p>
+                    )}
+                    
+                    {/* STATE 4: No Data (Fallback) */}
+                    {!subscriptionData?.profile && (
+                      <p className="text-muted-foreground text-center py-8">
+                        {language === 'en' ? 'No billing information available' : 'لا توجد معلومات فواتير متاحة'}
+                      </p>
+                    )}
+                  </>
                 )}
               </CardContent>
             </Card>

@@ -341,6 +341,11 @@ function WelcomeTrialPopup() {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [isStartingTrial, setIsStartingTrial] = useState(false);
+  
+  // ✅ LAYER 2: localStorage backup to prevent re-showing even if database fails
+  const [hasShownPopupLocally, setHasShownPopupLocally] = useState(
+    () => localStorage.getItem('wakti_trial_popup_shown') === 'true'
+  );
 
   const allowedRoutes = ['/', '/dashboard', '/wakti-ai'];
   const shouldShowPopup = allowedRoutes.includes(location.pathname);
@@ -350,23 +355,38 @@ function WelcomeTrialPopup() {
   // 2. User is NOT subscribed
   // 3. User is on allowed route
   // 4. trial_popup_shown === false (from DATABASE)
+  // 5. localStorage flag is not set (backup check)
   useEffect(() => {
-    if (
-      user &&
-      !isSubscribed &&
-      shouldShowPopup &&
-      !hasSeenTrialPopup
-    ) {
-      setIsOpen(true);
-    } else {
-      setIsOpen(false);
-    }
-  }, [user, isSubscribed, shouldShowPopup, hasSeenTrialPopup]);
+    // ✅ LAYER 3: Debounce to prevent race conditions from real-time subscription
+    const timer = setTimeout(() => {
+      if (
+        user &&
+        !isSubscribed &&
+        shouldShowPopup &&
+        !hasSeenTrialPopup &&
+        !hasShownPopupLocally  // ✅ Double-check with localStorage
+      ) {
+        setIsOpen(true);
+      } else {
+        setIsOpen(false);
+      }
+    }, 100); // 100ms debounce
+
+    return () => clearTimeout(timer);
+  }, [user, isSubscribed, shouldShowPopup, hasSeenTrialPopup, hasShownPopupLocally]);
 
   const handleStartTrial = async () => {
     if (!user?.id) return;
     
     setIsStartingTrial(true);
+    
+    // ✅ LAYER 1: Optimistic UI update - close popup IMMEDIATELY
+    setIsOpen(false);
+    
+    // ✅ LAYER 2: Set localStorage backup IMMEDIATELY
+    localStorage.setItem('wakti_trial_popup_shown', 'true');
+    setHasShownPopupLocally(true);
+    
     try {
       // Update BOTH fields in a single atomic database update
       const { error } = await supabase
@@ -380,18 +400,24 @@ function WelcomeTrialPopup() {
       if (error) {
         console.error('Error starting trial:', error);
         toast.error('Failed to start trial. Please try again.');
+        // ✅ Only re-open popup on error
+        setIsOpen(true);
+        localStorage.removeItem('wakti_trial_popup_shown');
+        setHasShownPopupLocally(false);
         return;
       }
 
       // Refetch profile to get updated data
       await refetch();
       
-      // Close popup
-      setIsOpen(false);
       toast.success('Your 30-minute trial has started!');
     } catch (error) {
       console.error('Error starting trial:', error);
       toast.error('Failed to start trial. Please try again.');
+      // ✅ Only re-open popup on error
+      setIsOpen(true);
+      localStorage.removeItem('wakti_trial_popup_shown');
+      setHasShownPopupLocally(false);
     } finally {
       setIsStartingTrial(false);
     }
