@@ -335,57 +335,49 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
 export { CustomPaywallModal };
 
 // WelcomeTrialPopup - shown ONCE per user lifetime to inform them of 30-min trial
+// ✅ SOLID SOLUTION: Database is the ONLY source of truth - no localStorage
 function WelcomeTrialPopup() {
-  const { profile, isSubscribed, hasSeenTrialPopup, refetch } = useUserProfile();
+  const { profile, loading, isSubscribed, hasSeenTrialPopup, hasTrialStarted, refetch } = useUserProfile();
   const { user } = useAuth();
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [isStartingTrial, setIsStartingTrial] = useState(false);
-  
-  // ✅ LAYER 2: localStorage backup to prevent re-showing even if database fails
-  const [hasShownPopupLocally, setHasShownPopupLocally] = useState(
-    () => localStorage.getItem('wakti_trial_popup_shown') === 'true'
-  );
 
   const allowedRoutes = ['/', '/dashboard', '/wakti-ai'];
   const shouldShowPopup = allowedRoutes.includes(location.pathname);
 
-  // Show popup ONLY if:
-  // 1. User is logged in
-  // 2. User is NOT subscribed
-  // 3. User is on allowed route
-  // 4. trial_popup_shown === false (from DATABASE)
-  // 5. localStorage flag is not set (backup check)
+  // ✅ SOLID DATABASE-ONLY LOGIC
+  // Show popup ONLY if ALL conditions are met:
+  // 1. Profile is LOADED (not loading, not null)
+  // 2. User is logged in
+  // 3. User is NOT subscribed
+  // 4. User is on allowed route
+  // 5. trial_popup_shown === false (from DATABASE)
+  // 6. free_access_start_at === null (trial NOT started - from DATABASE)
   useEffect(() => {
-    // ✅ LAYER 3: Debounce to prevent race conditions from real-time subscription
-    const timer = setTimeout(() => {
-      if (
-        user &&
-        !isSubscribed &&
-        shouldShowPopup &&
-        !hasSeenTrialPopup &&
-        !hasShownPopupLocally  // ✅ Double-check with localStorage
-      ) {
-        setIsOpen(true);
-      } else {
-        setIsOpen(false);
-      }
-    }, 100); // 100ms debounce
+    // ✅ CRITICAL: Wait for profile to load - database is the source of truth
+    if (loading || !profile) {
+      return; // Don't evaluate until profile is fully loaded
+    }
 
-    return () => clearTimeout(timer);
-  }, [user, isSubscribed, shouldShowPopup, hasSeenTrialPopup, hasShownPopupLocally]);
+    const shouldShow = (
+      user &&
+      !isSubscribed &&
+      shouldShowPopup &&
+      !hasSeenTrialPopup &&    // DB: trial_popup_shown = false
+      !hasTrialStarted         // DB: free_access_start_at = null (double safety)
+    );
+
+    setIsOpen(shouldShow);
+  }, [loading, profile, user, isSubscribed, shouldShowPopup, hasSeenTrialPopup, hasTrialStarted]);
 
   const handleStartTrial = async () => {
     if (!user?.id) return;
     
     setIsStartingTrial(true);
     
-    // ✅ LAYER 1: Optimistic UI update - close popup IMMEDIATELY
+    // ✅ Close popup immediately (optimistic UI)
     setIsOpen(false);
-    
-    // ✅ LAYER 2: Set localStorage backup IMMEDIATELY
-    localStorage.setItem('wakti_trial_popup_shown', 'true');
-    setHasShownPopupLocally(true);
     
     try {
       // Update BOTH fields in a single atomic database update
@@ -400,24 +392,20 @@ function WelcomeTrialPopup() {
       if (error) {
         console.error('Error starting trial:', error);
         toast.error('Failed to start trial. Please try again.');
-        // ✅ Only re-open popup on error
+        // Re-open popup on error so user can retry
         setIsOpen(true);
-        localStorage.removeItem('wakti_trial_popup_shown');
-        setHasShownPopupLocally(false);
         return;
       }
 
-      // Refetch profile to get updated data
+      // Refetch profile to get updated data from database
       await refetch();
       
       toast.success('Your 30-minute trial has started!');
     } catch (error) {
       console.error('Error starting trial:', error);
       toast.error('Failed to start trial. Please try again.');
-      // ✅ Only re-open popup on error
+      // Re-open popup on error so user can retry
       setIsOpen(true);
-      localStorage.removeItem('wakti_trial_popup_shown');
-      setHasShownPopupLocally(false);
     } finally {
       setIsStartingTrial(false);
     }

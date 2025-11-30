@@ -1,127 +1,112 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { fal } from "npm:@fal-ai/client@latest";
+import { GoogleGenerativeAI } from "npm:@google/generative-ai@0.21.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, upgrade, connection',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
+
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const upgradeHeader = req.headers.get("upgrade") || "";
-  
-  if (upgradeHeader.toLowerCase() !== "websocket") {
-    return new Response("Expected WebSocket connection", { 
-      status: 400,
-      headers: corsHeaders 
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 
-  const FAL_KEY = Deno.env.get('FAL_KEY');
-  if (!FAL_KEY) {
-    console.error('❌ FAL_KEY not configured');
-    return new Response(JSON.stringify({ error: 'FAL_KEY not configured' }), {
+  if (!GEMINI_API_KEY) {
+    console.error('❌ GEMINI_API_KEY not configured');
+    return new Response(JSON.stringify({ 
+      success: false,
+      error: 'GEMINI_API_KEY not configured' 
+    }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 
-  // Configure fal.ai client with our API key
-  fal.config({ credentials: FAL_KEY });
-
-  console.log('🚀 WebSocket upgrade requested for wakti-co-draw');
-
   try {
-    const { socket, response } = Deno.upgradeWebSocket(req);
+    const { imageBase64, prompt } = await req.json();
 
-    socket.onopen = () => {
-      console.log('✅ WebSocket connection established');
-      socket.send(JSON.stringify({ 
-        type: 'connected',
-        message: 'Ready for real-time drawing enhancement'
-      }));
-    };
+    if (!imageBase64 || !prompt) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Missing imageBase64 or prompt'
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
-    socket.onmessage = async (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        console.log('📨 Received generation request');
+    console.log(`🎨 Gemini Co-Drawing: ${prompt}`);
 
-        if (!data.imageBase64 || !data.prompt) {
-          socket.send(JSON.stringify({
-            type: 'error',
-            message: 'Missing imageBase64 or prompt'
-          }));
-          return;
+    // Initialize Gemini
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+    
+    // Use Gemini 2.0 Flash with native image generation
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.0-flash-exp",
+      generationConfig: {
+        responseModalities: ['Text', 'Image']
+      },
+    });
+
+    // Strip data URL prefix if present
+    let base64Data = imageBase64;
+    if (imageBase64.includes(',')) {
+      base64Data = imageBase64.split(',')[1];
+    }
+
+    // Create multipart content with drawing + prompt
+    const generationContent = [
+      {
+        inlineData: {
+          data: base64Data,
+          mimeType: "image/png"
         }
-
-        const strength = data.strength || 0.7;
-
-        console.log(`🎨 Triggering fal.ai generation (strength: ${strength})`);
-
-        // Simply await the result - fal.subscribe returns a Promise, not an async iterable
-        const result = await fal.subscribe("fal-ai/fast-lightning-sdxl/image-to-image", {
-          input: {
-            image_url: data.imageBase64,
-            prompt: `A highly detailed, cinematic, professional digital painting of ${data.prompt}, enhancing the original doodle while strictly adhering to the sketch lines. Volumetric lighting, hyper-detailed, 8k, concept art.`,
-            strength: strength,
-            num_inference_steps: 4,
-            guidance_scale: 2.0,
-            output_format: "jpeg",
-            enable_safety_checker: false
-          },
-          logs: true,
-          onQueueUpdate: (update) => {
-            console.log('Queue update:', update.status);
-            socket.send(JSON.stringify({
-              type: 'progress',
-              status: update.status
-            }));
-          }
-        });
-        
-        console.log('🎨 Generation result:', result);
-        
-        if (result?.data?.images && result.data.images.length > 0) {
-          console.log('✅ Generation complete');
-          socket.send(JSON.stringify({
-            type: 'image',
-            data: result.data.images[0].url
-          }));
-        } else {
-          console.error('❌ No images in response');
-          socket.send(JSON.stringify({
-            type: 'error',
-            message: 'No images generated'
-          }));
-        }
-
-      } catch (err: any) {
-        console.error('❌ Generation error:', err);
-        socket.send(JSON.stringify({
-          type: 'error',
-          message: err.message || 'Generation failed'
-        }));
+      },
+      { 
+        text: `${prompt}. Keep the same minimal line doodle style.` 
       }
-    };
+    ];
 
-    socket.onerror = (error) => {
-      console.error('❌ WebSocket error:', error);
-    };
+    console.log('🚀 Calling Gemini API...');
+    const response = await model.generateContent(generationContent);
+    console.log('✅ Gemini API response received');
 
-    socket.onclose = () => {
-      console.log('🔌 WebSocket connection closed');
-    };
+    // Extract image from response
+    for (const part of response.response.candidates[0].content.parts) {
+      if (part.inlineData) {
+        const imageData = part.inlineData.data;
+        console.log('✅ Image generated, length:', imageData.length);
+        
+        // Return base64 image as data URL
+        const imageUrl = `data:image/png;base64,${imageData}`;
+        
+        return new Response(JSON.stringify({
+          success: true,
+          imageUrl: imageUrl
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
 
-    return response;
+    throw new Error('No image in response');
 
-  } catch (error: any) {
-    console.error('❌ WebSocket upgrade failed:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+  } catch (err: any) {
+    console.error('❌ Error:', err);
+    return new Response(JSON.stringify({
+      success: false,
+      error: err.message || 'Failed'
+    }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Loader2, Trash2 } from 'lucide-react';
+import { Loader2, Trash2, Undo2, Redo2 } from 'lucide-react';
 import { useDrawAfterBG } from '@/hooks/useDrawAfterBG';
 import { toast } from 'sonner';
 
@@ -19,8 +19,12 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
   const [strength, setStrength] = useState(0.5);
   const lastGenerationTimeRef = useRef<number>(0);
   const generationIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Undo/Redo history management
+  const [history, setHistory] = useState<string[]>([]);
+  const [historyStep, setHistoryStep] = useState(-1);
 
-  const { isConnected, isGenerating, lastGeneratedImage, sendGenerationRequest } = useDrawAfterBG();
+  const { isConnected, isGenerating, lastGeneratedImage, sendGenerationRequest, resetImage } = useDrawAfterBG();
 
   // Initialize canvases
   useEffect(() => {
@@ -62,10 +66,29 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
     img.crossOrigin = 'anonymous'; // Try to handle CORS
     
     img.onload = () => {
-      console.log('✅ Image loaded successfully, drawing to canvas');
-      bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
-      bgCtx.drawImage(img, 0, 0, bgCanvas.width, bgCanvas.height);
-      toast.success('Drawing enhanced!');
+      console.log('✅ AI image loaded, replacing canvas content');
+      
+      // Draw AI result to the DRAWING canvas (replaces sketch)
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext('2d');
+      
+      if (!canvas || !ctx) {
+        console.error('❌ Canvas not available');
+        return;
+      }
+      
+      if (canvas.width === 0 || canvas.height === 0) {
+        console.error('❌ Canvas has zero dimensions');
+        toast.error('Canvas error - please refresh');
+        return;
+      }
+      
+      // Clear and draw AI result to drawing canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      console.log('✅ AI result drawn to canvas - you can now draw on top!');
+      
+      toast.success('AI enhanced! Draw more and send again to keep building.');
     };
     
     img.onerror = (err) => {
@@ -77,6 +100,71 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
     console.log('🔄 Setting img.src to:', lastGeneratedImage);
     img.src = lastGeneratedImage;
   }, [lastGeneratedImage]);
+
+  // Save current canvas state to history
+  const saveToHistory = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    try {
+      const dataUrl = canvas.toDataURL();
+      setHistory(prev => {
+        // Remove any future history if we're not at the end
+        const newHistory = prev.slice(0, historyStep + 1);
+        // Add current state
+        newHistory.push(dataUrl);
+        // Limit history to 20 states to prevent memory issues
+        if (newHistory.length > 20) {
+          newHistory.shift();
+          return newHistory;
+        }
+        return newHistory;
+      });
+      setHistoryStep(prev => Math.min(prev + 1, 19));
+    } catch (err) {
+      console.error('Failed to save canvas state:', err);
+    }
+  }, [historyStep]);
+
+  // Restore canvas from history
+  const restoreFromHistory = useCallback((dataUrl: string) => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+
+    const img = new Image();
+    img.onload = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+    };
+    img.src = dataUrl;
+  }, []);
+
+  // Undo last drawing action
+  const handleUndo = useCallback(() => {
+    if (historyStep <= 0) {
+      toast.info('Nothing to undo');
+      return;
+    }
+
+    const newStep = historyStep - 1;
+    setHistoryStep(newStep);
+    restoreFromHistory(history[newStep]);
+    toast.success('Undo');
+  }, [historyStep, history, restoreFromHistory]);
+
+  // Redo last undone action
+  const handleRedo = useCallback(() => {
+    if (historyStep >= history.length - 1) {
+      toast.info('Nothing to redo');
+      return;
+    }
+
+    const newStep = historyStep + 1;
+    setHistoryStep(newStep);
+    restoreFromHistory(history[newStep]);
+    toast.success('Redo');
+  }, [historyStep, history, restoreFromHistory]);
 
   const captureCanvasAsBase64 = useCallback((): string | null => {
     const canvas = canvasRef.current;
@@ -115,12 +203,17 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
       return;
     }
 
+    console.log('🎨 DRAW FEATURE: Starting generation with prompt:', prompt);
+    console.log('🎨 DRAW FEATURE: Strength:', strength);
+
     const imageBase64 = captureCanvasAsBase64();
     if (!imageBase64) {
+      console.error('❌ DRAW FEATURE: Failed to capture canvas');
       toast.error('Failed to capture drawing');
       return;
     }
 
+    console.log('✅ DRAW FEATURE: Canvas captured, base64 length:', imageBase64.length);
     lastGenerationTimeRef.current = now;
     sendGenerationRequest(imageBase64, prompt, strength);
   }, [prompt, strength, captureCanvasAsBase64, sendGenerationRequest]);
@@ -166,52 +259,117 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
   };
 
   const handleMouseUp = () => {
-    setIsDrawing(false);
-    // Trigger generation after stroke completion
-    if (prompt.trim() && isConnected) {
-      triggerGeneration();
+    if (isDrawing) {
+      setIsDrawing(false);
+      // Save to history after stroke completion
+      saveToHistory();
+      // Don't auto-generate - user will click Send button when ready
     }
   };
 
   const handleMouseLeave = () => {
-    setIsDrawing(false);
+    if (isDrawing) {
+      setIsDrawing(false);
+      saveToHistory();
+    }
+  };
+
+  // Touch event handlers for mobile/tablet support
+  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault(); // Prevent scrolling while drawing
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+
+    const touch = e.touches[0];
+    if (!touch) return;
+
+    setIsDrawing(true);
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (touch.clientX - rect.left) * scaleX;
+    const y = (touch.clientY - rect.top) * scaleY;
+
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault(); // Prevent scrolling while drawing
+    if (!isDrawing) return;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+
+    const touch = e.touches[0];
+    if (!touch) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (touch.clientX - rect.left) * scaleX;
+    const y = (touch.clientY - rect.top) * scaleY;
+
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+
+  const handleTouchEnd = () => {
+    if (isDrawing) {
+      setIsDrawing(false);
+      // Save to history after stroke completion
+      saveToHistory();
+      // Don't auto-generate - user will click Send button when ready
+    }
   };
 
   const clearCanvas = () => {
     const canvas = canvasRef.current;
-    const bgCanvas = bgCanvasRef.current;
     const ctx = canvas?.getContext('2d');
-    const bgCtx = bgCanvas?.getContext('2d');
 
     if (ctx && canvas) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
-    if (bgCtx && bgCanvas) {
-      bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
-    }
 
-    toast.success('Canvas cleared');
+    // Reset history when canvas is cleared
+    setHistory([]);
+    setHistoryStep(-1);
+    
+    // Reset AI image state
+    resetImage();
+
+    toast.success('Canvas cleared - ready to draw!');
   };
 
-  // Auto-generation interval during continuous drawing
+  // Cleanup interval ref on unmount (no longer used for auto-generation)
   useEffect(() => {
-    if (isDrawing && prompt.trim() && isConnected) {
-      generationIntervalRef.current = setInterval(() => {
-        triggerGeneration();
-      }, 200);
-    } else {
-      if (generationIntervalRef.current) {
-        clearInterval(generationIntervalRef.current);
-        generationIntervalRef.current = null;
-      }
-    }
-
     return () => {
       if (generationIntervalRef.current) {
         clearInterval(generationIntervalRef.current);
       }
     };
-  }, [isDrawing, prompt, isConnected, triggerGeneration]);
+  }, []);
+
+  // Keyboard shortcuts for undo/redo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+Z or Cmd+Z for Undo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      }
+      // Ctrl+Y or Cmd+Y or Ctrl+Shift+Z for Redo
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleUndo, handleRedo]);
 
   return (
     <div className="flex flex-col gap-4 w-full h-full p-4">
@@ -232,23 +390,28 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
       </div>
 
       {/* Canvas Container */}
-      <div className="relative flex-1 border-2 border-border rounded-lg overflow-hidden bg-background">
-        {/* Background canvas for AI-generated images */}
-        <canvas
-          ref={bgCanvasRef}
-          className="absolute inset-0 w-full h-full"
-          style={{ zIndex: 1 }}
-        />
-        
-        {/* Drawing canvas (foreground) - transparent to show background */}
+      <div className="relative flex-1 border-2 border-border rounded-lg overflow-hidden bg-white">
+        {/* Single canvas for drawing and AI results */}
         <canvas
           ref={canvasRef}
           className="absolute inset-0 w-full h-full cursor-crosshair"
-          style={{ zIndex: 2, backgroundColor: 'transparent' }}
+          style={{ 
+            backgroundColor: 'white',
+            touchAction: 'none'
+          }}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseLeave}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        />
+        
+        {/* Hidden background canvas - only used for loading AI images */}
+        <canvas
+          ref={bgCanvasRef}
+          style={{ display: 'none' }}
         />
         
         {/* DEBUG: Test if image URL loads at all */}
@@ -278,18 +441,46 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
             value={strength}
             onChange={(e) => setStrength(parseFloat(e.target.value))}
             className="flex-1"
+            aria-label="Drawing strength slider"
           />
         </div>
         
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={clearCanvas}
-          className="gap-2"
-        >
-          <Trash2 className="w-4 h-4" />
-          Clear
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleUndo}
+            disabled={historyStep <= 0}
+            className="gap-2"
+            title="Undo (Ctrl+Z)"
+          >
+            <Undo2 className="w-4 h-4" />
+            Undo
+          </Button>
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRedo}
+            disabled={historyStep >= history.length - 1}
+            className="gap-2"
+            title="Redo (Ctrl+Y)"
+          >
+            <Redo2 className="w-4 h-4" />
+            Redo
+          </Button>
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={clearCanvas}
+            className="gap-2"
+            title="Clear canvas"
+          >
+            <Trash2 className="w-4 h-4" />
+            Clear
+          </Button>
+        </div>
       </div>
     </div>
   );
