@@ -194,11 +194,13 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="w-[85vw] max-w-[85vw] sm:w-full sm:max-w-md bg-gradient-to-br from-background via-background to-accent/5 border-accent/20 max-h-[85vh] overflow-y-auto rounded-xl"
+        className="w-[85vw] max-w-[85vw] sm:w-full sm:max-w-md bg-gradient-to-br from-background via-background to-accent/5 border-accent/20 max-h-[85vh] overflow-y-auto rounded-xl touch-none"
         dir={language === 'ar' ? 'rtl' : 'ltr'}
         hideCloseButton
         onEscapeKeyDown={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+        style={{ transform: 'none', transition: 'none' }}
       >
         <div className="flex items-center justify-between">
           <Logo3D size="sm" className="w-8 h-8" />
