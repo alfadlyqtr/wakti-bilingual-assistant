@@ -196,18 +196,24 @@ export default function Settings() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-6">
-            <TabsTrigger value="appearance" className="flex items-center gap-2">
-              <Palette className="h-4 w-4" />
-              {t("appearance", language)}
+          <TabsList className="grid w-full grid-cols-3 mb-6 h-auto">
+            <TabsTrigger value="appearance" className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 py-2 px-1 sm:px-3">
+              <Palette className="h-4 w-4 flex-shrink-0" />
+              <span className="text-[10px] sm:text-sm whitespace-nowrap overflow-hidden text-ellipsis max-w-full">
+                {t("appearance", language)}
+              </span>
             </TabsTrigger>
-            <TabsTrigger value="notifications" className="flex items-center gap-2">
-              <Bell className="h-4 w-4" />
-              {t("notifications", language)}
+            <TabsTrigger value="notifications" className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 py-2 px-1 sm:px-3">
+              <Bell className="h-4 w-4 flex-shrink-0" />
+              <span className="text-[10px] sm:text-sm whitespace-nowrap overflow-hidden text-ellipsis max-w-full">
+                {t("notifications", language)}
+              </span>
             </TabsTrigger>
-            <TabsTrigger value="dashboard" className="flex items-center gap-2">
-              <Layout className="h-4 w-4" />
-              {language === "ar" ? "لوحة التحكم" : "Dashboard"}
+            <TabsTrigger value="dashboard" className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 py-2 px-1 sm:px-3">
+              <Layout className="h-4 w-4 flex-shrink-0" />
+              <span className="text-[10px] sm:text-sm whitespace-nowrap overflow-hidden text-ellipsis max-w-full">
+                {language === "ar" ? "لوحة التحكم" : "Dashboard"}
+              </span>
             </TabsTrigger>
           </TabsList>
 

@@ -126,10 +126,13 @@ export function ProfileImageUpload() {
     }
   };
 
+  // State to force avatar re-render
+  const [avatarKey, setAvatarKey] = useState(Date.now());
+
   // Add cache-busting to avatar URL
   const getCacheBustedAvatarUrl = (url: string | null | undefined) => {
     if (!url) return undefined;
-    const timestamp = Date.now();
+    const timestamp = avatarKey;
     const separator = url.includes('?') ? '&' : '?';
     return `${url}${separator}t=${timestamp}`;
   };
@@ -197,16 +200,16 @@ export function ProfileImageUpload() {
         throw updateError;
       }
 
+      // Force immediate avatar refresh
+      setAvatarKey(Date.now());
+      
       // Force refresh profile data to get the latest avatar
       await refetch();
 
-      // Add a small delay to ensure the real-time subscription has processed
-      setTimeout(() => {
-        // Force a page refresh of avatar components by dispatching a custom event
-        window.dispatchEvent(new CustomEvent('avatar-updated', { 
-          detail: { avatarUrl: publicUrl, userId: user.id } 
-        }));
-      }, 500);
+      // Dispatch event to update avatars across the app
+      window.dispatchEvent(new CustomEvent('avatar-updated', { 
+        detail: { avatarUrl: publicUrl, userId: user.id, timestamp: Date.now() } 
+      }));
 
       toast.success(language === 'ar' ? 'تم تحديث الصورة الشخصية بنجاح' : 'Profile picture updated successfully');
       
@@ -249,15 +252,16 @@ export function ProfileImageUpload() {
         throw updateError;
       }
 
+      // Force immediate avatar refresh
+      setAvatarKey(Date.now());
+      
       // Refresh profile data
       await refetch();
 
-      // Force refresh of avatar components
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('avatar-updated', { 
-          detail: { avatarUrl: null, userId: user.id } 
-        }));
-      }, 500);
+      // Dispatch event to update avatars across the app
+      window.dispatchEvent(new CustomEvent('avatar-updated', { 
+        detail: { avatarUrl: null, userId: user.id, timestamp: Date.now() } 
+      }));
 
       toast.success(language === 'ar' ? 'تم حذف الصورة الشخصية' : 'Profile picture removed');
       
@@ -298,12 +302,22 @@ export function ProfileImageUpload() {
     setAvatarError(false);
   }, [avatarUrl]);
 
+  // Listen for avatar updates from other components
+  useEffect(() => {
+    const handleAvatarUpdate = () => {
+      setAvatarKey(Date.now());
+      refetch();
+    };
+    window.addEventListener('avatar-updated', handleAvatarUpdate);
+    return () => window.removeEventListener('avatar-updated', handleAvatarUpdate);
+  }, [refetch]);
+
   return (
     <div className="flex flex-col items-center space-y-4">
       <div className="relative">
         <Avatar 
           className="h-24 w-24 ring-2 ring-border"
-          key={profile?.avatar_url || 'no-avatar'} // Force re-render when avatar changes
+          key={`${profile?.avatar_url || 'no-avatar'}-${avatarKey}`} // Force re-render when avatar changes
         >
           <AvatarImage 
             src={!avatarError && avatarUrl ? avatarUrl : undefined} 
