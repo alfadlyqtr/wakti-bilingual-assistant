@@ -58,7 +58,7 @@ interface CustomPaywallModalProps {
 
 function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
   const { language, setLanguage } = useTheme();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
@@ -93,30 +93,75 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
     });
   }, [open]);
 
-  const handleSubscribe = () => {
+  const handleSubscribe = async () => {
     setLoading(true);
-    purchasePackage('$rc_monthly', (resp) => {
-      setLoading(false);
+    purchasePackage('$rc_monthly', async (resp: any) => {
+      console.log('[Purchase] Response:', resp);
+      
       if (resp?.status === 'SUCCESS' && resp?.message === 'purchased') {
+        // Update Supabase directly after successful purchase
+        if (user?.id) {
+          try {
+            await supabase
+              .from('profiles')
+              .update({
+                is_subscribed: true,
+                subscription_status: 'active',
+                plan_name: 'Wakti Monthly',
+                billing_start_date: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', user.id);
+            console.log('[Purchase] Supabase updated successfully');
+          } catch (err) {
+            console.error('[Purchase] Supabase update failed:', err);
+          }
+        }
+        
         toast.success(language === 'ar' ? 'تم الاشتراك بنجاح!' : 'Subscription successful!');
         onOpenChange(false);
+        window.location.reload(); // Refresh to update UI
       } else if (resp?.status === 'ERROR') {
         toast.error(resp?.message || (language === 'ar' ? 'فشل الاشتراك' : 'Purchase failed'));
       }
+      setLoading(false);
     });
   };
 
-  const handleRestore = () => {
+  const handleRestore = async () => {
     setRestoring(true);
-    restorePurchases((resp) => {
-      setRestoring(false);
-      if (resp?.status === 'SUCCESS' && resp?.message === 'restored') {
-        toast.success(language === 'ar' ? 'تم استعادة المشتريات!' : 'Purchases restored!');
-        onOpenChange(false);
-      } else {
-        toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');
-      }
+    
+    // First, try the native restore (for devices with Apple receipt)
+    restorePurchases((resp: any) => {
+      console.log('[Restore] Native SDK response:', resp);
     });
+    
+    // Also check subscription via RevenueCat REST API (more reliable)
+    // This works even if the device doesn't have the Apple receipt
+    if (user?.id) {
+      try {
+        console.log('[Restore] Checking subscription via API for user:', user.id);
+        const { data, error } = await supabase.functions.invoke('check-subscription', {
+          body: { userId: user.id }
+        });
+        
+        console.log('[Restore] API check result:', data, error);
+        
+        if (data?.isSubscribed) {
+          toast.success(language === 'ar' ? 'تم استعادة المشتريات!' : 'Purchases restored!');
+          onOpenChange(false);
+          setRestoring(false);
+          window.location.reload(); // Refresh to update UI
+          return;
+        }
+      } catch (err) {
+        console.error('[Restore] API check failed:', err);
+      }
+    }
+    
+    // If API check didn't find subscription, show error
+    toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');
+    setRestoring(false);
   };
 
   const handleLogout = async () => {

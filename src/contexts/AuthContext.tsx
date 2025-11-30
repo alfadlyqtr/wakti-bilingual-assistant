@@ -183,12 +183,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [handleNativelyReady]);
 
   // Identify logged-in user in RevenueCat (via Natively SDK). No-op on web.
+  // Also check subscription status via RevenueCat REST API
   useEffect(() => {
     if (!nativelyReady) return;
     try {
       if (user?.id) {
         purchasesLogin(user.id, user.email || '');
         setNotificationUser(user.id);
+        
+        // Check subscription status via Edge Function (calls RevenueCat REST API)
+        // This ensures we have accurate subscription state after login
+        supabase.functions.invoke('check-subscription', {
+          body: { userId: user.id }
+        }).then(({ data, error }) => {
+          if (error) {
+            console.warn('[AuthContext] Subscription check failed:', error);
+          } else {
+            console.log('[AuthContext] Subscription check result:', data);
+          }
+        }).catch(err => {
+          console.warn('[AuthContext] Subscription check error:', err);
+        });
       } else {
         purchasesLogout();
         removeNotificationUser();
