@@ -1,6 +1,14 @@
 import React, { useRef, useState, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Loader2, Trash2, Undo2, Redo2 } from 'lucide-react';
+import { Loader2, Trash2, Undo2, Redo2, Download, Sparkles, ChevronDown } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useDrawAfterBG } from '@/hooks/useDrawAfterBG';
 import { toast } from 'sonner';
 
@@ -16,8 +24,66 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [strength, setStrength] = useState(0.5);
   const lastGenerationTimeRef = useRef<number>(0);
+  
+  // Organized prompt suggestions by category
+  const promptCategories = {
+    "🎨 Enhancements": [
+      "enhance",
+      "add more details",
+      "add shadows and highlights",
+      "add texture and depth",
+      "make it more realistic",
+      "add shading",
+      "improve proportions",
+      "add fine details",
+      "enhance the lighting"
+    ],
+    "� Characters & Objects": [
+      "add a person",
+      "add animals",
+      "add trees and plants",
+      "add buildings",
+      "add vehicles",
+      "add furniture",
+      "add decorations",
+      "add people in the scene"
+    ],
+    "⚡ Quick Actions": [
+      "make it bigger",
+      "add motion blur",
+      "add sparkles",
+      "add fire effects",
+      "add water effects",
+      "make it symmetrical",
+      "add reflections",
+      "add magical effects"
+    ],
+    "✨ Style & Effects": [
+      "add vibrant colors",
+      "make it 3D and realistic",
+      "add cartoon style",
+      "make it watercolor painting",
+      "add neon glow effects",
+      "make it sketch art style",
+      "add pixel art style",
+      "make it anime style",
+      "add oil painting texture",
+      "make it minimalist"
+    ],
+    "🌍 Background & Scene": [
+      "add a beautiful background",
+      "add a sunset sky",
+      "add a city background",
+      "add nature scenery",
+      "add clouds and sky",
+      "add a beach scene",
+      "add mountains in background",
+      "add space and stars",
+      "add a forest setting"
+    ]
+  };
+  
   const generationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // Undo/Redo history management
@@ -204,7 +270,6 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
     }
 
     console.log('🎨 DRAW FEATURE: Starting generation with prompt:', prompt);
-    console.log('🎨 DRAW FEATURE: Strength:', strength);
 
     const imageBase64 = captureCanvasAsBase64();
     if (!imageBase64) {
@@ -215,8 +280,8 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
 
     console.log('✅ DRAW FEATURE: Canvas captured, base64 length:', imageBase64.length);
     lastGenerationTimeRef.current = now;
-    sendGenerationRequest(imageBase64, prompt, strength);
-  }, [prompt, strength, captureCanvasAsBase64, sendGenerationRequest]);
+    sendGenerationRequest(imageBase64, prompt, 0.5);
+  }, [prompt, captureCanvasAsBase64, sendGenerationRequest]);
 
   // Expose triggerGeneration to parent via ref
   useImperativeHandle(ref, () => ({
@@ -427,24 +492,45 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
         )}
       </div>
 
+      {/* Quick Prompts Dropdown */}
+      <div className="mb-4">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="w-full justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4" />
+                <span>Quick Prompts</span>
+              </div>
+              <ChevronDown className="w-4 h-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-[300px] max-h-[400px] overflow-y-auto">
+            {Object.entries(promptCategories).map(([category, prompts], categoryIndex) => (
+              <div key={categoryIndex}>
+                <DropdownMenuLabel>{category}</DropdownMenuLabel>
+                {prompts.map((prompt, promptIndex) => (
+                  <DropdownMenuItem
+                    key={promptIndex}
+                    onClick={() => {
+                      const event = new CustomEvent('quickPromptSelected', { detail: prompt });
+                      window.dispatchEvent(event);
+                    }}
+                    className="cursor-pointer"
+                  >
+                    {prompt}
+                  </DropdownMenuItem>
+                ))}
+                {categoryIndex < Object.entries(promptCategories).length - 1 && (
+                  <DropdownMenuSeparator />
+                )}
+              </div>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
       {/* Controls */}
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2 flex-1">
-          <label className="text-sm text-muted-foreground whitespace-nowrap">
-            Strength: {strength.toFixed(2)}
-          </label>
-          <input
-            type="range"
-            min="0.3"
-            max="0.6"
-            step="0.05"
-            value={strength}
-            onChange={(e) => setStrength(parseFloat(e.target.value))}
-            className="flex-1"
-            aria-label="Drawing strength slider"
-          />
-        </div>
-        
+      <div className="flex items-center gap-2 flex-wrap">
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
@@ -479,6 +565,28 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
           >
             <Trash2 className="w-4 h-4" />
             Clear
+          </Button>
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const canvas = canvasRef.current;
+              if (!canvas) return;
+              
+              // Create download link
+              const link = document.createElement('a');
+              link.download = `wakti-drawing-${Date.now()}.png`;
+              link.href = canvas.toDataURL('image/png');
+              link.click();
+              
+              toast.success('Drawing saved!');
+            }}
+            className="gap-2"
+            title="Save drawing"
+          >
+            <Download className="w-4 h-4" />
+            Save
           </Button>
         </div>
       </div>

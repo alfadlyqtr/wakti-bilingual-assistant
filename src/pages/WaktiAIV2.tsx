@@ -59,6 +59,18 @@ const WaktiAIV2 = () => {
     }
   };
 
+  // Listen for quick prompt selection from DrawAfterBGCanvas
+  useEffect(() => {
+    const handleQuickPrompt = (event: CustomEvent) => {
+      setMessage(event.detail);
+    };
+
+    window.addEventListener('quickPromptSelected', handleQuickPrompt as EventListener);
+    return () => {
+      window.removeEventListener('quickPromptSelected', handleQuickPrompt as EventListener);
+    };
+  }, []);
+
   const handleRefreshConversations = useCallback(() => {
     const archived = EnhancedFrontendMemory.loadArchivedConversations();
     setArchivedConversations(Array.isArray(archived) ? archived : []);
