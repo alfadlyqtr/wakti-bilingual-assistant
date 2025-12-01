@@ -7,7 +7,11 @@ export default function TextGenerator() {
   const { language } = useTheme();
   const { user } = useAuth();
   const [showPopup, setShowPopup] = useState(false);
-  const [initialTab, setInitialTab] = useState<'compose' | 'reply' | 'generated'>('compose');
+  const [initialTab, setInitialTab] = useState<'compose' | 'reply' | 'generated' | 'file-generator'>('compose');
+  
+  // Debug
+  console.log('TextGenerator render', { showPopup, initialTab });
+  
   return (
     <div className="w-full h-full">
       {!showPopup ? (
@@ -19,11 +23,10 @@ export default function TextGenerator() {
           </div>
           {/* Top tabs under title (welcome-first flow) */}
           <div className="mb-3">
-            <div className="grid grid-cols-3 gap-2 p-1 rounded-2xl border border-border/70 bg-white/60 dark:bg-white/5 shadow-sm" role="tablist" aria-label={language === 'ar' ? 'التبويبات' : 'Tabs'}>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 p-1 rounded-2xl border border-border/70 bg-white/60 dark:bg-white/5 shadow-sm" role="tablist" aria-label={language === 'ar' ? 'التبويبات' : 'Tabs'}>
               <button
                 type="button"
                 role="tab"
-                aria-selected={true}
                 onClick={() => { setInitialTab('compose'); setShowPopup(true); }}
                 className={`h-12 rounded-xl border text-sm font-medium transition-all
                   bg-gradient-primary text-primary-foreground shadow-lg border-primary ring-1 ring-primary/60
@@ -34,7 +37,6 @@ export default function TextGenerator() {
               <button
                 type="button"
                 role="tab"
-                aria-selected={false}
                 onClick={() => { setInitialTab('reply'); setShowPopup(true); }}
                 className={`h-12 rounded-xl border text-sm font-medium transition-all
                   bg-white/80 dark:bg-white/5 border-border shadow-sm hover:shadow-md hover:bg-white
@@ -45,13 +47,22 @@ export default function TextGenerator() {
               <button
                 type="button"
                 role="tab"
-                aria-selected={false}
                 onClick={() => { setInitialTab('generated'); setShowPopup(true); }}
                 className={`h-12 rounded-xl border text-sm font-medium transition-all
                   bg-muted/90 text-foreground shadow-lg border-muted-foreground/20 ring-1 ring-muted-foreground/20
                 `}
               >
                 {language === 'ar' ? 'النص المُولد' : 'Generated Text'}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                onClick={() => { setInitialTab('file-generator'); setShowPopup(true); }}
+                className={`h-12 rounded-xl border text-sm font-medium transition-all
+                  bg-white/80 dark:bg-white/5 border-border shadow-sm hover:shadow-md hover:bg-white
+                `}
+              >
+                {language === 'ar' ? 'مولد الملفات' : 'File Generator'}
               </button>
             </div>
           </div>
@@ -69,7 +80,7 @@ export default function TextGenerator() {
                   : 'Write faster in your style: start from scratch, craft a smart reply, or improve existing text.'}
               </p>
             </div>
-            <div className="grid md:grid-cols-3 gap-3 mt-3">
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
               <button
                 type="button"
                 onClick={() => { setInitialTab('compose'); setShowPopup(true); }}
@@ -113,6 +124,21 @@ export default function TextGenerator() {
                   {language === 'ar'
                     ? 'حسّن نصًا جاهزًا مع الحفاظ على النية والأسلوب.'
                     : 'Improve an existing draft while keeping the intent and style.'}
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setInitialTab('file-generator'); setShowPopup(true); }}
+                aria-label={language === 'ar' ? 'افتح تبويب مولد الملفات' : 'Open File Generator tab'}
+                className="text-left rounded-xl border border-border/50 bg-white/60 dark:bg-white/5 p-4 hover:bg-white/80 dark:hover:bg-white/10 active:scale-[0.99] transition-colors"
+              >
+                <div className="text-sm font-medium mb-1">
+                  {language === 'ar' ? 'مولد الملفات' : 'File Generator'}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {language === 'ar'
+                    ? 'ارفع أي ملف أو اكتب نصًا واحصل على ملف PowerPoint أو Word أو PDF.'
+                    : 'Upload any file or type text and get a PowerPoint, Word, or PDF file.'}
                 </div>
               </button>
             </div>

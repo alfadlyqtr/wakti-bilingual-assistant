@@ -1,17 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
+import FileGeneratorTab from './FileGeneratorTab';
 
 interface TextGeneratorPopupProps {
   isOpen?: boolean;
   onClose: () => void;
   onTextGenerated: (text: string, mode: 'compose' | 'reply') => void;
   renderAsPage?: boolean;
-  initialTab?: 'compose' | 'reply' | 'generated';
+  initialTab?: 'compose' | 'reply' | 'generated' | 'file-generator';
 }
 
 type Mode = 'compose' | 'reply';
-type Tab = 'compose' | 'reply' | 'generated';
+type Tab = 'compose' | 'reply' | 'generated' | 'file-generator';
 type Language = 'en' | 'ar';
 type ModelPreference = 'gpt-4o' | 'gpt-4o-mini' | 'auto';
 
@@ -177,9 +178,11 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
 
   // Ensure initialTab is respected on first mount
   useEffect(() => {
-    if (initialTab && ['compose','reply','generated'].includes(initialTab)) {
+    if (initialTab && ['compose','reply','generated','file-generator'].includes(initialTab)) {
       setActiveTab(initialTab as Tab);
-      setMode(initialTab === 'reply' ? 'reply' : 'compose');
+      if (initialTab !== 'file-generator') {
+        setMode(initialTab === 'reply' ? 'reply' : 'compose');
+      }
     }
     // run only once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -337,14 +340,14 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
 
         {/* Tabs */}
         <div className="px-6 pt-4">
-          <div className="grid grid-cols-3 gap-2 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
             <button
               onClick={() => { setActiveTab('compose'); setMode('compose'); }}
-              className={`px-3 py-2 rounded-md border ${activeTab === 'compose' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+              className={`px-3 py-2 rounded-md border text-sm ${activeTab === 'compose' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
             >{language === 'ar' ? 'تأليف' : 'Compose'}</button>
             <button
               onClick={() => { setActiveTab('reply'); setMode('reply'); }}
-              className={`px-3 py-2 rounded-md border ${activeTab === 'reply' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+              className={`px-3 py-2 rounded-md border text-sm ${activeTab === 'reply' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
             >{language === 'ar' ? 'رد' : 'Reply'}</button>
             <button
               disabled={!generatedText && cachedTexts.length === 0}
@@ -355,7 +358,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 }
                 setActiveTab('generated');
               }}
-              className={`px-3 py-2 rounded-md border ${
+              className={`px-3 py-2 rounded-md border text-sm ${
                 activeTab === 'generated'
                   ? 'bg-primary text-primary-foreground'
                   : (generatedText || cachedTexts.length > 0)
@@ -363,6 +366,10 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                     : 'opacity-60 cursor-not-allowed'
               }`}
             >{language === 'ar' ? 'النص المُولد' : 'Generated Text'}</button>
+            <button
+              onClick={() => setActiveTab('file-generator')}
+              className={`px-3 py-2 rounded-md border text-sm ${activeTab === 'file-generator' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+            >{language === 'ar' ? 'مولد الملفات' : 'File Generator'}</button>
           </div>
         </div>
 
@@ -607,19 +614,25 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
             </div>
           )}
 
-          {error && (
+          {activeTab === 'file-generator' && (
+            <FileGeneratorTab />
+          )}
+
+          {error && activeTab !== 'file-generator' && (
             <div className="mt-4 text-sm text-destructive">{error}</div>
           )}
-          {/* Inline generate button at end of content (not sticky) */}
-          <div className="mt-6 flex justify-end">
-            <button
-              className={`px-5 py-2.5 rounded-full text-sm font-medium shadow-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500 hover:shadow-xl transition-all ${canGenerate ? '' : 'opacity-60 cursor-not-allowed'}`}
-              onClick={handleGenerate}
-              disabled={!canGenerate}
-            >
-              {isLoading ? (language === 'ar' ? 'جارٍ الإنشاء...' : 'Generating...') : (language === 'ar' ? 'توليد النص' : 'Generate Text')}
-            </button>
-          </div>
+          {/* Inline generate button at end of content (not sticky) - hide for file-generator */}
+          {activeTab !== 'file-generator' && (
+            <div className="mt-6 flex justify-end">
+              <button
+                className={`px-5 py-2.5 rounded-full text-sm font-medium shadow-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500 hover:shadow-xl transition-all ${canGenerate ? '' : 'opacity-60 cursor-not-allowed'}`}
+                onClick={handleGenerate}
+                disabled={!canGenerate}
+              >
+                {isLoading ? (language === 'ar' ? 'جارٍ الإنشاء...' : 'Generating...') : (language === 'ar' ? 'توليد النص' : 'Generate Text')}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
