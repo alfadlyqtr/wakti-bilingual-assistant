@@ -40,6 +40,7 @@ import Help from "./pages/Help";
 import PrivacyTerms from "./pages/PrivacyTerms";
 import AccountDelete from "./pages/AccountDelete";
 import Confirmed from "./pages/Confirmed";
+import AuthConfirm from "./pages/AuthConfirm";
 import NotFound from "./pages/NotFound";
 import SessionEnded from "./pages/SessionEnded";
 
@@ -127,6 +128,7 @@ function App() {
                 <Route path="/privacy-terms" element={<PrivacyTerms />} />
                 <Route path="/account-delete" element={<AccountDelete />} />
                 <Route path="/confirmed" element={<Confirmed />} />
+                <Route path="/auth/confirm" element={<AuthConfirm />} />
                 <Route path="/session-ended" element={<SessionEnded />} />
                 
                 {/* Shared task route (public) */}

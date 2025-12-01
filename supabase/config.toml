@@ -9,14 +9,30 @@ max_rows = 1000
 
 [auth]
 enabled = true
-site_url = "http://localhost:3000"
-additional_redirect_urls = ["https://localhost:3000", "http://localhost:5173", "https://localhost:5173"]
+site_url = "http://localhost:8080"
+additional_redirect_urls = ["http://localhost:8080/*", "http://localhost:8080/auth/confirm", "https://wakti.qa/*", "https://wakti.qa/auth/confirm"]
 jwt_expiry = 3600
 enable_signup = true
 
 [auth.email]
 enable_signup = true
 double_confirm_changes = true
+
+[auth.email.template.confirmation]
+subject = "Confirm your WAKTI account / تأكيد حساب وقتي"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.magic_link]
+subject = "Sign in to WAKTI / تسجيل الدخول إلى وقتي"
+content_path = "./supabase/templates/magic_link.html"
+
+[auth.email.template.recovery]
+subject = "Reset your WAKTI password / إعادة تعيين كلمة مرور وقتي"
+content_path = "./supabase/templates/recovery.html"
+
+[auth.email.template.email_change]
+subject = "Confirm email change / تأكيد تغيير البريد"
+content_path = "./supabase/templates/email_change.html"
 
 [db]
 port = 54322

@@ -1,0 +1,36 @@
+<div style="background-color: #fcfefd; padding: 40px 20px; font-family: sans-serif; color: #060541; text-align: center;">
+  <img src="https://hxauxozopvpzpdygoqwf.supabase.co/storage/v1/object/public/avatars/new%20wakti%20logo%20no%20BG.png" alt="WAKTI Logo" style="max-width: 120px; margin-bottom: 30px;" />
+  
+  <h2 style="font-size: 22px; font-weight: bold; margin-bottom: 10px;">
+    Sign in to WAKTI / تسجيل الدخول إلى وقتي
+  </h2>
+  
+  <p style="font-size: 16px; margin-bottom: 30px;">
+    Click the button below to sign in / اضغط على الزر أدناه لتسجيل الدخول
+  </p>
+  
+  <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=magiclink" style="
+    background-color: #e9ceb0;
+    color: #060541;
+    text-decoration: none;
+    padding: 14px 28px;
+    border-radius: 8px;
+    font-weight: 600;
+    display: inline-block;
+    font-size: 16px;
+    border: 2px solid #060541;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  ">
+    Sign In / تسجيل الدخول
+  </a>
+  
+  <p style="margin-top: 40px; font-size: 13px; color: #888;">
+    This link expires in 1 hour. If you didn't request this, ignore this email.<br>
+    تنتهي صلاحية هذا الرابط خلال ساعة واحدة.
+  </p>
+  
+  <p style="margin-top: 20px; font-size: 12px; color: #aaa;">
+    © 2024 WAKTI. All rights reserved.<br>
+    wakti.qa
+  </p>
+</div>
