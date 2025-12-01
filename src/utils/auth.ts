@@ -77,21 +77,31 @@ export const deleteUserAccount = async () => {
 
 export const updateUserPassword = async (currentPassword: string, newPassword: string) => {
   try {
-    // First verify current password by attempting to sign in
+    // First get the current user
     const { data: { user } } = await supabase.auth.getUser();
     if (!user?.email) {
-      throw new Error('No user found');
+      return { error: new Error('No user found') };
     }
 
-    // For security, we should verify the current password first
-    // But since Supabase doesn't provide a direct way to verify current password,
-    // we'll proceed with the update and let Supabase handle the security
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    if (error) {
-      return { error };
+    // Verify current password by attempting to sign in
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: currentPassword,
+    });
+
+    if (signInError) {
+      return { error: new Error('Current password is incorrect') };
+    }
+
+    // Current password is correct, now update to new password
+    const { error: updateError } = await supabase.auth.updateUser({ 
+      password: newPassword 
+    });
+    
+    if (updateError) {
+      return { error: updateError };
     }
     
-    toast.success('Password updated successfully');
     return { error: null };
   } catch (error) {
     console.error('Error updating password:', error);
