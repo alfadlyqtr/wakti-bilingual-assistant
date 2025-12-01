@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { generateRealPowerPoint, generateRealWordDocument, generateRealPDF, generateRealExcel, generatePlainText } from "./file-generators.ts";
+import { generateRealPowerPoint, generateRealWordDocument, generateRealPDF, generateRealExcel, generatePlainText } from "./real-file-generators.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -404,7 +404,7 @@ Requirements:
 - Add speaker notes when helpful${imageInstruction}`;
   }
 
-  if (outputType === 'docx') {
+  if (outputType === 'docx' || outputType === 'pdf' || outputType === 'txt') {
     return isArabic
       ? `أنت كاتب مستندات محترف. قم بإنشاء مستند منظم بعدد ${outputSize} صفحات تقريباً.
 
@@ -442,6 +442,44 @@ Requirements:
 - Organize content into logical sections
 - Use coherent paragraphs
 - Add subheadings when helpful${imageInstruction}`;
+  }
+
+  if (outputType === 'xlsx') {
+    return isArabic
+      ? `أنت محلل بيانات محترف. قم بإنشاء جدول بيانات منظم بعدد ${outputSize} صفوف تقريباً.
+
+أعد JSON بهذا التنسيق:
+{
+  "title": "عنوان الجدول",
+  "table": {
+    "headers": ["العمود 1", "العمود 2", "العمود 3"],
+    "rows": [
+      {"العمود 1": "قيمة", "العمود 2": 123, "العمود 3": "بيانات"}
+    ]
+  }
+}
+
+المتطلبات:
+- استخدم عناوين أعمدة واضحة
+- أضف بيانات واقعية ومفيدة
+- استخدم أرقام حيثما كان مناسباً`
+      : `You are a professional data analyst. Create a structured spreadsheet with approximately ${outputSize} rows.
+
+Return JSON in this format:
+{
+  "title": "Spreadsheet Title",
+  "table": {
+    "headers": ["Column 1", "Column 2", "Column 3"],
+    "rows": [
+      {"Column 1": "value", "Column 2": 123, "Column 3": "data"}
+    ]
+  }
+}
+
+Requirements:
+- Use clear column headers
+- Add realistic and useful data
+- Use numbers where appropriate`;
   }
 
   return getSystemPrompt('docx', outputSize, language, includeImages);

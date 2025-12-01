@@ -174,14 +174,6 @@ export default function FileGeneratorTab() {
         </div>
       )}
       
-      {/* Beta Notice */}
-      <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs">
-        <strong>{language === 'ar' ? '⚠️ ملاحظة:' : '⚠️ Note:'}</strong>{' '}
-        {language === 'ar' 
-          ? 'حالياً، يعمل تنسيق النص (.txt) بشكل كامل. التنسيقات الأخرى (PowerPoint، Word، PDF، Excel) قيد التطوير وتحتاج مكتبات إضافية.'
-          : 'Currently, Text format (.txt) works fully. Other formats (PowerPoint, Word, PDF, Excel) are in development and need additional libraries.'}
-      </div>
-      
       {/* Input Section */}
       <div className="space-y-3">
         <label className="text-sm font-medium">
