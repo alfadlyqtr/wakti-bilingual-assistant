@@ -7,7 +7,7 @@ export default function TextGenerator() {
   const { language } = useTheme();
   const { user } = useAuth();
   const [showPopup, setShowPopup] = useState(false);
-  const [initialTab, setInitialTab] = useState<'compose' | 'reply' | 'generated' | 'file-generator'>('compose');
+  const [initialTab, setInitialTab] = useState<'compose' | 'reply' | 'generated' | 'diagrams'>('compose');
   
   // Debug
   console.log('TextGenerator render', { showPopup, initialTab });
@@ -57,12 +57,12 @@ export default function TextGenerator() {
               <button
                 type="button"
                 role="tab"
-                onClick={() => { setInitialTab('file-generator'); setShowPopup(true); }}
+                onClick={() => { setInitialTab('diagrams'); setShowPopup(true); }}
                 className={`h-12 rounded-xl border text-sm font-medium transition-all
                   bg-white/80 dark:bg-white/5 border-border shadow-sm hover:shadow-md hover:bg-white
                 `}
               >
-                {language === 'ar' ? 'مولد الملفات' : 'File Generator'}
+                {language === 'ar' ? 'المخططات' : 'Diagrams'}
               </button>
             </div>
           </div>
@@ -128,17 +128,17 @@ export default function TextGenerator() {
               </button>
               <button
                 type="button"
-                onClick={() => { setInitialTab('file-generator'); setShowPopup(true); }}
-                aria-label={language === 'ar' ? 'افتح تبويب مولد الملفات' : 'Open File Generator tab'}
-                className="text-left rounded-xl border border-border/50 bg-white/60 dark:bg-white/5 p-4 hover:bg-white/80 dark:hover:bg-white/10 active:scale-[0.99] transition-colors"
+                onClick={() => { setInitialTab('diagrams'); setShowPopup(true); }}
+                aria-label={language === 'ar' ? 'افتح تبويب المخططات' : 'Open Diagrams tab'}
+                className="text-left rounded-xl border border-border/50 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 p-4 hover:from-indigo-100 hover:to-purple-100 dark:hover:from-indigo-900/40 dark:hover:to-purple-900/40 active:scale-[0.99] transition-colors ring-1 ring-indigo-200/50 dark:ring-indigo-800/30"
               >
-                <div className="text-sm font-medium mb-1">
-                  {language === 'ar' ? 'مولد الملفات' : 'File Generator'}
+                <div className="text-sm font-medium mb-1 text-indigo-700 dark:text-indigo-300">
+                  {language === 'ar' ? 'المخططات' : 'Diagrams'}
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-xs text-indigo-600/70 dark:text-indigo-400/70">
                   {language === 'ar'
-                    ? 'ارفع أي ملف أو اكتب نصًا واحصل على ملف PowerPoint أو Word أو PDF.'
-                    : 'Upload any file or type text and get a PowerPoint, Word, or PDF file.'}
+                    ? 'حوّل أفكارك إلى مخططات احترافية بضغطة واحدة.'
+                    : 'Transform your ideas into professional diagrams instantly.'}
                 </div>
               </button>
             </div>

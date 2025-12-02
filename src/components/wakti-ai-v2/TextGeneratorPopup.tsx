@@ -1,18 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
-import FileGeneratorTab from './FileGeneratorTab';
+import DiagramsTab from './DiagramsTab';
 
 interface TextGeneratorPopupProps {
   isOpen?: boolean;
   onClose: () => void;
   onTextGenerated: (text: string, mode: 'compose' | 'reply') => void;
   renderAsPage?: boolean;
-  initialTab?: 'compose' | 'reply' | 'generated' | 'file-generator';
+  initialTab?: 'compose' | 'reply' | 'generated' | 'diagrams';
 }
 
 type Mode = 'compose' | 'reply';
-type Tab = 'compose' | 'reply' | 'generated' | 'file-generator';
+type Tab = 'compose' | 'reply' | 'generated' | 'diagrams';
 type Language = 'en' | 'ar';
 type ModelPreference = 'gpt-4o' | 'gpt-4o-mini' | 'auto';
 
@@ -178,9 +178,9 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
 
   // Ensure initialTab is respected on first mount
   useEffect(() => {
-    if (initialTab && ['compose','reply','generated','file-generator'].includes(initialTab)) {
+    if (initialTab && ['compose','reply','generated','diagrams'].includes(initialTab)) {
       setActiveTab(initialTab as Tab);
-      if (initialTab !== 'file-generator') {
+      if (initialTab !== 'diagrams') {
         setMode(initialTab === 'reply' ? 'reply' : 'compose');
       }
     }
@@ -367,9 +367,9 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
               }`}
             >{language === 'ar' ? 'النص المُولد' : 'Generated Text'}</button>
             <button
-              onClick={() => setActiveTab('file-generator')}
-              className={`px-3 py-2 rounded-md border text-sm ${activeTab === 'file-generator' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
-            >{language === 'ar' ? 'مولد الملفات' : 'File Generator'}</button>
+              onClick={() => setActiveTab('diagrams')}
+              className={`px-3 py-2 rounded-md border text-sm ${activeTab === 'diagrams' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+            >{language === 'ar' ? 'المخططات' : 'Diagrams'}</button>
           </div>
         </div>
 
@@ -614,16 +614,16 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
             </div>
           )}
 
-          {activeTab === 'file-generator' && (
-            <FileGeneratorTab />
+          {activeTab === 'diagrams' && (
+            <DiagramsTab />
           )}
 
-          {error && activeTab !== 'file-generator' && (
+          {error && activeTab !== 'diagrams' && (
             <div className="mt-4 text-sm text-destructive">{error}</div>
           )}
-          {/* Inline generate button at end of content (not sticky) - hide for file-generator */}
-          {activeTab !== 'file-generator' && (
-            <div className="mt-6 flex justify-end">
+          {/* Inline generate button at end of content (not sticky) - hide for diagrams */}
+          {activeTab !== 'diagrams' && (
+          <div className="mt-6 flex justify-end">
               <button
                 className={`px-5 py-2.5 rounded-full text-sm font-medium shadow-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500 hover:shadow-xl transition-all ${canGenerate ? '' : 'opacity-60 cursor-not-allowed'}`}
                 onClick={handleGenerate}
