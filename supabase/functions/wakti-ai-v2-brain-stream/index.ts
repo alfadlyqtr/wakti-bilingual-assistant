@@ -26,8 +26,9 @@ const getCorsHeaders = (origin) => {
 
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
+const WOLFRAM_APP_ID = Deno.env.get('WOLFRAM_APP_ID') || 'VJT5YA9VGJ';
 
-console.log("WAKTI AI V2 STREAMING BRAIN: Ready");
+console.log("WAKTI AI V2 STREAMING BRAIN: Ready (with Wolfram|Alpha)");
 
 // === GEMINI HELPER ===
 function getGeminiApiKey() {
@@ -343,6 +344,107 @@ async function executeRegularSearch(query, language = 'en') {
   }
 }
 
+// === WOLFRAM|ALPHA HELPER (with timeout protection) ===
+async function queryWolfram(input: string, timeoutMs: number = 4000): Promise<{ success: boolean; answer?: string; steps?: string[]; interpretation?: string; error?: string }> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    const params = new URLSearchParams({
+      appid: WOLFRAM_APP_ID,
+      input: input,
+      output: 'json',
+      format: 'plaintext',
+      units: 'metric',
+    });
+
+    const url = `https://api.wolframalpha.com/v2/query?${params.toString()}`;
+    console.log('🔢 WOLFRAM: Querying (timeout=' + timeoutMs + 'ms):', input.substring(0, 50));
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      console.warn('⚠️ WOLFRAM: HTTP error', response.status);
+      return { success: false, error: `HTTP ${response.status}` };
+    }
+
+    const data = await response.json();
+    const qr = data?.queryresult;
+
+    if (!qr || qr.success === false || qr.error === true) {
+      console.log('🔢 WOLFRAM: No results');
+      return { success: false, error: 'No results' };
+    }
+
+    const pods = qr.pods || [];
+    let answer = '';
+    let interpretation = '';
+    const steps: string[] = [];
+
+    for (const pod of pods) {
+      const id = (pod.id || '').toLowerCase();
+      const title = (pod.title || '').toLowerCase();
+      const text = pod.subpods?.[0]?.plaintext || '';
+
+      if (id === 'input' || title.includes('input')) {
+        interpretation = text;
+      }
+      if (pod.primary || id === 'result' || id === 'solution' || id === 'value' || id === 'decimalapproximation') {
+        if (!answer && text) answer = text;
+      }
+      if (title.includes('step') || id.includes('step')) {
+        if (text) steps.push(text);
+      }
+    }
+
+    // Fallback: grab first non-input pod
+    if (!answer) {
+      for (const pod of pods) {
+        if (pod.id !== 'Input' && pod.subpods?.[0]?.plaintext) {
+          answer = pod.subpods[0].plaintext;
+          break;
+        }
+      }
+    }
+
+    if (!answer) {
+      return { success: false, error: 'No answer found' };
+    }
+
+    console.log('✅ WOLFRAM: Got answer');
+    return { success: true, answer, steps: steps.length > 0 ? steps : undefined, interpretation };
+
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      console.warn('⚠️ WOLFRAM: Timeout after', timeoutMs, 'ms');
+      return { success: false, error: 'Timeout' };
+    }
+    console.error('❌ WOLFRAM: Error:', err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+// Detect if query is suitable for Wolfram (math/science/facts)
+function isWolframQuery(q: string): boolean {
+  const lower = q.toLowerCase();
+  // Math patterns
+  if (/\d+\s*[\+\-\*\/\^]\s*\d+/.test(q)) return true;
+  if (/\b(solve|integrate|derivative|limit|factor|simplify|equation|calculate)\b/i.test(q)) return true;
+  if (/[∫∑∏√π∞]/.test(q)) return true;
+  if (/\b(sin|cos|tan|log|ln|sqrt)\s*\(/i.test(q)) return true;
+  // Science/facts patterns
+  if (/\b(convert|distance|population|capital|temperature|speed of|atomic|molecular|planet|star|gravity)\b/i.test(lower)) return true;
+  if (/\d+\s*(km|m|cm|mm|ft|in|mi|kg|g|lb|oz|l|ml|gal|mph|kph|°[CF])/i.test(q)) return true;
+  if (/\b(how (far|much|many|tall|big|old)|what is the)\b/i.test(lower)) return true;
+  return false;
+}
+
 serve(async (req) => {
   const origin = req.headers.get('origin');
   const corsHeaders = getCorsHeaders(origin);
@@ -373,10 +475,11 @@ serve(async (req) => {
           language = 'en', 
           recentMessages = [], 
           personalTouch = null, 
-          activeTrigger = 'general'
+          activeTrigger = 'general',
+          chatSubmode = 'chat' // 'chat' or 'study'
         } = body;
 
-        console.log(`🎯 REQUEST: trigger=${activeTrigger}, lang=${language}`);
+        console.log(`🎯 REQUEST: trigger=${activeTrigger}, submode=${chatSubmode}, lang=${language}`);
 
         if (!message) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Message required' })}\n\n`));
@@ -447,8 +550,56 @@ serve(async (req) => {
             messages.push({ role: 'user', content: message });
           }
         } else {
-          // Not search mode, add user message normally
-          messages.push({ role: 'user', content: message });
+          // Chat mode - check if we should use Wolfram
+          let wolframContext = '';
+          const useWolfram = chatSubmode === 'study' || (activeTrigger === 'chat' && isWolframQuery(message));
+          
+          if (useWolfram) {
+            console.log(`🔢 WOLFRAM: ${chatSubmode === 'study' ? 'Study mode' : 'Facts booster'} - querying...`);
+            try {
+              const wolfResult = await queryWolfram(message, chatSubmode === 'study' ? 4000 : 2500);
+              
+              if (wolfResult.success && wolfResult.answer) {
+                // Emit metadata so frontend knows Wolfram was used
+                try {
+                  const wolfMeta = {
+                    metadata: {
+                      wolfram: {
+                        answer: wolfResult.answer,
+                        interpretation: wolfResult.interpretation || null,
+                        steps: wolfResult.steps || [],
+                        mode: chatSubmode
+                      }
+                    }
+                  };
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify(wolfMeta)}\n\n`));
+                } catch {}
+
+                // Build context for AI
+                if (chatSubmode === 'study') {
+                  wolframContext = language === 'ar'
+                    ? `[بيانات Wolfram|Alpha الدقيقة]\nالسؤال: ${wolfResult.interpretation || message}\nالإجابة: ${wolfResult.answer}${wolfResult.steps?.length ? '\nالخطوات: ' + wolfResult.steps.join(' → ') : ''}\n\nاستخدم هذه البيانات لشرح الإجابة بطريقة تعليمية واضحة. اعرض الإجابة أولاً ثم الشرح.`
+                    : `[Wolfram|Alpha verified data]\nQuestion: ${wolfResult.interpretation || message}\nAnswer: ${wolfResult.answer}${wolfResult.steps?.length ? '\nSteps: ' + wolfResult.steps.join(' → ') : ''}\n\nUse this data to explain the answer in a clear, educational way. Present the answer first, then explain.`;
+                } else {
+                  wolframContext = language === 'ar'
+                    ? `[حقيقة موثقة من Wolfram|Alpha: ${wolfResult.answer}]\n\nاستخدم هذه الحقيقة في إجابتك بشكل طبيعي.`
+                    : `[Verified fact from Wolfram|Alpha: ${wolfResult.answer}]\n\nUse this fact naturally in your response.`;
+                }
+                console.log('✅ WOLFRAM: Data injected into prompt');
+              } else {
+                console.log('⚠️ WOLFRAM: No result, AI will handle alone');
+              }
+            } catch (wolfErr) {
+              console.warn('⚠️ WOLFRAM: Error (AI will handle alone):', wolfErr);
+            }
+          }
+
+          // Build final user message
+          if (wolframContext) {
+            messages.push({ role: 'user', content: `${wolframContext}\n\nUser question: ${message}` });
+          } else {
+            messages.push({ role: 'user', content: message });
+          }
         }
 
         let aiProvider = 'none';
@@ -470,7 +621,7 @@ serve(async (req) => {
           
           let geminiTokenCount = 0;
           await streamGemini(
-            'gemini-2.5-flash-lite',
+            'gemini-2.0-flash',
             contents,
             (token) => {
               geminiTokenCount++;

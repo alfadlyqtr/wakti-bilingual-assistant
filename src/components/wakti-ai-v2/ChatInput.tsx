@@ -38,12 +38,14 @@ const textareaHighlight = (activeTrigger: string) => {
 
 export type ImageMode = 'text2image' | 'image2image' | 'background-removal' | 'draw-after-bg';
 
+export type ChatSubmode = 'chat' | 'study';
+
 interface ChatInputProps {
   message: string;
   setMessage: (message: string) => void;
   isLoading: boolean;
   sessionMessages: any[];
-  onSendMessage: (message: string, trigger: string, files?: any[], imageMode?: ImageMode, imageQuality?: 'fast' | 'best_fast') => void;
+  onSendMessage: (message: string, trigger: string, files?: any[], imageMode?: ImageMode, imageQuality?: 'fast' | 'best_fast', chatSubmode?: ChatSubmode) => void;
   onClearChat: () => void;
   onOpenPlusDrawer: () => void;
   onOpenConversations?: () => void;
@@ -54,6 +56,8 @@ interface ChatInputProps {
   setShowVideoUpload?: (show: boolean) => void;
   videoCategory?: string;
   videoTemplate?: string;
+  chatSubmode?: ChatSubmode;
+  onChatSubmodeChange?: (submode: ChatSubmode) => void;
 }
 
 export function ChatInput({
@@ -71,7 +75,9 @@ export function ChatInput({
   showVideoUpload = false,
   setShowVideoUpload,
   videoCategory = 'custom',
-  videoTemplate = 'image2video'
+  videoTemplate = 'image2video',
+  chatSubmode = 'chat',
+  onChatSubmodeChange
 }: ChatInputProps) {
   const { language } = useTheme();
   const [wasAutoSwitchedToVision, setWasAutoSwitchedToVision] = useState(false);
@@ -113,6 +119,9 @@ export function ChatInput({
   // Image2Image inline translation state
   const [isTranslatingI2I, setIsTranslatingI2I] = useState(false);
   const [isAmping, setIsAmping] = useState(false);
+  // Chat/Study submode dropdown state
+  const chatSubmodeBtnRef = useRef<HTMLButtonElement>(null);
+  const [chatSubmodeMenuPos, setChatSubmodeMenuPos] = useState<{ top: number; left: number } | null>(null);
 
   // Compute a safe, clamped viewport position for the QuickModes portal
   const getQuickModesPortalPos = () => {
@@ -539,7 +548,8 @@ export function ChatInput({
         finalTrigger, // Use the final trigger (could be auto-switched to vision)
         outgoingFiles,
         activeTrigger === 'image' ? imageMode : undefined, // Only pass imageMode if in image mode
-        activeTrigger === 'image' && imageMode === 'text2image' ? imageQuality : undefined // Only pass imageQuality for Text2Image
+        activeTrigger === 'image' && imageMode === 'text2image' ? imageQuality : undefined, // Only pass imageQuality for Text2Image
+        activeTrigger === 'chat' ? chatSubmode : undefined // Pass chatSubmode for Chat mode (chat vs study)
       );
     } else {
       console.log('❌ SEND: No message or files to send');
@@ -584,10 +594,13 @@ export function ChatInput({
   };
 
   // Layout & Mode highlighting classes
-  // Default highlights from activeTrigger, but override to YouTube-red when Search submode is YouTube
+  // Default highlights from activeTrigger, but override for YouTube-red or Study-purple
   const containerHighlight = (() => {
     if (activeTrigger === 'search' && searchSubmode === 'youtube') {
       return 'border-red-300 ring-2 ring-red-200/70 shadow-red-100/10';
+    }
+    if (activeTrigger === 'chat' && chatSubmode === 'study') {
+      return 'border-purple-300 ring-2 ring-purple-200/70 shadow-purple-100/15';
     }
     return modeHighlightStyles(activeTrigger);
   })();
@@ -595,6 +608,7 @@ export function ChatInput({
   // Send button color by mode
   const sendBtnColors = (() => {
     if (activeTrigger === 'search' && searchSubmode === 'youtube') return 'bg-red-600 hover:bg-red-700 text-white';
+    if (activeTrigger === 'chat' && chatSubmode === 'study') return 'bg-purple-500 hover:bg-purple-600 text-white';
     switch (activeTrigger) {
       case 'chat':
         return 'bg-blue-600 hover:bg-blue-700 text-white';
@@ -613,6 +627,9 @@ export function ChatInput({
   const textareaHighlightClass = (() => {
     if (activeTrigger === 'search' && searchSubmode === 'youtube') {
       return 'border-red-300 shadow-[inset_0_2px_12px_0_rgba(248,113,113,0.10)]';
+    }
+    if (activeTrigger === 'chat' && chatSubmode === 'study') {
+      return 'border-purple-300 shadow-[inset_0_2px_12px_0_rgba(147,51,234,0.10)]';
     }
     return textareaHighlight(activeTrigger);
   })();
@@ -1161,12 +1178,87 @@ export function ChatInput({
                       </div>
                     ) : activeTrigger === 'chat' ? (
                       <div className="relative flex items-center gap-2">
-                        <span className="inline-flex items-center gap-1 px-3 py-1 h-8 rounded-full text-xs font-medium leading-none bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700/50">
-                          {language === 'ar' ? 'دردشة' : 'Chat'}
-                        </span>
+                        {/* Chat/Study Submode Dropdown */}
+                        <button
+                          ref={chatSubmodeBtnRef}
+                          data-dropdown
+                          onPointerDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            // @ts-ignore
+                            if (e.nativeEvent && typeof e.nativeEvent.stopImmediatePropagation === 'function') e.nativeEvent.stopImmediatePropagation();
+                            const rect = chatSubmodeBtnRef.current?.getBoundingClientRect();
+                            if (chatSubmodeMenuPos) {
+                              setChatSubmodeMenuPos(null);
+                            } else if (rect) {
+                              const margin = 8;
+                              const rightEdge = Math.min(window.innerWidth - 12, rect.right);
+                              setChatSubmodeMenuPos({ top: rect.top - margin, left: rightEdge - 8 });
+                            }
+                          }}
+                          className={`inline-flex items-center gap-1 px-3 py-1 h-8 rounded-full text-xs font-medium leading-none border align-middle ${
+                            chatSubmode === 'study'
+                              ? 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-700/50'
+                              : 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700/50'
+                          }`}
+                        >
+                          <span className={`w-2 h-2 rounded-full ${chatSubmode === 'study' ? 'bg-purple-500' : 'bg-blue-500'}`}></span>
+                          <span className="text-xs">
+                            {chatSubmode === 'study' 
+                              ? (language === 'ar' ? 'دراسة' : 'Study') 
+                              : (language === 'ar' ? 'دردشة' : 'Chat')}
+                          </span>
+                          <ChevronDown className="h-3 w-3" />
+                        </button>
+                        {createPortal(
+                          <AnimatePresence>
+                            {chatSubmodeMenuPos && (
+                              <motion.div
+                                key="chat-submode-menu"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ type: 'spring', stiffness: 320, damping: 24 }}
+                                className="fixed z-[9999] min-w-[140px]"
+                                data-dropdown-menu
+                                style={{ top: chatSubmodeMenuPos.top, left: chatSubmodeMenuPos.left, transform: 'translate(-100%, -100%)', transformOrigin: 'bottom right' }}
+                                onPointerDown={(e) => e.stopPropagation()}
+                              >
+                                <div className="rounded-2xl border border-white/60 dark:border-white/10 bg-gradient-to-b from-white/90 to-white/70 dark:from-neutral-900/80 dark:to-neutral-900/60 backdrop-blur-3xl shadow-[0_18px_40px_rgba(0,0,0,0.12)] ring-1 ring-white/25 dark:ring-white/5 py-1">
+                                  <button 
+                                    onPointerUp={() => { 
+                                      onChatSubmodeChange?.('chat'); 
+                                      setChatSubmodeMenuPos(null); 
+                                    }} 
+                                    className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-2"
+                                  >
+                                    <span className="w-3 h-3 bg-blue-500 rounded-full"></span>
+                                    {language === 'ar' ? 'دردشة' : 'Chat'}
+                                  </button>
+                                  <button 
+                                    onPointerUp={() => { 
+                                      onChatSubmodeChange?.('study'); 
+                                      setChatSubmodeMenuPos(null); 
+                                    }} 
+                                    className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-2"
+                                  >
+                                    <span className="w-3 h-3 bg-purple-500 rounded-full"></span>
+                                    {language === 'ar' ? 'دراسة' : 'Study'}
+                                    <span className="text-[10px] text-purple-500 ml-1">📚</span>
+                                  </button>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>,
+                          document.body
+                        )}
                         <button
                           type="button"
-                          className="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200/70 dark:border-blue-800/60 text-blue-900 dark:text-blue-200 shadow-sm"
+                          className={`inline-flex items-center justify-center h-8 w-8 rounded-lg shadow-sm ${
+                            chatSubmode === 'study'
+                              ? 'bg-purple-50 dark:bg-purple-950/40 border border-purple-200/70 dark:border-purple-800/60 text-purple-900 dark:text-purple-200'
+                              : 'bg-blue-50 dark:bg-blue-950/40 border border-blue-200/70 dark:border-blue-800/60 text-blue-900 dark:text-blue-200'
+                          }`}
                           onClick={(e) => { e.stopPropagation(); chatUploadInputRef.current?.click(); }}
                           aria-label={language === 'ar' ? 'تحميل صورة' : 'Upload image'}
                         >

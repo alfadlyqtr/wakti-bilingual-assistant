@@ -16,6 +16,7 @@ export interface AIMessage {
   attachedFiles?: any[];
   isTextGenerated?: boolean;
   metadata?: any;
+  chatSubmode?: 'chat' | 'study';
 }
 
 export interface AIConversation {
@@ -599,7 +600,8 @@ class WaktiAIV2ServiceClass {
     onToken?: (token: string) => void,
     onComplete?: (metadata: any) => void,
     onError?: (error: string) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    chatSubmode: 'chat' | 'study' = 'chat'
   ) {
     try {
       // Gate for emergency non-streaming fallback (disabled by default; streaming stays streaming)
@@ -709,6 +711,7 @@ class WaktiAIV2ServiceClass {
                 conversationId,
                 inputType,
                 activeTrigger,
+                chatSubmode,
                 attachedFiles,
                 recentMessages: enhancedMessages,
                 conversationSummary: finalSummary,

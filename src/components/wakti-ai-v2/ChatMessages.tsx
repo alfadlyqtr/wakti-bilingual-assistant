@@ -11,6 +11,7 @@ import { EditableTaskConfirmationCard } from './EditableTaskConfirmationCard';
 import { Badge } from '@/components/ui/badge';
 import { ImageModal } from './ImageModal';
 import { YouTubePreview } from './YouTubePreview';
+import { StudyModeMessage } from './StudyModeMessage';
 import { supabase } from '@/integrations/supabase/client';
 import { getSelectedVoices } from './TalkBackSettings';
 // Removed useMobileKeyboard - no longer needed
@@ -563,6 +564,10 @@ export function ChatMessages({
   const getMessageBadge = (message: AIMessage, currentActiveTrigger: string) => {
     // Prefer saved intent for user messages to keep badge stable
     if (message.role === 'user') {
+      // Check for Study mode first
+      if ((message as any)?.chatSubmode === 'study') {
+        return '📚 Study';
+      }
       if (message.intent) {
         switch (message.intent) {
           case 'search': {
@@ -573,6 +578,11 @@ export function ChatMessages({
           case 'image': return '🎨 Image';
           case 'vision': return '👁️ Vision';
           case 'parse_task': return '🎯 Task';
+          case 'chat': {
+            // Check chatSubmode for study
+            if ((message as any)?.chatSubmode === 'study') return '📚 Study';
+            return '💬 Chat';
+          }
           default: return '💬 Chat';
         }
       }
@@ -601,6 +611,10 @@ export function ChatMessages({
     }
 
     // For assistant messages, use the saved intent or detect from content
+    // Check for Study mode (Wolfram) first
+    const wolframMeta = (message as any)?.metadata?.wolfram;
+    if (wolframMeta?.mode === 'study') return '📚 Study';
+    
     if (message.intent === 'vision') return '👁️ Vision';
     if (message.intent === 'search') {
       const yt = (message as any)?.metadata?.youtube;
@@ -970,8 +984,28 @@ export function ChatMessages({
         );
       };
 
+      // Check for Wolfram|Alpha metadata
+      const wolframMeta = (message as any)?.metadata?.wolfram;
+      const isStudyMode = wolframMeta?.mode === 'study';
+
       return (
         <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-2 prose-pre:my-3 prose-table:my-3">
+          {/* Render Study Mode structured answer if present */}
+          {wolframMeta && wolframMeta.answer && isStudyMode && (
+            <StudyModeMessage
+              answer={wolframMeta.answer}
+              steps={wolframMeta.steps}
+              inputInterpretation={wolframMeta.interpretation}
+              language={language}
+            />
+          )}
+          {/* Render Facts Booster badge if present (subtle indicator for chat mode) */}
+          {wolframMeta && wolframMeta.answer && !isStudyMode && (
+            <div className="mb-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/20 border border-blue-200/50 dark:border-blue-700/30 text-[10px] text-blue-600 dark:text-blue-400">
+              <Globe className="h-3 w-3" />
+              <span>{language === 'ar' ? 'حقيقة موثقة' : 'Verified fact'}</span>
+            </div>
+          )}
           {renderVisionStructured()}
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
@@ -1107,7 +1141,9 @@ export function ChatMessages({
                   
                   <div className={`rounded-lg px-4 py-3 relative w-full min-h-24 ${
                     message.role === 'user'
-                      ? 'bg-primary text-primary-foreground'
+                      ? ((message as any)?.metadata?.wolfram?.mode === 'study' || (message as any)?.chatSubmode === 'study'
+                          ? 'bg-purple-500 text-white'
+                          : 'bg-primary text-primary-foreground')
                       : `bg-gradient-to-r from-blue-50 to-purple-50 text-gray-900 border-2 ${getAssistantBubbleClasses(message)}`
                   }`}>
                     {/* FIXED: Mode Badge with proper logic */}

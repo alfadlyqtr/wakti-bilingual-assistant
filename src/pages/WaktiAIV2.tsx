@@ -5,7 +5,7 @@ import { EnhancedFrontendMemory, ConversationMetadata } from '@/services/Enhance
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { supabase } from '@/integrations/supabase/client';
 import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
-import { ChatInput, ImageMode } from '@/components/wakti-ai-v2/ChatInput';
+import { ChatInput, ImageMode, ChatSubmode } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { ConversationSidebar } from '@/components/wakti-ai-v2/ConversationSidebar';
 import { DrawAfterBGCanvas, DrawAfterBGCanvasRef } from '@/components/wakti-ai/DrawAfterBGCanvas';
@@ -32,6 +32,7 @@ const WaktiAIV2 = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [inputReservePx, setInputReservePx] = useState<number>(120);
   const [activeImageMode, setActiveImageMode] = useState<ImageMode>('text2image');
+  const [chatSubmode, setChatSubmode] = useState<ChatSubmode>('chat');
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -194,7 +195,8 @@ const WaktiAIV2 = () => {
     trigger: string,
     attachedFiles?: any[],
     imageMode?: string,
-    imageQuality?: 'fast' | 'best_fast'
+    imageQuality?: 'fast' | 'best_fast',
+    chatSubmodeParam?: ChatSubmode
   ) => {
     // Special handling for draw-after-bg mode - trigger generation in canvas
     if (trigger === 'image' && imageMode === 'draw-after-bg') {
@@ -255,6 +257,7 @@ const WaktiAIV2 = () => {
       intent: trigger,
       inputType,
       attachedFiles: attachedFiles,
+      chatSubmode: chatSubmodeParam || chatSubmode, // Store study/chat mode for bubble styling
     };
     const newMessages = [...sessionMessages, userMessage];
     setSessionMessages(newMessages);
@@ -405,7 +408,8 @@ const WaktiAIV2 = () => {
           },
           (metadata: any) => { streamMeta = metadata || {}; },
           (err: string) => { console.error('Stream error:', err); },
-          controller.signal
+          controller.signal,
+          chatSubmodeParam || 'chat' // Pass chatSubmode for Study mode support
         );
 
         const finalAssistantMessage: AIMessage = {
@@ -543,6 +547,8 @@ const WaktiAIV2 = () => {
               activeTrigger={activeTrigger}
               onTriggerChange={setActiveTrigger}
               onImageModeChange={setActiveImageMode}
+              chatSubmode={chatSubmode}
+              onChatSubmodeChange={setChatSubmode}
             />
           </div>,
           portalRoot
@@ -560,6 +566,8 @@ const WaktiAIV2 = () => {
               activeTrigger={activeTrigger}
               onTriggerChange={setActiveTrigger}
               onImageModeChange={setActiveImageMode}
+              chatSubmode={chatSubmode}
+              onChatSubmodeChange={setChatSubmode}
             />
           </div>
         )}
