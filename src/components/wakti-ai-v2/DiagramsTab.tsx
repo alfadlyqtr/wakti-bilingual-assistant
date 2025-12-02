@@ -2,14 +2,44 @@ import React, { useState, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
-import { Download, Share2, RefreshCw, FileText, Sparkles, Clock, GitBranch, Users, Server, Loader2 } from 'lucide-react';
+import { Download, Share2, FileText, Sparkles, Loader2, Wand2, Palette, Zap } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-type DiagramFamily = 'auto' | 'flow' | 'timeline' | 'process' | 'map' | 'system';
 type MaxDiagrams = 1 | 2 | 3;
+
+type KrokiStyleKey =
+  | 'auto'
+  // Common Graphs
+  | 'block-diagram'
+  | 'dag'
+  | 'mindmap-style'
+  // UML / C4
+  | 'sequence-diagram'
+  | 'er-diagram'
+  | 'activity-diagram'
+  | 'use-case'
+  | 'uml-general'
+  | 'c4-diagram'
+  // Project Management
+  | 'wbs'
+  | 'gantt'
+  | 'business-process'
+  // Freestyle
+  | 'hand-drawn'
+  | 'ascii-art'
+  // Hardware
+  | 'byte-field'
+  | 'digital-timing'
+  // Network
+  | 'network-diagram'
+  | 'packets'
+  | 'rack'
+  // Data Visualization
+  | 'word-cloud'
+  | 'bar-chart';
 
 interface GeneratedDiagram {
   id: string;
@@ -22,16 +52,85 @@ interface GeneratedDiagram {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Diagram family options
+// Kroki style groups (all the pretty diagram types)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const DIAGRAM_FAMILIES: { value: DiagramFamily; labelEn: string; labelAr: string; icon: React.ReactNode; description: string; descriptionAr: string }[] = [
-  { value: 'auto', labelEn: 'Auto', labelAr: 'تلقائي', icon: <Sparkles className="w-4 h-4" />, description: 'Let Wakti choose the best diagram type', descriptionAr: 'دع واكتي يختار أفضل نوع' },
-  { value: 'flow', labelEn: 'Flow / Journey', labelAr: 'تدفق / رحلة', icon: <GitBranch className="w-4 h-4" />, description: 'Processes, funnels, user journeys', descriptionAr: 'عمليات، قمع، رحلات المستخدم' },
-  { value: 'timeline', labelEn: 'Timeline', labelAr: 'جدول زمني', icon: <Clock className="w-4 h-4" />, description: 'Roadmaps, schedules, history', descriptionAr: 'خرائط طريق، جداول، تاريخ' },
-  { value: 'process', labelEn: 'Process', labelAr: 'عملية', icon: <RefreshCw className="w-4 h-4" />, description: 'Workflows with decisions', descriptionAr: 'سير عمل مع قرارات' },
-  { value: 'map', labelEn: 'Map / Org', labelAr: 'خريطة / هيكل', icon: <Users className="w-4 h-4" />, description: 'Org charts, stakeholder maps', descriptionAr: 'هياكل تنظيمية، خرائط أصحاب المصلحة' },
-  { value: 'system', labelEn: 'System', labelAr: 'نظام', icon: <Server className="w-4 h-4" />, description: 'Architecture, technical diagrams', descriptionAr: 'بنية تقنية، مخططات فنية' },
+const KROKI_STYLE_GROUPS: {
+  key: string;
+  labelEn: string;
+  labelAr: string;
+  options: { value: KrokiStyleKey; labelEn: string; labelAr: string }[];
+}[] = [
+  {
+    key: 'common',
+    labelEn: 'Common graphs',
+    labelAr: 'رسوم بيانية عامة',
+    options: [
+      { value: 'block-diagram', labelEn: 'Block diagram', labelAr: 'مخطط كتل' },
+      { value: 'dag', labelEn: 'DAG', labelAr: 'رسم بياني موجه' },
+      { value: 'mindmap-style', labelEn: 'Mindmap', labelAr: 'خريطة ذهنية' },
+    ],
+  },
+  {
+    key: 'uml',
+    labelEn: 'UML / C4',
+    labelAr: 'مخططات UML / C4',
+    options: [
+      { value: 'sequence-diagram', labelEn: 'Sequence', labelAr: 'تسلسل' },
+      { value: 'er-diagram', labelEn: 'E‑R', labelAr: 'كيانات وعلاقات' },
+      { value: 'activity-diagram', labelEn: 'Activity', labelAr: 'نشاط' },
+      { value: 'use-case', labelEn: 'Use case', labelAr: 'حالة استخدام' },
+      { value: 'uml-general', labelEn: 'UMLs', labelAr: 'مخططات UML' },
+      { value: 'c4-diagram', labelEn: 'C4 diagram', labelAr: 'مخطط C4' },
+    ],
+  },
+  {
+    key: 'pm',
+    labelEn: 'Project management',
+    labelAr: 'إدارة المشاريع',
+    options: [
+      { value: 'wbs', labelEn: 'WBS', labelAr: 'هيكل تقسيم العمل' },
+      { value: 'gantt', labelEn: 'Gantt', labelAr: 'مخطط جانت' },
+      { value: 'business-process', labelEn: 'Business process', labelAr: 'عملية عمل' },
+    ],
+  },
+  {
+    key: 'freestyle',
+    labelEn: 'Freestyle',
+    labelAr: 'أسلوب حر',
+    options: [
+      { value: 'hand-drawn', labelEn: 'Hand‑drawn', labelAr: 'رسم يدوي' },
+      { value: 'ascii-art', labelEn: 'Ascii art', labelAr: 'رسوم نصية' },
+    ],
+  },
+  {
+    key: 'hardware',
+    labelEn: 'Hardware',
+    labelAr: 'عتاد',
+    options: [
+      { value: 'byte-field', labelEn: 'Byte field', labelAr: 'مجال البايت' },
+      { value: 'digital-timing', labelEn: 'Digital timing', labelAr: 'توقيت رقمي' },
+    ],
+  },
+  {
+    key: 'network',
+    labelEn: 'Network',
+    labelAr: 'شبكات',
+    options: [
+      { value: 'network-diagram', labelEn: 'Network', labelAr: 'شبكة' },
+      { value: 'packets', labelEn: 'Packets', labelAr: 'حزم' },
+      { value: 'rack', labelEn: 'Rack', labelAr: 'رك' },
+    ],
+  },
+  {
+    key: 'dataviz',
+    labelEn: 'Data visualization',
+    labelAr: 'تصوير البيانات',
+    options: [
+      { value: 'word-cloud', labelEn: 'Word cloud', labelAr: 'سحابة كلمات' },
+      { value: 'bar-chart', labelEn: 'Bar chart', labelAr: 'مخطط أعمدة' },
+    ],
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -47,8 +146,8 @@ const DiagramsTab: React.FC = () => {
   const [inputText, setInputText] = useState('');
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [fileContent, setFileContent] = useState<string>('');
-  const [diagramFamily, setDiagramFamily] = useState<DiagramFamily>('auto');
-  const [maxDiagrams, setMaxDiagrams] = useState<MaxDiagrams>(2);
+  const [maxDiagrams, setMaxDiagrams] = useState<MaxDiagrams>(1);
+  const [krokiStyle, setKrokiStyle] = useState<KrokiStyleKey>('auto');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [diagrams, setDiagrams] = useState<GeneratedDiagram[]>([]);
@@ -110,9 +209,10 @@ const DiagramsTab: React.FC = () => {
       }>('wakti-diagrams-v1', {
         body: {
           inputText: textToUse,
-          diagramFamily,
+          diagramFamily: 'auto',
           language: isArabic ? 'ar' : 'en',
           maxDiagrams,
+          krokiStyle: krokiStyle === 'auto' ? undefined : krokiStyle,
           userId: user?.id,
         },
       });
@@ -173,39 +273,54 @@ const DiagramsTab: React.FC = () => {
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="text-center">
-        <h2 className="text-xl font-semibold mb-1">
-          {isArabic ? 'مولد المخططات الذكي' : 'Smart Diagram Generator'}
-        </h2>
-        <p className="text-sm text-muted-foreground">
+    <div className="space-y-6 relative">
+      {/* Animated background gradient */}
+      <div className="absolute inset-0 -z-10 overflow-hidden rounded-2xl">
+        <div className="absolute -top-1/2 -left-1/2 w-full h-full bg-gradient-to-br from-violet-500/10 via-fuchsia-500/10 to-cyan-500/10 blur-3xl animate-pulse" />
+        <div className="absolute -bottom-1/2 -right-1/2 w-full h-full bg-gradient-to-tl from-emerald-500/10 via-blue-500/10 to-purple-500/10 blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+      </div>
+
+      {/* Header with gradient text */}
+      <div className="text-center py-4">
+        <div className="inline-flex items-center gap-2 mb-3">
+          <div className="p-2 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-lg shadow-violet-500/25">
+            <Wand2 className="w-5 h-5" />
+          </div>
+          <h2 className="text-2xl font-bold bg-gradient-to-r from-violet-600 via-fuchsia-600 to-cyan-600 bg-clip-text text-transparent">
+            {isArabic ? 'مولد المخططات السحري' : 'Magic Diagram Studio'}
+          </h2>
+        </div>
+        <p className="text-sm text-muted-foreground max-w-md mx-auto">
           {isArabic
-            ? 'حوّل أفكارك ونصوصك إلى مخططات احترافية'
-            : 'Transform your ideas and text into professional diagrams'}
+            ? 'حوّل أفكارك إلى مخططات مذهلة بضغطة زر واحدة ✨'
+            : 'Turn your ideas into stunning diagrams with one click ✨'}
         </p>
       </div>
 
       {/* Input Section */}
       <div className="space-y-4">
-        {/* Text Input */}
-        <div>
-          <label className="block text-sm font-medium mb-2">
-            {isArabic ? 'أدخل النص أو الفكرة' : 'Enter text or idea'}
-          </label>
-          <textarea
-            className="w-full border rounded-lg p-3 min-h-[120px] resize-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
-            placeholder={isArabic
-              ? 'اكتب ملخص اجتماع، فكرة مشروع، خطة عمل، أو أي نص تريد تحويله إلى مخطط...'
-              : 'Write a meeting summary, project idea, business plan, or any text you want to turn into a diagram...'}
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            disabled={isLoading}
-          />
+        {/* Text Input with glow effect */}
+        <div className="relative group">
+          <div className="absolute -inset-0.5 bg-gradient-to-r from-violet-500 via-fuchsia-500 to-cyan-500 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
+          <div className="relative">
+            <label className="block text-sm font-medium mb-2 flex items-center gap-2">
+              <Zap className="w-4 h-4 text-amber-500" />
+              {isArabic ? 'أدخل فكرتك هنا' : 'Drop your idea here'}
+            </label>
+            <textarea
+              className="w-full border-2 border-violet-200 dark:border-violet-800 rounded-xl p-4 min-h-[140px] resize-none bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all placeholder:text-muted-foreground/60"
+              placeholder={isArabic
+                ? '💡 اكتب ملخص اجتماع، فكرة مشروع، خطة عمل، جدول رمضان...'
+                : '💡 Meeting notes, project plan, Ramadan schedule, business flow...'}
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              disabled={isLoading}
+            />
+          </div>
         </div>
 
-        {/* File Upload */}
-        <div className="flex items-center gap-3">
+        {/* File Upload - compact */}
+        <div className="flex items-center gap-3 flex-wrap">
           <input
             ref={fileInputRef}
             type="file"
@@ -217,75 +332,84 @@ const DiagramsTab: React.FC = () => {
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2 px-4 py-2 border rounded-lg hover:bg-muted transition-colors"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-dashed border-violet-300 dark:border-violet-700 hover:border-violet-500 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all text-sm font-medium text-violet-600 dark:text-violet-400"
             disabled={isLoading}
           >
             <FileText className="w-4 h-4" />
-            {isArabic ? 'رفع ملف' : 'Upload File'}
+            {isArabic ? 'أو ارفع ملف' : 'Or upload file'}
           </button>
           {uploadedFile && (
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground">{uploadedFile.name}</span>
+            <div className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-full bg-violet-100 dark:bg-violet-900/30">
+              <span className="text-violet-700 dark:text-violet-300 font-medium">{uploadedFile.name}</span>
               <button
                 type="button"
                 onClick={clearFile}
-                className="text-destructive hover:underline"
+                className="text-red-500 hover:text-red-600 font-medium"
               >
-                {isArabic ? 'إزالة' : 'Remove'}
+                ✕
               </button>
             </div>
           )}
         </div>
       </div>
 
-      {/* Diagram Family Selection */}
-      <div>
-        <label className="block text-sm font-medium mb-3">
-          {isArabic ? 'نوع المخطط' : 'Diagram Type'}
+      {/* Diagram Style Dropdown - THE MAIN SELECTOR */}
+      <div className="relative">
+        <label className="block text-sm font-medium mb-2 flex items-center gap-2" htmlFor="kroki-style-select">
+          <Palette className="w-4 h-4 text-fuchsia-500" />
+          {isArabic ? 'اختر نمط المخطط' : 'Choose Diagram Style'}
         </label>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-          {DIAGRAM_FAMILIES.map((family) => (
-            <button
-              key={family.value}
-              type="button"
-              onClick={() => setDiagramFamily(family.value)}
-              disabled={isLoading}
-              className={`flex flex-col items-start p-3 rounded-lg border transition-all text-left ${
-                diagramFamily === family.value
-                  ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
-                  : 'border-border hover:border-primary/50 hover:bg-muted/50'
-              }`}
-            >
-              <div className="flex items-center gap-2 mb-1">
-                {family.icon}
-                <span className="font-medium text-sm">
-                  {isArabic ? family.labelAr : family.labelEn}
-                </span>
-              </div>
-              <span className="text-xs text-muted-foreground">
-                {isArabic ? family.descriptionAr : family.description}
-              </span>
-            </button>
-          ))}
+        <div className="relative">
+          <select
+            id="kroki-style-select"
+            className="w-full appearance-none border-2 border-fuchsia-200 dark:border-fuchsia-800 rounded-xl px-4 py-3 text-sm bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-fuchsia-500/50 focus:border-fuchsia-500 transition-all cursor-pointer font-medium"
+            value={krokiStyle}
+            onChange={(e) => setKrokiStyle(e.target.value as KrokiStyleKey)}
+            disabled={isLoading}
+          >
+            <option value="auto">
+              ✨ {isArabic ? 'تلقائي - دع الذكاء الاصطناعي يختار الأفضل' : 'Auto - Let AI pick the best style'}
+            </option>
+            {KROKI_STYLE_GROUPS.map((group) => (
+              <optgroup key={group.key} label={isArabic ? group.labelAr : group.labelEn}>
+                {group.options.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {isArabic ? opt.labelAr : opt.labelEn}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-fuchsia-500">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
         </div>
+        <p className="mt-2 text-xs text-muted-foreground flex items-center gap-1">
+          <span>🎨</span>
+          {isArabic
+            ? '40+ نمط متاح: Gantt، C4، شبكات، مخططات بيانية، رسم يدوي...'
+            : '40+ styles: Gantt, C4, Network, Charts, Hand-drawn & more!'}
+        </p>
       </div>
 
-      {/* Number of Diagrams */}
+      {/* Number of Diagrams - pill style */}
       <div>
         <label className="block text-sm font-medium mb-3">
-          {isArabic ? 'عدد المخططات' : 'Number of Diagrams'}
+          {isArabic ? 'كم مخطط تريد؟' : 'How many diagrams?'}
         </label>
-        <div className="flex gap-2">
+        <div className="inline-flex rounded-xl bg-gray-100 dark:bg-gray-800 p-1 gap-1">
           {([1, 2, 3] as MaxDiagrams[]).map((num) => (
             <button
               key={num}
               type="button"
               onClick={() => setMaxDiagrams(num)}
               disabled={isLoading}
-              className={`px-6 py-2 rounded-lg border font-medium transition-all ${
+              className={`px-5 py-2 rounded-lg font-semibold text-sm transition-all ${
                 maxDiagrams === num
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border hover:border-primary/50 hover:bg-muted/50'
+                  ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-md'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               {num}
@@ -294,24 +418,31 @@ const DiagramsTab: React.FC = () => {
         </div>
       </div>
 
-      {/* Generate Button */}
+      {/* Generate Button - big and bold */}
       <button
         type="button"
         onClick={handleGenerate}
         disabled={isLoading || (!inputText.trim() && !fileContent.trim())}
-        className="w-full py-3 rounded-xl font-medium text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+        className="group relative w-full py-4 rounded-2xl font-bold text-lg text-white overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-xl hover:shadow-2xl hover:scale-[1.02] active:scale-[0.98]"
       >
-        {isLoading ? (
-          <>
-            <Loader2 className="w-5 h-5 animate-spin" />
-            {isArabic ? 'جارٍ الإنشاء...' : 'Generating...'}
-          </>
-        ) : (
-          <>
-            <Sparkles className="w-5 h-5" />
-            {isArabic ? 'إنشاء المخططات' : 'Generate Diagrams'}
-          </>
-        )}
+        {/* Animated gradient background */}
+        <div className="absolute inset-0 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-cyan-600 bg-[length:200%_100%] animate-gradient" />
+        <div className="absolute inset-0 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-cyan-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+        
+        {/* Button content */}
+        <span className="relative flex items-center justify-center gap-3">
+          {isLoading ? (
+            <>
+              <Loader2 className="w-6 h-6 animate-spin" />
+              {isArabic ? 'السحر يحدث الآن...' : 'Magic happening...'}
+            </>
+          ) : (
+            <>
+              <Sparkles className="w-6 h-6 group-hover:animate-pulse" />
+              {isArabic ? '✨ أنشئ المخططات' : '✨ Generate Diagrams'}
+            </>
+          )}
+        </span>
       </button>
 
       {/* Error */}
@@ -321,40 +452,42 @@ const DiagramsTab: React.FC = () => {
         </div>
       )}
 
-      {/* Results Gallery */}
+      {/* Results Gallery - with animations */}
       {diagrams.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold">
-            {isArabic ? 'المخططات المُنشأة' : 'Generated Diagrams'}
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <h3 className="text-lg font-bold flex items-center gap-2">
+            <span className="text-2xl">🎉</span>
+            {isArabic ? 'مخططاتك جاهزة!' : 'Your diagrams are ready!'}
           </h3>
           <div className="grid gap-4">
-            {diagrams.map((diagram) => (
+            {diagrams.map((diagram, index) => (
               <div
                 key={diagram.id}
-                className="border rounded-xl overflow-hidden bg-card shadow-sm"
+                className="border-2 border-violet-200 dark:border-violet-800 rounded-2xl overflow-hidden bg-card shadow-lg hover:shadow-xl transition-all"
+                style={{ animationDelay: `${index * 100}ms` }}
               >
                 {/* Diagram Preview */}
-                <div className="p-4 bg-white dark:bg-gray-900 flex items-center justify-center min-h-[200px]">
+                <div className="p-6 bg-gradient-to-br from-white to-violet-50 dark:from-gray-900 dark:to-violet-950/20 flex items-center justify-center min-h-[250px]">
                   <img
                     src={diagram.imageUrl}
                     alt={diagram.title}
-                    className="max-w-full max-h-[400px] object-contain"
+                    className="max-w-full max-h-[450px] object-contain drop-shadow-lg"
                   />
                 </div>
 
                 {/* Diagram Info & Actions */}
-                <div className="p-4 border-t bg-muted/30">
+                <div className="p-4 border-t-2 border-violet-100 dark:border-violet-900 bg-gradient-to-r from-violet-50 to-fuchsia-50 dark:from-violet-950/30 dark:to-fuchsia-950/30">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <h4 className="font-medium">{diagram.title}</h4>
+                      <h4 className="font-bold text-lg">{diagram.title}</h4>
                       <p className="text-sm text-muted-foreground mt-1">
                         {diagram.description}
                       </p>
                       <div className="flex items-center gap-2 mt-2">
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                        <span className="text-xs px-3 py-1 rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white font-medium">
                           {diagram.type}
                         </span>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-xs px-2 py-1 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
                           {diagram.engine}
                         </span>
                       </div>
@@ -363,18 +496,18 @@ const DiagramsTab: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => handleDownload(diagram)}
-                        className="p-2 rounded-lg border hover:bg-muted transition-colors"
+                        className="p-2.5 rounded-xl bg-violet-100 dark:bg-violet-900/50 hover:bg-violet-200 dark:hover:bg-violet-800 transition-colors text-violet-600 dark:text-violet-400"
                         title={isArabic ? 'تحميل' : 'Download'}
                       >
-                        <Download className="w-4 h-4" />
+                        <Download className="w-5 h-5" />
                       </button>
                       <button
                         type="button"
                         onClick={() => handleCopyLink(diagram)}
-                        className="p-2 rounded-lg border hover:bg-muted transition-colors"
+                        className="p-2.5 rounded-xl bg-fuchsia-100 dark:bg-fuchsia-900/50 hover:bg-fuchsia-200 dark:hover:bg-fuchsia-800 transition-colors text-fuchsia-600 dark:text-fuchsia-400"
                         title={isArabic ? 'نسخ الرابط' : 'Copy Link'}
                       >
-                        <Share2 className="w-4 h-4" />
+                        <Share2 className="w-5 h-5" />
                       </button>
                     </div>
                   </div>
@@ -384,6 +517,18 @@ const DiagramsTab: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* CSS for gradient animation */}
+      <style>{`
+        @keyframes gradient {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        .animate-gradient {
+          animation: gradient 3s ease infinite;
+        }
+      `}</style>
     </div>
   );
 };

@@ -1,7 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
-import { deflate } from "https://deno.land/x/compress@v0.4.5/zlib/deflate.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,8 +16,49 @@ const KROKI_BASE_URL = "https://kroki.io";
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-type DiagramFamily = "auto" | "flow" | "timeline" | "process" | "map" | "system";
+type DiagramFamily =
+  | "auto"
+  | "flow"
+  | "timeline"
+  | "process"
+  | "map"
+  | "system"
+  | "mindmap"
+  | "sequence"
+  | "handdrawn";
+
 type Language = "en" | "ar";
+
+type KrokiStyleKey =
+  | "auto"
+  // Common Graphs
+  | "block-diagram"
+  | "dag"
+  | "mindmap-style"
+  // UML / C4
+  | "sequence-diagram"
+  | "er-diagram"
+  | "activity-diagram"
+  | "use-case"
+  | "uml-general"
+  | "c4-diagram"
+  // Project Management
+  | "wbs"
+  | "gantt"
+  | "business-process"
+  // Freestyle
+  | "hand-drawn"
+  | "ascii-art"
+  // Hardware
+  | "byte-field"
+  | "digital-timing"
+  // Network
+  | "network-diagram"
+  | "packets"
+  | "rack"
+  // Data Visualization
+  | "word-cloud"
+  | "bar-chart";
 
 interface DiagramRequest {
   inputText?: string;
@@ -27,10 +66,12 @@ interface DiagramRequest {
   diagramFamily: DiagramFamily;
   language: Language;
   maxDiagrams: 1 | 2 | 3;
+  userId?: string;
+  krokiStyle?: KrokiStyleKey;
 }
 
 interface DiagramSpec {
-  engine: "mermaid" | "graphviz" | "plantuml" | "excalidraw";
+  engine: string;
   kind: string;
   title: string;
   titleAr?: string;
@@ -61,25 +102,14 @@ serve(async (req) => {
   try {
     console.log("📊 Wakti Diagrams v1: Request received");
 
-    // Auth
-    const authHeader = req.headers.get("authorization");
-    if (!authHeader) {
-      throw new Error("Missing authorization header");
-    }
-
+    // Service role client – no per-request auth required
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-    if (authError || !user) {
-      throw new Error("Unauthorized");
-    }
-
-    console.log("✅ User authenticated:", user.id);
 
     // Parse request
     const body: DiagramRequest = await req.json();
-    const { inputText, fileContent, diagramFamily, language, maxDiagrams } = body;
+    const { inputText, fileContent, diagramFamily, language, maxDiagrams, userId, krokiStyle } = body;
+
+    const ownerId = userId && userId.trim().length > 0 ? userId : `anon-${crypto.randomUUID().slice(0, 8)}`;
 
     const textToProcess = inputText || fileContent || "";
 
@@ -96,6 +126,7 @@ serve(async (req) => {
       diagramFamily,
       language,
       maxDiagrams,
+      krokiStyle,
     });
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -103,7 +134,7 @@ serve(async (req) => {
     // ─────────────────────────────────────────────────────────────────────────
     console.log("🤖 Calling GPT-4o-mini for diagram planning...");
 
-    const diagramSpecs = await planDiagrams(textToProcess, diagramFamily, language, maxDiagrams);
+    const diagramSpecs = await planDiagrams(textToProcess, diagramFamily, language, maxDiagrams, krokiStyle);
 
     console.log(`✅ GPT returned ${diagramSpecs.length} diagram spec(s)`);
 
@@ -121,7 +152,7 @@ serve(async (req) => {
         // Upload to Supabase Storage
         const diagramId = crypto.randomUUID();
         const fileName = `${diagramId}.svg`;
-        const storagePath = `${user.id}/diagrams/${fileName}`;
+        const storagePath = `${ownerId}/diagrams/${fileName}`;
 
         const encoder = new TextEncoder();
         const svgBuffer = encoder.encode(svgContent);
