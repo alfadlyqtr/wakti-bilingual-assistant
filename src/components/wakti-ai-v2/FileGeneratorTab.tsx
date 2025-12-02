@@ -108,15 +108,15 @@ export default function FileGeneratorTab() {
         fileName = uploadedFile.name;
       }
 
-      // Call Edge Function V2 (with real file generation)
+      // Map old outputType to new system
+      const newOutputType = outputType === 'pptx' ? 'visuals' : 'pdf';
+      
+      // Call Edge Function V2 (Visuals + PDF only)
       const { data, error } = await supabase.functions.invoke('smart-file-generator-v2', {
         body: {
-          inputText: inputText || undefined,
-          fileUrl,
-          fileName,
-          outputType,
+          inputText: inputText || '',
+          outputType: newOutputType,
           outputSize,
-          includeImages,
           language: language === 'ar' ? 'ar' : 'en',
         },
       });
@@ -127,15 +127,33 @@ export default function FileGeneratorTab() {
         throw new Error(data.error || 'Generation failed');
       }
 
-      setGeneratedFile({
-        downloadUrl: data.downloadUrl,
-        fileName: data.fileName,
-        fileSize: data.fileSize,
-      });
-
-      setSuccess(language === 'ar'
-        ? 'تم إنشاء الملف بنجاح'
-        : 'File generated successfully');
+      // Handle different response modes
+      if (data.mode === 'visuals') {
+        // Visuals mode - show image URLs
+        const totalVisuals = (data.chartUrls?.length || 0) + (data.imageUrls?.length || 0);
+        setGeneratedFile({
+          downloadUrl: data.chartUrls?.[0] || data.imageUrls?.[0] || '',
+          fileName: 'visuals',
+          fileSize: totalVisuals,
+        });
+        setSuccess(language === 'ar'
+          ? `تم إنشاء ${totalVisuals} رسومات بصرية`
+          : `Generated ${totalVisuals} visuals`);
+        
+        // Log URLs for user to access
+        console.log('Chart URLs:', data.chartUrls);
+        console.log('Image URLs:', data.imageUrls);
+      } else {
+        // PDF mode - normal file download
+        setGeneratedFile({
+          downloadUrl: data.downloadUrl,
+          fileName: data.fileName,
+          fileSize: data.fileSize,
+        });
+        setSuccess(language === 'ar'
+          ? 'تم إنشاء ملف PDF بنجاح'
+          : 'PDF generated successfully');
+      }
 
     } catch (error: any) {
       console.error('File generation error:', error);
@@ -155,7 +173,7 @@ export default function FileGeneratorTab() {
 
   const getSizeLabel = () => {
     if (outputType === 'pptx') {
-      return language === 'ar' ? 'عدد الشرائح' : 'Number of slides';
+      return language === 'ar' ? 'عدد الرسومات' : 'Number of visuals';
     }
     return language === 'ar' ? 'عدد الصفحات' : 'Number of pages';
   };
@@ -248,55 +266,35 @@ export default function FileGeneratorTab() {
           {language === 'ar' ? 'نوع الملف' : 'Output Type'}
         </label>
         
-        <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+        <div className="grid grid-cols-2 gap-3">
           <Button
             type="button"
             variant={outputType === 'pptx' ? 'default' : 'outline'}
             onClick={() => setOutputType('pptx')}
-            className="flex flex-col items-center gap-1 h-auto py-3"
+            className="flex flex-col items-center gap-2 h-auto py-6"
           >
-            <Presentation className="w-5 h-5" />
-            <span className="text-xs">PowerPoint</span>
-          </Button>
-          
-          <Button
-            type="button"
-            variant={outputType === 'docx' ? 'default' : 'outline'}
-            onClick={() => setOutputType('docx')}
-            className="flex flex-col items-center gap-1 h-auto py-3"
-          >
-            <FileText className="w-5 h-5" />
-            <span className="text-xs">Word</span>
-          </Button>
-          
-          <Button
-            type="button"
-            variant={outputType === 'xlsx' ? 'default' : 'outline'}
-            onClick={() => setOutputType('xlsx')}
-            className="flex flex-col items-center gap-1 h-auto py-3"
-          >
-            <Table className="w-5 h-5" />
-            <span className="text-xs">Excel</span>
+            <Presentation className="w-8 h-8" />
+            <div className="text-center">
+              <div className="font-semibold">{language === 'ar' ? 'رسومات بصرية' : 'Visuals'}</div>
+              <div className="text-xs text-muted-foreground mt-1">
+                {language === 'ar' ? 'مخططات وصور (نابكن)' : 'Charts & Images (Napkin)'}
+              </div>
+            </div>
           </Button>
           
           <Button
             type="button"
             variant={outputType === 'pdf' ? 'default' : 'outline'}
             onClick={() => setOutputType('pdf')}
-            className="flex flex-col items-center gap-1 h-auto py-3"
+            className="flex flex-col items-center gap-2 h-auto py-6"
           >
-            <FileSpreadsheet className="w-5 h-5" />
-            <span className="text-xs">PDF</span>
-          </Button>
-          
-          <Button
-            type="button"
-            variant={outputType === 'txt' ? 'default' : 'outline'}
-            onClick={() => setOutputType('txt')}
-            className="flex flex-col items-center gap-1 h-auto py-3"
-          >
-            <FileText className="w-5 h-5" />
-            <span className="text-xs">Text</span>
+            <FileSpreadsheet className="w-8 h-8" />
+            <div className="text-center">
+              <div className="font-semibold">{language === 'ar' ? 'مستند PDF' : 'PDF Document'}</div>
+              <div className="text-xs text-muted-foreground mt-1">
+                {language === 'ar' ? 'مستند جميل متعدد الصفحات' : 'Beautiful Multi-Page Doc'}
+              </div>
+            </div>
           </Button>
         </div>
       </div>

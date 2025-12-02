@@ -144,7 +144,45 @@ serve(async (req) => {
       }
     }
 
-    // STEP 3: Call Document Builder Service
+    // SPECIAL HANDLING: PowerPoint = Return images only (Napkin style)
+    if (outputType === 'pptx') {
+      console.log("📸 PowerPoint mode: Returning visual images only (Napkin style)");
+      
+      // Update database with image URLs
+      const { error: updateError } = await supabase
+        .from('generated_files')
+        .update({
+          status: 'completed',
+          file_name: 'visual-images.json',
+          file_path: JSON.stringify(imageUrls),
+          download_url: imageUrls[0] || '',
+          file_size: imageUrls.length,
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', generationId);
+
+      if (updateError) {
+        console.error("⚠️ Failed to update generation record:", updateError);
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          mode: 'images',
+          imageUrls,
+          message: 'Visual images generated successfully. Download and insert into your PowerPoint.',
+          generationId
+        }),
+        { 
+          headers: { 
+            ...corsHeaders, 
+            'Content-Type': 'application/json' 
+          } 
+        }
+      );
+    }
+
+    // STEP 3: Call Document Builder Service for PDF/Word/Excel/Text
     console.log("📞 Calling Document Builder Service...");
     
     const docBuilderResponse = await fetch(`${DOCUMENT_BUILDER_URL}/generate`, {
