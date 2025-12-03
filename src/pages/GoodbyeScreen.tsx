@@ -1,16 +1,24 @@
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/providers/ThemeProvider";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
+import { supabase } from "@/integrations/supabase/client";
 
 /**
  * GoodbyeScreen - Displayed after successful account deletion
- * Shows a branded farewell message with option to return home
+ * Shows a branded farewell message with option to return home (landing page)
+ * Session is cleared on mount to ensure no stale access
  */
 export default function GoodbyeScreen() {
   const navigate = useNavigate();
   const { language } = useTheme();
   const isArabic = language === "ar";
+
+  // Clear any remaining session on mount (safety measure)
+  useEffect(() => {
+    supabase.auth.signOut();
+  }, []);
 
   return (
     <div 

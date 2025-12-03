@@ -372,8 +372,9 @@ export default function Account() {
           description: error.message || "Failed to delete account"
         });
       } else {
-        // Account deleted successfully - redirect to goodbye screen
-        // No need to sign out since the auth user is already deleted
+        // Account deleted successfully - clear session and redirect to goodbye screen
+        // Even though auth user is deleted, we must clear local session to prevent stale access
+        await signOut();
         navigate("/goodbye", { replace: true });
       }
     } catch (error) {
