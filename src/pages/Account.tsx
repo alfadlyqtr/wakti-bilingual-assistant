@@ -16,6 +16,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getCurrentUserProfile } from "@/services/contactsService";
 import { t } from "@/utils/translations";
 import { deleteUserAccount, updateUserPassword } from "@/utils/auth";
+import { CustomPaywallModal } from "@/components/AppLayout";
 import { 
   Dialog,
   DialogContent,
@@ -34,8 +35,10 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 
 // TrialCountdown Component - Shows remaining time of 30-minute trial
-const TrialCountdown = ({ startAt, language }: { startAt: string; language: string }) => {
+// When trial ends, shows friendly message with subscribe CTA
+const TrialCountdown = ({ startAt, language, onSubscribeClick }: { startAt: string; language: string; onSubscribeClick?: () => void }) => {
   const [timeLeft, setTimeLeft] = useState('');
+  const [isExpired, setIsExpired] = useState(false);
   
   useEffect(() => {
     const calculateTimeLeft = () => {
@@ -46,9 +49,11 @@ const TrialCountdown = ({ startAt, language }: { startAt: string; language: stri
       
       if (diff <= 0) {
         setTimeLeft(language === 'en' ? 'Trial ended' : 'انتهت الفترة التجريبية');
+        setIsExpired(true);
         return;
       }
       
+      setIsExpired(false);
       const minutes = Math.floor(diff / 60000);
       const seconds = Math.floor((diff % 60000) / 1000);
       setTimeLeft(`${minutes}:${seconds.toString().padStart(2, '0')}`);
@@ -58,6 +63,39 @@ const TrialCountdown = ({ startAt, language }: { startAt: string; language: stri
     const interval = setInterval(calculateTimeLeft, 1000);
     return () => clearInterval(interval);
   }, [startAt, language]);
+  
+  // When trial is expired, show friendly message with CTA
+  if (isExpired) {
+    return (
+      <div className="text-center space-y-4 py-2">
+        <div className="text-4xl">😊❤️</div>
+        <div className="text-2xl font-bold text-foreground">
+          {language === 'en' ? 'Trial ended' : 'انتهت الفترة التجريبية'}
+        </div>
+        <p className="text-muted-foreground max-w-xs mx-auto">
+          {language === 'en' 
+            ? "Wakti has so much to offer! Don't miss out on all the amazing features."
+            : "واكتي لديه الكثير ليقدمه! لا تفوت كل الميزات الرائعة."
+          }
+        </p>
+        <div className="bg-gradient-to-r from-accent-purple/10 to-accent-pink/10 border border-accent-purple/20 rounded-lg px-4 py-3">
+          <p className="text-sm font-medium text-accent-purple">
+            {language === 'en'
+              ? '✨ Subscribe now & get 3 more free days!'
+              : '✨ اشترك الآن واحصل على 3 أيام مجانية إضافية!'
+            }
+          </p>
+        </div>
+        <Button 
+          onClick={onSubscribeClick}
+          className="w-full max-w-xs bg-gradient-to-r from-accent-purple to-accent-pink hover:opacity-90 text-white font-semibold"
+          size="lg"
+        >
+          {language === 'en' ? 'Subscribe Now' : 'اشترك الآن'}
+        </Button>
+      </div>
+    );
+  }
   
   return (
     <div className="text-3xl font-bold text-center tabular-nums">
@@ -127,6 +165,9 @@ export default function Account() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [confirmationEmail, setConfirmationEmail] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Paywall modal state (for subscribe CTA from billing tab)
+  const [showPaywallModal, setShowPaywallModal] = useState(false);
   
   // Feedback states
   const [isFeedbackDialogOpen, setIsFeedbackDialogOpen] = useState(false);
@@ -780,7 +821,11 @@ export default function Account() {
                             {language === 'en' ? 'Free Trial Active' : 'الفترة التجريبية المجانية نشطة'}
                           </span>
                         </div>
-                        <TrialCountdown startAt={subscriptionData.profile.free_access_start_at} language={language} />
+                        <TrialCountdown 
+                          startAt={subscriptionData.profile.free_access_start_at} 
+                          language={language} 
+                          onSubscribeClick={() => setShowPaywallModal(true)}
+                        />
                       </div>
                     )}
                     
@@ -1036,6 +1081,9 @@ export default function Account() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      {/* Paywall Modal - triggered from billing tab subscribe CTA */}
+      <CustomPaywallModal open={showPaywallModal} onOpenChange={setShowPaywallModal} />
     </PageContainer>
   );
 }
