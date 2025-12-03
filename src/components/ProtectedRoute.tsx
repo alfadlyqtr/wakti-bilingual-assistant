@@ -441,15 +441,12 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
       return;
     }
 
-    // If on account billing, allow access to manage payment
+    // If on account page, always allow access (for billing management AND account deletion)
+    // This is required by Apple Guideline 5.1.1(v) - users must be able to delete their account
     const isAccount = location.pathname.startsWith('/account');
     if (isAccount) {
-      const params = new URLSearchParams(location.search || '');
-      const tab = (params.get('tab') || '').toLowerCase();
-      if (tab === 'billing') {
-        setShowPaywall(false);
-        return;
-      }
+      setShowPaywall(false);
+      return;
     }
 
     // If access not expired yet, keep paywall hidden

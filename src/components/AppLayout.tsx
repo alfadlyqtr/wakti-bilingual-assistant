@@ -316,7 +316,7 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
               variant="outline"
               className="w-full"
             >
-              {language === 'ar' ? 'الفوترة' : 'Billing'}
+              {language === 'ar' ? 'الحساب / الفوترة' : 'Account / Billing'}
             </Button>
 
             <Button
