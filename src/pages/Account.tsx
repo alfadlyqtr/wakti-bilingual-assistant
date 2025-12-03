@@ -127,7 +127,6 @@ export default function Account() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [confirmationEmail, setConfirmationEmail] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteConfirmDialogOpen, setDeleteConfirmDialogOpen] = useState(false);
   
   // Feedback states
   const [isFeedbackDialogOpen, setIsFeedbackDialogOpen] = useState(false);
@@ -298,15 +297,7 @@ export default function Account() {
     return confirmationEmail === user?.email;
   };
   
-  const openDeleteConfirmDialog = () => {
-    if (isEmailMatch()) {
-      setDeleteConfirmDialogOpen(true);
-    } else {
-      toast.error(t("error", language), {
-        description: "Email does not match your account email."
-      });
-    }
-  };
+  // Removed openDeleteConfirmDialog - now using single dialog flow
   
   const handleDeleteAccount = async () => {
     if (!isEmailMatch()) {
@@ -337,7 +328,6 @@ export default function Account() {
       });
     } finally {
       setIsDeleting(false);
-      setDeleteConfirmDialogOpen(false);
       setIsDeleteDialogOpen(false);
     }
   };
@@ -980,7 +970,7 @@ export default function Account() {
         </DialogContent>
       </Dialog>
       
-      {/* Delete Account Confirmation Dialog */}
+      {/* Delete Account Dialog - Single Clean Flow */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -989,68 +979,59 @@ export default function Account() {
               {t("deleteAccount", language)}
             </DialogTitle>
             <DialogDescription>
-              {t("deleteAccountDescription", language)}
+              {language === 'ar' 
+                ? 'سيتم حذف حسابك وجميع بياناتك نهائياً. لا يمكن التراجع عن هذا الإجراء.'
+                : 'This will permanently delete your account and all associated data. This action cannot be undone.'
+              }
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4 py-4">
-            <p className="text-sm font-medium">
-              To confirm deletion, please type your email address:
-            </p>
-            <Input
-              value={confirmationEmail}
-              onChange={handleConfirmEmailChange}
-              placeholder={user?.email || "Your email address"}
-              className="w-full"
-            />
+            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
+              <p className="text-sm text-destructive font-medium">
+                {language === 'ar'
+                  ? '⚠️ سيتم حذف: الملف الشخصي، المهام، الأحداث، المحادثات، وجميع البيانات المرتبطة.'
+                  : '⚠️ This will delete: profile, tasks, events, conversations, and all associated data.'
+                }
+              </p>
+            </div>
             
-            <p className="text-xs text-muted-foreground">
-              This action cannot be undone. All your data, including profile information, tasks, events, and messages will be permanently deleted.
-            </p>
+            <div className="space-y-2">
+              <p className="text-sm font-medium">
+                {language === 'ar'
+                  ? 'للتأكيد، اكتب بريدك الإلكتروني:'
+                  : 'To confirm, type your email address:'
+                }
+              </p>
+              <Input
+                value={confirmationEmail}
+                onChange={handleConfirmEmailChange}
+                placeholder={user?.email || "your@email.com"}
+                className="w-full"
+                autoComplete="off"
+              />
+            </div>
           </div>
           
-          <DialogFooter>
-            <Button variant="outline" onClick={closeDeleteDialog}>
-              {t("cancel", language)}
-            </Button>
-            <Button 
-              variant="destructive" 
-              onClick={openDeleteConfirmDialog}
-              disabled={!isEmailMatch() || isDeleting}
-            >
-              {t("deleteMyAccount", language)}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Final Confirmation Dialog */}
-      <Dialog open={deleteConfirmDialogOpen} onOpenChange={setDeleteConfirmDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-destructive flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5" />
-              Final Confirmation
-            </DialogTitle>
-            <DialogDescription>
-              Are you absolutely sure you want to delete your account? This cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button 
               variant="outline" 
-              onClick={() => setDeleteConfirmDialogOpen(false)}
+              onClick={closeDeleteDialog}
               disabled={isDeleting}
+              className="w-full sm:w-auto"
             >
               {t("cancel", language)}
             </Button>
             <Button 
               variant="destructive" 
               onClick={handleDeleteAccount}
-              disabled={isDeleting}
+              disabled={!isEmailMatch() || isDeleting}
+              className="w-full sm:w-auto"
             >
-              {isDeleting ? "Deleting..." : "Yes, Delete My Account"}
+              {isDeleting 
+                ? (language === 'ar' ? 'جارٍ الحذف...' : 'Deleting...')
+                : (language === 'ar' ? 'نعم، احذف حسابي نهائياً' : 'Yes, permanently delete my account')
+              }
             </Button>
           </DialogFooter>
         </DialogContent>
