@@ -24,20 +24,9 @@ export default function Home() {
     }
   }, [user, navigate]);
 
-  const [pricingPlan, setPricingPlan] = useState("monthly");
-
-  // Dynamic price calculation
-  const getPrices = () => {
-    const prices = {
-      monthly: { QAR: 55 },
-      yearly: { QAR: 550 }
-    };
-    return prices[pricingPlan as keyof typeof prices];
-  };
-
-  const formatPrice = (amount: number) => {
-    return `${amount} QAR`;
-  };
+  // Single monthly plan pricing (matches RevenueCat/Natively)
+  const MONTHLY_PRICE_QAR = 95;
+  const MONTHLY_PRICE_USD = 24.99;
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -323,24 +312,11 @@ export default function Home() {
                       {t("perfectForEveryone", language)}
                     </p>
 
-                    {/* Plan Toggle */}
-                    <div className="inline-flex items-center gap-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-full p-2 border shadow-sm mb-12">
-                      <Button
-                        size="lg"
-                        variant={pricingPlan === "monthly" ? "default" : "ghost"}
-                        className="rounded-full text-lg px-12 py-4"
-                        onClick={() => setPricingPlan("monthly")}
-                      >
-                        {t("monthly", language)}
-                      </Button>
-                      <Button
-                        size="lg"
-                        variant={pricingPlan === "yearly" ? "default" : "ghost"}
-                        className="rounded-full text-lg px-12 py-4"
-                        onClick={() => setPricingPlan("yearly")}
-                      >
-                        {t("yearly", language)}
-                      </Button>
+                    {/* 3-day free trial badge */}
+                    <div className="inline-flex items-center gap-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-full px-6 py-3 border shadow-sm mb-12">
+                      <span className="text-base font-medium text-muted-foreground">
+                        {language === "en" ? "3-day free trial, then" : "تجربة مجانية 3 أيام، ثم"}
+                      </span>
                     </div>
                   </motion.div>
 
@@ -349,21 +325,14 @@ export default function Home() {
                     className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-2xl p-12 lg:p-16 shadow-xl border border-white/50 dark:border-slate-700/50 max-w-2xl mx-auto"
                   >
                     <div className="text-center mb-16">
-                      <div className="flex justify-center items-baseline gap-3 mb-8">
+                      <div className="flex justify-center items-baseline gap-3 mb-4">
+                        <span className="text-4xl font-bold text-foreground">QAR</span>
                         <span className="text-6xl lg:text-8xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                          {formatPrice(getPrices().QAR)}
+                          {MONTHLY_PRICE_QAR}/month
                         </span>
-                        {pricingPlan === "yearly" && (
-                          <span className="text-lg bg-gradient-to-r from-green-500 to-emerald-500 text-white px-6 py-3 rounded-full font-medium shadow-sm">
-                            {language === 'en' ? 'SAVE 17%' : 'وفر 17٪'}
-                          </span>
-                        )}
                       </div>
                       <p className="text-xl text-muted-foreground">
-                        {pricingPlan === "monthly" 
-                          ? (language === "en" ? "per month" : "شهرياً") 
-                          : (language === "en" ? "per year" : "سنوياً")
-                        }
+                        ${MONTHLY_PRICE_USD}/month USD
                       </p>
                     </div>
 

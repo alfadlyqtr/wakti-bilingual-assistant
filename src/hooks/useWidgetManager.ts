@@ -123,6 +123,15 @@ export const useWidgetManager = (language: "en" | "ar") => {
       } catch (error) {
         console.error("Error loading widget settings:", error);
         if (!active) return;
+        // Ensure default widget settings are applied even on error
+        setWidgetSettings({
+          showCalendarWidget: true,
+          showTRWidget: true,
+          showMaw3dWidget: true,
+          showQuoteWidget: true,
+          showWhoopWidget: true,
+          showJournalWidget: true,
+        });
         const fallback = getLocalOrder();
         setCurrentOrder(fallback);
       }

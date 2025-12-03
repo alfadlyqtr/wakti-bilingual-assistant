@@ -121,9 +121,14 @@ export default function GoodbyeScreen() {
       </p>
 
       {/* Footer */}
-      <p className="text-xs text-muted-foreground mt-12">
-        {isArabic ? "شكراً لاستخدامك Wakti" : "Thank you for using Wakti"}
-      </p>
+      <div className="mt-12 text-center">
+        <p className="text-sm text-muted-foreground mb-1">
+          {isArabic ? "💙 شكراً لكونك جزءاً من رحلتنا" : "💙 Thank you for being part of our journey"}
+        </p>
+        <p className="text-xs text-muted-foreground/70">
+          {isArabic ? "نتمنى لك كل التوفيق" : "We wish you all the best"}
+        </p>
+      </div>
     </div>
   );
 }

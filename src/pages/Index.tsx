@@ -6,7 +6,7 @@ import { Logo3D } from "@/components/Logo3D";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { useTheme } from "@/providers/ThemeProvider";
 import { motion } from "framer-motion";
-import { Check, ArrowRight, Sparkles, Bot, Calendar, Mic, Users, MessageSquare, LogIn, Zap, Star, Music, Globe, Image as ImageIcon } from "lucide-react";
+import { Check, ArrowRight, Sparkles, Bot, Calendar, Mic, Users, MessageSquare, LogIn, Zap, Star, Music, Globe, Image as ImageIcon, BookOpen, PencilRuler, Workflow } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { MobileHeader } from "@/components/MobileHeader";
 import { Footer } from "@/components/Footer";
@@ -24,20 +24,9 @@ export default function Index() {
     }
   }, [user, navigate]);
 
-  const [pricingPlan, setPricingPlan] = useState("monthly");
-
-  // Dynamic price calculation
-  const getPrices = () => {
-    const prices = {
-      monthly: { QAR: 60 },
-      yearly: { QAR: 600 }
-    };
-    return prices[pricingPlan as keyof typeof prices];
-  };
-
-  const formatPrice = (amount: number) => {
-    return `${amount} QAR`;
-  };
+  // Single monthly plan pricing (matches RevenueCat/Natively)
+  const MONTHLY_PRICE_QAR = 95;
+  const MONTHLY_PRICE_USD = 24.99;
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -167,6 +156,30 @@ export default function Index() {
       gradient: "from-teal-500 via-emerald-500 to-green-600",
       bgGradient: "from-teal-50 to-emerald-50",
       iconColor: "text-teal-600"
+    },
+    {
+      icon: BookOpen,
+      title: "Study Mode",
+      description: "Turn any topic into simple explanations, flashcards, and practice questions so you can learn faster.",
+      gradient: "from-blue-500 via-indigo-500 to-purple-600",
+      bgGradient: "from-blue-50 to-indigo-50",
+      iconColor: "text-blue-600"
+    },
+    {
+      icon: PencilRuler,
+      title: "Draw Mode",
+      description: "Sketch ideas and scenes with AI-assisted drawing so you can visualize anything in seconds.",
+      gradient: "from-pink-500 via-rose-500 to-purple-600",
+      bgGradient: "from-pink-50 to-rose-50",
+      iconColor: "text-pink-600"
+    },
+    {
+      icon: Workflow,
+      title: "Create Diagrams",
+      description: "Turn messy text into clean diagrams and workflows so you can explain and present clearly.",
+      gradient: "from-emerald-500 via-teal-500 to-cyan-600",
+      bgGradient: "from-emerald-50 to-teal-50",
+      iconColor: "text-emerald-600"
     }
   ];
 
@@ -294,24 +307,11 @@ export default function Index() {
                   {t("perfectForEveryone", language)}
                 </p>
                 
-                {/* Plan Toggle */}
-                <div className="inline-flex items-center gap-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-full p-1 border shadow-sm mb-4">
-                  <Button
-                    size="sm"
-                    variant={pricingPlan === "monthly" ? "default" : "ghost"}
-                    className="rounded-full text-sm px-6 py-2"
-                    onClick={() => setPricingPlan("monthly")}
-                  >
-                    {t("monthly", language)}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={pricingPlan === "yearly" ? "default" : "ghost"}
-                    className="rounded-full text-sm px-6 py-2"
-                    onClick={() => setPricingPlan("yearly")}
-                  >
-                    {t("yearly", language)}
-                  </Button>
+                {/* 3-day free trial badge */}
+                <div className="inline-flex items-center gap-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-full px-4 py-2 border shadow-sm mb-4">
+                  <span className="text-sm font-medium text-muted-foreground">
+                    {language === "en" ? "3-day free trial, then" : "تجربة مجانية 3 أيام، ثم"}
+                  </span>
                 </div>
               </motion.div>
               
@@ -320,21 +320,14 @@ export default function Index() {
                 className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-2xl p-8 shadow-xl border border-white/50 dark:border-slate-700/50 max-w-sm mx-auto"
               >
                 <div className="text-center mb-8">
-                  <div className="flex justify-center items-baseline gap-2 mb-4">
+                  <div className="flex justify-center items-baseline gap-3 mb-2">
+                    <span className="text-3xl font-bold text-foreground">QAR</span>
                     <span className="text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                      {formatPrice(getPrices().QAR)}
+                      {MONTHLY_PRICE_QAR}/month
                     </span>
-                    {pricingPlan === "yearly" && (
-                      <span className="text-sm bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-1 rounded-full font-medium shadow-sm">
-                        {language === 'en' ? 'SAVE 17%' : 'وفر 17٪'}
-                      </span>
-                    )}
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    {pricingPlan === "monthly" 
-                      ? (language === "en" ? "per month" : "شهرياً") 
-                      : (language === "en" ? "per year" : "سنوياً")
-                    }
+                    ${MONTHLY_PRICE_USD}/month USD
                   </p>
                 </div>
                 
@@ -512,24 +505,11 @@ export default function Index() {
                       {t("perfectForEveryone", language)}
                     </p>
                     
-                    {/* Plan Toggle */}
-                    <div className="inline-flex items-center gap-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-full p-2 border shadow-sm mb-8">
-                      <Button
-                        size="sm"
-                        variant={pricingPlan === "monthly" ? "default" : "ghost"}
-                        className="rounded-full text-sm px-8 py-2"
-                        onClick={() => setPricingPlan("monthly")}
-                      >
-                        {t("monthly", language)}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={pricingPlan === "yearly" ? "default" : "ghost"}
-                        className="rounded-full text-sm px-8 py-2"
-                        onClick={() => setPricingPlan("yearly")}
-                      >
-                        {t("yearly", language)}
-                      </Button>
+                    {/* 3-day free trial badge */}
+                    <div className="inline-flex items-center gap-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-full px-6 py-3 border shadow-sm mb-8">
+                      <span className="text-base font-medium text-muted-foreground">
+                        {language === "en" ? "3-day free trial, then" : "تجربة مجانية 3 أيام، ثم"}
+                      </span>
                     </div>
                   </motion.div>
                   
@@ -538,21 +518,14 @@ export default function Index() {
                     className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-2xl p-10 lg:p-12 shadow-xl border border-white/50 dark:border-slate-700/50 max-w-xl mx-auto"
                   >
                     <div className="text-center mb-16">
-                      <div className="flex justify-center items-baseline gap-3 mb-8">
+                      <div className="flex justify-center items-baseline gap-3 mb-4">
+                        <span className="text-4xl font-bold text-foreground">QAR</span>
                         <span className="text-5xl lg:text-6xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                          {formatPrice(getPrices().QAR)}
+                          {MONTHLY_PRICE_QAR}/month
                         </span>
-                        {pricingPlan === "yearly" && (
-                          <span className="text-sm bg-gradient-to-r from-green-500 to-emerald-500 text-white px-4 py-2 rounded-full font-medium shadow-sm">
-                            {language === 'en' ? 'SAVE 17%' : 'وفر 17٪'}
-                          </span>
-                        )}
                       </div>
                       <p className="text-lg text-muted-foreground">
-                        {pricingPlan === "monthly" 
-                          ? (language === "en" ? "per month" : "شهرياً") 
-                          : (language === "en" ? "per year" : "سنوياً")
-                        }
+                        ${MONTHLY_PRICE_USD}/month USD
                       </p>
                     </div>
                     

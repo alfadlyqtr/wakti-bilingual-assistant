@@ -110,6 +110,27 @@ export function useUserProfile() {
         }
       } else {
         if (IS_DEV) console.debug('Profile fetched successfully:', data);
+        
+        // If profile exists but country is missing, sync from user_metadata
+        // This handles the case where the DB trigger didn't include country
+        if (!data.country && user?.user_metadata?.country) {
+          if (IS_DEV) console.debug('Syncing country from user_metadata to profile');
+          const { error: updateError } = await supabase
+            .from('profiles')
+            .update({
+              country: user.user_metadata.country,
+              country_code: user.user_metadata.country_code || null,
+              city: data.city || user.user_metadata.city || null
+            })
+            .eq('id', user.id);
+          
+          if (!updateError) {
+            data.country = user.user_metadata.country;
+            data.country_code = user.user_metadata.country_code || null;
+            data.city = data.city || user.user_metadata.city || null;
+          }
+        }
+        
         setProfile(data);
       }
     } catch (err) {
