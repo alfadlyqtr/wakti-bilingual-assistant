@@ -64,9 +64,21 @@ export const getCurrentUser = async () => {
 
 export const deleteUserAccount = async () => {
   try {
-    // This would typically be handled by an edge function for security
-    const { error } = await supabase.rpc('delete_user_account');
-    if (error) throw error;
+    // Use Edge Function for account deletion (requires service role to delete auth.users)
+    const { data, error } = await supabase.functions.invoke('delete-user-account', {
+      method: 'POST',
+    });
+    
+    if (error) {
+      console.error('Edge function error:', error);
+      throw error;
+    }
+    
+    if (data && !data.success) {
+      console.error('Deletion failed:', data.error);
+      throw new Error(data.error || 'Failed to delete account');
+    }
+    
     toast.success('Account deleted successfully');
     return { error: null };
   } catch (error) {

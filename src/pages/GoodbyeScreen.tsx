@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/providers/ThemeProvider";
+import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 
 /**
  * GoodbyeScreen - Displayed after successful account deletion
@@ -13,9 +14,13 @@ export default function GoodbyeScreen() {
 
   return (
     <div 
-      className="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-b from-background to-muted"
+      className="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-b from-background to-muted relative"
       dir={isArabic ? "rtl" : "ltr"}
     >
+      {/* Language/Theme Toggle */}
+      <div className="absolute top-4 right-4">
+        <ThemeLanguageToggle />
+      </div>
       {/* Wakti Logo */}
       <div className="mb-8">
         <img 
