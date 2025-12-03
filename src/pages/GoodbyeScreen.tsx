@@ -1,18 +1,52 @@
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/providers/ThemeProvider";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
+import { supabase } from "@/integrations/supabase/client";
 
 /**
  * GoodbyeScreen - Displayed after successful account deletion
- * Shows a branded farewell message with option to return home (landing page)
- * Session is already cleared before navigating here (in Account.tsx)
- * This screen stays visible until user clicks "Return to Home"
+ * 
+ * SOLID FLOW:
+ * 1. Screen appears immediately after delete
+ * 2. Session is killed right away (signOut called on mount)
+ * 3. Screen stays visible for max 30 seconds with countdown
+ * 4. User can click "Return to Home" anytime OR auto-redirect after 30s
  */
 export default function GoodbyeScreen() {
   const navigate = useNavigate();
   const { language } = useTheme();
   const isArabic = language === "ar";
+  const signedOutRef = useRef(false);
+  const [countdown, setCountdown] = useState(30);
+
+  // Sign out immediately on mount - session killed, user gone
+  useEffect(() => {
+    if (signedOutRef.current) return;
+    signedOutRef.current = true;
+    supabase.auth.signOut();
+  }, []);
+
+  // Countdown timer: 30 seconds then auto-redirect to home
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          navigate("/", { replace: true });
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [navigate]);
+
+  const handleReturnHome = () => {
+    navigate("/", { replace: true });
+  };
 
   return (
     <div 
@@ -58,11 +92,19 @@ export default function GoodbyeScreen() {
       {/* Return Home Button */}
       <Button
         variant="outline"
-        onClick={() => navigate("/")}
+        onClick={handleReturnHome}
         className="min-w-[200px]"
       >
         {isArabic ? "العودة للصفحة الرئيسية" : "Return to Home"}
       </Button>
+
+      {/* Auto-redirect countdown */}
+      <p className="text-xs text-muted-foreground mt-4">
+        {isArabic 
+          ? `سيتم توجيهك للصفحة الرئيسية خلال ${countdown} ثانية`
+          : `Redirecting to home in ${countdown} seconds`
+        }
+      </p>
 
       {/* Footer */}
       <p className="text-xs text-muted-foreground mt-12">
