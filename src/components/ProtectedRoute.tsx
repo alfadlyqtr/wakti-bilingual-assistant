@@ -429,7 +429,23 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   }
 
   // Check access and trigger paywall if needed
-  const { isSubscribed, isAccessExpired } = useUserProfile();
+  const { isSubscribed, isAccessExpired, profile } = useUserProfile();
+  
+  // Force re-evaluation of isAccessExpired every 10 seconds
+  // This is needed because isAccessExpired is a getter that recalculates based on Date.now()
+  // React's useEffect can't detect when a getter's return value changes
+  const [accessCheckTick, setAccessCheckTick] = useState(0);
+  
+  useEffect(() => {
+    // Only run the timer if user is not subscribed and has a trial start time
+    if (isSubscribed || !profile?.free_access_start_at) return;
+    
+    const interval = setInterval(() => {
+      setAccessCheckTick(t => t + 1);
+    }, 10000); // Check every 10 seconds
+    
+    return () => clearInterval(interval);
+  }, [isSubscribed, profile?.free_access_start_at]);
   
   useEffect(() => {
     if (TEMP_DISABLE_SUBSCRIPTION_CHECKS) return;
@@ -458,7 +474,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     // Else: user's free period has expired and they're not subscribed
     if (DEV) console.log("ProtectedRoute: Triggering paywall - access expired (route:", location.pathname, location.search, ")");
     setShowPaywall(true);
-  }, [user?.id, isSubscribed, isAccessExpired, location.pathname, location.search, TEMP_DISABLE_SUBSCRIPTION_CHECKS, DEV]);
+  }, [user?.id, isSubscribed, isAccessExpired, location.pathname, location.search, TEMP_DISABLE_SUBSCRIPTION_CHECKS, DEV, accessCheckTick]);
   
   if (TEMP_DISABLE_SUBSCRIPTION_CHECKS) {
     if (DEV) console.log("ProtectedRoute: TEMP DISABLE - allowing access after auth");
