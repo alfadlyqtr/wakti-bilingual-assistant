@@ -170,21 +170,33 @@ export default function AccountDelete() {
             <h1 className="text-xl sm:text-2xl font-bold">
               {language === "ar" ? "حذف حساب Wakti" : "Delete your Wakti account"}
             </h1>
+
+            {/* Primary method notice */}
+            <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
+              <p className="text-sm font-medium text-primary mb-2">
+                {language === "ar" ? "✨ الطريقة الأسرع" : "✨ Fastest Method"}
+              </p>
+              <p className="text-sm text-foreground">
+                {language === "ar"
+                  ? "يمكنك حذف حسابك فوراً من داخل التطبيق: افتح Wakti → سجّل الدخول → الحساب → حذف حسابي → أكد بريدك الإلكتروني. سيتم حذف حسابك وجميع بياناتك على الفور."
+                  : "You can delete your account instantly from inside the app: Open Wakti → Sign in → Account → Delete my account → Confirm your email. Your account and all data will be deleted immediately."}
+              </p>
+            </div>
+
             <p className="text-muted-foreground text-sm">
               {language === "ar"
                 ? "نحن حزينون لرؤيتك تغادر، لكننا نحترم قرارك ونسهّل عليك حذف حسابك." 
-                : "We’re sad to see you go, but we respect your decision and want to make it easy to close your account."}
+                : "We're sad to see you go, but we respect your decision and want to make it easy to close your account."}
             </p>
-            <p className="text-muted-foreground text-sm">
-              {language === "ar"
-                ? "يمكنك حذف حسابك في أي وقت من داخل تطبيق Wakti: افتح التطبيق، قم بتسجيل الدخول، ثم انتقل إلى الحساب → حذف حسابي، وأكد بريدك الإلكتروني واتبع الخطوات المعروضة."
-                : "You can delete your account at any time from inside the Wakti app: open the app, sign in, go to Account → Delete my account, confirm your email, and follow the on‑screen steps."}
-            </p>
-            <p className="text-muted-foreground text-sm">
-              {language === "ar"
-                ? "إذا تعذر عليك الوصول إلى التطبيق، يمكنك إرسال بريد إلكتروني إلى delete@wakti.qa من نفس البريد المسجل في حسابك، أو تعبئة النموذج أدناه لطلب حذف الحساب."
-                : "If you can’t access the app, you can email delete@wakti.qa from the address used in your Wakti account, or fill out the form below to request account deletion."}
-            </p>
+
+            {/* Fallback notice */}
+            <div className="bg-muted/50 border border-border rounded-lg p-3">
+              <p className="text-xs text-muted-foreground">
+                {language === "ar"
+                  ? "⚠️ هذا النموذج للمستخدمين الذين لا يستطيعون الوصول إلى التطبيق فقط. إذا كان بإمكانك تسجيل الدخول للتطبيق، يرجى استخدام خيار الحذف داخل التطبيق للحذف الفوري."
+                  : "⚠️ This form is only for users who cannot access the app. If you can log into the app, please use the in-app deletion option for immediate deletion."}
+              </p>
+            </div>
           </div>
 
           <Card>

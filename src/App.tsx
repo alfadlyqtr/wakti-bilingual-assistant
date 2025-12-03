@@ -39,6 +39,7 @@ import ContactUs from "./pages/ContactUs";
 import Help from "./pages/Help";
 import PrivacyTerms from "./pages/PrivacyTerms";
 import AccountDelete from "./pages/AccountDelete";
+import GoodbyeScreen from "./pages/GoodbyeScreen";
 import Confirmed from "./pages/Confirmed";
 import AuthConfirm from "./pages/AuthConfirm";
 import NotFound from "./pages/NotFound";
@@ -127,6 +128,7 @@ function App() {
                 } />
                 <Route path="/privacy-terms" element={<PrivacyTerms />} />
                 <Route path="/account-delete" element={<AccountDelete />} />
+                <Route path="/goodbye" element={<GoodbyeScreen />} />
                 <Route path="/confirmed" element={<Confirmed />} />
                 <Route path="/auth/confirm" element={<AuthConfirm />} />
                 <Route path="/session-ended" element={<SessionEnded />} />

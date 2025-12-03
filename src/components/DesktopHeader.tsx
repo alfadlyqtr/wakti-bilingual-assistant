@@ -25,12 +25,14 @@ import { WeatherButton } from "@/components/WeatherButton";
 export function DesktopHeader() {
   const { theme, setTheme, language, setLanguage, toggleLanguage } = useTheme();
   const { user, signOut } = useAuth();
-  const { profile } = useUserProfile();
+  const { profile, refetch: refetchProfile } = useUserProfile();
   const navigate = useNavigate();
   const location = useLocation();
   const { unreadTotal } = useUnreadMessages();
   const [avatarKey, setAvatarKey] = useState(Date.now());
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  // Local override for immediate avatar display before refetch completes
+  const [immediateAvatarUrl, setImmediateAvatarUrl] = useState<string | null | undefined>(undefined);
   
   const handleLogout = async () => {
     await signOut();
@@ -49,7 +51,12 @@ export function DesktopHeader() {
   useEffect(() => {
     const handleAvatarUpdate = (event: CustomEvent) => {
       console.log('Avatar updated event received:', event.detail);
+      const newUrl = event.detail?.avatarUrl;
+      // Immediately set the new avatar URL for instant display
+      setImmediateAvatarUrl(newUrl);
       setAvatarKey(Date.now()); // Force re-render of avatar
+      // Also refetch profile to sync state
+      refetchProfile();
     };
 
     window.addEventListener('avatar-updated', handleAvatarUpdate as EventListener);
@@ -57,10 +64,19 @@ export function DesktopHeader() {
     return () => {
       window.removeEventListener('avatar-updated', handleAvatarUpdate as EventListener);
     };
-  }, []);
+  }, [refetchProfile]);
 
-  // Get avatar URL from profile data with cache-busting
-  const avatarUrl = profile?.avatar_url ? getCacheBustedAvatarUrl(profile.avatar_url) : undefined;
+  // Clear immediate override once profile is updated with the new URL
+  useEffect(() => {
+    if (immediateAvatarUrl !== undefined && profile?.avatar_url === immediateAvatarUrl) {
+      setImmediateAvatarUrl(undefined);
+    }
+  }, [profile?.avatar_url, immediateAvatarUrl]);
+
+  // Get avatar URL - prefer immediate override, then profile data with cache-busting
+  const avatarUrl = immediateAvatarUrl !== undefined 
+    ? (immediateAvatarUrl ? getCacheBustedAvatarUrl(immediateAvatarUrl) : undefined)
+    : (profile?.avatar_url ? getCacheBustedAvatarUrl(profile.avatar_url) : undefined);
   
   // Determine current page info
   const getPageTitleWithIcon = () => {

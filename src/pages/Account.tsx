@@ -326,9 +326,9 @@ export default function Account() {
           description: error.message || "Failed to delete account"
         });
       } else {
-        toast.success("Account deleted successfully");
-        // Signout will be automatic since the account is deleted
-        navigate("/login");
+        // Account deleted successfully - redirect to goodbye screen
+        // No need to sign out since the auth user is already deleted
+        navigate("/goodbye", { replace: true });
       }
     } catch (error) {
       console.error("Error deleting account:", error);
