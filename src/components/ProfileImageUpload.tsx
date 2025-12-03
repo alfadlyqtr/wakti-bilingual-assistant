@@ -186,11 +186,12 @@ export function ProfileImageUpload() {
 
       console.log('Public URL generated:', publicUrl);
 
-      // Update profile with new avatar URL
+      // Update profile with new avatar URL (trim to prevent leading/trailing spaces)
+      const cleanUrl = publicUrl.trim();
       const { error: updateError } = await supabase
         .from('profiles')
         .update({ 
-          avatar_url: publicUrl,
+          avatar_url: cleanUrl,
           updated_at: new Date().toISOString()
         })
         .eq('id', user.id);
@@ -208,7 +209,7 @@ export function ProfileImageUpload() {
 
       // Dispatch event to update avatars across the app
       window.dispatchEvent(new CustomEvent('avatar-updated', { 
-        detail: { avatarUrl: publicUrl, userId: user.id, timestamp: Date.now() } 
+        detail: { avatarUrl: cleanUrl, userId: user.id, timestamp: Date.now() } 
       }));
 
       toast.success(language === 'ar' ? 'تم تحديث الصورة الشخصية بنجاح' : 'Profile picture updated successfully');
