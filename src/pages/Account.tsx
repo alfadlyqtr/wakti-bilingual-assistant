@@ -36,6 +36,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 // TrialCountdown Component - Shows remaining time of 30-minute trial
 // When trial ends, shows friendly message with subscribe CTA
+// Includes its own header - parent should NOT show "Free Trial Active" separately
 const TrialCountdown = ({ startAt, language, onSubscribeClick }: { startAt: string; language: string; onSubscribeClick?: () => void }) => {
   const [timeLeft, setTimeLeft] = useState('');
   const [isExpired, setIsExpired] = useState(false);
@@ -48,7 +49,6 @@ const TrialCountdown = ({ startAt, language, onSubscribeClick }: { startAt: stri
       const diff = trialEnd - now;
       
       if (diff <= 0) {
-        setTimeLeft(language === 'en' ? 'Trial ended' : 'انتهت الفترة التجريبية');
         setIsExpired(true);
         return;
       }
@@ -64,10 +64,10 @@ const TrialCountdown = ({ startAt, language, onSubscribeClick }: { startAt: stri
     return () => clearInterval(interval);
   }, [startAt, language]);
   
-  // When trial is expired, show friendly message with CTA
+  // When trial is expired, show friendly message with CTA (NO "Free Trial Active" header)
   if (isExpired) {
     return (
-      <div className="text-center space-y-4 py-2">
+      <div className="text-center space-y-4 py-4">
         <div className="text-4xl">😊❤️</div>
         <div className="text-2xl font-bold text-foreground">
           {language === 'en' ? 'Trial ended' : 'انتهت الفترة التجريبية'}
@@ -78,8 +78,8 @@ const TrialCountdown = ({ startAt, language, onSubscribeClick }: { startAt: stri
             : "واكتي لديه الكثير ليقدمه! لا تفوت كل الميزات الرائعة."
           }
         </p>
-        <div className="bg-gradient-to-r from-accent-purple/10 to-accent-pink/10 border border-accent-purple/20 rounded-lg px-4 py-3">
-          <p className="text-sm font-medium text-accent-purple">
+        <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-lg px-4 py-3">
+          <p className="text-sm font-medium text-purple-600 dark:text-purple-400">
             {language === 'en'
               ? '✨ Subscribe now & get 3 more free days!'
               : '✨ اشترك الآن واحصل على 3 أيام مجانية إضافية!'
@@ -88,8 +88,13 @@ const TrialCountdown = ({ startAt, language, onSubscribeClick }: { startAt: stri
         </div>
         <Button 
           onClick={onSubscribeClick}
-          className="w-full max-w-xs bg-gradient-to-r from-accent-purple to-accent-pink hover:opacity-90 text-white font-semibold"
+          className="w-full max-w-xs shadow-lg"
           size="lg"
+          style={{
+            background: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)',
+            color: 'white',
+            fontWeight: 600,
+          }}
         >
           {language === 'en' ? 'Subscribe Now' : 'اشترك الآن'}
         </Button>
@@ -97,9 +102,18 @@ const TrialCountdown = ({ startAt, language, onSubscribeClick }: { startAt: stri
     );
   }
   
+  // When trial is active, show "Free Trial Active" header + countdown
   return (
-    <div className="text-3xl font-bold text-center tabular-nums">
-      {timeLeft}
+    <div className="text-center space-y-3 py-4">
+      <div className="flex items-center justify-center gap-2 text-amber-500">
+        <Clock className="h-5 w-5" />
+        <span className="font-medium">
+          {language === 'en' ? 'Free Trial Active' : 'الفترة التجريبية المجانية نشطة'}
+        </span>
+      </div>
+      <div className="text-3xl font-bold text-center tabular-nums">
+        {timeLeft}
+      </div>
     </div>
   );
 };
@@ -812,21 +826,13 @@ export default function Account() {
                 ) : (
                   /* DATA STATES: Show appropriate content based on subscription status */
                   <>
-                    {/* STATE 1: Trial Active - Show Timer */}
+                    {/* STATE 1: Trial (Active or Expired) - TrialCountdown handles both states */}
                     {subscriptionData?.profile && !subscriptionData.profile.is_subscribed && subscriptionData.profile.free_access_start_at && (
-                      <div className="text-center space-y-3 py-4">
-                        <div className="flex items-center justify-center gap-2 text-amber-500">
-                          <Clock className="h-5 w-5" />
-                          <span className="font-medium">
-                            {language === 'en' ? 'Free Trial Active' : 'الفترة التجريبية المجانية نشطة'}
-                          </span>
-                        </div>
-                        <TrialCountdown 
-                          startAt={subscriptionData.profile.free_access_start_at} 
-                          language={language} 
-                          onSubscribeClick={() => setShowPaywallModal(true)}
-                        />
-                      </div>
+                      <TrialCountdown 
+                        startAt={subscriptionData.profile.free_access_start_at} 
+                        language={language} 
+                        onSubscribeClick={() => setShowPaywallModal(true)}
+                      />
                     )}
                     
                     {/* STATE 2: Subscribed - Show Status + Manage Button */}
