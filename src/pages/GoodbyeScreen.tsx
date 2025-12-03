@@ -21,20 +21,31 @@ export default function GoodbyeScreen() {
   const signedOutRef = useRef(false);
   const [countdown, setCountdown] = useState(30);
 
-  // Sign out immediately on mount - session killed, user gone
+  // Sign out after 2 seconds - gives time for screen to fully render
+  // and prevents auth state change from triggering redirects too early
   useEffect(() => {
     if (signedOutRef.current) return;
-    signedOutRef.current = true;
-    supabase.auth.signOut();
+    
+    const signOutTimer = setTimeout(() => {
+      signedOutRef.current = true;
+      supabase.auth.signOut();
+    }, 2000);
+    
+    return () => clearTimeout(signOutTimer);
   }, []);
 
   // Countdown timer: 30 seconds then auto-redirect to home
+  // Using a ref to track if we've already navigated
+  const navigatedRef = useRef(false);
+  
   useEffect(() => {
     const interval = setInterval(() => {
       setCountdown(prev => {
-        if (prev <= 1) {
+        if (prev <= 1 && !navigatedRef.current) {
+          navigatedRef.current = true;
           clearInterval(interval);
-          navigate("/", { replace: true });
+          // Use window.location for a hard redirect that bypasses React Router
+          window.location.href = "/";
           return 0;
         }
         return prev - 1;
@@ -42,10 +53,13 @@ export default function GoodbyeScreen() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [navigate]);
+  }, []);
 
   const handleReturnHome = () => {
-    navigate("/", { replace: true });
+    if (navigatedRef.current) return;
+    navigatedRef.current = true;
+    // Use window.location for a hard redirect
+    window.location.href = "/";
   };
 
   return (
