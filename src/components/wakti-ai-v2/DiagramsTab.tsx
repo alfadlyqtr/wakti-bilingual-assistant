@@ -2,7 +2,8 @@ import React, { useState, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
-import { Download, Share2, FileText, Sparkles, Loader2, Wand2, Palette, Zap } from 'lucide-react';
+import { Download, Share2, FileText, Sparkles, Loader2, Wand2, Palette, Zap, Check } from 'lucide-react';
+import { toast } from 'sonner';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -141,6 +142,7 @@ const DiagramsTab: React.FC = () => {
   const { language } = useTheme();
   const { user } = useAuth();
   const isArabic = language === 'ar';
+  const [copiedId, setCopiedId] = React.useState<string | null>(null);
 
   // State
   const [inputText, setInputText] = useState('');
@@ -240,7 +242,9 @@ const DiagramsTab: React.FC = () => {
 
   const handleDownload = async (diagram: GeneratedDiagram) => {
     try {
-      const response = await fetch(diagram.imageUrl);
+      // Try fetch first
+      const response = await fetch(diagram.imageUrl, { mode: 'cors' });
+      if (!response.ok) throw new Error('Fetch failed');
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -250,8 +254,16 @@ const DiagramsTab: React.FC = () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      toast.success(isArabic ? 'تم التحميل' : 'Downloaded', {
+        description: isArabic ? 'تم حفظ المخطط بنجاح' : 'Diagram saved successfully',
+      });
     } catch (err) {
       console.error('Download error:', err);
+      // Fallback: open in new tab for manual save
+      window.open(diagram.imageUrl, '_blank');
+      toast.info(isArabic ? 'افتح في نافذة جديدة' : 'Opened in new tab', {
+        description: isArabic ? 'اضغط بزر الماوس الأيمن واختر حفظ' : 'Right-click and choose Save As',
+      });
     }
   };
 
@@ -262,9 +274,15 @@ const DiagramsTab: React.FC = () => {
   const handleCopyLink = async (diagram: GeneratedDiagram) => {
     try {
       await navigator.clipboard.writeText(diagram.imageUrl);
-      // Could add a toast here
+      setCopiedId(diagram.id);
+      setTimeout(() => setCopiedId(null), 2000);
+      toast.success(isArabic ? 'تم النسخ' : 'Copied!', {
+        description: isArabic ? 'تم نسخ الرابط إلى الحافظة' : 'Link copied to clipboard',
+      });
     } catch (err) {
       console.error('Copy error:', err);
+      // Fallback: show the URL in a prompt
+      window.prompt(isArabic ? 'انسخ الرابط:' : 'Copy this link:', diagram.imageUrl);
     }
   };
 
@@ -507,7 +525,7 @@ const DiagramsTab: React.FC = () => {
                         className="p-2.5 rounded-xl bg-fuchsia-100 dark:bg-fuchsia-900/50 hover:bg-fuchsia-200 dark:hover:bg-fuchsia-800 transition-colors text-fuchsia-600 dark:text-fuchsia-400"
                         title={isArabic ? 'نسخ الرابط' : 'Copy Link'}
                       >
-                        <Share2 className="w-5 h-5" />
+                        {copiedId === diagram.id ? <Check className="w-5 h-5 text-green-500" /> : <Share2 className="w-5 h-5" />}
                       </button>
                     </div>
                   </div>
