@@ -985,18 +985,30 @@ export function ChatMessages({
         );
       };
 
-      // Check for Wolfram|Alpha metadata
+      // Check for Wolfram|Alpha metadata AND Study mode flag
       const wolframMeta = (message as any)?.metadata?.wolfram;
-      const isStudyMode = wolframMeta?.mode === 'study';
+      const studyModeFlag = (message as any)?.metadata?.studyMode;
+      const isStudyMode = studyModeFlag || wolframMeta?.mode === 'study';
+      
+      // For Study mode without Wolfram, extract the first sentence as the "answer"
+      const extractStudyAnswer = (text: string): string => {
+        if (!text) return '';
+        // Try to find "Answer:" prefix first
+        const answerMatch = text.match(/\*?\*?Answer:?\*?\*?\s*([^\n]+)/i);
+        if (answerMatch) return answerMatch[1].trim();
+        // Otherwise take first sentence (up to period, question mark, or newline)
+        const firstSentence = text.split(/[.!?\n]/)[0];
+        return firstSentence?.trim() || text.slice(0, 150);
+      };
 
       return (
         <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-2 prose-pre:my-3 prose-table:my-3">
-          {/* Render Study Mode structured answer if present */}
-          {wolframMeta && wolframMeta.answer && isStudyMode && (
+          {/* Render Study Mode structured answer - from Wolfram OR extracted from response */}
+          {isStudyMode && (wolframMeta?.answer || content) && (
             <StudyModeMessage
-              answer={wolframMeta.answer}
-              steps={wolframMeta.steps}
-              inputInterpretation={wolframMeta.interpretation}
+              answer={wolframMeta?.answer || extractStudyAnswer(content)}
+              steps={wolframMeta?.steps}
+              inputInterpretation={wolframMeta?.interpretation}
               language={language}
             />
           )}

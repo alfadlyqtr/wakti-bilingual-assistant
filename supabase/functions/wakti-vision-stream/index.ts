@@ -150,7 +150,7 @@ async function fetchImageAsBase64(url: string): Promise<{ base64: string; mimeTy
   return { base64, mimeType: mimeHeader, byteLength: bytes.byteLength };
 }
 
-function buildSystemPrompt(language: string, currentDate: string, personalTouch: any) {
+function buildSystemPrompt(language: string, currentDate: string, personalTouch: any, chatSubmode: string = 'chat') {
   const pt = personalTouch || {};
   const langRule = language === 'ar'
     ? 'CRITICAL: Respond ONLY in Arabic. Do NOT use English.'
@@ -205,13 +205,28 @@ ${VISION_CAPS}
 
 ${TABLE_ENFORCEMENT}
 
-OUTPUT REQUIREMENTS (CONVERSATIONAL FIRST):
+${chatSubmode === 'study' ? `
+📚 STUDY MODE (TUTOR STYLE) - CRITICAL
+You are now in STUDY MODE. Act as a friendly, patient tutor who helps the user learn and understand from this image.
+
+STUDY MODE RULES:
+1. ANSWER FIRST: Always start with the clear, direct answer or key takeaway (1-2 sentences).
+2. EXPLAIN STEP-BY-STEP: Break down the reasoning or concept in simple, numbered steps.
+3. USE SIMPLE LANGUAGE: Avoid jargon. Explain like teaching a curious student.
+4. STRUCTURE CLEARLY: Use bullet points, numbered lists, or short paragraphs. Never a wall of text.
+5. ADD EXAMPLES: When helpful, include a real-world example or analogy.
+6. PRACTICE QUESTIONS (optional): For suitable topics, end with 1-2 short practice questions to test understanding.
+7. ENCOURAGE: Be supportive and encouraging. Learning should feel positive.
+
+This applies to ALL subjects in the image: math problems, science diagrams, history notes, programming code, exam prep, textbook pages, etc.
+Analyze the image content and teach based on what you see.
+` : `OUTPUT REQUIREMENTS (CONVERSATIONAL FIRST):
 - Open with a warm greeting using the user's nickname if available. Keep the brand tone and style.
 - Part 1: Short friendly summary in ${language}.
 - Part 2: 3–5 concise bullets for key insights, validations, and follow_ups.
 - Documents: After summary and bullets, include a compact Markdown table of the main fields (only when user asks for OCR/"extract text"/"table" OR when the image is clearly a document like IDs, invoices, receipts, tickets, forms, certificates). No JSON by default.
 - Reasoning tasks (math/puzzles): Short friendly intro, then clear numbered steps, and end with a bold line: "Final Answer: ...".
-- Avoid code fences unless rendering a Markdown table. Keep it brief and helpful.
+- Avoid code fences unless rendering a Markdown table. Keep it brief and helpful.`}
 
 JSON SCHEMA GUIDANCE (use fields that apply):
 - type: "person_photo" | "screenshot" | "document" | "general_photo"
@@ -403,7 +418,8 @@ serve(async (req) => {
           model,
           images = [],
           options = { ocr: true, max_tokens: 1200 },
-          stream = false
+          stream = false,
+          chatSubmode = 'chat' // 'chat' or 'study' - Study mode uses tutor-style responses
         } = body || {};
 
         // Emit meta
@@ -411,6 +427,10 @@ serve(async (req) => {
           const meta = { requestId, provider, model: model || null, imagesCount: Array.isArray(images) ? images.length : 0 };
           console.log('VISION: meta', meta);
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: meta })}\n\n`));
+          // Emit Study mode metadata so frontend shows 📚 Study badge
+          if (chatSubmode === 'study') {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { studyMode: true } })}\n\n`));
+          }
         } catch {}
 
         // Validate images
@@ -453,7 +473,7 @@ serve(async (req) => {
         }
 
         const now = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Qatar' });
-        const systemPrompt = buildSystemPrompt(language, now, personalTouch);
+        const systemPrompt = buildSystemPrompt(language, now, personalTouch, chatSubmode);
 
         // Non-streaming JSON mode
         if (!stream) {

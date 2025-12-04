@@ -1066,7 +1066,8 @@ class WaktiAIV2ServiceClass {
               model: primary === 'claude' ? 'claude-3-5-haiku-20241022' : 'gpt-4o',
               stream: true,
               images: payloadImages,
-              options: { ocr: true, max_tokens: 2000 }
+              options: { ocr: true, max_tokens: 2000 },
+              chatSubmode: chatSubmode // Pass Study mode to Vision for tutor-style responses
             };
             resp = await fetch(`${supabaseUrl}/functions/v1/wakti-vision-stream`, {
               method: 'POST',
