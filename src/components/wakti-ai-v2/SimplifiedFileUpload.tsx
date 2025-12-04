@@ -8,6 +8,7 @@ import { UploadedFile, FileUploadProps } from '@/types/fileUpload';
 interface SimplifiedFileUploadProps extends Omit<FileUploadProps, 'maxFiles'> {
   onUpdateFiles: (files: UploadedFile[]) => void;
   onAutoSwitchMode?: (mode: string) => void;
+  isStudyMode?: boolean; // Hide Vision-specific UI when in Study mode
 }
 
 const imageTypes = [
@@ -27,7 +28,8 @@ export function SimplifiedFileUpload({
   onRemoveFile,
   isUploading,
   disabled = false,
-  onAutoSwitchMode
+  onAutoSwitchMode,
+  isStudyMode = false
 }: SimplifiedFileUploadProps) {
   const { language } = useTheme();
   const { showError } = useToastHelper();
@@ -124,7 +126,8 @@ export function SimplifiedFileUpload({
       onFilesUploaded(validFiles);
       
       // Auto-switch to vision mode when images are uploaded, unless suppressed (e.g., Image mode seed upload)
-      if (onAutoSwitchMode && !options?.suppressAutoSwitch) {
+      // Also skip auto-switch if in Study mode - Study handles images for tutoring
+      if (onAutoSwitchMode && !options?.suppressAutoSwitch && !isStudyMode) {
         console.log('🔄 Auto-switching to vision mode');
         onAutoSwitchMode('vision');
       }
@@ -199,7 +202,8 @@ export function SimplifiedFileUpload({
             ))}
           </div>
 
-          {/* Image Type Selectors */}
+          {/* Image Type Selectors - HIDE in Study mode (Study just needs the image, no Vision categories) */}
+          {!isStudyMode && (
           <div className="space-y-2">
             {uploadedFiles.map((file, index) => (
               <div key={file.id} className="p-2 bg-background/50 rounded-lg border border-border/50">
@@ -242,6 +246,7 @@ export function SimplifiedFileUpload({
               </div>
             ))}
           </div>
+          )}
         </div>
       )}
 

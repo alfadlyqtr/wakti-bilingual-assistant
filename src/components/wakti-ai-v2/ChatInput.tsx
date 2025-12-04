@@ -769,6 +769,7 @@ export function ChatInput({
               onRemoveFile={removeFile}
               isUploading={isUploading}
               disabled={isUploading}
+              isStudyMode={activeTrigger === 'chat' && chatSubmode === 'study'}
               onAutoSwitchMode={(mode) => {
                 if (onTriggerChange) {
                   onTriggerChange(mode);
