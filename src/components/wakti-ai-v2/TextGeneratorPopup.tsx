@@ -2,17 +2,18 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
 import DiagramsTab from './DiagramsTab';
+import PresentationTab from './PresentationTab';
 
 interface TextGeneratorPopupProps {
   isOpen?: boolean;
   onClose: () => void;
   onTextGenerated: (text: string, mode: 'compose' | 'reply') => void;
   renderAsPage?: boolean;
-  initialTab?: 'compose' | 'reply' | 'generated' | 'diagrams';
+  initialTab?: 'compose' | 'reply' | 'generated' | 'diagrams' | 'presentation';
 }
 
 type Mode = 'compose' | 'reply';
-type Tab = 'compose' | 'reply' | 'generated' | 'diagrams';
+type Tab = 'compose' | 'reply' | 'generated' | 'diagrams' | 'presentation';
 type Language = 'en' | 'ar';
 type ModelPreference = 'gpt-4o' | 'gpt-4o-mini' | 'auto';
 
@@ -340,7 +341,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
 
         {/* Tabs */}
         <div className="px-6 pt-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
             <button
               onClick={() => { setActiveTab('compose'); setMode('compose'); }}
               className={`px-3 py-2 rounded-md border text-sm ${activeTab === 'compose' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
@@ -370,6 +371,10 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
               onClick={() => setActiveTab('diagrams')}
               className={`px-3 py-2 rounded-md border text-sm ${activeTab === 'diagrams' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
             >{language === 'ar' ? 'المخططات' : 'Diagrams'}</button>
+            <button
+              onClick={() => setActiveTab('presentation')}
+              className={`px-3 py-2 rounded-md border text-sm bg-gradient-to-r ${activeTab === 'presentation' ? 'from-indigo-600 to-purple-600 text-white' : 'from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 hover:from-indigo-100 hover:to-purple-100 dark:hover:from-indigo-900/40 dark:hover:to-purple-900/40 text-indigo-700 dark:text-indigo-300'}`}
+            >{language === 'ar' ? 'العروض التقديمية' : 'Presentations'}</button>
           </div>
         </div>
 
@@ -618,11 +623,15 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
             <DiagramsTab />
           )}
 
-          {error && activeTab !== 'diagrams' && (
+          {activeTab === 'presentation' && (
+            <PresentationTab />
+          )}
+
+          {error && activeTab !== 'diagrams' && activeTab !== 'presentation' && (
             <div className="mt-4 text-sm text-destructive">{error}</div>
           )}
-          {/* Inline generate button at end of content (not sticky) - hide for diagrams */}
-          {activeTab !== 'diagrams' && (
+          {/* Inline generate button at end of content (not sticky) - hide for diagrams and presentation */}
+          {activeTab !== 'diagrams' && activeTab !== 'presentation' && (
           <div className="mt-6 flex justify-end">
               <button
                 className={`px-5 py-2.5 rounded-full text-sm font-medium shadow-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500 hover:shadow-xl transition-all ${canGenerate ? '' : 'opacity-60 cursor-not-allowed'}`}

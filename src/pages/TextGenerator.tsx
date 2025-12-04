@@ -7,7 +7,7 @@ export default function TextGenerator() {
   const { language } = useTheme();
   const { user } = useAuth();
   const [showPopup, setShowPopup] = useState(false);
-  const [initialTab, setInitialTab] = useState<'compose' | 'reply' | 'generated' | 'diagrams'>('compose');
+  const [initialTab, setInitialTab] = useState<'compose' | 'reply' | 'generated' | 'diagrams' | 'presentation'>('compose');
   
   // Debug
   console.log('TextGenerator render', { showPopup, initialTab });
@@ -23,7 +23,7 @@ export default function TextGenerator() {
           </div>
           {/* Top tabs under title (welcome-first flow) */}
           <div className="mb-3">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 p-1 rounded-2xl border border-border/70 bg-white/60 dark:bg-white/5 shadow-sm" role="tablist" aria-label={language === 'ar' ? 'التبويبات' : 'Tabs'}>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2 p-1 rounded-2xl border border-border/70 bg-white/60 dark:bg-white/5 shadow-sm" role="tablist" aria-label={language === 'ar' ? 'التبويبات' : 'Tabs'}>
               <button
                 type="button"
                 role="tab"
@@ -64,6 +64,16 @@ export default function TextGenerator() {
               >
                 {language === 'ar' ? 'المخططات' : 'Diagrams'}
               </button>
+              <button
+                type="button"
+                role="tab"
+                onClick={() => { setInitialTab('presentation'); setShowPopup(true); }}
+                className={`h-12 rounded-xl border text-sm font-medium transition-all
+                  bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg hover:shadow-xl hover:from-indigo-400 hover:to-purple-500
+                `}
+              >
+                {language === 'ar' ? 'العروض' : 'Presentations'}
+              </button>
             </div>
           </div>
           {/* Welcome panel */}
@@ -80,7 +90,7 @@ export default function TextGenerator() {
                   : 'Write faster in your style: start from scratch, craft a smart reply, or improve existing text.'}
               </p>
             </div>
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
+            <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-3 mt-3">
               <button
                 type="button"
                 onClick={() => { setInitialTab('compose'); setShowPopup(true); }}
@@ -130,15 +140,30 @@ export default function TextGenerator() {
                 type="button"
                 onClick={() => { setInitialTab('diagrams'); setShowPopup(true); }}
                 aria-label={language === 'ar' ? 'افتح تبويب المخططات' : 'Open Diagrams tab'}
-                className="text-left rounded-xl border border-border/50 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 p-4 hover:from-indigo-100 hover:to-purple-100 dark:hover:from-indigo-900/40 dark:hover:to-purple-900/40 active:scale-[0.99] transition-colors ring-1 ring-indigo-200/50 dark:ring-indigo-800/30"
+                className="text-left rounded-xl border border-border/50 bg-white/60 dark:bg-white/5 p-4 hover:bg-white/80 dark:hover:bg-white/10 active:scale-[0.99] transition-colors"
               >
-                <div className="text-sm font-medium mb-1 text-indigo-700 dark:text-indigo-300">
+                <div className="text-sm font-medium mb-1">
                   {language === 'ar' ? 'المخططات' : 'Diagrams'}
                 </div>
-                <div className="text-xs text-indigo-600/70 dark:text-indigo-400/70">
+                <div className="text-xs text-muted-foreground">
                   {language === 'ar'
                     ? 'حوّل أفكارك إلى مخططات احترافية بضغطة واحدة.'
                     : 'Transform your ideas into professional diagrams instantly.'}
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setInitialTab('presentation'); setShowPopup(true); }}
+                aria-label={language === 'ar' ? 'افتح تبويب العروض التقديمية' : 'Open Presentations tab'}
+                className="text-left rounded-xl border border-border/50 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 p-4 hover:from-indigo-100 hover:to-purple-100 dark:hover:from-indigo-900/40 dark:hover:to-purple-900/40 active:scale-[0.99] transition-colors ring-1 ring-indigo-200/50 dark:ring-indigo-800/30"
+              >
+                <div className="text-sm font-medium mb-1 text-indigo-700 dark:text-indigo-300">
+                  {language === 'ar' ? 'العروض التقديمية' : 'Presentations'}
+                </div>
+                <div className="text-xs text-indigo-600/70 dark:text-indigo-400/70">
+                  {language === 'ar'
+                    ? 'أنشئ عروضًا تقديمية احترافية باستخدام الذكاء الاصطناعي.'
+                    : 'Create professional AI-powered presentations in minutes.'}
                 </div>
               </button>
             </div>
