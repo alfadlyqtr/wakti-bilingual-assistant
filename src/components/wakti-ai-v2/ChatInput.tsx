@@ -582,8 +582,9 @@ export function ChatInput({
       }
       if (validFiles.length > 0) {
         handleFilesUploaded(validFiles);
-        // Auto-switch to Vision to reflect image context when in Chat
-        if (activeTrigger === 'chat' && onTriggerChange) {
+        // Auto-switch to Vision to reflect image context when in Chat (but NOT in Study mode)
+        // Study mode keeps images for tutoring without switching to Vision
+        if (activeTrigger === 'chat' && chatSubmode !== 'study' && onTriggerChange) {
           onTriggerChange('vision');
           setWasAutoSwitchedToVision(true);
         }

@@ -93,7 +93,7 @@ async function streamGemini(model, contents, onToken, systemInstruction, generat
 }
 
 // Build system prompt with Personal Touch
-function buildSystemPrompt(language, currentDate, personalTouch, activeTrigger) {
+function buildSystemPrompt(language, currentDate, personalTouch, activeTrigger, chatSubmode = 'chat') {
   const pt = personalTouch || {};
   const userNick = (pt.nickname || '').toString().trim();
   const aiNick = (pt.ai_nickname || '').toString().trim();
@@ -154,7 +154,22 @@ CRITICAL OUTPUT FORMAT
 - Paragraph: for conversational replies.
 - Use Markdown links ONLY when a real URL is provided.
 
-${activeTrigger === 'search' ? `
+${chatSubmode === 'study' ? `
+📚 STUDY MODE (TUTOR STYLE) - CRITICAL
+You are now in STUDY MODE. Act as a friendly, patient tutor who helps the user learn and understand.
+
+STUDY MODE RULES:
+1. ANSWER FIRST: Always start with the clear, direct answer or key takeaway (1-2 sentences).
+2. EXPLAIN STEP-BY-STEP: Break down the reasoning or concept in simple, numbered steps.
+3. USE SIMPLE LANGUAGE: Avoid jargon. Explain like teaching a curious student.
+4. STRUCTURE CLEARLY: Use bullet points, numbered lists, or short paragraphs. Never a wall of text.
+5. ADD EXAMPLES: When helpful, include a real-world example or analogy.
+6. PRACTICE QUESTIONS (optional): For suitable topics, end with 1-2 short practice questions to test understanding.
+7. ENCOURAGE: Be supportive and encouraging. Learning should feel positive.
+
+This applies to ALL subjects: math, science, history, languages, programming, exam prep, general knowledge, etc.
+If the user uploads an image (photo of notes, textbook, problem), analyze it and teach based on what you see.
+` : ''}${activeTrigger === 'search' ? `
 CRITICAL SEARCH FORMATTING RULES (NON-NEGOTIABLE)
 You are in SEARCH MODE. You will receive search results in the conversation.
 
@@ -491,8 +506,8 @@ serve(async (req) => {
           weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Qatar'
         });
 
-        // Build enhanced system prompt
-        const systemPrompt = buildSystemPrompt(language, currentDate, personalTouch, activeTrigger);
+        // Build enhanced system prompt (pass chatSubmode for Study mode tutor instructions)
+        const systemPrompt = buildSystemPrompt(language, currentDate, personalTouch, activeTrigger, chatSubmode);
         
         const messages = [
           { role: 'system', content: systemPrompt }
@@ -550,9 +565,9 @@ serve(async (req) => {
             messages.push({ role: 'user', content: message });
           }
         } else {
-          // Chat mode - check if we should use Wolfram
+          // Chat mode - check if we should use Wolfram (only for math/science queries, NOT forced by Study mode)
           let wolframContext = '';
-          const useWolfram = chatSubmode === 'study' || (activeTrigger === 'chat' && isWolframQuery(message));
+          const useWolfram = isWolframQuery(message); // Wolfram for math/science queries in both Chat and Study
           
           if (useWolfram) {
             console.log(`🔢 WOLFRAM: ${chatSubmode === 'study' ? 'Study mode' : 'Facts booster'} - querying...`);
