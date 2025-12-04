@@ -499,9 +499,11 @@ export function ChatInput({
       let finalTrigger = activeTrigger;
       
       // AUTO-SWITCH TO VISION MODE ONLY if not already in image mode
+      // BUT: Do NOT switch if we're in Study mode - Study handles images for tutoring
       if (uploadedFiles.length > 0 && activeTrigger !== 'image') {
         const hasImages = uploadedFiles.some(file => file.type?.startsWith('image/'));
-        if (hasImages && activeTrigger !== 'video' && activeTrigger !== 'vision') {
+        const isStudyMode = activeTrigger === 'chat' && chatSubmode === 'study';
+        if (hasImages && activeTrigger !== 'video' && activeTrigger !== 'vision' && !isStudyMode) {
           finalTrigger = 'vision';
           setWasAutoSwitchedToVision(true);
           console.log('🔍 AUTO-SWITCH: Images detected, switching to vision mode');

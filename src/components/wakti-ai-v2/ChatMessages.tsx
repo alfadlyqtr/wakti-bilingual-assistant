@@ -611,9 +611,10 @@ export function ChatMessages({
     }
 
     // For assistant messages, use the saved intent or detect from content
-    // Check for Study mode (Wolfram) first
+    // Check for Study mode first (either via studyMode flag or Wolfram metadata)
+    const studyModeFlag = (message as any)?.metadata?.studyMode;
     const wolframMeta = (message as any)?.metadata?.wolfram;
-    if (wolframMeta?.mode === 'study') return '📚 Study';
+    if (studyModeFlag || wolframMeta?.mode === 'study') return '📚 Study';
     
     if (message.intent === 'vision') return '👁️ Vision';
     if (message.intent === 'search') {

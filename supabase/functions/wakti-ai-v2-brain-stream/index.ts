@@ -565,6 +565,13 @@ serve(async (req) => {
             messages.push({ role: 'user', content: message });
           }
         } else {
+          // Emit Study mode metadata so frontend can show 📚 Study badge (even without Wolfram)
+          if (chatSubmode === 'study') {
+            try {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { studyMode: true } })}\n\n`));
+            } catch {}
+          }
+
           // Chat mode - check if we should use Wolfram (only for math/science queries, NOT forced by Study mode)
           let wolframContext = '';
           const useWolfram = isWolframQuery(message); // Wolfram for math/science queries in both Chat and Study
