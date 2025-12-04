@@ -1275,7 +1275,31 @@ export function ChatInput({
                </div>
 
             {/* DYNAMIC Quick Reply Pills - REACTIVE TO DROPDOWN SELECTION (hidden during mobile keyboard) */}
-            {!isKeyboardMode && uploadedFiles.length > 0 && message === '' && !isInputCollapsed && (
+            {/* STUDY MODE: Show Study-specific chips instead of Vision chips */}
+            {!isKeyboardMode && uploadedFiles.length > 0 && message === '' && !isInputCollapsed && activeTrigger === 'chat' && chatSubmode === 'study' && (
+              <div className="flex gap-2 flex-wrap px-3 py-2 mb-2 border-b border-purple-200/30 hide-on-keyboard">
+                <button
+                  onClick={() => setMessage('Explain this step by step')}
+                  className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-full text-sm"
+                >
+                  📚 {language === 'ar' ? 'اشرح خطوة بخطوة' : 'Explain step by step'}
+                </button>
+                <button
+                  onClick={() => setMessage('Solve this and teach me how')}
+                  className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-full text-sm"
+                >
+                  🧠 {language === 'ar' ? 'حل وعلمني' : 'Solve and teach me'}
+                </button>
+                <button
+                  onClick={() => setMessage('What are the key concepts here?')}
+                  className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-full text-sm"
+                >
+                  💡 {language === 'ar' ? 'ما المفاهيم الرئيسية؟' : 'Key concepts?'}
+                </button>
+              </div>
+            )}
+            {/* VISION/IMAGE MODE: Show Vision-specific chips (NOT in Study mode) */}
+            {!isKeyboardMode && uploadedFiles.length > 0 && message === '' && !isInputCollapsed && !(activeTrigger === 'chat' && chatSubmode === 'study') && (
               <div className="flex gap-2 flex-wrap px-3 py-2 mb-2 border-b border-white/20 hide-on-keyboard">
                 {/* Background Removal: show only a single bilingual chip */}
                 {activeTrigger === 'image' && imageMode === 'background-removal' ? (
