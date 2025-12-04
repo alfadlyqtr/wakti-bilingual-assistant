@@ -333,7 +333,8 @@ const WaktiAIV2 = () => {
           },
           (metadata: any) => { streamMeta = metadata || {}; },
           (err: string) => { console.error('Vision stream error:', err); },
-          controller.signal
+          controller.signal,
+          chatSubmodeParam || chatSubmode // Pass chatSubmode for Study mode support in Vision
         );
 
         const finalAssistantMessage: AIMessage = {
