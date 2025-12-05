@@ -97,8 +97,8 @@ export function clearStaleTokensBeforeInit(): void {
   }
 }
 
-// Clear stale tokens before creating the client
-clearStaleTokensBeforeInit();
+// Disabled: Let Supabase SDK handle token refresh instead of aggressively wiping on load
+// clearStaleTokensBeforeInit();
 
 // Export the URL for use in other services
 export const SUPABASE_URL = effectiveUrl;
@@ -137,21 +137,30 @@ if (typeof window !== 'undefined') {
     
     if (isJWTError) {
       isRecovering = true;
-      console.log('[Auth] Auto-recovering from JWT error:', errorStr);
+      console.log('[Auth] JWT error detected, waiting for refresh to complete:', errorStr);
       
-      // Clear all auth data
-      clearAllSupabaseAuthKeys();
-      
-      // Sign out via Supabase (best effort)
-      supabase.auth.signOut().catch(() => {});
-      
-      // Redirect to login after a brief delay
-      setTimeout(() => {
+      // Wait 2 seconds to let Supabase auto-refresh complete, then re-check
+      setTimeout(async () => {
+        try {
+          const { data } = await supabase.auth.getSession();
+          if (data?.session) {
+            // Session recovered - do NOT logout
+            console.log('[Auth] Session recovered after JWT error, staying logged in');
+            isRecovering = false;
+            return;
+          }
+        } catch (_) {}
+        
+        // Session is truly dead - now logout
+        console.log('[Auth] Session not recovered, logging out');
+        clearAllSupabaseAuthKeys();
+        supabase.auth.signOut().catch(() => {});
+        
         if (window.location.pathname !== '/login') {
           window.location.href = '/login';
         }
         isRecovering = false;
-      }, 100);
+      }, 2000);
     }
   };
   

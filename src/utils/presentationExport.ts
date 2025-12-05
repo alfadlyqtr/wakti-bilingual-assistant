@@ -101,8 +101,8 @@ export async function exportSlidesToPDF(
 }
 
 /**
- * Export slides as PDF by rendering each slide programmatically (no DOM capture)
- * This creates clean, consistent PDF output
+ * Export slides as PDF by rendering each slide to canvas first
+ * This properly supports Arabic text by using the browser's text rendering
  */
 export async function exportSlidesToPDFClean(
   slides: ExportSlide[],
@@ -120,106 +120,176 @@ export async function exportSlidesToPDFClean(
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const colors = THEME_COLORS[theme] || THEME_COLORS.starter;
-  const margin = 15;
   const isRtl = language === 'ar';
 
-  for (let i = 0; i < slides.length; i++) {
-    if (i > 0) {
-      doc.addPage([297, 167], 'landscape');
-    }
+  // Create a hidden container for rendering slides
+  const container = document.createElement('div');
+  container.style.cssText = 'position: fixed; left: -9999px; top: 0; width: 1920px; height: 1080px;';
+  document.body.appendChild(container);
 
-    onProgress?.(i + 1, slides.length);
-    const slide = slides[i];
+  try {
+    for (let i = 0; i < slides.length; i++) {
+      if (i > 0) {
+        doc.addPage([297, 167], 'landscape');
+      }
 
-    // Background
-    doc.setFillColor(colors.bg);
-    doc.rect(0, 0, pageWidth, pageHeight, 'F');
+      onProgress?.(i + 1, slides.length);
+      const slide = slides[i];
 
-    // Title
-    doc.setTextColor(colors.text);
-    doc.setFontSize(24);
-    const titleX = isRtl ? pageWidth - margin : margin;
-    doc.text(slide.title, titleX, margin + 15, { align: isRtl ? 'right' : 'left' });
-
-    // Accent dots under title
-    const accentColor = colors.accent;
-    const r = parseInt(accentColor.slice(1, 3), 16);
-    const g = parseInt(accentColor.slice(3, 5), 16);
-    const b = parseInt(accentColor.slice(5, 7), 16);
-    doc.setFillColor(r, g, b);
-    for (let d = 0; d < 3; d++) {
-      const dotX = isRtl ? pageWidth - margin - d * 6 : margin + d * 6;
-      doc.circle(dotX, margin + 22, 1.5, 'F');
-    }
-
-    // Subtitle
-    if (slide.subtitle) {
-      doc.setFontSize(14);
-      doc.setTextColor(200, 200, 200);
-      doc.text(slide.subtitle, titleX, margin + 32, { align: isRtl ? 'right' : 'left' });
-    }
-
-    // Bullets
-    if (slide.bullets && slide.bullets.length > 0) {
-      doc.setFontSize(11);
-      doc.setTextColor(220, 220, 220);
-      let bulletY = margin + 45;
+      // Create slide HTML with proper Arabic support
+      container.innerHTML = renderSlideToHTML(slide, colors, isRtl, language);
       
-      for (const bullet of slide.bullets.slice(0, 6)) {
-        // Clean markdown bold markers
-        const cleanBullet = bullet.replace(/\*\*/g, '');
-        
-        // Bullet point
-        doc.setFillColor(r, g, b);
-        const bulletX = isRtl ? pageWidth - margin - 2 : margin + 2;
-        doc.circle(bulletX, bulletY - 1, 1, 'F');
-        
-        // Text
-        const textX = isRtl ? pageWidth - margin - 8 : margin + 8;
-        const maxWidth = pageWidth / 2 - margin - 10;
-        const lines = doc.splitTextToSize(cleanBullet, maxWidth);
-        doc.text(lines, textX, bulletY, { align: isRtl ? 'right' : 'left' });
-        bulletY += lines.length * 6 + 4;
-      }
+      // Wait for fonts to load
+      await document.fonts.ready;
+      
+      // Capture with html2canvas
+      const canvas = await html2canvas(container.firstElementChild as HTMLElement, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: colors.bg,
+      });
+
+      // Add to PDF
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
     }
-
-    // Image placeholder (right side for content slides)
-    if (slide.imageUrl && slide.role !== 'cover' && slide.role !== 'thank_you') {
-      try {
-        // Try to load and add the image
-        const imgWidth = pageWidth / 2 - margin * 2;
-        const imgHeight = pageHeight - margin * 2 - 30;
-        const imgX = isRtl ? margin : pageWidth / 2 + margin / 2;
-        const imgY = margin + 30;
-        
-        // Add image with rounded corners effect (just add the image)
-        doc.addImage(slide.imageUrl, 'JPEG', imgX, imgY, imgWidth, imgHeight);
-      } catch (err) {
-        // If image fails, draw a placeholder
-        doc.setFillColor(50, 50, 60);
-        doc.roundedRect(
-          isRtl ? margin : pageWidth / 2 + margin / 2,
-          margin + 30,
-          pageWidth / 2 - margin * 2,
-          pageHeight - margin * 2 - 30,
-          3, 3, 'F'
-        );
-      }
-    }
-
-    // Slide number
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    doc.text(`${slide.slideNumber}`, pageWidth - 10, pageHeight - 5, { align: 'right' });
-
-    // Footer branding
-    doc.setFontSize(8);
-    doc.setTextColor(80, 80, 80);
-    const brandText = language === 'ar' ? 'Wakti AI وقتي' : 'Wakti AI';
-    doc.text(brandText, margin, pageHeight - 5);
+  } finally {
+    // Clean up
+    document.body.removeChild(container);
   }
 
   return doc.output('blob');
+}
+
+/**
+ * Render a slide to HTML for canvas capture - Professional layout
+ */
+function renderSlideToHTML(
+  slide: ExportSlide, 
+  colors: { bg: string; accent: string; text: string },
+  isRtl: boolean,
+  language: 'en' | 'ar'
+): string {
+  const cleanBullets = (slide.bullets || []).map(b => b.replace(/\*\*/g, '')).slice(0, 5);
+  const hasImage = slide.imageUrl && slide.role !== 'cover' && slide.role !== 'thank_you';
+  const isCoverOrThankYou = slide.role === 'cover' || slide.role === 'thank_you';
+
+  // Cover/Thank You slide - centered layout
+  if (isCoverOrThankYou) {
+    return `
+      <div style="
+        width: 1920px; 
+        height: 1080px; 
+        background: ${colors.bg}; 
+        font-family: 'Noto Sans Arabic', 'Segoe UI', sans-serif;
+        direction: ${isRtl ? 'rtl' : 'ltr'};
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 80px;
+        box-sizing: border-box;
+      ">
+        <h1 style="font-size: 72px; font-weight: bold; color: ${colors.text}; margin: 0 0 24px 0; max-width: 80%;">${slide.title}</h1>
+        <div style="display: flex; gap: 12px; margin-bottom: 32px;">
+          <div style="width: 14px; height: 14px; border-radius: 50%; background: ${colors.accent};"></div>
+          <div style="width: 14px; height: 14px; border-radius: 50%; background: ${colors.accent};"></div>
+          <div style="width: 14px; height: 14px; border-radius: 50%; background: ${colors.accent};"></div>
+        </div>
+        ${slide.subtitle ? `<p style="font-size: 32px; color: #94a3b8; margin: 0;">${slide.subtitle}</p>` : ''}
+        <div style="position: absolute; bottom: 40px; left: 0; right: 0; display: flex; justify-content: space-between; padding: 0 60px; color: #64748b; font-size: 18px;">
+          <span>${language === 'ar' ? 'Wakti AI وقتي' : 'Wakti AI'}</span>
+          <span>${slide.slideNumber}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  // Content slide with image - two column layout
+  if (hasImage) {
+    const bulletHtml = cleanBullets.map(b => `
+      <div style="display: flex; align-items: flex-start; gap: 16px; margin-bottom: 20px; ${isRtl ? 'flex-direction: row-reverse; text-align: right;' : ''}">
+        <div style="width: 12px; height: 12px; border-radius: 50%; background: ${colors.accent}; flex-shrink: 0; margin-top: 8px;"></div>
+        <div style="font-size: 24px; line-height: 1.6; color: #e2e8f0; flex: 1;">${b}</div>
+      </div>
+    `).join('');
+
+    return `
+      <div style="
+        width: 1920px; 
+        height: 1080px; 
+        background: ${colors.bg}; 
+        font-family: 'Noto Sans Arabic', 'Segoe UI', sans-serif;
+        direction: ${isRtl ? 'rtl' : 'ltr'};
+        display: flex;
+        padding: 60px;
+        gap: 60px;
+        box-sizing: border-box;
+      ">
+        <!-- Text Column -->
+        <div style="flex: 1; display: flex; flex-direction: column; ${isRtl ? 'text-align: right;' : ''}">
+          <h1 style="font-size: 52px; font-weight: bold; color: ${colors.text}; margin: 0 0 20px 0; line-height: 1.2;">${slide.title}</h1>
+          <div style="display: flex; gap: 10px; margin-bottom: 32px; ${isRtl ? 'flex-direction: row-reverse;' : ''}">
+            <div style="width: 12px; height: 12px; border-radius: 50%; background: ${colors.accent};"></div>
+            <div style="width: 12px; height: 12px; border-radius: 50%; background: ${colors.accent};"></div>
+            <div style="width: 12px; height: 12px; border-radius: 50%; background: ${colors.accent};"></div>
+          </div>
+          <div style="flex: 1; padding-${isRtl ? 'left' : 'right'}: 20px;">
+            ${bulletHtml}
+          </div>
+        </div>
+        
+        <!-- Image Column -->
+        <div style="width: 45%; display: flex; align-items: center; justify-content: center;">
+          <img src="${slide.imageUrl}" style="width: 100%; height: auto; max-height: 100%; object-fit: cover; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.3);" crossorigin="anonymous" />
+        </div>
+        
+        <!-- Footer -->
+        <div style="position: absolute; bottom: 30px; left: 60px; right: 60px; display: flex; justify-content: space-between; color: #64748b; font-size: 16px;">
+          <span>${language === 'ar' ? 'Wakti AI وقتي' : 'Wakti AI'}</span>
+          <span>${slide.slideNumber}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  // Content slide without image - full width bullets
+  const bulletHtml = cleanBullets.map(b => `
+    <div style="display: flex; align-items: flex-start; gap: 20px; margin-bottom: 28px; ${isRtl ? 'flex-direction: row-reverse; text-align: right;' : ''}">
+      <div style="width: 14px; height: 14px; border-radius: 50%; background: ${colors.accent}; flex-shrink: 0; margin-top: 10px;"></div>
+      <div style="font-size: 28px; line-height: 1.6; color: #e2e8f0; flex: 1;">${b}</div>
+    </div>
+  `).join('');
+
+  return `
+    <div style="
+      width: 1920px; 
+      height: 1080px; 
+      background: ${colors.bg}; 
+      font-family: 'Noto Sans Arabic', 'Segoe UI', sans-serif;
+      direction: ${isRtl ? 'rtl' : 'ltr'};
+      display: flex;
+      flex-direction: column;
+      padding: 60px 100px;
+      box-sizing: border-box;
+    ">
+      <h1 style="font-size: 56px; font-weight: bold; color: ${colors.text}; margin: 0 0 20px 0; ${isRtl ? 'text-align: right;' : ''}">${slide.title}</h1>
+      <div style="display: flex; gap: 10px; margin-bottom: 40px; ${isRtl ? 'flex-direction: row-reverse;' : ''}">
+        <div style="width: 14px; height: 14px; border-radius: 50%; background: ${colors.accent};"></div>
+        <div style="width: 14px; height: 14px; border-radius: 50%; background: ${colors.accent};"></div>
+        <div style="width: 14px; height: 14px; border-radius: 50%; background: ${colors.accent};"></div>
+      </div>
+      <div style="flex: 1; max-width: 85%;">
+        ${bulletHtml}
+      </div>
+      <div style="display: flex; justify-content: space-between; color: #64748b; font-size: 16px; margin-top: auto;">
+        <span>${language === 'ar' ? 'Wakti AI وقتي' : 'Wakti AI'}</span>
+        <span>${slide.slideNumber}</span>
+      </div>
+    </div>
+  `;
 }
 
 /**

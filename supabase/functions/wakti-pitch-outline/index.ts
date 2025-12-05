@@ -288,32 +288,52 @@ CRITICAL RULES:
 }
 
 function buildArabicPrompt(brief, slideCount) {
-  return `أنت خبير في تصميم العروض التقديمية. أنشئ بالضبط ${slideCount} شريحة (لا أكثر ولا أقل).
+  return `أنت خبير في تصميم العروض التقديمية المدرسية والتجارية. أنشئ عرضاً تقديمياً مفصلاً وغنياً بالمحتوى.
 
 الموضوع: ${brief.subject}
 الهدف: ${brief.objective}
 الجمهور: ${brief.audience}
 النبرة: ${brief.tone}
 
-مهم جداً: أنشئ بالضبط ${slideCount} شريحة.
+أنشئ بالضبط ${slideCount} شريحة مع محتوى مفصل وغني.
 
-أجب بـ JSON - كل شريحة يجب أن تحتوي على columns أو imageHint:
+أجب بـ JSON صالح فقط:
 {
   "slides": [
     {
       "slideNumber": 1,
       "role": "cover",
-      "title": "العنوان الرئيسي",
-      "subtitle": "شعار هنا",
+      "title": "عنوان جذاب ومقنع",
+      "subtitle": "عنوان فرعي توضيحي",
       "bullets": [],
-      "imageHint": "${brief.subject} professional"
+      "imageHint": "education technology classroom"
     },
-    ... حتى slideNumber ${slideCount}
+    {
+      "slideNumber": 2,
+      "role": "overview",
+      "title": "نظرة عامة على المحتوى",
+      "bullets": [
+        "**المقدمة** - خلفية الموضوع وسياقه مع تفاصيل محددة",
+        "**الحقائق الرئيسية** - إحصائيات ونقاط بيانات مهمة",
+        "**المواضيع الأساسية** - المجالات الرئيسية التي سنستكشفها",
+        "**التأثير** - الأهمية والآثار في العالم الحقيقي"
+      ],
+      "imageHint": "presentation overview business"
+    },
+    ... أكمل حتى slideNumber ${slideCount}
   ]
 }
 
-القواعد:
-1. بالضبط ${slideCount} شريحة - الأولى غلاف والأخيرة شكر
-2. كل شريحة وسطى يجب أن تحتوي على columns أو imageHint
-3. استخدم **نص عريض** للإحصائيات`;
+قواعد imageHint (مهم جداً):
+- يجب أن يكون imageHint بالإنجليزية فقط (2-4 كلمات بسيطة)
+- استخدم كلمات مرئية ملموسة: people, building, technology, classroom, meeting
+- لا تستخدم كلمات مجردة: overview, infographic, concept, illustration
+
+القواعد الحاسمة:
+1. أنشئ بالضبط ${slideCount} شريحة - الأولى غلاف والأخيرة شكر
+2. كل نقطة يجب أن تكون مفصلة (15-25 كلمة على الأقل)
+3. أضف إحصائيات وتواريخ وأسماء وحقائق محددة
+4. استخدم **نص عريض** للمصطلحات والإحصائيات الرئيسية
+5. جميع الشرائح (ما عدا الغلاف والشكر) يجب أن تحتوي على 4-6 نقاط مفصلة
+6. اجعل المحتوى تعليمياً ومعلوماتياً وليس عاماً`;
 }

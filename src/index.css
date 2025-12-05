@@ -301,10 +301,29 @@ textarea::placeholder {
     box-shadow: var(--shadow-vibrant), var(--glow-primary);
   }
 
-  /* Language specific */
+  /* Language specific - RTL support for Arabic */
   .rtl {
     direction: rtl;
     text-align: right;
+  }
+  
+  /* Arabic font support */
+  html[lang="ar"],
+  html[lang="ar"] * {
+    font-family: 'Noto Sans Arabic', 'Segoe UI', 'Tahoma', 'Arial', sans-serif;
+  }
+  
+  /* Ensure proper text rendering for Arabic */
+  html[lang="ar"] input,
+  html[lang="ar"] textarea,
+  html[lang="ar"] select {
+    text-align: right;
+    direction: rtl;
+  }
+  
+  /* Fix flexbox direction for RTL */
+  html[dir="rtl"] .flex-row {
+    flex-direction: row-reverse;
   }
   
   /* Enhanced draggable widgets */

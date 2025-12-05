@@ -292,19 +292,20 @@ const renderBoldText = (text: string, themeKey: string = 'starter'): React.React
   });
 };
 
-// Helper to get font size class from style
+// Helper to get font size class from style - optimized for mobile readability
 const getFontSizeClass = (size?: 'small' | 'medium' | 'large', type: 'title' | 'bullet' = 'bullet') => {
   if (type === 'title') {
     switch (size) {
-      case 'small': return 'text-lg md:text-xl';
-      case 'large': return 'text-2xl md:text-4xl';
-      default: return 'text-xl md:text-2xl';
+      case 'small': return 'text-base sm:text-lg md:text-xl lg:text-2xl';
+      case 'large': return 'text-xl sm:text-2xl md:text-3xl lg:text-4xl';
+      default: return 'text-lg sm:text-xl md:text-2xl lg:text-3xl';
     }
   }
+  // Bullets - more readable on mobile
   switch (size) {
-    case 'small': return 'text-xs';
-    case 'large': return 'text-sm md:text-base';
-    default: return 'text-xs md:text-sm';
+    case 'small': return 'text-xs sm:text-sm';
+    case 'large': return 'text-sm sm:text-base md:text-lg';
+    default: return 'text-xs sm:text-sm md:text-base';
   }
 };
 
@@ -367,7 +368,7 @@ const PresentationTab: React.FC = () => {
 
   // Topic input
   const [topic, setTopic] = useState('');
-  const [slideCount, setSlideCount] = useState(10);
+  const [slideCount, setSlideCount] = useState(4);
   const [researchMode, setResearchMode] = useState(false);
 
   // Brief
@@ -543,9 +544,12 @@ const PresentationTab: React.FC = () => {
     setIsExporting(true);
     setShowExportMenu(false);
     
+    // Dismiss any existing toasts first
+    toast.dismiss();
+    
+    const toastId = toast.loading(language === 'ar' ? 'جارٍ إنشاء PDF...' : 'Creating PDF...');
+    
     try {
-      toast.loading(language === 'ar' ? 'جارٍ إنشاء PDF...' : 'Creating PDF...');
-
       const pdfBlob = await exportSlidesToPDFClean(
         slides,
         brief?.subject || topic,
@@ -556,9 +560,11 @@ const PresentationTab: React.FC = () => {
       const filename = generateFilename(brief?.subject || topic, 'pdf');
       downloadBlob(pdfBlob, filename);
 
+      toast.dismiss(toastId);
       toast.success(language === 'ar' ? `تم حفظ ${filename}` : `Saved ${filename}`);
     } catch (err) {
       console.error('PDF export error:', err);
+      toast.dismiss(toastId);
       toast.error(language === 'ar' ? 'فشل في تصدير PDF' : 'Failed to export PDF');
     } finally {
       setIsExporting(false);
@@ -571,9 +577,12 @@ const PresentationTab: React.FC = () => {
     setIsExporting(true);
     setShowExportMenu(false);
     
+    // Dismiss any existing toasts first
+    toast.dismiss();
+    
+    const toastId = toast.loading(language === 'ar' ? 'جارٍ إنشاء PowerPoint...' : 'Creating PowerPoint...');
+    
     try {
-      toast.loading(language === 'ar' ? 'جارٍ إنشاء PowerPoint...' : 'Creating PowerPoint...');
-
       const pptxBlob = await exportSlidesToPPTX(
         slides,
         brief?.subject || topic,
@@ -584,9 +593,11 @@ const PresentationTab: React.FC = () => {
       const filename = generateFilename(brief?.subject || topic, 'pptx');
       downloadBlob(pptxBlob, filename);
 
+      toast.dismiss(toastId);
       toast.success(language === 'ar' ? `تم حفظ ${filename}` : `Saved ${filename}`);
     } catch (err) {
       console.error('PPTX export error:', err);
+      toast.dismiss(toastId);
       toast.error(language === 'ar' ? 'فشل في تصدير PowerPoint' : 'Failed to export PowerPoint');
     } finally {
       setIsExporting(false);
@@ -1139,16 +1150,16 @@ const PresentationTab: React.FC = () => {
               'bg-gradient-to-br from-blue-900/20 to-purple-900/10'
             }`} />
             
-            {/* Content area */}
-            <div className="relative h-full p-6 md:p-10 flex flex-col">
+            {/* Content area - better mobile padding */}
+            <div className="relative h-full p-4 sm:p-6 md:p-8 lg:p-10 flex flex-col overflow-hidden">
               {currentSlide && (
                 <>
                   {/* Cover slide - with full edit support including image */}
                   {currentSlide.role === 'cover' && (
                     <div className="flex-1 flex flex-col items-center justify-center text-center">
-                      {/* Cover with image - split layout */}
+                      {/* Cover with image - responsive layout */}
                       {currentSlide.imageUrl ? (
-                        <div className="flex-1 w-full grid grid-cols-2 gap-6 items-center">
+                        <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 items-center">
                           <div className="text-left">
                             <h1 
                               className={`${getFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} ${currentSlide.titleStyle?.fontStyle === 'italic' ? 'italic' : ''} ${currentSlide.titleStyle?.textDecoration === 'underline' ? 'underline' : ''} mb-4 leading-tight`}
@@ -1288,10 +1299,15 @@ const PresentationTab: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Layout: Image Left */}
+                      {/* Layout: Image Left - responsive */}
                       {currentSlide.layoutVariant === 'image_left' && currentSlide.imageUrl && (
-                        <div className="flex-1 grid grid-cols-2 gap-4 min-h-0">
-                          <div className={`rounded-xl overflow-hidden bg-slate-700/50 ${currentSlide.imageSize === 'small' ? 'w-3/4' : currentSlide.imageSize === 'full' ? 'w-full' : 'w-full'}`}>
+                        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 min-h-0">
+                          <div className={`rounded-xl overflow-hidden bg-slate-700/50 flex items-center justify-center ${
+                            currentSlide.imageSize === 'small' ? 'w-1/2 h-1/2' : 
+                            currentSlide.imageSize === 'large' ? 'w-full h-full' : 
+                            currentSlide.imageSize === 'full' ? 'w-full h-full' : 
+                            'w-3/4 h-3/4'
+                          }`}>
                             <img src={currentSlide.imageUrl} alt={currentSlide.title} className={`w-full h-full ${getImageFitClass(currentSlide.imageFit)}`} />
                           </div>
                           <div className="flex flex-col overflow-y-auto pl-2">
@@ -1325,9 +1341,9 @@ const PresentationTab: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Layout: Text Left (default) */}
+                      {/* Layout: Text Left (default) - responsive */}
                       {(!currentSlide.layoutVariant || currentSlide.layoutVariant === 'text_left') && currentSlide.imageUrl && (
-                        <div className="flex-1 grid grid-cols-2 gap-4 min-h-0">
+                        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 min-h-0">
                           <div className="flex flex-col overflow-y-auto pr-2 scrollbar-thin">
                             <ul className="space-y-2">
                               {currentSlide.bullets?.slice(0, 6).map((b, i) => (
@@ -1340,7 +1356,12 @@ const PresentationTab: React.FC = () => {
                               ))}
                             </ul>
                           </div>
-                          <div className={`rounded-xl overflow-hidden bg-slate-700/50 ${currentSlide.imageSize === 'small' ? 'w-3/4 ml-auto' : currentSlide.imageSize === 'full' ? 'w-full' : 'w-full'}`}>
+                          <div className={`rounded-xl overflow-hidden bg-slate-700/50 flex items-center justify-center ${
+                            currentSlide.imageSize === 'small' ? 'w-1/2 h-1/2 ml-auto mt-auto' : 
+                            currentSlide.imageSize === 'large' ? 'w-full h-full' : 
+                            currentSlide.imageSize === 'full' ? 'w-full h-full' : 
+                            'w-3/4 h-3/4 ml-auto'
+                          }`}>
                             <img src={currentSlide.imageUrl} alt={currentSlide.title} className={`w-full h-full ${getImageFitClass(currentSlide.imageFit)}`} />
                           </div>
                         </div>
@@ -1629,12 +1650,12 @@ const PresentationTab: React.FC = () => {
             </div>
 
             {/* Image Edit Section */}
-            <div className="mb-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+            <div className={`mb-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg ${language === 'ar' ? 'text-right' : ''}`} dir={language === 'ar' ? 'rtl' : 'ltr'}>
               <label className="text-xs text-slate-500 mb-2 block font-medium">
                 🖼️ {language === 'ar' ? 'صورة الشريحة' : 'Slide Image'}
               </label>
               <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-3">
+                <div className={`flex items-center gap-3 ${language === 'ar' ? 'flex-row-reverse' : ''}`}>
                   <div className="w-24 h-16 rounded-lg border border-dashed border-slate-300 dark:border-slate-500 overflow-hidden bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px] text-slate-400">
                     {currentSlide.imageUrl ? (
                       <img src={currentSlide.imageUrl} alt="Slide" className={`w-full h-full ${getImageFitClass(currentSlide.imageFit)}`} />
@@ -1646,7 +1667,7 @@ const PresentationTab: React.FC = () => {
                     <input
                       type="file"
                       accept="image/*"
-                      className="text-[11px] file:text-[11px] file:px-3 file:py-1.5 file:mr-2 file:rounded-lg file:border-0 file:bg-primary file:text-white file:cursor-pointer"
+                      className={`text-[11px] file:text-[11px] file:px-3 file:py-1.5 ${language === 'ar' ? 'file:ml-2' : 'file:mr-2'} file:rounded-lg file:border-0 file:bg-primary file:text-white file:cursor-pointer`}
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
@@ -1661,7 +1682,7 @@ const PresentationTab: React.FC = () => {
                         onClick={() => setSlides(prev => prev.map((s, i) =>
                           i === selectedSlideIndex ? { ...s, imageUrl: undefined } : s
                         ))}
-                        className="text-[11px] text-red-500 hover:text-red-600 flex items-center gap-1"
+                        className={`text-[11px] text-red-500 hover:text-red-600 flex items-center gap-1 ${language === 'ar' ? 'flex-row-reverse' : ''}`}
                       >
                         <Trash2 className="w-3 h-3" />
                         {language === 'ar' ? 'إزالة الصورة' : 'Remove Image'}
@@ -1670,34 +1691,38 @@ const PresentationTab: React.FC = () => {
                   </div>
                 </div>
                 {/* Image Size */}
-                <div className="flex items-center gap-2">
+                <div className={`flex items-center gap-2 ${language === 'ar' ? 'flex-row-reverse' : ''}`}>
                   <span className="text-[11px] text-slate-500">{language === 'ar' ? 'حجم الصورة:' : 'Size:'}</span>
-                  {(['small', 'medium', 'large', 'full'] as const).map(size => (
-                    <button
-                      key={size}
-                      onClick={() => setSlides(prev => prev.map((s, i) => 
-                        i === selectedSlideIndex ? { ...s, imageSize: size } : s
-                      ))}
-                      className={`px-2 py-1 text-[10px] rounded ${(currentSlide.imageSize || 'medium') === size ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
-                    >
-                      {size === 'small' ? 'S' : size === 'medium' ? 'M' : size === 'large' ? 'L' : 'Full'}
-                    </button>
-                  ))}
+                  <div className="flex gap-1">
+                    {(['small', 'medium', 'large', 'full'] as const).map(size => (
+                      <button
+                        key={size}
+                        onClick={() => setSlides(prev => prev.map((s, i) => 
+                          i === selectedSlideIndex ? { ...s, imageSize: size } : s
+                        ))}
+                        className={`px-2 py-1 text-[10px] rounded transition-colors ${(currentSlide.imageSize || 'medium') === size ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500'}`}
+                      >
+                        {size === 'small' ? 'S' : size === 'medium' ? 'M' : size === 'large' ? 'L' : 'Full'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 {/* Image Fit Mode */}
-                <div className="flex items-center gap-2">
+                <div className={`flex items-center gap-2 ${language === 'ar' ? 'flex-row-reverse' : ''}`}>
                   <span className="text-[11px] text-slate-500">{language === 'ar' ? 'الوضع:' : 'Mode:'}</span>
-                  {(['crop', 'fit', 'fill'] as const).map(mode => (
-                    <button
-                      key={mode}
-                      onClick={() => setSlides(prev => prev.map((s, i) => 
-                        i === selectedSlideIndex ? { ...s, imageFit: mode } : s
-                      ))}
-                      className={`px-2 py-1 text-[10px] rounded ${(currentSlide.imageFit || 'crop') === mode ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
-                    >
-                      {mode === 'crop' ? 'Crop' : mode === 'fit' ? 'Fit' : 'Fill'}
-                    </button>
-                  ))}
+                  <div className="flex gap-1">
+                    {(['crop', 'fit', 'fill'] as const).map(mode => (
+                      <button
+                        key={mode}
+                        onClick={() => setSlides(prev => prev.map((s, i) => 
+                          i === selectedSlideIndex ? { ...s, imageFit: mode } : s
+                        ))}
+                        className={`px-2 py-1 text-[10px] rounded transition-colors ${(currentSlide.imageFit || 'crop') === mode ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500'}`}
+                      >
+                        {mode === 'crop' ? 'Crop' : mode === 'fit' ? 'Fit' : 'Fill'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
