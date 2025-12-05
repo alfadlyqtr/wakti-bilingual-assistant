@@ -116,6 +116,56 @@ export const supabase = createClient<Database>(effectiveUrl, effectiveAnon, {
   }
 });
 
+/**
+ * Global error handler for JWT/auth errors that slip through
+ * Auto-recovers by clearing auth and redirecting to login
+ */
+if (typeof window !== 'undefined') {
+  // Track if we're already recovering to prevent loops
+  let isRecovering = false;
+  
+  const handleAuthError = (error: any) => {
+    if (isRecovering) return;
+    
+    const errorStr = String(error?.message || error || '');
+    const isJWTError = 
+      errorStr.includes('InvalidJWTToken') ||
+      errorStr.includes('Invalid value for JWT claim') ||
+      errorStr.includes('JWT expired') ||
+      errorStr.includes('invalid_grant') ||
+      errorStr.includes('Invalid Refresh Token');
+    
+    if (isJWTError) {
+      isRecovering = true;
+      console.log('[Auth] Auto-recovering from JWT error:', errorStr);
+      
+      // Clear all auth data
+      clearAllSupabaseAuthKeys();
+      
+      // Sign out via Supabase (best effort)
+      supabase.auth.signOut().catch(() => {});
+      
+      // Redirect to login after a brief delay
+      setTimeout(() => {
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+        isRecovering = false;
+      }, 100);
+    }
+  };
+  
+  // Catch unhandled promise rejections (where most JWT errors surface)
+  window.addEventListener('unhandledrejection', (event) => {
+    handleAuthError(event.reason);
+  });
+  
+  // Also catch regular errors
+  window.addEventListener('error', (event) => {
+    handleAuthError(event.error);
+  });
+}
+
 // Centralized auth gate to avoid refresh storms across the app.
 // - Coalesces concurrent callers into a single in-flight promise
 // - Resolves when there is a valid (non-expired) session or a token refresh completes

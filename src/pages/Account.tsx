@@ -25,7 +25,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { AlertTriangle, Check, MessageSquare, Flag, CalendarIcon, User, CreditCard, CheckCircle, XCircle, Clock } from "lucide-react";
+import { AlertTriangle, Check, MessageSquare, Flag, CalendarIcon, User, CreditCard, CheckCircle, XCircle, Clock, RefreshCw } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
@@ -33,6 +33,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { restorePurchases } from "@/integrations/natively/purchasesBridge";
 
 // TrialCountdown Component - Shows remaining time of 30-minute trial
 // When trial ends, shows friendly message with subscribe CTA
@@ -182,6 +183,9 @@ export default function Account() {
   
   // Paywall modal state (for subscribe CTA from billing tab)
   const [showPaywallModal, setShowPaywallModal] = useState(false);
+  
+  // Restore purchases state
+  const [isRestoring, setIsRestoring] = useState(false);
   
   // Feedback states
   const [isFeedbackDialogOpen, setIsFeedbackDialogOpen] = useState(false);
@@ -388,6 +392,43 @@ export default function Account() {
     }
   };
   
+  // Restore purchases handler (same logic as CustomPaywallModal)
+  const handleRestorePurchases = async () => {
+    setIsRestoring(true);
+    
+    // First, try the native restore (for devices with Apple receipt)
+    restorePurchases((resp: any) => {
+      console.log('[Restore] Native SDK response:', resp);
+    });
+    
+    // Also check subscription via RevenueCat REST API (more reliable)
+    if (user?.id) {
+      try {
+        console.log('[Restore] Checking subscription via API for user:', user.id);
+        const { data, error } = await supabase.functions.invoke('check-subscription', {
+          body: { userId: user.id }
+        });
+        
+        console.log('[Restore] API check result:', data, error);
+        
+        if (data?.isSubscribed) {
+          toast.success(language === 'ar' ? 'تم استعادة المشتريات!' : 'Purchases restored!');
+          setIsRestoring(false);
+          // Refresh subscription data
+          queryClient.invalidateQueries({ queryKey: ['subscription'] });
+          window.location.reload();
+          return;
+        }
+      } catch (err) {
+        console.error('[Restore] API check failed:', err);
+      }
+    }
+    
+    // If API check didn't find subscription, show error
+    toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');
+    setIsRestoring(false);
+  };
+
   // Date of Birth handler
   const handleUpdateDateOfBirth = async () => {
     if (!dateOfBirth) {
@@ -829,11 +870,29 @@ export default function Account() {
                   <>
                     {/* STATE 1: Trial (Active or Expired) - TrialCountdown handles both states */}
                     {subscriptionData?.profile && !subscriptionData.profile.is_subscribed && subscriptionData.profile.free_access_start_at && (
-                      <TrialCountdown 
-                        startAt={subscriptionData.profile.free_access_start_at} 
-                        language={language} 
-                        onSubscribeClick={() => setShowPaywallModal(true)}
-                      />
+                      <>
+                        <TrialCountdown 
+                          startAt={subscriptionData.profile.free_access_start_at} 
+                          language={language} 
+                          onSubscribeClick={() => setShowPaywallModal(true)}
+                        />
+                        {/* Restore Purchases button - Apple requirement */}
+                        <div className="flex justify-center pt-2">
+                          <Button
+                            variant="outline"
+                            onClick={handleRestorePurchases}
+                            disabled={isRestoring}
+                            className="w-full max-w-xs"
+                          >
+                            {isRestoring ? (
+                              <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+                            ) : (
+                              <RefreshCw className="w-4 h-4 mr-2" />
+                            )}
+                            {language === 'ar' ? 'استعادة المشتريات' : 'Restore Purchases'}
+                          </Button>
+                        </div>
+                      </>
                     )}
                     
                     {/* STATE 2: Subscribed - Show Status + Manage Button */}
@@ -852,14 +911,56 @@ export default function Account() {
                         >
                           {language === 'en' ? 'Manage Subscription' : 'إدارة الاشتراك'}
                         </Button>
+                        {/* Restore Purchases button - Apple requirement */}
+                        <Button
+                          variant="ghost"
+                          onClick={handleRestorePurchases}
+                          disabled={isRestoring}
+                          className="w-full max-w-xs text-muted-foreground"
+                        >
+                          {isRestoring ? (
+                            <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+                          ) : (
+                            <RefreshCw className="w-4 h-4 mr-2" />
+                          )}
+                          {language === 'ar' ? 'استعادة المشتريات' : 'Restore Purchases'}
+                        </Button>
                       </div>
                     )}
                     
                     {/* STATE 3: No Subscription, No Trial */}
                     {subscriptionData?.profile && !subscriptionData.profile.is_subscribed && !subscriptionData.profile.free_access_start_at && (
-                      <p className="text-muted-foreground text-center py-8">
-                        {language === 'en' ? 'No active subscription' : 'لا يوجد اشتراك نشط'}
-                      </p>
+                      <div className="text-center space-y-4 py-4">
+                        <p className="text-muted-foreground">
+                          {language === 'en' ? 'No active subscription' : 'لا يوجد اشتراك نشط'}
+                        </p>
+                        <Button 
+                          onClick={() => setShowPaywallModal(true)}
+                          className="w-full max-w-xs shadow-lg"
+                          size="lg"
+                          style={{
+                            background: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)',
+                            color: 'white',
+                            fontWeight: 600,
+                          }}
+                        >
+                          {language === 'en' ? 'Subscribe Now' : 'اشترك الآن'}
+                        </Button>
+                        {/* Restore Purchases button - Apple requirement */}
+                        <Button
+                          variant="outline"
+                          onClick={handleRestorePurchases}
+                          disabled={isRestoring}
+                          className="w-full max-w-xs"
+                        >
+                          {isRestoring ? (
+                            <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+                          ) : (
+                            <RefreshCw className="w-4 h-4 mr-2" />
+                          )}
+                          {language === 'ar' ? 'استعادة المشتريات' : 'Restore Purchases'}
+                        </Button>
+                      </div>
                     )}
                     
                     {/* STATE 4: No Data (Fallback) */}
