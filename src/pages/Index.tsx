@@ -6,7 +6,7 @@ import { Logo3D } from "@/components/Logo3D";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { useTheme } from "@/providers/ThemeProvider";
 import { motion } from "framer-motion";
-import { Check, ArrowRight, Sparkles, Bot, Calendar, Mic, Users, MessageSquare, LogIn, Zap, Star, Music, Globe, Image as ImageIcon, BookOpen, PencilRuler, Workflow } from "lucide-react";
+import { Check, ArrowRight, Sparkles, Bot, Calendar, Mic, Users, MessageSquare, LogIn, Zap, Star, Music, Globe, Image as ImageIcon, BookOpen, PencilRuler, Workflow, MonitorPlay } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { MobileHeader } from "@/components/MobileHeader";
 import { Footer } from "@/components/Footer";
@@ -180,6 +180,14 @@ export default function Index() {
       gradient: "from-emerald-500 via-teal-500 to-cyan-600",
       bgGradient: "from-emerald-50 to-teal-50",
       iconColor: "text-emerald-600"
+    },
+    {
+      icon: MonitorPlay,
+      title: t("waktiPresentationsTitle", language),
+      description: t("waktiPresentationsDesc", language),
+      gradient: "from-cyan-500 via-blue-500 to-indigo-600",
+      bgGradient: "from-cyan-50 to-blue-50",
+      iconColor: "text-cyan-600"
     }
   ];
 

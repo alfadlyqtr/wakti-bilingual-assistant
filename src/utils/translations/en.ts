@@ -84,4 +84,8 @@ export const en = {
   sessionEnded_message: "For your security, you’ve been signed out on this device because your account was used to sign in elsewhere.",
   sessionEnded_goToLogin: "Go to Login",
   sessionEnded_goToHome: "Go to Home",
+
+  // Wakti Presentations
+  waktiPresentationsTitle: "Wakti Presentations",
+  waktiPresentationsDesc: "Create professional slides, briefs, and outlines instantly with AI",
 };

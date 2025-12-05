@@ -84,4 +84,8 @@ export const ar = {
   sessionEnded_message: "لأمانك، تم تسجيل خروجك من هذا الجهاز لأن حسابك استُخدم لتسجيل الدخول في مكان آخر.",
   sessionEnded_goToLogin: "الذهاب إلى تسجيل الدخول",
   sessionEnded_goToHome: "الذهاب إلى الصفحة الرئيسية",
+
+  // Wakti Presentations
+  waktiPresentationsTitle: "عروض وقتي",
+  waktiPresentationsDesc: "أنشئ شرائح وملخصات ومخططات احترافية فوراً بالذكاء الاصطناعي",
 };

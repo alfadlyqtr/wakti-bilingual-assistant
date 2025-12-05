@@ -6,7 +6,7 @@ import { Logo3D } from "@/components/Logo3D";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { useTheme } from "@/providers/ThemeProvider";
 import { motion } from "framer-motion";
-import { Check, ArrowRight, Sparkles, Bot, Calendar, Mic, Users, MessageSquare, LogIn, Zap, Star } from "lucide-react";
+import { Check, ArrowRight, Sparkles, Bot, Calendar, Mic, Users, MessageSquare, LogIn, Zap, Star, MonitorPlay } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Footer } from "@/components/Footer";
 import { t } from "@/utils/translations";
@@ -91,6 +91,14 @@ export default function Home() {
       gradient: "from-violet-500 via-purple-500 to-fuchsia-600",
       bgGradient: "from-violet-50 to-purple-50",
       iconColor: "text-violet-600"
+    },
+    {
+      icon: MonitorPlay,
+      title: t("waktiPresentationsTitle", language),
+      description: t("waktiPresentationsDesc", language),
+      gradient: "from-cyan-500 via-blue-500 to-indigo-600",
+      bgGradient: "from-cyan-50 to-blue-50",
+      iconColor: "text-cyan-600"
     }
   ];
 

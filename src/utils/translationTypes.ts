@@ -1420,6 +1420,11 @@ export type TranslationKey =
   | "chess_medium_challenge"
   | "chess_hard_wont_survive"
   | "chess_hard_simulation"
+
+  // Wakti Presentations
+  | "waktiPresentationsTitle"
+  | "waktiPresentationsDesc"
+
   | "chess_hard_try_again"
   | "chess_hard_calculated"
   | "chess_hard_inevitable"
