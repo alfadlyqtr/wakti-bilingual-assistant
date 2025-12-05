@@ -67,7 +67,14 @@ interface UVResponse {
 }
 
 const CACHE_DURATION = 60 * 60 * 1000; // 60 minutes
-const CACHE_VERSION = '1.2'; // Increment to invalidate old cache
+const CACHE_VERSION = '1.3'; // Increment to invalidate old cache
+
+// Location input type for weather fetching
+export interface WeatherLocation {
+  city?: string | null;
+  country?: string | null;
+  countryCode?: string | null;
+}
 
 interface CachedWeatherData {
   data: WeatherData;
@@ -131,18 +138,65 @@ const getWindDirectionFull = (degrees: number): string => {
   return 'North';
 };
 
-const getLocationFromCountry = async (country: string): Promise<{ lat: number; lon: number } | null> => {
-  const countryCoords: Record<string, { lat: number; lon: number }> = {
-    'Qatar': { lat: 25.3548, lon: 51.1839 },
-    'UAE': { lat: 23.4241, lon: 53.8478 },
-    'United Arab Emirates': { lat: 23.4241, lon: 53.8478 },
-    'Saudi Arabia': { lat: 23.8859, lon: 45.0792 },
-    'Kuwait': { lat: 29.3117, lon: 47.4818 },
-    'Bahrain': { lat: 26.0667, lon: 50.5577 },
-    'Oman': { lat: 21.4735, lon: 55.9754 }
-  };
-  
-  return countryCoords[country] || null;
+// Fallback country coordinates for when geocoding fails
+const FALLBACK_COUNTRY_COORDS: Record<string, { lat: number; lon: number }> = {
+  'Qatar': { lat: 25.3548, lon: 51.1839 },
+  'UAE': { lat: 23.4241, lon: 53.8478 },
+  'United Arab Emirates': { lat: 23.4241, lon: 53.8478 },
+  'Saudi Arabia': { lat: 23.8859, lon: 45.0792 },
+  'Kuwait': { lat: 29.3117, lon: 47.4818 },
+  'Bahrain': { lat: 26.0667, lon: 50.5577 },
+  'Oman': { lat: 21.4735, lon: 55.9754 }
+};
+
+const getLocationFromCountry = (country: string): { lat: number; lon: number } | null => {
+  return FALLBACK_COUNTRY_COORDS[country] || null;
+};
+
+/**
+ * Geocode a city + country using OpenWeather Geocoding API
+ * Returns lat/lon for any location worldwide
+ */
+const geocodeLocation = async (
+  city?: string | null,
+  country?: string | null,
+  countryCode?: string | null,
+  apiKey?: string | null
+): Promise<{ lat: number; lon: number } | null> => {
+  if (!apiKey) return null;
+  if (!city && !country) return null;
+
+  try {
+    // Build query: "City,CountryCode" or "City,Country" or just "Country"
+    const parts: string[] = [];
+    if (city?.trim()) parts.push(city.trim());
+    if (countryCode?.trim()) parts.push(countryCode.trim());
+    else if (country?.trim()) parts.push(country.trim());
+
+    const q = encodeURIComponent(parts.join(','));
+    const url = `https://api.openweathermap.org/geo/1.0/direct?q=${q}&limit=1&appid=${apiKey}`;
+    
+    console.log('🌍 Geocoding location:', parts.join(', '));
+    
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.warn('🌍 Geocoding API failed:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      console.warn('🌍 Geocoding returned no results for:', parts.join(', '));
+      return null;
+    }
+
+    const result = { lat: data[0].lat, lon: data[0].lon };
+    console.log('🌍 Geocoded successfully:', data[0].name, data[0].country, '->', result);
+    return result;
+  } catch (error) {
+    console.error('🌍 Geocoding error:', error);
+    return null;
+  }
 };
 
 const getApiKey = async (): Promise<string | null> => {
@@ -352,12 +406,22 @@ const getFiveDayForecast = (forecastList: ForecastResponse['list']) => {
   return forecast;
 };
 
-export const fetchWeatherData = async (country?: string): Promise<WeatherData | null> => {
+export const fetchWeatherData = async (location?: WeatherLocation | string): Promise<WeatherData | null> => {
   try {
-    console.log('🌤️ Starting weather data fetch for country:', country);
+    // Handle both old string format and new object format for backwards compatibility
+    const loc: WeatherLocation = typeof location === 'string' 
+      ? { country: location } 
+      : (location || {});
+    
+    const city = loc.city?.trim() || undefined;
+    const country = loc.country?.trim() || undefined;
+    const countryCode = loc.countryCode?.trim() || undefined;
+    
+    console.log('🌤️ Starting weather data fetch for:', { city, country, countryCode });
     
     // Check cache first with version validation
-    const cacheKey = `weather_forecast_${country || 'default'}`;
+    // Cache key includes both city and country for uniqueness
+    const cacheKey = `weather_forecast_${city || ''}_${country || 'default'}`;
     const cached = localStorage.getItem(cacheKey);
     
     if (cached) {
@@ -386,11 +450,25 @@ export const fetchWeatherData = async (country?: string): Promise<WeatherData | 
       throw new Error('Weather API key not available');
     }
 
-    // Get coordinates from country
-    let coords = country ? await getLocationFromCountry(country) : null;
+    // Get coordinates: try geocoding city+country first, then fallback to country map, then default
+    let coords: { lat: number; lon: number } | null = null;
     
-    // Fallback to Doha, Qatar if no country or country not found
+    // 1) Try geocoding with city + country (works for any location worldwide)
+    if (city || country) {
+      coords = await geocodeLocation(city, country, countryCode, apiKey);
+    }
+    
+    // 2) If geocoding failed but we have a country, try the fallback country map
+    if (!coords && country) {
+      coords = getLocationFromCountry(country);
+      if (coords) {
+        console.log('🌤️ Using fallback country coordinates for:', country);
+      }
+    }
+    
+    // 3) Final fallback to Doha, Qatar
     if (!coords) {
+      console.log('🌤️ Using default coordinates (Doha, Qatar)');
       coords = { lat: 25.3548, lon: 51.1839 };
     }
 

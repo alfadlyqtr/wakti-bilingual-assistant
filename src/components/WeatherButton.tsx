@@ -17,8 +17,12 @@ export function WeatherButton() {
   const [selectedDay, setSelectedDay] = React.useState<string | null>(null);
 
   const { data: weather, isLoading, error } = useQuery({
-    queryKey: ['weather', profile?.country],
-    queryFn: () => fetchWeatherData(profile?.country || undefined),
+    queryKey: ['weather', profile?.country, profile?.city],
+    queryFn: () => fetchWeatherData({
+      country: profile?.country,
+      city: profile?.city,
+      countryCode: profile?.country_code
+    }),
     refetchInterval: 60 * 60 * 1000, // Refetch every 60 minutes
     staleTime: 50 * 60 * 1000, // Consider data stale after 50 minutes
   });
@@ -353,7 +357,7 @@ export function WeatherButton() {
 
                 {/* Location & Last Updated */}
                 <div className="text-center text-xs text-muted-foreground pt-1 border-t border-white/10">
-                  📍 {profile?.country || 'Qatar'} • {t('updated', language)} {weather.lastUpdated}
+                  📍 {profile?.city ? `${profile.city}, ${profile.country || ''}` : (profile?.country || 'Qatar')} • {t('updated', language)} {weather.lastUpdated}
                 </div>
               </>
             )}
