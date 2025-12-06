@@ -425,9 +425,28 @@ export async function exportSlidesToPPTX(
 }
 
 /**
- * Trigger file download
+ * Trigger file download - uses Share API on mobile for proper filename
  */
-export function downloadBlob(blob: Blob, filename: string): void {
+export async function downloadBlob(blob: Blob, filename: string): Promise<void> {
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  
+  // On mobile, try Share API first (preserves filename)
+  if (isMobile && navigator.share && navigator.canShare) {
+    try {
+      const file = new File([blob], filename, { type: blob.type });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'Wakti Presentation',
+        });
+        return;
+      }
+    } catch (err) {
+      console.log('Share API failed, falling back to download:', err);
+    }
+  }
+  
+  // Fallback: traditional download (works on desktop, may lose filename on mobile)
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

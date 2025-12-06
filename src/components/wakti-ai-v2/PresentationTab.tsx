@@ -558,7 +558,7 @@ const PresentationTab: React.FC = () => {
       );
 
       const filename = generateFilename(brief?.subject || topic, 'pdf');
-      downloadBlob(pdfBlob, filename);
+      await downloadBlob(pdfBlob, filename);
 
       toast.dismiss(toastId);
       toast.success(language === 'ar' ? `تم حفظ ${filename}` : `Saved ${filename}`);
@@ -591,7 +591,7 @@ const PresentationTab: React.FC = () => {
       );
 
       const filename = generateFilename(brief?.subject || topic, 'pptx');
-      downloadBlob(pptxBlob, filename);
+      await downloadBlob(pptxBlob, filename);
 
       toast.dismiss(toastId);
       toast.success(language === 'ar' ? `تم حفظ ${filename}` : `Saved ${filename}`);
