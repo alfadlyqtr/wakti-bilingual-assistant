@@ -131,37 +131,54 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
   const handleRestore = async () => {
     setRestoring(true);
     
-    // First, try the native restore (for devices with Apple receipt)
-    restorePurchases((resp: any) => {
+    // Call native restore and WAIT for the callback from Apple
+    restorePurchases(async (resp: any) => {
       console.log('[Restore] Native SDK response:', resp);
-    });
-    
-    // Also check subscription via RevenueCat REST API (more reliable)
-    // This works even if the device doesn't have the Apple receipt
-    if (user?.id) {
-      try {
-        console.log('[Restore] Checking subscription via API for user:', user.id);
-        const { data, error } = await supabase.functions.invoke('check-subscription', {
-          body: { userId: user.id }
-        });
+      
+      // If native restore succeeded, sync with backend and reload
+      if (resp?.status === 'SUCCESS') {
+        console.log('[Restore] Native restore succeeded, syncing with backend...');
         
-        console.log('[Restore] API check result:', data, error);
-        
-        if (data?.isSubscribed) {
-          toast.success(language === 'ar' ? 'تم استعادة المشتريات!' : 'Purchases restored!');
-          onOpenChange(false);
-          setRestoring(false);
-          window.location.reload(); // Refresh to update UI
-          return;
+        // Sync with backend to update DB
+        if (user?.id) {
+          try {
+            await supabase.functions.invoke('check-subscription', {
+              body: { userId: user.id }
+            });
+          } catch (err) {
+            console.error('[Restore] Backend sync failed:', err);
+          }
         }
-      } catch (err) {
-        console.error('[Restore] API check failed:', err);
+        
+        toast.success(language === 'ar' ? 'تم استعادة المشتريات!' : 'Purchases restored!');
+        onOpenChange(false);
+        window.location.reload();
+        return;
       }
-    }
-    
-    // If API check didn't find subscription, show error
-    toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');
-    setRestoring(false);
+      
+      // Native restore didn't find anything - try backend check as fallback
+      if (user?.id) {
+        try {
+          console.log('[Restore] Trying backend check as fallback...');
+          const { data } = await supabase.functions.invoke('check-subscription', {
+            body: { userId: user.id }
+          });
+          
+          if (data?.isSubscribed) {
+            toast.success(language === 'ar' ? 'تم استعادة المشتريات!' : 'Purchases restored!');
+            onOpenChange(false);
+            window.location.reload();
+            return;
+          }
+        } catch (err) {
+          console.error('[Restore] Backend fallback failed:', err);
+        }
+      }
+      
+      // Nothing found anywhere
+      toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');
+      setRestoring(false);
+    });
   };
 
   const handleLogout = async () => {
