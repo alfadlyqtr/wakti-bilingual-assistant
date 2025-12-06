@@ -393,66 +393,71 @@ export default function Account() {
   };
   
   // Restore purchases handler - calls native Apple restore via Natively SDK
+  // Per RevenueCat docs: SUCCESS means restore completed, but we must verify entitlements
   const handleRestorePurchases = () => {
     setIsRestoring(true);
     
     // Call native restore - Natively SDK talks to Apple/RevenueCat
     // Callback receives: { status: 'SUCCESS' | 'FAILED', customerId, error }
+    // NOTE: SUCCESS only means the restore operation completed, NOT that purchases were found!
     restorePurchases((resp: any) => {
       console.log('[Restore] Native SDK response:', resp);
       
       try {
-        // If native restore succeeded
-        if (resp?.status === 'SUCCESS') {
-          console.log('[Restore] Native restore succeeded!');
-          
-          // Sync with backend to update DB (fire and forget)
-          if (user?.id) {
-            supabase.functions.invoke('check-subscription', {
-              body: { userId: user.id }
-            }).catch(err => console.error('[Restore] Backend sync failed:', err));
+        // After restore (success or fail), we MUST check backend to verify entitlements
+        // This is because SUCCESS just means "restore completed" not "purchases found"
+        const verifySubscription = () => {
+          if (!user?.id) {
+            toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');
+            setIsRestoring(false);
+            return;
           }
           
-          toast.success(language === 'ar' ? 'تم استعادة المشتريات!' : 'Purchases restored!');
-          queryClient.invalidateQueries({ queryKey: ['subscription'] });
-          
-          // Small delay before reload to show toast
-          setTimeout(() => window.location.reload(), 500);
-          return;
-        }
-        
-        // Native restore failed or found nothing
-        console.log('[Restore] Native restore status:', resp?.status, 'Error:', resp?.error);
-        
-        // Check if user is already subscribed locally
-        if (subscriptionData?.profile?.is_subscribed) {
-          toast.success(language === 'ar' ? 'أنت مشترك بالفعل!' : 'You are already subscribed!');
-          setIsRestoring(false);
-          return;
-        }
-        
-        // Try backend check as fallback (for cross-device restore via RevenueCat API)
-        if (user?.id) {
+          // Check subscription via RevenueCat REST API (our backend)
           supabase.functions.invoke('check-subscription', {
             body: { userId: user.id }
-          }).then(({ data }) => {
+          }).then(({ data, error }) => {
+            console.log('[Restore] Backend verification result:', data, error);
+            
             if (data?.isSubscribed) {
+              // Purchases were found and restored!
               toast.success(language === 'ar' ? 'تم استعادة المشتريات!' : 'Purchases restored!');
               queryClient.invalidateQueries({ queryKey: ['subscription'] });
               setTimeout(() => window.location.reload(), 500);
+            } else if (subscriptionData?.profile?.is_subscribed) {
+              // Already subscribed locally
+              toast.success(language === 'ar' ? 'أنت مشترك بالفعل!' : 'You are already subscribed!');
+              setIsRestoring(false);
             } else {
+              // No purchases found
               toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');
               setIsRestoring(false);
             }
           }).catch(err => {
-            console.error('[Restore] Backend fallback failed:', err);
-            toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');
+            console.error('[Restore] Backend verification failed:', err);
+            // If backend fails but user is subscribed locally, show success
+            if (subscriptionData?.profile?.is_subscribed) {
+              toast.success(language === 'ar' ? 'أنت مشترك بالفعل!' : 'You are already subscribed!');
+            } else {
+              toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');
+            }
             setIsRestoring(false);
           });
-        } else {
-          toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');
-          setIsRestoring(false);
+        };
+        
+        // If native restore succeeded, verify with backend
+        if (resp?.status === 'SUCCESS') {
+          console.log('[Restore] Native restore completed, verifying with backend...');
+          verifySubscription();
+          return;
         }
+        
+        // Native restore failed - still try backend verification
+        // (handles cross-device restore where native has no local receipt)
+        console.log('[Restore] Native restore status:', resp?.status, 'Error:', resp?.error);
+        console.log('[Restore] Trying backend verification as fallback...');
+        verifySubscription();
+        
       } catch (err) {
         console.error('[Restore] Error in callback:', err);
         toast.error(language === 'ar' ? 'حدث خطأ' : 'An error occurred');

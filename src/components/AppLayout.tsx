@@ -128,59 +128,62 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
     });
   };
 
+  // Restore purchases handler - per RevenueCat docs, SUCCESS means restore completed,
+  // but we must verify entitlements via backend to confirm purchases were actually found
   const handleRestore = () => {
     setRestoring(true);
     
     // Call native restore - Natively SDK talks to Apple/RevenueCat
     // Callback receives: { status: 'SUCCESS' | 'FAILED', customerId, error }
+    // NOTE: SUCCESS only means the restore operation completed, NOT that purchases were found!
     restorePurchases((resp: any) => {
       console.log('[Restore] Native SDK response:', resp);
       
       try {
-        // If native restore succeeded
-        if (resp?.status === 'SUCCESS') {
-          console.log('[Restore] Native restore succeeded!');
-          
-          // Sync with backend to update DB (fire and forget)
-          if (user?.id) {
-            supabase.functions.invoke('check-subscription', {
-              body: { userId: user.id }
-            }).catch(err => console.error('[Restore] Backend sync failed:', err));
+        // After restore (success or fail), we MUST check backend to verify entitlements
+        const verifySubscription = () => {
+          if (!user?.id) {
+            toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');
+            setRestoring(false);
+            return;
           }
           
-          toast.success(language === 'ar' ? 'تم استعادة المشتريات!' : 'Purchases restored!');
-          onOpenChange(false);
-          
-          // Small delay before reload to show toast
-          setTimeout(() => window.location.reload(), 500);
-          return;
-        }
-        
-        // Native restore failed or found nothing
-        console.log('[Restore] Native restore status:', resp?.status, 'Error:', resp?.error);
-        
-        // Try backend check as fallback (for cross-device restore via RevenueCat API)
-        if (user?.id) {
+          // Check subscription via RevenueCat REST API (our backend)
           supabase.functions.invoke('check-subscription', {
             body: { userId: user.id }
-          }).then(({ data }) => {
+          }).then(({ data, error }) => {
+            console.log('[Restore] Backend verification result:', data, error);
+            
             if (data?.isSubscribed) {
+              // Purchases were found and restored!
               toast.success(language === 'ar' ? 'تم استعادة المشتريات!' : 'Purchases restored!');
               onOpenChange(false);
               setTimeout(() => window.location.reload(), 500);
             } else {
+              // No purchases found
               toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');
               setRestoring(false);
             }
           }).catch(err => {
-            console.error('[Restore] Backend fallback failed:', err);
+            console.error('[Restore] Backend verification failed:', err);
             toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');
             setRestoring(false);
           });
-        } else {
-          toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');
-          setRestoring(false);
+        };
+        
+        // If native restore succeeded, verify with backend
+        if (resp?.status === 'SUCCESS') {
+          console.log('[Restore] Native restore completed, verifying with backend...');
+          verifySubscription();
+          return;
         }
+        
+        // Native restore failed - still try backend verification
+        // (handles cross-device restore where native has no local receipt)
+        console.log('[Restore] Native restore status:', resp?.status, 'Error:', resp?.error);
+        console.log('[Restore] Trying backend verification as fallback...');
+        verifySubscription();
+        
       } catch (err) {
         console.error('[Restore] Error in callback:', err);
         toast.error(language === 'ar' ? 'حدث خطأ' : 'An error occurred');
