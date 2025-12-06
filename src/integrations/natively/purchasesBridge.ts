@@ -53,8 +53,23 @@ export function showPaywallIfNeeded(
 
 export function restorePurchases(callback?: (resp: any) => void) {
   const p = getInstance();
-  if (!p) return;
-  try { p.restore(callback || function () {}); } catch {}
+  if (!p) {
+    // SDK not available (running in browser, not native app)
+    // Call callback with FAILED status so UI can handle it
+    console.warn('[Purchases] NativelyPurchases SDK not available - not running in native app');
+    if (callback) {
+      callback({ status: 'FAILED', error: 'Not running in native app', customerId: null });
+    }
+    return;
+  }
+  try {
+    p.restore(callback || function () {});
+  } catch (err) {
+    console.error('[Purchases] restore() threw error:', err);
+    if (callback) {
+      callback({ status: 'FAILED', error: String(err), customerId: null });
+    }
+  }
 }
 
 export function purchasePackage(packageId: string, callback?: (resp: any) => void) {
