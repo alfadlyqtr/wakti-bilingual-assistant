@@ -392,64 +392,72 @@ export default function Account() {
     }
   };
   
-  // Restore purchases handler - waits for native Apple restore callback
-  const handleRestorePurchases = async () => {
+  // Restore purchases handler - calls native Apple restore via Natively SDK
+  const handleRestorePurchases = () => {
     setIsRestoring(true);
     
-    // Call native restore and WAIT for the callback from Apple
-    restorePurchases(async (resp: any) => {
+    // Call native restore - Natively SDK talks to Apple/RevenueCat
+    // Callback receives: { status: 'SUCCESS' | 'FAILED', customerId, error }
+    restorePurchases((resp: any) => {
       console.log('[Restore] Native SDK response:', resp);
       
-      // If native restore succeeded, sync with backend and reload
-      if (resp?.status === 'SUCCESS') {
-        console.log('[Restore] Native restore succeeded, syncing with backend...');
-        
-        // Sync with backend to update DB
-        if (user?.id) {
-          try {
-            await supabase.functions.invoke('check-subscription', {
-              body: { userId: user.id }
-            });
-          } catch (err) {
-            console.error('[Restore] Backend sync failed:', err);
-          }
-        }
-        
-        toast.success(language === 'ar' ? 'تم استعادة المشتريات!' : 'Purchases restored!');
-        queryClient.invalidateQueries({ queryKey: ['subscription'] });
-        window.location.reload();
-        return;
-      }
-      
-      // Native restore didn't find anything - check if already subscribed locally
-      if (subscriptionData?.profile?.is_subscribed) {
-        toast.success(language === 'ar' ? 'أنت مشترك بالفعل!' : 'You are already subscribed!');
-        setIsRestoring(false);
-        return;
-      }
-      
-      // Also try backend check as fallback (for cross-device restore)
-      if (user?.id) {
-        try {
-          console.log('[Restore] Trying backend check as fallback...');
-          const { data } = await supabase.functions.invoke('check-subscription', {
-            body: { userId: user.id }
-          });
+      try {
+        // If native restore succeeded
+        if (resp?.status === 'SUCCESS') {
+          console.log('[Restore] Native restore succeeded!');
           
-          if (data?.isSubscribed) {
-            toast.success(language === 'ar' ? 'تم استعادة المشتريات!' : 'Purchases restored!');
-            queryClient.invalidateQueries({ queryKey: ['subscription'] });
-            window.location.reload();
-            return;
+          // Sync with backend to update DB (fire and forget)
+          if (user?.id) {
+            supabase.functions.invoke('check-subscription', {
+              body: { userId: user.id }
+            }).catch(err => console.error('[Restore] Backend sync failed:', err));
           }
-        } catch (err) {
-          console.error('[Restore] Backend fallback failed:', err);
+          
+          toast.success(language === 'ar' ? 'تم استعادة المشتريات!' : 'Purchases restored!');
+          queryClient.invalidateQueries({ queryKey: ['subscription'] });
+          
+          // Small delay before reload to show toast
+          setTimeout(() => window.location.reload(), 500);
+          return;
         }
+        
+        // Native restore failed or found nothing
+        console.log('[Restore] Native restore status:', resp?.status, 'Error:', resp?.error);
+        
+        // Check if user is already subscribed locally
+        if (subscriptionData?.profile?.is_subscribed) {
+          toast.success(language === 'ar' ? 'أنت مشترك بالفعل!' : 'You are already subscribed!');
+          setIsRestoring(false);
+          return;
+        }
+        
+        // Try backend check as fallback (for cross-device restore via RevenueCat API)
+        if (user?.id) {
+          supabase.functions.invoke('check-subscription', {
+            body: { userId: user.id }
+          }).then(({ data }) => {
+            if (data?.isSubscribed) {
+              toast.success(language === 'ar' ? 'تم استعادة المشتريات!' : 'Purchases restored!');
+              queryClient.invalidateQueries({ queryKey: ['subscription'] });
+              setTimeout(() => window.location.reload(), 500);
+            } else {
+              toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');
+              setIsRestoring(false);
+            }
+          }).catch(err => {
+            console.error('[Restore] Backend fallback failed:', err);
+            toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');
+            setIsRestoring(false);
+          });
+        } else {
+          toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');
+          setIsRestoring(false);
+        }
+      } catch (err) {
+        console.error('[Restore] Error in callback:', err);
+        toast.error(language === 'ar' ? 'حدث خطأ' : 'An error occurred');
+        setIsRestoring(false);
       }
-      
-      // Nothing found anywhere
-      toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');
-      setIsRestoring(false);
     });
   };
 

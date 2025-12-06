@@ -128,56 +128,64 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
     });
   };
 
-  const handleRestore = async () => {
+  const handleRestore = () => {
     setRestoring(true);
     
-    // Call native restore and WAIT for the callback from Apple
-    restorePurchases(async (resp: any) => {
+    // Call native restore - Natively SDK talks to Apple/RevenueCat
+    // Callback receives: { status: 'SUCCESS' | 'FAILED', customerId, error }
+    restorePurchases((resp: any) => {
       console.log('[Restore] Native SDK response:', resp);
       
-      // If native restore succeeded, sync with backend and reload
-      if (resp?.status === 'SUCCESS') {
-        console.log('[Restore] Native restore succeeded, syncing with backend...');
-        
-        // Sync with backend to update DB
-        if (user?.id) {
-          try {
-            await supabase.functions.invoke('check-subscription', {
-              body: { userId: user.id }
-            });
-          } catch (err) {
-            console.error('[Restore] Backend sync failed:', err);
-          }
-        }
-        
-        toast.success(language === 'ar' ? 'تم استعادة المشتريات!' : 'Purchases restored!');
-        onOpenChange(false);
-        window.location.reload();
-        return;
-      }
-      
-      // Native restore didn't find anything - try backend check as fallback
-      if (user?.id) {
-        try {
-          console.log('[Restore] Trying backend check as fallback...');
-          const { data } = await supabase.functions.invoke('check-subscription', {
-            body: { userId: user.id }
-          });
+      try {
+        // If native restore succeeded
+        if (resp?.status === 'SUCCESS') {
+          console.log('[Restore] Native restore succeeded!');
           
-          if (data?.isSubscribed) {
-            toast.success(language === 'ar' ? 'تم استعادة المشتريات!' : 'Purchases restored!');
-            onOpenChange(false);
-            window.location.reload();
-            return;
+          // Sync with backend to update DB (fire and forget)
+          if (user?.id) {
+            supabase.functions.invoke('check-subscription', {
+              body: { userId: user.id }
+            }).catch(err => console.error('[Restore] Backend sync failed:', err));
           }
-        } catch (err) {
-          console.error('[Restore] Backend fallback failed:', err);
+          
+          toast.success(language === 'ar' ? 'تم استعادة المشتريات!' : 'Purchases restored!');
+          onOpenChange(false);
+          
+          // Small delay before reload to show toast
+          setTimeout(() => window.location.reload(), 500);
+          return;
         }
+        
+        // Native restore failed or found nothing
+        console.log('[Restore] Native restore status:', resp?.status, 'Error:', resp?.error);
+        
+        // Try backend check as fallback (for cross-device restore via RevenueCat API)
+        if (user?.id) {
+          supabase.functions.invoke('check-subscription', {
+            body: { userId: user.id }
+          }).then(({ data }) => {
+            if (data?.isSubscribed) {
+              toast.success(language === 'ar' ? 'تم استعادة المشتريات!' : 'Purchases restored!');
+              onOpenChange(false);
+              setTimeout(() => window.location.reload(), 500);
+            } else {
+              toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');
+              setRestoring(false);
+            }
+          }).catch(err => {
+            console.error('[Restore] Backend fallback failed:', err);
+            toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');
+            setRestoring(false);
+          });
+        } else {
+          toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');
+          setRestoring(false);
+        }
+      } catch (err) {
+        console.error('[Restore] Error in callback:', err);
+        toast.error(language === 'ar' ? 'حدث خطأ' : 'An error occurred');
+        setRestoring(false);
       }
-      
-      // Nothing found anywhere
-      toast.error(language === 'ar' ? 'لم يتم العثور على مشتريات' : 'No purchases found');
-      setRestoring(false);
     });
   };
 
