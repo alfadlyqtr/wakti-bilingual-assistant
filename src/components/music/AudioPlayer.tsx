@@ -23,8 +23,28 @@ export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
       return;
     }
 
-    // Create audio element directly (same as Tasjeel)
-    const audio = new Audio(src);
+    // Normalize and clean the URL to avoid issues like leading spaces or encoded prefixes
+    // (Same sanitization as Tasjeel's AudioControls)
+    let cleanUrl = (src || '').trim();
+    try {
+      // Decode once to handle cases like '%20https://...'
+      cleanUrl = decodeURIComponent(cleanUrl).trim();
+    } catch {
+      // If decode fails, continue with trimmed version
+    }
+    // Explicitly strip a leading space marker if it survived encoding
+    if (cleanUrl.startsWith(' ')) {
+      cleanUrl = cleanUrl.trimStart();
+    }
+    // Also handle a raw '%20' prefix that wasn't part of normal encoding
+    if (cleanUrl.startsWith('%20')) {
+      cleanUrl = cleanUrl.slice(3).trimStart();
+    }
+
+    console.log('[AudioPlayer] Loading audio:', { original: src, cleaned: cleanUrl });
+
+    // Create audio element with the cleaned URL
+    const audio = new Audio(cleanUrl);
     audioRef.current = audio;
 
     // Set up event listeners
@@ -52,7 +72,13 @@ export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
     };
 
     const handleError = () => {
-      console.error('[AudioPlayer] Error loading audio:', src);
+      const audioError = audio.error;
+      console.error('[AudioPlayer] Error loading audio:', {
+        src,
+        cleanUrl,
+        errorCode: audioError?.code,
+        errorMessage: audioError?.message
+      });
       setIsLoading(false);
       setIsPlaying(false);
       setError(language === 'ar' ? 'فشل تحميل الملف الصوتي' : 'Failed to load audio');
