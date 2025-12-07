@@ -3,7 +3,7 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { purchasesLogin, purchasesLogout, purchasesWarmup } from '@/integrations/natively/purchasesBridge';
-import { setNotificationUser, removeNotificationUser } from '@/integrations/natively/notificationsBridge';
+import { setNotificationUser, removeNotificationUser, requestNotificationPermission } from '@/integrations/natively/notificationsBridge';
 
 interface AuthContextType {
   user: User | null;
@@ -189,7 +189,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       if (user?.id) {
         purchasesLogin(user.id, user.email || '');
-        setNotificationUser(user.id);
+        
+        // Request push notification permission first (required by Natively/OneSignal)
+        // This registers the device with OneSignal, then we set the external ID
+        requestNotificationPermission(true); // true = show alert to open settings if previously denied
+        
+        // Set external ID to link this device to the user for targeted push notifications
+        // Small delay to ensure permission request completes first
+        setTimeout(() => {
+          setNotificationUser(user.id);
+        }, 1000);
         
         // Check subscription status via Edge Function (calls RevenueCat REST API)
         // This ensures we have accurate subscription state after login
