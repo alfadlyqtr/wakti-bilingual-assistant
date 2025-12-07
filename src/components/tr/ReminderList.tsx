@@ -199,9 +199,9 @@ export const ReminderList: React.FC<ReminderListProps> = ({
     return language === 'ar' ? `خلال ${diffDays} يوم` : `Due in ${diffDays}d`;
   };
 
-  // Tick every 30s to update countdowns
+  // Tick every 1s to update countdowns in real-time
   useEffect(() => {
-    const interval = setInterval(() => setTick((t) => t + 1), 30000);
+    const interval = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(interval);
   }, []);
 

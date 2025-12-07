@@ -259,8 +259,8 @@ export function ReminderForm({ isOpen, onClose, reminder, onReminderSaved }: Rem
                     type="time"
                     {...register('due_time')}
                     disabled={isLoading}
-                    className="pl-9"
-                    placeholder="--:--"
+                    className="pl-9 text-base"
+                    style={{ colorScheme: 'light dark' }}
                   />
                 </div>
                 {errors.due_time && (
@@ -270,42 +270,47 @@ export function ReminderForm({ isOpen, onClose, reminder, onReminderSaved }: Rem
             </div>
 
             {/* Quick time presets */}
-            <div className="flex flex-wrap gap-1.5 pt-1">
+            <div className="flex flex-wrap gap-2 pt-3">
               {[
+                { label: language === 'ar' ? '+1 د' : '+1m', minutes: 1 },
                 { label: language === 'ar' ? '+5 د' : '+5m', minutes: 5 },
+                { label: language === 'ar' ? '+10 د' : '+10m', minutes: 10 },
                 { label: language === 'ar' ? '+15 د' : '+15m', minutes: 15 },
-                { label: language === 'ar' ? '+30 د' : '+30m', minutes: 30 },
+                { label: language === 'ar' ? '+20 د' : '+20m', minutes: 20 },
                 { label: language === 'ar' ? '+1 س' : '+1h', minutes: 60 },
-                { label: language === 'ar' ? 'الليلة' : 'Tonight', minutes: null, hour: 21 },
-                { label: language === 'ar' ? 'غداً' : 'Tomorrow', minutes: null, tomorrow: true },
               ].map((preset) => (
                 <Button
                   key={preset.label}
                   type="button"
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
-                  className="h-7 text-xs px-2"
+                  className="h-8 text-[11px] px-3.5 rounded-full bg-gradient-to-r from-primary/80 to-primary text-primary-foreground hover:from-primary hover:to-primary shadow-md border border-primary/60 transition-all focus-visible:ring-2 focus-visible:ring-primary/70 focus-visible:ring-offset-1 disabled:opacity-60"
                   disabled={isLoading}
                   onClick={() => {
-                    const now = new Date();
-                    let targetDate = new Date();
-                    let targetTime = '';
-
-                    if (preset.minutes) {
-                      targetDate = new Date(now.getTime() + preset.minutes * 60000);
-                      targetTime = `${String(targetDate.getHours()).padStart(2, '0')}:${String(targetDate.getMinutes()).padStart(2, '0')}`;
-                    } else if (preset.hour !== undefined) {
-                      // Tonight at specific hour
-                      targetDate.setHours(preset.hour, 0, 0, 0);
-                      if (targetDate <= now) {
-                        targetDate.setDate(targetDate.getDate() + 1);
-                      }
-                      targetTime = `${String(preset.hour).padStart(2, '0')}:00`;
-                    } else if (preset.tomorrow) {
-                      targetDate.setDate(targetDate.getDate() + 1);
-                      targetDate.setHours(9, 0, 0, 0);
-                      targetTime = '09:00';
+                    // Get current values or start from now
+                    const currentDate = watch('due_date');
+                    const currentTime = watch('due_time');
+                    
+                    let baseDate: Date;
+                    
+                    if (currentDate && currentTime) {
+                      // If both date and time are set, add to that time
+                      baseDate = parseISO(currentDate);
+                      const [hours, minutes] = currentTime.split(':').map(Number);
+                      baseDate.setHours(hours, minutes, 0, 0);
+                    } else if (currentDate) {
+                      // If only date is set, start from that date at current time
+                      baseDate = parseISO(currentDate);
+                      const now = new Date();
+                      baseDate.setHours(now.getHours(), now.getMinutes(), 0, 0);
+                    } else {
+                      // If nothing is set, start from now
+                      baseDate = new Date();
                     }
+                    
+                    // Add the preset minutes
+                    const targetDate = new Date(baseDate.getTime() + preset.minutes * 60000);
+                    const targetTime = `${String(targetDate.getHours()).padStart(2, '0')}:${String(targetDate.getMinutes()).padStart(2, '0')}`;
 
                     setValue('due_date', formatDateForInput(targetDate));
                     setValue('due_time', targetTime);
@@ -316,7 +321,7 @@ export function ReminderForm({ isOpen, onClose, reminder, onReminderSaved }: Rem
               ))}
             </div>
             <p className="text-[10px] text-muted-foreground">
-              {language === 'ar' ? 'اضغط على الوقت لاختياره أو استخدم الأزرار السريعة' : 'Tap time to select or use quick buttons'}
+              {language === 'ar' ? 'اضغط عدة مرات للإضافة (مثال: 5×5د = 25د)' : 'Tap multiple times to stack (e.g., 5×5m = 25m)'}
             </p>
           </div>
 
