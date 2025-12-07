@@ -1,8 +1,13 @@
+import { toast } from 'sonner';
+
 declare global {
   interface Window {
     NativelyNotifications?: any;
   }
 }
+
+// Debug flag - set to true to see toast notifications for debugging
+const DEBUG_NOTIFICATIONS = true;
 
 function getInstance(): any | null {
   try {
@@ -30,9 +35,17 @@ function getInstance(): any | null {
  */
 export function setNotificationUser(userId: string) {
   console.log('[NativelyNotifications] setNotificationUser called with userId:', userId);
+  
+  if (DEBUG_NOTIFICATIONS) {
+    toast.info(`🔔 Setting push user: ${userId.slice(0, 8)}...`);
+  }
+  
   const n = getInstance();
   if (!n) {
     console.warn('[NativelyNotifications] Cannot set user - SDK not available');
+    if (DEBUG_NOTIFICATIONS) {
+      toast.error('❌ Push SDK not available');
+    }
     return;
   }
   if (!userId) {
@@ -47,13 +60,22 @@ export function setNotificationUser(userId: string) {
       console.log('[NativelyNotifications] setExternalId response:', JSON.stringify(resp));
       if (resp && resp.externalId) {
         console.log('[NativelyNotifications] ✅ External ID set successfully:', resp.externalId);
+        if (DEBUG_NOTIFICATIONS) {
+          toast.success(`✅ Push linked: ${resp.externalId.slice(0, 8)}...`);
+        }
       } else {
         const errorMessage = (resp && (resp.error || resp.message)) || "Failed to set external ID";
         console.warn('[NativelyNotifications] ❌ Failed to set External ID:', errorMessage);
+        if (DEBUG_NOTIFICATIONS) {
+          toast.error(`❌ Push link failed: ${errorMessage}`);
+        }
       }
     });
   } catch (err) {
     console.error('[NativelyNotifications] Error calling setExternalId:', err);
+    if (DEBUG_NOTIFICATIONS) {
+      toast.error(`❌ Push error: ${err}`);
+    }
   }
 }
 

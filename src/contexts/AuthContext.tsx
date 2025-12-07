@@ -195,10 +195,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
         requestNotificationPermission(true); // true = show alert to open settings if previously denied
         
         // Set external ID to link this device to the user for targeted push notifications
-        // Small delay to ensure permission request completes first
+        // Longer delay to ensure SDK is fully ready and permission is processed
         setTimeout(() => {
+          console.log('[AuthContext] Setting notification user ID:', user.id);
           setNotificationUser(user.id);
-        }, 1000);
+        }, 2000);
         
         // Check subscription status via Edge Function (calls RevenueCat REST API)
         // This ensures we have accurate subscription state after login
