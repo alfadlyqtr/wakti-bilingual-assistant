@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { toast } from "sonner";
-import { searchUsers, sendContactRequest, checkIfUserInContacts } from "@/services/contactsService";
+import { searchUsers, sendContactRequest, getContactRelationshipStatus, ContactRelationshipStatus } from "@/services/contactsService";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
@@ -19,7 +19,7 @@ export function ContactSearch() {
   const [isSearching, setIsSearching] = useState(false);
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [contactStatus, setContactStatus] = useState<Record<string, boolean>>({});
+  const [contactStatus, setContactStatus] = useState<Record<string, ContactRelationshipStatus>>({});
 
   // Search users query
   const { 
@@ -35,21 +35,22 @@ export function ContactSearch() {
   // Send contact request mutation
   const sendRequestMutation = useMutation({
     mutationFn: (userId: string) => sendContactRequest(userId),
-    onSuccess: () => {
+    onSuccess: (createdContact) => {
       toast.success(t("requestSent", language));
       
       // Invalidate queries that might be affected
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
       queryClient.invalidateQueries({ queryKey: ['contactRequests'] });
       
-      // Update contact status for this user
+      // Update contact status for this user based on created contact row
       setContactStatus(prev => {
         const updatedStatus = { ...prev };
-        // Set the status to true for the user that was just added
+        // Set the relationship status for the user that was just added
         if (searchResults) {
           searchResults.forEach(user => {
             if (sendRequestMutation.variables === user.id) {
-              updatedStatus[user.id] = true;
+              // Use status from backend (approved if auto-approve, otherwise pending)
+              updatedStatus[user.id] = (createdContact?.status as ContactRelationshipStatus) ?? 'pending';
             }
           });
         }
@@ -86,10 +87,10 @@ export function ContactSearch() {
       if (searchResults) {
         const statusChecks = searchResults.map(async (user) => {
           try {
-            const isContact = await checkIfUserInContacts(user.id);
+            const status = await getContactRelationshipStatus(user.id);
             setContactStatus(prev => ({
               ...prev,
-              [user.id]: isContact
+              [user.id]: status
             }));
           } catch (err) {
             console.error(`Error checking contact status for ${user.id}:`, err);
@@ -103,24 +104,23 @@ export function ContactSearch() {
     }
   };
 
-  // Check contact status when search results are updated
+  // When raw search results change (e.g. new search), refresh relationship status map
   useEffect(() => {
     const checkContactsStatus = async () => {
       if (!searchResults) return;
-      
       for (const user of searchResults) {
         try {
-          const isContact = await checkIfUserInContacts(user.id);
+          const status = await getContactRelationshipStatus(user.id);
           setContactStatus(prev => ({
             ...prev,
-            [user.id]: isContact
+            [user.id]: status,
           }));
         } catch (err) {
           console.error(`Error checking contact status for ${user.id}:`, err);
         }
       }
     };
-    
+
     if (searchResults && searchResults.length > 0) {
       checkContactsStatus();
     }
@@ -200,22 +200,42 @@ export function ContactSearch() {
                     )}
                   </div>
                 </div>
-                {contactStatus[user.id] ? (
-                  <Badge variant="secondary" className="px-3 py-1">
-                    {t("alreadyInContacts", language)}
-                  </Badge>
-                ) : (
-                  <Button 
-                    onClick={() => handleSendRequest(user.id)}
-                    disabled={sendRequestMutation.isPending && sendRequestMutation.variables === user.id}
-                    size="sm"
-                  >
-                    {(sendRequestMutation.isPending && sendRequestMutation.variables === user.id) ? (
-                      <LoadingSpinner size="sm" className="mr-2" />
-                    ) : null}
-                    {t("sendRequest", language)}
-                  </Button>
-                )}
+                {(() => {
+                  const status = contactStatus[user.id];
+                  if (status === 'approved') {
+                    return (
+                      <Badge variant="secondary" className="px-3 py-1">
+                        {t("alreadyInContacts", language)}
+                      </Badge>
+                    );
+                  }
+                  if (status === 'pending') {
+                    return (
+                      <Badge variant="outline" className="px-3 py-1 text-xs">
+                        {t("requestSent", language)}
+                      </Badge>
+                    );
+                  }
+                  if (status === 'blocked') {
+                    return (
+                      <Badge variant="destructive" className="px-3 py-1 text-xs">
+                        {t("blocked", language)}
+                      </Badge>
+                    );
+                  }
+                  return (
+                    <Button
+                      onClick={() => handleSendRequest(user.id)}
+                      disabled={sendRequestMutation.isPending && sendRequestMutation.variables === user.id}
+                      size="sm"
+                    >
+                      {(sendRequestMutation.isPending && sendRequestMutation.variables === user.id) ? (
+                        <LoadingSpinner size="sm" className="mr-2" />
+                      ) : null}
+                      {t("sendRequest", language)}
+                    </Button>
+                  );
+                })()}
               </div>
             ))}
           </div>

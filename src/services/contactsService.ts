@@ -38,6 +38,8 @@ export interface UserSearchResult {
   email?: string;
 }
 
+export type ContactRelationshipStatus = 'approved' | 'pending' | 'blocked' | 'none';
+
 // Get all approved contacts for the current user
 export async function getContacts() {
   const userId = await getCurrentUserId();
@@ -247,15 +249,15 @@ export async function searchUsers(query: string): Promise<UserSearchResult[]> {
   return users;
 }
 
-// Check if a user is already in contacts
-export async function checkIfUserInContacts(userId: string): Promise<boolean> {
+// Get detailed relationship status between current user and another user
+export async function getContactRelationshipStatus(userId: string): Promise<ContactRelationshipStatus> {
   const currentUserId = await getCurrentUserId();
   if (!currentUserId) {
     throw new Error("User not authenticated");
   }
   await ensurePassport();
   
-  // Check if this user is already in the contacts list with any status
+  // Check if this user is already in the contacts list and get the raw status
   const { data, error } = await supabase
     .from("contacts")
     .select("id, status")
@@ -268,8 +270,23 @@ export async function checkIfUserInContacts(userId: string): Promise<boolean> {
     throw error;
   }
   
-  // Return true if a contact entry exists and it's not blocked
-  return data && data.length > 0 && data[0].status !== 'blocked';
+  if (!data || data.length === 0) {
+    return 'none';
+  }
+
+  const status = data[0].status as ContactRelationshipStatus;
+  if (status === 'approved' || status === 'pending' || status === 'blocked') {
+    return status;
+  }
+
+  // Fallback for unexpected values
+  return 'none';
+}
+
+// Backwards-compatible helper: treat only approved contacts as "in contacts"
+export async function checkIfUserInContacts(userId: string): Promise<boolean> {
+  const status = await getContactRelationshipStatus(userId);
+  return status === 'approved';
 }
 
 // Send a contact request
