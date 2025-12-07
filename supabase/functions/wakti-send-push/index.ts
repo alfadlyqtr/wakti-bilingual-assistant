@@ -142,12 +142,12 @@ serve(async (req) => {
 
         console.log(`Sending push for notification ${notif.id} to user ${notif.user_id}`);
 
-        // Send to OneSignal
-        const response = await fetch("https://onesignal.com/api/v1/notifications", {
+        // Send to OneSignal (using new API endpoint and 'key' auth scheme per docs)
+        const response = await fetch("https://api.onesignal.com/notifications", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Basic ${ONESIGNAL_REST_API_KEY}`,
+            "Authorization": `key ${ONESIGNAL_REST_API_KEY}`,
           },
           body: JSON.stringify(payload),
         });
