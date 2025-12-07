@@ -4,6 +4,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { DesktopLayout } from "@/components/layouts/DesktopLayout";
 import { TabletLayout } from "@/components/layouts/TabletLayout";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+import { useNotificationHistory } from "@/hooks/useNotificationHistory";
 import { useIsMobile, useIsTablet, useIsDesktop } from "@/hooks/use-mobile";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { PresenceBeacon } from "@/components/PresenceBeacon";
@@ -526,6 +527,11 @@ function WelcomeTrialPopup() {
 export function AppLayout({ children }: AppLayoutProps) {
   // Single instance of useUnreadMessages hook - the only one in the entire app
   const unreadData = useUnreadMessages();
+  
+  // Unified notification system - subscribes to notification_history for all notification types
+  // including task_due, reminder_due, messages, contacts, RSVPs, etc.
+  // This hook automatically shows in-app toasts when new notifications arrive
+  useNotificationHistory();
 
   const { isMobile } = useIsMobile();
   const { isTablet } = useIsTablet();
