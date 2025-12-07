@@ -1073,8 +1073,14 @@ export function ChatInput({
                               setImageMenuPos(null);
                             } else if (rect) {
                               const margin = 8;
-                              const rightEdge = Math.min(window.innerWidth - 12, rect.right);
-                              setImageMenuPos({ top: rect.top - margin, left: rightEdge - 8 });
+                              // Prefer clamping within the chat/messages area so the menu visually aligns with the chat column
+                              const host = document.querySelector('.wakti-ai-messages-area') as HTMLElement | null;
+                              const bounds = host ? host.getBoundingClientRect() : null;
+                              const minX = (bounds?.left ?? 12) + 12;
+                              const maxX = (bounds ? bounds.right - 12 : window.innerWidth - 12);
+                              const centerX = rect.left + rect.width / 2;
+                              const clampedX = Math.max(minX, Math.min(centerX, maxX));
+                              setImageMenuPos({ top: rect.top - margin, left: clampedX });
                             }
                           }}
                           className="inline-flex items-center gap-1 px-3 py-1 h-8 rounded-full text-xs font-medium leading-none bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700/50 align-middle shrink-0"
@@ -1102,7 +1108,12 @@ export function ChatInput({
                                 transition={{ type: 'spring', stiffness: 320, damping: 24 }}
                                 className="fixed z-[9999] min-w-[160px]"
                                 data-dropdown-menu
-                                style={{ top: imageMenuPos.top, left: imageMenuPos.left, transform: 'translate(-100%, -100%)', transformOrigin: 'bottom right' }}
+                                style={{
+                                  top: imageMenuPos.top,
+                                  left: imageMenuPos.left,
+                                  transform: 'translate(-50%, -100%)',
+                                  transformOrigin: 'bottom center',
+                                }}
                                 onPointerDown={(e) => e.stopPropagation()}
                               >
                                 <div className="rounded-2xl border border-white/60 dark:border-white/10 bg-gradient-to-b from-white/90 to-white/70 dark:from-neutral-900/80 dark:to-neutral-900/60 backdrop-blur-3xl shadow-[0_18px_40px_rgba(0,0,0,0.12)] ring-1 ring-white/25 dark:ring-white/5 py-1">
@@ -1474,7 +1485,7 @@ export function ChatInput({
                       autoExpand={true}
                       maxLines={4}
                       minLines={(message.trim() === '' && (activeTrigger === 'image' || activeTrigger === 'search')) ? 2 : 1}
-                      className={`
+                      className={`wakti-ai-textarea
                         flex-1 border-[2.5px]
                         bg-white/95 dark:bg-gray-800/90
                         text-gray-900 dark:text-gray-100

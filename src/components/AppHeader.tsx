@@ -221,6 +221,7 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
 
   const headerEl = (
     <header
+      dir="ltr"
       className={cn(
         "h-16 border-b border-transparent",
         "glue-fixed glue-top z-[990]", // firmly below sidebar (z 999) and its mask (z 998)

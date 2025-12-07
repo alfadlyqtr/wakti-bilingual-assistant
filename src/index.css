@@ -320,6 +320,12 @@ textarea::placeholder {
     text-align: right;
     direction: rtl;
   }
+
+  /* EXCEPTION: Wakti AI chat textarea should always behave LTR like English */
+  html[lang="ar"] .wakti-ai-textarea {
+    text-align: left;
+    direction: ltr;
+  }
   
   /* Fix flexbox direction for RTL */
   html[dir="rtl"] .flex-row {

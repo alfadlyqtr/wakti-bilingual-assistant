@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useDrawAfterBG } from '@/hooks/useDrawAfterBG';
+import { useTheme } from '@/providers/ThemeProvider';
 import { toast } from 'sonner';
 
 interface DrawAfterBGCanvasProps {
@@ -25,9 +26,66 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const lastGenerationTimeRef = useRef<number>(0);
+  const { language } = useTheme();
+  const isArabic = language === 'ar';
   
-  // Organized prompt suggestions by category
-  const promptCategories = {
+  // Bilingual prompt suggestions by category
+  const promptCategories = isArabic ? {
+    "🎨 تحسينات": [
+      "تحسين",
+      "أضف المزيد من التفاصيل",
+      "أضف الظلال والإضاءة",
+      "أضف الملمس والعمق",
+      "اجعلها أكثر واقعية",
+      "أضف التظليل",
+      "حسّن النسب",
+      "أضف تفاصيل دقيقة",
+      "حسّن الإضاءة"
+    ],
+    "👤 شخصيات وأشياء": [
+      "أضف شخصاً",
+      "أضف حيوانات",
+      "أضف أشجار ونباتات",
+      "أضف مباني",
+      "أضف مركبات",
+      "أضف أثاث",
+      "أضف زخارف",
+      "أضف أشخاصاً في المشهد"
+    ],
+    "⚡ إجراءات سريعة": [
+      "اجعلها أكبر",
+      "أضف ضبابية الحركة",
+      "أضف لمعان",
+      "أضف تأثيرات النار",
+      "أضف تأثيرات الماء",
+      "اجعلها متماثلة",
+      "أضف انعكاسات",
+      "أضف تأثيرات سحرية"
+    ],
+    "✨ الأنماط والتأثيرات": [
+      "أضف ألواناً نابضة بالحياة",
+      "اجعلها ثلاثية الأبعاد وواقعية",
+      "أضف نمط الكرتون",
+      "اجعلها لوحة مائية",
+      "أضف تأثيرات النيون المتوهجة",
+      "اجعلها بأسلوب الرسم",
+      "أضف نمط البكسل",
+      "اجعلها بأسلوب الأنمي",
+      "أضف ملمس اللوحة الزيتية",
+      "اجعلها بسيطة"
+    ],
+    "🌍 الخلفية والمشهد": [
+      "أضف خلفية جميلة",
+      "أضف سماء غروب الشمس",
+      "أضف خلفية مدينة",
+      "أضف مناظر طبيعية",
+      "أضف السحب والسماء",
+      "أضف مشهد شاطئ",
+      "أضف جبال في الخلفية",
+      "أضف الفضاء والنجوم",
+      "أضف غابة"
+    ]
+  } : {
     "🎨 Enhancements": [
       "enhance",
       "add more details",
@@ -39,7 +97,7 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
       "add fine details",
       "enhance the lighting"
     ],
-    "� Characters & Objects": [
+    "👤 Characters & Objects": [
       "add a person",
       "add animals",
       "add trees and plants",
@@ -115,6 +173,15 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
       ctx.lineJoin = 'round';
       ctx.lineWidth = 3;
       ctx.strokeStyle = '#000000';
+      
+      // Save initial blank state to history so undo works from first stroke
+      try {
+        const initialState = canvas.toDataURL();
+        setHistory([initialState]);
+        setHistoryStep(0);
+      } catch (err) {
+        console.error('Failed to save initial canvas state:', err);
+      }
     }
   }, []);
 
@@ -405,7 +472,7 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
     // Reset AI image state
     resetImage();
 
-    toast.success('Canvas cleared - ready to draw!');
+    toast.success(isArabic ? 'تم مسح اللوحة - جاهز للرسم!' : 'Canvas cleared - ready to draw!');
   };
 
   // Cleanup interval ref on unmount (no longer used for auto-generation)
@@ -443,13 +510,15 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
         <div className="flex items-center gap-2">
           <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
           <span className="text-sm text-muted-foreground">
-            {isConnected ? 'Connected • Real-time drawing active' : 'Connecting...'}
+            {isConnected 
+              ? (isArabic ? 'متصل • الرسم في الوقت الفعلي نشط' : 'Connected • Real-time drawing active') 
+              : (isArabic ? 'جاري الاتصال...' : 'Connecting...')}
           </span>
         </div>
         {isGenerating && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="w-4 h-4 animate-spin" />
-            <span>Enhancing...</span>
+            <span>{isArabic ? 'جاري التحسين...' : 'Enhancing...'}</span>
           </div>
         )}
       </div>
@@ -459,10 +528,13 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
         {/* Single canvas for drawing and AI results */}
         <canvas
           ref={canvasRef}
-          className="absolute inset-0 w-full h-full cursor-crosshair"
+          className="absolute inset-0 w-full h-full cursor-crosshair select-none"
           style={{ 
             backgroundColor: 'white',
-            touchAction: 'none'
+            touchAction: 'none',
+            WebkitUserSelect: 'none',
+            userSelect: 'none',
+            WebkitTouchCallout: 'none'
           }}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
@@ -478,18 +550,6 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
           ref={bgCanvasRef}
           style={{ display: 'none' }}
         />
-        
-        {/* DEBUG: Test if image URL loads at all */}
-        {lastGeneratedImage && (
-          <img 
-            src={lastGeneratedImage} 
-            alt="Debug test" 
-            className="absolute bottom-2 right-2 w-20 h-20 border-2 border-green-500 object-cover"
-            style={{ zIndex: 999 }}
-            onLoad={() => console.log('✅ DEBUG img tag loaded successfully')}
-            onError={() => console.error('❌ DEBUG img tag failed')}
-          />
-        )}
       </div>
 
       {/* Quick Prompts Dropdown */}
@@ -499,7 +559,7 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
             <Button variant="outline" className="w-full justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4" />
-                <span>Quick Prompts</span>
+                <span>{isArabic ? 'اقتراحات سريعة' : 'Quick Prompts'}</span>
               </div>
               <ChevronDown className="w-4 h-4" />
             </Button>
@@ -538,10 +598,10 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
             onClick={handleUndo}
             disabled={historyStep <= 0}
             className="gap-2"
-            title="Undo (Ctrl+Z)"
+            title={isArabic ? 'تراجع' : 'Undo (Ctrl+Z)'}
           >
             <Undo2 className="w-4 h-4" />
-            Undo
+            {isArabic ? 'تراجع' : 'Undo'}
           </Button>
           
           <Button
@@ -550,10 +610,10 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
             onClick={handleRedo}
             disabled={historyStep >= history.length - 1}
             className="gap-2"
-            title="Redo (Ctrl+Y)"
+            title={isArabic ? 'إعادة' : 'Redo (Ctrl+Y)'}
           >
             <Redo2 className="w-4 h-4" />
-            Redo
+            {isArabic ? 'إعادة' : 'Redo'}
           </Button>
           
           <Button
@@ -561,10 +621,10 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
             size="sm"
             onClick={clearCanvas}
             className="gap-2"
-            title="Clear canvas"
+            title={isArabic ? 'مسح اللوحة' : 'Clear canvas'}
           >
             <Trash2 className="w-4 h-4" />
-            Clear
+            {isArabic ? 'مسح' : 'Clear'}
           </Button>
           
           <Button
@@ -574,19 +634,50 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
               const canvas = canvasRef.current;
               if (!canvas) return;
               
-              // Create download link
-              const link = document.createElement('a');
-              link.download = `wakti-drawing-${Date.now()}.png`;
-              link.href = canvas.toDataURL('image/png');
-              link.click();
-              
-              toast.success('Drawing saved!');
+              try {
+                // Create an offscreen canvas with white background for proper export
+                const exportCanvas = document.createElement('canvas');
+                exportCanvas.width = canvas.width;
+                exportCanvas.height = canvas.height;
+                const exportCtx = exportCanvas.getContext('2d');
+                if (!exportCtx) {
+                  toast.error(isArabic ? 'فشل في حفظ الرسم' : 'Failed to save drawing');
+                  return;
+                }
+                
+                // Fill with white background
+                exportCtx.fillStyle = '#ffffff';
+                exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+                exportCtx.drawImage(canvas, 0, 0);
+                
+                // Convert to blob for better mobile compatibility
+                exportCanvas.toBlob((blob) => {
+                  if (!blob) {
+                    toast.error(isArabic ? 'فشل في حفظ الرسم' : 'Failed to save drawing');
+                    return;
+                  }
+                  
+                  const url = URL.createObjectURL(blob);
+                  const link = document.createElement('a');
+                  link.download = `wakti-drawing-${Date.now()}.png`;
+                  link.href = url;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  URL.revokeObjectURL(url);
+                  
+                  toast.success(isArabic ? 'تم حفظ الرسم!' : 'Drawing saved!');
+                }, 'image/png');
+              } catch (err) {
+                console.error('Save failed:', err);
+                toast.error(isArabic ? 'فشل في حفظ الرسم' : 'Failed to save drawing');
+              }
             }}
             className="gap-2"
-            title="Save drawing"
+            title={isArabic ? 'حفظ الرسم' : 'Save drawing'}
           >
             <Download className="w-4 h-4" />
-            Save
+            {isArabic ? 'حفظ' : 'Save'}
           </Button>
         </div>
       </div>

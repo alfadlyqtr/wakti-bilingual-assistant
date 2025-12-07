@@ -465,7 +465,7 @@ export function ChatMessages({
             <div className="text-sm leading-relaxed">
               {language === 'ar' 
                  ? `مرحباً ${userName}! 👋 أنا وقتي AI، هنا لمساعدتك في كل ما تحتاجه.`
-                : `Hey ${userName}! 👋 I'm Wakti AI your smart assistant. Ask me anything, from tasks and reminders to chats and ideas. What's on your mind today?`
+                : `Hey ${userName}! 👋 I’m Wakti AI, your smart assistant. Ask me anything from quick questions and planning ideas to deeper conversations. What’s on your mind today?`
               }
             </div>
             
@@ -476,7 +476,7 @@ export function ChatMessages({
                 <button
                   onClick={() => navigator.clipboard.writeText(language === 'ar' 
                      ? `مرحباً ${userName}! 👋 أنا وقتي AI، هنا لمساعدتك في كل ما تحتاجه.`
-                     : `Hey ${userName}! 👋 I'm Wakti AI your smart assistant. Ask me anything, from tasks and reminders to chats and ideas. What's on your mind today?`
+                     : `Hey ${userName}! 👋 I’m Wakti AI, your smart assistant. Ask me anything from quick questions and planning ideas to deeper conversations. What’s on your mind today?`
                   )}
                   className="p-2 rounded-md hover:bg-background/80 transition-colors"
                   title={language === 'ar' ? 'نسخ النص' : 'Copy text'}
@@ -488,7 +488,7 @@ export function ChatMessages({
                 <button
                   onPointerUp={() => handleSpeak(language === 'ar' 
                     ? `مرحباً ${userName}! 👋 أنا وقتي AI، هنا لمساعدتك في كل ما تحتاجه.`
-                    : `Hey ${userName}! 👋 I'm Wakti AI your smart assistant. Ask me anything, from tasks and reminders to chats and ideas. What's on your mind today?`, 'welcome'
+                    : `Hey ${userName}! 👋 I’m Wakti AI, your smart assistant. Ask me anything from quick questions and planning ideas to deeper conversations. What’s on your mind today?`, 'welcome'
                   )}
                   className={`p-2 rounded-md transition-colors ${speakingMessageId === 'welcome' || fadeOutId === 'welcome' ? 'text-green-500 bg-green-500/10 shadow-[0_0_8px_rgba(34,197,94,0.7)]' : 'hover:bg-background/80'}`}
                   title={language === 'ar' ? 'تشغيل الصوت' : 'Play audio'}
@@ -535,7 +535,7 @@ export function ChatMessages({
                       handleSpeak(
                         language === 'ar'
                           ? `مرحباً ${userName}! 👋 أنا وقتي AI، هنا لمساعدتك في كل ما تحتاجه.`
-                          : `Hey ${userName}! 👋 I'm Wakti AI your smart assistant. Ask me anything, from tasks and reminders to chats and ideas. What's on your mind today?`,
+                          : `Hey ${userName}! 👋 I’m Wakti AI, your smart assistant. Ask me anything from quick questions and planning ideas to deeper conversations. What’s on your mind today?`,
                         'welcome'
                       );
                     }}

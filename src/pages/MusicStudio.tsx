@@ -1415,25 +1415,41 @@ function EditorTab() {
     try {
       const { data, error } = await (supabase as any)
         .from('user_music_tracks')
-        .select('id, created_at, prompt, include_styles, exclude_styles, requested_duration_seconds, signed_url, storage_path, mime')
+        .select('id, created_at, prompt, include_styles, exclude_styles, requested_duration_seconds, signed_url, storage_path, mime, meta')
         .order('created_at', { ascending: false })
         .limit(50);
 
       if (error) throw error;
-      // Simple approach like Tasjeel: use signed_url directly from database
-      const withUrls = (data || []).map((t) => {
-        // Use signed_url directly if available, otherwise construct from storage_path as fallback
-        let playUrl: string | null = t.signed_url;
-        if (!playUrl && t.storage_path) {
-          const base = SUPABASE_URL.replace(/\/$/, '');
-          const path = t.storage_path.startsWith('/') ? t.storage_path.slice(1) : t.storage_path;
-          playUrl = `${base}/storage/v1/object/public/music/${path}`;
-        }
-        return { ...t, play_url: playUrl } as typeof t & { play_url: string | null };
-      });
+      
+      // Filter out failed/generating records and build playable URLs
+      const withUrls = (data || [])
+        .filter((t: any) => {
+          // Skip records that are still generating or failed
+          const status = t.meta?.status;
+          if (status === 'generating' || status === 'failed') {
+            console.log('[MusicStudio] Skipping track with status:', status, t.id);
+            return false;
+          }
+          // Skip records with placeholder paths (never completed)
+          if (t.storage_path?.includes('_pending.mp3')) {
+            console.log('[MusicStudio] Skipping pending track:', t.id);
+            return false;
+          }
+          return true;
+        })
+        .map((t: any) => {
+          // Use signed_url directly if available, otherwise construct from storage_path as fallback
+          let playUrl: string | null = t.signed_url;
+          if (!playUrl && t.storage_path) {
+            const base = SUPABASE_URL.replace(/\/$/, '');
+            const path = t.storage_path.startsWith('/') ? t.storage_path.slice(1) : t.storage_path;
+            playUrl = `${base}/storage/v1/object/public/music/${path}`;
+          }
+          return { ...t, play_url: playUrl } as typeof t & { play_url: string | null };
+        });
       setTracks(withUrls);
     } catch (e) {
-      // noop
+      console.error('[MusicStudio] Load error:', e);
     } finally {
       setLoading(false);
     }

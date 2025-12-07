@@ -55,14 +55,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("language", language);
     document.documentElement.setAttribute("lang", language);
     
-    // Apply RTL direction for Arabic
-    if (language === "ar") {
-      document.documentElement.classList.add("rtl");
-      document.dir = "rtl";
-    } else {
-      document.documentElement.classList.remove("rtl");
-      document.dir = "ltr";
-    }
+    // Keep overall app layout LTR for all languages.
+    // Arabic will still get right-aligned text via css rules on [lang="ar"],
+    // but we no longer flip the entire document direction.
+    document.dir = "ltr";
   }, [language]);
 
   const toggleTheme = () => {
