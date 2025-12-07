@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { MoreVertical, Calendar, Clock, Edit, Trash2, Pause } from 'lucide-react';
-import { format, isPast, parseISO } from 'date-fns';
+import { format, isPast, parseISO, differenceInSeconds, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import { TRService, TRReminder } from '@/services/trService';
@@ -30,7 +30,7 @@ export const ReminderList: React.FC<ReminderListProps> = ({
   const [editingReminder, setEditingReminder] = useState<TRReminder | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [error, setError] = useState<string>('');
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [tick, setTick] = useState(0); // For countdown refresh
 
   console.log('ReminderList - Rendered with propReminders:', propReminders?.length);
 
@@ -112,12 +112,12 @@ export const ReminderList: React.FC<ReminderListProps> = ({
   };
 
   const handleDeleteClick = async (reminder: TRReminder) => {
-    // Two-step inline confirmation: first tap arms, second tap confirms
-    if (pendingDeleteId !== reminder.id) {
-      setPendingDeleteId(reminder.id);
-      return;
-    }
-
+    const confirmMsg = language === 'ar' 
+      ? `هل أنت متأكد أنك تريد حذف "${reminder.title}"؟`
+      : `Are you sure you want to delete "${reminder.title}"?`;
+    
+    if (!window.confirm(confirmMsg)) return;
+    
     try {
       console.log('ReminderList - Deleting reminder:', reminder.id);
       await TRService.deleteReminder(reminder.id);
@@ -126,14 +126,13 @@ export const ReminderList: React.FC<ReminderListProps> = ({
       if (onRemindersChanged) {
         onRemindersChanged();
       } else {
-        loadReminders();
+        await loadReminders();
       }
       onReminderUpdate?.();
     } catch (error) {
       console.error('ReminderList - Error deleting reminder:', error);
       toast.error(t('errorDeleting', language));
     }
-    setPendingDeleteId(null);
   };
 
   const handleFormClose = () => {
@@ -153,21 +152,58 @@ export const ReminderList: React.FC<ReminderListProps> = ({
     onReminderUpdate?.();
   };
 
-  const isOverdue = (reminder: TRReminder) => {
-    if (!reminder.due_date) return false;
-    
+  const getReminderDateTime = (reminder: TRReminder): Date | null => {
+    if (!reminder.due_date) return null;
     try {
       const reminderDate = parseISO(reminder.due_date);
       if (reminder.due_time) {
         const [hours, minutes] = reminder.due_time.split(':');
-        reminderDate.setHours(parseInt(hours), parseInt(minutes));
+        reminderDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
       }
-      return isPast(reminderDate);
-    } catch (error) {
-      console.error('ReminderList - Error checking overdue status:', error);
-      return false;
+      return reminderDate;
+    } catch {
+      return null;
     }
   };
+
+  const isOverdue = (reminder: TRReminder) => {
+    const dt = getReminderDateTime(reminder);
+    return dt ? isPast(dt) : false;
+  };
+
+  // Countdown text helper
+  const getCountdownText = (reminder: TRReminder): string | null => {
+    const dt = getReminderDateTime(reminder);
+    if (!dt) return null;
+    const now = new Date();
+    const diffSec = differenceInSeconds(dt, now);
+    if (diffSec <= 0) {
+      // Overdue
+      const overdueSec = Math.abs(diffSec);
+      if (overdueSec < 60) return language === 'ar' ? `متأخر بـ ${overdueSec} ث` : `Overdue by ${overdueSec}s`;
+      const overdueMin = Math.floor(overdueSec / 60);
+      if (overdueMin < 60) return language === 'ar' ? `متأخر بـ ${overdueMin} د` : `Overdue by ${overdueMin}m`;
+      const overdueHr = Math.floor(overdueMin / 60);
+      if (overdueHr < 24) return language === 'ar' ? `متأخر بـ ${overdueHr} س` : `Overdue by ${overdueHr}h`;
+      const overdueDays = Math.floor(overdueHr / 24);
+      return language === 'ar' ? `متأخر بـ ${overdueDays} يوم` : `Overdue by ${overdueDays}d`;
+    }
+    // Due in future
+    if (diffSec < 60) return language === 'ar' ? `خلال ${diffSec} ث` : `Due in ${diffSec}s`;
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return language === 'ar' ? `خلال ${diffMin} د` : `Due in ${diffMin}m`;
+    const diffHr = Math.floor(diffMin / 60);
+    const remMin = diffMin % 60;
+    if (diffHr < 24) return language === 'ar' ? `خلال ${diffHr} س ${remMin > 0 ? remMin + ' د' : ''}` : `Due in ${diffHr}h${remMin > 0 ? ' ' + remMin + 'm' : ''}`;
+    const diffDays = Math.floor(diffHr / 24);
+    return language === 'ar' ? `خلال ${diffDays} يوم` : `Due in ${diffDays}d`;
+  };
+
+  // Tick every 30s to update countdowns
+  useEffect(() => {
+    const interval = setInterval(() => setTick((t) => t + 1), 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Error boundary effect
   useEffect(() => {
@@ -244,11 +280,19 @@ export const ReminderList: React.FC<ReminderListProps> = ({
                           <span>{reminder.due_time}</span>
                         </div>
                       )}
-                      {isOverdue(reminder) && (
-                        <span className="text-red-600 font-medium">{t('overdue', language)}</span>
-                      )}
                     </div>
                   )}
+                  {/* Countdown */}
+                  {(() => {
+                    const countdown = getCountdownText(reminder);
+                    if (!countdown) return null;
+                    const overdue = isOverdue(reminder);
+                    return (
+                      <div className={`text-xs mt-1 font-medium ${overdue ? 'text-red-600' : 'text-primary'}`}>
+                        {countdown}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <DropdownMenu>
@@ -271,9 +315,7 @@ export const ReminderList: React.FC<ReminderListProps> = ({
                       className="text-destructive focus:text-destructive"
                     >
                       <Trash2 className="h-4 w-4 mr-2" />
-                      {pendingDeleteId === reminder.id
-                        ? (language === 'ar' ? 'اضغط مرة أخرى للتأكيد' : 'Tap again to confirm')
-                        : t('delete', language)}
+                      {t('delete', language)}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -291,6 +333,7 @@ export const ReminderList: React.FC<ReminderListProps> = ({
           onReminderSaved={handleReminderSaved}
         />
       )}
+
     </>
   );
 };

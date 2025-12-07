@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { CalendarIcon } from 'lucide-react';
+import { CalendarIcon, Clock } from 'lucide-react';
 import { format, parseISO, isValid } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -252,17 +252,72 @@ export function ReminderForm({ isOpen, onClose, reminder, onReminderSaved }: Rem
               />
 
               <div className="flex-1 min-w-[120px]">
-                <Input
-                  id="due_time"
-                  type="time"
-                  {...register('due_time')}
-                  disabled={isLoading}
-                />
+                <div className="relative">
+                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    id="due_time"
+                    type="time"
+                    {...register('due_time')}
+                    disabled={isLoading}
+                    className="pl-9"
+                    placeholder="--:--"
+                  />
+                </div>
                 {errors.due_time && (
                   <p className="mt-1 text-xs text-destructive">{errors.due_time.message}</p>
                 )}
               </div>
             </div>
+
+            {/* Quick time presets */}
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {[
+                { label: language === 'ar' ? '+5 د' : '+5m', minutes: 5 },
+                { label: language === 'ar' ? '+15 د' : '+15m', minutes: 15 },
+                { label: language === 'ar' ? '+30 د' : '+30m', minutes: 30 },
+                { label: language === 'ar' ? '+1 س' : '+1h', minutes: 60 },
+                { label: language === 'ar' ? 'الليلة' : 'Tonight', minutes: null, hour: 21 },
+                { label: language === 'ar' ? 'غداً' : 'Tomorrow', minutes: null, tomorrow: true },
+              ].map((preset) => (
+                <Button
+                  key={preset.label}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs px-2"
+                  disabled={isLoading}
+                  onClick={() => {
+                    const now = new Date();
+                    let targetDate = new Date();
+                    let targetTime = '';
+
+                    if (preset.minutes) {
+                      targetDate = new Date(now.getTime() + preset.minutes * 60000);
+                      targetTime = `${String(targetDate.getHours()).padStart(2, '0')}:${String(targetDate.getMinutes()).padStart(2, '0')}`;
+                    } else if (preset.hour !== undefined) {
+                      // Tonight at specific hour
+                      targetDate.setHours(preset.hour, 0, 0, 0);
+                      if (targetDate <= now) {
+                        targetDate.setDate(targetDate.getDate() + 1);
+                      }
+                      targetTime = `${String(preset.hour).padStart(2, '0')}:00`;
+                    } else if (preset.tomorrow) {
+                      targetDate.setDate(targetDate.getDate() + 1);
+                      targetDate.setHours(9, 0, 0, 0);
+                      targetTime = '09:00';
+                    }
+
+                    setValue('due_date', formatDateForInput(targetDate));
+                    setValue('due_time', targetTime);
+                  }}
+                >
+                  {preset.label}
+                </Button>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              {language === 'ar' ? 'اضغط على الوقت لاختياره أو استخدم الأزرار السريعة' : 'Tap time to select or use quick buttons'}
+            </p>
           </div>
 
           {/* Form Actions */}
