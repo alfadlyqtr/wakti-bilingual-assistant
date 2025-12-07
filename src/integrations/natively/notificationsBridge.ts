@@ -6,11 +6,19 @@ declare global {
 
 function getInstance(): any | null {
   try {
-    if (typeof window === 'undefined') return null;
+    if (typeof window === 'undefined') {
+      console.log('[NativelyNotifications] Window undefined - not in browser');
+      return null;
+    }
     const Ctor = (window as any).NativelyNotifications;
-    if (!Ctor) return null;
+    if (!Ctor) {
+      console.log('[NativelyNotifications] NativelyNotifications class not found on window - not in Natively app');
+      return null;
+    }
+    console.log('[NativelyNotifications] SDK found, creating instance');
     return new Ctor();
-  } catch {
+  } catch (err) {
+    console.error('[NativelyNotifications] Error creating instance:', err);
     return null;
   }
 }
@@ -21,21 +29,31 @@ function getInstance(): any | null {
  * @param userId The database UUID of the user
  */
 export function setNotificationUser(userId: string) {
+  console.log('[NativelyNotifications] setNotificationUser called with userId:', userId);
   const n = getInstance();
-  if (!n || !userId) return;
+  if (!n) {
+    console.warn('[NativelyNotifications] Cannot set user - SDK not available');
+    return;
+  }
+  if (!userId) {
+    console.warn('[NativelyNotifications] Cannot set user - no userId provided');
+    return;
+  }
 
   try {
+    console.log('[NativelyNotifications] Calling setExternalId with:', userId);
     // Natively SDK docs: notifications.setExternalId({ externalId: '...' }, callback)
     n.setExternalId({ externalId: userId }, (resp: any) => {
+      console.log('[NativelyNotifications] setExternalId response:', JSON.stringify(resp));
       if (resp && resp.externalId) {
-        console.log('Natively: OneSignal External ID set successfully:', resp.externalId);
+        console.log('[NativelyNotifications] ✅ External ID set successfully:', resp.externalId);
       } else {
         const errorMessage = (resp && (resp.error || resp.message)) || "Failed to set external ID";
-        console.warn('Natively: Failed to set OneSignal External ID:', errorMessage);
+        console.warn('[NativelyNotifications] ❌ Failed to set External ID:', errorMessage);
       }
     });
   } catch (err) {
-    console.warn('Natively: Error calling setExternalId', err);
+    console.error('[NativelyNotifications] Error calling setExternalId:', err);
   }
 }
 
