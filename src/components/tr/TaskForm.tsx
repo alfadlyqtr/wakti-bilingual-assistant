@@ -11,7 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { CalendarIcon, X, Plus, Trash2, Copy, ExternalLink, Clock } from 'lucide-react';
+import { CalendarIcon, X, Plus, Trash2, Copy, ExternalLink, Clock, Sparkles, ImagePlus, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -19,6 +19,7 @@ import { t } from '@/utils/translations';
 import { TRService, TRTask } from '@/services/trService';
 import { toast } from 'sonner';
 import { SubtaskManager } from '@/components/tr/SubtaskManager';
+import { supabase } from '@/integrations/supabase/client';
 
 // PHASE 2 FIX: Updated schema to make due_date truly optional
 const taskSchema = z.object({
@@ -48,6 +49,8 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
   const [newSubtask, setNewSubtask] = useState('');
   const [openDueIndex, setOpenDueIndex] = useState<number | null>(null);
   const [bulkInput, setBulkInput] = useState('');
+  const [isExtracting, setIsExtracting] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const {
     register,
@@ -246,6 +249,99 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
     }
   };
 
+  // AI Tidy - extract subtasks from messy text
+  const handleAITidy = async () => {
+    if (!bulkInput.trim()) {
+      toast.error(language === 'ar' ? 'الرجاء إدخال نص أولاً' : 'Please enter some text first');
+      return;
+    }
+    
+    setIsExtracting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-subtasks', {
+        body: { mode: 'text', text: bulkInput }
+      });
+      
+      if (error) throw error;
+      
+      if (data?.subtasks?.length > 0) {
+        setBulkInput(data.subtasks.join('\n'));
+        toast.success(
+          language === 'ar' 
+            ? `تم استخراج ${data.subtasks.length} مهمة فرعية ✨` 
+            : `Extracted ${data.subtasks.length} subtasks ✨`
+        );
+      } else {
+        toast.info(language === 'ar' ? 'لم يتم العثور على مهام فرعية' : 'No subtasks found');
+      }
+    } catch (error) {
+      console.error('AI Tidy error:', error);
+      toast.error(language === 'ar' ? 'فشل في استخراج المهام' : 'Failed to extract subtasks');
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
+  // Handle image upload for OCR extraction
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error(language === 'ar' ? 'الرجاء اختيار صورة' : 'Please select an image');
+      return;
+    }
+    
+    // Validate file size (max 4MB)
+    if (file.size > 4 * 1024 * 1024) {
+      toast.error(language === 'ar' ? 'الصورة كبيرة جداً (الحد الأقصى 4MB)' : 'Image too large (max 4MB)');
+      return;
+    }
+    
+    setIsExtracting(true);
+    try {
+      // Convert to base64
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = reader.result as string;
+        
+        const { data, error } = await supabase.functions.invoke('generate-subtasks', {
+          body: { mode: 'image', imageBase64: base64 }
+        });
+        
+        if (error) throw error;
+        
+        if (data?.subtasks?.length > 0) {
+          setBulkInput(data.subtasks.join('\n'));
+          toast.success(
+            language === 'ar' 
+              ? `تم استخراج ${data.subtasks.length} مهمة من الصورة ✨` 
+              : `Extracted ${data.subtasks.length} subtasks from image ✨`
+          );
+        } else {
+          toast.info(language === 'ar' ? 'لم يتم العثور على مهام في الصورة' : 'No subtasks found in image');
+        }
+        
+        setIsExtracting(false);
+      };
+      reader.onerror = () => {
+        toast.error(language === 'ar' ? 'فشل في قراءة الصورة' : 'Failed to read image');
+        setIsExtracting(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Image upload error:', error);
+      toast.error(language === 'ar' ? 'فشل في استخراج المهام من الصورة' : 'Failed to extract from image');
+      setIsExtracting(false);
+    }
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
@@ -321,17 +417,61 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
             />
           </div>
 
-          {/* Due Time - Only show if date is selected */}
-          {watchedDueDate && (
-            <div className="space-y-2">
-              <Label htmlFor="due_time">{t('dueTime', language)}</Label>
-              <Input
-                id="due_time"
-                type="time"
-                {...register('due_time')}
-              />
+          {/* Due Time - Always visible, optional */}
+          <div className="space-y-2">
+            <Label htmlFor="due_time">{t('dueTime', language)} {language === 'ar' ? '(اختياري)' : '(optional)'}</Label>
+            <Input
+              id="due_time"
+              type="time"
+              {...register('due_time')}
+              className="text-base"
+            />
+            {/* Quick Time Chips - fewer than reminders */}
+            <div className="flex flex-wrap gap-2 pt-1">
+              {[
+                { label: language === 'ar' ? '+15 د' : '+15m', minutes: 15 },
+                { label: language === 'ar' ? '+30 د' : '+30m', minutes: 30 },
+                { label: language === 'ar' ? '+1 س' : '+1h', minutes: 60 },
+                { label: language === 'ar' ? '+2 س' : '+2h', minutes: 120 },
+              ].map((preset) => (
+                <Button
+                  key={preset.label}
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="h-7 text-[11px] px-3 rounded-full bg-gradient-to-r from-primary/80 to-primary text-primary-foreground hover:from-primary hover:to-primary shadow-sm"
+                  disabled={isLoading}
+                  onClick={() => {
+                    const currentDate = watch('due_date');
+                    const currentTime = watch('due_time');
+                    
+                    let baseDate: Date;
+                    
+                    if (currentDate && currentTime) {
+                      baseDate = new Date(currentDate);
+                      const [hours, minutes] = currentTime.split(':').map(Number);
+                      baseDate.setHours(hours, minutes, 0, 0);
+                    } else {
+                      // Start from now if no date/time set
+                      baseDate = new Date();
+                      baseDate.setSeconds(0, 0);
+                      if (new Date().getSeconds() > 0) {
+                        baseDate.setMinutes(baseDate.getMinutes() + 1);
+                      }
+                    }
+                    
+                    const targetDate = new Date(baseDate.getTime() + preset.minutes * 60000);
+                    const targetTime = `${String(targetDate.getHours()).padStart(2, '0')}:${String(targetDate.getMinutes()).padStart(2, '0')}`;
+                    
+                    setValue('due_date', format(targetDate, 'yyyy-MM-dd'));
+                    setValue('due_time', targetTime);
+                  }}
+                >
+                  {preset.label}
+                </Button>
+              ))}
             </div>
-          )}
+          </div>
 
           {/* Priority */}
           <div className="space-y-2">
@@ -464,18 +604,75 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
 
                 {/* Bulk Subtasks */}
                 <div className="mt-3 rounded-lg border bg-muted/10 p-3">
-                  <Label className="text-sm">
-                    {language === 'ar' ? 'إضافة مجمّعة' : 'Bulk Subtasks'}
-                  </Label>
+                  {/* Header with title and AI buttons */}
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="text-sm">
+                      {language === 'ar' ? 'إضافة مجمّعة' : 'Bulk Subtasks'}
+                    </Label>
+                    <div className="flex items-center gap-1">
+                      {/* AI Tidy Button */}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs gap-1 text-primary hover:text-primary hover:bg-primary/10"
+                        onClick={handleAITidy}
+                        disabled={isExtracting || !bulkInput.trim()}
+                        title={language === 'ar' ? 'تنظيف واستخراج بالذكاء الاصطناعي' : 'AI Tidy & Extract'}
+                      >
+                        {isExtracting ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Sparkles className="h-3.5 w-3.5" />
+                        )}
+                        <span className="hidden sm:inline">{language === 'ar' ? 'تنظيف' : 'Tidy'}</span>
+                      </Button>
+                      {/* Upload Image Button */}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs gap-1 text-primary hover:text-primary hover:bg-primary/10"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isExtracting}
+                        title={language === 'ar' ? 'استخراج من صورة' : 'Extract from image'}
+                      >
+                        {isExtracting ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <ImagePlus className="h-3.5 w-3.5" />
+                        )}
+                        <span className="hidden sm:inline">{language === 'ar' ? 'صورة' : 'Image'}</span>
+                      </Button>
+                      {/* Hidden file input */}
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleImageUpload}
+                      />
+                    </div>
+                  </div>
+                  
                   <Textarea
-                    className="mt-2"
                     rows={3}
                     value={bulkInput}
                     onChange={(e) => setBulkInput(e.target.value)}
-                    placeholder={language === 'ar' ? 'ألصق أو اكتب عناصر مفصولة بفواصل أو أسطر جديدة' : 'Paste or type items separated by commas or new lines'}
+                    placeholder={language === 'ar' ? 'ألصق نص من إيميل، واتساب، أو أي مصدر...' : 'Paste text from email, WhatsApp, or any source...'}
+                    disabled={isExtracting}
                   />
+                  
+                  {/* Loading indicator */}
+                  {isExtracting && (
+                    <div className="mt-2 flex items-center gap-2 text-xs text-primary">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      {language === 'ar' ? 'جاري استخراج المهام...' : 'Extracting subtasks...'}
+                    </div>
+                  )}
+                  
                   {/* Preview */}
-                  {bulkInput.trim() && (
+                  {bulkInput.trim() && !isExtracting && (
                     <div className="mt-2">
                       <div className="text-xs text-muted-foreground mb-1">
                         {(() => {
@@ -498,13 +695,14 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
                       </div>
                     </div>
                   )}
+                  
                   <div className="mt-2 flex justify-end">
-                    <Button type="button" size="sm" onClick={handleBulkCreate} disabled={!bulkInput.trim()}>
+                    <Button type="button" size="sm" onClick={handleBulkCreate} disabled={!bulkInput.trim() || isExtracting}>
                       {language === 'ar' ? 'إنشاء المهام الفرعية' : 'Create Subtasks'}
                     </Button>
                   </div>
                   <div className="mt-1 text-[11px] text-muted-foreground">
-                    {language === 'ar' ? 'تلميح: اللصق يحوِّل العناصر تلقائيًا إلى بطاقات.' : 'Tip: Pasting a list auto-splits into chips.'}
+                    {language === 'ar' ? 'تلميح: استخدم ✨ لتنظيف نص فوضوي أو 📷 لاستخراج من صورة' : 'Tip: Use ✨ to clean messy text or 📷 to extract from image'}
                   </div>
                 </div>
               </div>

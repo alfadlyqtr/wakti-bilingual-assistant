@@ -297,18 +297,19 @@ export function ReminderForm({ isOpen, onClose, reminder, onReminderSaved }: Rem
                       // If both date and time are set, add to that time
                       baseDate = parseISO(currentDate);
                       const [hours, minutes] = currentTime.split(':').map(Number);
-                      baseDate.setHours(hours, minutes, 0, 0);
-                    } else if (currentDate) {
-                      // If only date is set, start from that date at current time
-                      baseDate = parseISO(currentDate);
-                      const now = new Date();
-                      baseDate.setHours(now.getHours(), now.getMinutes(), 0, 0);
+                      baseDate.setHours(hours, minutes, 0, 0); // Always :00 seconds
                     } else {
-                      // If nothing is set, start from now
-                      baseDate = new Date();
+                      // If nothing is set, start from NOW but round up to next minute
+                      const now = new Date();
+                      baseDate = new Date(now);
+                      baseDate.setSeconds(0, 0); // Reset to :00 seconds
+                      // If we're past :00 in the current minute, move to next minute
+                      if (now.getSeconds() > 0) {
+                        baseDate.setMinutes(baseDate.getMinutes() + 1);
+                      }
                     }
                     
-                    // Add the preset minutes
+                    // Add the preset minutes (exact minutes, not affected by current seconds)
                     const targetDate = new Date(baseDate.getTime() + preset.minutes * 60000);
                     const targetTime = `${String(targetDate.getHours()).padStart(2, '0')}:${String(targetDate.getMinutes()).padStart(2, '0')}`;
 

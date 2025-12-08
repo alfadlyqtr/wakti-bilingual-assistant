@@ -42,7 +42,7 @@ const TabsTrigger = React.forwardRef<
     <TabsPrimitive.Trigger asChild ref={ref} {...props}>
       <div
         className={cn(
-          "inline-flex items-center whitespace-nowrap rounded-xl px-5 py-2.5 text-sm font-medium",
+          "inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm font-medium min-w-0",
           // Base button look (at rest)
           "border border-border bg-card text-foreground/90 shadow-sm",
           // Hover subtle lift

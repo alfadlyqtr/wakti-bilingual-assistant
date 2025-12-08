@@ -41,6 +41,7 @@ export interface TRReminder {
   due_date: string;
   due_time?: string;
   snoozed_until?: string;
+  notified_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -388,14 +389,22 @@ export class TRService {
     return data;
   }
 
-  static async snoozeReminder(id: string): Promise<TRReminder> {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
+  static async snoozeReminder(id: string, minutes: number = 10): Promise<TRReminder> {
+    // Snooze for specified minutes - update the due_date and due_time
+    const newDueTime = new Date();
+    newDueTime.setMinutes(newDueTime.getMinutes() + minutes);
+    newDueTime.setSeconds(0, 0); // Round to minute
     
-    const { data, error } = await supabase
-      .from('tr_reminders')
+    const newDueDate = newDueTime.toISOString().split('T')[0]; // YYYY-MM-DD
+    const newDueTimeStr = `${String(newDueTime.getHours()).padStart(2, '0')}:${String(newDueTime.getMinutes()).padStart(2, '0')}:00`;
+    
+    const { data, error } = await (supabase
+      .from('tr_reminders') as any)
       .update({ 
-        snoozed_until: tomorrow.toISOString().split('T')[0]
+        due_date: newDueDate,
+        due_time: newDueTimeStr,
+        snoozed_until: null, // Clear snooze flag - we're updating the actual time
+        notified_at: null // Reset so it can notify again
       })
       .eq('id', id)
       .select()

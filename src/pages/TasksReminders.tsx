@@ -119,18 +119,20 @@ export default function TasksReminders() {
 
           {/* Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="tasks">
-                {t('tasks', language)} ({tasks.length})
+            <TabsList className="grid w-full grid-cols-3 gap-1">
+              <TabsTrigger value="tasks" className="text-xs sm:text-sm px-2 sm:px-4">
+                <span className="hidden sm:inline">{t('tasks', language)}</span>
+                <span className="sm:hidden">Tasks</span>
+                <span className="ml-1">({tasks.length})</span>
               </TabsTrigger>
-              <TabsTrigger value="reminders">
-                {t('reminders', language)} ({reminders.length})
+              <TabsTrigger value="reminders" className="text-xs sm:text-sm px-2 sm:px-4">
+                <span className="hidden sm:inline">{t('reminders', language)}</span>
+                <span className="sm:hidden">Remind</span>
+                <span className="ml-1">({reminders.length})</span>
               </TabsTrigger>
-              <TabsTrigger
-                value="activity"
-                className="text-[11px] leading-snug whitespace-normal px-3 py-2 sm:text-sm sm:leading-tight"
-              >
-                {t('activityMonitor', language)}
+              <TabsTrigger value="activity" className="text-xs sm:text-sm px-2 sm:px-4">
+                <span className="hidden sm:inline">{t('activityMonitor', language)}</span>
+                <span className="sm:hidden">Activity</span>
               </TabsTrigger>
             </TabsList>
 

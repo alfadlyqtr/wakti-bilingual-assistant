@@ -1,15 +1,16 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { MoreVertical, Calendar, Clock, Edit, Trash2, Pause } from 'lucide-react';
+import { MoreVertical, Calendar, Clock, Edit, Trash2, Pause, Timer, AlarmClock, CheckCircle2 } from 'lucide-react';
 import { format, isPast, parseISO, differenceInSeconds, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import { TRService, TRReminder } from '@/services/trService';
 import { ReminderForm } from './ReminderForm';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ReminderListProps {
   reminders?: TRReminder[];
@@ -31,23 +32,17 @@ export const ReminderList: React.FC<ReminderListProps> = ({
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [error, setError] = useState<string>('');
   const [tick, setTick] = useState(0); // For countdown refresh
+  const triggeredReminders = useRef<Set<string>>(new Set()); // Track which reminders we've already triggered
+  const [snoozeReminderId, setSnoozeReminderId] = useState<string | null>(null); // For snooze popover
 
-  console.log('ReminderList - Rendered with propReminders:', propReminders?.length);
 
   useEffect(() => {
     if (propReminders) {
-      console.log('ReminderList - Using prop reminders:', propReminders.length);
-      // Filter out snoozed reminders if using prop reminders
-      const now = new Date();
-      const activeReminders = propReminders.filter(reminder => {
-        if (!reminder.snoozed_until) return true;
-        return parseISO(reminder.snoozed_until) <= now;
-      });
-      setReminders(activeReminders);
+      // Show all reminders (no filtering)
+      setReminders(propReminders);
       setLoading(false);
       setError('');
     } else {
-      console.log('ReminderList - Loading own reminders');
       loadReminders();
     }
   }, [propReminders]);
@@ -56,21 +51,10 @@ export const ReminderList: React.FC<ReminderListProps> = ({
     try {
       setLoading(true);
       setError('');
-      console.log('ReminderList - Fetching reminders from service');
       
       const data = await TRService.getReminders();
-      
-      console.log('ReminderList - Fetched reminders:', data.length);
-      
-      // Filter out snoozed reminders
-      const now = new Date();
-      const activeReminders = data.filter(reminder => {
-        if (!reminder.snoozed_until) return true;
-        return parseISO(reminder.snoozed_until) <= now;
-      });
-      
-      console.log('ReminderList - Active reminders after filtering:', activeReminders.length);
-      setReminders(activeReminders);
+      // Show all reminders (no filtering)
+      setReminders(data);
     } catch (error) {
       console.error('ReminderList - Error loading reminders:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to load reminders';
@@ -83,7 +67,6 @@ export const ReminderList: React.FC<ReminderListProps> = ({
   };
 
   const handleEditReminder = (reminder: TRReminder) => {
-    console.log('ReminderList - Edit reminder clicked:', reminder.id);
     
     if (onReminderEdit) {
       onReminderEdit(reminder);
@@ -93,11 +76,14 @@ export const ReminderList: React.FC<ReminderListProps> = ({
     }
   };
 
-  const handleSnoozeReminder = async (reminder: TRReminder) => {
+  const handleSnoozeReminder = async (reminderId: string, minutes: number) => {
     try {
-      console.log('ReminderList - Snoozing reminder:', reminder.id);
-      await TRService.snoozeReminder(reminder.id);
-      toast.success(t('snoozeReminder', language));
+      await TRService.snoozeReminder(reminderId, minutes);
+      const snoozeMsg = language === 'ar' 
+        ? `تم تأجيل التذكير ${minutes} دقيقة ⏰`
+        : `Snoozed for ${minutes}min ⏰`;
+      toast.success(snoozeMsg);
+      setSnoozeReminderId(null);
       
       if (onRemindersChanged) {
         onRemindersChanged();
@@ -107,9 +93,37 @@ export const ReminderList: React.FC<ReminderListProps> = ({
       onReminderUpdate?.();
     } catch (error) {
       console.error('ReminderList - Error snoozing reminder:', error);
-      toast.error(t('errorSnoozing', language));
+      toast.error(language === 'ar' ? 'فشل تأجيل التذكير' : 'Failed to snooze reminder');
     }
   };
+
+  const handleMarkDone = async (reminder: TRReminder) => {
+    try {
+      await TRService.deleteReminder(reminder.id);
+      const doneMsg = language === 'ar' ? 'تم إكمال التذكير ✓' : 'Reminder completed ✓';
+      toast.success(doneMsg);
+      
+      if (onRemindersChanged) {
+        onRemindersChanged();
+      } else {
+        loadReminders();
+      }
+      onReminderUpdate?.();
+    } catch (error) {
+      console.error('ReminderList - Error marking reminder done:', error);
+      toast.error(language === 'ar' ? 'فشل إكمال التذكير' : 'Failed to complete reminder');
+    }
+  };
+
+  // Snooze time presets
+  const snoozePresets = [
+    { label: language === 'ar' ? '1 د' : '1m', minutes: 1 },
+    { label: language === 'ar' ? '5 د' : '5m', minutes: 5 },
+    { label: language === 'ar' ? '10 د' : '10m', minutes: 10 },
+    { label: language === 'ar' ? '15 د' : '15m', minutes: 15 },
+    { label: language === 'ar' ? '30 د' : '30m', minutes: 30 },
+    { label: language === 'ar' ? '1 س' : '1h', minutes: 60 },
+  ];
 
   const handleDeleteClick = async (reminder: TRReminder) => {
     const confirmMsg = language === 'ar' 
@@ -119,7 +133,6 @@ export const ReminderList: React.FC<ReminderListProps> = ({
     if (!window.confirm(confirmMsg)) return;
     
     try {
-      console.log('ReminderList - Deleting reminder:', reminder.id);
       await TRService.deleteReminder(reminder.id);
       toast.success(t('reminderDeleted', language));
       
@@ -136,14 +149,11 @@ export const ReminderList: React.FC<ReminderListProps> = ({
   };
 
   const handleFormClose = () => {
-    console.log('ReminderList - Form closed');
     setIsFormOpen(false);
     setEditingReminder(null);
   };
 
   const handleReminderSaved = () => {
-    console.log('ReminderList - Reminder saved, refreshing data');
-    
     if (onRemindersChanged) {
       onRemindersChanged();
     } else {
@@ -199,11 +209,80 @@ export const ReminderList: React.FC<ReminderListProps> = ({
     return language === 'ar' ? `خلال ${diffDays} يوم` : `Due in ${diffDays}d`;
   };
 
-  // Tick every 1s to update countdowns in real-time
+  // Trigger instant notification for a reminder that just became due
+  const triggerInstantNotification = async (reminder: TRReminder) => {
+    // Don't trigger if we've already triggered this reminder
+    if (triggeredReminders.current.has(reminder.id)) return;
+    triggeredReminders.current.add(reminder.id);
+    
+    try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      // Create notification entry - this will trigger the instant_push_trigger
+      // Using type assertion because TS types may be out of sync with actual DB schema
+      const { error } = await (supabase
+        .from('notification_history') as any)
+        .insert({
+          user_id: user.id,
+          type: 'reminder_due',
+          title: 'Reminder',
+          body: reminder.title,
+          data: {
+            reminder_id: reminder.id,
+            due_date: reminder.due_date,
+            due_time: reminder.due_time
+          },
+          deep_link: '/tr'
+        });
+      
+      if (error) {
+        // Check if it's a duplicate (already notified by cron)
+        if (!error.message?.includes('duplicate')) {
+          console.error('Error triggering instant notification:', error);
+        }
+      } else {
+        // Mark as notified in the reminders table
+        await (supabase
+          .from('tr_reminders') as any)
+          .update({ notified_at: new Date().toISOString() })
+          .eq('id', reminder.id);
+      }
+    } catch (err) {
+      console.error('Error in triggerInstantNotification:', err);
+    }
+  };
+
+  // Tick every 1s to update countdowns and check for due reminders
   useEffect(() => {
-    const interval = setInterval(() => setTick((t) => t + 1), 1000);
+    const interval = setInterval(() => {
+      setTick((t) => t + 1);
+      
+      // Check each reminder to see if it just became due
+      reminders.forEach(reminder => {
+        if (!reminder.due_date || !reminder.due_time) return;
+        if (reminder.notified_at) return; // Already notified
+        
+        try {
+          const reminderDate = parseISO(reminder.due_date);
+          const [hours, minutes] = reminder.due_time.split(':');
+          reminderDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+          
+          const now = new Date();
+          const diffSec = differenceInSeconds(reminderDate, now);
+          
+          // If reminder just became due (within last 2 seconds), trigger instant notification
+          if (diffSec <= 0 && diffSec > -2) {
+            triggerInstantNotification(reminder);
+          }
+        } catch (err) {
+          // Ignore parse errors
+        }
+      });
+    }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [reminders]);
 
   // Error boundary effect
   useEffect(() => {
@@ -258,46 +337,14 @@ export const ReminderList: React.FC<ReminderListProps> = ({
         {reminders.map((reminder) => (
           <Card key={reminder.id} className={`transition-all hover:shadow-md ${isOverdue(reminder) ? 'border-red-200 bg-red-50/50' : ''}`}>
             <CardContent className="p-4">
-              <div className="flex items-start justify-between">
-                <div className="flex-1 min-w-0">
-                  <h3 className={`font-medium text-sm ${isOverdue(reminder) ? 'text-red-700' : ''}`}>
-                    {reminder.title}
-                  </h3>
-                  {reminder.description && (
-                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                      {reminder.description}
-                    </p>
-                  )}
-                  {reminder.due_date && (
-                    <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        <span>{format(parseISO(reminder.due_date), 'MMM dd, yyyy')}</span>
-                      </div>
-                      {reminder.due_time && (
-                        <div className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          <span>{reminder.due_time}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {/* Countdown */}
-                  {(() => {
-                    const countdown = getCountdownText(reminder);
-                    if (!countdown) return null;
-                    const overdue = isOverdue(reminder);
-                    return (
-                      <div className={`text-xs mt-1 font-medium ${overdue ? 'text-red-600' : 'text-primary'}`}>
-                        {countdown}
-                      </div>
-                    );
-                  })()}
-                </div>
-
+              {/* Header: Title + Menu */}
+              <div className="flex items-start justify-between gap-2 mb-1">
+                <h3 className={`font-medium text-sm flex-1 ${isOverdue(reminder) ? 'text-red-700' : ''}`}>
+                  {reminder.title}
+                </h3>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0">
                       <MoreVertical className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -306,7 +353,7 @@ export const ReminderList: React.FC<ReminderListProps> = ({
                       <Edit className="h-4 w-4 mr-2" />
                       {t('edit', language)}
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleSnoozeReminder(reminder)}>
+                    <DropdownMenuItem onClick={() => setSnoozeReminderId(reminder.id)}>
                       <Pause className="h-4 w-4 mr-2" />
                       {t('snooze', language)}
                     </DropdownMenuItem>
@@ -320,6 +367,98 @@ export const ReminderList: React.FC<ReminderListProps> = ({
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
+
+              {/* Description */}
+              {reminder.description && (
+                <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
+                  {reminder.description}
+                </p>
+              )}
+
+              {/* Date & Time */}
+              {reminder.due_date && (
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1">
+                    <Calendar className="h-3 w-3" />
+                    <span>{format(parseISO(reminder.due_date), 'MMM dd, yyyy')}</span>
+                  </div>
+                  {reminder.due_time && (
+                    <div className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      <span>{reminder.due_time}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Countdown + Done Button Row */}
+              <div className="flex items-center justify-between mt-3 gap-2">
+                {/* Countdown Badge */}
+                {(() => {
+                  const countdown = getCountdownText(reminder);
+                  if (!countdown) return <div />;
+                  const overdue = isOverdue(reminder);
+                  const dt = getReminderDateTime(reminder);
+                  const isUrgent = dt && !overdue && differenceInMinutes(dt, new Date()) <= 5;
+                  
+                  return (
+                    <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                      overdue 
+                        ? 'bg-red-100 text-red-700 animate-pulse' 
+                        : isUrgent 
+                          ? 'bg-orange-100 text-orange-700 animate-pulse'
+                          : 'bg-primary/10 text-primary'
+                    }`}>
+                      {overdue ? (
+                        <AlarmClock className="h-3.5 w-3.5" />
+                      ) : (
+                        <Timer className="h-3.5 w-3.5" />
+                      )}
+                      <span>{countdown}</span>
+                    </div>
+                  );
+                })()}
+
+                {/* Beautiful Done Button */}
+                <Button
+                  size="sm"
+                  className="h-8 px-4 rounded-full bg-gradient-to-r from-emerald-500 to-green-500 text-white hover:from-emerald-600 hover:to-green-600 shadow-md hover:shadow-lg transition-all duration-200 font-medium text-xs"
+                  onClick={() => handleMarkDone(reminder)}
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                  {language === 'ar' ? 'تم' : 'Done'}
+                </Button>
+              </div>
+
+              {/* Snooze Time Chips */}
+              {snoozeReminderId === reminder.id && (
+                <div className="mt-3 pt-3 border-t">
+                  <p className="text-xs text-muted-foreground mb-2">
+                    {language === 'ar' ? 'تأجيل لمدة:' : 'Snooze for:'}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {snoozePresets.map((preset) => (
+                      <Button
+                        key={preset.minutes}
+                        variant="secondary"
+                        size="sm"
+                        className="h-7 text-[11px] px-3 rounded-full bg-gradient-to-r from-primary/80 to-primary text-primary-foreground hover:from-primary hover:to-primary shadow-sm"
+                        onClick={() => handleSnoozeReminder(reminder.id, preset.minutes)}
+                      >
+                        {preset.label}
+                      </Button>
+                    ))}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-[11px] px-2 text-muted-foreground"
+                      onClick={() => setSnoozeReminderId(null)}
+                    >
+                      {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         ))}

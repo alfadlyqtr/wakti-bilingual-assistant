@@ -515,7 +515,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     // Do not early-return. Let rendering fall through so the CustomPaywallModal can display.
   }
 
-  if (DEV) console.log("ProtectedRoute: User has valid subscription, allowing access");
+  // User has valid subscription - render children
   return (
     <>
       {CustomPaywallModal && (

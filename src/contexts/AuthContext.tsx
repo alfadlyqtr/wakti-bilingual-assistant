@@ -141,7 +141,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
         // ========================================
         
-        console.log('AuthContext: onAuthStateChange event fired:', event);
+        // Auth state changed (only log errors, not every event)
         window.clearTimeout(loadingTimer);
         setSession(session);
         setUser(session?.user ?? null);
