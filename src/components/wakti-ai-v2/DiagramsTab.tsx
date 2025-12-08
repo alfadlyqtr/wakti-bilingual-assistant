@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
-import { Download, Share2, FileText, Sparkles, Loader2, Wand2, Palette, Zap, Check } from 'lucide-react';
+import { Download, Share2, FileText, Sparkles, Loader2, Wand2, Palette, Zap, Check, Image } from 'lucide-react';
 import { toast } from 'sonner';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -151,6 +151,7 @@ const DiagramsTab: React.FC = () => {
   const [maxDiagrams, setMaxDiagrams] = useState<MaxDiagrams>(1);
   const [krokiStyle, setKrokiStyle] = useState<KrokiStyleKey>('auto');
   const [isLoading, setIsLoading] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [diagrams, setDiagrams] = useState<GeneratedDiagram[]>([]);
 
@@ -160,21 +161,152 @@ const DiagramsTab: React.FC = () => {
   // File handling
   // ─────────────────────────────────────────────────────────────────────────
 
+  // Convert file to base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        const result = reader.result as string;
+        // Remove the data URL prefix (e.g., "data:image/png;base64,")
+        const base64 = result.split(',')[1] || result;
+        resolve(base64);
+      };
+      reader.onerror = reject;
+    });
+  };
+
+  // Extract text from image using Vision AI (streaming response)
+  const extractTextFromImage = async (file: File): Promise<string> => {
+    const base64 = await fileToBase64(file);
+    const mimeType = file.type || 'image/png';
+    
+    // Get auth session for proper authorization
+    const { supabase } = await import('@/integrations/supabase/client');
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session?.access_token) {
+      throw new Error('Not authenticated');
+    }
+    
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    
+    // Use fetch with proper CORS settings (same as WaktiAIV2Service)
+    const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/wakti-ai-v2-brain-stream', {
+      method: 'POST',
+      mode: 'cors',
+      cache: 'no-cache',
+      credentials: 'omit',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream',
+        'apikey': supabaseAnonKey,
+      },
+      body: JSON.stringify({
+        message: 'Extract ALL text from this image. Return ONLY the extracted text, nothing else. If there is no text, describe what you see in the image briefly.',
+        mode: 'vision',
+        files: [{
+          type: mimeType,
+          data: base64,
+          content: base64,
+        }],
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Vision API error: ${response.status}`);
+    }
+
+    // Read the streaming response and collect all text
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('No response body');
+    }
+
+    const decoder = new TextDecoder();
+    let fullText = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      
+      const chunk = decoder.decode(value, { stream: true });
+      // Parse SSE format: data: {"token":"..."}\n\n
+      const lines = chunk.split('\n');
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const jsonStr = line.slice(6);
+            if (jsonStr === '[DONE]') continue;
+            const parsed = JSON.parse(jsonStr);
+            if (parsed.token) {
+              fullText += parsed.token;
+            }
+          } catch {
+            // Ignore parse errors for incomplete chunks
+          }
+        }
+      }
+    }
+
+    return fullText.trim();
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setUploadedFile(file);
     setError(null);
+    setIsExtracting(true);
 
-    // Read file content as text (for txt, md) or just store the name for now
-    // For PDFs/DOCX, we'd need server-side extraction - for v1, we support text files
-    if (file.type === 'text/plain' || file.name.endsWith('.md') || file.name.endsWith('.txt')) {
-      const text = await file.text();
-      setFileContent(text);
-    } else {
-      // For other file types, we'll send the file name and let user know
-      setFileContent(`[File: ${file.name}] - For best results with PDF/DOCX, please paste the text content directly.`);
+    try {
+      let extractedText = '';
+
+      // Handle different file types
+      if (file.type === 'text/plain' || file.name.endsWith('.md') || file.name.endsWith('.txt')) {
+        // Plain text files - read directly
+        extractedText = await file.text();
+      } else if (file.type.startsWith('image/') || file.name.match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i)) {
+        // Images - use Vision AI to extract text
+        toast.info(isArabic ? 'جاري استخراج النص من الصورة...' : 'Extracting text from image...', {
+          duration: 2000,
+        });
+        extractedText = await extractTextFromImage(file);
+      } else if (file.name.endsWith('.pdf') || file.name.endsWith('.docx') || file.name.endsWith('.doc')) {
+        // PDF/Word - show message to copy-paste
+        toast.info(isArabic ? 'نوع ملف غير مدعوم للاستخراج التلقائي' : 'File type not supported for auto-extraction', {
+          description: isArabic 
+            ? 'الرجاء نسخ ولصق النص من الملف مباشرة' 
+            : 'Please copy and paste the text from the file directly',
+        });
+        setIsExtracting(false);
+        return;
+      } else {
+        toast.error(isArabic ? 'نوع ملف غير مدعوم' : 'Unsupported file type');
+        setIsExtracting(false);
+        return;
+      }
+
+      if (extractedText.trim()) {
+        setFileContent(extractedText);
+        setInputText((prev) => prev ? `${prev}\n\n${extractedText}` : extractedText);
+        toast.success(isArabic ? 'تم استخراج النص' : 'Text extracted', {
+          description: isArabic ? 'تم إضافة محتوى الملف إلى مربع النص' : 'File content added to text box',
+        });
+      } else {
+        toast.warning(isArabic ? 'لم يتم العثور على نص' : 'No text found', {
+          description: isArabic ? 'لم نتمكن من استخراج نص من هذا الملف' : 'Could not extract text from this file',
+        });
+      }
+    } catch (err) {
+      console.error('File extraction error:', err);
+      toast.error(isArabic ? 'فشل استخراج النص' : 'Failed to extract text', {
+        description: isArabic ? 'الرجاء المحاولة مرة أخرى أو نسخ النص يدوياً' : 'Please try again or copy the text manually',
+      });
+    } finally {
+      setIsExtracting(false);
     }
   };
 
@@ -241,15 +373,17 @@ const DiagramsTab: React.FC = () => {
   // ─────────────────────────────────────────────────────────────────────────
 
   const handleDownload = async (diagram: GeneratedDiagram) => {
+    const fileName = `${diagram.title.replace(/\s+/g, '_')}.svg`;
+    
     try {
-      // Try fetch first
+      // Method 1: Try direct fetch with CORS
       const response = await fetch(diagram.imageUrl, { mode: 'cors' });
       if (!response.ok) throw new Error('Fetch failed');
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${diagram.title.replace(/\s+/g, '_')}.svg`;
+      a.download = fileName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -258,8 +392,50 @@ const DiagramsTab: React.FC = () => {
         description: isArabic ? 'تم حفظ المخطط بنجاح' : 'Diagram saved successfully',
       });
     } catch (err) {
-      console.error('Download error:', err);
-      // Fallback: open in new tab for manual save
+      console.error('Download error (trying fallback):', err);
+      
+      // Method 2: Try to render from diagramSource if available
+      if (diagram.diagramSource) {
+        try {
+          // Find the SVG element in the DOM and extract it
+          const imgElement = document.querySelector(`img[src="${diagram.imageUrl}"]`) as HTMLImageElement;
+          if (imgElement) {
+            // Create a canvas and draw the image
+            const canvas = document.createElement('canvas');
+            canvas.width = imgElement.naturalWidth || 800;
+            canvas.height = imgElement.naturalHeight || 600;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.fillStyle = 'white';
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              ctx.drawImage(imgElement, 0, 0);
+              
+              // Download as PNG
+              canvas.toBlob((blob) => {
+                if (blob) {
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = fileName.replace('.svg', '.png');
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                  toast.success(isArabic ? 'تم التحميل' : 'Downloaded', {
+                    description: isArabic ? 'تم حفظ المخطط كصورة PNG' : 'Diagram saved as PNG',
+                  });
+                  return;
+                }
+              }, 'image/png');
+              return;
+            }
+          }
+        } catch (canvasErr) {
+          console.error('Canvas fallback failed:', canvasErr);
+        }
+      }
+      
+      // Method 3: Open in new tab as last resort
       window.open(diagram.imageUrl, '_blank');
       toast.info(isArabic ? 'افتح في نافذة جديدة' : 'Opened in new tab', {
         description: isArabic ? 'اضغط بزر الماوس الأيمن واختر حفظ' : 'Right-click and choose Save As',
@@ -342,7 +518,7 @@ const DiagramsTab: React.FC = () => {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".txt,.md,.pdf,.docx"
+            accept=".txt,.md,.pdf,.docx,.doc,.jpg,.jpeg,.png,.gif,.webp,.bmp,image/*"
             onChange={handleFileChange}
             className="hidden"
             id="diagram-file-input"
@@ -351,10 +527,17 @@ const DiagramsTab: React.FC = () => {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-dashed border-violet-300 dark:border-violet-700 hover:border-violet-500 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all text-sm font-medium text-violet-600 dark:text-violet-400"
-            disabled={isLoading}
+            disabled={isLoading || isExtracting}
           >
-            <FileText className="w-4 h-4" />
-            {isArabic ? 'أو ارفع ملف' : 'Or upload file'}
+            {isExtracting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <FileText className="w-4 h-4" />
+            )}
+            {isExtracting 
+              ? (isArabic ? 'جاري الاستخراج...' : 'Extracting...')
+              : (isArabic ? 'أو ارفع ملف' : 'Or upload file')
+            }
           </button>
           {uploadedFile && (
             <div className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-full bg-violet-100 dark:bg-violet-900/30">

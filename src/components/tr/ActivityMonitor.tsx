@@ -192,6 +192,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     const comments = taskResponses.filter(r => r.response_type === 'comment');
     const snoozeRequests = taskResponses.filter(r => r.response_type === 'snooze_request');
     const uncheckRequests = taskResponses.filter(r => r.response_type === 'uncheck_request');
+    const completionRequests = taskResponses.filter(r => r.response_type === 'completion_request');
     
     return {
       assignees: uniqueAssignees,
@@ -201,6 +202,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
       comments: comments,
       snoozeRequests: snoozeRequests,
       uncheckRequests: uncheckRequests,
+      completionRequests: completionRequests,
       allResponses: taskResponses,
       subtasks: taskSubtaskList,
       visitors: taskVisitors
@@ -223,6 +225,8 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         return <MessageCircle className="h-4 w-4 text-blue-600" />;
       case 'snooze_request':
         return <Pause className="h-4 w-4 text-orange-600" />;
+      case 'completion_request':
+        return <AlertCircle className="h-4 w-4 text-amber-600" />;
       default:
         return <Clock className="h-4 w-4 text-gray-600" />;
     }
@@ -248,6 +252,8 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         return `commented: "${activity.content?.substring(0, 50)}${activity.content && activity.content.length > 50 ? '...' : ''}"`;
       case 'snooze_request':
         return `requested snooze${activity.content ? `: "${activity.content.substring(0, 30)}..."` : ''}`;
+      case 'completion_request':
+        return 'requested to mark task as complete';
       default:
         return 'performed an action';
     }
@@ -332,6 +338,52 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     }
   };
 
+  const handleCompletionRequest = async (
+    taskId: string, 
+    requestId: string, 
+    visitorName: string,
+    action: 'approved' | 'denied'
+  ) => {
+    // Add to processing set to show loading state
+    setProcessingRequests(prev => new Set(prev).add(requestId));
+    
+    try {
+      if (action === 'approved') {
+        await TRSharedService.approveCompletionRequest(requestId, taskId, visitorName);
+        toast.success(`Task marked as completed by ${visitorName}`, {
+          duration: 4000,
+          position: 'bottom-center'
+        });
+        onTasksChanged(); // Refresh task list to show completed status
+      } else {
+        await TRSharedService.denyCompletionRequest(requestId);
+        toast.success('Completion request denied', {
+          duration: 3000,
+          position: 'bottom-center'
+        });
+      }
+      
+      // Force immediate refresh with a delay to ensure database changes are committed
+      setTimeout(() => {
+        loadAllData(true);
+      }, 1000);
+      
+    } catch (error) {
+      console.error(`Error ${action} completion request:`, error);
+      toast.error(`Failed to ${action === 'approved' ? 'approve' : 'deny'} completion request`, {
+        duration: 3000,
+        position: 'bottom-center'
+      });
+    } finally {
+      // Remove from processing set
+      setProcessingRequests(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(requestId);
+        return newSet;
+      });
+    }
+  };
+
   const getInitials = (name: string) => {
     return name
       .split(' ')
@@ -388,6 +440,63 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
           size="sm" 
           variant="outline"
           onClick={() => handleSnoozeRequest(request.task_id, request.id, 'denied')}
+          className="h-7 px-2 text-xs"
+          disabled={isProcessing}
+        >
+          <X className="h-3 w-3 mr-1" />
+          {t('deny', language)}
+        </Button>
+      </div>
+    );
+  };
+
+  // Render completion request status badge
+  const renderCompletionRequestStatus = (request: TRSharedResponse) => {
+    const status = parseSnoozeStatus(request.content); // reuse same parser
+    const isProcessing = processingRequests.has(request.id);
+    
+    if (isProcessing) {
+      return (
+        <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
+          <Clock className="h-3 w-3 mr-1 animate-spin" />
+          {t('processing', language)}...
+        </Badge>
+      );
+    }
+    
+    if (status === 'approved') {
+      return (
+        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+          <Check className="h-3 w-3 mr-1" />
+          {t('approved', language)}
+        </Badge>
+      );
+    }
+    
+    if (status === 'denied') {
+      return (
+        <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+          <X className="h-3 w-3 mr-1" />
+          {t('denied', language)}
+        </Badge>
+      );
+    }
+    
+    return (
+      <div className="flex gap-2">
+        <Button 
+          size="sm" 
+          onClick={() => handleCompletionRequest(request.task_id, request.id, request.visitor_name, 'approved')}
+          className="h-7 px-2 text-xs bg-green-600 hover:bg-green-700"
+          disabled={isProcessing}
+        >
+          <Check className="h-3 w-3 mr-1" />
+          Approve & Complete
+        </Button>
+        <Button 
+          size="sm" 
+          variant="outline"
+          onClick={() => handleCompletionRequest(request.task_id, request.id, request.visitor_name, 'denied')}
           className="h-7 px-2 text-xs"
           disabled={isProcessing}
         >
@@ -662,16 +771,16 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                       className={`${
                         activeView === 'requests' ? 'bg-primary/20 border-primary/30' : 'bg-secondary/20 hover:bg-secondary/30'
                       } ${
-                        (stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length + stats.uncheckRequests.length) > 0 ? 'ring-2 ring-orange-400 ring-offset-2' : ''
+                        (stats.completionRequests.filter(r => !parseSnoozeStatus(r.content)).length + stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length + stats.uncheckRequests.length) > 0 ? 'ring-2 ring-orange-400 ring-offset-2' : ''
                       } transition-colors rounded-lg p-3 text-center border-2 border-transparent relative`}
                       onClick={() => handleViewChange(task.id, 'requests')}
                     >
-                      {(stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length + stats.uncheckRequests.length) > 0 && (
+                      {(stats.completionRequests.filter(r => !parseSnoozeStatus(r.content)).length + stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length + stats.uncheckRequests.length) > 0 && (
                         <Badge className="absolute -top-2 -right-2 bg-orange-500 h-6 w-6 rounded-full p-0 flex items-center justify-center text-xs">
-                          {stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length + stats.uncheckRequests.length}
+                          {stats.completionRequests.filter(r => !parseSnoozeStatus(r.content)).length + stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length + stats.uncheckRequests.length}
                         </Badge>
                       )}
-                      <div className="text-lg font-semibold">{stats.snoozeRequests.length + stats.uncheckRequests.length}</div>
+                      <div className="text-lg font-semibold">{stats.completionRequests.length + stats.snoozeRequests.length + stats.uncheckRequests.length}</div>
                       <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
                         <AlertCircle className="h-3 w-3" />
                         {t('requests', language)}
@@ -719,6 +828,12 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                                   {activity.response_type === 'snooze_request' && (
                                     <div className="mt-2">
                                       {renderSnoozeRequestStatus(activity)}
+                                    </div>
+                                  )}
+                                  
+                                  {activity.response_type === 'completion_request' && (
+                                    <div className="mt-2">
+                                      {renderCompletionRequestStatus(activity)}
                                     </div>
                                   )}
                                 </div>
@@ -957,6 +1072,42 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                   {/* Requests View */}
                   {activeView === 'requests' && (
                     <div className="space-y-6">
+                      {/* Completion Requests - Most Important */}
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-medium flex items-center gap-2 text-amber-600">
+                          <CheckCircle className="h-5 w-5" />
+                          {language === 'ar' ? 'طلبات إكمال المهمة' : 'Completion Requests'} ({stats.completionRequests.length})
+                        </h3>
+                        {stats.completionRequests.length > 0 ? (
+                          <div className="space-y-4 max-h-[300px] overflow-y-auto">
+                            {stats.completionRequests
+                              .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                              .map((request) => (
+                                <div key={request.id} className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <CheckCircle className="h-4 w-4 text-amber-600" />
+                                    <span className="font-medium" dir="auto">{request.visitor_name}</span>
+                                    <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-800">
+                                      {language === 'ar' ? 'طلب إكمال' : 'Completion Request'}
+                                    </Badge>
+                                  </div>
+                                  <div className="text-xs text-muted-foreground mb-3">
+                                    {format(parseISO(request.created_at), 'MMM dd, HH:mm')}
+                                  </div>
+                                  <div className="flex gap-2">
+                                    {renderCompletionRequestStatus(request)}
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        ) : (
+                          <div className="text-center py-8 text-muted-foreground text-sm">
+                            {language === 'ar' ? 'لا توجد طلبات إكمال' : 'No completion requests'}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Snooze Requests */}
                       <div className="space-y-4">
                         <h3 className="text-lg font-medium flex items-center gap-2 text-orange-600">
                           <AlertCircle className="h-5 w-5" />

@@ -49,8 +49,11 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
   const [newSubtask, setNewSubtask] = useState('');
   const [openDueIndex, setOpenDueIndex] = useState<number | null>(null);
   const [bulkInput, setBulkInput] = useState('');
+  const [generatorPrompt, setGeneratorPrompt] = useState('');
+  const [isGeneratingTask, setIsGeneratingTask] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const generateFileInputRef = React.useRef<HTMLInputElement>(null);
 
   const {
     register,
@@ -342,6 +345,120 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
     }
   };
 
+  // AI Generate full task (title, description, due, priority, subtasks)
+  const handleGenerateTask = async (mode: 'text' | 'image' = 'text', imageBase64?: string) => {
+    if (mode === 'text') {
+      const idea = generatorPrompt.trim();
+      if (!idea) {
+        toast.error(language === 'ar' ? 'اكتب فكرة للمهمة أولاً' : 'Please enter an idea for the task first');
+        return;
+      }
+    }
+
+    setIsGeneratingTask(true);
+    try {
+      const body: any = { language };
+      if (mode === 'text') {
+        body.prompt = generatorPrompt.trim();
+      } else if (mode === 'image' && imageBase64) {
+        body.imageBase64 = imageBase64;
+      }
+
+      const { data, error } = await supabase.functions.invoke('generate-task', { body });
+
+      if (error) throw error;
+
+      const taskData = data?.task;
+      if (!taskData) {
+        throw new Error('No task returned from AI');
+      }
+
+      // Fill main fields
+      if (taskData.title) setValue('title', taskData.title);
+      if (taskData.description) setValue('description', taskData.description);
+      setValue('priority', taskData.priority ?? 'normal');
+
+      // Optional due date / time
+      setValue('due_date', taskData.due_date ?? null);
+      setValue('due_time', taskData.due_time ?? null);
+
+      // Subtasks
+      const aiSubtasks: string[] = Array.isArray(taskData.subtasks)
+        ? taskData.subtasks.filter((s: unknown) => typeof s === 'string' && s.trim().length > 0).map((s: string) => s.trim())
+        : [];
+
+      if (aiSubtasks.length > 0) {
+        // Replace existing subtasks with AI ones
+        const drafts: SubtaskDraft[] = aiSubtasks.map((title) => ({ title, due_date: null, due_time: null }));
+        setSubtasks(drafts);
+        setBulkInput(''); // Clear bulk input to avoid duplicate display
+      }
+
+      toast.success(
+        language === 'ar'
+          ? mode === 'image' 
+            ? 'تم إنشاء مهمة من الصورة بالذكاء الاصطناعي ✨'
+            : 'تم إنشاء مهمة كاملة بالذكاء الاصطناعي ✨'
+          : mode === 'image'
+            ? 'Generated task from image with AI ✨'
+            : 'Generated a full task with AI ✨'
+      );
+    } catch (error) {
+      console.error('Generate Task AI error:', error);
+      toast.error(
+        language === 'ar'
+          ? 'فشل في إنشاء المهمة بالذكاء الاصطناعي'
+          : 'Failed to generate task with AI'
+      );
+    } finally {
+      setIsGeneratingTask(false);
+    }
+  };
+
+  // Handle image upload for Generate Task
+  const handleGenerateImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error(language === 'ar' ? 'الرجاء اختيار صورة' : 'Please select an image');
+      return;
+    }
+    
+    // Validate file size (max 4MB)
+    if (file.size > 4 * 1024 * 1024) {
+      toast.error(language === 'ar' ? 'الصورة كبيرة جداً (الحد الأقصى 4MB)' : 'Image too large (max 4MB)');
+      return;
+    }
+    
+    setIsGeneratingTask(true);
+    try {
+      // Convert to base64
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = reader.result as string;
+        
+        // Call generate-task with image
+        await handleGenerateTask('image', base64);
+      };
+      reader.onerror = () => {
+        toast.error(language === 'ar' ? 'فشل في قراءة الصورة' : 'Failed to read image');
+        setIsGeneratingTask(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Generate Task image upload error:', error);
+      toast.error(language === 'ar' ? 'فشل في استخراج المهام من الصورة' : 'Failed to extract from image');
+      setIsGeneratingTask(false);
+    }
+    
+    // Reset file input
+    if (generateFileInputRef.current) {
+      generateFileInputRef.current.value = '';
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
@@ -352,6 +469,101 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {/* AI Generate Task - Premium UI */}
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-500/10 via-purple-500/5 to-fuchsia-500/10 p-4 border border-violet-500/20 shadow-sm">
+            {/* Decorative glow */}
+            <div className="absolute -top-12 -right-12 w-24 h-24 bg-violet-500/20 rounded-full blur-2xl" />
+            <div className="absolute -bottom-8 -left-8 w-20 h-20 bg-fuchsia-500/15 rounded-full blur-2xl" />
+            
+            {/* Header */}
+            <div className="relative flex items-center gap-3 mb-3">
+              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 shadow-lg shadow-violet-500/25">
+                <Sparkles className="h-5 w-5 text-white" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-bold bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent">
+                  {language === 'ar' ? 'مولّد المهام الذكي' : 'AI Task Generator'}
+                </h3>
+                <p className="text-[11px] text-muted-foreground">
+                  {language === 'ar' ? 'اكتب فكرة أو ارفع صورة' : 'Type an idea or upload an image'}
+                </p>
+              </div>
+            </div>
+
+            {/* Input area */}
+            <div className="relative">
+              <Textarea
+                id="task_idea"
+                value={generatorPrompt}
+                onChange={(e) => setGeneratorPrompt(e.target.value)}
+                placeholder={
+                  language === 'ar'
+                    ? 'مثال: تنظيم حفلة خطوبة الشهر القادم...'
+                    : 'Example: Plan engagement party for next month...'
+                }
+                rows={2}
+                className="text-sm resize-none bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm border-violet-200 dark:border-violet-500/30 focus:border-violet-400 focus:ring-violet-400/20 rounded-xl"
+                disabled={isGeneratingTask}
+              />
+              {/* Hidden file input */}
+              <input
+                ref={generateFileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleGenerateImageUpload}
+                aria-label="Upload image"
+              />
+            </div>
+
+            {/* Action buttons row */}
+            <div className="relative flex items-center justify-between mt-3 gap-2">
+              {/* Image upload button */}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-10 px-4 gap-2 rounded-xl border-violet-300 dark:border-violet-500/40 bg-white/60 dark:bg-gray-900/60 hover:bg-violet-50 dark:hover:bg-violet-500/10 hover:border-violet-400 text-violet-700 dark:text-violet-300 transition-all shadow-sm"
+                onClick={() => generateFileInputRef.current?.click()}
+                disabled={isGeneratingTask || isLoading}
+              >
+                {isGeneratingTask ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ImagePlus className="h-4 w-4" />
+                )}
+                <span className="text-xs font-semibold">
+                  {language === 'ar' ? 'رفع صورة' : 'Upload Image'}
+                </span>
+              </Button>
+
+              {/* Generate button */}
+              <Button
+                type="button"
+                size="sm"
+                className="h-10 px-5 gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white shadow-lg shadow-violet-500/30 hover:shadow-violet-500/40 transition-all font-semibold"
+                onClick={() => handleGenerateTask('text')}
+                disabled={isGeneratingTask || isLoading || !generatorPrompt.trim()}
+              >
+                {isGeneratingTask ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="text-xs">
+                      {language === 'ar' ? 'جاري الإنشاء...' : 'Generating...'}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    <span className="text-xs">
+                      {language === 'ar' ? 'إنشاء المهمة' : 'Generate'}
+                    </span>
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+
           {/* Title */}
           <div className="space-y-2">
             <Label htmlFor="title">{t('title', language)} *</Label>
@@ -602,20 +814,31 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
                   </Button>
                 </div>
 
-                {/* Bulk Subtasks */}
-                <div className="mt-3 rounded-lg border bg-muted/10 p-3">
+                {/* Bulk Subtasks - Enhanced UI */}
+                <div className="mt-4 relative overflow-hidden rounded-xl bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-cyan-500/10 p-4 border border-emerald-500/20 shadow-sm">
+                  {/* Decorative glow */}
+                  <div className="absolute -top-10 -right-10 w-20 h-20 bg-emerald-500/15 rounded-full blur-2xl" />
+                  <div className="absolute -bottom-6 -left-6 w-16 h-16 bg-cyan-500/10 rounded-full blur-2xl" />
+                  
                   {/* Header with title and AI buttons */}
-                  <div className="flex items-center justify-between mb-2">
-                    <Label className="text-sm">
-                      {language === 'ar' ? 'إضافة مجمّعة' : 'Bulk Subtasks'}
-                    </Label>
+                  <div className="relative flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 shadow-md shadow-emerald-500/20">
+                        <Plus className="h-4 w-4 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+                          {language === 'ar' ? 'إضافة مجمّعة' : 'Bulk Subtasks'}
+                        </h4>
+                      </div>
+                    </div>
                     <div className="flex items-center gap-1">
                       {/* AI Tidy Button */}
                       <Button
                         type="button"
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
-                        className="h-7 px-2 text-xs gap-1 text-primary hover:text-primary hover:bg-primary/10"
+                        className="h-8 px-2.5 text-xs gap-1.5 rounded-lg border-emerald-300 dark:border-emerald-500/40 bg-white/60 dark:bg-gray-900/60 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 hover:border-emerald-400 text-emerald-700 dark:text-emerald-300 transition-all"
                         onClick={handleAITidy}
                         disabled={isExtracting || !bulkInput.trim()}
                         title={language === 'ar' ? 'تنظيف واستخراج بالذكاء الاصطناعي' : 'AI Tidy & Extract'}
@@ -625,14 +848,14 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
                         ) : (
                           <Sparkles className="h-3.5 w-3.5" />
                         )}
-                        <span className="hidden sm:inline">{language === 'ar' ? 'تنظيف' : 'Tidy'}</span>
+                        <span>{language === 'ar' ? 'تنظيف' : 'Tidy'}</span>
                       </Button>
                       {/* Upload Image Button */}
                       <Button
                         type="button"
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
-                        className="h-7 px-2 text-xs gap-1 text-primary hover:text-primary hover:bg-primary/10"
+                        className="h-8 px-2.5 text-xs gap-1.5 rounded-lg border-emerald-300 dark:border-emerald-500/40 bg-white/60 dark:bg-gray-900/60 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 hover:border-emerald-400 text-emerald-700 dark:text-emerald-300 transition-all"
                         onClick={() => fileInputRef.current?.click()}
                         disabled={isExtracting}
                         title={language === 'ar' ? 'استخراج من صورة' : 'Extract from image'}
@@ -642,7 +865,7 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
                         ) : (
                           <ImagePlus className="h-3.5 w-3.5" />
                         )}
-                        <span className="hidden sm:inline">{language === 'ar' ? 'صورة' : 'Image'}</span>
+                        <span>{language === 'ar' ? 'صورة' : 'Image'}</span>
                       </Button>
                       {/* Hidden file input */}
                       <input
@@ -655,17 +878,34 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
                     </div>
                   </div>
                   
-                  <Textarea
-                    rows={3}
-                    value={bulkInput}
-                    onChange={(e) => setBulkInput(e.target.value)}
-                    placeholder={language === 'ar' ? 'ألصق نص من إيميل، واتساب، أو أي مصدر...' : 'Paste text from email, WhatsApp, or any source...'}
-                    disabled={isExtracting}
-                  />
+                  {/* Textarea with clear button */}
+                  <div className="relative">
+                    <Textarea
+                      rows={3}
+                      value={bulkInput}
+                      onChange={(e) => setBulkInput(e.target.value)}
+                      placeholder={language === 'ar' ? 'ألصق نص من إيميل، واتساب، أو أي مصدر...' : 'Paste text from email, WhatsApp, or any source...'}
+                      disabled={isExtracting}
+                      className="text-sm bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm border-emerald-200 dark:border-emerald-500/30 focus:border-emerald-400 focus:ring-emerald-400/20 rounded-xl pr-10"
+                    />
+                    {/* Clear button */}
+                    {bulkInput.trim() && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute top-2 right-2 h-6 w-6 p-0 rounded-full hover:bg-red-100 dark:hover:bg-red-500/20 text-muted-foreground hover:text-red-500 transition-all"
+                        onClick={() => setBulkInput('')}
+                        title={language === 'ar' ? 'مسح' : 'Clear'}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
                   
                   {/* Loading indicator */}
                   {isExtracting && (
-                    <div className="mt-2 flex items-center gap-2 text-xs text-primary">
+                    <div className="mt-2 flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
                       <Loader2 className="h-3 w-3 animate-spin" />
                       {language === 'ar' ? 'جاري استخراج المهام...' : 'Extracting subtasks...'}
                     </div>
@@ -673,36 +913,40 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
                   
                   {/* Preview */}
                   {bulkInput.trim() && !isExtracting && (
-                    <div className="mt-2">
-                      <div className="text-xs text-muted-foreground mb-1">
+                    <div className="mt-3">
+                      <div className="text-xs font-medium text-emerald-700 dark:text-emerald-400 mb-2">
                         {(() => {
                           const count = parseItems(bulkInput).length;
-                          return language === 'ar' ? `${count} جاهزة` : `${count} ready`;
+                          return language === 'ar' ? `✓ ${count} جاهزة` : `✓ ${count} ready`;
                         })()}
                         {parseItems(bulkInput).length > 100 && (
-                          <span className="ml-2 text-destructive">{language === 'ar' ? 'تم تحديد الحد الأقصى 100' : 'Max 100 will be added'}</span>
+                          <span className="ml-2 text-red-500">{language === 'ar' ? '(الحد الأقصى 100)' : '(max 100)'}</span>
                         )}
                       </div>
                       <div className="flex flex-wrap gap-1.5">
-                        {parseItems(bulkInput).slice(0, 30).map((it, idx) => (
-                          <span key={idx} className="px-2 py-0.5 text-xs rounded-full border bg-white/60 dark:bg-white/5">
+                        {parseItems(bulkInput).slice(0, 20).map((it, idx) => (
+                          <span key={idx} className="px-2.5 py-1 text-xs rounded-lg border border-emerald-200 dark:border-emerald-500/30 bg-white/70 dark:bg-gray-900/50 text-emerald-800 dark:text-emerald-200">
                             {it}
                           </span>
                         ))}
-                        {parseItems(bulkInput).length > 30 && (
-                          <span className="text-xs text-muted-foreground">…</span>
+                        {parseItems(bulkInput).length > 20 && (
+                          <span className="px-2.5 py-1 text-xs text-muted-foreground">+{parseItems(bulkInput).length - 20} more</span>
                         )}
                       </div>
                     </div>
                   )}
                   
-                  <div className="mt-2 flex justify-end">
-                    <Button type="button" size="sm" onClick={handleBulkCreate} disabled={!bulkInput.trim() || isExtracting}>
+                  {/* Action buttons */}
+                  <div className="relative mt-3 flex justify-end">
+                    <Button 
+                      type="button" 
+                      size="sm" 
+                      className="h-9 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md shadow-emerald-500/25 hover:shadow-emerald-500/35 transition-all font-semibold text-xs"
+                      onClick={handleBulkCreate} 
+                      disabled={!bulkInput.trim() || isExtracting}
+                    >
                       {language === 'ar' ? 'إنشاء المهام الفرعية' : 'Create Subtasks'}
                     </Button>
-                  </div>
-                  <div className="mt-1 text-[11px] text-muted-foreground">
-                    {language === 'ar' ? 'تلميح: استخدم ✨ لتنظيف نص فوضوي أو 📷 لاستخراج من صورة' : 'Tip: Use ✨ to clean messy text or 📷 to extract from image'}
                   </div>
                 </div>
               </div>

@@ -6,7 +6,7 @@ export interface TRSharedResponse {
   id: string;
   task_id: string;
   visitor_name: string;
-  response_type: 'completion' | 'comment' | 'snooze_request' | 'uncheck_request';
+  response_type: 'completion' | 'comment' | 'snooze_request' | 'uncheck_request' | 'completion_request';
   content?: string;
   is_completed?: boolean;
   subtask_id?: string;
@@ -328,6 +328,90 @@ export class TRSharedService {
       if (error) throw error;
     } catch (error) {
       console.error('Error denying snooze request:', error);
+      throw error;
+    }
+  }
+
+  // Request task completion (assignee cannot directly complete main task)
+  static async requestTaskCompletion(taskId: string, visitorName: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('tr_shared_responses')
+        .insert({
+          task_id: taskId,
+          visitor_name: visitorName,
+          response_type: 'completion_request',
+          is_completed: true
+        });
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error requesting task completion:', error);
+      throw error;
+    }
+  }
+
+  // Approve completion request - marks task as completed
+  static async approveCompletionRequest(requestId: string, taskId: string, visitorName: string): Promise<void> {
+    try {
+      // Update the completion request with approval status
+      const { error: updateError } = await supabase
+        .from('tr_shared_responses')
+        .update({
+          content: JSON.stringify({
+            status: 'approved',
+            actionTime: new Date().toISOString()
+          })
+        })
+        .eq('id', requestId);
+
+      if (updateError) throw updateError;
+
+      // Mark the task as completed
+      const { error: taskUpdateError } = await supabase
+        .from('tr_tasks')
+        .update({
+          completed: true,
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', taskId);
+
+      if (taskUpdateError) throw taskUpdateError;
+
+      // Add a completion response to record who completed it
+      const { error: completionError } = await supabase
+        .from('tr_shared_responses')
+        .insert({
+          task_id: taskId,
+          visitor_name: visitorName,
+          response_type: 'completion',
+          is_completed: true
+        });
+
+      if (completionError) throw completionError;
+      
+    } catch (error) {
+      console.error('Error approving completion request:', error);
+      throw error;
+    }
+  }
+
+  // Deny completion request
+  static async denyCompletionRequest(requestId: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('tr_shared_responses')
+        .update({
+          content: JSON.stringify({
+            status: 'denied',
+            actionTime: new Date().toISOString()
+          })
+        })
+        .eq('id', requestId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error denying completion request:', error);
       throw error;
     }
   }

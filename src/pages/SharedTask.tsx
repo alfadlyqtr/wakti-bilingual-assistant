@@ -64,17 +64,21 @@ export default function SharedTask() {
     if (task && visitorName) {
       loadResponses();
       
-      // Real-time subscription
-      const channel = TRSharedService.subscribeToTaskUpdates(task.id, loadResponses);
+      // Real-time subscription - reload both task and responses on any update
+      const handleRealtimeUpdate = () => {
+        loadSharedTask(false); // Reload task without loading spinner
+        loadResponses();
+      };
+      const channel = TRSharedService.subscribeToTaskUpdates(task.id, handleRealtimeUpdate);
       return () => {
         channel.unsubscribe();
       };
     }
   }, [task, visitorName]);
 
-  const loadSharedTask = async () => {
+  const loadSharedTask = async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       const sharedTask = await TRService.getSharedTask(shareLink!);
       if (sharedTask) {
         setTask(sharedTask);
@@ -123,15 +127,15 @@ export default function SharedTask() {
     toast.success(`Welcome, ${name}!`);
   };
 
-  const handleTaskToggle = async (completed: boolean) => {
+  const handleRequestCompletion = async () => {
     if (!task || !visitorName) return;
 
     try {
-      await TRSharedService.markTaskCompleted(task.id, visitorName, completed);
-      toast.success(completed ? 'Task marked as complete' : 'Task marked as incomplete');
+      await TRSharedService.requestTaskCompletion(task.id, visitorName);
+      toast.success('Completion request sent to task owner');
     } catch (error) {
-      console.error('Error toggling task:', error);
-      toast.error('Failed to update task');
+      console.error('Error requesting completion:', error);
+      toast.error('Failed to send completion request');
     }
   };
 
@@ -166,6 +170,14 @@ export default function SharedTask() {
       !r.subtask_id
   );
   const ownerCompleted = !!task?.completed; // owner truth (guard task may be null during refresh)
+
+  // Check if there's a pending completion request from me
+  const myPendingCompletionRequest = responses.find(
+    r => r.visitor_name === visitorName &&
+      r.response_type === 'completion_request' &&
+      !r.content // no status means pending
+  );
+  const hasPendingRequest = !!myPendingCompletionRequest;
 
   // Get who completed the task
   const taskCompletedBy = responses
@@ -305,28 +317,38 @@ export default function SharedTask() {
                 </div>
               )}
 
-              {/* Task Completion Actions (assignee cannot mark incomplete) */}
+              {/* Task Completion Actions (assignee requests completion, owner approves) */}
               <div className="border rounded-lg p-4 space-y-4">
                 <div className="flex items-center gap-3">
                   {ownerCompleted ? (
                     <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
+                  ) : hasPendingRequest ? (
+                    <Clock className="h-5 w-5 text-amber-500 flex-shrink-0" />
                   ) : (
                     <XCircle className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                   )}
                   <span className="font-medium text-sm">
-                    {ownerCompleted ? 'Task is completed' : 'Mark this task as complete'}
+                    {ownerCompleted 
+                      ? 'Task is completed' 
+                      : hasPendingRequest 
+                        ? 'Completion request pending approval'
+                        : 'Request task completion'}
                   </span>
                 </div>
 
                 <div className="flex flex-col gap-3 sm:flex-row">
                   <Button
-                    variant={ownerCompleted ? "secondary" : "default"}
+                    variant={ownerCompleted ? "secondary" : hasPendingRequest ? "outline" : "default"}
                     size="sm"
-                    onClick={() => !ownerCompleted && handleTaskToggle(true)}
-                    disabled={ownerCompleted}
+                    onClick={handleRequestCompletion}
+                    disabled={ownerCompleted || hasPendingRequest}
                     className="flex-1 w-full"
                   >
-                    {ownerCompleted ? 'Completed' : 'Mark Complete'}
+                    {ownerCompleted 
+                      ? 'Completed' 
+                      : hasPendingRequest 
+                        ? 'Request Pending...'
+                        : 'Request Completion'}
                   </Button>
 
                   <Button

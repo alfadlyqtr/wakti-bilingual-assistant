@@ -758,16 +758,22 @@ Use descriptive axis labels and title.`;
     case "auto":
     default:
       return `DIAGRAM STYLE: Auto (AI chooses best)
-Analyze the text and pick the most appropriate diagram type.
-Choose the engine and syntax that best fits the content:
-- For flows/processes: Use Mermaid flowchart
-- For timelines: Use Mermaid gantt
-- For sequences: Use Mermaid sequenceDiagram
-- For relationships: Use GraphViz digraph
-- For hierarchies: Use PlantUML mindmap or WBS
-- For architecture: Use PlantUML C4
 
-Mermaid flowchart example:
+You MUST analyze the text and pick the BEST diagram type. Follow these rules:
+
+1. FIRST, identify what the text is about:
+   - Meeting notes, project plans, workflows → Use Mermaid flowchart
+   - Schedules, timelines, deadlines → Use Mermaid gantt
+   - Conversations, API calls, interactions → Use Mermaid sequenceDiagram
+   - Relationships, hierarchies, org charts → Use GraphViz digraph
+   - Ideas, brainstorming, topics → Use PlantUML mindmap
+   - System architecture → Use PlantUML component diagram
+
+2. ALWAYS use Mermaid flowchart as the DEFAULT if unsure. It works for most content.
+
+3. Keep diagrams SIMPLE with 5-10 nodes maximum.
+
+Mermaid flowchart (PREFERRED - works for most content):
 flowchart TD
     A[Start] --> B{Decision}
     B -->|Yes| C[Action 1]
@@ -775,20 +781,39 @@ flowchart TD
     C --> E[End]
     D --> E
 
-GraphViz example:
+Mermaid gantt (for schedules/timelines):
+gantt
+    title Project Timeline
+    dateFormat YYYY-MM-DD
+    section Phase 1
+    Task 1 :a1, 2024-01-01, 7d
+    Task 2 :a2, after a1, 5d
+
+Mermaid sequenceDiagram (for interactions):
+sequenceDiagram
+    participant A as User
+    participant B as Server
+    A->>B: Request
+    B-->>A: Response
+
+GraphViz digraph (for relationships):
 digraph G {
     rankdir=LR;
-    A -> B -> C;
-    A -> D -> C;
+    node [shape=box];
+    A [label="Item 1"];
+    B [label="Item 2"];
+    A -> B;
 }
 
-PlantUML example:
-@startuml
-start
-:Step 1;
-:Step 2;
-stop
-@enduml`;
+PlantUML mindmap (for ideas/topics):
+@startmindmap
+* Central Topic
+** Branch 1
+*** Detail
+** Branch 2
+@endmindmap
+
+IMPORTANT: If the text is vague or general (like a signature, greeting, or short message), create a simple Mermaid flowchart showing the key concepts mentioned.`;
   }
 }
 
@@ -822,6 +847,15 @@ async function renderWithKroki(engine: string, diagramSource: string): Promise<s
   };
 
   const krokiEngine = engineMap[engine] || engine || "mermaid";
+  
+  // Clean up diagram source - remove markdown code fences if present
+  let cleanSource = diagramSource.trim();
+  if (cleanSource.startsWith("```")) {
+    // Remove opening fence (e.g., ```mermaid or ```plantuml)
+    cleanSource = cleanSource.replace(/^```[a-zA-Z]*\n?/, "");
+    // Remove closing fence
+    cleanSource = cleanSource.replace(/\n?```$/, "");
+  }
 
   // Kroki accepts POST with JSON body
   const response = await fetch(`${KROKI_BASE_URL}/${krokiEngine}/svg`, {
@@ -829,7 +863,7 @@ async function renderWithKroki(engine: string, diagramSource: string): Promise<s
     headers: {
       "Content-Type": "text/plain",
     },
-    body: diagramSource,
+    body: cleanSource,
   });
 
   if (!response.ok) {

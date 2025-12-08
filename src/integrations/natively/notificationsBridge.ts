@@ -7,7 +7,7 @@ declare global {
 }
 
 // Debug flag - set to true to see toast notifications for debugging
-const DEBUG_NOTIFICATIONS = true;
+const DEBUG_NOTIFICATIONS = false;
 
 function getInstance(): any | null {
   try {
