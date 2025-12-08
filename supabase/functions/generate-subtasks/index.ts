@@ -7,13 +7,17 @@ const ALLOWED_ORIGINS = [
   "https://hxauxozopvpzpdygoqwf.supabase.co",
   "http://localhost:5173",
   "http://localhost:3000",
+  "http://localhost:8080",
   "http://127.0.0.1:5173",
+  "http://127.0.0.1:8080",
 ];
 
 // Generate CORS headers based on request origin
 function getCorsHeaders(req: Request) {
   const origin = req.headers.get("origin") || "";
-  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  // Allow any localhost origin for development
+  const isLocalhost = origin.includes("localhost") || origin.includes("127.0.0.1");
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) || isLocalhost ? origin : ALLOWED_ORIGINS[0];
   
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
