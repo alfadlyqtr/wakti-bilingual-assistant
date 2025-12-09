@@ -324,20 +324,20 @@ const renderBoldText = (text: string, themeKey: string = 'starter'): React.React
   });
 };
 
-// Helper to get font size class from style - optimized for mobile readability
+// Helper to get font size class from style - compact to fit more content
 const getFontSizeClass = (size?: 'small' | 'medium' | 'large', type: 'title' | 'bullet' = 'bullet') => {
   if (type === 'title') {
     switch (size) {
-      case 'small': return 'text-base sm:text-lg md:text-xl lg:text-2xl';
-      case 'large': return 'text-xl sm:text-2xl md:text-3xl lg:text-4xl';
-      default: return 'text-lg sm:text-xl md:text-2xl lg:text-3xl';
+      case 'small': return 'text-sm sm:text-base md:text-lg lg:text-xl';
+      case 'large': return 'text-lg sm:text-xl md:text-2xl lg:text-3xl';
+      default: return 'text-base sm:text-lg md:text-xl lg:text-2xl';
     }
   }
-  // Bullets - more readable on mobile
+  // Bullets - compact to fit slide
   switch (size) {
-    case 'small': return 'text-xs sm:text-sm';
-    case 'large': return 'text-sm sm:text-base md:text-lg';
-    default: return 'text-xs sm:text-sm md:text-base';
+    case 'small': return 'text-[10px] sm:text-xs';
+    case 'large': return 'text-xs sm:text-sm md:text-base';
+    default: return 'text-[11px] sm:text-xs md:text-sm';
   }
 };
 
@@ -1404,12 +1404,12 @@ const PresentationTab: React.FC = () => {
                           <div className={`rounded-xl overflow-hidden bg-slate-700/50 ${currentSlide.imageSize === 'small' ? 'h-24' : currentSlide.imageSize === 'large' ? 'h-48' : currentSlide.imageSize === 'full' ? 'h-56' : 'h-32'}`}>
                             <img src={currentSlide.imageUrl} alt={currentSlide.title} className={`w-full h-full ${getImageFitClass(currentSlide.imageFit)}`} />
                           </div>
-                          <div className="flex-1 overflow-y-auto">
-                            <ul className="space-y-2">
-                              {currentSlide.bullets?.slice(0, 6).map((b, i) => (
-                                <li key={i} className="flex items-start gap-2">
-                                  <span className={`w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0 ${getThemeAccent(selectedTheme).bg}`} />
-                                  <span className={`${getFontSizeClass(currentSlide.bulletStyle?.fontSize)} leading-snug`} style={{ color: currentSlide.bulletStyle?.color || '#e2e8f0' }}>
+                          <div className="flex-1 overflow-hidden">
+                            <ul className="space-y-1">
+                              {currentSlide.bullets?.slice(0, 4).map((b, i) => (
+                                <li key={i} className="flex items-start gap-1.5">
+                                  <span className={`w-1 h-1 rounded-full mt-1.5 flex-shrink-0 ${getThemeAccent(selectedTheme).bg}`} />
+                                  <span className={`${getFontSizeClass(currentSlide.bulletStyle?.fontSize)} leading-tight`} style={{ color: currentSlide.bulletStyle?.color || '#e2e8f0' }}>
                                     {renderBoldText(b, selectedTheme)}
                                   </span>
                                 </li>
@@ -1430,12 +1430,12 @@ const PresentationTab: React.FC = () => {
                           }`}>
                             <img src={currentSlide.imageUrl} alt={currentSlide.title} className={`w-full h-full ${getImageFitClass(currentSlide.imageFit)}`} />
                           </div>
-                          <div className="flex flex-col overflow-y-auto pl-2">
-                            <ul className="space-y-2">
-                              {currentSlide.bullets?.slice(0, 6).map((b, i) => (
-                                <li key={i} className="flex items-start gap-2">
-                                  <span className={`w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0 ${getThemeAccent(selectedTheme).bg}`} />
-                                  <span className={`${getFontSizeClass(currentSlide.bulletStyle?.fontSize)} leading-snug`} style={{ color: currentSlide.bulletStyle?.color || '#e2e8f0' }}>
+                          <div className="flex flex-col overflow-hidden pl-2">
+                            <ul className="space-y-1">
+                              {currentSlide.bullets?.slice(0, 4).map((b, i) => (
+                                <li key={i} className="flex items-start gap-1.5">
+                                  <span className={`w-1 h-1 rounded-full mt-1.5 flex-shrink-0 ${getThemeAccent(selectedTheme).bg}`} />
+                                  <span className={`${getFontSizeClass(currentSlide.bulletStyle?.fontSize)} leading-tight`} style={{ color: currentSlide.bulletStyle?.color || '#e2e8f0' }}>
                                     {renderBoldText(b, selectedTheme)}
                                   </span>
                                 </li>
@@ -1447,12 +1447,12 @@ const PresentationTab: React.FC = () => {
 
                       {/* Layout: Text Only */}
                       {currentSlide.layoutVariant === 'text_only' && (
-                        <div className="flex-1 overflow-y-auto">
-                          <ul className="space-y-3">
-                            {currentSlide.bullets?.map((b, i) => (
-                              <li key={i} className="flex items-start gap-3">
-                                <span className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${getThemeAccent(selectedTheme).bg}`} />
-                                <span className={`${getFontSizeClass(currentSlide.bulletStyle?.fontSize)} leading-relaxed`} style={{ color: currentSlide.bulletStyle?.color || '#e2e8f0' }}>
+                        <div className="flex-1 overflow-hidden">
+                          <ul className="space-y-1.5">
+                            {currentSlide.bullets?.slice(0, 5).map((b, i) => (
+                              <li key={i} className="flex items-start gap-2">
+                                <span className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${getThemeAccent(selectedTheme).bg}`} />
+                                <span className={`${getFontSizeClass(currentSlide.bulletStyle?.fontSize)} leading-snug`} style={{ color: currentSlide.bulletStyle?.color || '#e2e8f0' }}>
                                   {renderBoldText(b, selectedTheme)}
                                 </span>
                               </li>
@@ -1464,12 +1464,12 @@ const PresentationTab: React.FC = () => {
                       {/* Layout: Text Left (default) - responsive */}
                       {(!currentSlide.layoutVariant || currentSlide.layoutVariant === 'text_left') && currentSlide.imageUrl && (
                         <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 min-h-0">
-                          <div className="flex flex-col overflow-y-auto pr-2 scrollbar-thin">
-                            <ul className="space-y-2">
-                              {currentSlide.bullets?.slice(0, 6).map((b, i) => (
-                                <li key={i} className="flex items-start gap-2">
-                                  <span className={`w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0 ${getThemeAccent(selectedTheme).bg}`} />
-                                  <span className={`${getFontSizeClass(currentSlide.bulletStyle?.fontSize)} leading-snug`} style={{ color: currentSlide.bulletStyle?.color || '#e2e8f0' }}>
+                          <div className="flex flex-col overflow-hidden pr-2">
+                            <ul className="space-y-1">
+                              {currentSlide.bullets?.slice(0, 4).map((b, i) => (
+                                <li key={i} className="flex items-start gap-1.5">
+                                  <span className={`w-1 h-1 rounded-full mt-1.5 flex-shrink-0 ${getThemeAccent(selectedTheme).bg}`} />
+                                  <span className={`${getFontSizeClass(currentSlide.bulletStyle?.fontSize)} leading-tight`} style={{ color: currentSlide.bulletStyle?.color || '#e2e8f0' }}>
                                     {renderBoldText(b, selectedTheme)}
                                   </span>
                                 </li>
