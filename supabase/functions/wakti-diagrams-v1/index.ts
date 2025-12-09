@@ -175,7 +175,11 @@ serve(async (req) => {
 
     for (const spec of diagramSpecs) {
       try {
+        console.log(`🔧 Rendering diagram: ${spec.title} (engine: ${spec.engine})`);
+        console.log(`📝 Diagram source (first 200 chars): ${spec.diagramSource.substring(0, 200)}`);
+        
         const svgContent = await renderWithKroki(spec.engine, spec.diagramSource);
+        console.log(`✅ Kroki rendered SVG (${svgContent.length} bytes)`);
 
         // Upload to Supabase Storage
         const diagramId = crypto.randomUUID();
@@ -214,6 +218,8 @@ serve(async (req) => {
         console.log(`✅ Diagram "${spec.title}" rendered and stored`);
       } catch (err) {
         console.error(`❌ Failed to render diagram "${spec.title}":`, err);
+        // Log the diagram source for debugging
+        console.error(`📝 Failed diagram source: ${spec.diagramSource}`);
       }
     }
 
