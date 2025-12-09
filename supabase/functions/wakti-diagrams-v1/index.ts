@@ -63,9 +63,12 @@ type KrokiStyleKey =
 interface DiagramRequest {
   inputText?: string;
   fileContent?: string; // base64 or extracted text from uploaded file
-  diagramFamily: DiagramFamily;
+  imageBase64?: string; // base64 image data for Vision extraction
+  imageMimeType?: string; // e.g., "image/png", "image/jpeg"
+  extractOnly?: boolean; // If true, just extract text from image and return it
+  diagramFamily?: DiagramFamily;
   language: Language;
-  maxDiagrams: 1 | 2 | 3;
+  maxDiagrams?: 1 | 2 | 3;
   userId?: string;
   krokiStyle?: KrokiStyleKey;
 }
@@ -107,17 +110,42 @@ serve(async (req) => {
 
     // Parse request
     const body: DiagramRequest = await req.json();
-    const { inputText, fileContent, diagramFamily, language, maxDiagrams, userId, krokiStyle } = body;
+    const { inputText, fileContent, imageBase64, imageMimeType, extractOnly, diagramFamily, language, maxDiagrams, userId, krokiStyle } = body;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Extract-only mode: Just extract text from image and return it
+    // ─────────────────────────────────────────────────────────────────────────
+    if (extractOnly && imageBase64) {
+      console.log("🖼️ Extract-only mode: Extracting text from image...");
+      const extractedText = await extractTextFromImage(imageBase64, imageMimeType || "image/png");
+      console.log(`📝 Extracted ${extractedText.length} characters`);
+      
+      return new Response(
+        JSON.stringify({
+          success: true,
+          extractedText,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     const ownerId = userId && userId.trim().length > 0 ? userId : `anon-${crypto.randomUUID().slice(0, 8)}`;
 
-    const textToProcess = inputText || fileContent || "";
+    let textToProcess = inputText || fileContent || "";
+
+    // If image provided, extract text using Vision AI (GPT-4o-mini - cheap & fast)
+    if (imageBase64 && !textToProcess.trim()) {
+      console.log("🖼️ Image detected, extracting text with Vision AI...");
+      textToProcess = await extractTextFromImage(imageBase64, imageMimeType || "image/png");
+      console.log(`📝 Extracted ${textToProcess.length} characters from image`);
+    }
 
     if (!textToProcess.trim()) {
       throw new Error("No input text or file content provided");
     }
 
-    if (maxDiagrams < 1 || maxDiagrams > 3) {
+    const numDiagrams = maxDiagrams || 1;
+    if (numDiagrams < 1 || numDiagrams > 3) {
       throw new Error("maxDiagrams must be 1, 2, or 3");
     }
 
@@ -125,7 +153,7 @@ serve(async (req) => {
       textLength: textToProcess.length,
       diagramFamily,
       language,
-      maxDiagrams,
+      maxDiagrams: numDiagrams,
       krokiStyle,
     });
 
@@ -134,7 +162,7 @@ serve(async (req) => {
     // ─────────────────────────────────────────────────────────────────────────
     console.log("🤖 Calling GPT-4o-mini for diagram planning...");
 
-    const diagramSpecs = await planDiagrams(textToProcess, diagramFamily, language, maxDiagrams, krokiStyle || 'auto');
+    const diagramSpecs = await planDiagrams(textToProcess, diagramFamily || 'auto', language, numDiagrams, krokiStyle || 'auto');
 
     console.log(`✅ GPT returned ${diagramSpecs.length} diagram spec(s)`);
 
@@ -210,6 +238,56 @@ serve(async (req) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GPT-4o-mini Vision: Extract text from image (cheap & fast)
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function extractTextFromImage(base64Data: string, mimeType: string): Promise<string> {
+  // Normalize mime type
+  let normalizedMime = mimeType;
+  if (normalizedMime === "image/jpg") normalizedMime = "image/jpeg";
+  
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini", // Cheap & fast vision model
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Extract ALL text from this image. Return ONLY the extracted text, nothing else. If there's no text, describe the key concepts, items, or workflow shown in the image that could be turned into a diagram.",
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:${normalizedMime};base64,${base64Data}`,
+              },
+            },
+          ],
+        },
+      ],
+      max_tokens: 2000,
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    console.error("Vision API error:", errText);
+    throw new Error(`Vision extraction failed: ${response.status}`);
+  }
+
+  const result = await response.json();
+  const extractedText = result.choices?.[0]?.message?.content || "";
+  
+  return extractedText.trim();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GPT-4o-mini: Plan diagrams from text
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -257,7 +335,26 @@ async function planDiagrams(
   }
 
   const parsed = JSON.parse(content);
-  return parsed.diagrams || [];
+  const diagrams = parsed.diagrams || [];
+  
+  // If no diagrams returned, create a fallback
+  if (diagrams.length === 0) {
+    console.log("⚠️ No diagrams from AI, creating fallback...");
+    return [{
+      engine: "mermaid",
+      kind: "flowchart",
+      title: "Content Overview",
+      titleAr: "نظرة عامة على المحتوى",
+      description: "A visual representation of the key concepts",
+      descriptionAr: "تمثيل مرئي للمفاهيم الرئيسية",
+      diagramSource: `flowchart TD
+    A[Input Text] --> B[Key Concepts]
+    B --> C[Analysis]
+    C --> D[Output]`
+    }];
+  }
+  
+  return diagrams;
 }
 
 function buildSystemPrompt(_family: DiagramFamily, language: Language, maxDiagrams: number, krokiStyle: KrokiStyleKey): string {
@@ -532,24 +629,30 @@ Use |Lane| for swimlanes, activities, decisions.`;
     case "hand-drawn":
       return `MANDATORY STYLE: Hand-Drawn Sketch Style
 Engine: "plantuml"
-You MUST use a simple PlantUML activity diagram. Example:
+You MUST use PlantUML with handwritten style enabled. Example:
 @startuml
+skinparam handwritten true
 skinparam backgroundColor #FFFEF0
-skinparam defaultFontName "Comic Sans MS"
+skinparam roundcorner 15
+skinparam ArrowColor #333333
+skinparam ActivityBackgroundColor #FFF8DC
+skinparam ActivityBorderColor #DEB887
 
 start
-:Wake up;
-:Have breakfast;
-if (Sunny?) then (yes)
-  :Go outside;
+:First Step;
+:Second Step;
+if (Decision?) then (yes)
+  :Option A;
 else (no)
-  :Stay home;
+  :Option B;
 endif
-:End day;
+:Final Step;
 stop
 @enduml
-Create flowcharts with a soft, sketch-style color palette.
-Use activity diagram syntax for flows.`;
+
+CRITICAL: You MUST include "skinparam handwritten true" at the start.
+This creates a sketchy, hand-drawn appearance.
+Use warm colors like #FFFEF0, #FFF8DC, #DEB887 for a paper-like feel.`;
 
     case "ascii-art":
       return `MANDATORY STYLE: Simple Text-Based Diagram
@@ -759,21 +862,28 @@ Use descriptive axis labels and title.`;
     default:
       return `DIAGRAM STYLE: Auto (AI chooses best)
 
-You MUST analyze the text and pick the BEST diagram type. Follow these rules:
+You MUST analyze the text and create a meaningful diagram. Follow these rules:
 
-1. FIRST, identify what the text is about:
-   - Meeting notes, project plans, workflows → Use Mermaid flowchart
-   - Schedules, timelines, deadlines → Use Mermaid gantt
-   - Conversations, API calls, interactions → Use Mermaid sequenceDiagram
-   - Relationships, hierarchies, org charts → Use GraphViz digraph
-   - Ideas, brainstorming, topics → Use PlantUML mindmap
-   - System architecture → Use PlantUML component diagram
+1. ALWAYS create a diagram, even for short or vague text.
+2. Extract key concepts, names, actions, or topics from the text.
+3. Use Mermaid flowchart as your DEFAULT - it works for everything.
 
-2. ALWAYS use Mermaid flowchart as the DEFAULT if unsure. It works for most content.
+FOR SHORT/VAGUE TEXT (emails, signatures, greetings, brief notes):
+- Extract any names, topics, or actions mentioned
+- Create a simple flowchart showing relationships or steps
+- Example for "Best regards, Abdullah":
+  flowchart TD
+      A[Message] --> B[From: Abdullah]
+      B --> C[Best Regards]
 
-3. Keep diagrams SIMPLE with 5-10 nodes maximum.
+FOR LONGER TEXT:
+- Meeting notes, workflows → Mermaid flowchart
+- Schedules, timelines → Mermaid gantt  
+- Conversations, APIs → Mermaid sequenceDiagram
+- Hierarchies → GraphViz digraph
+- Ideas, brainstorming → PlantUML mindmap
 
-Mermaid flowchart (PREFERRED - works for most content):
+Mermaid flowchart (DEFAULT - use this most often):
 flowchart TD
     A[Start] --> B{Decision}
     B -->|Yes| C[Action 1]
@@ -781,22 +891,14 @@ flowchart TD
     C --> E[End]
     D --> E
 
-Mermaid gantt (for schedules/timelines):
-gantt
-    title Project Timeline
-    dateFormat YYYY-MM-DD
-    section Phase 1
-    Task 1 :a1, 2024-01-01, 7d
-    Task 2 :a2, after a1, 5d
-
-Mermaid sequenceDiagram (for interactions):
+Mermaid sequenceDiagram:
 sequenceDiagram
     participant A as User
     participant B as Server
     A->>B: Request
     B-->>A: Response
 
-GraphViz digraph (for relationships):
+GraphViz digraph:
 digraph G {
     rankdir=LR;
     node [shape=box];
@@ -805,15 +907,18 @@ digraph G {
     A -> B;
 }
 
-PlantUML mindmap (for ideas/topics):
+PlantUML mindmap:
 @startmindmap
 * Central Topic
 ** Branch 1
-*** Detail
 ** Branch 2
 @endmindmap
 
-IMPORTANT: If the text is vague or general (like a signature, greeting, or short message), create a simple Mermaid flowchart showing the key concepts mentioned.`;
+CRITICAL RULES:
+1. NEVER return empty diagrams array - always create at least one diagram
+2. Keep diagrams SIMPLE with 3-8 nodes
+3. Use SHORT labels (max 4 words per node)
+4. Use only ASCII characters in labels`;
   }
 }
 

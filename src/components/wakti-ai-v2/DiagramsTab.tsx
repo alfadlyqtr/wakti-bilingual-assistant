@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
-import { Download, Share2, FileText, Sparkles, Loader2, Wand2, Palette, Zap, Check, Image } from 'lucide-react';
+import { Download, Share2, FileText, Sparkles, Loader2, Wand2, Palette, Zap, Check } from 'lucide-react';
 import { toast } from 'sonner';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -151,15 +151,17 @@ const DiagramsTab: React.FC = () => {
   const [maxDiagrams, setMaxDiagrams] = useState<MaxDiagrams>(1);
   const [krokiStyle, setKrokiStyle] = useState<KrokiStyleKey>('auto');
   const [isLoading, setIsLoading] = useState(false);
-  const [isExtracting, setIsExtracting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [diagrams, setDiagrams] = useState<GeneratedDiagram[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ─────────────────────────────────────────────────────────────────────────
-  // File handling
+  // File handling - Text files read directly, images sent to backend for OCR
   // ─────────────────────────────────────────────────────────────────────────
+
+  // State for extraction loading
+  const [isExtracting, setIsExtracting] = useState(false);
 
   // Convert file to base64
   const fileToBase64 = (file: File): Promise<string> => {
@@ -176,81 +178,26 @@ const DiagramsTab: React.FC = () => {
     });
   };
 
-  // Extract text from image using Vision AI (streaming response)
-  const extractTextFromImage = async (file: File): Promise<string> => {
-    const base64 = await fileToBase64(file);
-    const mimeType = file.type || 'image/png';
-    
-    // Get auth session for proper authorization
-    const { supabase } = await import('@/integrations/supabase/client');
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (!session?.access_token) {
-      throw new Error('Not authenticated');
-    }
-    
-    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    
-    // Use fetch with proper CORS settings (same as WaktiAIV2Service)
-    const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/wakti-ai-v2-brain-stream', {
-      method: 'POST',
-      mode: 'cors',
-      cache: 'no-cache',
-      credentials: 'omit',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json',
-        'Accept': 'text/event-stream',
-        'apikey': supabaseAnonKey,
+  // Extract text from image using backend Vision API
+  const extractTextFromImage = async (base64: string, mimeType: string): Promise<string> => {
+    const response = await callEdgeFunctionWithRetry<{
+      success: boolean;
+      extractedText?: string;
+      error?: string;
+    }>('wakti-diagrams-v1', {
+      body: {
+        imageBase64: base64,
+        imageMimeType: mimeType,
+        extractOnly: true, // New flag to just extract text, not generate diagrams
+        language: isArabic ? 'ar' : 'en',
       },
-      body: JSON.stringify({
-        message: 'Extract ALL text from this image. Return ONLY the extracted text, nothing else. If there is no text, describe what you see in the image briefly.',
-        mode: 'vision',
-        files: [{
-          type: mimeType,
-          data: base64,
-          content: base64,
-        }],
-      }),
     });
 
-    if (!response.ok) {
-      throw new Error(`Vision API error: ${response.status}`);
+    if (!response.success || !response.extractedText) {
+      throw new Error(response.error || 'Failed to extract text');
     }
 
-    // Read the streaming response and collect all text
-    const reader = response.body?.getReader();
-    if (!reader) {
-      throw new Error('No response body');
-    }
-
-    const decoder = new TextDecoder();
-    let fullText = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      
-      const chunk = decoder.decode(value, { stream: true });
-      // Parse SSE format: data: {"token":"..."}\n\n
-      const lines = chunk.split('\n');
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const jsonStr = line.slice(6);
-            if (jsonStr === '[DONE]') continue;
-            const parsed = JSON.parse(jsonStr);
-            if (parsed.token) {
-              fullText += parsed.token;
-            }
-          } catch {
-            // Ignore parse errors for incomplete chunks
-          }
-        }
-      }
-    }
-
-    return fullText.trim();
+    return response.extractedText;
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -259,54 +206,61 @@ const DiagramsTab: React.FC = () => {
 
     setUploadedFile(file);
     setError(null);
-    setIsExtracting(true);
 
-    try {
-      let extractedText = '';
-
-      // Handle different file types
-      if (file.type === 'text/plain' || file.name.endsWith('.md') || file.name.endsWith('.txt')) {
-        // Plain text files - read directly
-        extractedText = await file.text();
-      } else if (file.type.startsWith('image/') || file.name.match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i)) {
-        // Images - use Vision AI to extract text
-        toast.info(isArabic ? 'جاري استخراج النص من الصورة...' : 'Extracting text from image...', {
-          duration: 2000,
-        });
-        extractedText = await extractTextFromImage(file);
-      } else if (file.name.endsWith('.pdf') || file.name.endsWith('.docx') || file.name.endsWith('.doc')) {
-        // PDF/Word - show message to copy-paste
-        toast.info(isArabic ? 'نوع ملف غير مدعوم للاستخراج التلقائي' : 'File type not supported for auto-extraction', {
-          description: isArabic 
-            ? 'الرجاء نسخ ولصق النص من الملف مباشرة' 
-            : 'Please copy and paste the text from the file directly',
-        });
-        setIsExtracting(false);
-        return;
-      } else {
-        toast.error(isArabic ? 'نوع ملف غير مدعوم' : 'Unsupported file type');
-        setIsExtracting(false);
-        return;
-      }
-
+    // Text files - read directly
+    if (file.type === 'text/plain' || file.name.endsWith('.md') || file.name.endsWith('.txt')) {
+      const extractedText = await file.text();
       if (extractedText.trim()) {
         setFileContent(extractedText);
         setInputText((prev) => prev ? `${prev}\n\n${extractedText}` : extractedText);
         toast.success(isArabic ? 'تم استخراج النص' : 'Text extracted', {
           description: isArabic ? 'تم إضافة محتوى الملف إلى مربع النص' : 'File content added to text box',
         });
-      } else {
-        toast.warning(isArabic ? 'لم يتم العثور على نص' : 'No text found', {
-          description: isArabic ? 'لم نتمكن من استخراج نص من هذا الملف' : 'Could not extract text from this file',
-        });
       }
-    } catch (err) {
-      console.error('File extraction error:', err);
-      toast.error(isArabic ? 'فشل استخراج النص' : 'Failed to extract text', {
-        description: isArabic ? 'الرجاء المحاولة مرة أخرى أو نسخ النص يدوياً' : 'Please try again or copy the text manually',
+    } 
+    // Images - extract text immediately using Vision API
+    else if (file.type.startsWith('image/') || file.name.match(/\.(jpg|jpeg|png|gif|webp|bmp|heic)$/i)) {
+      setIsExtracting(true);
+      toast.info(isArabic ? 'جاري استخراج النص...' : 'Extracting text...', { duration: 2000 });
+      
+      try {
+        const base64 = await fileToBase64(file);
+        const mimeType = file.type || 'image/png';
+        
+        // Call backend to extract text
+        const extractedText = await extractTextFromImage(base64, mimeType);
+        
+        if (extractedText.trim()) {
+          setFileContent(extractedText);
+          setInputText((prev) => prev ? `${prev}\n\n${extractedText}` : extractedText);
+          toast.success(isArabic ? 'تم استخراج النص' : 'Text extracted', {
+            description: isArabic ? 'تم إضافة النص المستخرج إلى مربع النص' : 'Extracted text added to text box',
+          });
+        } else {
+          toast.warning(isArabic ? 'لم يتم العثور على نص' : 'No text found in image');
+        }
+      } catch (err) {
+        console.error('Error extracting text from image:', err);
+        toast.error(isArabic ? 'فشل استخراج النص' : 'Failed to extract text from image');
+      } finally {
+        setIsExtracting(false);
+      }
+    }
+    // PDF/Word - not supported yet
+    else if (file.name.endsWith('.pdf') || file.name.endsWith('.docx') || file.name.endsWith('.doc')) {
+      toast.info(isArabic ? 'PDF/Word غير مدعوم حالياً' : 'PDF/Word not supported yet', {
+        description: isArabic 
+          ? 'الرجاء نسخ النص من الملف ولصقه مباشرة' 
+          : 'Please copy text from the file and paste it directly',
       });
-    } finally {
-      setIsExtracting(false);
+      setUploadedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+    // Other files
+    else {
+      toast.error(isArabic ? 'نوع ملف غير مدعوم' : 'Unsupported file type');
+      setUploadedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -360,9 +314,10 @@ const DiagramsTab: React.FC = () => {
       if (!response.diagrams || response.diagrams.length === 0) {
         setError(isArabic ? 'لم يتم إنشاء أي مخططات. حاول بنص مختلف.' : 'No diagrams were generated. Try different text.');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Diagram generation error:', err);
-      setError(err.message || (isArabic ? 'حدث خطأ أثناء إنشاء المخططات' : 'Error generating diagrams'));
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      setError(errorMessage || (isArabic ? 'حدث خطأ أثناء إنشاء المخططات' : 'Error generating diagrams'));
     } finally {
       setIsLoading(false);
     }
@@ -373,17 +328,40 @@ const DiagramsTab: React.FC = () => {
   // ─────────────────────────────────────────────────────────────────────────
 
   const handleDownload = async (diagram: GeneratedDiagram) => {
-    const fileName = `${diagram.title.replace(/\s+/g, '_')}.svg`;
+    const fileName = `${diagram.title.replace(/\s+/g, '_')}`;
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     
     try {
-      // Method 1: Try direct fetch with CORS
+      // Fetch the SVG
       const response = await fetch(diagram.imageUrl, { mode: 'cors' });
       if (!response.ok) throw new Error('Fetch failed');
       const blob = await response.blob();
+      
+      // For iOS: Use Web Share API if available, otherwise open in new tab
+      if (isIOS) {
+        if (navigator.share && navigator.canShare?.({ files: [new File([blob], `${fileName}.svg`, { type: 'image/svg+xml' })] })) {
+          const file = new File([blob], `${fileName}.svg`, { type: 'image/svg+xml' });
+          await navigator.share({
+            files: [file],
+            title: diagram.title,
+          });
+          toast.success(isArabic ? 'تم المشاركة' : 'Shared!');
+          return;
+        }
+        // iOS fallback: open in new tab for long-press save
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        toast.info(isArabic ? 'اضغط مطولاً للحفظ' : 'Long-press to save', {
+          description: isArabic ? 'اضغط مطولاً على الصورة واختر حفظ' : 'Long-press the image and choose Save',
+        });
+        return;
+      }
+      
+      // Desktop/Android: Use download link
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = fileName;
+      a.download = `${fileName}.svg`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -392,53 +370,51 @@ const DiagramsTab: React.FC = () => {
         description: isArabic ? 'تم حفظ المخطط بنجاح' : 'Diagram saved successfully',
       });
     } catch (err) {
-      console.error('Download error (trying fallback):', err);
+      console.error('Download error (trying PNG fallback):', err);
       
-      // Method 2: Try to render from diagramSource if available
-      if (diagram.diagramSource) {
-        try {
-          // Find the SVG element in the DOM and extract it
-          const imgElement = document.querySelector(`img[src="${diagram.imageUrl}"]`) as HTMLImageElement;
-          if (imgElement) {
-            // Create a canvas and draw the image
-            const canvas = document.createElement('canvas');
-            canvas.width = imgElement.naturalWidth || 800;
-            canvas.height = imgElement.naturalHeight || 600;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              ctx.fillStyle = 'white';
-              ctx.fillRect(0, 0, canvas.width, canvas.height);
-              ctx.drawImage(imgElement, 0, 0);
-              
-              // Download as PNG
-              canvas.toBlob((blob) => {
-                if (blob) {
+      // Fallback: Convert to PNG using canvas
+      try {
+        const imgElement = document.querySelector(`img[src="${diagram.imageUrl}"]`) as HTMLImageElement;
+        if (imgElement && imgElement.complete) {
+          const canvas = document.createElement('canvas');
+          canvas.width = imgElement.naturalWidth || 800;
+          canvas.height = imgElement.naturalHeight || 600;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(imgElement, 0, 0);
+            
+            canvas.toBlob((blob) => {
+              if (blob) {
+                if (isIOS) {
+                  const url = URL.createObjectURL(blob);
+                  window.open(url, '_blank');
+                  toast.info(isArabic ? 'اضغط مطولاً للحفظ' : 'Long-press to save');
+                } else {
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a');
                   a.href = url;
-                  a.download = fileName.replace('.svg', '.png');
+                  a.download = `${fileName}.png`;
                   document.body.appendChild(a);
                   a.click();
                   document.body.removeChild(a);
                   URL.revokeObjectURL(url);
-                  toast.success(isArabic ? 'تم التحميل' : 'Downloaded', {
-                    description: isArabic ? 'تم حفظ المخطط كصورة PNG' : 'Diagram saved as PNG',
-                  });
-                  return;
+                  toast.success(isArabic ? 'تم التحميل' : 'Downloaded as PNG');
                 }
-              }, 'image/png');
-              return;
-            }
+              }
+            }, 'image/png');
+            return;
           }
-        } catch (canvasErr) {
-          console.error('Canvas fallback failed:', canvasErr);
         }
+      } catch (canvasErr) {
+        console.error('Canvas fallback failed:', canvasErr);
       }
       
-      // Method 3: Open in new tab as last resort
+      // Last resort: Open in new tab
       window.open(diagram.imageUrl, '_blank');
       toast.info(isArabic ? 'افتح في نافذة جديدة' : 'Opened in new tab', {
-        description: isArabic ? 'اضغط بزر الماوس الأيمن واختر حفظ' : 'Right-click and choose Save As',
+        description: isArabic ? 'اضغط مطولاً على الصورة للحفظ' : 'Long-press image to save',
       });
     }
   };
@@ -518,7 +494,7 @@ const DiagramsTab: React.FC = () => {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".txt,.md,.pdf,.docx,.doc,.jpg,.jpeg,.png,.gif,.webp,.bmp,image/*"
+            accept=".txt,.md,.jpg,.jpeg,.png,.gif,.webp,.bmp,.heic,image/*"
             onChange={handleFileChange}
             className="hidden"
             id="diagram-file-input"
@@ -535,8 +511,8 @@ const DiagramsTab: React.FC = () => {
               <FileText className="w-4 h-4" />
             )}
             {isExtracting 
-              ? (isArabic ? 'جاري الاستخراج...' : 'Extracting...')
-              : (isArabic ? 'أو ارفع ملف' : 'Or upload file')
+              ? (isArabic ? 'جاري استخراج النص...' : 'Extracting text...')
+              : (isArabic ? 'أو ارفع ملف أو صورة' : 'Or upload file or image')
             }
           </button>
           {uploadedFile && (
