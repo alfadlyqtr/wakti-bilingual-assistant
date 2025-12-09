@@ -353,10 +353,7 @@ async function planDiagrams(
       titleAr: "نظرة عامة على المحتوى",
       description: "A visual representation of the key concepts",
       descriptionAr: "تمثيل مرئي للمفاهيم الرئيسية",
-      diagramSource: `flowchart TD
-    A[Input Text] --> B[Key Concepts]
-    B --> C[Analysis]
-    C --> D[Output]`
+      diagramSource: "flowchart TD\n    A[Input] --> B[Process]\n    B --> C[Output]"
     }];
   }
   

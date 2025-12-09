@@ -300,7 +300,7 @@ const DiagramsTab: React.FC = () => {
           diagramFamily: 'auto',
           language: isArabic ? 'ar' : 'en',
           maxDiagrams,
-          krokiStyle: krokiStyle === 'auto' ? undefined : krokiStyle,
+          krokiStyle: krokiStyle, // Always send the style, backend handles 'auto'
           userId: user?.id,
         },
       });
