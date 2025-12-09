@@ -25,7 +25,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { AlertTriangle, Check, MessageSquare, Flag, CalendarIcon, User, CreditCard, CheckCircle, XCircle, Clock, RefreshCw } from "lucide-react";
+import { AlertTriangle, Check, MessageSquare, Flag, CalendarIcon, User, CreditCard, CheckCircle, XCircle, Clock, RefreshCw, Sparkles } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
@@ -913,8 +913,17 @@ export default function Account() {
                           language={language} 
                           onSubscribeClick={() => setShowPaywallModal(true)}
                         />
-                        {/* Restore Purchases button - Apple requirement */}
-                        <div className="flex justify-center pt-2">
+                        {/* Start Free Trial button - same as paywall */}
+                        <div className="flex flex-col items-center gap-2 pt-2">
+                          <Button
+                            onClick={() => setShowPaywallModal(true)}
+                            className="w-full max-w-xs bg-gradient-to-r from-accent-purple to-accent-pink hover:opacity-90 text-white font-semibold"
+                            size="lg"
+                          >
+                            <Sparkles className="w-4 h-4 mr-2" />
+                            {language === 'ar' ? 'اشترك الآن واحصل على 3 أيام مجانية' : 'Subscribe Now – Get 3 Free Days'}
+                          </Button>
+                          {/* Restore Purchases button - Apple requirement */}
                           <Button
                             variant="outline"
                             onClick={handleRestorePurchases}
