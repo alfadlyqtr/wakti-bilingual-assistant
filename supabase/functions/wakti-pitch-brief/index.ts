@@ -7,10 +7,13 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+type InputMode = 'verbatim' | 'polish' | 'topic_only';
+
 interface BriefRequest {
   topic: string;
   slideCount: number;
   researchMode: boolean;
+  inputMode?: InputMode;
   language: 'en' | 'ar';
 }
 
@@ -167,7 +170,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { topic, slideCount, researchMode, language } = await req.json() as BriefRequest;
+    const { topic, slideCount, researchMode, inputMode = 'topic_only', language } = await req.json() as BriefRequest;
 
     if (!topic?.trim()) {
       return new Response(
@@ -176,7 +179,11 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    console.log(`📊 Generating brief for: "${topic}" (${language}, ${slideCount} slides, research: ${researchMode})`);
+    console.log(`📊 Generating brief for: "${topic}" (${language}, ${slideCount} slides, research: ${researchMode}, mode: ${inputMode})`);
+
+    // Detect if this looks like a personal tribute/love letter
+    const loveKeywords = /\b(my wife|my husband|my love|my dear|my darling|beloved|زوجتي|زوجي|حبيبي|حبيبتي|عزيزي|عزيزتي|يا حياتي)\b/i;
+    const isPersonalTribute = loveKeywords.test(topic);
 
     // If research mode is ON, search with Tavily first
     let researchContext = "";
@@ -184,25 +191,51 @@ Deno.serve(async (req: Request) => {
       researchContext = await searchWithTavily(topic);
     }
 
-    // Build prompts
+    // Build prompts based on input mode and content type
+    let modeInstruction = '';
+    if (inputMode === 'verbatim') {
+      modeInstruction = language === 'ar'
+        ? 'المستخدم يريد استخدام نصه كما هو بالضبط. لا تغير الكلمات، فقط قسّمها إلى شرائح.'
+        : 'The user wants their text used EXACTLY as written. Do NOT rewrite or change their words. Only structure it into slides.';
+    } else if (inputMode === 'polish') {
+      modeInstruction = language === 'ar'
+        ? 'المستخدم يريد تحسين نصه مع الحفاظ على صوته وأسلوبه. حسّن التدفق والبنية لكن احتفظ بالأسماء والمشاعر والمعنى.'
+        : 'The user wants their text POLISHED but keeping their voice. Improve flow and structure, but preserve names, emotions, and meaning.';
+    } else {
+      modeInstruction = language === 'ar'
+        ? 'استخدم النص كموضوع فقط وأنشئ محتوى جديد منظم.'
+        : 'Use the text as a TOPIC only and create fresh, structured content.';
+    }
+
+    // If personal tribute detected, suggest appropriate defaults
+    const personalHint = isPersonalTribute
+      ? (language === 'ar'
+        ? '\nهذا يبدو كرسالة شخصية/تقدير. اقترح: objective=express_love, audience=partner_spouse, scenario=anniversary, tone=romantic'
+        : '\nThis looks like a personal tribute/love message. Suggest: objective=express_love, audience=partner_spouse, scenario=anniversary, tone=romantic')
+      : '';
+
     const systemPrompt = language === 'ar' 
-      ? `أنت مساعد متخصص في إنشاء العروض التقديمية. أجب بصيغة JSON فقط:
+      ? `أنت مساعد متخصص في إنشاء العروض التقديمية. ${modeInstruction}${personalHint}
+
+أجب بصيغة JSON فقط:
 {
   "subject": "الموضوع الرئيسي",
-  "objective": "educate_audience أو pitch_investors أو training",
-  "audience": "students أو investors أو general_public",
-  "scenario": "classroom أو conference أو pitch_meeting",
-  "tone": "professional أو data_driven أو inspirational",
-  "themeHint": "academic_blue أو dark_fintech أو clean_minimal"
+  "objective": "express_love أو celebrate_someone أو educate_audience أو pitch_investors",
+  "audience": "partner_spouse أو family أو students أو investors أو general_public",
+  "scenario": "anniversary أو private_celebration أو classroom أو conference",
+  "tone": "romantic أو heartfelt أو professional أو inspirational",
+  "themeHint": "romantic_pink أو academic_blue أو dark_fintech أو clean_minimal"
 }`
-      : `You are a presentation expert. Respond with JSON only:
+      : `You are a presentation expert. ${modeInstruction}${personalHint}
+
+Respond with JSON only:
 {
   "subject": "Main presentation title",
-  "objective": "educate_audience or pitch_investors or training",
-  "audience": "students or investors or general_public",
-  "scenario": "classroom or conference or pitch_meeting",
-  "tone": "professional or data_driven or inspirational",
-  "themeHint": "academic_blue or dark_fintech or clean_minimal"
+  "objective": "express_love or celebrate_someone or educate_audience or pitch_investors",
+  "audience": "partner_spouse or family or students or investors or general_public",
+  "scenario": "anniversary or private_celebration or classroom or conference",
+  "tone": "romantic or heartfelt or professional or inspirational",
+  "themeHint": "romantic_pink or academic_blue or dark_fintech or clean_minimal"
 }`;
 
     let userPrompt = language === 'ar'
@@ -242,15 +275,22 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // Use appropriate defaults based on detected content type
+    const defaultObjective = isPersonalTribute ? 'express_love' : 'educate_audience';
+    const defaultAudience = isPersonalTribute ? 'partner_spouse' : 'students';
+    const defaultScenario = isPersonalTribute ? 'anniversary' : 'classroom';
+    const defaultTone = isPersonalTribute ? 'romantic' : 'professional';
+
     const brief = {
       subject: briefData.subject || topic,
-      objective: briefData.objective || 'educate_audience',
-      audience: briefData.audience || 'students',
-      scenario: briefData.scenario || 'classroom',
-      tone: briefData.tone || 'professional',
+      objective: briefData.objective || defaultObjective,
+      audience: briefData.audience || defaultAudience,
+      scenario: briefData.scenario || defaultScenario,
+      tone: briefData.tone || defaultTone,
       language,
-      themeHint: briefData.themeHint || 'academic_blue',
+      themeHint: briefData.themeHint || (isPersonalTribute ? 'romantic_pink' : 'academic_blue'),
       researchContext: researchContext || undefined,
+      inputMode, // Pass through so outline/slides can use it
     };
 
     console.log("✅ Generated brief:", brief.subject);

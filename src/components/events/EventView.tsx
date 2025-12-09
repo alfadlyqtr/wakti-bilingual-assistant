@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Edit, MapPin, Clock, Users, Share2, Calendar, ExternalLink, Navigation } from 'lucide-react';
+import { ArrowLeft, Edit, MapPin, Clock, Users, Calendar, ExternalLink, Navigation } from 'lucide-react';
+import ShareButton from '@/components/ui/ShareButton';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -146,23 +147,10 @@ export default function EventView({ standalone = false }: EventViewProps) {
     return date.toLocaleString();
   };
 
-  const handleShare = async () => {
-    const shareUrl = event?.short_id 
-      ? `${window.location.origin}/wakti/${event.short_id}`
-      : window.location.href;
-      
-    try {
-      await navigator.share({
-        title: event?.title,
-        text: event?.description,
-        url: shareUrl,
-      });
-    } catch (error) {
-      // Fallback to copying URL
-      navigator.clipboard.writeText(shareUrl);
-      toast.success('Event link copied to clipboard');
-    }
-  };
+  // Share URL for the event
+  const shareUrl = event?.short_id 
+    ? `${window.location.origin}/wakti/${event.short_id}`
+    : window.location.href;
 
   const handleGetDirections = () => {
     if (!event?.location) return;
@@ -301,13 +289,12 @@ export default function EventView({ standalone = false }: EventViewProps) {
           <div className="flex items-center gap-2">
             {/* Only show share button for creators */}
             {isOwner && (
-              <Button 
-                variant="ghost" 
+              <ShareButton
+                shareUrl={shareUrl}
+                shareTitle={event?.title || 'Event'}
+                shareDescription={event?.description}
                 size="sm"
-                onClick={handleShare}
-              >
-                <Share2 className="h-4 w-4" />
-              </Button>
+              />
             )}
             {isOwner && (
               <Button 
@@ -418,14 +405,12 @@ export default function EventView({ standalone = false }: EventViewProps) {
 
           {/* Only show share button for creators or in non-standalone guest view */}
           {(isOwner || !standalone) && (
-            <Button 
-              variant="outline" 
-              onClick={handleShare}
-              className="flex items-center gap-2"
-            >
-              <Share2 className="h-4 w-4" />
-              {t("share", language)}
-            </Button>
+            <ShareButton
+              shareUrl={shareUrl}
+              shareTitle={event?.title || 'Event'}
+              shareDescription={event?.description}
+              size="md"
+            />
           )}
         </div>
 

@@ -2,7 +2,8 @@ import React, { useState, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
-import { Download, Share2, FileText, Sparkles, Loader2, Wand2, Palette, Zap, Check } from 'lucide-react';
+import { Download, FileText, Sparkles, Loader2, Wand2, Palette, Zap } from 'lucide-react';
+import ShareButton from '@/components/ui/ShareButton';
 import { toast } from 'sonner';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -142,7 +143,6 @@ const DiagramsTab: React.FC = () => {
   const { language } = useTheme();
   const { user } = useAuth();
   const isArabic = language === 'ar';
-  const [copiedId, setCopiedId] = React.useState<string | null>(null);
 
   // State
   const [inputText, setInputText] = useState('');
@@ -332,15 +332,41 @@ const DiagramsTab: React.FC = () => {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     
     try {
-      // Fetch the SVG
-      const response = await fetch(diagram.imageUrl, { mode: 'cors' });
-      if (!response.ok) throw new Error('Fetch failed');
-      const blob = await response.blob();
+      // Convert SVG to PNG using canvas
+      const imgElement = document.querySelector(`img[src="${diagram.imageUrl}"]`) as HTMLImageElement;
       
-      // For iOS: Use Web Share API if available, otherwise open in new tab
+      if (!imgElement || !imgElement.complete) {
+        throw new Error('Image not loaded');
+      }
+
+      // Create canvas and draw the image
+      const canvas = document.createElement('canvas');
+      // Use higher resolution for better quality
+      const scale = 2;
+      canvas.width = (imgElement.naturalWidth || 800) * scale;
+      canvas.height = (imgElement.naturalHeight || 600) * scale;
+      const ctx = canvas.getContext('2d');
+      
+      if (!ctx) throw new Error('Canvas context failed');
+      
+      // White background
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.scale(scale, scale);
+      ctx.drawImage(imgElement, 0, 0);
+      
+      // Convert to PNG blob
+      const pngBlob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error('Failed to create PNG'));
+        }, 'image/png', 1.0);
+      });
+
+      // For iOS: Use Web Share API
       if (isIOS) {
-        if (navigator.share && navigator.canShare?.({ files: [new File([blob], `${fileName}.svg`, { type: 'image/svg+xml' })] })) {
-          const file = new File([blob], `${fileName}.svg`, { type: 'image/svg+xml' });
+        if (navigator.share && navigator.canShare?.({ files: [new File([pngBlob], `${fileName}.png`, { type: 'image/png' })] })) {
+          const file = new File([pngBlob], `${fileName}.png`, { type: 'image/png' });
           await navigator.share({
             files: [file],
             title: diagram.title,
@@ -349,7 +375,7 @@ const DiagramsTab: React.FC = () => {
           return;
         }
         // iOS fallback: open in new tab for long-press save
-        const url = URL.createObjectURL(blob);
+        const url = URL.createObjectURL(pngBlob);
         window.open(url, '_blank');
         toast.info(isArabic ? 'اضغط مطولاً للحفظ' : 'Long-press to save', {
           description: isArabic ? 'اضغط مطولاً على الصورة واختر حفظ' : 'Long-press the image and choose Save',
@@ -357,86 +383,47 @@ const DiagramsTab: React.FC = () => {
         return;
       }
       
-      // Desktop/Android: Use download link
-      const url = URL.createObjectURL(blob);
+      // Desktop/Android: Download as PNG
+      const url = URL.createObjectURL(pngBlob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${fileName}.svg`;
+      a.download = `${fileName}.png`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       toast.success(isArabic ? 'تم التحميل' : 'Downloaded', {
-        description: isArabic ? 'تم حفظ المخطط بنجاح' : 'Diagram saved successfully',
+        description: isArabic ? 'تم حفظ المخطط كصورة PNG' : 'Diagram saved as PNG image',
       });
     } catch (err) {
-      console.error('Download error (trying PNG fallback):', err);
+      console.error('PNG download error:', err);
       
-      // Fallback: Convert to PNG using canvas
+      // Fallback: Try direct SVG download
       try {
-        const imgElement = document.querySelector(`img[src="${diagram.imageUrl}"]`) as HTMLImageElement;
-        if (imgElement && imgElement.complete) {
-          const canvas = document.createElement('canvas');
-          canvas.width = imgElement.naturalWidth || 800;
-          canvas.height = imgElement.naturalHeight || 600;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.fillStyle = 'white';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(imgElement, 0, 0);
-            
-            canvas.toBlob((blob) => {
-              if (blob) {
-                if (isIOS) {
-                  const url = URL.createObjectURL(blob);
-                  window.open(url, '_blank');
-                  toast.info(isArabic ? 'اضغط مطولاً للحفظ' : 'Long-press to save');
-                } else {
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `${fileName}.png`;
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-                  URL.revokeObjectURL(url);
-                  toast.success(isArabic ? 'تم التحميل' : 'Downloaded as PNG');
-                }
-              }
-            }, 'image/png');
-            return;
-          }
-        }
-      } catch (canvasErr) {
-        console.error('Canvas fallback failed:', canvasErr);
+        const response = await fetch(diagram.imageUrl, { mode: 'cors' });
+        if (!response.ok) throw new Error('Fetch failed');
+        const blob = await response.blob();
+        
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${fileName}.svg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast.success(isArabic ? 'تم التحميل' : 'Downloaded as SVG');
+      } catch (svgErr) {
+        console.error('SVG fallback failed:', svgErr);
+        // Last resort: Open in new tab
+        window.open(diagram.imageUrl, '_blank');
+        toast.info(isArabic ? 'افتح في نافذة جديدة' : 'Opened in new tab', {
+          description: isArabic ? 'اضغط مطولاً على الصورة للحفظ' : 'Long-press image to save',
+        });
       }
-      
-      // Last resort: Open in new tab
-      window.open(diagram.imageUrl, '_blank');
-      toast.info(isArabic ? 'افتح في نافذة جديدة' : 'Opened in new tab', {
-        description: isArabic ? 'اضغط مطولاً على الصورة للحفظ' : 'Long-press image to save',
-      });
     }
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Copy link
-  // ─────────────────────────────────────────────────────────────────────────
-
-  const handleCopyLink = async (diagram: GeneratedDiagram) => {
-    try {
-      await navigator.clipboard.writeText(diagram.imageUrl);
-      setCopiedId(diagram.id);
-      setTimeout(() => setCopiedId(null), 2000);
-      toast.success(isArabic ? 'تم النسخ' : 'Copied!', {
-        description: isArabic ? 'تم نسخ الرابط إلى الحافظة' : 'Link copied to clipboard',
-      });
-    } catch (err) {
-      console.error('Copy error:', err);
-      // Fallback: show the URL in a prompt
-      window.prompt(isArabic ? 'انسخ الرابط:' : 'Copy this link:', diagram.imageUrl);
-    }
-  };
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render
@@ -678,14 +665,12 @@ const DiagramsTab: React.FC = () => {
                       >
                         <Download className="w-5 h-5" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => handleCopyLink(diagram)}
-                        className="p-2.5 rounded-xl bg-fuchsia-100 dark:bg-fuchsia-900/50 hover:bg-fuchsia-200 dark:hover:bg-fuchsia-800 transition-colors text-fuchsia-600 dark:text-fuchsia-400"
-                        title={isArabic ? 'نسخ الرابط' : 'Copy Link'}
-                      >
-                        {copiedId === diagram.id ? <Check className="w-5 h-5 text-green-500" /> : <Share2 className="w-5 h-5" />}
-                      </button>
+                      <ShareButton
+                        shareUrl={diagram.imageUrl}
+                        shareTitle={diagram.title}
+                        shareDescription={diagram.description}
+                        size="sm"
+                      />
                     </div>
                   </div>
                 </div>

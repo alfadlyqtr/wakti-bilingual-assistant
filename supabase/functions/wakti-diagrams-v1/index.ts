@@ -395,12 +395,15 @@ OUTPUT FORMAT (strict JSON):
   ]
 }
 
-IMPORTANT:
+CRITICAL FORMATTING RULES:
 - Return ONLY valid JSON, nothing else.
 - The diagramSource must be valid syntax for the chosen engine.
+- IMPORTANT: In diagramSource, use \\n for newlines. Each arrow/connection MUST be on its own line.
+- For Mermaid flowcharts, EACH arrow must be on a separate line like: "flowchart TD\\n    A[Step 1]\\n    A --> B[Step 2]\\n    B --> C[Step 3]"
 - Keep node labels SHORT (max 4-5 words).
 - Use simple ASCII characters, avoid special symbols that might break rendering.
-- Do NOT use markdown code fences inside diagramSource.`;
+- Do NOT use markdown code fences inside diagramSource.
+- Do NOT put multiple arrows on the same line.`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -921,7 +924,10 @@ CRITICAL RULES:
 1. NEVER return empty diagrams array - always create at least one diagram
 2. Keep diagrams SIMPLE with 3-8 nodes
 3. Use SHORT labels (max 4 words per node)
-4. Use only ASCII characters in labels`;
+4. Use only ASCII characters in labels
+5. EACH ARROW MUST BE ON ITS OWN LINE - use \\n in diagramSource
+6. Example correct format: "flowchart TD\\n    A[Step 1]\\n    A --> B[Step 2]\\n    B --> C[Step 3]"
+7. WRONG: "flowchart TD A[Step 1] --> B[Step 2] B --> C[Step 3]" (no newlines = WILL FAIL)`;
   }
 }
 

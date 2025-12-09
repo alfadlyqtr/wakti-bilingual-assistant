@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Calendar, Clock, MapPin, Users, Edit, Share2, Trash2, CheckCircle, XCircle, User, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, MapPin, Users, Edit, Trash2, CheckCircle, XCircle, User, MessageCircle } from 'lucide-react';
+import ShareButton from '@/components/ui/ShareButton';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -73,20 +74,10 @@ export default function Maw3dManage() {
     }
   };
 
-  const handleShare = async () => {
-    if (!event) {
-      toast.error('Cannot generate link for this event');
-      return;
-    }
-    
-    try {
-      // Pass the full event object to ShareService
-      await ShareService.shareEvent(event);
-    } catch (error) {
-      console.error('Error sharing event:', error);
-      toast.error('Failed to share event');
-    }
-  };
+  // Share URL for the event
+  const shareUrl = event?.short_id 
+    ? `${window.location.origin}/wakti/${event.short_id}`
+    : `${window.location.origin}/maw3d/${id}`;
 
   const handleDelete = async () => {
     if (!event) return;
@@ -222,15 +213,12 @@ export default function Maw3dManage() {
                 {t("editEvent", language)}
               </Button>
               
-              <Button
-                variant="outline"
-                onClick={handleShare}
-                className="gap-2 h-12"
+              <ShareButton
+                shareUrl={shareUrl}
+                shareTitle={event?.title || 'Event'}
+                shareDescription={event?.description}
                 size="lg"
-              >
-                <Share2 className="w-5 h-5" />
-                {t("shareEvent", language)}
-              </Button>
+              />
             </div>
             
             {/* Destructive Action */}

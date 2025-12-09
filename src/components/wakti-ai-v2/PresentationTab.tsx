@@ -109,6 +109,7 @@ interface Slide {
 
 type Step = 'topic' | 'brief' | 'outline' | 'slides';
 type ThemeKey = 'starter' | 'professional' | 'pitch_deck' | 'creative' | 'academic';
+type InputMode = 'verbatim' | 'polish' | 'topic_only';
 
 interface ThemeConfig {
   key: ThemeKey;
@@ -213,8 +214,29 @@ const THEMES: ThemeConfig[] = [
   },
 ];
 
-// Dropdown options - expanded with more use cases
+// Input mode options for how Wakti should handle the user's text
+const INPUT_MODES: { key: InputMode; label: { en: string; ar: string }; description: { en: string; ar: string } }[] = [
+  {
+    key: 'verbatim',
+    label: { en: 'Use my text exactly', ar: 'استخدم نصي كما هو' },
+    description: { en: 'Turn my words into slides without changing them', ar: 'حوّل كلماتي إلى شرائح دون تغييرها' },
+  },
+  {
+    key: 'polish',
+    label: { en: 'Polish & adapt my text', ar: 'حسّن نصي وطوّره' },
+    description: { en: 'Improve flow & structure but keep my voice', ar: 'حسّن التدفق والبنية مع الحفاظ على أسلوبي' },
+  },
+  {
+    key: 'topic_only',
+    label: { en: 'Treat as topic only', ar: 'استخدمه كموضوع فقط' },
+    description: { en: 'Use as inspiration, create fresh content', ar: 'استخدمه كإلهام وأنشئ محتوى جديد' },
+  },
+];
+
+// Dropdown options - expanded with more use cases including personal tributes
 const OBJECTIVES = [
+  { key: 'express_love', label: { en: '💕 Express Love / Appreciation', ar: '💕 التعبير عن الحب / التقدير' } },
+  { key: 'celebrate_someone', label: { en: '🎉 Celebrate Someone Special', ar: '🎉 الاحتفاء بشخص مميز' } },
   { key: 'school_project', label: { en: '📚 School Project', ar: '📚 مشروع مدرسي' } },
   { key: 'university_thesis', label: { en: '🎓 University Thesis/Research', ar: '🎓 أطروحة جامعية/بحث' } },
   { key: 'pitch_investors', label: { en: '💰 Pitch to Investors', ar: '💰 عرض للمستثمرين' } },
@@ -228,6 +250,9 @@ const OBJECTIVES = [
 ];
 
 const AUDIENCES = [
+  { key: 'partner_spouse', label: { en: '💑 My Partner / Spouse', ar: '💑 شريك حياتي / زوجي' } },
+  { key: 'family', label: { en: '👨‍👩‍👧‍👦 My Family', ar: '👨‍👩‍👧‍👦 عائلتي' } },
+  { key: 'loved_one', label: { en: '❤️ A Loved One', ar: '❤️ شخص عزيز' } },
   { key: 'teachers', label: { en: '👨‍🏫 Teachers/Professors', ar: '👨‍🏫 المعلمون/الأساتذة' } },
   { key: 'classmates', label: { en: '👥 Classmates/Peers', ar: '👥 زملاء الدراسة' } },
   { key: 'students', label: { en: '🎒 Students', ar: '🎒 الطلاب' } },
@@ -240,6 +265,9 @@ const AUDIENCES = [
 ];
 
 const SCENARIOS = [
+  { key: 'anniversary', label: { en: '💍 Anniversary / Special Night', ar: '💍 ذكرى سنوية / ليلة مميزة' } },
+  { key: 'private_celebration', label: { en: '🎊 Private Celebration', ar: '🎊 احتفال خاص' } },
+  { key: 'wedding_speech', label: { en: '💒 Wedding / Engagement', ar: '💒 زفاف / خطوبة' } },
   { key: 'classroom', label: { en: '🏫 Classroom Presentation', ar: '🏫 عرض في الفصل' } },
   { key: 'school_project', label: { en: '📚 School Project Defense', ar: '📚 دفاع عن مشروع مدرسي' } },
   { key: 'thesis_defense', label: { en: '🎓 Thesis Defense', ar: '🎓 مناقشة الأطروحة' } },
@@ -252,6 +280,10 @@ const SCENARIOS = [
 ];
 
 const TONES = [
+  { key: 'romantic', label: { en: '💕 Romantic', ar: '💕 رومانسي' } },
+  { key: 'heartfelt', label: { en: '❤️ Heartfelt & Warm', ar: '❤️ صادق ودافئ' } },
+  { key: 'gentle', label: { en: '🌸 Soft & Gentle', ar: '🌸 ناعم ولطيف' } },
+  { key: 'playful', label: { en: '😄 Playful & Fun', ar: '😄 مرح وممتع' } },
   { key: 'educational', label: { en: '📖 Educational & Clear', ar: '📖 تعليمي وواضح' } },
   { key: 'professional', label: { en: '💼 Professional', ar: '💼 مهني' } },
   { key: 'casual', label: { en: '😊 Casual & Friendly', ar: '😊 ودي وغير رسمي' } },
@@ -370,6 +402,7 @@ const PresentationTab: React.FC = () => {
   const [topic, setTopic] = useState('');
   const [slideCount, setSlideCount] = useState(4);
   const [researchMode, setResearchMode] = useState(false);
+  const [inputMode, setInputMode] = useState<InputMode>('topic_only');
 
   // Brief
   const [brief, setBrief] = useState<Brief | null>(null);
@@ -394,6 +427,7 @@ const PresentationTab: React.FC = () => {
   // UI state
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isRegeneratingImage, setIsRegeneratingImage] = useState(false);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Handlers
@@ -415,6 +449,7 @@ const PresentationTab: React.FC = () => {
           topic: topic.trim(),
           slideCount,
           researchMode,
+          inputMode,
           language,
         },
         maxRetries: 2,
@@ -433,7 +468,7 @@ const PresentationTab: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [topic, slideCount, researchMode, language]);
+  }, [topic, slideCount, researchMode, inputMode, language]);
 
   const handleGenerateOutline = useCallback(async () => {
     if (!brief) return;
@@ -455,8 +490,10 @@ const PresentationTab: React.FC = () => {
             scenario: brief.scenario,
             tone: brief.tone,
           },
+          originalText: topic, // Pass the original user text for verbatim/polish modes
           slideCount,
           researchMode,
+          inputMode,
           language,
           theme: selectedTheme, // Pass theme for layout decisions
         },
@@ -476,7 +513,7 @@ const PresentationTab: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [brief, slideCount, researchMode, language, selectedTheme]);
+  }, [brief, topic, slideCount, researchMode, inputMode, language, selectedTheme]);
 
   const handleGenerateSlides = useCallback(async () => {
     if (outline.length === 0) return;
@@ -537,6 +574,51 @@ const PresentationTab: React.FC = () => {
       setIsLoading(false);
     }
   }, [outline, selectedTheme, brief, language]);
+
+  // Regenerate image for current slide using AI (simple auto-only)
+  const handleRegenerateImage = useCallback(async () => {
+    if (slides.length === 0) return;
+    
+    const currentSlide = slides[selectedSlideIndex];
+    if (!currentSlide) return;
+
+    setIsRegeneratingImage(true);
+
+    try {
+      const response = await callEdgeFunctionWithRetry<{
+        success: boolean;
+        imageUrl?: string;
+        error?: string;
+      }>('wakti-slide-regenerate-image', {
+        body: {
+          title: currentSlide.title,
+          bullets: currentSlide.bullets,
+          role: currentSlide.role,
+          objective: brief?.objective,
+          audience: brief?.audience,
+          tone: brief?.tone,
+        },
+        maxRetries: 2,
+        retryDelay: 1000,
+      });
+
+      if (!response?.success || !response?.imageUrl) {
+        throw new Error(response?.error || 'Failed to regenerate image');
+      }
+
+      // Update the slide with the new image
+      setSlides(prev => prev.map((s, i) =>
+        i === selectedSlideIndex ? { ...s, imageUrl: response.imageUrl } : s
+      ));
+
+      toast.success(language === 'ar' ? 'تم إنشاء الصورة بنجاح' : 'Image regenerated successfully');
+    } catch (e: any) {
+      console.error('Image regeneration error:', e);
+      toast.error(language === 'ar' ? 'فشل إنشاء الصورة' : 'Failed to regenerate image');
+    } finally {
+      setIsRegeneratingImage(false);
+    }
+  }, [slides, selectedSlideIndex, brief, language]);
 
   // Export as PDF
   const handleExportPDF = useCallback(async () => {
@@ -730,52 +812,90 @@ const PresentationTab: React.FC = () => {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-sm font-medium mb-2 block">
-              {language === 'ar' ? 'عدد الشرائح' : 'Number of Slides'}
-            </label>
-            <div className="flex flex-col gap-2">
-              <input
-                type="range"
-                min={3}
-                max={12}
-                step={1}
-                value={slideCount}
-                onChange={(e) => setSlideCount(Number(e.target.value))}
-                className="w-full accent-primary"
-                aria-label={language === 'ar' ? 'عدد الشرائح' : 'Number of slides'}
-              />
-              <div className="text-xs text-muted-foreground flex justify-between">
-                <span>{language === 'ar' ? 'الحد الأدنى: 3 شرائح' : 'Min: 3 slides'}</span>
-                <span className="font-medium">
-                  {slideCount} {language === 'ar' ? 'شريحة' : 'slides'}
-                </span>
-                <span>{language === 'ar' ? 'الحد الأقصى: 12 شريحة' : 'Max: 12 slides'}</span>
-              </div>
+        {/* Input Mode Selection */}
+        <div className="bg-muted/30 rounded-xl p-4">
+          <label className="text-sm font-medium mb-3 block">
+            {language === 'ar' ? 'كيف يستخدم وقتي نصك؟' : 'How should Wakti use your text?'}
+          </label>
+          <div className="space-y-2">
+            {INPUT_MODES.map((mode) => (
+              <label
+                key={mode.key}
+                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                  inputMode === mode.key
+                    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                    : 'border-transparent hover:bg-muted/50'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="inputMode"
+                  value={mode.key}
+                  checked={inputMode === mode.key}
+                  onChange={() => setInputMode(mode.key)}
+                  className="mt-1 accent-primary"
+                />
+                <div className="flex-1">
+                  <span className="font-medium text-sm">{mode.label[language]}</span>
+                  <p className="text-xs text-muted-foreground mt-0.5">{mode.description[language]}</p>
+                </div>
+              </label>
+            ))}
+
+            {/* Research Mode - inside the same section */}
+            <div className="border-t border-border/50 pt-3 mt-2">
+              <label
+                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                  researchMode
+                    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                    : 'border-transparent hover:bg-muted/50'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={researchMode}
+                  onChange={() => setResearchMode(!researchMode)}
+                  className="mt-1 accent-primary"
+                />
+                <div className="flex-1">
+                  <span className="font-medium text-sm flex items-center gap-1.5">
+                    <Sparkles className={`w-3.5 h-3.5 ${researchMode ? 'text-primary' : ''}`} />
+                    {language === 'ar' ? 'بحث متقدم' : 'Web Research'}
+                  </span>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {language === 'ar' 
+                      ? 'ابحث في الإنترنت للحصول على معلومات حديثة'
+                      : 'Search the web for up-to-date information'}
+                  </p>
+                </div>
+              </label>
             </div>
           </div>
+        </div>
 
-          <div>
-            <label className="text-sm font-medium mb-2 block">
-              {language === 'ar' ? 'وضع البحث' : 'Research Mode'}
-            </label>
-            <button
-              type="button"
-              onClick={() => setResearchMode(!researchMode)}
-              className={`w-full border rounded-xl px-4 py-3 text-left transition-all ${
-                researchMode 
-                  ? 'bg-primary/10 border-primary text-primary' 
-                  : 'hover:bg-muted'
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                <Sparkles className={`w-4 h-4 ${researchMode ? 'text-primary' : ''}`} />
-                {researchMode 
-                  ? (language === 'ar' ? 'مفعّل' : 'Enabled')
-                  : (language === 'ar' ? 'معطّل' : 'Disabled')}
+        {/* Number of Slides - standalone */}
+        <div>
+          <label className="text-sm font-medium mb-2 block">
+            {language === 'ar' ? 'عدد الشرائح' : 'Number of Slides'}
+          </label>
+          <div className="flex flex-col gap-2">
+            <input
+              type="range"
+              min={3}
+              max={12}
+              step={1}
+              value={slideCount}
+              onChange={(e) => setSlideCount(Number(e.target.value))}
+              className="w-full accent-primary"
+              aria-label={language === 'ar' ? 'عدد الشرائح' : 'Number of slides'}
+            />
+            <div className="text-xs text-muted-foreground flex justify-between">
+              <span>{language === 'ar' ? 'الحد الأدنى: 3 شرائح' : 'Min: 3 slides'}</span>
+              <span className="font-medium">
+                {slideCount} {language === 'ar' ? 'شريحة' : 'slides'}
               </span>
-            </button>
+              <span>{language === 'ar' ? 'الحد الأقصى: 12 شريحة' : 'Max: 12 slides'}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -1677,19 +1797,38 @@ const PresentationTab: React.FC = () => {
                         ));
                       }}
                     />
-                    {currentSlide.imageUrl && (
+                    <div className={`flex items-center gap-2 ${language === 'ar' ? 'flex-row-reverse' : ''}`}>
+                      {/* Regenerate Image with AI - nicer button */}
                       <button
-                        onClick={() => setSlides(prev => prev.map((s, i) =>
-                          i === selectedSlideIndex ? { ...s, imageUrl: undefined } : s
-                        ))}
-                        className={`text-[11px] text-red-500 hover:text-red-600 flex items-center gap-1 ${language === 'ar' ? 'flex-row-reverse' : ''}`}
+                        onClick={handleRegenerateImage}
+                        disabled={isRegeneratingImage}
+                        className={`px-3 py-1.5 text-[11px] rounded-lg bg-gradient-to-r from-primary/90 to-primary text-white hover:from-primary hover:to-primary/90 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm ${language === 'ar' ? 'flex-row-reverse' : ''}`}
                       >
-                        <Trash2 className="w-3 h-3" />
-                        {language === 'ar' ? 'إزالة الصورة' : 'Remove Image'}
+                        {isRegeneratingImage ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-3.5 h-3.5" />
+                        )}
+                        {isRegeneratingImage 
+                          ? (language === 'ar' ? 'جارٍ الإنشاء...' : 'Generating...') 
+                          : (language === 'ar' ? 'إنشاء بالذكاء' : 'Regenerate')}
                       </button>
-                    )}
+                      {/* Remove Image */}
+                      {currentSlide.imageUrl && (
+                        <button
+                          onClick={() => setSlides(prev => prev.map((s, i) =>
+                            i === selectedSlideIndex ? { ...s, imageUrl: undefined } : s
+                          ))}
+                          className={`text-[11px] text-red-500 hover:text-red-600 flex items-center gap-1 ${language === 'ar' ? 'flex-row-reverse' : ''}`}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          {language === 'ar' ? 'إزالة' : 'Remove'}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
+
                 {/* Image Size */}
                 <div className={`flex items-center gap-2 ${language === 'ar' ? 'flex-row-reverse' : ''}`}>
                   <span className="text-[11px] text-slate-500">{language === 'ar' ? 'حجم الصورة:' : 'Size:'}</span>
