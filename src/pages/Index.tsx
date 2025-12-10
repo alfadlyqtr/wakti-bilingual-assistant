@@ -7,7 +7,21 @@ import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { useTheme } from "@/providers/ThemeProvider";
 import { motion } from "framer-motion";
 import { Check, ArrowRight, Sparkles, Bot, Calendar, Mic, Users, MessageSquare, LogIn, Zap, Star, Music, Globe, Image as ImageIcon, BookOpen, PencilRuler, Workflow, MonitorPlay } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { 
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { 
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
 import { MobileHeader } from "@/components/MobileHeader";
 import { Footer } from "@/components/Footer";
 import { t } from "@/utils/translations";
@@ -16,6 +30,40 @@ export default function Index() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { language, theme } = useTheme();
+  
+  // Autoplay state for carousels
+  const [desktopApi, setDesktopApi] = useState<any>(null);
+  const [mobileApi, setMobileApi] = useState<any>(null);
+  
+  // Desktop autoplay
+  useEffect(() => {
+    if (!desktopApi) return;
+    
+    const interval = setInterval(() => {
+      if (desktopApi.canScrollNext()) {
+        desktopApi.scrollNext();
+      } else {
+        desktopApi.scrollTo(0);
+      }
+    }, 3000);
+    
+    return () => clearInterval(interval);
+  }, [desktopApi]);
+  
+  // Mobile autoplay
+  useEffect(() => {
+    if (!mobileApi) return;
+    
+    const interval = setInterval(() => {
+      if (mobileApi.canScrollNext()) {
+        mobileApi.scrollNext();
+      } else {
+        mobileApi.scrollTo(0);
+      }
+    }, 3000);
+    
+    return () => clearInterval(interval);
+  }, [mobileApi]);
 
   // If user is already logged in, redirect to dashboard
   useEffect(() => {
@@ -159,24 +207,30 @@ export default function Index() {
     },
     {
       icon: BookOpen,
-      title: "Study Mode",
-      description: "Turn any topic into simple explanations, flashcards, and practice questions so you can learn faster.",
+      title: language === "en" ? "Study Mode" : "وضع الدراسة",
+      description: language === "en" 
+        ? "Turn any topic into simple explanations, flashcards, and practice questions so you can learn faster."
+        : "حوّل أي موضوع إلى شروحات بسيطة وبطاقات تعليمية وأسئلة تدريبية لتتعلم بشكل أسرع.",
       gradient: "from-blue-500 via-indigo-500 to-purple-600",
       bgGradient: "from-blue-50 to-indigo-50",
       iconColor: "text-blue-600"
     },
     {
       icon: PencilRuler,
-      title: "Draw Mode",
-      description: "Sketch ideas and scenes with AI-assisted drawing so you can visualize anything in seconds.",
+      title: language === "en" ? "Draw Mode" : "وضع الرسم",
+      description: language === "en"
+        ? "Sketch ideas and scenes with AI-assisted drawing so you can visualize anything in seconds."
+        : "ارسم أفكارك ومشاهدك بمساعدة الذكاء الاصطناعي لتتخيل أي شيء في ثوانٍ.",
       gradient: "from-pink-500 via-rose-500 to-purple-600",
       bgGradient: "from-pink-50 to-rose-50",
       iconColor: "text-pink-600"
     },
     {
       icon: Workflow,
-      title: "Create Diagrams",
-      description: "Turn messy text into clean diagrams and workflows so you can explain and present clearly.",
+      title: language === "en" ? "Create Diagrams" : "إنشاء المخططات",
+      description: language === "en"
+        ? "Turn messy text into clean diagrams and workflows so you can explain and present clearly."
+        : "حوّل النصوص الفوضوية إلى مخططات وسير عمل واضحة لتشرح وتعرض بوضوح.",
       gradient: "from-emerald-500 via-teal-500 to-cyan-600",
       bgGradient: "from-emerald-50 to-teal-50",
       iconColor: "text-emerald-600"
@@ -272,30 +326,95 @@ export default function Index() {
                 </p>
               </motion.div>
               
-              <div className="space-y-6 max-w-lg mx-auto">
-                {features.map((feature, index) => (
-                  <motion.div key={index} variants={itemVariants} className="group">
-                    <Card className={`overflow-hidden border-0 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 bg-gradient-to-br ${feature.bgGradient} dark:from-slate-800/50 dark:to-slate-900/50`}>
-                      <div className={`h-1 bg-gradient-to-r ${feature.gradient}`}></div>
-                      <div className="p-6">
-                        <div className="flex items-start gap-4">
-                          <div className={`p-3 rounded-xl bg-white dark:bg-slate-800 shadow-sm ${feature.iconColor}`}>
-                            <feature.icon className="h-6 w-6" />
+              <div className="max-w-lg mx-auto overflow-visible">
+                <Carousel
+                  opts={{
+                    align: "start",
+                    loop: true,
+                    slidesToScroll: 1,
+                  }}
+                  className="w-full overflow-visible"
+                  setApi={setMobileApi}
+                >
+                  <CarouselContent className="-ml-4">
+                    {features.filter((_, index) => index % 2 === 0).map((feature, index) => {
+                      const nextFeature = features[index * 2 + 1];
+                      return (
+                        <CarouselItem key={index} className="pl-4 basis-full">
+                          <div className="space-y-4">
+                            <motion.div 
+                              variants={itemVariants} 
+                              className="group"
+                              whileHover={{ 
+                                scale: 1.02,
+                                rotateX: 5,
+                                rotateY: -5,
+                                z: 50
+                              }}
+                              transition={{ duration: 0.3 }}
+                            >
+                              <Card className={`overflow-hidden border-0 shadow-xl hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 bg-gradient-to-br ${feature.bgGradient} dark:from-slate-800/50 dark:to-slate-900/50`}>
+                                <div className={`h-1 bg-gradient-to-r ${feature.gradient}`}></div>
+                                <div className="p-6">
+                                  <div className="flex items-start gap-4">
+                                    <div className={`p-3 rounded-xl bg-white dark:bg-slate-800 shadow-md ${feature.iconColor} transform hover:scale-110 transition-transform duration-300`}>
+                                      <feature.icon className="h-6 w-6" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
+                                        {feature.title}
+                                        <Check className="h-4 w-4 text-green-500" />
+                                      </h3>
+                                      <p className="text-sm text-muted-foreground leading-relaxed w-full">
+                                        {feature.description}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </Card>
+                            </motion.div>
+                            
+                            {nextFeature && (
+                              <motion.div 
+                                variants={itemVariants} 
+                                className="group"
+                                whileHover={{ 
+                                  scale: 1.02,
+                                  rotateX: 5,
+                                  rotateY: -5,
+                                  z: 50
+                                }}
+                                transition={{ duration: 0.3 }}
+                              >
+                                <Card className={`overflow-hidden border-0 shadow-xl hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 bg-gradient-to-br ${nextFeature.bgGradient} dark:from-slate-800/50 dark:to-slate-900/50`}>
+                                  <div className={`h-1 bg-gradient-to-r ${nextFeature.gradient}`}></div>
+                                  <div className="p-6">
+                                    <div className="flex items-start gap-4">
+                                      <div className={`p-3 rounded-xl bg-white dark:bg-slate-800 shadow-md ${nextFeature.iconColor} transform hover:scale-110 transition-transform duration-300`}>
+                                        <nextFeature.icon className="h-6 w-6" />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
+                                          {nextFeature.title}
+                                          <Check className="h-4 w-4 text-green-500" />
+                                        </h3>
+                                        <p className="text-sm text-muted-foreground leading-relaxed w-full">
+                                          {nextFeature.description}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </Card>
+                              </motion.div>
+                            )}
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
-                              {feature.title}
-                              <Check className="h-4 w-4 text-green-500" />
-                            </h3>
-                            <p className="text-sm text-muted-foreground leading-relaxed w-full">
-                              {feature.description}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </Card>
-                  </motion.div>
-                ))}
+                        </CarouselItem>
+                      );
+                    })}
+                  </CarouselContent>
+                  <CarouselPrevious className="flex -left-12 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white border-2 border-[#e9ceb0]/30" />
+                  <CarouselNext className="flex -right-12 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white border-2 border-[#e9ceb0]/30" />
+                </Carousel>
               </div>
             </motion.section>
             
@@ -305,60 +424,78 @@ export default function Index() {
               whileInView="visible"
               viewport={{ once: true, margin: "-50px" }}
               variants={containerVariants}
-              className="px-4 py-12 bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-indigo-950/20 dark:via-purple-950/20 dark:to-pink-950/20 mx-4 my-8 rounded-3xl backdrop-blur-sm border border-indigo-100 dark:border-indigo-800/30"
+              className="px-4 py-12"
             >
-              <motion.div variants={itemVariants} className="text-center mb-8">
-                <h2 className="text-2xl font-bold mb-3">
-                  {t("chooseYourPlan", language)}
-                </h2>
-                <p className="text-muted-foreground text-sm mb-6">
-                  {t("perfectForEveryone", language)}
-                </p>
-                
-                {/* 3-day free trial badge */}
-                <div className="inline-flex items-center gap-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-full px-4 py-2 border shadow-sm mb-4">
-                  <span className="text-sm font-medium text-muted-foreground">
-                    {language === "en" ? "3-day free trial, then" : "تجربة مجانية 3 أيام، ثم"}
-                  </span>
-                </div>
-              </motion.div>
-              
-              <motion.div
-                variants={itemVariants}
-                className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-2xl p-8 shadow-xl border border-white/50 dark:border-slate-700/50 max-w-sm mx-auto"
-              >
-                <div className="text-center mb-8">
-                  <div className="flex justify-center items-baseline gap-3 mb-2">
-                    <span className="text-3xl font-bold text-foreground">QAR</span>
-                    <span className="text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                      {MONTHLY_PRICE_QAR}/month
-                    </span>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    ${MONTHLY_PRICE_USD}/month USD
+              <div className="max-w-6xl mx-auto flex flex-col items-center">
+                <motion.div variants={itemVariants} className="text-center mb-8">
+                  <p className="text-3xl font-bold text-[#e9ceb0] max-w-3xl mx-auto">
+                    {t("perfectForEveryone", language)}
                   </p>
-                </div>
+                </motion.div>
                 
-                <ul className="space-y-4 mb-8">
-                  {features.map((feature, index) => (
-                    <li key={index} className="flex items-start gap-3">
-                      <div className={`p-1 rounded-full ${feature.iconColor} bg-white dark:bg-slate-800 shadow-sm`}>
-                        <Check className="h-4 w-4" />
-                      </div>
-                      <span className="text-sm font-medium">{feature.title}</span>
-                    </li>
-                  ))}
-                </ul>
-                
-                <Button
-                  className="w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-600 hover:via-purple-600 hover:to-pink-600 text-white font-semibold py-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-                  onClick={() => navigate('/signup')}
+                {/* Pricing Card - Mobile version */}
+                <motion.div
+                  variants={itemVariants}
+                  className="relative max-w-sm w-full"
                 >
-                  <Star className="h-5 w-5 mr-2" />
-                  {t("createAccountNow", language)}
-                  <ArrowRight className="h-5 w-5 ml-2" />
-                </Button>
-              </motion.div>
+                  {/* Background glow effect */}
+                  <div className="absolute -inset-4 bg-gradient-to-br from-blue-500/40 via-indigo-400/30 to-cyan-400/40 rounded-[2.5rem] blur-2xl"></div>
+                  
+                  {/* Card - Vibrant blue gradient */}
+                  <div className="relative bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-700 rounded-2xl p-6 text-white shadow-2xl overflow-hidden">
+                    {/* Glassmorphic overlay for depth */}
+                    <div className="absolute inset-0 bg-gradient-to-b from-white/15 via-transparent to-black/10 rounded-2xl"></div>
+                    {/* Inner border glow - Wakti gold accent */}
+                    <div className="absolute inset-[2px] rounded-[18px] border-2 border-[#e9ceb0]/40"></div>
+                    
+                    <div className="relative z-10 flex flex-col items-center text-center">
+                      {/* 3-day free trial badge - Catchy gradient with glow */}
+                      <div className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-400 via-orange-400 to-yellow-400 text-[#060541] rounded-full px-4 py-2 mb-4 shadow-[0_0_20px_rgba(251,191,36,0.5)]">
+                        <Star className="h-4 w-4 fill-current" />
+                        <span className="text-xs font-black tracking-wider uppercase">
+                          {language === "en" ? "🎉 3-DAY FREE TRIAL" : "🎉 تجربة مجانية 3 أيام"}
+                        </span>
+                      </div>
+                      
+                      {/* Price */}
+                      <p className="text-5xl lg:text-6xl font-black mb-2" dir="ltr">
+                        {MONTHLY_PRICE_QAR}<span className="text-3xl font-bold ml-1">{language === "en" ? "QAR" : "ر.ق"}</span>
+                      </p>
+                      <p className="text-xs font-medium text-white/80 tracking-widest uppercase mb-4">
+                        {language === "en" ? `$${MONTHLY_PRICE_USD}/month USD` : `${MONTHLY_PRICE_USD}$ شهرياً`}
+                      </p>
+                      
+                      {/* Description */}
+                      <p className="text-white/70 text-xs mb-6 max-w-xs">
+                        {language === "en" 
+                          ? "Unlock all premium features and supercharge your productivity with AI" 
+                          : "افتح جميع الميزات المميزة وعزز إنتاجيتك بالذكاء الاصطناعي"}
+                      </p>
+                      
+                      {/* Feature tags - Mobile version */}
+                      <div className="flex flex-wrap justify-center gap-1.5 mb-6">
+                        {features.map((feature, index) => (
+                          <span 
+                            key={index} 
+                            className="bg-[#e9ceb0]/90 text-[#060541] text-xs font-medium px-2 py-1 rounded-full"
+                          >
+                            {feature.title}
+                          </span>
+                        ))}
+                      </div>
+                      
+                      {/* CTA Button - Mobile version */}
+                      <button
+                        className="w-full bg-gradient-to-r from-cyan-400 via-blue-500 to-indigo-500 hover:from-cyan-500 hover:via-blue-600 hover:to-indigo-600 text-white font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-[0_0_25px_hsla(210,100%,65%,0.5)] border-2 border-white/30 text-sm"
+                        onClick={() => navigate('/signup')}
+                      >
+                        <Star className="h-4 w-4" />
+                        {t("createAccountNow", language)}
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
             </motion.section>
           </div>
           
@@ -455,7 +592,7 @@ export default function Index() {
               whileInView="visible"
               viewport={{ once: true, margin: "-50px" }}
               variants={containerVariants}
-              className="py-20 lg:py-32 px-6 lg:px-8 bg-gradient-to-b from-transparent to-slate-50/50 dark:to-slate-900/20"
+              className="py-20 lg:py-32 px-6 lg:px-8 bg-gradient-to-b from-transparent to-slate-50/50 dark:to-slate-900/20 overflow-visible"
             >
               <motion.div variants={itemVariants} className="text-center mb-20">
                 <h2 className="text-3xl lg:text-5xl font-bold mb-6 max-w-3xl mx-auto">
@@ -466,32 +603,67 @@ export default function Index() {
                 </p>
               </motion.div>
               
-              <div className="max-w-7xl mx-auto">
-                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8 lg:gap-12">
-                  {features.map((feature, index) => (
-                    <motion.div key={index} variants={itemVariants} className="group">
-                      <Card className={`overflow-hidden border-0 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 bg-gradient-to-br ${feature.bgGradient} dark:from-slate-800/50 dark:to-slate-900/50 h-full`}>
-                        <div className={`h-2 bg-gradient-to-r ${feature.gradient}`}></div>
-                        <div className="p-8 lg:p-10">
-                          <div className="flex items-start gap-6">
-                            <div className={`p-4 lg:p-5 rounded-xl bg-white dark:bg-slate-800 shadow-sm ${feature.iconColor}`}>
-                              <feature.icon className="h-10 w-10 lg:h-12 lg:w-12" />
+              <div className="max-w-7xl mx-auto overflow-visible">
+                <Carousel
+                  opts={{
+                    align: "start",
+                    loop: true,
+                    slidesToScroll: 1,
+                  }}
+                  className="w-full overflow-visible"
+                  setApi={setDesktopApi}
+                >
+                  <CarouselContent className="-ml-4 overflow-visible">
+                    {features.map((feature, index) => (
+                      <CarouselItem key={index} className="pl-4 md:basis-1/2 lg:basis-1/3 overflow-visible py-4">
+                        <div 
+                          className="group h-full overflow-visible"
+                          style={{ perspective: "1000px" }}
+                        >
+                          <div
+                            className="h-full"
+                            style={{ 
+                              transformStyle: "preserve-3d",
+                              transition: "transform 0.5s ease, box-shadow 0.5s ease"
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.transform = "rotateX(10deg) rotateY(-10deg) translateY(-16px) scale(1.05)";
+                              e.currentTarget.style.boxShadow = "0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 30px rgba(99, 102, 241, 0.3)";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = "rotateX(0deg) rotateY(0deg) translateY(0) scale(1)";
+                              e.currentTarget.style.boxShadow = "";
+                            }}
+                          >
+                          <Card 
+                            className={`overflow-visible border-0 shadow-xl transition-all duration-500 bg-gradient-to-br ${feature.bgGradient} dark:from-slate-800/50 dark:to-slate-900/50 h-full`}
+                          >
+                            <div className={`h-2 bg-gradient-to-r ${feature.gradient}`}></div>
+                            <div className="p-8 lg:p-10">
+                              <div className="flex items-start gap-6">
+                                <div className={`p-4 lg:p-5 rounded-xl bg-white dark:bg-slate-800 shadow-md ${feature.iconColor} transform hover:scale-110 transition-transform duration-300`}>
+                                  <feature.icon className="h-10 w-10 lg:h-12 lg:w-12" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="font-bold text-2xl lg:text-3xl mb-4 flex items-center gap-3">
+                                    {feature.title}
+                                    <Check className="h-6 w-6 lg:h-7 lg:w-7 text-green-500" />
+                                  </h3>
+                                  <p className="text-lg lg:text-xl text-muted-foreground leading-relaxed w-full">
+                                    {feature.description}
+                                  </p>
+                                </div>
+                              </div>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-bold text-2xl lg:text-3xl mb-4 flex items-center gap-3">
-                                {feature.title}
-                                <Check className="h-6 w-6 lg:h-7 lg:w-7 text-green-500" />
-                              </h3>
-                              <p className="text-lg lg:text-xl text-muted-foreground leading-relaxed w-full">
-                                {feature.description}
-                              </p>
-                            </div>
+                          </Card>
                           </div>
                         </div>
-                      </Card>
-                    </motion.div>
-                  ))}
-                </div>
+                      </CarouselItem>
+                    ))}
+                  </CarouselContent>
+                  <CarouselPrevious className="hidden md:flex -left-16 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white border-2 border-[#e9ceb0]/30 z-10" />
+                  <CarouselNext className="hidden md:flex -right-16 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white border-2 border-[#e9ceb0]/30 z-10" />
+                </Carousel>
               </div>
             </motion.section>
             
@@ -503,61 +675,75 @@ export default function Index() {
               variants={containerVariants}
               className="py-16 lg:py-20 px-6 lg:px-8"
             >
-              <div className="max-w-6xl mx-auto">
-                <div className="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-indigo-950/20 dark:via-purple-950/20 dark:to-pink-950/20 rounded-3xl backdrop-blur-sm border border-indigo-100 dark:border-indigo-800/30 p-8 lg:p-12">
-                  <motion.div variants={itemVariants} className="text-center mb-12">
-                    <h2 className="text-3xl lg:text-5xl font-bold mb-6">
-                      {t("chooseYourPlan", language)}
-                    </h2>
-                    <p className="text-lg lg:text-xl text-muted-foreground mb-8 max-w-3xl mx-auto">
-                      {t("perfectForEveryone", language)}
-                    </p>
-                    
-                    {/* 3-day free trial badge */}
-                    <div className="inline-flex items-center gap-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-full px-6 py-3 border shadow-sm mb-8">
-                      <span className="text-base font-medium text-muted-foreground">
-                        {language === "en" ? "3-day free trial, then" : "تجربة مجانية 3 أيام، ثم"}
-                      </span>
-                    </div>
-                  </motion.div>
+              <div className="max-w-6xl mx-auto flex flex-col items-center">
+                <motion.div variants={itemVariants} className="text-center mb-16">
+                  <p className="text-4xl md:text-5xl font-bold text-[#e9ceb0] max-w-3xl mx-auto">
+                    {t("perfectForEveryone", language)}
+                  </p>
+                </motion.div>
+                
+                {/* Pricing Card - Wakti style */}
+                <motion.div
+                  variants={itemVariants}
+                  className="relative max-w-md w-full"
+                >
+                  {/* Background glow effect */}
+                  <div className="absolute -inset-6 bg-gradient-to-br from-blue-500/40 via-indigo-400/30 to-cyan-400/40 rounded-[3rem] blur-3xl"></div>
                   
-                  <motion.div
-                    variants={itemVariants}
-                    className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-2xl p-10 lg:p-12 shadow-xl border border-white/50 dark:border-slate-700/50 max-w-xl mx-auto"
-                  >
-                    <div className="text-center mb-16">
-                      <div className="flex justify-center items-baseline gap-3 mb-4">
-                        <span className="text-4xl font-bold text-foreground">QAR</span>
-                        <span className="text-5xl lg:text-6xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                          {MONTHLY_PRICE_QAR}/month
+                  {/* Card - Vibrant blue gradient */}
+                  <div className="relative bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-700 rounded-3xl p-8 text-white shadow-2xl overflow-hidden">
+                    {/* Glassmorphic overlay for depth */}
+                    <div className="absolute inset-0 bg-gradient-to-b from-white/15 via-transparent to-black/10 rounded-3xl"></div>
+                    {/* Inner border glow - Wakti gold accent */}
+                    <div className="absolute inset-[2px] rounded-[22px] border-2 border-[#e9ceb0]/40"></div>
+                    
+                    <div className="relative z-10 flex flex-col items-center text-center">
+                      {/* 3-day free trial badge - Catchy gradient with glow */}
+                      <div className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-400 via-orange-400 to-yellow-400 text-[#060541] rounded-full px-5 py-2.5 mb-6 shadow-[0_0_20px_rgba(251,191,36,0.5)]">
+                        <Star className="h-5 w-5 fill-current" />
+                        <span className="text-sm font-black tracking-wider uppercase">
+                          {language === "en" ? "🎉 3-DAY FREE TRIAL" : "🎉 تجربة مجانية 3 أيام"}
                         </span>
                       </div>
-                      <p className="text-lg text-muted-foreground">
-                        ${MONTHLY_PRICE_USD}/month USD
+                      
+                      {/* Price */}
+                      <p className="text-7xl lg:text-8xl font-black mb-2" dir="ltr">
+                        {MONTHLY_PRICE_QAR}<span className="text-4xl font-bold ml-1">{language === "en" ? "QAR" : "ر.ق"}</span>
                       </p>
+                      <p className="text-sm font-medium text-white/80 tracking-widest uppercase mb-6">
+                        {language === "en" ? `$${MONTHLY_PRICE_USD}/month USD` : `${MONTHLY_PRICE_USD}$ شهرياً`}
+                      </p>
+                      
+                      {/* Description */}
+                      <p className="text-white/70 text-sm mb-8 max-w-xs">
+                        {language === "en" 
+                          ? "Unlock all premium features and supercharge your productivity with AI" 
+                          : "افتح جميع الميزات المميزة وعزز إنتاجيتك بالذكاء الاصطناعي"}
+                      </p>
+                      
+                      {/* Feature tags - ALL features - Wakti style */}
+                      <div className="flex flex-wrap justify-center gap-2 mb-8">
+                        {features.map((feature, index) => (
+                          <span 
+                            key={index} 
+                            className="bg-[#e9ceb0]/90 text-[#060541] text-sm font-medium px-3 py-1.5 rounded-full"
+                          >
+                            {feature.title}
+                          </span>
+                        ))}
+                      </div>
+                      
+                      {/* CTA Button - Wakti vibrant gradient */}
+                      <button
+                        className="w-full bg-gradient-to-r from-cyan-400 via-blue-500 to-indigo-500 hover:from-cyan-500 hover:via-blue-600 hover:to-indigo-600 text-white font-semibold py-4 rounded-xl transition-all flex items-center justify-center gap-2 shadow-[0_0_25px_hsla(210,100%,65%,0.5)] border-2 border-white/30"
+                        onClick={() => navigate('/signup')}
+                      >
+                        <Star className="h-5 w-5" />
+                        {t("createAccountNow", language)}
+                      </button>
                     </div>
-                    
-                    <ul className="space-y-8 mb-16">
-                      {features.map((feature, index) => (
-                        <li key={index} className="flex items-start gap-6">
-                          <div className={`p-3 rounded-full ${feature.iconColor} bg-white dark:bg-slate-800 shadow-sm`}>
-                            <Check className="h-6 w-6" />
-                          </div>
-                          <span className="text-xl font-medium">{feature.title}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    
-                    <Button
-                      className="w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-600 hover:via-purple-600 hover:to-pink-600 text-white font-semibold py-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 text-lg"
-                      onClick={() => navigate('/signup')}
-                    >
-                      <Star className="h-6 w-6 mr-3" />
-                      {t("createAccountNow", language)}
-                      <ArrowRight className="h-6 w-6 ml-3" />
-                    </Button>
-                  </motion.div>
-                </div>
+                  </div>
+                </motion.div>
               </div>
             </motion.section>
           </main>

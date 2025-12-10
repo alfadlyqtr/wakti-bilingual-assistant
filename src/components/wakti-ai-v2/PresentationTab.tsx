@@ -334,20 +334,20 @@ const renderBoldText = (text: string, themeKey: string = 'starter'): React.React
   });
 };
 
-// Helper to get font size class from style - compact to fit more content
+// Helper to get font size class from style - LARGER sizes for better readability
 const getFontSizeClass = (size?: 'small' | 'medium' | 'large', type: 'title' | 'bullet' = 'bullet') => {
   if (type === 'title') {
     switch (size) {
-      case 'small': return 'text-sm sm:text-base md:text-lg lg:text-xl';
-      case 'large': return 'text-lg sm:text-xl md:text-2xl lg:text-3xl';
-      default: return 'text-base sm:text-lg md:text-xl lg:text-2xl';
+      case 'small': return 'text-lg sm:text-xl md:text-2xl lg:text-3xl';
+      case 'large': return 'text-2xl sm:text-3xl md:text-4xl lg:text-5xl';
+      default: return 'text-xl sm:text-2xl md:text-3xl lg:text-4xl'; // medium
     }
   }
-  // Bullets - compact to fit slide
+  // Bullets - larger for readability
   switch (size) {
-    case 'small': return 'text-[10px] sm:text-xs';
-    case 'large': return 'text-xs sm:text-sm md:text-base';
-    default: return 'text-[11px] sm:text-xs md:text-sm';
+    case 'small': return 'text-xs sm:text-sm md:text-base';
+    case 'large': return 'text-base sm:text-lg md:text-xl';
+    default: return 'text-sm sm:text-base md:text-lg'; // medium
   }
 };
 
@@ -1371,7 +1371,7 @@ const PresentationTab: React.FC = () => {
                       {/* Image Left */}
                       {currentSlide.layoutVariant === 'image_left' && (
                         <div className="flex-1 flex gap-4 items-center">
-                          <div className={`rounded-xl overflow-hidden bg-slate-700/50 ${currentSlide.imageSize === 'small' ? 'w-1/4' : currentSlide.imageSize === 'large' ? 'w-1/2' : 'w-1/3'} h-full max-h-48`}>
+                          <div className={`rounded-xl overflow-hidden bg-slate-700/50 ${currentSlide.imageSize === 'small' ? 'w-1/3' : currentSlide.imageSize === 'large' ? 'w-2/3' : 'w-1/2'} h-full max-h-72`}>
                             <img src={currentSlide.imageUrl} alt={currentSlide.title} className={`w-full h-full ${getImageFitClass(currentSlide.imageFit)}`} />
                           </div>
                           <div className="flex-1 flex flex-col justify-center">
@@ -1389,7 +1389,7 @@ const PresentationTab: React.FC = () => {
                             {currentSlide.subtitle && <p className={`${getFontSizeClass(currentSlide.subtitleStyle?.fontSize)}`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>{currentSlide.subtitle}</p>}
                             <div className={`w-16 h-1 rounded-full mt-3 ${getThemeAccent(selectedTheme).bg}`} />
                           </div>
-                          <div className={`rounded-xl overflow-hidden bg-slate-700/50 ${currentSlide.imageSize === 'small' ? 'w-1/4' : currentSlide.imageSize === 'large' ? 'w-1/2' : 'w-1/3'} h-full max-h-48`}>
+                          <div className={`rounded-xl overflow-hidden bg-slate-700/50 ${currentSlide.imageSize === 'small' ? 'w-1/3' : currentSlide.imageSize === 'large' ? 'w-2/3' : 'w-1/2'} h-full max-h-72`}>
                             <img src={currentSlide.imageUrl} alt={currentSlide.title} className={`w-full h-full ${getImageFitClass(currentSlide.imageFit)}`} />
                           </div>
                         </div>
@@ -1397,7 +1397,7 @@ const PresentationTab: React.FC = () => {
                       {/* Image Top */}
                       {currentSlide.layoutVariant === 'image_top' && (
                         <div className="flex-1 flex flex-col gap-3">
-                          <div className={`rounded-xl overflow-hidden bg-slate-700/50 w-full ${currentSlide.imageSize === 'small' ? 'h-20' : currentSlide.imageSize === 'large' ? 'h-40' : 'h-28'}`}>
+                          <div className={`rounded-xl overflow-hidden bg-slate-700/50 w-full ${currentSlide.imageSize === 'small' ? 'h-32' : currentSlide.imageSize === 'large' ? 'h-56' : 'h-44'}`}>
                             <img src={currentSlide.imageUrl} alt={currentSlide.title} className={`w-full h-full ${getImageFitClass(currentSlide.imageFit)}`} />
                           </div>
                           <div className="flex-1 flex flex-col items-center justify-center text-center">
@@ -1415,7 +1415,7 @@ const PresentationTab: React.FC = () => {
                             {currentSlide.subtitle && <p className={`${getFontSizeClass(currentSlide.subtitleStyle?.fontSize)}`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>{currentSlide.subtitle}</p>}
                             <div className={`w-16 h-1 rounded-full mt-3 ${getThemeAccent(selectedTheme).bg}`} />
                           </div>
-                          <div className={`rounded-xl overflow-hidden bg-slate-700/50 w-full ${currentSlide.imageSize === 'small' ? 'h-20' : currentSlide.imageSize === 'large' ? 'h-40' : 'h-28'}`}>
+                          <div className={`rounded-xl overflow-hidden bg-slate-700/50 w-full ${currentSlide.imageSize === 'small' ? 'h-32' : currentSlide.imageSize === 'large' ? 'h-56' : 'h-44'}`}>
                             <img src={currentSlide.imageUrl} alt={currentSlide.title} className={`w-full h-full ${getImageFitClass(currentSlide.imageFit)}`} />
                           </div>
                         </div>
@@ -1450,7 +1450,7 @@ const PresentationTab: React.FC = () => {
                       {/* Image Left layout */}
                       {currentSlide.layoutVariant === 'image_left' && (
                         <div className="flex-1 flex gap-4 items-center">
-                          <div className={`rounded-xl overflow-hidden bg-slate-700/50 ${currentSlide.imageSize === 'small' ? 'w-1/4' : currentSlide.imageSize === 'large' ? 'w-1/2' : 'w-1/3'} h-full max-h-48`}>
+                          <div className={`rounded-xl overflow-hidden bg-slate-700/50 ${currentSlide.imageSize === 'small' ? 'w-1/3' : currentSlide.imageSize === 'large' ? 'w-2/3' : 'w-1/2'} h-full max-h-72`}>
                             <img src={currentSlide.imageUrl} alt={currentSlide.title} className={`w-full h-full ${getImageFitClass(currentSlide.imageFit)}`} />
                           </div>
                           <div className="flex-1 flex flex-col justify-center">
@@ -1468,7 +1468,7 @@ const PresentationTab: React.FC = () => {
                             {currentSlide.subtitle && <p className={`${getFontSizeClass(currentSlide.subtitleStyle?.fontSize)}`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>{currentSlide.subtitle}</p>}
                             <div className={`w-16 h-1 rounded-full mt-3 ${getThemeAccent(selectedTheme).bg}`} />
                           </div>
-                          <div className={`rounded-xl overflow-hidden bg-slate-700/50 ${currentSlide.imageSize === 'small' ? 'w-1/4' : currentSlide.imageSize === 'large' ? 'w-1/2' : 'w-1/3'} h-full max-h-48`}>
+                          <div className={`rounded-xl overflow-hidden bg-slate-700/50 ${currentSlide.imageSize === 'small' ? 'w-1/3' : currentSlide.imageSize === 'large' ? 'w-2/3' : 'w-1/2'} h-full max-h-72`}>
                             <img src={currentSlide.imageUrl} alt={currentSlide.title} className={`w-full h-full ${getImageFitClass(currentSlide.imageFit)}`} />
                           </div>
                         </div>
@@ -1476,7 +1476,7 @@ const PresentationTab: React.FC = () => {
                       {/* Image Top layout */}
                       {currentSlide.layoutVariant === 'image_top' && (
                         <div className="flex-1 flex flex-col gap-3">
-                          <div className={`rounded-xl overflow-hidden bg-slate-700/50 w-full ${currentSlide.imageSize === 'small' ? 'h-20' : currentSlide.imageSize === 'large' ? 'h-40' : 'h-28'}`}>
+                          <div className={`rounded-xl overflow-hidden bg-slate-700/50 w-full ${currentSlide.imageSize === 'small' ? 'h-32' : currentSlide.imageSize === 'large' ? 'h-56' : 'h-44'}`}>
                             <img src={currentSlide.imageUrl} alt={currentSlide.title} className={`w-full h-full ${getImageFitClass(currentSlide.imageFit)}`} />
                           </div>
                           <div className="flex-1 flex flex-col items-center justify-center text-center">
@@ -1494,7 +1494,7 @@ const PresentationTab: React.FC = () => {
                             {currentSlide.subtitle && <p className={`${getFontSizeClass(currentSlide.subtitleStyle?.fontSize)}`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>{currentSlide.subtitle}</p>}
                             <div className={`w-16 h-1 rounded-full mt-3 ${getThemeAccent(selectedTheme).bg}`} />
                           </div>
-                          <div className={`rounded-xl overflow-hidden bg-slate-700/50 w-full ${currentSlide.imageSize === 'small' ? 'h-20' : currentSlide.imageSize === 'large' ? 'h-40' : 'h-28'}`}>
+                          <div className={`rounded-xl overflow-hidden bg-slate-700/50 w-full ${currentSlide.imageSize === 'small' ? 'h-32' : currentSlide.imageSize === 'large' ? 'h-56' : 'h-44'}`}>
                             <img src={currentSlide.imageUrl} alt={currentSlide.title} className={`w-full h-full ${getImageFitClass(currentSlide.imageFit)}`} />
                           </div>
                         </div>

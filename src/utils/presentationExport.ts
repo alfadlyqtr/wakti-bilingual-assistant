@@ -390,6 +390,24 @@ function renderSlideToHTML(
   const accentFontStyle = slide.accentFontStyle || 'normal';
   const accentFontSize = slide.accentFontSize; // Can be 'small', 'medium', 'large', or undefined
   
+  // Font size mapping for bullets - MUCH larger for 1920x1080 canvas
+  // small = 32px, medium = 40px, large = 48px (was 24px before!)
+  const bulletFontSizeMap: Record<string, string> = {
+    small: '32px',
+    medium: '40px',
+    large: '48px',
+  };
+  const bulletFontSize = bulletFontSizeMap[slide.bulletStyle?.fontSize || 'medium'] || '40px';
+  
+  // Title font size mapping - also larger
+  // small = 48px, medium = 56px, large = 64px
+  const titleFontSizeMap: Record<string, string> = {
+    small: '48px',
+    medium: '56px',
+    large: '64px',
+  };
+  const titleFontSize = titleFontSizeMap[slide.titleStyle?.fontSize || 'medium'] || '56px';
+  
   // Process title - highlight second word (matching UI behavior) OR **keywords** if present
   // For regular content slides, highlight the second word of the title
   // For cover/thank_you slides, don't highlight
@@ -551,9 +569,9 @@ function renderSlideToHTML(
 
   // Build bullet HTML with custom shape, color, size, and highlighted keywords
   const bulletHtml = processedBullets.map((b, index) => `
-    <div style="display: flex; align-items: flex-start; gap: 16px; margin-bottom: 20px; ${isRtl ? 'flex-direction: row-reverse; text-align: right;' : ''}">
+    <div style="display: flex; align-items: flex-start; gap: 20px; margin-bottom: 28px; ${isRtl ? 'flex-direction: row-reverse; text-align: right;' : ''}">
       ${getBulletShapeHtml(bulletDotShape, index, bulletDotColor, bulletDotSize)}
-      <div style="font-size: 24px; line-height: 1.6; color: ${bulletColor}; flex: 1;">${b}</div>
+      <div style="font-size: ${bulletFontSize}; line-height: 1.5; color: ${bulletColor}; flex: 1;">${b}</div>
     </div>
   `).join('');
 
@@ -602,7 +620,7 @@ function renderSlideToHTML(
         
         <!-- Text Column (RIGHT) -->
         <div style="flex: 1; display: flex; flex-direction: column; ${isRtl ? 'text-align: right;' : ''}">
-          <h1 style="font-size: 52px; font-weight: bold; color: ${titleColor}; margin: 0 0 20px 0; line-height: 1.2;">${processedTitle}</h1>
+          <h1 style="font-size: ${titleFontSize}; font-weight: bold; color: ${titleColor}; margin: 0 0 20px 0; line-height: 1.2;">${processedTitle}</h1>
           <div style="display: flex; gap: 10px; margin-bottom: 32px; ${isRtl ? 'flex-direction: row-reverse;' : ''}">
             <div style="width: 12px; height: 12px; border-radius: 50%; background: ${accentColor};"></div>
             <div style="width: 12px; height: 12px; border-radius: 50%; background: ${accentColor};"></div>
@@ -639,7 +657,7 @@ function renderSlideToHTML(
         position: relative;
       ">
         <!-- Title -->
-        <h1 style="font-size: 44px; font-weight: bold; color: ${titleColor}; margin: 0; line-height: 1.2; ${isRtl ? 'text-align: right;' : ''}">${processedTitle}</h1>
+        <h1 style="font-size: ${titleFontSize}; font-weight: bold; color: ${titleColor}; margin: 0; line-height: 1.2; ${isRtl ? 'text-align: right;' : ''}">${processedTitle}</h1>
         <div style="display: flex; gap: 10px; ${isRtl ? 'flex-direction: row-reverse;' : ''}">
           <div style="width: 12px; height: 12px; border-radius: 50%; background: ${accentColor};"></div>
           <div style="width: 12px; height: 12px; border-radius: 50%; background: ${accentColor};"></div>
@@ -682,7 +700,7 @@ function renderSlideToHTML(
         position: relative;
       ">
         <!-- Title -->
-        <h1 style="font-size: 44px; font-weight: bold; color: ${titleColor}; margin: 0; line-height: 1.2; ${isRtl ? 'text-align: right;' : ''}">${processedTitle}</h1>
+        <h1 style="font-size: ${titleFontSize}; font-weight: bold; color: ${titleColor}; margin: 0; line-height: 1.2; ${isRtl ? 'text-align: right;' : ''}">${processedTitle}</h1>
         <div style="display: flex; gap: 10px; ${isRtl ? 'flex-direction: row-reverse;' : ''}">
           <div style="width: 12px; height: 12px; border-radius: 50%; background: ${accentColor};"></div>
           <div style="width: 12px; height: 12px; border-radius: 50%; background: ${accentColor};"></div>
@@ -725,7 +743,7 @@ function renderSlideToHTML(
       ">
         <!-- Text Column (LEFT) -->
         <div style="flex: 1; display: flex; flex-direction: column; ${isRtl ? 'text-align: right;' : ''}">
-          <h1 style="font-size: 52px; font-weight: bold; color: ${titleColor}; margin: 0 0 20px 0; line-height: 1.2;">${processedTitle}</h1>
+          <h1 style="font-size: ${titleFontSize}; font-weight: bold; color: ${titleColor}; margin: 0 0 20px 0; line-height: 1.2;">${processedTitle}</h1>
           <div style="display: flex; gap: 10px; margin-bottom: 32px; ${isRtl ? 'flex-direction: row-reverse;' : ''}">
             <div style="width: 12px; height: 12px; border-radius: 50%; background: ${accentColor};"></div>
             <div style="width: 12px; height: 12px; border-radius: 50%; background: ${accentColor};"></div>
@@ -751,10 +769,18 @@ function renderSlideToHTML(
   }
 
   // Text Only layout (no image) - use custom bullet shapes with highlighted keywords
+  // Text-only gets slightly larger bullets since there's more space
+  const textOnlyBulletFontSizeMap: Record<string, string> = {
+    small: '36px',
+    medium: '44px',
+    large: '52px',
+  };
+  const textOnlyBulletFontSize = textOnlyBulletFontSizeMap[slide.bulletStyle?.fontSize || 'medium'] || '44px';
+  
   const textOnlyBulletHtml = processedBullets.map((b, index) => `
-    <div style="display: flex; align-items: flex-start; gap: 20px; margin-bottom: 28px; ${isRtl ? 'flex-direction: row-reverse; text-align: right;' : ''}">
+    <div style="display: flex; align-items: flex-start; gap: 24px; margin-bottom: 32px; ${isRtl ? 'flex-direction: row-reverse; text-align: right;' : ''}">
       ${getBulletShapeHtml(bulletDotShape, index, bulletDotColor, bulletDotSize === 'small' ? 'medium' : bulletDotSize)}
-      <div style="font-size: 28px; line-height: 1.6; color: ${bulletColor}; flex: 1;">${b}</div>
+      <div style="font-size: ${textOnlyBulletFontSize}; line-height: 1.5; color: ${bulletColor}; flex: 1;">${b}</div>
     </div>
   `).join('');
 
@@ -771,7 +797,7 @@ function renderSlideToHTML(
       box-sizing: border-box;
       position: relative;
     ">
-      <h1 style="font-size: 56px; font-weight: bold; color: ${titleColor}; margin: 0 0 20px 0; ${isRtl ? 'text-align: right;' : ''}">${processedTitle}</h1>
+      <h1 style="font-size: ${titleFontSize}; font-weight: bold; color: ${titleColor}; margin: 0 0 20px 0; ${isRtl ? 'text-align: right;' : ''}">${processedTitle}</h1>
       <div style="display: flex; gap: 10px; margin-bottom: 40px; ${isRtl ? 'flex-direction: row-reverse;' : ''}">
         <div style="width: 14px; height: 14px; border-radius: 50%; background: ${accentColor};"></div>
         <div style="width: 14px; height: 14px; border-radius: 50%; background: ${accentColor};"></div>
@@ -790,7 +816,7 @@ function renderSlideToHTML(
 
 /**
  * Export slides as PPTX (PowerPoint)
- * Uses pptxgenjs library
+ * Renders each slide as an image to preserve gradients, colors, and exact styling
  */
 export async function exportSlidesToPPTX(
   slides: ExportSlide[],
@@ -799,8 +825,10 @@ export async function exportSlidesToPPTX(
   language: 'en' | 'ar',
   onProgress?: (current: number, total: number) => void
 ): Promise<Blob> {
-  // Dynamically import pptxgenjs
+  // Dynamically import pptxgenjs and html2canvas
   const PptxGenJS = (await import('pptxgenjs')).default;
+  const html2canvasModule = await import('html2canvas');
+  const html2canvas = html2canvasModule.default;
   
   const pptx = new PptxGenJS();
   pptx.layout = 'LAYOUT_16x9';
@@ -808,112 +836,66 @@ export async function exportSlidesToPPTX(
   pptx.author = 'Wakti AI';
   
   const colors = THEME_COLORS[theme] || THEME_COLORS.starter;
-  const isRtl = language === 'ar';
 
-  for (let i = 0; i < slides.length; i++) {
-    onProgress?.(i + 1, slides.length);
-    const slide = slides[i];
-    const pptSlide = pptx.addSlide();
+  // Create a hidden container for rendering slides
+  const container = document.createElement('div');
+  container.style.cssText = 'position: fixed; left: -9999px; top: 0; width: 1920px; height: 1080px;';
+  document.body.appendChild(container);
 
-    // Background - use custom slide background if set
-    const bgColor = getSlideBackground(slide, colors);
-    pptSlide.background = { color: bgColor.replace('#', '') };
+  try {
+    for (let i = 0; i < slides.length; i++) {
+      onProgress?.(i + 1, slides.length);
+      const slide = slides[i];
+      
+      // Generate HTML for this slide (reuse the same function as PDF)
+      const isRtl = language === 'ar';
+      const slideHtml = renderSlideToHTML(slide, colors, isRtl, language);
+      container.innerHTML = slideHtml;
 
-    // Title
-    pptSlide.addText(slide.title, {
-      x: isRtl ? 0.5 : 0.5,
-      y: 0.5,
-      w: slide.imageUrl ? '45%' : '90%',
-      h: 0.8,
-      fontSize: 28,
-      bold: true,
-      color: colors.text.replace('#', ''),
-      align: isRtl ? 'right' : 'left',
-      rtlMode: isRtl,
-    });
+      // Wait for images to load
+      const images = container.querySelectorAll('img');
+      await Promise.all(
+        Array.from(images).map(
+          (img) =>
+            new Promise<void>((resolve) => {
+              if (img.complete) {
+                resolve();
+              } else {
+                img.onload = () => resolve();
+                img.onerror = () => resolve();
+              }
+            })
+        )
+      );
 
-    // Accent dots
-    const dotY = 1.3;
-    for (let d = 0; d < 3; d++) {
-      pptSlide.addShape('ellipse', {
-        x: isRtl ? 4.5 - d * 0.2 : 0.5 + d * 0.2,
-        y: dotY,
-        w: 0.12,
-        h: 0.12,
-        fill: { color: colors.accent.replace('#', '') },
+      // Small delay for rendering
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Render to canvas
+      const canvas = await html2canvas(container.firstElementChild as HTMLElement, {
+        backgroundColor: null,
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+      });
+
+      // Convert canvas to base64 image
+      const imgData = canvas.toDataURL('image/png');
+
+      // Add slide with the rendered image as background
+      const pptSlide = pptx.addSlide();
+      pptSlide.addImage({
+        data: imgData,
+        x: 0,
+        y: 0,
+        w: '100%',
+        h: '100%',
       });
     }
-
-    // Subtitle
-    if (slide.subtitle) {
-      pptSlide.addText(slide.subtitle, {
-        x: 0.5,
-        y: 1.5,
-        w: slide.imageUrl ? '45%' : '90%',
-        h: 0.5,
-        fontSize: 14,
-        color: 'C8C8C8',
-        align: isRtl ? 'right' : 'left',
-        rtlMode: isRtl,
-      });
-    }
-
-    // Bullets
-    if (slide.bullets && slide.bullets.length > 0) {
-      const bulletText = slide.bullets.slice(0, 6).map(b => ({
-        text: b.replace(/\*\*/g, ''),
-        options: { bullet: { type: 'bullet' as const, color: colors.accent.replace('#', '') } },
-      }));
-
-      pptSlide.addText(bulletText, {
-        x: 0.5,
-        y: 2.0,
-        w: slide.imageUrl ? '45%' : '90%',
-        h: 3.0,
-        fontSize: 12,
-        color: 'DCDCDC',
-        align: isRtl ? 'right' : 'left',
-        rtlMode: isRtl,
-        valign: 'top',
-      });
-    }
-
-    // Image
-    if (slide.imageUrl && slide.role !== 'cover' && slide.role !== 'thank_you') {
-      try {
-        pptSlide.addImage({
-          path: slide.imageUrl,
-          x: isRtl ? 0.5 : 5.2,
-          y: 1.5,
-          w: 4.3,
-          h: 3.2,
-          rounding: true,
-        });
-      } catch (err) {
-        console.error('Failed to add image to PPTX:', err);
-      }
-    }
-
-    // Slide number
-    pptSlide.addText(`${slide.slideNumber}`, {
-      x: 9.2,
-      y: 5.1,
-      w: 0.5,
-      h: 0.3,
-      fontSize: 10,
-      color: '666666',
-      align: 'right',
-    });
-
-    // Footer branding
-    pptSlide.addText(language === 'ar' ? 'Wakti AI وقتي' : 'Wakti AI', {
-      x: 0.5,
-      y: 5.1,
-      w: 2,
-      h: 0.3,
-      fontSize: 8,
-      color: '505050',
-    });
+  } finally {
+    // Clean up
+    document.body.removeChild(container);
   }
 
   // Generate blob
