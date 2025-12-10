@@ -8,13 +8,18 @@ import { fetchWeatherData, getUVIndexLabel } from '@/services/weatherService';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
-import { Cloud, Loader2, AlertCircle, X, ArrowLeft } from 'lucide-react';
+import { Cloud, Loader2, AlertCircle, X, ArrowLeft, MapPin, CloudSun, CloudMoon } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export function WeatherButton() {
   const { profile } = useUserProfile();
   const { language } = useTheme();
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = React.useState(false);
   const [selectedDay, setSelectedDay] = React.useState<string | null>(null);
+
+  // Check if user has set their location
+  const hasLocation = !!(profile?.country || profile?.city);
 
   const { data: weather, isLoading, error } = useQuery({
     queryKey: ['weather', profile?.country, profile?.city],
@@ -25,6 +30,7 @@ export function WeatherButton() {
     }),
     refetchInterval: 60 * 60 * 1000, // Refetch every 60 minutes
     staleTime: 50 * 60 * 1000, // Consider data stale after 50 minutes
+    enabled: hasLocation, // Only fetch if user has set location
   });
 
   const getDayName = (dayShort: string) => {
@@ -133,37 +139,36 @@ export function WeatherButton() {
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 px-2 py-1 rounded-xl transition-all duration-300 hover:scale-105 relative overflow-hidden group"
-          style={{
-            background: 'rgba(255, 255, 255, 0.1)',
-            backdropFilter: 'blur(20px)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-          }}
+          className="h-9 px-3 py-1.5 rounded-full transition-all duration-300 hover:scale-105 relative overflow-hidden group border border-[#e9ceb0]/50 dark:border-[#606062]/50 bg-gradient-to-r from-[#e9ceb0]/20 to-[#e9ceb0]/10 dark:from-[#606062]/20 dark:to-[#858384]/10 hover:from-[#e9ceb0]/30 hover:to-[#e9ceb0]/20 dark:hover:from-[#606062]/30 dark:hover:to-[#858384]/20 shadow-sm hover:shadow-md"
         >
-          <div className="absolute inset-0 bg-gradient-to-r from-accent-blue/10 to-accent-purple/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          <div className="relative z-10 flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             {isLoading ? (
               <>
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span className="text-xs font-medium">{t('weather', language)}</span>
+                <div className="w-5 h-5 rounded-full bg-[#060541]/10 dark:bg-white/10 flex items-center justify-center">
+                  <Loader2 className="h-3 w-3 animate-spin text-[#060541] dark:text-white" />
+                </div>
+                <span className="text-xs font-medium text-[#060541] dark:text-white">{t('weather', language)}</span>
               </>
             ) : error || !weather ? (
               <>
-                <AlertCircle className="h-3 w-3" />
-                <span className="text-xs font-medium">{t('weather', language)}</span>
+                <div className="w-5 h-5 rounded-full bg-[#060541]/10 dark:bg-white/10 flex items-center justify-center">
+                  <Cloud className="h-3 w-3 text-[#060541] dark:text-white" />
+                </div>
+                <span className="text-xs font-medium text-[#060541] dark:text-white">{t('weather', language)}</span>
               </>
             ) : (
               <>
-                <span className="text-sm">{weather.icon}</span>
-                <span className="text-xs font-semibold">{weather.temperature}°C</span>
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-amber-400/80 to-orange-500/80 flex items-center justify-center shadow-sm">
+                  <span className="text-xs">{weather.icon}</span>
+                </div>
+                <span className="text-sm font-semibold text-[#060541] dark:text-white">{weather.temperature}°</span>
               </>
             )}
           </div>
         </Button>
       </PopoverTrigger>
       {/* Backdrop overlay when popover is open - portal below header to blur page only */}
-      {isOpen && createPortal(
+      {isOpen && typeof document !== 'undefined' && createPortal(
         <div
           onClick={() => setIsOpen(false)}
           className="fixed inset-0 z-[980] bg-background/20 backdrop-blur-sm"
@@ -206,7 +211,73 @@ export function WeatherButton() {
           )}
 
           <div className="p-3 space-y-3">
-            {error || !weather ? (
+            {/* No location set - prompt user to set it */}
+            {!hasLocation ? (
+              <div className="text-center py-5 space-y-4">
+                {/* Animated weather icon - Sun+Clouds in light, Moon+Stars in dark */}
+                <div className="mx-auto w-16 h-16 relative">
+                  {/* Light mode: Sun with clouds */}
+                  <div className="dark:hidden absolute inset-0">
+                    {/* Sky background */}
+                    <div className="absolute inset-0 rounded-full bg-gradient-to-b from-sky-300 to-sky-400 overflow-hidden">
+                      {/* Sun */}
+                      <div className="absolute top-1 right-1 w-8 h-8 rounded-full bg-gradient-to-br from-amber-300 to-orange-500 shadow-lg animate-pulse" style={{ animationDuration: '3s' }} />
+                      {/* Clouds */}
+                      <div className="absolute bottom-0 left-0 right-0">
+                        <div className="absolute bottom-1 left-1 w-6 h-6 rounded-full bg-white shadow-sm" />
+                        <div className="absolute bottom-0 left-4 w-8 h-8 rounded-full bg-white shadow-sm" />
+                        <div className="absolute bottom-1 left-9 w-5 h-5 rounded-full bg-white shadow-sm" />
+                      </div>
+                    </div>
+                  </div>
+                  {/* Dark mode: Moon with stars */}
+                  <div className="hidden dark:block absolute inset-0">
+                    {/* Night sky background */}
+                    <div className="absolute inset-0 rounded-full bg-gradient-to-b from-slate-800 to-slate-900 overflow-hidden">
+                      {/* Moon */}
+                      <div className="absolute top-2 right-2 w-7 h-7 rounded-full bg-gradient-to-br from-gray-100 to-gray-300 shadow-lg">
+                        {/* Moon craters */}
+                        <div className="absolute top-1 left-1 w-2 h-2 rounded-full bg-gray-400/50" />
+                        <div className="absolute top-3 left-3 w-1.5 h-1.5 rounded-full bg-gray-400/50" />
+                        <div className="absolute top-2 left-4 w-1 h-1 rounded-full bg-gray-400/50" />
+                      </div>
+                      {/* Twinkling stars */}
+                      <div className="absolute top-2 left-2 w-1.5 h-1.5 rounded-full bg-white animate-pulse" style={{ animationDuration: '1.5s' }} />
+                      <div className="absolute top-4 left-5 w-1 h-1 rounded-full bg-white animate-pulse" style={{ animationDuration: '2s', animationDelay: '0.3s' }} />
+                      <div className="absolute top-6 left-2 w-1 h-1 rounded-full bg-white animate-pulse" style={{ animationDuration: '1.8s', animationDelay: '0.6s' }} />
+                      <div className="absolute bottom-3 left-3 w-1.5 h-1.5 rounded-full bg-white animate-pulse" style={{ animationDuration: '2.2s', animationDelay: '0.9s' }} />
+                    </div>
+                  </div>
+                </div>
+                <div className="text-base font-semibold text-foreground">
+                  {language === 'ar' ? 'أين أنت؟' : 'Where are you?'}
+                </div>
+                <div className="text-sm text-muted-foreground px-3 leading-relaxed">
+                  {language === 'ar' 
+                    ? 'أضف موقعك لنعرض لك الطقس المحلي والتحديثات اليومية!'
+                    : 'Add your location to get local weather updates!'
+                  }
+                </div>
+                <Button
+                  size="default"
+                  className="mt-3 bg-[#060541] hover:bg-[#060541]/90 dark:bg-[#e9ceb0] dark:hover:bg-[#e9ceb0]/90 text-white dark:text-[#060541] font-medium px-6 shadow-lg"
+                  onClick={() => {
+                    setIsOpen(false);
+                    navigate('/account?tab=profile');
+                    // Scroll to location section after navigation
+                    setTimeout(() => {
+                      const locationEl = document.getElementById('location');
+                      if (locationEl) {
+                        locationEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      }
+                    }, 300);
+                  }}
+                >
+                  <MapPin className="w-4 h-4 mr-2" />
+                  {language === 'ar' ? 'تعيين موقعي' : 'Set My Location'}
+                </Button>
+              </div>
+            ) : error || !weather ? (
               <div className="text-center py-4">
                 <AlertCircle className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
                 <div className="text-sm font-medium mb-1">

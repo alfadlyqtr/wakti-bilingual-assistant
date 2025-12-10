@@ -25,7 +25,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { AlertTriangle, Check, MessageSquare, Flag, CalendarIcon, User, CreditCard, CheckCircle, XCircle, Clock, RefreshCw, Sparkles } from "lucide-react";
+import { AlertTriangle, Check, MessageSquare, Flag, CalendarIcon, User, CreditCard, CheckCircle, XCircle, Clock, RefreshCw, Sparkles, Sun } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
@@ -779,9 +779,27 @@ export default function Account() {
             </Card>
 
             {/* Country + City in one row */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <AccountCountrySection />
-              <AccountCitySection />
+            <div id="location" className="scroll-mt-24">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
+                  <Sun className="h-4 w-4 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    {language === 'ar' ? 'موقعك (اختياري)' : 'Your Location (optional)'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {language === 'ar' 
+                      ? 'أضف موقعك للحصول على تحديثات الطقس المحلية ☀️'
+                      : 'Add your location to get local weather updates ☀️'
+                    }
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <AccountCountrySection />
+                <AccountCitySection />
+              </div>
             </div>
             
             {/* Submit Feedback Section */}
@@ -906,40 +924,67 @@ export default function Account() {
                   /* DATA STATES: Show appropriate content based on subscription status */
                   <>
                     {/* STATE 1: Trial (Active or Expired) - TrialCountdown handles both states */}
-                    {subscriptionData?.profile && !subscriptionData.profile.is_subscribed && subscriptionData.profile.free_access_start_at && (
-                      <>
-                        <TrialCountdown 
-                          startAt={subscriptionData.profile.free_access_start_at} 
-                          language={language} 
-                          onSubscribeClick={() => setShowPaywallModal(true)}
-                        />
-                        {/* Start Free Trial button - same as paywall */}
-                        <div className="flex flex-col items-center gap-2 pt-2">
-                          <Button
-                            onClick={() => setShowPaywallModal(true)}
-                            className="w-full max-w-xs bg-gradient-to-r from-accent-purple to-accent-pink hover:opacity-90 text-white font-semibold"
-                            size="lg"
-                          >
-                            <Sparkles className="w-4 h-4 mr-2" />
-                            {language === 'ar' ? 'اشترك الآن واحصل على 3 أيام مجانية' : 'Subscribe Now – Get 3 Free Days'}
-                          </Button>
-                          {/* Restore Purchases button - Apple requirement */}
-                          <Button
-                            variant="outline"
-                            onClick={handleRestorePurchases}
-                            disabled={isRestoring}
-                            className="w-full max-w-xs"
-                          >
-                            {isRestoring ? (
-                              <RefreshCw className="w-4 h-4 animate-spin mr-2" />
-                            ) : (
-                              <RefreshCw className="w-4 h-4 mr-2" />
-                            )}
-                            {language === 'ar' ? 'استعادة المشتريات' : 'Restore Purchases'}
-                          </Button>
-                        </div>
-                      </>
-                    )}
+                    {subscriptionData?.profile && !subscriptionData.profile.is_subscribed && subscriptionData.profile.free_access_start_at && (() => {
+                      // Calculate if trial is still active
+                      const start = new Date(subscriptionData.profile.free_access_start_at).getTime();
+                      const trialEnd = start + (30 * 60 * 1000); // 30 minutes
+                      const isTrialActive = Date.now() < trialEnd;
+                      
+                      return (
+                        <>
+                          <TrialCountdown 
+                            startAt={subscriptionData.profile.free_access_start_at} 
+                            language={language} 
+                            onSubscribeClick={() => setShowPaywallModal(true)}
+                          />
+                          {/* Only show these buttons during ACTIVE trial - TrialCountdown handles expired state with its own button */}
+                          {isTrialActive && (
+                            <div className="flex flex-col items-center gap-2 pt-2">
+                              <Button
+                                onClick={() => setShowPaywallModal(true)}
+                                className="w-full max-w-xs bg-gradient-to-r from-accent-purple to-accent-pink hover:opacity-90 text-white font-semibold"
+                                size="lg"
+                              >
+                                <Sparkles className="w-4 h-4 mr-2" />
+                                {language === 'ar' ? 'اشترك الآن واحصل على 3 أيام مجانية' : 'Subscribe Now – Get 3 Free Days'}
+                              </Button>
+                              {/* Restore Purchases button - Apple requirement */}
+                              <Button
+                                variant="outline"
+                                onClick={handleRestorePurchases}
+                                disabled={isRestoring}
+                                className="w-full max-w-xs"
+                              >
+                                {isRestoring ? (
+                                  <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+                                ) : (
+                                  <RefreshCw className="w-4 h-4 mr-2" />
+                                )}
+                                {language === 'ar' ? 'استعادة المشتريات' : 'Restore Purchases'}
+                              </Button>
+                            </div>
+                          )}
+                          {/* Restore Purchases for expired trial - separate from TrialCountdown's Subscribe button */}
+                          {!isTrialActive && (
+                            <div className="flex flex-col items-center gap-2 pt-2">
+                              <Button
+                                variant="outline"
+                                onClick={handleRestorePurchases}
+                                disabled={isRestoring}
+                                className="w-full max-w-xs"
+                              >
+                                {isRestoring ? (
+                                  <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+                                ) : (
+                                  <RefreshCw className="w-4 h-4 mr-2" />
+                                )}
+                                {language === 'ar' ? 'استعادة المشتريات' : 'Restore Purchases'}
+                              </Button>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                     
                     {/* STATE 2: Subscribed - Show Status + Manage Button */}
                     {subscriptionData?.profile?.is_subscribed && (

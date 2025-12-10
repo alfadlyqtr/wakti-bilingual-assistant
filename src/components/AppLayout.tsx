@@ -289,6 +289,7 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
           })()}
         </div>
         <DialogHeader>
+          <DialogTitle className="sr-only">Subscribe to Wakti AI</DialogTitle>
           <DialogDescription className="text-base pt-2 font-semibold text-accent-blue">
             {txt.subtitle}
           </DialogDescription>

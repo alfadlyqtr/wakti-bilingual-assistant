@@ -78,16 +78,6 @@ export default function Signup() {
       return;
     }
     
-    if (!country) {
-      setErrorMsg(language === 'en' ? 'Please select your country' : 'يرجى اختيار بلدك');
-      return;
-    }
-    
-    if (!city) {
-      setErrorMsg(language === 'en' ? 'Please select your city' : 'يرجى اختيار مدينتك');
-      return;
-    }
-    
     if (!agreedToTerms) {
       setErrorMsg(language === 'en' ? 'Please agree to the Privacy Policy and Terms of Service' : 'يرجى الموافقة على سياسة الخصوصية وشروط الخدمة');
       return;
@@ -279,6 +269,9 @@ export default function Signup() {
               </div>
 
               <form onSubmit={handleSignup} className="space-y-6 w-full overflow-x-hidden">
+                {/* REQUIRED FIELDS FIRST */}
+                
+                {/* Name */}
                 <div className="space-y-2">
                   <Label htmlFor="name" className="text-base">{t.name}<span className="text-red-500 ml-1" aria-hidden="true">*</span></Label>
                   <div className="relative">
@@ -300,58 +293,6 @@ export default function Signup() {
                   </div>
                 </div>
 
-                {/* Country + City in one row */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Country */}
-                  <div className="space-y-2">
-                    <Label htmlFor="country" className="text-base">{t.country}<span className="text-red-500 ml-1" aria-hidden="true">*</span></Label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none z-10">
-                        <Globe className="h-5 w-5 text-muted-foreground" />
-                      </div>
-                      <Select 
-                        value={country} 
-                        onValueChange={setCountry}
-                        disabled={isLoading}
-                        required
-                      >
-                        <SelectTrigger className="pl-10 py-6 text-base shadow-sm">
-                          <SelectValue placeholder={t.selectCountry} />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-60 max-w-[calc(100vw-2rem)]">
-                          {countries.map((c) => (
-                            <SelectItem key={c.code} value={c.code}>
-                              {language === 'ar' ? c.nameAr : c.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  {/* City - Plain input (no dataset) */}
-                  <div className="space-y-2">
-                    <Label htmlFor="city" className="text-base">{language === 'ar' ? 'المدينة' : 'City'}<span className="text-red-500 ml-1" aria-hidden="true">*</span></Label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none z-10">
-                        <Globe className="h-5 w-5 text-muted-foreground" />
-                      </div>
-                      <Input
-                        id="city"
-                        placeholder={language === 'ar' ? 'أدخل مدينتك' : 'Enter your city'}
-                        type="text"
-                        autoCapitalize="words"
-                        autoCorrect="off"
-                        disabled={isLoading || !country}
-                        value={city}
-                        onChange={(e) => setCity(e.target.value)}
-                        className="pl-10 py-6 text-base shadow-sm"
-                        required
-                      />
-                    </div>
-                  </div>
-                </div>
-                
                 {/* Username + Email in one row */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Username */}
@@ -398,37 +339,6 @@ export default function Signup() {
                       />
                     </div>
                   </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="dateOfBirth" className="text-base">{t.dateOfBirth}</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full max-w-full justify-start text-left font-normal py-6 text-base shadow-sm",
-                          !dateOfBirth && "text-muted-foreground"
-                        )}
-                        disabled={isLoading}
-                      >
-                        <CalendarIcon className="mr-2 h-5 w-5 flex-shrink-0" />
-                        {dateOfBirth ? format(dateOfBirth, "PPP") : <span>{t.dobPlaceholder}</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 max-w-[calc(100vw-2rem)]" align="center">
-                      <Calendar
-                        mode="single"
-                        selected={dateOfBirth}
-                        onSelect={setDateOfBirth}
-                        disabled={(date) =>
-                          date > new Date() || date < new Date("1900-01-01")
-                        }
-                        initialFocus
-                        className="p-3 pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
                 </div>
                 
                 {/* Password + Confirm Password in one row */}
@@ -497,6 +407,90 @@ export default function Signup() {
                           <Eye className="h-5 w-5 text-muted-foreground" />
                         )}
                       </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* OPTIONAL FIELDS */}
+                
+                {/* Date of Birth (optional) */}
+                <div className="space-y-2">
+                  <Label htmlFor="dateOfBirth" className="text-base">{t.dateOfBirth} <span className="text-xs text-muted-foreground font-normal">{language === 'ar' ? '(اختياري)' : '(optional)'}</span></Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full max-w-full justify-start text-left font-normal py-6 text-base shadow-sm",
+                          !dateOfBirth && "text-muted-foreground"
+                        )}
+                        disabled={isLoading}
+                      >
+                        <CalendarIcon className="mr-2 h-5 w-5 flex-shrink-0" />
+                        {dateOfBirth ? format(dateOfBirth, "PPP") : <span>{t.dobPlaceholder}</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 max-w-[calc(100vw-2rem)]" align="center">
+                      <Calendar
+                        mode="single"
+                        selected={dateOfBirth}
+                        onSelect={setDateOfBirth}
+                        disabled={(date) =>
+                          date > new Date() || date < new Date("1900-01-01")
+                        }
+                        initialFocus
+                        className="p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {/* Country + City in one row (optional) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Country (optional) */}
+                  <div className="space-y-2">
+                    <Label htmlFor="country" className="text-base">{t.country} <span className="text-xs text-muted-foreground font-normal">{language === 'ar' ? '(اختياري)' : '(optional)'}</span></Label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none z-10">
+                        <Globe className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <Select 
+                        value={country} 
+                        onValueChange={setCountry}
+                        disabled={isLoading}
+                      >
+                        <SelectTrigger className="pl-10 py-6 text-base shadow-sm">
+                          <SelectValue placeholder={t.selectCountry} />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-60 max-w-[calc(100vw-2rem)]">
+                          {countries.map((c) => (
+                            <SelectItem key={c.code} value={c.code}>
+                              {language === 'ar' ? c.nameAr : c.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* City (optional) */}
+                  <div className="space-y-2">
+                    <Label htmlFor="city" className="text-base">{language === 'ar' ? 'المدينة' : 'City'} <span className="text-xs text-muted-foreground font-normal">{language === 'ar' ? '(اختياري)' : '(optional)'}</span></Label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none z-10">
+                        <Globe className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <Input
+                        id="city"
+                        placeholder={language === 'ar' ? 'أدخل مدينتك' : 'Enter your city'}
+                        type="text"
+                        autoCapitalize="words"
+                        autoCorrect="off"
+                        disabled={isLoading || !country}
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        className="pl-10 py-6 text-base shadow-sm"
+                      />
                     </div>
                   </div>
                 </div>
