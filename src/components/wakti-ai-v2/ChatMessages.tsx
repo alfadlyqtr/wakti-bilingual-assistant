@@ -1084,6 +1084,13 @@ export function ChatMessages({
   };
 
   const getAssistantBubbleClasses = (message: AIMessage) => {
+    // Check for Study mode first (via metadata flag or Wolfram mode)
+    const studyModeFlag = (message as any)?.metadata?.studyMode;
+    const wolframMeta = (message as any)?.metadata?.wolfram;
+    if (studyModeFlag || wolframMeta?.mode === 'study') {
+      return 'border-purple-400'; // Purple border for Study mode
+    }
+    
     switch (message.intent) {
       case 'search': {
         const yt = (message as any)?.metadata?.youtube;
@@ -1094,7 +1101,7 @@ export function ChatMessages({
       case 'image':
         return 'border-orange-400';
       case 'vision':
-        return 'border-blue-300'; // keep vision as default
+        return 'border-cyan-400'; // Cyan/teal for Vision mode
       case 'parse_task':
         return 'border-blue-300';
       default:

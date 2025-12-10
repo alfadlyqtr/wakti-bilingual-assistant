@@ -243,8 +243,10 @@ const WaktiAIV2 = () => {
       setIsNewConversation(false);
     }
 
-    // Do NOT auto-force 'vision' when files exist; ChatInput already controls trigger.
-    const inputType = trigger === 'vision' ? 'vision' : 'text';
+    // Route to Vision path if: explicit vision trigger OR Study mode with images
+    const hasImages = attachedFiles && attachedFiles.length > 0 && attachedFiles.some((f: any) => f.type?.startsWith('image/'));
+    const isStudyWithImages = trigger === 'chat' && (chatSubmodeParam || chatSubmode) === 'study' && hasImages;
+    const inputType = (trigger === 'vision' || isStudyWithImages) ? 'vision' : 'text';
     // Per-message language override: if user explicitly asks for Arabic translation, force 'ar' for this request
     const wantsArabic = /translate.+to\s+arabic/i.test(messageContent || '') || /إلى العربية/.test(messageContent || '');
     const requestLanguage = wantsArabic ? 'ar' : language;
