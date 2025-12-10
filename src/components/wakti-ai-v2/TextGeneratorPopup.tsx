@@ -619,13 +619,14 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
             </div>
           )}
 
-          {activeTab === 'diagrams' && (
+          {/* Always render Diagrams and Presentation tabs to preserve state when switching tabs */}
+          <div className={activeTab === 'diagrams' ? '' : 'hidden'}>
             <DiagramsTab />
-          )}
+          </div>
 
-          {activeTab === 'presentation' && (
+          <div className={activeTab === 'presentation' ? '' : 'hidden'}>
             <PresentationTab />
-          )}
+          </div>
 
           {error && activeTab !== 'diagrams' && activeTab !== 'presentation' && (
             <div className="mt-4 text-sm text-destructive">{error}</div>
