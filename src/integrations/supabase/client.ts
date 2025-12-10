@@ -117,6 +117,19 @@ export const supabase = createClient<Database>(effectiveUrl, effectiveAnon, {
 });
 
 /**
+ * Clears all Supabase auth-related keys from localStorage
+ * Used during logout to ensure clean state
+ */
+const clearAllSupabaseAuthKeys = () => {
+  try {
+    const keys = Object.keys(localStorage).filter(k => 
+      k.startsWith('sb-') || k.includes('supabase') || k.startsWith('wakti-auth')
+    );
+    keys.forEach(k => localStorage.removeItem(k));
+  } catch {}
+};
+
+/**
  * Global error handler for JWT/auth errors that slip through
  * Auto-recovers by clearing auth and redirecting to login
  */
