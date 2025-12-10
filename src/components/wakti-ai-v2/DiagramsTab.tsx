@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
-import { Download, FileText, Sparkles, Loader2, Wand2, Palette, Zap } from 'lucide-react';
+import { Download, FileText, Sparkles, Loader2, Wand2, Palette, Zap, FilePlus2 } from 'lucide-react';
 import ShareButton from '@/components/ui/ShareButton';
 import { toast } from 'sonner';
 
@@ -155,6 +155,17 @@ const DiagramsTab: React.FC = () => {
   const [diagrams, setDiagrams] = useState<GeneratedDiagram[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Start new diagram - reset all state
+  const handleStartNew = () => {
+    setInputText('');
+    setUploadedFile(null);
+    setFileContent('');
+    setMaxDiagrams(1);
+    setKrokiStyle('auto');
+    setDiagrams([]);
+    setError(null);
+  };
 
   // ─────────────────────────────────────────────────────────────────────────
   // File handling - Text files read directly, images sent to backend for OCR
@@ -619,10 +630,21 @@ const DiagramsTab: React.FC = () => {
       {/* Results Gallery - with animations */}
       {diagrams.length > 0 && (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <h3 className="text-lg font-bold flex items-center gap-2">
-            <span className="text-2xl">🎉</span>
-            {isArabic ? 'مخططاتك جاهزة!' : 'Your diagrams are ready!'}
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold flex items-center gap-2">
+              <span className="text-2xl">🎉</span>
+              {isArabic ? 'مخططاتك جاهزة!' : 'Your diagrams are ready!'}
+            </h3>
+            {/* Start New button */}
+            <button
+              onClick={handleStartNew}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg border hover:bg-muted transition-colors text-sm"
+              title={isArabic ? 'مخطط جديد' : 'New Diagram'}
+            >
+              <FilePlus2 className="w-4 h-4" />
+              {isArabic ? 'جديد' : 'New'}
+            </button>
+          </div>
           <div className="grid gap-4">
             {diagrams.map((diagram, index) => (
               <div

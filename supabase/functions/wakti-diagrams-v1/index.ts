@@ -103,7 +103,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("📊 Wakti Diagrams v1: Request received");
+    console.log("📊 Wakti Diagrams v1.5 NEWLINE FIX: Request received");
 
     // Service role client – no per-request auth required
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -398,12 +398,23 @@ OUTPUT FORMAT (strict JSON):
 CRITICAL FORMATTING RULES:
 - Return ONLY valid JSON, nothing else.
 - The diagramSource must be valid syntax for the chosen engine.
-- IMPORTANT: In diagramSource, use \\n for newlines. Each arrow/connection MUST be on its own line.
-- For Mermaid flowcharts, EACH arrow must be on a separate line like: "flowchart TD\\n    A[Step 1]\\n    A --> B[Step 2]\\n    B --> C[Step 3]"
+- EXTREMELY IMPORTANT: In diagramSource, use REAL NEWLINE CHARACTERS (actual line breaks in the JSON string).
+- DO NOT use \\n escape sequences - they don't work! Use actual newlines.
+- For Mermaid flowcharts, EACH element must be on a separate line.
+- For Mermaid gantt, EACH line (title, dateFormat, section, task) must be on its own line.
 - Keep node labels SHORT (max 4-5 words).
 - Use simple ASCII characters, avoid special symbols that might break rendering.
 - Do NOT use markdown code fences inside diagramSource.
-- Do NOT put multiple arrows on the same line.`;
+- Do NOT put multiple elements on the same line - THIS WILL CAUSE ERRORS.
+
+CORRECT diagramSource example (with real newlines):
+"flowchart TD
+    A[Step 1]
+    A --> B[Step 2]
+    B --> C[Step 3]"
+
+WRONG (WILL FAIL):
+"flowchart TD A[Step 1] A --> B[Step 2] B --> C[Step 3]"`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -594,7 +605,20 @@ Use * for levels, indent for hierarchy.`;
     case "gantt":
       return `MANDATORY STYLE: Gantt Chart (Mermaid)
 Engine: "mermaid"
-You MUST use Mermaid gantt syntax. Example:
+
+IMPORTANT: Gantt charts are for PROJECT TIMELINES with DATES, not daily schedules.
+- If the user asks about daily routines (sleep, eat, gym, etc.), use a FLOWCHART instead.
+- Only use Gantt for multi-day/week/month project planning.
+
+For daily routines, use this flowchart format instead:
+flowchart LR
+    A[Sleep 8h] --> B[Eat 1h]
+    B --> C[Gym 2h]
+    C --> D[Work 8h]
+    D --> E[Relax 3h]
+    E --> F[Sleep]
+
+For actual project timelines, use Gantt:
 gantt
     title Project Timeline
     dateFormat YYYY-MM-DD
@@ -603,8 +627,12 @@ gantt
     Task 2 :a2, after a1, 5d
     section Phase 2
     Task 3 :b1, after a2, 10d
-Show project schedule with tasks and dependencies.
-Use sections, task names, durations.`;
+
+CRITICAL RULES:
+- dateFormat MUST be YYYY-MM-DD (not HHmm or HH:mm)
+- Task dates must be in YYYY-MM-DD format
+- Each line must be on its own line (use real newlines)
+- DO NOT use time-based formats like 00:00 or 8h for start times`;
 
     case "business-process":
       return `MANDATORY STYLE: Business Process (BPMN via PlantUML)
@@ -970,6 +998,54 @@ async function renderWithKroki(engine: string, diagramSource: string): Promise<s
     // Remove closing fence
     cleanSource = cleanSource.replace(/\n?```$/, "");
   }
+  
+  // CRITICAL FIX: Convert ALL forms of escaped newlines to actual newlines
+  // The AI may return \\n, \n as literal strings, or other escape sequences
+  
+  // Handle literal backslash-n sequences (most common from JSON)
+  cleanSource = cleanSource.split('\\n').join('\n');
+  
+  // Handle double-escaped (from JSON stringify)
+  cleanSource = cleanSource.split('\\\\n').join('\n');
+  
+  // Handle any remaining literal \n that didn't get converted
+  cleanSource = cleanSource.replace(/\\n/g, '\n');
+  
+  // GANTT CHART FIX: Add newlines before keywords if missing
+  if (krokiEngine === 'mermaid' && cleanSource.toLowerCase().includes('gantt')) {
+    console.log("🔧 Applying Gantt chart fixes...");
+    
+    // Fix invalid dateFormat - HHmm doesn't work, use YYYY-MM-DD
+    cleanSource = cleanSource.replace(/dateFormat\s+HHmm/gi, 'dateFormat HH:mm');
+    cleanSource = cleanSource.replace(/dateFormat\s+HH:mm/gi, 'dateFormat YYYY-MM-DD');
+    
+    // Add newline before each gantt keyword
+    cleanSource = cleanSource.replace(/\s+(title\s)/gi, '\n    $1');
+    cleanSource = cleanSource.replace(/\s+(dateFormat\s)/gi, '\n    $1');
+    cleanSource = cleanSource.replace(/\s+(section\s)/gi, '\n    $1');
+    cleanSource = cleanSource.replace(/\s+(excludes\s)/gi, '\n    $1');
+    
+    // Add newline before task definitions (word followed by space, colon, id pattern)
+    // Match patterns like "Sleep :a1" or "Task 1 :t1"
+    cleanSource = cleanSource.replace(/\s+(\w+(?:\s+\d+)?\s*:\s*\w+)/g, '\n    $1');
+    
+    // Fix time-based tasks to use dates instead
+    // Convert "00:00, 8h" style to "2024-01-01, 8h" style
+    cleanSource = cleanSource.replace(/:(\w+),\s*(\d{2}:\d{2}),/g, ':$1, 2024-01-01,');
+    
+    console.log("🔧 Gantt after fixes:\n" + cleanSource.substring(0, 500));
+  }
+  
+  // FLOWCHART FIX: Add newlines before arrows if missing
+  if (krokiEngine === 'mermaid' && cleanSource.toLowerCase().includes('flowchart')) {
+    // Add newline before each node definition or arrow
+    cleanSource = cleanSource.replace(/\s+([A-Z]\[)/g, '\n    $1');
+    cleanSource = cleanSource.replace(/\s+([A-Z]\s*-->)/g, '\n    $1');
+    cleanSource = cleanSource.replace(/\s+([A-Z]\s*---)/g, '\n    $1');
+  }
+  
+  console.log(`🔧 Cleaned diagram source for ${krokiEngine}:\n${cleanSource.substring(0, 500)}`);
+  
 
   // Kroki accepts POST with JSON body
   const response = await fetch(`${KROKI_BASE_URL}/${krokiEngine}/svg`, {
