@@ -75,10 +75,11 @@ export function AppStoreBanner({
   };
 
   // Don't show if:
-  // - Running inside native app
-  // - iOS Safari (Smart App Banner handles this)
+  // - Running inside native app (Natively wrapper)
   // - User dismissed it
-  if (isNative || platform === 'ios' || isDismissed) {
+  // NOTE: We show on ALL platforms including iOS because Smart App Banner
+  // may not work immediately after app launch
+  if (isNative || isDismissed) {
     return null;
   }
 
@@ -93,26 +94,28 @@ export function AppStoreBanner({
     >
       <div className="container mx-auto px-4 py-3">
         <div className="flex items-center justify-center gap-4">
-          {/* App Store Badge - Always shown, always clickable */}
-          <a 
-            href={APP_STORE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-shrink-0 transition-transform hover:scale-105 active:scale-95"
-          >
-            <img 
-              src="/lovable-uploads/apple download.png" 
-              alt="Download on the App Store"
-              className="h-10 w-auto rounded-lg object-contain"
-              style={{ 
-                backgroundColor: 'transparent',
-                maxWidth: '135px'
-              }}
-            />
-          </a>
+          {/* App Store Badge - Show on iOS and Desktop */}
+          {(platform === 'ios' || platform === 'desktop') && (
+            <a 
+              href={APP_STORE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-shrink-0 transition-transform hover:scale-105 active:scale-95"
+            >
+              <img 
+                src="/lovable-uploads/apple download.png" 
+                alt="Download on the App Store"
+                className="h-10 w-auto rounded-lg object-contain"
+                style={{ 
+                  backgroundColor: 'transparent',
+                  maxWidth: '135px'
+                }}
+              />
+            </a>
+          )}
 
-          {/* Google Play Badge - Only on desktop, disabled/coming soon */}
-          {platform === 'desktop' && (
+          {/* Google Play Badge - Show on Android and Desktop (disabled/coming soon) */}
+          {(platform === 'android' || platform === 'desktop') && (
             <div className="flex-shrink-0 relative group">
               <img 
                 src="/lovable-uploads/google download.png" 
@@ -125,25 +128,6 @@ export function AppStoreBanner({
                 }}
               />
               {/* Coming soon tooltip */}
-              <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-foreground text-background text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                Coming soon
-              </div>
-            </div>
-          )}
-
-          {/* Android: Show only Play Store badge (disabled) */}
-          {platform === 'android' && (
-            <div className="flex-shrink-0 relative group">
-              <img 
-                src="/lovable-uploads/google download.png" 
-                alt="Get it on Google Play"
-                className="h-10 w-auto rounded-lg object-contain opacity-50 cursor-not-allowed"
-                style={{ 
-                  backgroundColor: 'transparent',
-                  maxWidth: '135px',
-                  filter: 'grayscale(30%)'
-                }}
-              />
               <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-foreground text-background text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
                 Coming soon
               </div>
