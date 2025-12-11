@@ -65,6 +65,7 @@ import FitnessHealth from "./pages/FitnessHealth";
 import FitnessWhoopCallback from "./pages/FitnessWhoopCallback";
 import Journal from "./pages/Journal";
 import MusicStudio from "./pages/MusicStudio";
+import MusicShare from "./pages/MusicShare";
 import LettersCreate from "./pages/LettersCreate";
 import LettersWaiting from "./pages/LettersWaiting";
 import LettersJoin from "./pages/LettersJoin";
@@ -138,6 +139,7 @@ function App() {
                 
                 {/* Maw3d public view */}
                 <Route path="/maw3d/:shortId" element={<Maw3dView />} />
+                <Route path="/music/share/:id" element={<MusicShare />} />
                 
                 {/* Protected user routes - AuthProvider is mounted once at top level */}
                 <Route path="/dashboard" element={

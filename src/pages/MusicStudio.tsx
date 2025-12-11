@@ -8,6 +8,7 @@ import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/integrations/supaba
 import { toast } from 'sonner';
 import { createPortal } from 'react-dom';
 import { AudioPlayer } from '@/components/music/AudioPlayer';
+import ShareButton from '@/components/ui/ShareButton';
 import { Info, Wand2, Trash2 } from 'lucide-react';
 
 // Helper function to download audio files on mobile
@@ -1527,16 +1528,12 @@ function EditorTab() {
                     >
                       {language==='ar' ? 'تنزيل' : 'Download'}
                     </Button>
-                    <Button
-                      variant="outline"
+                    <ShareButton
                       size="sm"
-                      onClick={() => {
-                        navigator.clipboard.writeText(t.play_url || '');
-                        toast.success(language==='ar' ? 'تم نسخ الرابط' : 'URL copied');
-                      }}
-                    >
-                      {language==='ar' ? 'نسخ الرابط' : 'Copy URL'}
-                    </Button>
+                      shareUrl={typeof window !== 'undefined' ? `${window.location.origin}/music/share/${t.id}` : ''}
+                      shareTitle={language==='ar' ? 'استمع إلى موسيقى من Wakti' : 'Listen to my Wakti music track'}
+                      shareDescription={t.prompt || undefined}
+                    />
                     <Button
                       variant="outline"
                       size="sm"
