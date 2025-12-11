@@ -54,13 +54,18 @@ export function AppStoreBanner({
   position = 'bottom',
   dismissible = true 
 }: AppStoreBannerProps) {
-  const [platform, setPlatform] = useState<'ios' | 'android' | 'desktop'>('desktop');
-  const [isNative, setIsNative] = useState(false);
+  const [platform, setPlatform] = useState<'ios' | 'android' | 'desktop' | null>(null);
+  const [isNative, setIsNative] = useState<boolean | null>(null);
   const [isDismissed, setIsDismissed] = useState(false);
 
   useEffect(() => {
-    setPlatform(getPlatform());
-    setIsNative(isInNativeApp());
+    const detectedPlatform = getPlatform();
+    const detectedNative = isInNativeApp();
+    
+    console.log('[AppStoreBanner] Platform:', detectedPlatform, 'isNative:', detectedNative);
+    
+    setPlatform(detectedPlatform);
+    setIsNative(detectedNative);
     
     // Check if user previously dismissed
     const dismissed = sessionStorage.getItem('app-store-banner-dismissed');
@@ -74,11 +79,14 @@ export function AppStoreBanner({
     sessionStorage.setItem('app-store-banner-dismissed', 'true');
   };
 
+  // Wait for detection to complete
+  if (platform === null || isNative === null) {
+    return null;
+  }
+
   // Don't show if:
   // - Running inside native app (Natively wrapper)
   // - User dismissed it
-  // NOTE: We show on ALL platforms including iOS because Smart App Banner
-  // may not work immediately after app launch
   if (isNative || isDismissed) {
     return null;
   }
