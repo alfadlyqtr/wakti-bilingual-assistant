@@ -10,7 +10,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { Analytics } from "@vercel/analytics/react";
 import ErrorBoundary from "@/components/ErrorBoundary";
-
+import { AppStoreBanner } from "@/components/AppStoreBanner";
 
 // Import all your existing components
 import Index from "./pages/Index";
@@ -302,6 +302,8 @@ function App() {
                 {/* 404 catch-all */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
+              {/* App Store / Play Store Banner - shows on all pages for browser users */}
+              <AppStoreBanner position="bottom" dismissible={true} />
             </div>
             </BrowserRouter>
           </AuthProvider>

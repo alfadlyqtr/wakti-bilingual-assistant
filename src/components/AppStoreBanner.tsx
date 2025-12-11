@@ -4,16 +4,11 @@ import { X } from 'lucide-react';
 // App Store URL
 const APP_STORE_URL = 'https://apps.apple.com/us/app/wakti-ai/id6755150700';
 
-// Detect platform
+// Detect platform based on user agent only (not Natively SDK)
 function getPlatform(): 'ios' | 'android' | 'desktop' {
   const ua = navigator.userAgent || navigator.vendor || (window as any).opera || '';
   
-  // Check if running inside Natively wrapper (native app)
-  if (typeof window !== 'undefined' && (window as any).natively) {
-    return 'ios'; // Treat as iOS native app - don't show banner
-  }
-  
-  // iOS detection
+  // iOS detection (based on user agent, not Natively SDK)
   if (/iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream) {
     return 'ios';
   }
@@ -27,17 +22,21 @@ function getPlatform(): 'ios' | 'android' | 'desktop' {
   return 'desktop';
 }
 
-// Check if running inside native app wrapper
+// Check if running inside native app wrapper (actually wrapped, not just SDK loaded)
 function isInNativeApp(): boolean {
   if (typeof window === 'undefined') return false;
   
-  // Check for Natively SDK
-  if ((window as any).natively) return true;
+  // Check if Natively SDK reports we're actually inside the native app
+  // The SDK is loaded on web too, so we need to check if it's actually wrapped
+  const natively = (window as any).natively;
+  if (natively && typeof natively.isNativeApp === 'function') {
+    return natively.isNativeApp();
+  }
   
-  // Check for standalone PWA mode
+  // Fallback: Check for standalone PWA mode (home screen app)
   if (window.matchMedia('(display-mode: standalone)').matches) return true;
   
-  // Check iOS standalone
+  // Check iOS standalone (added to home screen)
   if ((navigator as any).standalone === true) return true;
   
   return false;
@@ -54,6 +53,8 @@ export function AppStoreBanner({
   position = 'bottom',
   dismissible = true 
 }: AppStoreBannerProps) {
+  console.log('[AppStoreBanner] Component rendering...');
+  
   const [platform, setPlatform] = useState<'ios' | 'android' | 'desktop' | null>(null);
   const [isNative, setIsNative] = useState<boolean | null>(null);
   const [isDismissed, setIsDismissed] = useState(false);
