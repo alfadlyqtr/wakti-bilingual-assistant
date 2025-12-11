@@ -75,6 +75,49 @@ const ShareButton: React.FC<ShareButtonProps> = ({
   // Detect iOS for Messages color
   const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
 
+  // Helper: Try native share first, fallback to web URL
+  const tryNativeShareOrFallback = async (platform: string, fallbackUrl?: string) => {
+    // Always try native share API first (opens real apps on mobile)
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: shareTitle,
+          text: shareDescription || shareTitle,
+          url: shareUrl,
+        });
+        onShare?.(platform);
+        setIsExpanded(false);
+        return true;
+      } catch (err: any) {
+        // User cancelled or share failed - try fallback
+        if (err?.name === 'AbortError') {
+          // User cancelled, just close
+          setIsExpanded(false);
+          return true;
+        }
+      }
+    }
+    
+    // Fallback to web URL if native share not available or failed
+    if (fallbackUrl) {
+      window.open(fallbackUrl, '_blank');
+      onShare?.(platform);
+      setIsExpanded(false);
+      return true;
+    }
+    
+    // Last resort: copy to clipboard
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success('Link copied! Paste it in your app.');
+      onShare?.(platform);
+      setIsExpanded(false);
+    } catch {
+      toast.error('Could not share');
+    }
+    return false;
+  };
+
   // Social platforms configuration - using actual brand colors
   // 7 buttons = 360/7 ≈ 51.4 degrees apart
   const platforms = [
@@ -84,10 +127,9 @@ const ShareButton: React.FC<ShareButtonProps> = ({
       bgColor: 'bg-[#25D366]', // WhatsApp green
       angle: 0,
       action: () => {
-        const url = `https://wa.me/?text=${encodeURIComponent(`${shareTitle}\n${shareUrl}`)}`;
-        window.open(url, '_blank');
-        onShare?.('whatsapp');
-        setIsExpanded(false);
+        // Native share opens the real WhatsApp app
+        const fallbackUrl = `https://wa.me/?text=${encodeURIComponent(`${shareTitle}\n${shareUrl}`)}`;
+        tryNativeShareOrFallback('whatsapp', fallbackUrl);
       },
     },
     {
@@ -96,10 +138,8 @@ const ShareButton: React.FC<ShareButtonProps> = ({
       bgColor: 'bg-gradient-to-br from-[#833AB4] via-[#FD1D1D] to-[#F77737]', // Instagram gradient
       angle: 51,
       action: () => {
-        navigator.clipboard.writeText(shareUrl);
-        toast.success('Link copied! Share on Instagram');
-        onShare?.('instagram');
-        setIsExpanded(false);
+        // Instagram doesn't have a web share URL, so native share or copy
+        tryNativeShareOrFallback('instagram');
       },
     },
     {
@@ -109,10 +149,9 @@ const ShareButton: React.FC<ShareButtonProps> = ({
       textColor: 'text-black', // Black text on yellow
       angle: 103,
       action: () => {
-        const url = `https://www.snapchat.com/share?url=${encodeURIComponent(shareUrl)}`;
-        window.open(url, '_blank');
-        onShare?.('snapchat');
-        setIsExpanded(false);
+        // Native share opens the real Snapchat app
+        const fallbackUrl = `https://www.snapchat.com/share?url=${encodeURIComponent(shareUrl)}`;
+        tryNativeShareOrFallback('snapchat', fallbackUrl);
       },
     },
     {
@@ -121,10 +160,9 @@ const ShareButton: React.FC<ShareButtonProps> = ({
       bgColor: 'bg-[#1877F2]', // Facebook blue
       angle: 154,
       action: () => {
-        const url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
-        window.open(url, '_blank');
-        onShare?.('facebook');
-        setIsExpanded(false);
+        // Native share opens the real Facebook app
+        const fallbackUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
+        tryNativeShareOrFallback('facebook', fallbackUrl);
       },
     },
     {
@@ -133,6 +171,7 @@ const ShareButton: React.FC<ShareButtonProps> = ({
       bgColor: 'bg-[#EA4335]', // Gmail red / Email red
       angle: 206,
       action: () => {
+        // Email works well with mailto: scheme
         const subject = encodeURIComponent(shareTitle);
         const body = encodeURIComponent(`${shareDescription || shareTitle}\n\n${shareUrl}`);
         window.location.href = `mailto:?subject=${subject}&body=${body}`;
@@ -146,19 +185,26 @@ const ShareButton: React.FC<ShareButtonProps> = ({
       bgColor: isIOS ? 'bg-[#007AFF]' : 'bg-[#34C759]', // iMessage blue for iOS, Android green
       angle: 257,
       action: () => {
+        // Native share or SMS fallback
+        const fallbackSms = `sms:?body=${encodeURIComponent(`${shareTitle}\n${shareUrl}`)}`;
         if (navigator.share) {
           navigator.share({
             title: shareTitle,
             text: shareDescription || shareTitle,
             url: shareUrl,
+          }).then(() => {
+            onShare?.('messages');
+            setIsExpanded(false);
           }).catch(() => {
-            window.location.href = `sms:?body=${encodeURIComponent(`${shareTitle}\n${shareUrl}`)}`;
+            window.location.href = fallbackSms;
+            onShare?.('messages');
+            setIsExpanded(false);
           });
         } else {
-          window.location.href = `sms:?body=${encodeURIComponent(`${shareTitle}\n${shareUrl}`)}`;
+          window.location.href = fallbackSms;
+          onShare?.('messages');
+          setIsExpanded(false);
         }
-        onShare?.('messages');
-        setIsExpanded(false);
       },
     },
     {
