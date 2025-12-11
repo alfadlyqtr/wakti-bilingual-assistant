@@ -7,7 +7,6 @@ import { Logo3D } from "@/components/Logo3D";
 import { LoginForm } from "@/components/LoginForm";
 import { ArrowLeft } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { AppStoreBanner } from "@/components/AppStoreBanner";
 
 // Define the type for location state
 interface LocationState {
@@ -73,8 +72,6 @@ export default function Login() {
         </div>
       </div>
 
-      {/* App Store / Play Store Banner for browser users */}
-      <AppStoreBanner position="bottom" dismissible={true} />
     </div>
   );
 }

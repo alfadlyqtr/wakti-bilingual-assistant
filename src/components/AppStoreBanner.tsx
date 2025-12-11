@@ -22,18 +22,27 @@ function getPlatform(): 'ios' | 'android' | 'desktop' {
   return 'desktop';
 }
 
-// Check if running inside native app wrapper (actually wrapped, not just SDK loaded)
+// Check if running inside native app wrapper (Natively)
 function isInNativeApp(): boolean {
   if (typeof window === 'undefined') return false;
   
-  // Check if Natively SDK reports we're actually inside the native app
-  // The SDK is loaded on web too, so we need to check if it's actually wrapped
-  const natively = (window as any).natively;
-  if (natively && typeof natively.isNativeApp === 'function') {
-    return natively.isNativeApp();
+  try {
+    // Use Natively SDK's official browserInfo() method
+    // This is the correct way to detect if we're inside the native app
+    const NativelyInfo = (window as any).NativelyInfo;
+    if (NativelyInfo) {
+      const info = new NativelyInfo();
+      const browserInfo = info.browserInfo();
+      if (browserInfo && browserInfo.isNativeApp) {
+        console.log('[AppStoreBanner] Detected Natively native app via browserInfo()');
+        return true;
+      }
+    }
+  } catch (err) {
+    console.log('[AppStoreBanner] NativelyInfo check failed:', err);
   }
   
-  // Fallback: Check for standalone PWA mode (home screen app)
+  // Check for standalone PWA mode (home screen app)
   if (window.matchMedia('(display-mode: standalone)').matches) return true;
   
   // Check iOS standalone (added to home screen)
