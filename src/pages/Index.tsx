@@ -298,7 +298,7 @@ export default function Index() {
                 <motion.div variants={itemVariants} className="mb-8">
                   <Button
                     size="lg"
-                    className="w-full max-w-xs bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-600 hover:via-purple-600 hover:to-pink-600 text-white font-semibold py-4 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                    className="liquid-glass-btn w-full max-w-xs bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-600 hover:via-purple-600 hover:to-pink-600 text-white font-semibold py-4 px-8 rounded-xl transition-all duration-300"
                     onClick={() => navigate('/signup')}
                   >
                     <Star className="h-5 w-5 mr-2" />
@@ -315,7 +315,7 @@ export default function Index() {
               whileInView="visible"
               viewport={{ once: true, margin: "-50px" }}
               variants={containerVariants}
-              className="px-4 py-12 bg-gradient-to-b from-transparent to-slate-50/50 dark:to-slate-900/20"
+              className="section-3d-pop px-4 py-12 bg-gradient-to-b from-transparent to-slate-50/50 dark:to-slate-900/20"
             >
               <motion.div variants={itemVariants} className="text-center mb-10">
                 <h2 className="text-2xl font-bold mb-3">
@@ -353,7 +353,7 @@ export default function Index() {
                               }}
                               transition={{ duration: 0.3 }}
                             >
-                              <Card className={`overflow-hidden border-0 shadow-xl hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 bg-gradient-to-br ${feature.bgGradient} dark:from-slate-800/50 dark:to-slate-900/50`}>
+                              <Card className={`liquid-glass-feature overflow-hidden border-0 shadow-xl hover:shadow-2xl transition-all duration-500 bg-gradient-to-br ${feature.bgGradient} dark:from-slate-800/50 dark:to-slate-900/50`}>
                                 <div className={`h-1 bg-gradient-to-r ${feature.gradient}`}></div>
                                 <div className="p-6">
                                   <div className="flex items-start gap-4">
@@ -386,7 +386,7 @@ export default function Index() {
                                 }}
                                 transition={{ duration: 0.3 }}
                               >
-                                <Card className={`overflow-hidden border-0 shadow-xl hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 bg-gradient-to-br ${nextFeature.bgGradient} dark:from-slate-800/50 dark:to-slate-900/50`}>
+                                <Card className={`liquid-glass-feature overflow-hidden border-0 shadow-xl hover:shadow-2xl transition-all duration-500 bg-gradient-to-br ${nextFeature.bgGradient} dark:from-slate-800/50 dark:to-slate-900/50`}>
                                   <div className={`h-1 bg-gradient-to-r ${nextFeature.gradient}`}></div>
                                   <div className="p-6">
                                     <div className="flex items-start gap-4">
@@ -441,12 +441,8 @@ export default function Index() {
                   {/* Background glow effect */}
                   <div className="absolute -inset-4 bg-gradient-to-br from-blue-500/40 via-indigo-400/30 to-cyan-400/40 rounded-[2.5rem] blur-2xl"></div>
                   
-                  {/* Card - Vibrant blue gradient */}
-                  <div className="relative bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-700 rounded-2xl p-6 text-white shadow-2xl overflow-hidden">
-                    {/* Glassmorphic overlay for depth */}
-                    <div className="absolute inset-0 bg-gradient-to-b from-white/15 via-transparent to-black/10 rounded-2xl"></div>
-                    {/* Inner border glow - Wakti gold accent */}
-                    <div className="absolute inset-[2px] rounded-[18px] border-2 border-[#e9ceb0]/40"></div>
+                  {/* Card - Vibrant blue gradient with liquid glass */}
+                  <div className="liquid-glass-card relative bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-700 rounded-2xl p-6 text-white shadow-2xl">
                     
                     <div className="relative z-10 flex flex-col items-center text-center">
                       {/* 3-day free trial badge - Catchy gradient with glow */}

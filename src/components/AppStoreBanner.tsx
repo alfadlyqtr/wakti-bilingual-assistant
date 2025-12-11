@@ -1,0 +1,167 @@
+import React, { useState, useEffect } from 'react';
+import { X } from 'lucide-react';
+
+// App Store URL
+const APP_STORE_URL = 'https://apps.apple.com/us/app/wakti-ai/id6755150700';
+
+// Detect platform
+function getPlatform(): 'ios' | 'android' | 'desktop' {
+  const ua = navigator.userAgent || navigator.vendor || (window as any).opera || '';
+  
+  // Check if running inside Natively wrapper (native app)
+  if (typeof window !== 'undefined' && (window as any).natively) {
+    return 'ios'; // Treat as iOS native app - don't show banner
+  }
+  
+  // iOS detection
+  if (/iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream) {
+    return 'ios';
+  }
+  
+  // Android detection
+  if (/android/i.test(ua)) {
+    return 'android';
+  }
+  
+  // Everything else is desktop
+  return 'desktop';
+}
+
+// Check if running inside native app wrapper
+function isInNativeApp(): boolean {
+  if (typeof window === 'undefined') return false;
+  
+  // Check for Natively SDK
+  if ((window as any).natively) return true;
+  
+  // Check for standalone PWA mode
+  if (window.matchMedia('(display-mode: standalone)').matches) return true;
+  
+  // Check iOS standalone
+  if ((navigator as any).standalone === true) return true;
+  
+  return false;
+}
+
+interface AppStoreBannerProps {
+  /** Position of the banner */
+  position?: 'top' | 'bottom';
+  /** Allow user to dismiss the banner */
+  dismissible?: boolean;
+}
+
+export function AppStoreBanner({ 
+  position = 'bottom',
+  dismissible = true 
+}: AppStoreBannerProps) {
+  const [platform, setPlatform] = useState<'ios' | 'android' | 'desktop'>('desktop');
+  const [isNative, setIsNative] = useState(false);
+  const [isDismissed, setIsDismissed] = useState(false);
+
+  useEffect(() => {
+    setPlatform(getPlatform());
+    setIsNative(isInNativeApp());
+    
+    // Check if user previously dismissed
+    const dismissed = sessionStorage.getItem('app-store-banner-dismissed');
+    if (dismissed === 'true') {
+      setIsDismissed(true);
+    }
+  }, []);
+
+  const handleDismiss = () => {
+    setIsDismissed(true);
+    sessionStorage.setItem('app-store-banner-dismissed', 'true');
+  };
+
+  // Don't show if:
+  // - Running inside native app
+  // - iOS Safari (Smart App Banner handles this)
+  // - User dismissed it
+  if (isNative || platform === 'ios' || isDismissed) {
+    return null;
+  }
+
+  const positionClasses = position === 'top' 
+    ? 'top-0' 
+    : 'bottom-0';
+
+  return (
+    <div 
+      className={`fixed left-0 right-0 ${positionClasses} z-[9999] bg-background/95 backdrop-blur-md border-t border-border/50 shadow-lg`}
+      style={{ paddingBottom: position === 'bottom' ? 'env(safe-area-inset-bottom, 0px)' : undefined }}
+    >
+      <div className="container mx-auto px-4 py-3">
+        <div className="flex items-center justify-center gap-4">
+          {/* App Store Badge - Always shown, always clickable */}
+          <a 
+            href={APP_STORE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-shrink-0 transition-transform hover:scale-105 active:scale-95"
+          >
+            <img 
+              src="/lovable-uploads/apple download.png" 
+              alt="Download on the App Store"
+              className="h-10 w-auto rounded-lg object-contain"
+              style={{ 
+                backgroundColor: 'transparent',
+                maxWidth: '135px'
+              }}
+            />
+          </a>
+
+          {/* Google Play Badge - Only on desktop, disabled/coming soon */}
+          {platform === 'desktop' && (
+            <div className="flex-shrink-0 relative group">
+              <img 
+                src="/lovable-uploads/google download.png" 
+                alt="Get it on Google Play"
+                className="h-10 w-auto rounded-lg object-contain opacity-50 cursor-not-allowed"
+                style={{ 
+                  backgroundColor: 'transparent',
+                  maxWidth: '135px',
+                  filter: 'grayscale(30%)'
+                }}
+              />
+              {/* Coming soon tooltip */}
+              <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-foreground text-background text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                Coming soon
+              </div>
+            </div>
+          )}
+
+          {/* Android: Show only Play Store badge (disabled) */}
+          {platform === 'android' && (
+            <div className="flex-shrink-0 relative group">
+              <img 
+                src="/lovable-uploads/google download.png" 
+                alt="Get it on Google Play"
+                className="h-10 w-auto rounded-lg object-contain opacity-50 cursor-not-allowed"
+                style={{ 
+                  backgroundColor: 'transparent',
+                  maxWidth: '135px',
+                  filter: 'grayscale(30%)'
+                }}
+              />
+              <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-foreground text-background text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                Coming soon
+              </div>
+            </div>
+          )}
+
+          {/* Dismiss button */}
+          {dismissible && (
+            <button
+              onClick={handleDismiss}
+              className="flex-shrink-0 p-1.5 rounded-full hover:bg-muted transition-colors ml-2"
+              aria-label="Dismiss"
+            >
+              <X className="w-4 h-4 text-muted-foreground" />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

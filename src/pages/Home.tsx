@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/card";
 import { Footer } from "@/components/Footer";
 import { t } from "@/utils/translations";
 import { MobileHeader } from "@/components/MobileHeader";
+import { AppStoreBanner } from "@/components/AppStoreBanner";
 
 export default function Home() {
   const navigate = useNavigate();
@@ -372,6 +373,9 @@ export default function Home() {
           <Footer />
         </div>
       </div>
+
+      {/* App Store / Play Store Banner for browser users */}
+      <AppStoreBanner position="bottom" dismissible={true} />
     </>
   );
 }
