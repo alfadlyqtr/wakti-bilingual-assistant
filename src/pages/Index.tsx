@@ -265,7 +265,7 @@ export default function Index() {
             </div>
           </MobileHeader>
           
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden">
             {/* Hero Section */}
             <section className="relative px-4 py-8 bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-indigo-950/30 dark:via-background dark:to-purple-950/30">
               <div className="absolute inset-0 opacity-50"></div>
@@ -326,21 +326,21 @@ export default function Index() {
                 </p>
               </motion.div>
               
-              <div className="max-w-lg mx-auto overflow-visible">
+              <div className="max-w-lg mx-auto overflow-hidden">
                 <Carousel
                   opts={{
                     align: "start",
                     loop: true,
                     slidesToScroll: 1,
                   }}
-                  className="w-full overflow-visible"
+                  className="w-full"
                   setApi={setMobileApi}
                 >
-                  <CarouselContent className="-ml-4">
+                  <CarouselContent>
                     {features.filter((_, index) => index % 2 === 0).map((feature, index) => {
                       const nextFeature = features[index * 2 + 1];
                       return (
-                        <CarouselItem key={index} className="pl-4 basis-full">
+                        <CarouselItem key={index} className="px-2 basis-full">
                           <div className="space-y-4">
                             <motion.div 
                               variants={itemVariants} 
@@ -501,7 +501,7 @@ export default function Index() {
 
       {/* Desktop/Tablet Variant */}
       <div className="hidden md:block">
-        <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-indigo-950/30 dark:via-background dark:to-purple-950/30">
+        <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-indigo-950/30 dark:via-background dark:to-purple-950/30">
           {/* Header */}
           <header className="sticky top-0 z-10 bg-white/80 dark:bg-background/80 backdrop-blur-sm border-b border-border/50">
             <div className="w-full px-6 lg:px-8 py-4 flex items-center justify-between">
