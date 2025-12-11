@@ -185,57 +185,60 @@ export function ContactSearch() {
           <p className="text-sm text-muted-foreground mb-2">{t("searchResults", language)}</p>
           <div className="space-y-2">
             {searchResults.map((user) => (
-              <div key={user.id} className="flex items-center justify-between p-2 hover:bg-muted rounded-md">
-                <div className="flex items-center gap-2">
-                  <Avatar>
+              <div key={user.id} className="flex items-center justify-between gap-3 p-2 hover:bg-muted rounded-md">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <Avatar className="flex-shrink-0">
                     <AvatarImage src={user.avatar_url || ""} />
                     <AvatarFallback>{getInitials(user.display_name || user.username)}</AvatarFallback>
                   </Avatar>
-                  <div>
-                    <p className="font-medium">{user.display_name}</p>
-                    <p className="text-xs text-muted-foreground">@{user.username}</p>
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{user.display_name}</p>
+                    <p className="text-xs text-muted-foreground truncate">@{user.username}</p>
                     {/* Check if email exists before rendering it */}
                     {user.email && (
-                      <p className="text-xs text-muted-foreground">{user.email}</p>
+                      <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                     )}
                   </div>
                 </div>
-                {(() => {
-                  const status = contactStatus[user.id];
-                  if (status === 'approved') {
+                <div className="flex-shrink-0">
+                  {(() => {
+                    const status = contactStatus[user.id];
+                    if (status === 'approved') {
+                      return (
+                        <Badge variant="secondary" className="px-3 py-1 whitespace-nowrap">
+                          {t("alreadyInContacts", language)}
+                        </Badge>
+                      );
+                    }
+                    if (status === 'pending') {
+                      return (
+                        <Badge variant="outline" className="px-3 py-1 text-xs whitespace-nowrap">
+                          {t("requestSent", language)}
+                        </Badge>
+                      );
+                    }
+                    if (status === 'blocked') {
+                      return (
+                        <Badge variant="destructive" className="px-3 py-1 text-xs whitespace-nowrap">
+                          {t("blocked", language)}
+                        </Badge>
+                      );
+                    }
                     return (
-                      <Badge variant="secondary" className="px-3 py-1">
-                        {t("alreadyInContacts", language)}
-                      </Badge>
+                      <Button
+                        onClick={() => handleSendRequest(user.id)}
+                        disabled={sendRequestMutation.isPending && sendRequestMutation.variables === user.id}
+                        size="sm"
+                        className="whitespace-nowrap"
+                      >
+                        {(sendRequestMutation.isPending && sendRequestMutation.variables === user.id) ? (
+                          <LoadingSpinner size="sm" className="mr-2" />
+                        ) : null}
+                        {t("sendRequest", language)}
+                      </Button>
                     );
-                  }
-                  if (status === 'pending') {
-                    return (
-                      <Badge variant="outline" className="px-3 py-1 text-xs">
-                        {t("requestSent", language)}
-                      </Badge>
-                    );
-                  }
-                  if (status === 'blocked') {
-                    return (
-                      <Badge variant="destructive" className="px-3 py-1 text-xs">
-                        {t("blocked", language)}
-                      </Badge>
-                    );
-                  }
-                  return (
-                    <Button
-                      onClick={() => handleSendRequest(user.id)}
-                      disabled={sendRequestMutation.isPending && sendRequestMutation.variables === user.id}
-                      size="sm"
-                    >
-                      {(sendRequestMutation.isPending && sendRequestMutation.variables === user.id) ? (
-                        <LoadingSpinner size="sm" className="mr-2" />
-                      ) : null}
-                      {t("sendRequest", language)}
-                    </Button>
-                  );
-                })()}
+                  })()}
+                </div>
               </div>
             ))}
           </div>
