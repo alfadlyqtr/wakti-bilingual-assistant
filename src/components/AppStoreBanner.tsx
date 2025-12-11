@@ -96,8 +96,9 @@ export function AppStoreBanner({
 
   // Don't show if:
   // - Running inside native app (Natively wrapper)
+  // - iOS device (Safari shows Apple's Smart App Banner instead)
   // - User dismissed it
-  if (isNative || isDismissed) {
+  if (isNative || platform === 'ios' || isDismissed) {
     return null;
   }
 
@@ -112,8 +113,8 @@ export function AppStoreBanner({
     >
       <div className="container mx-auto px-4 py-3">
         <div className="flex items-center justify-center gap-4">
-          {/* App Store Badge - Show on iOS and Desktop */}
-          {(platform === 'ios' || platform === 'desktop') && (
+          {/* App Store Badge - Show on Desktop only (iOS uses Apple's Smart App Banner) */}
+          {platform === 'desktop' && (
             <a 
               href={APP_STORE_URL}
               target="_blank"
