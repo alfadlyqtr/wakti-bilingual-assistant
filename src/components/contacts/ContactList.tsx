@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,6 +11,7 @@ import { getContacts, blockContact, deleteContact, toggleContactFavorite } from 
 import { LoadingSpinner } from "@/components/ui/loading";
 import { toast } from "sonner";
 import { ChatPopup } from "./ChatPopup";
+import { useIsMobile, useIsTablet } from "@/hooks/use-mobile";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -55,6 +57,11 @@ export function ContactList({
   const { language } = useTheme();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const isMobile = useIsMobile();
+  const isTablet = useIsTablet();
+  const useFullPageChat = isMobile || isTablet; // Full page on mobile/tablet, popup on desktop
+  
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [contactToDelete, setContactToDelete] = useState<{id: string, name: string} | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
@@ -104,12 +111,19 @@ export function ContactList({
         const avatarUrl = contactProfile.avatar_url;
         
         console.log('🔔 Opening chat from push notification for:', displayName);
-        setSelectedContact({ id: openChatUserId, name: displayName, avatar: avatarUrl });
-        setChatOpen(true);
         clearOpenChat(); // Clear the URL param so it doesn't re-open on refresh
+        
+        if (useFullPageChat) {
+          // Mobile/tablet: navigate to full-page chat
+          navigate(`/contacts/${openChatUserId}`);
+        } else {
+          // Desktop: use popup
+          setSelectedContact({ id: openChatUserId, name: displayName, avatar: avatarUrl });
+          setChatOpen(true);
+        }
       }
     }
-  }, [openChatUserId, contacts, clearOpenChat]);
+  }, [openChatUserId, contacts, clearOpenChat, useFullPageChat, navigate]);
 
   // Block contact mutation
   const blockContactMutation = useMutation({
@@ -161,8 +175,14 @@ export function ContactList({
   });
 
   const handleOpenChat = (contactId: string, name: string, avatar?: string) => {
-    setSelectedContact({ id: contactId, name, avatar });
-    setChatOpen(true);
+    if (useFullPageChat) {
+      // Mobile/tablet: navigate to full-page chat
+      navigate(`/contacts/${contactId}`);
+    } else {
+      // Desktop: use popup
+      setSelectedContact({ id: contactId, name, avatar });
+      setChatOpen(true);
+    }
   };
 
   const handleToggleFavorite = (contactId: string, isCurrentlyFavorite: boolean) => {

@@ -28,6 +28,7 @@ import WaktiAi from "./pages/WaktiAi";
 import WaktiAIV2 from "./pages/WaktiAIV2";
 import Calendar from "./pages/Calendar";
 import Contacts from "./pages/Contacts";
+import ChatPage from "./pages/ChatPage";
 import Maw3d from "./pages/Maw3d";
 import Maw3dCreate from "./pages/Maw3dCreate";
 import Maw3dManage from "./pages/Maw3dManage";
@@ -246,6 +247,13 @@ function App() {
                   <GiftNotificationProvider>
                     <ErrorBoundary>
                       <AppLayout><Contacts /></AppLayout>
+                    </ErrorBoundary>
+                  </GiftNotificationProvider>
+                } />
+                <Route path="/contacts/:contactId" element={
+                  <GiftNotificationProvider>
+                    <ErrorBoundary>
+                      <ChatPage />
                     </ErrorBoundary>
                   </GiftNotificationProvider>
                 } />
