@@ -149,7 +149,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
 
   // Share URL for the event
   const shareUrl = event?.short_id 
-    ? `${window.location.origin}/wakti/${event.short_id}`
+    ? `${window.location.origin}/maw3d/${event.short_id}`
     : window.location.href;
 
   const handleGetDirections = () => {
