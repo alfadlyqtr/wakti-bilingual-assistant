@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 type Theme = "dark" | "light";
 type Language = "en" | "ar";
@@ -59,6 +60,19 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     // Arabic will still get right-aligned text via css rules on [lang="ar"],
     // but we no longer flip the entire document direction.
     document.dir = "ltr";
+    
+    // Sync language to database for push notifications (fire-and-forget, non-blocking)
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.id) {
+          // Cast needed until types are regenerated with new language column
+          await (supabase.from("profiles") as any).update({ language }).eq("id", user.id);
+        }
+      } catch {
+        // Silent fail - localStorage is the source of truth for UI
+      }
+    })();
   }, [language]);
 
   const toggleTheme = () => {
