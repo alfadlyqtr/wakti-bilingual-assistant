@@ -6,24 +6,16 @@ import { ContactList } from "@/components/contacts/ContactList";
 import { BlockedUsers } from "@/components/contacts/BlockedUsers";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Contact, Bell, ShieldCheck } from "lucide-react";
+import { getPendingRequestsCount } from "@/services/contactsService";
+import { getAllUnreadCounts } from "@/services/messageService";
 
 // Create a client
 const queryClient = new QueryClient();
 
-interface ContactsProps {
-  contactCount?: number;
-  perContactUnread?: Record<string, number>;
-  refetchUnreadCounts?: () => void;
-}
-
-export default function Contacts({ 
-  contactCount = 0, 
-  perContactUnread = {}, 
-  refetchUnreadCounts = () => {} 
-}: ContactsProps) {
+export default function Contacts() {
   const { language } = useTheme();
   const [activeTab, setActiveTab] = useState("contacts");
 
@@ -33,9 +25,6 @@ export default function Contacts({
         language={language} 
         activeTab={activeTab} 
         setActiveTab={setActiveTab}
-        contactCount={contactCount}
-        perContactUnread={perContactUnread}
-        refetchUnreadCounts={refetchUnreadCounts}
       />
     </QueryClientProvider>
   );
@@ -45,18 +34,30 @@ export default function Contacts({
 function ContactsContent({ 
   language, 
   activeTab, 
-  setActiveTab,
-  contactCount,
-  perContactUnread,
-  refetchUnreadCounts
+  setActiveTab
 }: { 
   language: string; 
   activeTab: string;
   setActiveTab: (tab: string) => void;
-  contactCount: number;
-  perContactUnread: Record<string, number>;
-  refetchUnreadCounts: () => void;
 }) {
+  // Fetch pending requests count for the badge
+  const { data: pendingRequestsCount = 0 } = useQuery({
+    queryKey: ['pendingRequestsCount'],
+    queryFn: getPendingRequestsCount,
+    staleTime: 30000, // 30 seconds
+    refetchInterval: 60000, // Refetch every minute
+    refetchOnWindowFocus: true,
+  });
+
+  // Fetch unread message counts for all contacts
+  const { data: perContactUnread = {}, refetch: refetchUnreadCounts } = useQuery({
+    queryKey: ['allUnreadCounts'],
+    queryFn: getAllUnreadCounts,
+    staleTime: 30000,
+    refetchInterval: 60000,
+    refetchOnWindowFocus: true,
+  });
+
   // Handler for unblock success
   const handleUnblockSuccess = () => {
     setActiveTab("contacts");
@@ -80,9 +81,9 @@ function ContactsContent({
           <TabsTrigger value="requests" className="flex gap-2 items-center">
             <Bell className="h-4 w-4" />
             <span>{t("requests", language)}</span>
-            {contactCount > 0 && (
+            {pendingRequestsCount > 0 && (
               <Badge variant="destructive" className="h-5 w-5 p-0 flex items-center justify-center text-xs">
-                {contactCount}
+                {pendingRequestsCount}
               </Badge>
             )}
           </TabsTrigger>

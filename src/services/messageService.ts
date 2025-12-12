@@ -135,6 +135,33 @@ export async function getUnreadMessages(contactId: string): Promise<number> {
   return count || 0;
 }
 
+// Get unread message counts for ALL contacts at once
+export async function getAllUnreadCounts(): Promise<Record<string, number>> {
+  const userId = await getCurrentUserId();
+  if (!userId) return {};
+  await ensurePassport();
+
+  // Get all unread messages where current user is recipient, grouped by sender
+  const { data, error } = await supabase
+    .from("messages")
+    .select("sender_id")
+    .eq("recipient_id", userId)
+    .eq("is_read", false);
+
+  if (error) {
+    console.error("Error fetching all unread counts:", error);
+    return {};
+  }
+
+  // Count messages per sender
+  const counts: Record<string, number> = {};
+  data?.forEach((msg) => {
+    counts[msg.sender_id] = (counts[msg.sender_id] || 0) + 1;
+  });
+
+  return counts;
+}
+
 // Mark messages as read
 export async function markAsRead(senderId: string): Promise<void> {
   try {

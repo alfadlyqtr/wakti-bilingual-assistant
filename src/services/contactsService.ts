@@ -106,6 +106,26 @@ export async function getContacts() {
   return results;
 }
 
+// Get count of pending contact requests for the current user (for badge)
+export async function getPendingRequestsCount(): Promise<number> {
+  const userId = await getCurrentUserId();
+  if (!userId) return 0;
+  await ensurePassport();
+
+  const { count, error } = await supabase
+    .from('contacts')
+    .select('*', { count: 'exact', head: true })
+    .eq('contact_id', userId)
+    .eq('status', 'pending');
+
+  if (error) {
+    console.error("Error fetching pending requests count:", error);
+    return 0;
+  }
+
+  return count || 0;
+}
+
 // Get all pending contact requests for the current user
 export async function getContactRequests() {
   const userId = await getCurrentUserId();
