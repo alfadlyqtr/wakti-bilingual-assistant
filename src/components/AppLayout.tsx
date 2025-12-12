@@ -13,6 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useTheme } from "@/providers/ThemeProvider";
 import { purchasePackage, restorePurchases, getOfferings } from "@/integrations/natively/purchasesBridge";
+import { setupNotificationClickHandler } from "@/integrations/natively/notificationsBridge";
 import {
   Dialog,
   DialogContent,
@@ -533,6 +534,14 @@ export function AppLayout({ children }: AppLayoutProps) {
   // including task_due, reminder_due, messages, contacts, RSVPs, etc.
   // This hook automatically shows in-app toasts when new notifications arrive
   useNotificationHistory();
+  
+  const navigate = useNavigate();
+  
+  // Set up push notification click handler (Natively/OneSignal)
+  // This handles navigation when user taps a push notification
+  React.useEffect(() => {
+    setupNotificationClickHandler(navigate);
+  }, [navigate]);
 
   const { isMobile } = useIsMobile();
   const { isTablet } = useIsTablet();

@@ -124,21 +124,16 @@ serve(async (req) => {
           contents: { en: notif.body },
         };
 
-        // Add data payload
-        if (notif.data && Object.keys(notif.data).length > 0) {
-          payload.data = {
-            ...notif.data,
-            notification_id: notif.id,
-            type: notif.type,
-          };
-        }
+        // Add data payload - always include type and deep_link for click handling
+        payload.data = {
+          ...(notif.data || {}),
+          notification_id: notif.id,
+          type: notif.type,
+          deep_link: notif.deep_link || null,
+        };
 
-        // Add deep link if present
-        if (notif.deep_link) {
-          // For Natively, use the full URL
-          const baseUrl = Deno.env.get("APP_URL") || "https://wakti.app";
-          payload.url = `${baseUrl}${notif.deep_link}`;
-        }
+        // Note: We're NOT setting payload.url anymore because Natively opens it in a webview
+        // Instead, we rely on the data payload and the notification click handler in the app
 
         console.log(`Sending push for notification ${notif.id} to user ${notif.user_id}`);
 

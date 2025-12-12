@@ -136,3 +136,48 @@ export function getOneSignalId(callback?: (playerId: string | null) => void) {
     if (callback) callback(null);
   }
 }
+
+/**
+ * Set up a handler for when a push notification is tapped.
+ * This allows us to navigate to the correct screen based on notification data.
+ * @param navigate React Router navigate function
+ */
+export function setupNotificationClickHandler(navigate: (path: string) => void) {
+  const n = getInstance();
+  if (!n) {
+    console.log('[NativelyNotifications] Cannot set click handler - SDK not available');
+    return;
+  }
+
+  try {
+    // Natively SDK: setNotificationOpenedHandler receives notification data when tapped
+    n.setNotificationOpenedHandler((notification: any) => {
+      console.log('[NativelyNotifications] Notification tapped:', JSON.stringify(notification));
+      
+      // Extract data from the notification payload
+      const data = notification?.additionalData || notification?.data || {};
+      const senderId = data.sender_id;
+      const type = data.type;
+      
+      console.log('[NativelyNotifications] Notification data:', { senderId, type, data });
+      
+      // Handle message notifications - navigate to contacts with openChat param
+      if ((type === 'message_received' || type === 'message' || type === 'messages') && senderId) {
+        console.log('[NativelyNotifications] Navigating to chat with:', senderId);
+        navigate(`/contacts?openChat=${senderId}`);
+      } else if (data.deep_link) {
+        // Use deep_link from data if available
+        console.log('[NativelyNotifications] Using deep_link:', data.deep_link);
+        navigate(data.deep_link);
+      } else {
+        // Default: go to contacts
+        console.log('[NativelyNotifications] No specific handler, going to contacts');
+        navigate('/contacts');
+      }
+    });
+    
+    console.log('[NativelyNotifications] Notification click handler set up successfully');
+  } catch (err) {
+    console.error('[NativelyNotifications] Error setting notification click handler:', err);
+  }
+}
