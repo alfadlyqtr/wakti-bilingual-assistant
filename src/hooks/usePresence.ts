@@ -35,18 +35,11 @@ export function usePresence(currentUserId?: string | null) {
     return typingUsers.has(userId);
   }, [typingUsers]);
 
-  // Consider a user online only if presence exists AND last_seen is fresh
+  // Consider a user online if we currently see them in the presence channel.
+  // last_seen is primarily used for "last online" text, not for gating online status.
   const isOnline = useCallback((userId: string) => {
-    if (!onlineUserIds.has(userId)) return false;
-    const ts = lastSeen[userId];
-    if (!ts) return false;
-    try {
-      const age = Date.now() - new Date(ts).getTime();
-      return age <= 60_000; // 60s freshness window
-    } catch {
-      return false;
-    }
-  }, [onlineUserIds, lastSeen]);
+    return onlineUserIds.has(userId);
+  }, [onlineUserIds]);
 
   // Get neutral presence label
   const getLastSeen = useCallback((userId: string) => {
