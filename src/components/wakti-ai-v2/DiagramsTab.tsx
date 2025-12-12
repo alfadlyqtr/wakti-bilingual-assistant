@@ -343,19 +343,22 @@ const DiagramsTab: React.FC = () => {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     
     try {
-      // Convert SVG to PNG using canvas
-      const imgElement = document.querySelector(`img[src="${diagram.imageUrl}"]`) as HTMLImageElement;
+      // Load the image fresh via new Image() to avoid querySelector issues
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
       
-      if (!imgElement || !imgElement.complete) {
-        throw new Error('Image not loaded');
-      }
+      // Wait for image to load
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('Failed to load image'));
+        img.src = diagram.imageUrl;
+      });
 
       // Create canvas and draw the image
       const canvas = document.createElement('canvas');
-      // Use higher resolution for better quality
-      const scale = 2;
-      canvas.width = (imgElement.naturalWidth || 800) * scale;
-      canvas.height = (imgElement.naturalHeight || 600) * scale;
+      const scale = 2; // Higher resolution for better quality
+      canvas.width = (img.naturalWidth || 800) * scale;
+      canvas.height = (img.naturalHeight || 600) * scale;
       const ctx = canvas.getContext('2d');
       
       if (!ctx) throw new Error('Canvas context failed');
@@ -364,7 +367,7 @@ const DiagramsTab: React.FC = () => {
       ctx.fillStyle = 'white';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.scale(scale, scale);
-      ctx.drawImage(imgElement, 0, 0);
+      ctx.drawImage(img, 0, 0);
       
       // Convert to PNG blob
       const pngBlob = await new Promise<Blob>((resolve, reject) => {
@@ -374,18 +377,20 @@ const DiagramsTab: React.FC = () => {
         }, 'image/png', 1.0);
       });
 
-      // For iOS: Use Web Share API
+      // For iOS: Use Web Share API with PNG file
       if (isIOS) {
-        if (navigator.share && navigator.canShare?.({ files: [new File([pngBlob], `${fileName}.png`, { type: 'image/png' })] })) {
-          const file = new File([pngBlob], `${fileName}.png`, { type: 'image/png' });
+        const pngFile = new File([pngBlob], `${fileName}.png`, { type: 'image/png' });
+        
+        if (navigator.share && navigator.canShare?.({ files: [pngFile] })) {
           await navigator.share({
-            files: [file],
+            files: [pngFile],
             title: diagram.title,
           });
           toast.success(isArabic ? 'تم المشاركة' : 'Shared!');
           return;
         }
-        // iOS fallback: open in new tab for long-press save
+        
+        // iOS fallback: open PNG in new tab for long-press save
         const url = URL.createObjectURL(pngBlob);
         window.open(url, '_blank');
         toast.info(isArabic ? 'اضغط مطولاً للحفظ' : 'Long-press to save', {
@@ -409,7 +414,7 @@ const DiagramsTab: React.FC = () => {
     } catch (err) {
       console.error('PNG download error:', err);
       
-      // Fallback: Try direct SVG download
+      // Fallback: Try direct SVG download (only if PNG fails)
       try {
         const response = await fetch(diagram.imageUrl, { mode: 'cors' });
         if (!response.ok) throw new Error('Fetch failed');

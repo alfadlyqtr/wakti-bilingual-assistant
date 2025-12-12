@@ -258,54 +258,8 @@ const ShareButton: React.FC<ShareButtonProps> = ({
   };
 
   return (
-    <div
-      ref={containerRef}
-      className={`relative inline-flex items-center justify-center ${className}`}
-      style={{
-        width: isExpanded ? `${expandDistance * 2 + 60}px` : 'fit-content',
-        height: isExpanded ? `${expandDistance * 2 + 60}px` : 'fit-content',
-        transition: 'all 0.3s ease',
-      }}
-    >
-      {/* Social platform buttons */}
-      {platforms.map((platform) => {
-        const { x, y } = getButtonPosition(platform.angle);
-        const Icon = platform.icon;
-        const textColorClass = 'textColor' in platform ? platform.textColor : 'text-white';
-        
-        return (
-          <button
-            key={platform.name}
-            onClick={(e) => {
-              e.stopPropagation();
-              platform.action();
-            }}
-            className={`
-              absolute ${config.button} ${config.padding}
-              flex items-center justify-center
-              rounded-full border-none
-              ${platform.bgColor}
-              ${textColorClass}
-              shadow-lg
-              transition-all duration-300 ease-out
-              active:scale-95
-              focus:outline-none focus:ring-2 focus:ring-violet-500/50
-            `}
-            style={{
-              transform: isExpanded
-                ? `translate(${x}px, ${y}px) scale(1)`
-                : 'translate(0, 0) scale(0)',
-              opacity: isExpanded ? 1 : 0,
-              pointerEvents: isExpanded ? 'auto' : 'none',
-            }}
-            aria-label={`Share on ${platform.name}`}
-          >
-            <Icon />
-          </button>
-        );
-      })}
-
-      {/* Main share button */}
+    <>
+      {/* Main share button - stays in place */}
       <button
         onClick={handleMainClick}
         className={`
@@ -320,7 +274,7 @@ const ShareButton: React.FC<ShareButtonProps> = ({
           hover:shadow-xl hover:scale-105
           active:scale-95
           focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:ring-offset-2
-          z-10
+          ${className}
         `}
         style={{
           boxShadow: '4px 4px 16px rgba(139, 92, 246, 0.3), -2px -2px 12px rgba(255, 255, 255, 0.1)',
@@ -328,13 +282,84 @@ const ShareButton: React.FC<ShareButtonProps> = ({
         aria-label="Share"
         aria-expanded={isExpanded}
       >
-        {isExpanded ? (
-          <X className={config.icon} />
-        ) : (
-          <Share2 className={config.icon} />
-        )}
+        <Share2 className={config.icon} />
       </button>
-    </div>
+
+      {/* Centered overlay with platform buttons */}
+      {isExpanded && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={() => setIsExpanded(false)}
+        >
+          <div
+            ref={containerRef}
+            className="relative flex items-center justify-center"
+            style={{
+              width: expandDistance * 2 + 80,
+              height: expandDistance * 2 + 80,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Social platform buttons in a circle */}
+            {platforms.map((platform) => {
+              const { x, y } = getButtonPosition(platform.angle);
+              const Icon = platform.icon;
+              const textColorClass = 'textColor' in platform ? platform.textColor : 'text-white';
+              
+              return (
+                <button
+                  key={platform.name}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    platform.action();
+                  }}
+                  className={`
+                    absolute ${config.button} ${config.padding}
+                    flex items-center justify-center
+                    rounded-full border-none
+                    ${platform.bgColor}
+                    ${textColorClass}
+                    shadow-lg
+                    transition-all duration-300 ease-out
+                    active:scale-95
+                    focus:outline-none focus:ring-2 focus:ring-violet-500/50
+                  `}
+                  style={{
+                    transform: `translate(${x}px, ${y}px) scale(1)`,
+                  }}
+                  aria-label={`Share on ${platform.name}`}
+                >
+                  <Icon />
+                </button>
+              );
+            })}
+
+            {/* Center close button */}
+            <button
+              onClick={() => setIsExpanded(false)}
+              className={`
+                relative ${config.button} ${config.padding}
+                flex items-center justify-center
+                rounded-full border-none
+                bg-gradient-to-br from-violet-500 to-fuchsia-500
+                text-white
+                shadow-lg
+                transition-all duration-200 ease-out
+                active:scale-95
+                focus:outline-none focus:ring-2 focus:ring-violet-500/50
+                z-10
+              `}
+              style={{
+                boxShadow: '4px 4px 16px rgba(139, 92, 246, 0.3), -2px -2px 12px rgba(255, 255, 255, 0.1)',
+              }}
+              aria-label="Close share menu"
+            >
+              <X className={config.icon} />
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
