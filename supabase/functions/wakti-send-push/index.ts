@@ -132,8 +132,11 @@ serve(async (req) => {
           deep_link: notif.deep_link || null,
         };
 
-        // Note: We're NOT setting payload.url anymore because Natively opens it in a webview
-        // Instead, we rely on the data payload and the notification click handler in the app
+        // Add URL for Natively - must match the App URL in Natively dashboard (www.wakti.qa)
+        // This makes tapping the notification navigate within the app
+        if (notif.deep_link) {
+          payload.url = `https://www.wakti.qa${notif.deep_link}`;
+        }
 
         console.log(`Sending push for notification ${notif.id} to user ${notif.user_id}`);
 
