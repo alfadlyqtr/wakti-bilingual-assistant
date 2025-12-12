@@ -203,8 +203,9 @@ export async function uploadMessageAttachment(file: File, type: 'image' | 'voice
     .from('message_attachments')
     .getPublicUrl(fileName);
 
-  console.log("✅ File uploaded successfully:", urlData.publicUrl);
-  return urlData.publicUrl;
+  const cleanUrl = urlData.publicUrl?.trim() || '';
+  console.log("✅ File uploaded successfully:", cleanUrl);
+  return cleanUrl;
 }
 
 // Send a message to a contact

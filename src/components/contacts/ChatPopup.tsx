@@ -405,7 +405,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
-    return `${mins}m ago`;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   // Theme-based styles
@@ -462,18 +462,18 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
               {message.message_type === 'image' ? (
                 <div className="relative group">
                   <img 
-                    src={message.media_url} 
+                    src={message.media_url?.trim()} 
                     alt="Image message" 
                     className="max-w-full h-auto rounded-lg cursor-pointer"
                     loading="lazy"
-                    onClick={() => setExpandedImage(message.media_url)}
+                    onClick={() => setExpandedImage(message.media_url?.trim())}
                   />
                   {/* Image overlay buttons */}
                   <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col gap-1">
                     <Button
                       size="sm"
                       variant="secondary"
-                      onClick={() => setExpandedImage(message.media_url)}
+                      onClick={() => setExpandedImage(message.media_url?.trim())}
                       className="h-7 w-7 p-0 rounded-full bg-black/60 hover:bg-black/80 text-white border-0"
                       title="Expand"
                     >
@@ -482,7 +482,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                     <Button
                       size="sm"
                       variant="secondary"
-                      onClick={() => handleImageDownload(message.media_url)}
+                      onClick={() => handleImageDownload(message.media_url?.trim() || '')}
                       className="h-7 w-7 p-0 rounded-full bg-black/60 hover:bg-black/80 text-white border-0"
                       title="Download"
                     >
@@ -520,7 +520,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                     <Button
                       size="sm"
                       variant={isSentByMe ? "ghost" : "secondary"}
-                      onClick={() => toggleAudioPlayback(message.id, message.media_url)}
+                      onClick={() => toggleAudioPlayback(message.id, message.media_url?.trim() || '')}
                       className={`h-8 w-8 p-0 rounded-full ${isSentByMe ? 'hover:bg-white/20' : 'hover:bg-black/10'}`}
                     >
                       {playingAudio === message.id ? 
@@ -567,7 +567,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => window.open(message.media_url, '_blank')}
+                      onClick={() => window.open(message.media_url?.trim(), '_blank')}
                       className="h-7 w-7 p-0 rounded-full text-gray-500 hover:text-gray-700"
                       title="Download"
                     >
