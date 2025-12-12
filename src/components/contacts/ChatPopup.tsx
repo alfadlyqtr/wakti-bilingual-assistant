@@ -408,6 +408,12 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Clean media URLs: remove leading/trailing spaces AND URL-encoded spaces (%20)
+  const cleanMediaUrl = (url: string | null | undefined): string => {
+    if (!url) return '';
+    return url.trim().replace(/^(%20|\s)+/, '').replace(/(%20|\s)+$/, '');
+  };
+
   // Theme-based styles
   const isDark = theme === 'dark';
   
@@ -462,18 +468,29 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
               {message.message_type === 'image' ? (
                 <div className="relative group">
                   <img 
-                    src={message.media_url?.trim()} 
+                    src={cleanMediaUrl(message.media_url)} 
                     alt="Image message" 
                     className="max-w-full h-auto rounded-lg cursor-pointer"
                     loading="lazy"
-                    onClick={() => setExpandedImage(message.media_url?.trim())}
+                    crossOrigin="anonymous"
+                    referrerPolicy="no-referrer"
+                    onClick={() => setExpandedImage(cleanMediaUrl(message.media_url))}
+                    onError={(e) => {
+                      console.error('Image load error:', cleanMediaUrl(message.media_url));
+                      // Try without crossOrigin as fallback
+                      const img = e.currentTarget;
+                      if (img.crossOrigin) {
+                        img.crossOrigin = null as any;
+                        img.src = cleanMediaUrl(message.media_url);
+                      }
+                    }}
                   />
                   {/* Image overlay buttons */}
                   <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col gap-1">
                     <Button
                       size="sm"
                       variant="secondary"
-                      onClick={() => setExpandedImage(message.media_url?.trim())}
+                      onClick={() => setExpandedImage(cleanMediaUrl(message.media_url))}
                       className="h-7 w-7 p-0 rounded-full bg-black/60 hover:bg-black/80 text-white border-0"
                       title="Expand"
                     >
@@ -482,7 +499,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                     <Button
                       size="sm"
                       variant="secondary"
-                      onClick={() => handleImageDownload(message.media_url?.trim() || '')}
+                      onClick={() => handleImageDownload(cleanMediaUrl(message.media_url))}
                       className="h-7 w-7 p-0 rounded-full bg-black/60 hover:bg-black/80 text-white border-0"
                       title="Download"
                     >
@@ -520,7 +537,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                     <Button
                       size="sm"
                       variant={isSentByMe ? "ghost" : "secondary"}
-                      onClick={() => toggleAudioPlayback(message.id, message.media_url?.trim() || '')}
+                      onClick={() => toggleAudioPlayback(message.id, cleanMediaUrl(message.media_url))}
                       className={`h-8 w-8 p-0 rounded-full ${isSentByMe ? 'hover:bg-white/20' : 'hover:bg-black/10'}`}
                     >
                       {playingAudio === message.id ? 
@@ -567,7 +584,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => window.open(message.media_url?.trim(), '_blank')}
+                      onClick={() => window.open(cleanMediaUrl(message.media_url), '_blank')}
                       className="h-7 w-7 p-0 rounded-full text-gray-500 hover:text-gray-700"
                       title="Download"
                     >

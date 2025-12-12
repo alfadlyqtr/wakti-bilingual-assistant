@@ -203,7 +203,8 @@ export async function uploadMessageAttachment(file: File, type: 'image' | 'voice
     .from('message_attachments')
     .getPublicUrl(fileName);
 
-  const cleanUrl = urlData.publicUrl?.trim() || '';
+  // Clean URL: remove leading/trailing spaces AND URL-encoded spaces (%20)
+  const cleanUrl = (urlData.publicUrl || '').trim().replace(/^(%20|\s)+/, '').replace(/(%20|\s)+$/, '');
   console.log("✅ File uploaded successfully:", cleanUrl);
   return cleanUrl;
 }
