@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ArrowLeft, Send, Image, FileText, Download, Play, Pause, Expand, Save, Bookmark, BookmarkCheck, CheckCheck, X } from "lucide-react";
+import { ChevronLeft, Send, Image, FileText, Download, Play, Pause, Expand, Save, Bookmark, BookmarkCheck, CheckCheck, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getMessages, sendMessage, markAsRead, uploadMessageAttachment } from "@/services/messageService";
 import { saveMessage, unsaveMessage, isMessageSaved as checkMessageSaved } from "@/services/savedMessagesService";
@@ -654,9 +654,9 @@ export default function ChatPage() {
           variant="ghost" 
           size="icon"
           onClick={() => navigate('/contacts')}
-          className={`h-9 w-9 rounded-full ${isDark ? 'hover:bg-dark-secondary/60 text-white' : 'hover:bg-light-secondary/50 text-light-primary'}`}
+          className={`h-10 w-10 rounded-xl ${isDark ? 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-400' : 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-600'} transition-all active:scale-95`}
         >
-          <ArrowLeft className="h-5 w-5" />
+          <ChevronLeft className="h-6 w-6" />
         </Button>
         
         <Avatar className={`h-10 w-10 border-2 ${isDark ? 'border-dark-secondary' : 'border-light-secondary'}`}>
