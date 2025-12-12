@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ContactSearch } from "@/components/contacts/ContactSearch";
 import { ContactRequests } from "@/components/contacts/ContactRequests";
@@ -18,6 +19,10 @@ const queryClient = new QueryClient();
 export default function Contacts() {
   const { language } = useTheme();
   const [activeTab, setActiveTab] = useState("contacts");
+  const [searchParams, setSearchParams] = useSearchParams();
+  
+  // Get openChat param from URL (for deep linking from push notifications)
+  const openChatUserId = searchParams.get('openChat');
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -25,6 +30,11 @@ export default function Contacts() {
         language={language} 
         activeTab={activeTab} 
         setActiveTab={setActiveTab}
+        openChatUserId={openChatUserId}
+        clearOpenChat={() => {
+          searchParams.delete('openChat');
+          setSearchParams(searchParams);
+        }}
       />
     </QueryClientProvider>
   );
@@ -34,11 +44,15 @@ export default function Contacts() {
 function ContactsContent({ 
   language, 
   activeTab, 
-  setActiveTab
+  setActiveTab,
+  openChatUserId,
+  clearOpenChat
 }: { 
   language: string; 
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  openChatUserId: string | null;
+  clearOpenChat: () => void;
 }) {
   // Fetch pending requests count for the badge
   const { data: pendingRequestsCount = 0 } = useQuery({
@@ -97,6 +111,8 @@ function ContactsContent({
           <ContactList 
             perContactUnread={perContactUnread}
             refetchUnreadCounts={refetchUnreadCounts}
+            openChatUserId={openChatUserId}
+            clearOpenChat={clearOpenChat}
           />
         </TabsContent>
         

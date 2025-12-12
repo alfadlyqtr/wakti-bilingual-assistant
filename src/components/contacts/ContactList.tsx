@@ -42,11 +42,15 @@ type ContactType = {
 interface ContactListProps {
   perContactUnread?: Record<string, number>;
   refetchUnreadCounts?: () => void;
+  openChatUserId?: string | null;
+  clearOpenChat?: () => void;
 }
 
 export function ContactList({ 
   perContactUnread = {}, 
-  refetchUnreadCounts = () => {} 
+  refetchUnreadCounts = () => {},
+  openChatUserId = null,
+  clearOpenChat = () => {}
 }: ContactListProps) {
   const { language } = useTheme();
   const { user } = useAuth();
@@ -88,6 +92,24 @@ export function ContactList({
       });
     }
   }, [contacts, perContactUnread]);
+
+  // Handle deep link from push notification - auto-open chat
+  useEffect(() => {
+    if (openChatUserId && contacts && contacts.length > 0) {
+      // Find the contact that matches the openChatUserId
+      const contact = contacts.find((c: any) => c.contact_id === openChatUserId);
+      if (contact) {
+        const contactProfile = (contact.profile || {}) as UserProfile;
+        const displayName = contactProfile.username || contactProfile.display_name || "Unknown";
+        const avatarUrl = contactProfile.avatar_url;
+        
+        console.log('🔔 Opening chat from push notification for:', displayName);
+        setSelectedContact({ id: openChatUserId, name: displayName, avatar: avatarUrl });
+        setChatOpen(true);
+        clearOpenChat(); // Clear the URL param so it doesn't re-open on refresh
+      }
+    }
+  }, [openChatUserId, contacts, clearOpenChat]);
 
   // Block contact mutation
   const blockContactMutation = useMutation({
