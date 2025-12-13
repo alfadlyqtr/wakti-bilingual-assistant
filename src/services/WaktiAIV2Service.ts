@@ -633,7 +633,23 @@ class WaktiAIV2ServiceClass {
       const location = await this.getUserLocation(userId);
 
       // Enhanced message handling with 20-message memory
-      const enhancedMessages = this.getEnhancedMessages(recentMessages);
+      // CRITICAL: Strip base64 data from attachedFiles to avoid huge request bodies
+      const rawEnhanced = this.getEnhancedMessages(recentMessages);
+      const enhancedMessages = rawEnhanced.map(msg => {
+        if (msg.attachedFiles && Array.isArray(msg.attachedFiles)) {
+          return {
+            ...msg,
+            attachedFiles: msg.attachedFiles.map((f: any) => ({
+              name: f.name,
+              type: f.type,
+              size: f.size,
+              imageType: f.imageType,
+              // Exclude base64 data (data, content, base64, url) to keep payload small
+            }))
+          };
+        }
+        return msg;
+      });
       const generatedSummary = this.generateConversationSummary(enhancedMessages);
 
       // Load stored rolling summary (Supabase by conversation UUID, else local fallback)
@@ -1259,7 +1275,22 @@ class WaktiAIV2ServiceClass {
       const location = await this.getUserLocation(userId);
 
       // Enhanced message handling with 20-message memory
-      const enhancedMessages = this.getEnhancedMessages(recentMessages);
+      // CRITICAL: Strip base64 data from attachedFiles to avoid huge request bodies
+      const rawEnhanced = this.getEnhancedMessages(recentMessages);
+      const enhancedMessages = rawEnhanced.map(msg => {
+        if (msg.attachedFiles && Array.isArray(msg.attachedFiles)) {
+          return {
+            ...msg,
+            attachedFiles: msg.attachedFiles.map((f: any) => ({
+              name: f.name,
+              type: f.type,
+              size: f.size,
+              imageType: f.imageType,
+            }))
+          };
+        }
+        return msg;
+      });
       const generatedSummary = this.generateConversationSummary(enhancedMessages);
 
       // Load stored rolling summary (Supabase by conversation UUID, else local fallback)
