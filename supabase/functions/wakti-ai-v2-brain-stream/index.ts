@@ -5,16 +5,21 @@ const allowedOrigins = [
   'https://wakti.qa',
   'https://www.wakti.qa',
   'http://localhost:8080',
-  'http://127.0.0.1:54063'
+  'http://127.0.0.1:8080'
 ];
 
 const getCorsHeaders = (origin) => {
-  const isAllowed = origin && (
+  // Allow any localhost/127.0.0.1 port for development
+  const isLocalDev = origin && (
+    origin.startsWith('http://localhost:') ||
+    origin.startsWith('http://127.0.0.1:')
+  );
+  const isAllowed = isLocalDev || (origin && (
     allowedOrigins.some(allowed => origin.startsWith(allowed)) ||
     origin.includes('lovable.dev') ||
     origin.includes('lovable.app') ||
     origin.includes('lovableproject.com')
-  );
+  ));
 
   return {
     'Access-Control-Allow-Origin': isAllowed ? origin : '*',

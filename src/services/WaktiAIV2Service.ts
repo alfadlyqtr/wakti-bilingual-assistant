@@ -694,6 +694,7 @@ class WaktiAIV2ServiceClass {
               pt_hash
             });
 
+            console.log(`📡 CHAT: Attempt ${attempt}/${maxRetries} - Calling brain-stream [${requestId}]`);
             response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/wakti-ai-v2-brain-stream`, {
               method: 'POST',
               mode: 'cors',
@@ -727,6 +728,7 @@ class WaktiAIV2ServiceClass {
               }),
               signal
             });
+            console.log(`📡 CHAT: Response status=${response.status} ok=${response.ok} [${requestId}]`);
 
             if (response.ok) break;
 
