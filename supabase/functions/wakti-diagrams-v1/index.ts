@@ -178,21 +178,18 @@ serve(async (req) => {
         console.log(`🔧 Rendering diagram: ${spec.title} (engine: ${spec.engine})`);
         console.log(`📝 Diagram source (first 200 chars): ${spec.diagramSource.substring(0, 200)}`);
         
-        const svgContent = await renderWithKroki(spec.engine, spec.diagramSource);
-        console.log(`✅ Kroki rendered SVG (${svgContent.length} bytes)`);
+        const pngBuffer = await renderWithKroki(spec.engine, spec.diagramSource);
+        console.log(`✅ Kroki rendered PNG (${pngBuffer.length} bytes)`);
 
-        // Upload to Supabase Storage
+        // Upload PNG to Supabase Storage
         const diagramId = crypto.randomUUID();
-        const fileName = `${diagramId}.svg`;
+        const fileName = `${diagramId}.png`;
         const storagePath = `${ownerId}/diagrams/${fileName}`;
-
-        const encoder = new TextEncoder();
-        const svgBuffer = encoder.encode(svgContent);
 
         const { error: uploadError } = await supabase.storage
           .from("generated-files")
-          .upload(storagePath, svgBuffer, {
-            contentType: "image/svg+xml",
+          .upload(storagePath, pngBuffer, {
+            contentType: "image/png",
             upsert: true,
           });
 
@@ -960,10 +957,10 @@ CRITICAL RULES:
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Kroki: Render diagram to SVG
+// Kroki: Render diagram to PNG (binary)
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function renderWithKroki(engine: string, diagramSource: string): Promise<string> {
+async function renderWithKroki(engine: string, diagramSource: string): Promise<Uint8Array> {
   // Map our engine names to Kroki endpoints
   // See https://kroki.io/#support for full list
   const engineMap: Record<string, string> = {
@@ -1046,9 +1043,8 @@ async function renderWithKroki(engine: string, diagramSource: string): Promise<s
   
   console.log(`🔧 Cleaned diagram source for ${krokiEngine}:\n${cleanSource.substring(0, 500)}`);
   
-
-  // Kroki accepts POST with JSON body
-  const response = await fetch(`${KROKI_BASE_URL}/${krokiEngine}/svg`, {
+  // Request PNG from Kroki (binary response)
+  const response = await fetch(`${KROKI_BASE_URL}/${krokiEngine}/png`, {
     method: "POST",
     headers: {
       "Content-Type": "text/plain",
@@ -1061,5 +1057,7 @@ async function renderWithKroki(engine: string, diagramSource: string): Promise<s
     throw new Error(`Kroki error (${krokiEngine}): ${response.status} - ${errText}`);
   }
 
-  return await response.text();
+  // Return PNG as binary Uint8Array
+  const arrayBuffer = await response.arrayBuffer();
+  return new Uint8Array(arrayBuffer);
 }

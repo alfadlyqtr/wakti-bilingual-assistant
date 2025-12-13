@@ -12,35 +12,26 @@ import { toast } from 'sonner';
 
 type MaxDiagrams = 1 | 2 | 3;
 
+// Only PNG-supported Kroki engines
 type KrokiStyleKey =
   | 'auto'
-  // Common Graphs
+  // Common Graphs (PNG supported)
   | 'block-diagram'
-  | 'dag'
+  | 'flowchart'
   | 'mindmap-style'
-  // UML / C4
+  // UML / C4 (PNG supported)
   | 'sequence-diagram'
   | 'er-diagram'
   | 'activity-diagram'
-  | 'use-case'
-  | 'uml-general'
+  | 'class-diagram'
   | 'c4-diagram'
-  // Project Management
-  | 'wbs'
+  // Project Management (PNG supported)
   | 'gantt'
-  | 'business-process'
-  // Freestyle
-  | 'hand-drawn'
-  | 'ascii-art'
-  // Hardware
-  | 'byte-field'
-  | 'digital-timing'
-  // Network
+  // Network (PNG supported)
   | 'network-diagram'
   | 'packets'
   | 'rack'
-  // Data Visualization
-  | 'word-cloud'
+  // Data Visualization (PNG supported)
   | 'bar-chart';
 
 interface GeneratedDiagram {
@@ -57,6 +48,7 @@ interface GeneratedDiagram {
 // Kroki style groups (all the pretty diagram types)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Only PNG-supported diagram styles
 const KROKI_STYLE_GROUPS: {
   key: string;
   labelEn: string;
@@ -68,8 +60,8 @@ const KROKI_STYLE_GROUPS: {
     labelEn: 'Common graphs',
     labelAr: 'رسوم بيانية عامة',
     options: [
+      { value: 'flowchart', labelEn: 'Flowchart', labelAr: 'مخطط تدفق' },
       { value: 'block-diagram', labelEn: 'Block diagram', labelAr: 'مخطط كتل' },
-      { value: 'dag', labelEn: 'DAG', labelAr: 'رسم بياني موجه' },
       { value: 'mindmap-style', labelEn: 'Mindmap', labelAr: 'خريطة ذهنية' },
     ],
   },
@@ -79,10 +71,9 @@ const KROKI_STYLE_GROUPS: {
     labelAr: 'مخططات UML / C4',
     options: [
       { value: 'sequence-diagram', labelEn: 'Sequence', labelAr: 'تسلسل' },
+      { value: 'class-diagram', labelEn: 'Class diagram', labelAr: 'مخطط فئات' },
       { value: 'er-diagram', labelEn: 'E‑R', labelAr: 'كيانات وعلاقات' },
       { value: 'activity-diagram', labelEn: 'Activity', labelAr: 'نشاط' },
-      { value: 'use-case', labelEn: 'Use case', labelAr: 'حالة استخدام' },
-      { value: 'uml-general', labelEn: 'UMLs', labelAr: 'مخططات UML' },
       { value: 'c4-diagram', labelEn: 'C4 diagram', labelAr: 'مخطط C4' },
     ],
   },
@@ -91,27 +82,7 @@ const KROKI_STYLE_GROUPS: {
     labelEn: 'Project management',
     labelAr: 'إدارة المشاريع',
     options: [
-      { value: 'wbs', labelEn: 'WBS', labelAr: 'هيكل تقسيم العمل' },
       { value: 'gantt', labelEn: 'Gantt', labelAr: 'مخطط جانت' },
-      { value: 'business-process', labelEn: 'Business process', labelAr: 'عملية عمل' },
-    ],
-  },
-  {
-    key: 'freestyle',
-    labelEn: 'Freestyle',
-    labelAr: 'أسلوب حر',
-    options: [
-      { value: 'hand-drawn', labelEn: 'Hand‑drawn', labelAr: 'رسم يدوي' },
-      { value: 'ascii-art', labelEn: 'Ascii art', labelAr: 'رسوم نصية' },
-    ],
-  },
-  {
-    key: 'hardware',
-    labelEn: 'Hardware',
-    labelAr: 'عتاد',
-    options: [
-      { value: 'byte-field', labelEn: 'Byte field', labelAr: 'مجال البايت' },
-      { value: 'digital-timing', labelEn: 'Digital timing', labelAr: 'توقيت رقمي' },
     ],
   },
   {
@@ -129,7 +100,6 @@ const KROKI_STYLE_GROUPS: {
     labelEn: 'Data visualization',
     labelAr: 'تصوير البيانات',
     options: [
-      { value: 'word-cloud', labelEn: 'Word cloud', labelAr: 'سحابة كلمات' },
       { value: 'bar-chart', labelEn: 'Bar chart', labelAr: 'مخطط أعمدة' },
     ],
   },
@@ -335,51 +305,23 @@ const DiagramsTab: React.FC = () => {
   };
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Download diagram
+  // Download diagram (PNG directly from backend - no conversion needed)
   // ─────────────────────────────────────────────────────────────────────────
 
   const handleDownload = async (diagram: GeneratedDiagram) => {
-    const fileName = `${diagram.title.replace(/\s+/g, '_')}`;
+    const fileName = `${diagram.title.replace(/\s+/g, '_')}.png`;
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     
     try {
-      // Load the image fresh via new Image() to avoid querySelector issues
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
+      // Fetch the PNG directly from Supabase
+      const response = await fetch(diagram.imageUrl);
+      if (!response.ok) throw new Error('Failed to fetch image');
       
-      // Wait for image to load
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = () => reject(new Error('Failed to load image'));
-        img.src = diagram.imageUrl;
-      });
-
-      // Create canvas and draw the image
-      const canvas = document.createElement('canvas');
-      const scale = 2; // Higher resolution for better quality
-      canvas.width = (img.naturalWidth || 800) * scale;
-      canvas.height = (img.naturalHeight || 600) * scale;
-      const ctx = canvas.getContext('2d');
-      
-      if (!ctx) throw new Error('Canvas context failed');
-      
-      // White background
-      ctx.fillStyle = 'white';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.scale(scale, scale);
-      ctx.drawImage(img, 0, 0);
-      
-      // Convert to PNG blob
-      const pngBlob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((blob) => {
-          if (blob) resolve(blob);
-          else reject(new Error('Failed to create PNG'));
-        }, 'image/png', 1.0);
-      });
+      const pngBlob = await response.blob();
 
       // For iOS: Use Web Share API with PNG file
       if (isIOS) {
-        const pngFile = new File([pngBlob], `${fileName}.png`, { type: 'image/png' });
+        const pngFile = new File([pngBlob], fileName, { type: 'image/png' });
         
         if (navigator.share && navigator.canShare?.({ files: [pngFile] })) {
           await navigator.share({
@@ -403,7 +345,7 @@ const DiagramsTab: React.FC = () => {
       const url = URL.createObjectURL(pngBlob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${fileName}.png`;
+      a.download = fileName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -412,31 +354,12 @@ const DiagramsTab: React.FC = () => {
         description: isArabic ? 'تم حفظ المخطط كصورة PNG' : 'Diagram saved as PNG image',
       });
     } catch (err) {
-      console.error('PNG download error:', err);
-      
-      // Fallback: Try direct SVG download (only if PNG fails)
-      try {
-        const response = await fetch(diagram.imageUrl, { mode: 'cors' });
-        if (!response.ok) throw new Error('Fetch failed');
-        const blob = await response.blob();
-        
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${fileName}.svg`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        toast.success(isArabic ? 'تم التحميل' : 'Downloaded as SVG');
-      } catch (svgErr) {
-        console.error('SVG fallback failed:', svgErr);
-        // Last resort: Open in new tab
-        window.open(diagram.imageUrl, '_blank');
-        toast.info(isArabic ? 'افتح في نافذة جديدة' : 'Opened in new tab', {
-          description: isArabic ? 'اضغط مطولاً على الصورة للحفظ' : 'Long-press image to save',
-        });
-      }
+      console.error('Download error:', err);
+      // Fallback: Open in new tab
+      window.open(diagram.imageUrl, '_blank');
+      toast.info(isArabic ? 'افتح في نافذة جديدة' : 'Opened in new tab', {
+        description: isArabic ? 'اضغط مطولاً على الصورة للحفظ' : 'Long-press image to save',
+      });
     }
   };
 
