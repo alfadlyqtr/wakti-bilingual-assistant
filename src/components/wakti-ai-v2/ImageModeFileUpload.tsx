@@ -22,6 +22,148 @@ interface ImageModeFileUploadProps {
   maxFiles?: number;
 }
 
+/**
+ * Read EXIF orientation from a File (JPEG/HEIC).
+ * Returns orientation 1-8, or 1 if not found/unsupported.
+ */
+const getExifOrientation = (file: File): Promise<number> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const view = new DataView(e.target?.result as ArrayBuffer);
+      // Check for JPEG SOI marker
+      if (view.getUint16(0, false) !== 0xFFD8) {
+        resolve(1);
+        return;
+      }
+      const length = view.byteLength;
+      let offset = 2;
+      while (offset < length) {
+        if (offset + 2 > length) break;
+        const marker = view.getUint16(offset, false);
+        offset += 2;
+        // APP1 marker (EXIF)
+        if (marker === 0xFFE1) {
+          if (offset + 2 > length) break;
+          const exifLength = view.getUint16(offset, false);
+          // Check for "Exif\0\0"
+          if (offset + 8 > length) break;
+          if (view.getUint32(offset + 2, false) !== 0x45786966 || view.getUint16(offset + 6, false) !== 0x0000) {
+            resolve(1);
+            return;
+          }
+          const tiffOffset = offset + 8;
+          if (tiffOffset + 8 > length) break;
+          const littleEndian = view.getUint16(tiffOffset, false) === 0x4949;
+          const ifdOffset = view.getUint32(tiffOffset + 4, littleEndian) + tiffOffset;
+          if (ifdOffset + 2 > length) break;
+          const tags = view.getUint16(ifdOffset, littleEndian);
+          for (let i = 0; i < tags; i++) {
+            const tagOffset = ifdOffset + 2 + i * 12;
+            if (tagOffset + 12 > length) break;
+            if (view.getUint16(tagOffset, littleEndian) === 0x0112) {
+              // Orientation tag
+              resolve(view.getUint16(tagOffset + 8, littleEndian));
+              return;
+            }
+          }
+          resolve(1);
+          return;
+        } else if ((marker & 0xFF00) !== 0xFF00) {
+          break;
+        } else {
+          if (offset + 2 > length) break;
+          offset += view.getUint16(offset, false);
+        }
+      }
+      resolve(1);
+    };
+    reader.onerror = () => resolve(1);
+    // Only read first 64KB for EXIF (enough for header)
+    reader.readAsArrayBuffer(file.slice(0, 65536));
+  });
+};
+
+/**
+ * Normalize image orientation based on EXIF and return a corrected base64 data URL.
+ * This ensures mobile photos are upright before sending to image generation APIs.
+ */
+const normalizeImageOrientation = (file: File): Promise<string> => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const orientation = await getExifOrientation(file);
+      
+      // If orientation is 1 (normal) or unsupported format, just return raw base64
+      if (orientation === 1) {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+        return;
+      }
+
+      // Load image and apply rotation/flip based on EXIF orientation
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Canvas context not available'));
+          return;
+        }
+
+        let width = img.width;
+        let height = img.height;
+
+        // Orientations 5-8 swap width/height
+        if (orientation >= 5 && orientation <= 8) {
+          canvas.width = height;
+          canvas.height = width;
+        } else {
+          canvas.width = width;
+          canvas.height = height;
+        }
+
+        // Apply transforms based on orientation
+        // See: https://sirv.com/help/articles/rotate-photos-to-be-upright/
+        switch (orientation) {
+          case 2: ctx.transform(-1, 0, 0, 1, width, 0); break; // flip horizontal
+          case 3: ctx.transform(-1, 0, 0, -1, width, height); break; // rotate 180
+          case 4: ctx.transform(1, 0, 0, -1, 0, height); break; // flip vertical
+          case 5: ctx.transform(0, 1, 1, 0, 0, 0); break; // transpose
+          case 6: ctx.transform(0, 1, -1, 0, height, 0); break; // rotate 90 CW
+          case 7: ctx.transform(0, -1, -1, 0, height, width); break; // transverse
+          case 8: ctx.transform(0, -1, 1, 0, 0, width); break; // rotate 90 CCW
+          default: break;
+        }
+
+        ctx.drawImage(img, 0, 0);
+        
+        // Export as same type if possible, fallback to JPEG
+        const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+        const quality = mimeType === 'image/jpeg' ? 0.92 : undefined;
+        const dataUrl = canvas.toDataURL(mimeType, quality);
+        
+        console.log(`📐 EXIF: Normalized orientation ${orientation} → upright`);
+        resolve(dataUrl);
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error('Failed to load image for orientation fix'));
+      };
+
+      img.src = objectUrl;
+    } catch (err) {
+      reject(err);
+    }
+  });
+};
+
 export function ImageModeFileUpload({
   onFilesUploaded,
   onRemoveFile,
@@ -33,18 +175,6 @@ export function ImageModeFileUpload({
   const { language } = useTheme();
   const { showError } = useToastHelper();
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => {
-        const result = reader.result as string;
-        resolve(result);
-      };
-      reader.onerror = error => reject(error);
-    });
-  };
 
   const handleFileSelect = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -82,7 +212,8 @@ export function ImageModeFileUpload({
       }
 
       try {
-        const base64 = await fileToBase64(file);
+        // Use orientation-normalized base64 to fix sideways mobile photos
+        const base64 = await normalizeImageOrientation(file);
         const fileObj: ImageModeUploadedFile = {
           id: `img-${Date.now()}-${i}`,
           name: file.name,

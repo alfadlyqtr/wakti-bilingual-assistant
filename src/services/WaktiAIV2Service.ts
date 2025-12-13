@@ -633,22 +633,39 @@ class WaktiAIV2ServiceClass {
       const location = await this.getUserLocation(userId);
 
       // Enhanced message handling with 20-message memory
-      // CRITICAL: Strip base64 data from attachedFiles to avoid huge request bodies
+      // CRITICAL: Strip large data to avoid huge request bodies that crash Edge Functions
       const rawEnhanced = this.getEnhancedMessages(recentMessages);
       const enhancedMessages = rawEnhanced.map(msg => {
-        if (msg.attachedFiles && Array.isArray(msg.attachedFiles)) {
-          return {
-            ...msg,
-            attachedFiles: msg.attachedFiles.map((f: any) => ({
-              name: f.name,
-              type: f.type,
-              size: f.size,
-              imageType: f.imageType,
-              // Exclude base64 data (data, content, base64, url) to keep payload small
-            }))
+        const cleaned: any = { ...msg };
+        
+        // Strip base64 data from attachedFiles (vision images)
+        if (cleaned.attachedFiles && Array.isArray(cleaned.attachedFiles)) {
+          cleaned.attachedFiles = cleaned.attachedFiles.map((f: any) => ({
+            name: f.name,
+            type: f.type,
+            size: f.size,
+            imageType: f.imageType,
+          }));
+        }
+        
+        // Strip search metadata (contains huge raw_content from web scraping)
+        if (cleaned.metadata?.search) {
+          cleaned.metadata = {
+            ...cleaned.metadata,
+            search: {
+              answer: cleaned.metadata.search.answer?.substring(0, 500),
+              total: cleaned.metadata.search.total,
+              // Exclude full results array - it's massive
+            }
           };
         }
-        return msg;
+        
+        // Truncate very long content (e.g., from search results)
+        if (cleaned.content && cleaned.content.length > 2000) {
+          cleaned.content = cleaned.content.substring(0, 2000) + '... [truncated]';
+        }
+        
+        return cleaned;
       });
       const generatedSummary = this.generateConversationSummary(enhancedMessages);
 
@@ -1275,21 +1292,38 @@ class WaktiAIV2ServiceClass {
       const location = await this.getUserLocation(userId);
 
       // Enhanced message handling with 20-message memory
-      // CRITICAL: Strip base64 data from attachedFiles to avoid huge request bodies
+      // CRITICAL: Strip large data to avoid huge request bodies that crash Edge Functions
       const rawEnhanced = this.getEnhancedMessages(recentMessages);
       const enhancedMessages = rawEnhanced.map(msg => {
-        if (msg.attachedFiles && Array.isArray(msg.attachedFiles)) {
-          return {
-            ...msg,
-            attachedFiles: msg.attachedFiles.map((f: any) => ({
-              name: f.name,
-              type: f.type,
-              size: f.size,
-              imageType: f.imageType,
-            }))
+        const cleaned: any = { ...msg };
+        
+        // Strip base64 data from attachedFiles (vision images)
+        if (cleaned.attachedFiles && Array.isArray(cleaned.attachedFiles)) {
+          cleaned.attachedFiles = cleaned.attachedFiles.map((f: any) => ({
+            name: f.name,
+            type: f.type,
+            size: f.size,
+            imageType: f.imageType,
+          }));
+        }
+        
+        // Strip search metadata (contains huge raw_content from web scraping)
+        if (cleaned.metadata?.search) {
+          cleaned.metadata = {
+            ...cleaned.metadata,
+            search: {
+              answer: cleaned.metadata.search.answer?.substring(0, 500),
+              total: cleaned.metadata.search.total,
+            }
           };
         }
-        return msg;
+        
+        // Truncate very long content (e.g., from search results)
+        if (cleaned.content && cleaned.content.length > 2000) {
+          cleaned.content = cleaned.content.substring(0, 2000) + '... [truncated]';
+        }
+        
+        return cleaned;
       });
       const generatedSummary = this.generateConversationSummary(enhancedMessages);
 
