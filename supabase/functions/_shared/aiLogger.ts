@@ -179,20 +179,20 @@ export async function logAI(params: AILogParams): Promise<void> {
     // Calculate cost
     const cost = calculateCost(params.model, inputTokens, outputTokens, params.inputText);
     
-    // Call the RPC function
+    // Call the RPC function with CORRECT parameter names matching the DB function signature
     const { error } = await supabase.rpc("log_ai_usage", {
       p_user_id: params.userId || null,
       p_function_name: params.functionName,
-      p_provider: params.provider,
       p_model: params.model,
-      p_input_tokens: inputTokens,
-      p_output_tokens: outputTokens,
-      p_total_tokens: inputTokens + outputTokens,
-      p_estimated_cost: cost,
-      p_duration_ms: params.durationMs || null,
       p_status: params.status,
       p_error_message: params.errorMessage || null,
-      p_metadata: params.metadata ? JSON.stringify(params.metadata) : null,
+      p_prompt: params.inputText ? params.inputText.substring(0, 2000) : null,
+      p_response: params.outputText ? params.outputText.substring(0, 2000) : null,
+      p_metadata: params.metadata ? { ...params.metadata, provider: params.provider } : { provider: params.provider },
+      p_input_tokens: inputTokens,
+      p_output_tokens: outputTokens,
+      p_duration_ms: params.durationMs || 0,
+      p_cost_credits: cost,
     });
     
     if (error) {
