@@ -384,7 +384,7 @@ export default function AdminAIUsage() {
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 space-y-6">
         {/* Stats Cards */}
         {stats && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             <Card className="bg-white/5 border-white/10">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-white/70 flex items-center">
@@ -432,6 +432,18 @@ export default function AdminAIUsage() {
                 <div className="text-2xl font-bold text-white">{stats.unique_users.toLocaleString()}</div>
               </CardContent>
             </Card>
+            
+            <Card className="bg-white/5 border-white/10">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-white/70 flex items-center">
+                  <Zap className="h-4 w-4 mr-2 text-accent-green" />
+                  Total Cost
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-accent-green">${(stats.total_cost || 0).toFixed(4)}</div>
+              </CardContent>
+            </Card>
           </div>
         )}
 
@@ -469,10 +481,10 @@ export default function AdminAIUsage() {
                   <SelectTrigger className="mt-1 bg-white/5 border-white/20 text-white">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Functions</SelectItem>
+                  <SelectContent className="bg-[#1a1d24] border-white/20 text-white z-50">
+                    <SelectItem value="all" className="text-white hover:bg-white/10 focus:bg-white/10 focus:text-white">All Functions</SelectItem>
                     {availableFunctions.map(fn => (
-                      <SelectItem key={fn} value={fn}>{fn}</SelectItem>
+                      <SelectItem key={fn} value={fn} className="text-white hover:bg-white/10 focus:bg-white/10 focus:text-white">{fn}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -485,10 +497,10 @@ export default function AdminAIUsage() {
                   <SelectTrigger className="mt-1 bg-white/5 border-white/20 text-white">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Models</SelectItem>
+                  <SelectContent className="bg-[#1a1d24] border-white/20 text-white z-50">
+                    <SelectItem value="all" className="text-white hover:bg-white/10 focus:bg-white/10 focus:text-white">All Models</SelectItem>
                     {availableModels.map(model => (
-                      <SelectItem key={model} value={model}>{model}</SelectItem>
+                      <SelectItem key={model} value={model} className="text-white hover:bg-white/10 focus:bg-white/10 focus:text-white">{model}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -501,10 +513,10 @@ export default function AdminAIUsage() {
                   <SelectTrigger className="mt-1 bg-white/5 border-white/20 text-white">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="success">Success</SelectItem>
-                    <SelectItem value="error">Error</SelectItem>
+                  <SelectContent className="bg-[#1a1d24] border-white/20 text-white z-50">
+                    <SelectItem value="all" className="text-white hover:bg-white/10 focus:bg-white/10 focus:text-white">All Status</SelectItem>
+                    <SelectItem value="success" className="text-white hover:bg-white/10 focus:bg-white/10 focus:text-white">Success</SelectItem>
+                    <SelectItem value="error" className="text-white hover:bg-white/10 focus:bg-white/10 focus:text-white">Error</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -516,12 +528,12 @@ export default function AdminAIUsage() {
                   <SelectTrigger className="mt-1 bg-white/5 border-white/20 text-white">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="today">Today</SelectItem>
-                    <SelectItem value="7days">Last 7 Days</SelectItem>
-                    <SelectItem value="30days">Last 30 Days</SelectItem>
-                    <SelectItem value="all">All Time</SelectItem>
-                    <SelectItem value="custom">Custom</SelectItem>
+                  <SelectContent className="bg-[#1a1d24] border-white/20 text-white z-50">
+                    <SelectItem value="today" className="text-white hover:bg-white/10 focus:bg-white/10 focus:text-white">Today</SelectItem>
+                    <SelectItem value="7days" className="text-white hover:bg-white/10 focus:bg-white/10 focus:text-white">Last 7 Days</SelectItem>
+                    <SelectItem value="30days" className="text-white hover:bg-white/10 focus:bg-white/10 focus:text-white">Last 30 Days</SelectItem>
+                    <SelectItem value="all" className="text-white hover:bg-white/10 focus:bg-white/10 focus:text-white">All Time</SelectItem>
+                    <SelectItem value="custom" className="text-white hover:bg-white/10 focus:bg-white/10 focus:text-white">Custom</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
