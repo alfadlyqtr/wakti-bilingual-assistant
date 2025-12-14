@@ -8,7 +8,9 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { AlertTriangle, RefreshCw, Search, Shield, Users } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Search, Shield, Users, User, Mail, Calendar, Clock, Activity, Crown, CreditCard, CheckCircle, XCircle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { formatDistanceToNow } from 'date-fns';
 
 interface AdminUser {
   id: string;
@@ -428,18 +430,126 @@ export default function AdminUsers() {
             )}
             {!detailsLoading && userDetails && (
               <div className="space-y-4 text-sm">
-                <div className="border rounded-md p-3">
-                  <h4 className="font-semibold mb-2">Profile</h4>
-                  <div className="grid grid-cols-2 gap-y-1">
-                    <span className="text-muted-foreground">Name</span>
-                    <span>{userDetails.profile?.display_name || '—'}</span>
-                    <span className="text-muted-foreground">Email</span>
-                    <span>{userDetails.profile?.email || '—'}</span>
-                    <span className="text-muted-foreground">Status</span>
-                    <span>{userDetails.profile?.is_suspended ? 'Suspended' : 'Active'}</span>
-                    <span className="text-muted-foreground">Created</span>
-                    <span>{userDetails.profile?.created_at ? new Date(userDetails.profile.created_at).toLocaleString() : '—'}</span>
+                {/* Enhanced Profile Header with Avatar */}
+                <div className="border rounded-md p-4">
+                  <div className="flex items-start gap-4">
+                    {/* Avatar */}
+                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                      {userDetails.profile?.avatar_url ? (
+                        <img
+                          src={userDetails.profile.avatar_url}
+                          alt={userDetails.profile?.display_name || 'User'}
+                          className="w-16 h-16 rounded-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-white font-bold text-xl">
+                          {(userDetails.profile?.display_name || userDetails.profile?.email || '?').charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* User Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-lg font-semibold truncate">
+                          {userDetails.profile?.display_name || 'No name'}
+                        </h3>
+                        {/* Online Status */}
+                        {userDetails.profile?.is_online ? (
+                          <Badge className="bg-green-500 text-white text-xs">
+                            <Activity className="h-3 w-3 mr-1" />
+                            Online
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="text-xs">Offline</Badge>
+                        )}
+                      </div>
+                      
+                      <p className="text-muted-foreground flex items-center gap-1 mt-1">
+                        <Mail className="h-3 w-3" />
+                        {userDetails.profile?.email || '—'}
+                      </p>
+                      
+                      {/* Status Badges */}
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        <Badge variant={userDetails.profile?.is_suspended ? "destructive" : "default"} className="text-xs">
+                          {userDetails.profile?.is_suspended ? 'Suspended' : 'Active'}
+                        </Badge>
+                        <Badge variant={userDetails.profile?.email_confirmed ? "default" : "outline"} className="text-xs">
+                          {userDetails.profile?.email_confirmed ? (
+                            <><CheckCircle className="h-3 w-3 mr-1" />Verified</>
+                          ) : (
+                            <><XCircle className="h-3 w-3 mr-1" />Unverified</>
+                          )}
+                        </Badge>
+                      </div>
+                    </div>
                   </div>
+                  
+                  {/* Dates Row */}
+                  <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t">
+                    <div>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        Member Since
+                      </p>
+                      <p className="font-medium">
+                        {userDetails.profile?.created_at 
+                          ? new Date(userDetails.profile.created_at).toLocaleDateString()
+                          : '—'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {userDetails.profile?.created_at 
+                          ? formatDistanceToNow(new Date(userDetails.profile.created_at), { addSuffix: true })
+                          : ''}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        Last Active
+                      </p>
+                      <p className="font-medium">
+                        {userDetails.profile?.last_login_at 
+                          ? formatDistanceToNow(new Date(userDetails.profile.last_login_at), { addSuffix: true })
+                          : 'Never'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Subscription Info */}
+                <div className="border rounded-md p-3">
+                  <h4 className="font-semibold mb-2 flex items-center gap-2">
+                    <Crown className="h-4 w-4 text-yellow-500" />
+                    Subscription
+                  </h4>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {userDetails.profile?.is_subscribed || (userDetails.subscriptions && userDetails.subscriptions.length > 0) ? (
+                      <>
+                        <Badge className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white">
+                          <CreditCard className="h-3 w-3 mr-1" />
+                          Subscribed
+                        </Badge>
+                        {userDetails.profile?.plan_name && (
+                          <Badge variant="outline">{userDetails.profile.plan_name}</Badge>
+                        )}
+                        {userDetails.subscriptions?.[0]?.plan_name && !userDetails.profile?.plan_name && (
+                          <Badge variant="outline">{userDetails.subscriptions[0].plan_name}</Badge>
+                        )}
+                      </>
+                    ) : (
+                      <Badge variant="secondary">Free Plan</Badge>
+                    )}
+                  </div>
+                  {userDetails.subscriptions?.[0] && (
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      <p>Status: {userDetails.subscriptions[0].status}</p>
+                      {userDetails.subscriptions[0].current_period_end && (
+                        <p>Renews: {new Date(userDetails.subscriptions[0].current_period_end).toLocaleDateString()}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="border rounded-md p-3">

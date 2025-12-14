@@ -573,6 +573,10 @@ serve(async (req) => {
   let requestTrigger = 'general';
   let requestSubmode = 'chat';
   let modelUsedOuter = '';
+  // Track external service usage for logging (declared at outer scope for catch block access)
+  let wolframUsedOuter = false;
+  let tavilyUsedOuter = false;
+  let tavilyResultsCountOuter = 0;
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -635,8 +639,7 @@ serve(async (req) => {
           });
         }
         
-        // Track if Wolfram was used (for logging)
-        let wolframUsed = false;
+        // Track external service usage (update outer scope vars for catch block access)
         
         // Inject web search context when in Search mode
         if (activeTrigger === 'search') {
@@ -644,6 +647,8 @@ serve(async (req) => {
             const s = await executeRegularSearch(message, language);
             
             if (s?.success) {
+              tavilyUsedOuter = true;
+              tavilyResultsCountOuter = s.data?.total_results || s.data?.results?.length || 0;
               // Emit metadata
               try {
                 const metaPayload = {
@@ -724,7 +729,7 @@ serve(async (req) => {
                     : `[Verified fact from Wolfram|Alpha: ${wolfResult.answer}]\n\nUse this fact naturally in your response.`;
                 }
                 console.log('✅ WOLFRAM: Data injected into prompt');
-                wolframUsed = true; // Mark that Wolfram was successfully used
+                wolframUsedOuter = true; // Mark that Wolfram was successfully used
               } else {
                 console.log('⚠️ WOLFRAM: No result, AI will handle alone');
               }
@@ -866,7 +871,14 @@ serve(async (req) => {
             status: 'success',
             prompt: requestMessage,
             response: responseText.slice(0, 500), // First 500 chars for reference
-            metadata: { trigger: requestTrigger, submode: requestSubmode, provider: aiProvider, wolfram_used: wolframUsed },
+            metadata: { 
+              trigger: requestTrigger, 
+              submode: requestSubmode, 
+              provider: aiProvider, 
+              wolfram_used: wolframUsedOuter,
+              tavily_used: tavilyUsedOuter,
+              tavily_results: tavilyResultsCountOuter
+            },
             inputTokens,
             outputTokens,
             durationMs: Date.now() - startTime,
@@ -921,7 +933,14 @@ serve(async (req) => {
           status: 'success',
           prompt: requestMessage,
           response: responseText.slice(0, 500), // First 500 chars for reference
-          metadata: { trigger: requestTrigger, submode: requestSubmode, provider: aiProvider, wolfram_used: wolframUsed },
+          metadata: { 
+            trigger: requestTrigger, 
+            submode: requestSubmode, 
+            provider: aiProvider, 
+            wolfram_used: wolframUsedOuter,
+            tavily_used: tavilyUsedOuter,
+            tavily_results: tavilyResultsCountOuter
+          },
           inputTokens,
           outputTokens,
           durationMs: Date.now() - startTime,
@@ -941,7 +960,13 @@ serve(async (req) => {
           status: 'error',
           errorMessage: errMsg,
           prompt: requestMessage,
-          metadata: { trigger: requestTrigger, submode: requestSubmode, wolfram_used: wolframUsed },
+          metadata: { 
+            trigger: requestTrigger, 
+            submode: requestSubmode, 
+            wolfram_used: wolframUsedOuter,
+            tavily_used: tavilyUsedOuter,
+            tavily_results: tavilyResultsCountOuter
+          },
           durationMs: Date.now() - startTime
         });
         

@@ -88,19 +88,35 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   "deepseek-chat": { input: 0.14, output: 0.28 },
   "deepseek-coder": { input: 0.14, output: 0.28 },
   
-  // ─── Runware (Image Generation) ───
-  "runware:97@2": { input: 0, output: 0, perCall: 0.002 }, // ~$0.002 per image
-  "runware:100@1": { input: 0, output: 0, perCall: 0.002 },
-  "runware:106@1": { input: 0, output: 0, perCall: 0.003 },
-  "runware": { input: 0, output: 0, perCall: 0.002 }, // Default Runware
+  // ─── Runware (Image Generation) - Updated Dec 2024 from actual usage ───
+  "runware:111@1": { input: 0, output: 0, perCall: 0.007 }, // Standard quality ~$0.005-0.01
+  "runware:106@1": { input: 0, output: 0, perCall: 0.015 }, // Higher quality ~$0.01-0.02
+  "runware:97@2": { input: 0, output: 0, perCall: 0.007 }, // Mid-range ~$0.006-0.008
+  "runware:100@1": { input: 0, output: 0, perCall: 0.007 },
+  "runware": { input: 0, output: 0, perCall: 0.007 }, // Default Runware
+  "google:4@1": { input: 0, output: 0, perCall: 0.039 }, // Google Imagen via Runware
   
-  // ─── ElevenLabs (Voice Cloning/TTS) ───
-  "elevenlabs": { input: 0, output: 0, perCall: 0.018 }, // ~$18 per 1M chars
+  // ─── Runware Music Generation ───
+  "elevenlabs:1@1": { input: 0, output: 0, perCall: 0.275 }, // Music generation ~$0.275 per 30s track
+  "runware-music": { input: 0, output: 0, perCall: 0.275 },
+  
+  // ─── ElevenLabs (Voice TTS) - $0.30 per 1K chars ───
+  "elevenlabs": { input: 0, output: 0, perCall: 0.0003 }, // $0.30/1K chars = $0.0003/char (calculated per char in cost fn)
+  "elevenlabs-tts": { input: 0, output: 0, perCall: 0.0003 },
   "elevenlabs-clone": { input: 0, output: 0, perCall: 0.30 }, // Voice clone creation
   
   // ─── Google TTS ───
   "google-tts": { input: 0, output: 0, perCall: 0.004 }, // $4 per 1M chars standard
   "google-tts-chirp3": { input: 0, output: 0, perCall: 0.016 }, // $16 per 1M chars for Chirp3
+  
+  // ─── Tavily Search API ───
+  "tavily": { input: 0, output: 0, perCall: 0.016 }, // Advanced search = 2 credits × $0.008 = $0.016
+  "tavily-basic": { input: 0, output: 0, perCall: 0.008 }, // Basic search = 1 credit
+  "tavily-advanced": { input: 0, output: 0, perCall: 0.016 }, // Advanced search = 2 credits
+  
+  // ─── Wolfram Alpha API ───
+  "wolfram": { input: 0, output: 0, perCall: 0.0025 }, // ~$0.0025/query after free tier (2K/month free)
+  "wolfram-alpha": { input: 0, output: 0, perCall: 0.0025 },
   
   // ─── Default fallback ───
   "default": { input: 0.10, output: 0.40 },
@@ -137,10 +153,20 @@ export function calculateCost(
   
   // If perCall pricing exists, use that
   if (pricing.perCall && pricing.perCall > 0) {
-    // For TTS, estimate based on character count
+    // For ElevenLabs TTS: $0.30 per 1K chars = $0.0003 per char
+    if (normalizedModel.includes("elevenlabs") && !normalizedModel.includes("clone") && !normalizedModel.includes("music") && inputText) {
+      const charCount = inputText.length;
+      return charCount * pricing.perCall; // perCall is $0.0003/char
+    }
+    // For OpenAI TTS: pricing is per 1K chars
     if (normalizedModel.includes("tts") && inputText) {
       const charCount = inputText.length;
       return (charCount / 1000) * pricing.perCall;
+    }
+    // For Google TTS: pricing is per 1M chars, perCall is per-call estimate
+    if (normalizedModel.includes("google-tts") && inputText) {
+      const charCount = inputText.length;
+      return (charCount / 1_000_000) * (pricing.perCall * 1000); // Convert back to per-1M
     }
     return pricing.perCall;
   }
