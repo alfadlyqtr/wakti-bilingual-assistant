@@ -1161,7 +1161,7 @@ export function ChatMessages({
                       ? ((message as any)?.metadata?.wolfram?.mode === 'study' || (message as any)?.chatSubmode === 'study'
                           ? 'bg-purple-500 text-white'
                           : 'bg-primary text-primary-foreground')
-                      : `bg-gradient-to-r from-blue-50 to-purple-50 text-gray-900 border-2 ${getAssistantBubbleClasses(message)}`
+                      : `bg-gradient-to-r from-blue-50 to-purple-50 dark:from-slate-800 dark:to-slate-900 text-gray-900 dark:text-gray-100 border-2 ${getAssistantBubbleClasses(message)}`
                   }`}>
                     {/* FIXED: Mode Badge with proper logic */}
                     <div className="flex items-center gap-2 mb-2">

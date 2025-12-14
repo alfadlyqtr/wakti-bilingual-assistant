@@ -465,19 +465,23 @@ const WaktiAIV2 = () => {
       // and provide a smoother UX (user usually wants to chat about the result)
       if (trigger === 'vision') {
         visionInFlightRef.current = false;
-        setActiveTrigger('chat'); // Reset to chat mode after vision completes
+        setActiveTrigger('chat');
+        setChatSubmode('chat'); // Reset to regular chat (not study)
+        console.log('🔄 AUTO-SWITCH: Vision complete → Chat mode');
       } else if (trigger === 'search') {
         // After search completes, switch back to chat
         // User can manually re-enter search if needed
         setActiveTrigger('chat');
+        setChatSubmode('chat'); // Reset to regular chat (not study)
         console.log('🔄 AUTO-SWITCH: Search complete → Chat mode');
       } else if (trigger === 'image' && imageMode !== 'draw-after-bg') {
         // After image generation (non-draw), switch back to chat
         // Draw mode stays as-is since it's a creative session
         setActiveTrigger('chat');
+        setChatSubmode('chat'); // Reset to regular chat (not study)
         console.log('🔄 AUTO-SWITCH: Image complete → Chat mode');
       }
-      // Note: Study mode (chat + study submode) stays as-is - it's a session mode
+      // Study mode only persists when user explicitly stays in chat trigger
     }
   }, [currentConversationId, language, sessionMessages, userProfile]);
 
