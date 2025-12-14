@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { AlertTriangle, RefreshCw, Search, Shield, Users, User, Mail, Calendar, Clock, Activity, Crown, CreditCard, CheckCircle, XCircle } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Search, Shield, Users, User, Mail, Calendar, Clock, Activity, Crown, CreditCard, CheckCircle, XCircle, Smartphone, Globe, MapPin } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -25,6 +25,16 @@ interface AdminUser {
   subscription_status?: string;
   created_at: string;
 }
+
+// Helper to convert country code to flag emoji
+const getFlagEmoji = (countryCode: string): string => {
+  if (!countryCode || countryCode.length !== 2) return '🌍';
+  const codePoints = countryCode
+    .toUpperCase()
+    .split('')
+    .map(char => 127397 + char.charCodeAt(0));
+  return String.fromCodePoint(...codePoints);
+};
 
 export default function AdminUsers() {
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -417,11 +427,11 @@ export default function AdminUsers() {
           setFeatureUsage(null);
         }
       }}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>User Details</DialogTitle>
           </DialogHeader>
-          <div className="py-4 space-y-4">
+          <div className="py-4 space-y-4 overflow-y-auto flex-1">
             {detailsLoading && (
               <div className="text-sm text-muted-foreground">Loading details...</div>
             )}
@@ -510,8 +520,8 @@ export default function AdminUsers() {
                         Last Active
                       </p>
                       <p className="font-medium">
-                        {userDetails.profile?.last_login_at 
-                          ? formatDistanceToNow(new Date(userDetails.profile.last_login_at), { addSuffix: true })
+                        {userDetails.profile?.last_seen 
+                          ? formatDistanceToNow(new Date(userDetails.profile.last_seen), { addSuffix: true })
                           : 'Never'}
                       </p>
                     </div>
@@ -543,14 +553,69 @@ export default function AdminUsers() {
                     )}
                   </div>
                   {userDetails.subscriptions?.[0] && (
-                    <div className="mt-2 text-xs text-muted-foreground">
-                      <p>Status: {userDetails.subscriptions[0].status}</p>
-                      {userDetails.subscriptions[0].current_period_end && (
-                        <p>Renews: {new Date(userDetails.subscriptions[0].current_period_end).toLocaleDateString()}</p>
+                    <div className="mt-2 text-xs text-muted-foreground space-y-1">
+                      <p>Status: <span className="font-medium">{userDetails.subscriptions[0].status}</span></p>
+                      {userDetails.subscriptions[0].billing_amount && (
+                        <p>Amount: <span className="font-medium">{userDetails.subscriptions[0].billing_currency} {userDetails.subscriptions[0].billing_amount}/{userDetails.subscriptions[0].billing_cycle}</span></p>
+                      )}
+                      {userDetails.subscriptions[0].next_billing_date && (
+                        <p>Next Billing: <span className="font-medium">{new Date(userDetails.subscriptions[0].next_billing_date).toLocaleDateString()}</span></p>
+                      )}
+                      {userDetails.subscriptions[0].payment_method && (
+                        <p>Payment: <span className="font-medium">{userDetails.subscriptions[0].payment_method}</span></p>
+                      )}
+                      {userDetails.subscriptions[0].is_gift && (
+                        <Badge variant="outline" className="mt-1 text-xs bg-pink-100 text-pink-700">🎁 Gift Subscription</Badge>
                       )}
                     </div>
                   )}
                 </div>
+
+                {/* IAP / RevenueCat Info */}
+                {userDetails.iap_info?.has_iap && (
+                  <div className="border rounded-md p-3 bg-gradient-to-r from-purple-500/10 to-blue-500/10">
+                    <h4 className="font-semibold mb-2 flex items-center gap-2">
+                      <Smartphone className="h-4 w-4 text-purple-500" />
+                      In-App Purchase (RevenueCat)
+                    </h4>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-muted-foreground">RevenueCat ID:</span>
+                        <p className="font-mono text-xs truncate">{userDetails.iap_info.revenuecat_id}</p>
+                      </div>
+                      {userDetails.iap_info.payment_method && (
+                        <div>
+                          <span className="text-muted-foreground">Payment Method:</span>
+                          <p className="font-medium">{userDetails.iap_info.payment_method}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Location Info */}
+                {(userDetails.profile?.country || userDetails.profile?.city) && (
+                  <div className="border rounded-md p-3">
+                    <h4 className="font-semibold mb-2 flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-green-500" />
+                      Location
+                    </h4>
+                    <div className="flex items-center gap-2 text-sm">
+                      {userDetails.profile?.country_code && (
+                        <span className="text-lg">{getFlagEmoji(userDetails.profile.country_code)}</span>
+                      )}
+                      <span>
+                        {[userDetails.profile?.city, userDetails.profile?.country].filter(Boolean).join(', ')}
+                      </span>
+                      {userDetails.profile?.language && (
+                        <Badge variant="outline" className="text-xs ml-2">
+                          <Globe className="h-3 w-3 mr-1" />
+                          {userDetails.profile.language.toUpperCase()}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <div className="border rounded-md p-3">
                   <h4 className="font-semibold mb-2">Voice Usage</h4>
@@ -653,42 +718,10 @@ export default function AdminUsers() {
                   </div>
                 </div>
 
-                <div className="border rounded-md p-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-semibold">Subscriptions</h4>
-                    <button className="text-xs underline" onClick={() => setShowSubs(!showSubs)}>
-                      {showSubs ? 'Hide' : 'Show'}
-                    </button>
-                  </div>
-                  {showSubs && (
-                    Array.isArray(userDetails.subscriptions) && userDetails.subscriptions.length > 0 ? (
-                      <div className="space-y-2 mt-2">
-                        {userDetails.subscriptions.map((s: any, idx: number) => (
-                          <div key={idx} className="border border-border/50 rounded p-2 text-xs">
-                            <div className="flex items-center justify-between">
-                              <div className="font-medium">{s.plan_name || 'Plan'}</div>
-                              <span className={`text-xs px-2 py-0.5 rounded ${s.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-muted text-foreground/70'}`}>{s.status}</span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-y-1 mt-2">
-                              <span className="text-muted-foreground">Amount</span>
-                              <span>{(s.billing_amount ?? 0).toFixed ? s.billing_amount.toFixed(2) : s.billing_amount} {s.billing_currency || ''}</span>
-                              <span className="text-muted-foreground">Start</span>
-                              <span>{s.start_date ? new Date(s.start_date).toLocaleDateString() : '—'}</span>
-                              <span className="text-muted-foreground">Next Billing</span>
-                              <span>{s.next_billing_date ? new Date(s.next_billing_date).toLocaleDateString() : '—'}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground mt-2">No subscriptions found.</p>
-                    )
-                  )}
-                </div>
               </div>
             )}
           </div>
-          <div className="flex justify-end">
+          <div className="flex justify-end pt-4 border-t flex-shrink-0">
             <Button variant="outline" onClick={() => {
               setShowDetails(false);
               setUserDetails(null);

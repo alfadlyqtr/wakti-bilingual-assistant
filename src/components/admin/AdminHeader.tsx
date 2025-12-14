@@ -97,17 +97,17 @@ export const AdminHeader = ({ title, subtitle, icon, children }: AdminHeaderProp
         </div>
 
         {impersonationInfo && (
-          <div className="mt-2 text-xs flex items-center justify-between rounded-md border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-yellow-100">
+          <div className="mt-2 text-xs flex items-center justify-between rounded-md border border-blue-500/50 bg-blue-600/20 px-3 py-2 text-white">
             <div className="flex flex-col">
-              <span className="font-medium">Acting on behalf of {impersonationInfo.userEmail || 'selected user'}</span>
+              <span className="font-semibold text-white">Acting on behalf of {impersonationInfo.userEmail || 'selected user'}</span>
               {impersonationInfo.reason && (
-                <span className="text-[11px] text-yellow-200/80">Reason: {impersonationInfo.reason}</span>
+                <span className="text-[11px] text-blue-100">Reason: {impersonationInfo.reason}</span>
               )}
             </div>
             <Button
               variant="outline"
               size="sm"
-              className="text-[10px] h-6 px-2 border-yellow-500/60 text-yellow-100 hover:bg-yellow-500/20"
+              className="text-[10px] h-6 px-2 border-blue-400 text-white bg-blue-500/30 hover:bg-blue-500/50"
               onClick={clearImpersonation}
             >
               Clear

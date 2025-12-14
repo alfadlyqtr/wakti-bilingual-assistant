@@ -103,19 +103,55 @@ serve(async (req) => {
 
     // Update Supabase profile if subscribed
     if (isSubscribed) {
+      // Get first active subscription details from RevenueCat response
+      const firstSubKey = Object.keys(subscriptions)[0];
+      const subDetails = firstSubKey ? (subscriptions as Record<string, unknown>)[firstSubKey] as Record<string, unknown> : null;
+      const store = subDetails?.store as string || "";
+      const productId = firstSubKey || "";
+      const expiresDate = subDetails?.expires_date as string || null;
+      
+      // Build comprehensive update data
+      const updateData: Record<string, unknown> = {
+        is_subscribed: true,
+        subscription_status: "active",
+        updated_at: new Date().toISOString()
+      };
+      
+      // Set payment method from store (apple, google, etc.)
+      if (store) {
+        const s = store.toUpperCase();
+        if (s.includes("APP_STORE") || s.includes("APPLE")) updateData["payment_method"] = "apple";
+        else if (s.includes("PLAY_STORE") || s.includes("GOOGLE")) updateData["payment_method"] = "google";
+        else if (s.includes("STRIPE")) updateData["payment_method"] = "stripe";
+        else updateData["payment_method"] = "iap";
+      }
+      
+      // Set plan name from product ID - WAKTI SPECIFIC
+      if (productId) {
+        const p = productId.toLowerCase();
+        if (p.includes("qr.wakti.ai.monthly") || p.includes("wakti.ai.monthly")) updateData["plan_name"] = "Wakti Pro Monthly";
+        else if (p.includes("qr.wakti.ai.yearly") || p.includes("wakti.ai.yearly") || p.includes("annual")) updateData["plan_name"] = "Wakti Pro Yearly";
+        else if (p.includes("qr.wakti.ai.lifetime") || p.includes("wakti.ai.lifetime")) updateData["plan_name"] = "Wakti Pro Lifetime";
+        else if (p.includes("yearly") || p.includes("annual")) updateData["plan_name"] = "Wakti Pro Yearly";
+        else if (p.includes("monthly")) updateData["plan_name"] = "Wakti Pro Monthly";
+        else if (p.includes("lifetime")) updateData["plan_name"] = "Wakti Pro Lifetime";
+        else updateData["plan_name"] = "Wakti Pro";
+      }
+      
+      // Set expiration date
+      if (expiresDate) {
+        updateData["next_billing_date"] = expiresDate;
+      }
+      
       const { error: updateError } = await supabase
         .from("profiles")
-        .update({
-          is_subscribed: true,
-          subscription_status: "active",
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq("id", userId);
       
       if (updateError) {
         console.error("[check-subscription] Supabase update error:", updateError);
       } else {
-        console.log(`[check-subscription] Updated profile for user ${userIdShort}...: is_subscribed=true`);
+        console.log(`[check-subscription] Updated profile for user ${userIdShort}...: is_subscribed=true, payment_method=${updateData["payment_method"] || 'unknown'}, plan=${updateData["plan_name"] || 'unknown'}`);
       }
     }
 
