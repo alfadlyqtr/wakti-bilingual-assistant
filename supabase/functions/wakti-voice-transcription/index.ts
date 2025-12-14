@@ -1,6 +1,7 @@
 
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { logAI } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -45,6 +46,7 @@ serve(async (req) => {
     formData.append('language', language === 'ar' ? 'ar' : 'en');
 
     // Send to OpenAI Whisper
+    const startTime = Date.now();
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: {
@@ -59,6 +61,16 @@ serve(async (req) => {
 
     const result = await response.json();
 
+    // Log successful AI usage
+    await logAI({
+      functionName: "wakti-voice-transcription",
+      provider: "openai",
+      model: "whisper-1",
+      outputText: result.text,
+      durationMs: Date.now() - startTime,
+      status: "success"
+    });
+
     return new Response(
       JSON.stringify({ 
         text: result.text,
@@ -69,8 +81,18 @@ serve(async (req) => {
 
   } catch (error) {
     console.error("Voice transcription error:", error);
+    
+    // Log failed AI usage
+    await logAI({
+      functionName: "wakti-voice-transcription",
+      provider: "openai",
+      model: "whisper-1",
+      status: "error",
+      errorMessage: (error as Error).message
+    });
+
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: (error as Error).message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

@@ -1,5 +1,7 @@
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { generateGemini } from "../_shared/gemini.ts";
+import { logAI } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -196,6 +198,17 @@ serve(async (req) => {
           generatedText = content;
           console.log("🎯 Text Generator: Successfully generated text, length:", generatedText.length, "model: gemini-2.5-flash-lite");
 
+          // Log successful AI usage
+          await logAI({
+            functionName: "text-generator",
+            provider: "gemini",
+            model: "gemini-2.5-flash-lite",
+            inputText: prompt,
+            outputText: generatedText,
+            durationMs: geminiDuration,
+            status: "success"
+          });
+
           return new Response(
             JSON.stringify({
               success: true,
@@ -339,17 +352,27 @@ serve(async (req) => {
       }
     );
     
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const err = error as Error;
     console.error("🎯 Text Generator: Unexpected error:", {
-      name: error.name,
-      message: error.message,
-      stack: error.stack
+      name: err.name,
+      message: err.message,
+      stack: err.stack
     });
     
+    // Log failed AI usage
+    await logAI({
+      functionName: "text-generator",
+      provider: "gemini",
+      model: "gemini-2.5-flash-lite",
+      status: "error",
+      errorMessage: err.message
+    });
+
     return new Response(
       JSON.stringify({ 
         success: false,
-        error: `Text generation failed: ${error.message}` 
+        error: `Text generation failed: ${err.message}` 
       }),
       { 
         status: 500, 

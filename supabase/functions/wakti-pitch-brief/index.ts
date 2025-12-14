@@ -1,5 +1,6 @@
 // @ts-nocheck: Deno/Supabase edge runtime
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { logAI } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -295,6 +296,16 @@ Respond with JSON only:
 
     console.log("✅ Generated brief:", brief.subject);
 
+    // Log successful AI usage
+    await logAI({
+      functionName: "wakti-pitch-brief",
+      provider: "openai",
+      model: "gpt-4o-mini",
+      inputText: topic,
+      outputText: responseText,
+      status: "success"
+    });
+
     return new Response(
       JSON.stringify({ success: true, brief } as BriefResponse),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -302,6 +313,16 @@ Respond with JSON only:
 
   } catch (error) {
     console.error("❌ Error:", error);
+    
+    // Log failed AI usage
+    await logAI({
+      functionName: "wakti-pitch-brief",
+      provider: "openai",
+      model: "gpt-4o-mini",
+      status: "error",
+      errorMessage: error instanceof Error ? error.message : "Unknown error"
+    });
+
     return new Response(
       JSON.stringify({ 
         success: false, 

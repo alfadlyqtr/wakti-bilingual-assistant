@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { logAI } from "../_shared/aiLogger.ts";
 import type {
   ExecuteActionRequest,
   ExecuteActionResult,
@@ -295,14 +296,33 @@ async function generateImage(prompt: string | undefined, userId: string, languag
       console.log('Could not save image to database:', dbError);
     }
 
+    // Log successful AI usage
+    await logAI({
+      functionName: "wakti-execute-action",
+      userId,
+      provider: "runware",
+      model: modelUsed,
+      inputText: prompt,
+      status: "success"
+    });
+
     return {
       success: true,
       message: language === 'ar' ? 'تم إنشاء الصورة بنجاح' : 'Image generated successfully',
       imageUrl: imageResult.imageURL,
-      modelUsed,
     };
   } catch (error) {
     console.error('Error generating image with Runware:', error);
+    
+    // Log failed AI usage
+    await logAI({
+      functionName: "wakti-execute-action",
+      provider: "runware",
+      model: "runware:97@2",
+      status: "error",
+      errorMessage: error instanceof Error ? error.message : String(error)
+    });
+
     return {
       success: false,
       message: language === 'ar' ? 'فشل في إنشاء الصورة' : 'Failed to generate image',

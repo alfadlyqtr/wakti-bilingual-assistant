@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import { logAI } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -229,6 +230,15 @@ serve(async (req: Request) => {
         .upload(fileName, outBytes, { contentType: outMime, upsert: true });
       if (!uploadError) {
         const { data: publicUrl } = supabase.storage.from("wakti-ai-v2").getPublicUrl(fileName);
+        // Log successful AI usage
+        await logAI({
+          functionName: "wakti-image2image",
+          provider: "runware",
+          model: "runware:106@1",
+          inputText: prompt,
+          status: "success"
+        });
+
         return new Response(
           JSON.stringify({ success: true, url: publicUrl.publicUrl, model: "runware:106@1" }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -237,6 +247,15 @@ serve(async (req: Request) => {
     }
 
     if (directUrl) {
+      // Log successful AI usage
+      await logAI({
+        functionName: "wakti-image2image",
+        provider: "runware",
+        model: "runware:106@1",
+        inputText: prompt,
+        status: "success"
+      });
+
       return new Response(
         JSON.stringify({ success: true, url: directUrl, model: "runware:106@1" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -247,8 +266,18 @@ serve(async (req: Request) => {
       JSON.stringify({ error: "RUNWARE_NO_IMAGE", code: "RUNWARE_NO_IMAGE", details: { keys: Object.keys(node || {}) } }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (err: any) {
-    const message = err?.message || String(err);
+  } catch (err: unknown) {
+    const message = (err as Error)?.message || String(err);
+    
+    // Log failed AI usage
+    await logAI({
+      functionName: "wakti-image2image",
+      provider: "runware",
+      model: "runware:106@1",
+      status: "error",
+      errorMessage: message
+    });
+
     return new Response(
       JSON.stringify({ error: message, code: "UNHANDLED" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

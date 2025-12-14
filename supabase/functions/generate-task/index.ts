@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { logAI } from "../_shared/aiLogger.ts";
 
 const ALLOWED_ORIGINS = [
   "https://wakti.app",
@@ -111,6 +112,7 @@ Always respond with JSON matching the provided schema. Preserve the input langua
       ];
     }
 
+    const startTime = Date.now();
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -180,12 +182,33 @@ Always respond with JSON matching the provided schema. Preserve the input langua
       throw new Error("AI response missing required fields");
     }
 
+    // Log successful AI usage
+    await logAI({
+      functionName: "generate-task",
+      provider: "openai",
+      model: MODEL,
+      inputText: prompt || "[image input]",
+      outputText: content,
+      durationMs: Date.now() - startTime,
+      status: "success"
+    });
+
     return new Response(
       JSON.stringify({ success: true, task: result }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("Error in generate-task:", error);
+    
+    // Log failed AI usage
+    await logAI({
+      functionName: "generate-task",
+      provider: "openai",
+      model: MODEL,
+      status: "error",
+      errorMessage: error instanceof Error ? error.message : "Unknown error"
+    });
+
     const message = error instanceof Error ? error.message : "Failed to generate task";
     return new Response(
       JSON.stringify({ error: message }),

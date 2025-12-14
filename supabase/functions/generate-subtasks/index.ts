@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { logAI } from "../_shared/aiLogger.ts";
 
 // Allowed origins for CORS
 const ALLOWED_ORIGINS = [
@@ -95,6 +96,7 @@ serve(async (req) => {
     }
 
     // Call OpenAI gpt-4o-mini (vision capable)
+    const startTime = Date.now();
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -127,6 +129,17 @@ serve(async (req) => {
       .map((line: string) => line.trim())
       .filter((line: string) => line.length > 0);
 
+    // Log successful AI usage
+    await logAI({
+      functionName: "generate-subtasks",
+      provider: "openai",
+      model: "gpt-4o-mini",
+      inputText: text || "[image input]",
+      outputText: extractedText,
+      durationMs: Date.now() - startTime,
+      status: "success"
+    });
+
     return new Response(
       JSON.stringify({ 
         success: true, 
@@ -138,8 +151,18 @@ serve(async (req) => {
 
   } catch (error) {
     console.error("Error in extract-subtasks:", error);
+    
+    // Log failed AI usage
+    await logAI({
+      functionName: "generate-subtasks",
+      provider: "openai",
+      model: "gpt-4o-mini",
+      status: "error",
+      errorMessage: (error as Error).message
+    });
+
     return new Response(
-      JSON.stringify({ error: error.message || "Failed to extract subtasks" }),
+      JSON.stringify({ error: (error as Error).message || "Failed to extract subtasks" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

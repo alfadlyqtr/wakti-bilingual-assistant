@@ -57,6 +57,7 @@ import AdminQuotas from "./pages/AdminQuotas";
 import AdminAnalytics from "./pages/AdminAnalytics";
 import AdminSettings from "./pages/AdminSettings";
 import AdminAuditLog from "./pages/AdminAuditLog";
+import AdminAIUsage from "./pages/AdminAIUsage";
 import VoiceTTS from "./pages/VoiceTTS";
 import VoiceStudio from "./pages/VoiceStudio";
 import TextGenerator from "./pages/TextGenerator";
@@ -97,6 +98,7 @@ function App() {
                 <Route path="/admin/quotas" element={<AdminRoute><AdminQuotas /></AdminRoute>} />
                 <Route path="/admin/analytics" element={<AdminRoute><AdminAnalytics /></AdminRoute>} />
                 <Route path="/admin/audit-log" element={<AdminRoute><AdminAuditLog /></AdminRoute>} />
+                <Route path="/admin/ai-usage" element={<AdminRoute><AdminAIUsage /></AdminRoute>} />
                 <Route path="/admin-settings" element={<AdminRoute><AdminSettings /></AdminRoute>} />
                 
                 {/* Public routes - no auth provider needed */}

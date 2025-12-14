@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { logAI } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -27,6 +28,7 @@ serve(async (req) => {
   }
 
   try {
+    const startTime = Date.now();
     const { prompt } = await req.json();
 
     if (!prompt) {
@@ -107,6 +109,17 @@ serve(async (req) => {
     const imageResult = result.data?.find((item: any) => item.taskType === "imageInference");
     
     if (imageResult && imageResult.imageURL) {
+      // Log successful AI usage
+      await logAI({
+        functionName: "generate-image",
+        provider: "runware",
+        model: modelUsed,
+        inputText: prompt,
+        durationMs: Date.now() - startTime,
+        status: "success",
+        metadata: { width: 1024, height: 1024 }
+      });
+
       return new Response(
         JSON.stringify({ 
           imageUrl: imageResult.imageURL,
@@ -122,6 +135,16 @@ serve(async (req) => {
 
   } catch (error) {
     console.error("Error generating image:", error);
+    
+    // Log failed AI usage
+    await logAI({
+      functionName: "generate-image",
+      provider: "runware",
+      model: RW_PREFERRED_MODEL,
+      status: "error",
+      errorMessage: (error as Error).message
+    });
+
     return new Response(
       JSON.stringify({ 
         error: "Image generation failed", 

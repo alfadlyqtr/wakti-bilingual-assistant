@@ -1,5 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { logAI } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -56,6 +57,7 @@ serve(async (req) => {
     whisperFormData.append('model', 'gpt-4o-mini-transcribe');
 
     console.log('Sending to OpenAI GPT-4o Mini Transcription');
+    const startTime = Date.now();
     const openaiResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: {
@@ -163,6 +165,18 @@ serve(async (req) => {
       console.log('Title check failed, using default:', title);
     }
     
+    // Log successful AI usage (both transcription and summarization)
+    await logAI({
+      functionName: "quick-summary",
+      provider: "openai",
+      model: "gpt-4o-mini",
+      inputText: transcription.text,
+      outputText: summaryText,
+      durationMs: Date.now() - startTime,
+      status: "success",
+      metadata: { audioSize: audioFile.size }
+    });
+
     return new Response(
       JSON.stringify({ 
         title: title, 
@@ -173,11 +187,21 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error('Unhandled error in quick-summary function:', error);
+    
+    // Log failed AI usage
+    await logAI({
+      functionName: "quick-summary",
+      provider: "openai",
+      model: "gpt-4o-mini",
+      status: "error",
+      errorMessage: (error as Error).message
+    });
+
     return new Response(
       JSON.stringify({ 
         error: 'Processing failed', 
-        details: error.message,
-        stack: error.stack
+        details: (error as Error).message,
+        stack: (error as Error).stack
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

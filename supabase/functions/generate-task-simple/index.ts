@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { logAI } from "../_shared/aiLogger.ts";
 
 const ALLOWED_ORIGINS = [
   "https://wakti.app",
@@ -46,6 +47,7 @@ serve(async (req) => {
     console.log("Request received with prompt:", prompt?.substring(0, 50) + "...");
 
     // Simple call without JSON schema to test basic functionality
+    const startTime = Date.now();
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -109,12 +111,33 @@ serve(async (req) => {
       subtasks: Array.isArray(task?.subtasks) ? task.subtasks.slice(0, 10) : ["Sample subtask 1", "Sample subtask 2"],
     };
 
+    // Log successful AI usage
+    await logAI({
+      functionName: "generate-task-simple",
+      provider: "openai",
+      model: "gpt-4o-mini",
+      inputText: prompt,
+      outputText: content,
+      durationMs: Date.now() - startTime,
+      status: "success"
+    });
+
     return new Response(
       JSON.stringify({ success: true, task: result }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("Error in generate-task-simple:", error);
+    
+    // Log failed AI usage
+    await logAI({
+      functionName: "generate-task-simple",
+      provider: "openai",
+      model: "gpt-4o-mini",
+      status: "error",
+      errorMessage: error instanceof Error ? error.message : "Unknown error"
+    });
+
     const message = error instanceof Error ? error.message : "Failed to generate task";
     return new Response(
       JSON.stringify({ error: message }),

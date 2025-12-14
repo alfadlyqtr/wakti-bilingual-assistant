@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { logAI } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -222,6 +223,16 @@ serve(async (req) => {
 
     console.log(`📊 Successfully generated ${generatedDiagrams.length} diagram(s)`);
 
+    // Log successful AI usage
+    await logAI({
+      functionName: "wakti-diagrams-v1",
+      provider: "openai",
+      model: "gpt-4o-mini",
+      inputText: inputText || "[image input]",
+      status: "success",
+      metadata: { diagramCount: generatedDiagrams.length }
+    });
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -231,10 +242,21 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
-  } catch (error: any) {
-    console.error("❌ Error:", error);
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("❌ Error:", err);
+    
+    // Log failed AI usage
+    await logAI({
+      functionName: "wakti-diagrams-v1",
+      provider: "openai",
+      model: "gpt-4o-mini",
+      status: "error",
+      errorMessage: err.message
+    });
+
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ success: false, error: err.message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
 
 const allowedOrigins = [
   'https://wakti.qa',
@@ -32,8 +33,79 @@ const getCorsHeaders = (origin) => {
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const WOLFRAM_APP_ID = Deno.env.get('WOLFRAM_APP_ID') || 'VJT5YA9VGJ';
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-console.log("WAKTI AI V2 STREAMING BRAIN: Ready (with Wolfram|Alpha)");
+console.log("WAKTI AI V2 STREAMING BRAIN: Ready (with Wolfram|Alpha + AI Logging)");
+
+// === TOKEN ESTIMATION ===
+// Rough estimate: ~4 chars = 1 token for English, ~3 chars for mixed/Arabic
+function estimateTokens(text: string): number {
+  if (!text) return 0;
+  return Math.ceil(text.length / 4);
+}
+
+// === COST CALCULATION ===
+// Prices per 1M tokens (as of Dec 2024)
+const MODEL_PRICING: Record<string, { input: number; output: number }> = {
+  'gemini-2.0-flash': { input: 0.075, output: 0.30 },
+  'gpt-4o-mini': { input: 0.15, output: 0.60 },
+  'claude-3-5-sonnet-20241022': { input: 3.00, output: 15.00 },
+};
+
+function calculateCost(model: string, inputTokens: number, outputTokens: number): number {
+  const pricing = MODEL_PRICING[model];
+  if (!pricing) return 0;
+  
+  // Convert to cost (prices are per 1M tokens)
+  const inputCost = (inputTokens / 1_000_000) * pricing.input;
+  const outputCost = (outputTokens / 1_000_000) * pricing.output;
+  
+  return inputCost + outputCost;
+}
+
+// === AI USAGE LOGGING ===
+async function logAIUsage(params: {
+  userId?: string;
+  functionName: string;
+  model?: string;
+  status: 'success' | 'error';
+  errorMessage?: string;
+  prompt?: string;
+  response?: string;
+  metadata?: Record<string, unknown>;
+  inputTokens?: number;
+  outputTokens?: number;
+  durationMs?: number;
+  costCredits?: number;
+}) {
+  try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    
+    const { error } = await supabase.rpc('log_ai_usage', {
+      p_user_id: params.userId || null,
+      p_function_name: params.functionName,
+      p_model: params.model || null,
+      p_status: params.status,
+      p_error_message: params.errorMessage || null,
+      p_prompt: params.prompt || null,
+      p_response: params.response || null,
+      p_metadata: params.metadata || {},
+      p_input_tokens: params.inputTokens || 0,
+      p_output_tokens: params.outputTokens || 0,
+      p_duration_ms: params.durationMs || 0,
+      p_cost_credits: params.costCredits || 0
+    });
+    
+    if (error) {
+      console.warn('⚠️ AI LOG: Failed to log usage:', error.message);
+    } else {
+      console.log('📊 AI LOG: Usage logged successfully');
+    }
+  } catch (err) {
+    console.warn('⚠️ AI LOG: Exception:', err);
+  }
+}
 
 // === GEMINI HELPER ===
 function getGeminiApiKey() {
@@ -220,9 +292,15 @@ function convertMessagesToClaudeFormat(messages) {
   };
 }
 
-async function streamClaudeResponse(reader, controller, encoder) {
+async function streamClaudeResponse(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  controller: ReadableStreamDefaultController,
+  encoder: TextEncoder,
+  onToken?: (text: string) => void
+): Promise<string> {
   const decoder = new TextDecoder();
   let buffer = '';
+  let fullResponse = '';
 
   while (true) {
     const { done, value } = await reader.read();
@@ -241,9 +319,12 @@ async function streamClaudeResponse(reader, controller, encoder) {
         try {
           const parsed = JSON.parse(data);
           if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
+            const text = parsed.delta.text;
+            fullResponse += text;
+            if (onToken) onToken(text);
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-              token: parsed.delta.text,
-              content: parsed.delta.text
+              token: text,
+              content: text
             })}\n\n`));
           }
           if (parsed.type === 'message_stop') {
@@ -254,6 +335,8 @@ async function streamClaudeResponse(reader, controller, encoder) {
       }
     }
   }
+  
+  return fullResponse;
 }
 
 
@@ -473,17 +556,36 @@ serve(async (req) => {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
+  // Extract user ID from auth header for logging
+  let userId: string | undefined;
+  try {
+    const authHeader = req.headers.get('authorization');
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.slice(7);
+      // Decode JWT payload (middle part) to get user id
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      userId = payload.sub;
+    }
+  } catch { /* ignore auth parsing errors */ }
+
+  const startTime = Date.now();
+  let requestMessage = '';
+  let requestTrigger = 'general';
+  let requestSubmode = 'chat';
+  let modelUsedOuter = '';
+
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
       try {
         // Defensive body parsing
-        let body = {};
+        let body: Record<string, unknown> = {};
         try {
           const bodyText = await req.text();
           body = bodyText ? JSON.parse(bodyText) : {};
-        } catch (bodyErr) {
-          console.error('🔥 BODY PARSE ERROR:', bodyErr.message);
+        } catch (bodyErr: unknown) {
+          const errMsg = bodyErr instanceof Error ? bodyErr.message : 'Unknown error';
+          console.error('🔥 BODY PARSE ERROR:', errMsg);
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Invalid request body' })}\n\n`));
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
@@ -497,7 +599,12 @@ serve(async (req) => {
           personalTouch = null, 
           activeTrigger = 'general',
           chatSubmode = 'chat' // 'chat' or 'study'
-        } = body;
+        } = body as { message?: string; language?: string; recentMessages?: unknown[]; personalTouch?: unknown; activeTrigger?: string; chatSubmode?: string };
+
+        // Store for logging
+        requestMessage = typeof message === 'string' ? message : '';
+        requestTrigger = activeTrigger;
+        requestSubmode = chatSubmode;
 
         console.log(`🎯 REQUEST: trigger=${activeTrigger}, submode=${chatSubmode}, lang=${language}`);
 
@@ -577,14 +684,15 @@ serve(async (req) => {
             } catch {}
           }
 
-          // Chat mode - check if we should use Wolfram (only for math/science queries, NOT forced by Study mode)
+          // Study mode ALWAYS tries Wolfram; Chat mode only for math/science queries
           let wolframContext = '';
-          const useWolfram = isWolframQuery(message); // Wolfram for math/science queries in both Chat and Study
+          const useWolfram = chatSubmode === 'study' || isWolframQuery(message);
           
           if (useWolfram) {
-            console.log(`🔢 WOLFRAM: ${chatSubmode === 'study' ? 'Study mode' : 'Facts booster'} - querying...`);
+            console.log(`🔢 WOLFRAM: ${chatSubmode === 'study' ? 'Study mode (always)' : 'Facts booster'} - querying...`);
             try {
-              const wolfResult = await queryWolfram(message, chatSubmode === 'study' ? 4000 : 2500);
+              // Study mode: shorter timeout (2s) to not slow down, Chat mode: longer (2.5s)
+              const wolfResult = await queryWolfram(message, chatSubmode === 'study' ? 2000 : 2500);
               
               if (wolfResult.success && wolfResult.answer) {
                 // Emit metadata so frontend knows Wolfram was used
@@ -631,6 +739,8 @@ serve(async (req) => {
 
         let aiProvider = 'none';
         let streamReader = null;
+        let modelUsed = '';
+        let responseText = ''; // Track full response for token estimation
 
         const tryGemini = async () => {
           const sysMsg = messages.find((m) => m.role === 'system')?.content || '';
@@ -644,7 +754,9 @@ serve(async (req) => {
           }
           
           aiProvider = 'gemini';
-          try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'gemini' })}\n\n`)); } catch {}
+          modelUsed = 'gemini-2.0-flash';
+          modelUsedOuter = modelUsed;
+          try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'gemini' })}\n\n`)); } catch { /* ignore */ }
           
           let geminiTokenCount = 0;
           await streamGemini(
@@ -652,7 +764,8 @@ serve(async (req) => {
             contents,
             (token) => {
               geminiTokenCount++;
-              try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`)); } catch {}
+              responseText += token; // Track response for token estimation
+              try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`)); } catch { /* ignore */ }
             },
             sysMsg,
             { temperature: activeTrigger === 'search' ? 0.3 : 0.7, maxOutputTokens: 4000 }
@@ -683,8 +796,10 @@ serve(async (req) => {
           if (!response.ok) throw new Error(`OpenAI failed: ${response.status}`);
           
           aiProvider = 'openai';
+          modelUsed = 'gpt-4o-mini';
+          modelUsedOuter = modelUsed;
           streamReader = response.body?.getReader() || null;
-          try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'openai' })}\n\n`)); } catch {}
+          try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'openai' })}\n\n`)); } catch { /* ignore */ }
           console.log('✅ OpenAI');
         };
 
@@ -710,8 +825,10 @@ serve(async (req) => {
           if (!response.ok) throw new Error(`Claude failed: ${response.status}`);
           
           aiProvider = 'claude';
+          modelUsed = 'claude-3-5-sonnet-20241022';
+          modelUsedOuter = modelUsed;
           streamReader = response.body?.getReader() || null;
-          try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'claude' })}\n\n`)); } catch {}
+          try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'claude' })}\n\n`)); } catch { /* ignore */ }
           console.log('✅ Claude');
         };
 
@@ -733,7 +850,25 @@ serve(async (req) => {
         }
 
         if (aiProvider === 'gemini') {
-          try { controller.close(); } catch {}
+          // Log successful Gemini usage with token estimation
+          const inputTokens = estimateTokens(requestMessage);
+          const outputTokens = estimateTokens(responseText);
+          const cost = calculateCost(modelUsed, inputTokens, outputTokens);
+          
+          logAIUsage({
+            userId,
+            functionName: 'brain_stream',
+            model: modelUsed,
+            status: 'success',
+            prompt: requestMessage,
+            response: responseText.slice(0, 500), // First 500 chars for reference
+            metadata: { trigger: requestTrigger, submode: requestSubmode, provider: aiProvider },
+            inputTokens,
+            outputTokens,
+            durationMs: Date.now() - startTime,
+            costCredits: cost
+          });
+          try { controller.close(); } catch { /* ignore */ }
           return;
         }
         if (!streamReader) throw new Error('No stream reader available');
@@ -758,19 +893,54 @@ serve(async (req) => {
                   const parsed = JSON.parse(data);
                   const content = parsed.choices?.[0]?.delta?.content;
                   if (content) {
+                    responseText += content; // Track response for token estimation
                     controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: content, content })}\n\n`));
                   }
-                } catch {}
+                } catch { /* ignore */ }
               }
             }
           }
         } else if (aiProvider === 'claude') {
-          await streamClaudeResponse(streamReader, controller, encoder);
+          const claudeResponse = await streamClaudeResponse(streamReader, controller, encoder);
+          responseText = claudeResponse; // Capture Claude response for token estimation
         }
+
+        // Log successful OpenAI/Claude usage with token estimation
+        const inputTokens = estimateTokens(requestMessage);
+        const outputTokens = estimateTokens(responseText);
+        const cost = calculateCost(modelUsed, inputTokens, outputTokens);
+        
+        logAIUsage({
+          userId,
+          functionName: 'brain_stream',
+          model: modelUsed,
+          status: 'success',
+          prompt: requestMessage,
+          response: responseText.slice(0, 500), // First 500 chars for reference
+          metadata: { trigger: requestTrigger, submode: requestSubmode, provider: aiProvider },
+          inputTokens,
+          outputTokens,
+          durationMs: Date.now() - startTime,
+          costCredits: cost
+        });
 
         controller.close();
       } catch (error) {
-        console.error('🔥 ERROR:', error);
+        const errMsg = error instanceof Error ? error.message : 'Unknown error';
+        console.error('🔥 ERROR:', errMsg);
+        
+        // Log failed AI usage (no tokens/cost on error)
+        logAIUsage({
+          userId,
+          functionName: 'brain_stream',
+          model: modelUsedOuter || 'unknown',
+          status: 'error',
+          errorMessage: errMsg,
+          prompt: requestMessage,
+          metadata: { trigger: requestTrigger, submode: requestSubmode },
+          durationMs: Date.now() - startTime
+        });
+        
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Service unavailable' })}\n\n`));
         controller.close();
       }

@@ -1,7 +1,7 @@
 
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Users, MessageSquare, CreditCard, Gift, Receipt } from "lucide-react";
+import { Users, MessageSquare, CreditCard, Gift, Brain } from "lucide-react";
 
 export const AdminMobileNav = () => {
   const navigate = useNavigate();
@@ -37,13 +37,20 @@ export const AdminMobileNav = () => {
       icon: Gift,
       label: 'Quotas',
       color: 'text-accent-cyan'
+    },
+    {
+      id: 'ai-usage',
+      path: '/admin/ai-usage',
+      icon: Brain,
+      label: 'AI',
+      color: 'text-accent-purple'
     }
   ];
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 border-t border-white/10 bg-[#0c0f14]/90 backdrop-blur-xl px-2 py-2 z-40">
       <div className="max-w-4xl mx-auto">
-        <div className="grid grid-cols-4 gap-1">
+        <div className="grid grid-cols-5 gap-1">
           {navItems.map(({ id, path, icon: Icon, label, color }) => (
             <Button
               key={id}

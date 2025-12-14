@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { logAI } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -71,6 +72,7 @@ Preserve original languages for proper names and quoted terms. If content mixes 
     const userPrompt = `${transcript}`;
 
     console.log('Calling OpenAI Chat Completions with model:', chosenModel);
+    const startTime = Date.now();
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -103,14 +105,35 @@ Preserve original languages for proper names and quoted terms. If content mixes 
 
     console.log('Summary generated successfully, length:', summary.length);
 
+    // Log successful AI usage
+    await logAI({
+      functionName: "summarize-text",
+      provider: "openai",
+      model: chosenModel,
+      inputText: transcript,
+      outputText: summary,
+      durationMs: Date.now() - startTime,
+      status: "success"
+    });
+
     return new Response(
       JSON.stringify({ summary, recordId }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
     console.error('Error in summarize-text function:', error);
+    
+    // Log failed AI usage
+    await logAI({
+      functionName: "summarize-text",
+      provider: "openai",
+      model: "gpt-4o-mini",
+      status: "error",
+      errorMessage: (error as Error).message
+    });
+
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: (error as Error).message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

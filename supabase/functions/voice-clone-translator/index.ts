@@ -3,6 +3,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
 import { generateGemini } from "../_shared/gemini.ts";
+import { logAI } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -188,6 +189,17 @@ serve(async (req) => {
       translatedPreview: translatedText.substring(0, 100)
     });
 
+    // Log successful AI usage
+    await logAI({
+      functionName: "voice-clone-translator",
+      userId: user.id,
+      provider: "gemini",
+      model: "gemini-2.0-flash",
+      inputText: original_text,
+      outputText: translatedText,
+      status: "success"
+    });
+
     return new Response(JSON.stringify({
       success: true,
       original_text,
@@ -200,9 +212,18 @@ serve(async (req) => {
   } catch (error) {
     console.error('🌐 Translation error:', error);
     
+    // Log failed AI usage
+    await logAI({
+      functionName: "voice-clone-translator",
+      provider: "gemini",
+      model: "gemini-2.0-flash",
+      status: "error",
+      errorMessage: (error as Error).message
+    });
+
     return new Response(JSON.stringify({
       success: false,
-      error: error.message || 'Translation failed'
+      error: (error as Error).message || 'Translation failed'
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" }

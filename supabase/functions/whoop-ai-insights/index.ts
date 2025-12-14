@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { logAI } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -514,9 +515,30 @@ ${maxHR ? `Max HR: ${maxHR} bpm` : ''}`;
 
     const json = await resp.json();
     const content = json?.choices?.[0]?.message?.content || "{}";
+    
+    // Log successful AI usage
+    await logAI({
+      functionName: "whoop-ai-insights",
+      provider: "deepseek",
+      model: "deepseek-chat",
+      inputText: userPrompt,
+      outputText: content,
+      status: "success"
+    });
+
     return new Response(content, { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error("whoop-ai-insights error", e);
+    
+    // Log failed AI usage
+    await logAI({
+      functionName: "whoop-ai-insights",
+      provider: "deepseek",
+      model: "deepseek-chat",
+      status: "error",
+      errorMessage: (e as Error).message
+    });
+
     return new Response(JSON.stringify({ error: "internal_error" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });

@@ -17,6 +17,7 @@ interface User {
   subscription_status?: string;
   is_suspended?: boolean;
   suspended_at?: string;
+  suspended_until?: string;
   suspension_reason?: string;
   is_subscribed?: boolean;
   plan_name?: string;
@@ -155,6 +156,20 @@ export const UserProfileModal = ({ user, isOpen, onClose, onUserUpdated }: UserP
                   <p className="text-sm">
                     <strong>Suspended:</strong> {user.suspended_at ? new Date(user.suspended_at).toLocaleString() : 'Unknown'}
                   </p>
+                  {user.suspended_until ? (
+                    <p className="text-sm">
+                      <strong>Until:</strong> {new Date(user.suspended_until).toLocaleString()}
+                      {new Date(user.suspended_until) < new Date() && (
+                        <Badge variant="outline" className="ml-2 text-xs bg-yellow-100 text-yellow-700">
+                          Expired
+                        </Badge>
+                      )}
+                    </p>
+                  ) : (
+                    <p className="text-sm">
+                      <strong>Until:</strong> <span className="text-red-600">Indefinite</span>
+                    </p>
+                  )}
                   {user.suspension_reason && (
                     <p className="text-sm">
                       <strong>Reason:</strong> {user.suspension_reason}

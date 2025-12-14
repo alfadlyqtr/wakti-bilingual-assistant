@@ -1,6 +1,7 @@
 
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { logAI } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -74,6 +75,7 @@ serve(async (req) => {
     console.log('🎤 WAKTI VOICE V2: Processing audio blob, size:', audioBlob.size, 'language:', language);
 
     // Prepare form data for OpenAI Whisper - FIXED FOR TRANSCRIPTION ONLY
+    const startTime = Date.now();
     const whisperFormData = new FormData();
     whisperFormData.append('file', audioBlob, 'audio.webm');
     whisperFormData.append('model', 'whisper-1');
@@ -113,6 +115,17 @@ serve(async (req) => {
     console.log('🎤 WAKTI VOICE V2: Transcribed text:', result.text);
     console.log('🎤 WAKTI VOICE V2: Expected language was:', language, 'Result should be in same language');
 
+    // Log successful AI usage
+    await logAI({
+      functionName: "wakti-voice-v2",
+      provider: "openai",
+      model: "whisper-1",
+      outputText: result.text,
+      durationMs: Date.now() - startTime,
+      status: "success",
+      metadata: { audioSize: audioBlob.size, language }
+    });
+
     return new Response(
       JSON.stringify({ 
         text: result.text,
@@ -124,8 +137,18 @@ serve(async (req) => {
 
   } catch (error) {
     console.error("🎤 WAKTI VOICE V2: Error:", error);
+    
+    // Log failed AI usage
+    await logAI({
+      functionName: "wakti-voice-v2",
+      provider: "openai",
+      model: "whisper-1",
+      status: "error",
+      errorMessage: (error as Error).message
+    });
+
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: (error as Error).message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

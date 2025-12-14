@@ -4,9 +4,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { AlertTriangle, UserX, Trash2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AlertTriangle, UserX, Trash2, Calendar } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { addDays, addMonths, format } from "date-fns";
 
 interface User {
   id: string;
@@ -40,6 +43,26 @@ interface DeleteModalProps {
 export const SuspendUserModal = ({ user, isOpen, onClose, onSuccess }: SuspendModalProps) => {
   const [reason, setReason] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [durationType, setDurationType] = useState<string>("indefinite");
+  const [customDate, setCustomDate] = useState<string>("");
+
+  const getSuspendUntilDate = (): string | null => {
+    const now = new Date();
+    switch (durationType) {
+      case "1day":
+        return addDays(now, 1).toISOString();
+      case "7days":
+        return addDays(now, 7).toISOString();
+      case "30days":
+        return addDays(now, 30).toISOString();
+      case "3months":
+        return addMonths(now, 3).toISOString();
+      case "custom":
+        return customDate ? new Date(customDate).toISOString() : null;
+      default:
+        return null; // indefinite
+    }
+  };
 
   const handleSuspend = async () => {
     if (!user) return;
@@ -54,11 +77,13 @@ export const SuspendUserModal = ({ user, isOpen, onClose, onSuccess }: SuspendMo
       }
 
       const session = JSON.parse(adminSession);
+      const suspendUntil = getSuspendUntilDate();
       
-      const { error } = await supabase.rpc('suspend_user', {
+      const { error } = await (supabase as any).rpc('suspend_user', {
         p_user_id: user.id,
         p_admin_id: session.admin_id,
-        p_reason: reason.trim() || 'Account suspended by admin'
+        p_reason: reason.trim() || 'Account suspended by admin',
+        p_until: suspendUntil
       });
 
       if (error) {
@@ -67,8 +92,16 @@ export const SuspendUserModal = ({ user, isOpen, onClose, onSuccess }: SuspendMo
         return;
       }
 
-      toast.success(`User ${user.full_name || user.email} has been suspended`);
+      const durationText = durationType === 'indefinite' 
+        ? 'indefinitely' 
+        : durationType === 'custom' && customDate
+          ? `until ${format(new Date(customDate), 'PPP')}`
+          : `for ${durationType.replace('days', ' days').replace('months', ' months').replace('day', ' day')}`;
+      
+      toast.success(`User ${user.full_name || user.email} has been suspended ${durationText}`);
       setReason("");
+      setDurationType("indefinite");
+      setCustomDate("");
       onSuccess();
       onClose();
     } catch (error) {
@@ -136,16 +169,52 @@ export const SuspendUserModal = ({ user, isOpen, onClose, onSuccess }: SuspendMo
           </div>
 
           {!user.is_suspended && (
-            <div>
-              <Label htmlFor="reason">Suspension Reason (Optional)</Label>
-              <Textarea
-                id="reason"
-                placeholder="Provide a reason for suspension..."
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                rows={3}
-                className="mt-1"
-              />
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="duration" className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  Suspension Duration
+                </Label>
+                <Select value={durationType} onValueChange={setDurationType}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select duration" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="indefinite">Indefinite (until manually unsuspended)</SelectItem>
+                    <SelectItem value="1day">1 Day</SelectItem>
+                    <SelectItem value="7days">7 Days</SelectItem>
+                    <SelectItem value="30days">30 Days</SelectItem>
+                    <SelectItem value="3months">3 Months</SelectItem>
+                    <SelectItem value="custom">Custom Date</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {durationType === "custom" && (
+                <div>
+                  <Label htmlFor="customDate">Suspend Until</Label>
+                  <Input
+                    id="customDate"
+                    type="datetime-local"
+                    value={customDate}
+                    onChange={(e) => setCustomDate(e.target.value)}
+                    min={format(new Date(), "yyyy-MM-dd'T'HH:mm")}
+                    className="mt-1"
+                  />
+                </div>
+              )}
+
+              <div>
+                <Label htmlFor="reason">Suspension Reason (Optional)</Label>
+                <Textarea
+                  id="reason"
+                  placeholder="Provide a reason for suspension..."
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  rows={3}
+                  className="mt-1"
+                />
+              </div>
             </div>
           )}
 

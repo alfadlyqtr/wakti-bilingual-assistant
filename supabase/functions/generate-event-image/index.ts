@@ -1,6 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { logAI } from "../_shared/aiLogger.ts"
 
 // ENHANCED CORS CONFIGURATION FOR PRODUCTION
 const allowedOrigins = [
@@ -312,6 +313,16 @@ serve(async (req) => {
       .from('event-images')
       .getPublicUrl(fileName)
 
+    // Log successful AI usage
+    await logAI({
+      functionName: "generate-event-image",
+      provider: "runware",
+      model: modelUsed,
+      inputText: prompt,
+      status: "success",
+      metadata: { width, height }
+    });
+
     return new Response(
       JSON.stringify({ 
         imageUrl: urlData.publicUrl,
@@ -327,6 +338,15 @@ serve(async (req) => {
     const err = error as Error
     console.error('Error in generate-event-image function:', err)
     
+    // Log failed AI usage
+    await logAI({
+      functionName: "generate-event-image",
+      provider: "runware",
+      model: "runware:97@2",
+      status: "error",
+      errorMessage: err.message
+    });
+
     return new Response(
       JSON.stringify({ 
         error: 'Failed to generate image',

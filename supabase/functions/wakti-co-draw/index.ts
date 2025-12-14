@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { GoogleGenerativeAI } from "npm:@google/generative-ai@0.21.0";
+import { logAI } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -100,6 +101,15 @@ User's request: ${prompt}`
         // Return base64 image as data URL
         const imageUrl = `data:image/png;base64,${imageData}`;
         
+        // Log successful AI usage
+        await logAI({
+          functionName: "wakti-co-draw",
+          provider: "gemini",
+          model: "gemini-2.0-flash-exp",
+          inputText: prompt,
+          status: "success"
+        });
+
         return new Response(JSON.stringify({
           success: true,
           imageUrl: imageUrl
@@ -112,11 +122,22 @@ User's request: ${prompt}`
 
     throw new Error('No image in response');
 
-  } catch (err: any) {
-    console.error('❌ Error:', err);
+  } catch (err: unknown) {
+    const error = err as Error;
+    console.error('❌ Error:', error);
+    
+    // Log failed AI usage
+    await logAI({
+      functionName: "wakti-co-draw",
+      provider: "gemini",
+      model: "gemini-2.0-flash-exp",
+      status: "error",
+      errorMessage: error.message
+    });
+
     return new Response(JSON.stringify({
       success: false,
-      error: err.message || 'Failed'
+      error: error.message || 'Failed'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

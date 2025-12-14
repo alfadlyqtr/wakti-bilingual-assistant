@@ -1,5 +1,6 @@
 // @ts-nocheck: Deno/Supabase edge runtime
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { logAI } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -203,14 +204,34 @@ Deno.serve(async (req) => {
 
     console.log("Generated " + slides.length + " slides with " + imageCount + " images");
 
+    // Log successful AI usage (image generation)
+    await logAI({
+      functionName: "wakti-pitch-slides",
+      provider: "runware",
+      model: "runware:97@2",
+      inputText: brief.subject,
+      status: "success",
+      metadata: { slideCount: slides.length, imageCount }
+    });
+
     return new Response(
       JSON.stringify({ success: true, slides: slides }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("Error:", error);
+    
+    // Log failed AI usage
+    await logAI({
+      functionName: "wakti-pitch-slides",
+      provider: "runware",
+      model: "runware:97@2",
+      status: "error",
+      errorMessage: (error as Error).message
+    });
+
     return new Response(
-      JSON.stringify({ success: false, error: error.message || "Failed to generate slides" }),
+      JSON.stringify({ success: false, error: (error as Error).message || "Failed to generate slides" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

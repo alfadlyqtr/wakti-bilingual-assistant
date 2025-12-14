@@ -18,6 +18,7 @@ interface AdminUser {
   is_suspended: boolean;
   email_confirmed: boolean;
   suspended_at?: string;
+  suspended_until?: string;
   suspension_reason?: string;
   subscription_status?: string;
   created_at: string;
@@ -61,6 +62,7 @@ export default function AdminUsers() {
           is_suspended,
           email_confirmed,
           suspended_at,
+          suspended_until,
           suspension_reason,
           subscription_status,
           created_at

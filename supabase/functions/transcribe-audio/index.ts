@@ -1,6 +1,7 @@
-
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { logAI } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -233,6 +234,7 @@ serve(async (req) => {
     }
 
     console.log('FormData ready, sending to OpenAI GPT-4o Mini Transcribe');
+    const startTime = Date.now();
     const openaiResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: {
@@ -258,12 +260,33 @@ serve(async (req) => {
     const transcription = await openaiResponse.json();
     console.log('Transcription received:', transcription.text ? 'Success' : 'Empty');
 
+    // Log successful AI usage
+    await logAI({
+      functionName: "transcribe-audio",
+      provider: "openai",
+      model: "gpt-4o-transcribe",
+      outputText: transcription.text,
+      durationMs: Date.now() - startTime,
+      status: "success",
+      metadata: { audioSize: audioData.size }
+    });
+
     return new Response(
       JSON.stringify({ transcript: transcription.text }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
     console.error('Unhandled error in transcription function:', error);
+    
+    // Log failed AI usage
+    await logAI({
+      functionName: "transcribe-audio",
+      provider: "openai",
+      model: "gpt-4o-transcribe",
+      status: "error",
+      errorMessage: (error as Error).message
+    });
+
     return new Response(
       JSON.stringify({ 
         error: 'Transcription failed', 

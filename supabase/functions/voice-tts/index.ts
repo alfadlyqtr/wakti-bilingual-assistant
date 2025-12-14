@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
+import { logAI } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -305,6 +306,16 @@ serve(async (req: Request) => {
         const audioBuffer = joined.buffer as ArrayBuffer;
         console.log('🎵 Google TTS audio generated successfully (concatenated):', { chunks: audioSegments.length, audioSize: audioBuffer.byteLength });
 
+        // Log successful AI usage
+        await logAI({
+          functionName: "voice-tts",
+          provider: "google",
+          model: "google-tts-chirp3",
+          inputText: text,
+          status: "success",
+          metadata: { chunks: audioSegments.length, audioSize: audioBuffer.byteLength }
+        });
+
         // NOTE: No voice quota mutation here. Persist usage only in `elevenlabs-tts`.
 
         return new Response(audioBuffer, {
@@ -319,6 +330,16 @@ serve(async (req: Request) => {
   } catch (error: unknown) {
     const message = (error && typeof error === 'object' && 'message' in error) ? (error as { message: string }).message : 'TTS generation failed';
     console.error('🎵 TTS error:', error);
+    
+    // Log failed AI usage
+    await logAI({
+      functionName: "voice-tts",
+      provider: "google",
+      model: "google-tts-chirp3",
+      status: "error",
+      errorMessage: message
+    });
+
     return new Response(JSON.stringify({
       success: false,
       error: message

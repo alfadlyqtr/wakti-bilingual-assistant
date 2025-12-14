@@ -1,5 +1,6 @@
 // @ts-nocheck: Deno/Supabase edge runtime
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { logAI } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -263,14 +264,34 @@ Deno.serve(async (req) => {
 
     console.log("Generated " + validatedSlides.length + " Dokie-style slides");
 
+    // Log successful AI usage
+    await logAI({
+      functionName: "wakti-pitch-outline",
+      provider: "gemini",
+      model: "gemini-2.0-flash",
+      inputText: brief.subject,
+      status: "success",
+      metadata: { slideCount: validatedSlides.length }
+    });
+
     return new Response(
       JSON.stringify({ success: true, outline: validatedSlides }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("Error:", error);
+    
+    // Log failed AI usage
+    await logAI({
+      functionName: "wakti-pitch-outline",
+      provider: "gemini",
+      model: "gemini-2.0-flash",
+      status: "error",
+      errorMessage: (error as Error).message
+    });
+
     return new Response(
-      JSON.stringify({ success: false, error: error.message || "Failed to generate outline" }),
+      JSON.stringify({ success: false, error: (error as Error).message || "Failed to generate outline" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

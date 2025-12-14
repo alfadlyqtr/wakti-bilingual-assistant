@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { logAI } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -53,6 +54,7 @@ serve(async (req) => {
     }
 
     // Generate speech using OpenAI TTS
+    const startTime = Date.now();
     const response = await fetch('https://api.openai.com/v1/audio/speech', {
       method: 'POST',
       headers: {
@@ -87,14 +89,35 @@ serve(async (req) => {
     }
     const base64Audio = btoa(binary);
 
+    // Log successful AI usage
+    await logAI({
+      functionName: "generate-speech",
+      provider: "openai",
+      model: "tts-1",
+      inputText: summary,
+      durationMs: Date.now() - startTime,
+      status: "success",
+      metadata: { voice: voiceOption, textLength: summary.length }
+    });
+
     return new Response(
       JSON.stringify({ audioContent: base64Audio, voice: voiceOption }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Error in generate-speech function:', error && (error as any).message);
+    console.error('Error in generate-speech function:', error && (error as Error).message);
+    
+    // Log failed AI usage
+    await logAI({
+      functionName: "generate-speech",
+      provider: "openai",
+      model: "tts-1",
+      status: "error",
+      errorMessage: (error as Error).message
+    });
+
     return new Response(
-      JSON.stringify({ error: (error as any)?.message || 'Unknown error' }),
+      JSON.stringify({ error: (error as Error)?.message || 'Unknown error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
