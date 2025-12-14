@@ -564,10 +564,7 @@ export function ChatMessages({
   const getMessageBadge = (message: AIMessage, currentActiveTrigger: string) => {
     // Prefer saved intent for user messages to keep badge stable
     if (message.role === 'user') {
-      // Check for Study mode first
-      if ((message as any)?.chatSubmode === 'study') {
-        return '📚 Study';
-      }
+      // Check intent FIRST - if user explicitly switched modes, respect that
       if (message.intent) {
         switch (message.intent) {
           case 'search': {
@@ -579,7 +576,7 @@ export function ChatMessages({
           case 'vision': return '👁️ Vision';
           case 'parse_task': return '🎯 Task';
           case 'chat': {
-            // Check chatSubmode for study
+            // Only show Study badge when intent is 'chat' AND chatSubmode is 'study'
             if ((message as any)?.chatSubmode === 'study') return '📚 Study';
             return '💬 Chat';
           }
