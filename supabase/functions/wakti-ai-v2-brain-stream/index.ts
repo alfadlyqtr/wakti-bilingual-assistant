@@ -635,6 +635,9 @@ serve(async (req) => {
           });
         }
         
+        // Track if Wolfram was used (for logging)
+        let wolframUsed = false;
+        
         // Inject web search context when in Search mode
         if (activeTrigger === 'search') {
           try {
@@ -721,6 +724,7 @@ serve(async (req) => {
                     : `[Verified fact from Wolfram|Alpha: ${wolfResult.answer}]\n\nUse this fact naturally in your response.`;
                 }
                 console.log('✅ WOLFRAM: Data injected into prompt');
+                wolframUsed = true; // Mark that Wolfram was successfully used
               } else {
                 console.log('⚠️ WOLFRAM: No result, AI will handle alone');
               }
@@ -862,7 +866,7 @@ serve(async (req) => {
             status: 'success',
             prompt: requestMessage,
             response: responseText.slice(0, 500), // First 500 chars for reference
-            metadata: { trigger: requestTrigger, submode: requestSubmode, provider: aiProvider },
+            metadata: { trigger: requestTrigger, submode: requestSubmode, provider: aiProvider, wolfram_used: wolframUsed },
             inputTokens,
             outputTokens,
             durationMs: Date.now() - startTime,
@@ -917,7 +921,7 @@ serve(async (req) => {
           status: 'success',
           prompt: requestMessage,
           response: responseText.slice(0, 500), // First 500 chars for reference
-          metadata: { trigger: requestTrigger, submode: requestSubmode, provider: aiProvider },
+          metadata: { trigger: requestTrigger, submode: requestSubmode, provider: aiProvider, wolfram_used: wolframUsed },
           inputTokens,
           outputTokens,
           durationMs: Date.now() - startTime,
@@ -937,7 +941,7 @@ serve(async (req) => {
           status: 'error',
           errorMessage: errMsg,
           prompt: requestMessage,
-          metadata: { trigger: requestTrigger, submode: requestSubmode },
+          metadata: { trigger: requestTrigger, submode: requestSubmode, wolfram_used: wolframUsed },
           durationMs: Date.now() - startTime
         });
         

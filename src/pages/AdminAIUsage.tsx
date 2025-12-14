@@ -222,13 +222,150 @@ export default function AdminAIUsage() {
     const colors: Record<string, string> = {
       'brain_stream': 'bg-purple-500/20 text-purple-400',
       'text2image': 'bg-blue-500/20 text-blue-400',
+      'wakti-text2image': 'bg-blue-500/20 text-blue-400',
       'image2image': 'bg-cyan-500/20 text-cyan-400',
+      'prompt-amp': 'bg-yellow-500/20 text-yellow-400',
       'music': 'bg-pink-500/20 text-pink-400',
       'voice_tts': 'bg-orange-500/20 text-orange-400',
+      'generate-speech': 'bg-orange-500/20 text-orange-400',
+      'transcribe-audio': 'bg-teal-500/20 text-teal-400',
       'journal_qa': 'bg-green-500/20 text-green-400',
+      'generate-image': 'bg-indigo-500/20 text-indigo-400',
     };
     const color = colors[fn] || 'bg-gray-500/20 text-gray-400';
     return <Badge className={color}>{fn}</Badge>;
+  };
+
+  // Color mapping for known keys
+  const getColorForKey = (key: string, value: unknown): string => {
+    const keyColors: Record<string, string> = {
+      'provider': 'text-blue-400',
+      'trigger': 'text-purple-400',
+      'submode': 'text-yellow-400',
+      'mode': 'text-cyan-400',
+      'language': 'text-white/70',
+      'wolfram_used': 'text-orange-400',
+      'quality': 'text-green-400',
+      'voice': 'text-pink-400',
+      'width': 'text-white/70',
+      'height': 'text-white/70',
+      'textLength': 'text-white/70',
+    };
+    
+    // Special value-based colors
+    if (key === 'provider') {
+      const providerColors: Record<string, string> = {
+        'gemini': 'text-blue-400',
+        'openai': 'text-green-400',
+        'claude': 'text-orange-400',
+        'deepseek': 'text-cyan-400',
+        'runware': 'text-pink-400',
+        'elevenlabs': 'text-purple-400',
+      };
+      return providerColors[String(value)] || 'text-blue-400';
+    }
+    
+    if (key === 'trigger') {
+      const triggerColors: Record<string, string> = {
+        'chat': 'text-purple-400',
+        'search': 'text-blue-400',
+        'image': 'text-pink-400',
+        'vision': 'text-cyan-400',
+        'study': 'text-yellow-400',
+      };
+      return triggerColors[String(value)] || 'text-purple-400';
+    }
+    
+    return keyColors[key] || 'text-white/70';
+  };
+
+  // Format value for display
+  const formatMetaValue = (key: string, value: unknown): string => {
+    if (value === null || value === undefined) return 'N/A';
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+    if (typeof value === 'number') return value.toLocaleString();
+    if (typeof value === 'object') return JSON.stringify(value);
+    
+    // Special formatting
+    if (key === 'language') {
+      if (value === 'ar') return 'Arabic';
+      if (value === 'en') return 'English';
+    }
+    
+    return String(value);
+  };
+
+  // Format key for display (snake_case to Title Case)
+  const formatMetaKey = (key: string): string => {
+    return key
+      .replace(/_/g, ' ')
+      .replace(/([A-Z])/g, ' $1')
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ')
+      .trim();
+  };
+
+  // Extract ALL metadata fields dynamically
+  const getMetadataInfo = (log: AILog) => {
+    const meta = log.metadata || {};
+    const info: { label: string; value: string; color: string; key: string }[] = [];
+    
+    // Priority order for common keys (show these first)
+    const priorityKeys = ['provider', 'trigger', 'submode', 'mode', 'language', 'wolfram_used', 'quality', 'voice'];
+    
+    // Get all keys and sort by priority
+    const allKeys = Object.keys(meta);
+    const sortedKeys = [
+      ...priorityKeys.filter(k => allKeys.includes(k)),
+      ...allKeys.filter(k => !priorityKeys.includes(k))
+    ];
+    
+    for (const key of sortedKeys) {
+      const value = meta[key];
+      // Skip null/undefined or empty values
+      if (value === null || value === undefined || value === '') continue;
+      // Skip complex nested objects in list view (will show in detail)
+      if (typeof value === 'object' && !Array.isArray(value)) continue;
+      
+      info.push({
+        key,
+        label: formatMetaKey(key),
+        value: formatMetaValue(key, value),
+        color: getColorForKey(key, value)
+      });
+    }
+    
+    return info;
+  };
+
+  // Get ALL metadata for detail view (including nested objects)
+  const getAllMetadata = (log: AILog) => {
+    const meta = log.metadata || {};
+    const items: { key: string; label: string; value: string; color: string; isComplex: boolean }[] = [];
+    
+    const priorityKeys = ['provider', 'trigger', 'submode', 'mode', 'language', 'wolfram_used', 'quality', 'voice'];
+    const allKeys = Object.keys(meta);
+    const sortedKeys = [
+      ...priorityKeys.filter(k => allKeys.includes(k)),
+      ...allKeys.filter(k => !priorityKeys.includes(k))
+    ];
+    
+    for (const key of sortedKeys) {
+      const value = meta[key];
+      if (value === null || value === undefined) continue;
+      
+      const isComplex = typeof value === 'object';
+      items.push({
+        key,
+        label: formatMetaKey(key),
+        value: isComplex ? JSON.stringify(value, null, 2) : formatMetaValue(key, value),
+        color: getColorForKey(key, value),
+        isComplex
+      });
+    }
+    
+    return items;
   };
 
   return (
@@ -442,9 +579,19 @@ export default function AdminAIUsage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
                         {getFunctionBadge(log.function_name)}
-                        {log.model && <Badge variant="outline" className="text-xs">{log.model}</Badge>}
+                        {log.model && <Badge variant="outline" className="text-xs border-white/30">{log.model}</Badge>}
                         {getStatusBadge(log.status)}
                       </div>
+                      {/* Metadata info row */}
+                      {getMetadataInfo(log).length > 0 && (
+                        <div className="flex items-center gap-3 text-xs mb-1">
+                          {getMetadataInfo(log).slice(0, 4).map((info, idx) => (
+                            <span key={idx} className={info.color}>
+                              <span className="text-white/40">{info.label}:</span> {info.value}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       <div className="text-sm text-white/70 truncate">
                         {log.user_display_name || log.user_email || 'Unknown user'}
                       </div>
@@ -455,6 +602,7 @@ export default function AdminAIUsage() {
                         </span>
                         <span>{log.total_tokens.toLocaleString()} tokens</span>
                         <span>{log.duration_ms}ms</span>
+                        {log.cost_credits > 0 && <span className="text-accent-green">${log.cost_credits.toFixed(5)}</span>}
                       </div>
                     </div>
                     <Button
@@ -526,6 +674,33 @@ export default function AdminAIUsage() {
                 </div>
               </div>
 
+              {/* Enhanced Metadata Display - ALL fields */}
+              {getAllMetadata(selectedLog).length > 0 && (
+                <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                  <Label className="text-white/50 mb-2 block">All Metadata ({getAllMetadata(selectedLog).length} fields)</Label>
+                  
+                  {/* Simple fields in grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">
+                    {getAllMetadata(selectedLog).filter(m => !m.isComplex).map((info, idx) => (
+                      <div key={idx} className="text-center p-2 bg-white/5 rounded">
+                        <p className="text-xs text-white/40">{info.label}</p>
+                        <p className={`text-sm font-medium ${info.color} break-all`}>{info.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {/* Complex/nested fields shown separately */}
+                  {getAllMetadata(selectedLog).filter(m => m.isComplex).map((info, idx) => (
+                    <div key={idx} className="mt-2">
+                      <p className="text-xs text-white/40 mb-1">{info.label}</p>
+                      <pre className="p-2 bg-white/5 rounded text-xs text-white/70 whitespace-pre-wrap overflow-x-auto max-h-32 overflow-y-auto">
+                        {info.value}
+                      </pre>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Tokens */}
               <div className="grid grid-cols-3 gap-4 p-3 bg-white/5 rounded-lg">
                 <div className="text-center">
@@ -572,14 +747,16 @@ export default function AdminAIUsage() {
                 </div>
               )}
 
-              {/* Metadata */}
+              {/* Raw Metadata JSON (collapsible for debugging) */}
               {selectedLog.metadata && Object.keys(selectedLog.metadata).length > 0 && (
-                <div>
-                  <Label className="text-white/50">Metadata</Label>
-                  <pre className="mt-1 p-3 bg-white/5 rounded text-xs text-white/80 whitespace-pre-wrap">
+                <details className="group">
+                  <summary className="cursor-pointer text-white/50 text-sm hover:text-white/70 transition-colors">
+                    Raw JSON (click to expand)
+                  </summary>
+                  <pre className="mt-2 p-3 bg-white/5 rounded text-xs text-white/60 whitespace-pre-wrap max-h-48 overflow-y-auto">
                     {JSON.stringify(selectedLog.metadata, null, 2)}
                   </pre>
-                </div>
+                </details>
               )}
             </div>
           )}
