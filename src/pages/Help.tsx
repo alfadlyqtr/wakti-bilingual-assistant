@@ -7,7 +7,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChevronRight, 
   LayoutDashboard, Calendar, CalendarClock, ListTodo, Sparkles, Mic, 
-  Users, Settings, Lightbulb, Navigation, MessageCircle, HelpCircle, Ticket } from 'lucide-react';
+  Users, Settings, Lightbulb, Navigation, MessageCircle, HelpCircle, Ticket,
+  Music, Heart, BookOpen, Gamepad2, AudioWaveform } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -53,6 +54,8 @@ export default function Help() {
               <li>• {t('tasksWidget', language)}</li>
               <li>• {t('eventsWidget', language)}</li>
               <li>• {t('maw3dWidget', language)}</li>
+              <li>• {t('journalWidget', language)}</li>
+              <li>• {t('whoopWidget', language)}</li>
             </ul>
           </div>
         </div>
@@ -68,20 +71,80 @@ export default function Help() {
       content: (
         <div className="space-y-4">
           <div>
-            <h4 className="font-medium mb-1 text-orange-400">{t('chatMode', language)}</h4>
-            <p className="text-sm text-muted-foreground/80">{t('chatModeDesc', language)}</p>
+            <h4 className="font-medium mb-1 text-orange-400">{t('modesButton', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('modesButtonDesc', language)}</p>
           </div>
           <div>
-            <h4 className="font-medium mb-1 text-orange-400">{t('searchMode', language)}</h4>
-            <p className="text-sm text-muted-foreground/80">{t('searchModeDesc', language)}</p>
+            <h4 className="font-medium mb-1 text-blue-500">{t('chatMode', language)}</h4>
+            <p className="text-sm text-muted-foreground/80 mb-2">{t('chatModeDesc', language)}</p>
+            <ul className="text-sm space-y-1 ml-4">
+              <li className="text-blue-500">• {t('chatSubMode', language)}</li>
+              <li className="text-purple-500">• {t('studySubMode', language)}</li>
+            </ul>
           </div>
           <div>
-            <h4 className="font-medium mb-1 text-orange-400">{language === 'ar' ? 'وضع الصور' : 'Image Mode'}</h4>
-            <p className="text-sm text-muted-foreground/80">{language === 'ar' ? 'ارفع الصور لتحليل الذكاء الاصطناعي، استخراج النص، أو الوصف التفصيلي.' : 'Upload images for AI analysis, text extraction, or detailed description.'}</p>
+            <h4 className="font-medium mb-1 text-green-500">{t('searchMode', language)}</h4>
+            <p className="text-sm text-muted-foreground/80 mb-2">{t('searchModeDesc', language)}</p>
+            <ul className="text-sm space-y-1 ml-4">
+              <li className="text-green-500">• {t('webSubMode', language)}</li>
+              <li className="text-red-500">• {t('youtubeSubMode', language)}</li>
+            </ul>
           </div>
           <div>
-            <h4 className="font-medium mb-1 text-orange-400">{t('voiceFeatures', language)}</h4>
-            <p className="text-sm text-muted-foreground/80">{t('voiceFeaturesDesc', language)}</p>
+            <h4 className="font-medium mb-1 text-orange-400">{t('imageMode', language)}</h4>
+            <p className="text-sm text-muted-foreground/80 mb-2">{t('imageModeDesc', language)}</p>
+            <ul className="text-sm space-y-1 ml-4">
+              <li className="text-orange-500">• <strong>{t('textToImage', language)}:</strong> {t('textToImageDesc', language)}</li>
+              <li className="text-orange-500">• <strong>{t('imageToImage', language)}:</strong> {t('imageToImageDesc', language)}</li>
+              <li className="text-orange-500">• <strong>{t('backgroundRemoval', language)}:</strong> {t('backgroundRemovalDesc', language)}</li>
+              <li className="text-orange-500">• <strong>{t('drawMode', language)}:</strong> {t('drawModeDesc', language)}</li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-orange-400">{t('extraTab', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('extraTabDesc', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-orange-400">{t('personalTouch', language)}</h4>
+            <p className="text-sm text-muted-foreground/80 mb-2">{t('personalTouchDesc', language)}</p>
+            <ul className="text-sm space-y-1 ml-4">
+              <li>• {t('userNickname', language)}</li>
+              <li>• {t('aiNickname', language)}</li>
+              <li>• {t('toneStyle', language)}</li>
+              <li>• {t('customNotes', language)}</li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-orange-400">{t('talkBack', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('talkBackDesc', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-orange-400">{t('conversationHistory', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('conversationHistoryDesc', language)}</p>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'smart-tools',
+      icon: <Lightbulb className="h-5 w-5" />,
+      title: t('smartToolsTitle', language),
+      description: t('smartToolsDesc', language),
+      colorClass: 'text-emerald-500',
+      glowClass: 'hover:shadow-glow',
+      content: (
+        <div className="space-y-4">
+          <div>
+            <h4 className="font-medium mb-1 text-emerald-400">{t('textGenerator', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('textGeneratorDesc', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-emerald-400">{t('presentationsFeature', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('presentationsFeatureDesc', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-emerald-400">{t('diagramsTab', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('diagramsTabDesc', language)}</p>
           </div>
         </div>
       )
@@ -94,17 +157,29 @@ export default function Help() {
       colorClass: 'text-cyan-500',
       glowClass: 'hover:shadow-glow-blue',
       content: (
-        <div className="space-y-3">
+        <div className="space-y-4">
           <div>
             <h4 className="font-medium mb-2 text-cyan-400">{t('recordingSteps', language)}</h4>
             <ul className="text-sm space-y-1">
-              <li>1. {t('step1Record', language)}</li>
-              <li>2. {t('step2Stop', language)}</li>
-              <li>3. {t('step3Transcribe', language)}</li>
-              <li>4. {t('step4Save', language)}</li>
+              <li>{t('step1Record', language)}</li>
+              <li>{t('step2Stop', language)}</li>
+              <li>{t('step3Transcribe', language)}</li>
+              <li>{t('step4Save', language)}</li>
             </ul>
           </div>
           <p className="text-sm text-muted-foreground/80">{t('autoDeleteFeature', language)}</p>
+          <div>
+            <h4 className="font-medium mb-1 text-cyan-400">{t('quickSummaryUpload', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('quickSummaryUploadDesc', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-cyan-400">{t('generateAudio', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('generateAudioDesc', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-cyan-400">{t('savedRecordings', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('savedRecordingsDesc', language)}</p>
+          </div>
         </div>
       )
     },
@@ -125,6 +200,10 @@ export default function Help() {
               <li>{t('eventStep3', language)}</li>
               <li>{t('eventStep4', language)}</li>
               <li>{t('eventStep5', language)}</li>
+              <li>{t('eventStep6', language)}</li>
+              <li>{t('eventStep7', language)}</li>
+              <li>{t('eventStep8', language)}</li>
+              <li>{t('eventStep9', language)}</li>
             </ul>
           </div>
           <div>
@@ -133,6 +212,14 @@ export default function Help() {
               <li>• {t('checkAttendance', language)}</li>
               <li>• {t('eventCustomization', language)}</li>
             </ul>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-purple-400">{t('shareEvent', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('shareEventDesc', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-purple-400">{t('publicEventView', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('publicEventViewDesc', language)}</p>
           </div>
         </div>
       )
@@ -153,7 +240,22 @@ export default function Help() {
               <li>{t('taskStep2', language)}</li>
               <li>{t('taskStep3', language)}</li>
               <li>{t('taskStep4', language)}</li>
+              <li>{t('taskStep5', language)}</li>
+              <li>{t('taskStep6', language)}</li>
+              <li>{t('taskStep7', language)}</li>
             </ul>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-green-400">{t('subtasksFeature', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('subtasksFeatureDesc', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-green-400">{t('aiTaskGenerator', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('aiTaskGeneratorDesc', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-green-400">{t('aiTidy', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('aiTidyDesc', language)}</p>
           </div>
           <div>
             <h4 className="font-medium mb-2 text-green-400">{t('shareTask', language)}</h4>
@@ -163,6 +265,18 @@ export default function Help() {
               <li>{t('shareStep3', language)}</li>
             </ul>
             <p className="text-sm text-muted-foreground/80 mt-2">{t('sharedTaskFeatures', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-green-400">{t('snoozeTask', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('snoozeTaskDesc', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-green-400">{t('remindersFeature', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('remindersFeatureDesc', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-green-400">{t('activityMonitor', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('activityMonitorDesc', language)}</p>
           </div>
         </div>
       )
@@ -182,6 +296,7 @@ export default function Help() {
               <li>• {t('monthView', language)}</li>
               <li>• {t('weekView', language)}</li>
               <li>• {t('yearView', language)}</li>
+              <li>• {t('agendaView', language)}</li>
             </ul>
           </div>
           <div>
@@ -192,6 +307,10 @@ export default function Help() {
               <li>• {t('reminderIcon', language)}</li>
             </ul>
             <p className="text-sm text-muted-foreground/80 mt-2">{t('colorCoding', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-blue-400">{t('manualNotes', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('manualNotesDesc', language)}</p>
           </div>
         </div>
       )
@@ -211,7 +330,16 @@ export default function Help() {
               <li>{t('contactStep1', language)}</li>
               <li>{t('contactStep2', language)}</li>
               <li>{t('contactStep3', language)}</li>
+              <li>{t('contactStep4', language)}</li>
             </ul>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-pink-400">{t('contactRequests', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('contactRequestsDesc', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-pink-400">{t('blockedUsers', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('blockedUsersDesc', language)}</p>
           </div>
           <div>
             <h4 className="font-medium mb-2 text-pink-400">{t('messaging', language)}</h4>
@@ -221,6 +349,14 @@ export default function Help() {
               <li>• {t('imageSharing', language)}</li>
               <li>• {t('privacyControls', language)}</li>
             </ul>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-pink-400">{t('typingIndicator', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('typingIndicatorDesc', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-pink-400">{t('savedMessages', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('savedMessagesDesc', language)}</p>
           </div>
         </div>
       )
@@ -258,6 +394,202 @@ export default function Help() {
           </div>
         </div>
       )
+    },
+    {
+      id: 'voice-studio',
+      icon: <AudioWaveform className="h-5 w-5" />,
+      title: t('voiceStudioTitle', language),
+      description: t('voiceStudioDesc', language),
+      colorClass: 'text-indigo-500',
+      glowClass: 'hover:shadow-glow',
+      content: (
+        <div className="space-y-4">
+          <div>
+            <h4 className="font-medium mb-1 text-indigo-400">{t('ttsFeature', language)}</h4>
+            <p className="text-sm text-muted-foreground/80 mb-2">{t('ttsFeatureDesc', language)}</p>
+            <ul className="text-sm space-y-1">
+              <li>{t('ttsStep1', language)}</li>
+              <li>{t('ttsStep2', language)}</li>
+              <li>{t('ttsStep3', language)}</li>
+              <li>{t('ttsStep4', language)}</li>
+              <li>{t('ttsStep5', language)}</li>
+              <li>{t('ttsStep6', language)}</li>
+            </ul>
+            <p className="text-sm text-muted-foreground/80 mt-2">{t('ttsQuota', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-indigo-400">{t('voiceClone', language)}</h4>
+            <p className="text-sm text-muted-foreground/80 mb-2">{t('voiceCloneDesc', language)}</p>
+            <ul className="text-sm space-y-1">
+              <li>{t('voiceCloneStep1', language)}</li>
+              <li>{t('voiceCloneStep2', language)}</li>
+              <li>{t('voiceCloneStep3', language)}</li>
+              <li>{t('voiceCloneStep4', language)}</li>
+            </ul>
+            <p className="text-sm text-muted-foreground/80 mt-2">{t('voiceCloneTip', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-indigo-400">{t('voiceTranslator', language)}</h4>
+            <p className="text-sm text-muted-foreground/80 mb-2">{t('voiceTranslatorDesc', language)}</p>
+            <ul className="text-sm space-y-1">
+              <li>{t('voiceTranslatorStep1', language)}</li>
+              <li>{t('voiceTranslatorStep2', language)}</li>
+              <li>{t('voiceTranslatorStep3', language)}</li>
+              <li>{t('voiceTranslatorStep4', language)}</li>
+              <li>{t('voiceTranslatorStep5', language)}</li>
+              <li>{t('voiceTranslatorStep6', language)}</li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-indigo-400">{t('textTranslator', language)}</h4>
+            <p className="text-sm text-muted-foreground/80 mb-2">{t('textTranslatorDesc', language)}</p>
+            <ul className="text-sm space-y-1">
+              <li>{t('textTranslatorStep1', language)}</li>
+              <li>{t('textTranslatorStep2', language)}</li>
+              <li>{t('textTranslatorStep3', language)}</li>
+              <li>{t('textTranslatorStep4', language)}</li>
+              <li>{t('textTranslatorStep5', language)}</li>
+            </ul>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'music-studio',
+      icon: <Music className="h-5 w-5" />,
+      title: t('musicStudioTitle', language),
+      description: t('musicStudioDesc', language),
+      colorClass: 'text-fuchsia-500',
+      glowClass: 'hover:shadow-glow',
+      content: (
+        <div className="space-y-4">
+          <div>
+            <h4 className="font-medium mb-1 text-fuchsia-400">{t('generateMusic', language)}</h4>
+            <p className="text-sm text-muted-foreground/80 mb-2">{t('generateMusicDesc', language)}</p>
+            <ul className="text-sm space-y-1">
+              <li>{t('musicStep1', language)}</li>
+              <li>{t('musicStep2', language)}</li>
+              <li>{t('musicStep3', language)}</li>
+              <li>{t('musicStep4', language)}</li>
+              <li>{t('musicStep5', language)}</li>
+            </ul>
+            <p className="text-sm text-muted-foreground/80 mt-2">{t('musicQuota', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-fuchsia-400">{t('savedTracks', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('savedTracksDesc', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-fuchsia-400">{t('shareMusic', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('shareMusicDesc', language)}</p>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'fitness',
+      icon: <Heart className="h-5 w-5" />,
+      title: t('fitnessTitle', language),
+      description: t('fitnessDesc', language),
+      colorClass: 'text-red-500',
+      glowClass: 'hover:shadow-glow',
+      content: (
+        <div className="space-y-4">
+          <div>
+            <h4 className="font-medium mb-1 text-red-400">{t('connectWhoop', language)}</h4>
+            <p className="text-sm text-muted-foreground/80 mb-2">{t('connectWhoopDesc', language)}</p>
+            <ul className="text-sm space-y-1">
+              <li>{t('connectWhoopStep1', language)}</li>
+              <li>{t('connectWhoopStep2', language)}</li>
+              <li>{t('connectWhoopStep3', language)}</li>
+              <li>{t('connectWhoopStep4', language)}</li>
+            </ul>
+            <p className="text-sm text-muted-foreground/80 mt-2">{t('whoopRequirement', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-red-400">{t('aiInsights', language)}</h4>
+            <p className="text-sm text-muted-foreground/80 mb-2">{t('aiInsightsDesc', language)}</p>
+            <ul className="text-sm space-y-1">
+              <li>{t('aiInsightsStep1', language)}</li>
+              <li>{t('aiInsightsStep2', language)}</li>
+              <li>{t('aiInsightsStep3', language)}</li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-red-400">{t('whoopTabs', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('whoopTabsDesc', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-red-400">{t('syncWhoop', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('syncWhoopDesc', language)}</p>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'journal',
+      icon: <BookOpen className="h-5 w-5" />,
+      title: t('journalTitle', language),
+      description: t('journalDesc', language),
+      colorClass: 'text-teal-500',
+      glowClass: 'hover:shadow-glow',
+      content: (
+        <div className="space-y-4">
+          <div>
+            <h4 className="font-medium mb-1 text-teal-400">{t('todayTab', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('todayTabDesc', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-teal-400">{t('timelineTab', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('timelineTabDesc', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-teal-400">{t('chartsTab', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('chartsTabDesc', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-teal-400">{t('askJournalTab', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('askJournalTabDesc', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-teal-400">{t('journalStreaks', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('journalStreaksDesc', language)}</p>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'games',
+      icon: <Gamepad2 className="h-5 w-5" />,
+      title: t('gamesTitle', language),
+      description: t('gamesDesc', language),
+      colorClass: 'text-yellow-500',
+      glowClass: 'hover:shadow-glow',
+      content: (
+        <div className="space-y-4">
+          <div>
+            <h4 className="font-medium mb-1 text-yellow-400">{t('chessGame', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('chessGameDesc', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-yellow-400">{t('ticTacToeGame', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('ticTacToeGameDesc', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-yellow-400">{t('solitaireGame', language)}</h4>
+            <p className="text-sm text-muted-foreground/80">{t('solitaireGameDesc', language)}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-yellow-400">{t('lettersGame', language)}</h4>
+            <p className="text-sm text-muted-foreground/80 mb-2">{t('lettersGameDesc', language)}</p>
+            <ul className="text-sm space-y-1">
+              <li>{t('lettersGameStep1', language)}</li>
+              <li>{t('lettersGameStep2', language)}</li>
+              <li>{t('lettersGameStep3', language)}</li>
+            </ul>
+          </div>
+        </div>
+      )
     }
   ];
 
@@ -266,7 +598,12 @@ export default function Help() {
     t('tip2', language),
     t('tip3', language),
     t('tip4', language),
-    t('tip5', language)
+    t('tip5', language),
+    t('tip6', language),
+    t('tip7', language),
+    t('tip8', language),
+    t('tip9', language),
+    t('tip10', language)
   ];
 
   // Read initial tab from query param (e.g., /help?tab=support)
@@ -430,8 +767,8 @@ export default function Help() {
                               </div>
                               <p className="text-sm text-muted-foreground/90">
                                 {language === 'ar' 
-                                  ? 'استخدم شريط التنقل السفلي للانتقال بين الأقسام الرئيسية'
-                                  : 'Use the bottom navigation bar to move between main sections'
+                                  ? 'اضغط على شعار WAKTI (أعلى الوسط) لفتح قائمة التنقل السريع'
+                                  : 'Tap the WAKTI logo (top center) to open the quick navigation menu'
                                 }
                               </p>
                             </div>
@@ -441,8 +778,8 @@ export default function Help() {
                               </div>
                               <p className="text-sm text-muted-foreground/90">
                                 {language === 'ar' 
-                                  ? 'اضغط على صورة الملف الشخصي في الأعلى للوصول للإعدادات والرسائل'
-                                  : 'Tap your profile picture at the top to access settings and messages'
+                                  ? 'اضغط على صورة ملفك الشخصي (أعلى اليمين) للوصول للإعدادات وجهات الاتصال والرسائل'
+                                  : 'Tap your profile picture (top right) to access Settings, Contacts, and Messages'
                                 }
                               </p>
                             </div>
@@ -452,8 +789,19 @@ export default function Help() {
                               </div>
                               <p className="text-sm text-muted-foreground/90">
                                 {language === 'ar' 
-                                  ? 'اسحب لأسفل في أي صفحة لتحديث المحتوى'
-                                  : 'Pull down on any page to refresh content'
+                                  ? 'في WAKTI AI، اضغط على "Extra" للوصول لإعدادات Personal وسجل المحادثات (Convos)'
+                                  : 'In WAKTI AI, tap "Extra" to access Personal settings and conversation history (Convos)'
+                                }
+                              </p>
+                            </div>
+                            <div className="flex items-start gap-3">
+                              <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0 mt-1">
+                                <span className="text-sm font-semibold text-blue-400">4</span>
+                              </div>
+                              <p className="text-sm text-muted-foreground/90">
+                                {language === 'ar' 
+                                  ? 'استخدم أزرار الرجوع للعودة إلى الشاشات السابقة'
+                                  : 'Use back buttons to return to previous screens'
                                 }
                               </p>
                             </div>
