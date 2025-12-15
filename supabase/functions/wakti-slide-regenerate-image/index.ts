@@ -1,6 +1,6 @@
 // @ts-nocheck: Deno/Supabase edge runtime
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { logAI } from "../_shared/aiLogger.ts";
+import { logAIFromRequest } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -257,7 +257,7 @@ Deno.serve(async (req) => {
 
     if (imageResult && imageResult.imageURL) {
       // Log successful AI usage
-      await logAI({
+      await logAIFromRequest(req, {
         functionName: "wakti-slide-regenerate-image",
         provider: "runware",
         model: modelUsed,
@@ -282,7 +282,7 @@ Deno.serve(async (req) => {
     console.error("Error regenerating image:", error);
     
     // Log failed AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "wakti-slide-regenerate-image",
       provider: "runware",
       model: "runware:97@2",

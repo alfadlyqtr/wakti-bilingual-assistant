@@ -1,7 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { generateGemini } from "../_shared/gemini.ts";
-import { logAI } from "../_shared/aiLogger.ts";
+import { logAIFromRequest } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -199,7 +199,7 @@ serve(async (req) => {
           console.log("🎯 Text Generator: Successfully generated text, length:", generatedText.length, "model: gemini-2.5-flash-lite");
 
           // Log successful AI usage
-          await logAI({
+          await logAIFromRequest(req, {
             functionName: "text-generator",
             provider: "gemini",
             model: "gemini-2.5-flash-lite",
@@ -361,7 +361,7 @@ serve(async (req) => {
     });
     
     // Log failed AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "text-generator",
       provider: "gemini",
       model: "gemini-2.5-flash-lite",

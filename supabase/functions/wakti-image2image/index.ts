@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
-import { logAI } from "../_shared/aiLogger.ts";
+import { logAIFromRequest } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -231,7 +231,7 @@ serve(async (req: Request) => {
       if (!uploadError) {
         const { data: publicUrl } = supabase.storage.from("wakti-ai-v2").getPublicUrl(fileName);
         // Log successful AI usage
-        await logAI({
+        await logAIFromRequest(req, {
           functionName: "wakti-image2image",
           provider: "runware",
           model: "runware:106@1",
@@ -248,7 +248,7 @@ serve(async (req: Request) => {
 
     if (directUrl) {
       // Log successful AI usage
-      await logAI({
+      await logAIFromRequest(req, {
         functionName: "wakti-image2image",
         provider: "runware",
         model: "runware:106@1",
@@ -270,7 +270,7 @@ serve(async (req: Request) => {
     const message = (err as Error)?.message || String(err);
     
     // Log failed AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "wakti-image2image",
       provider: "runware",
       model: "runware:106@1",

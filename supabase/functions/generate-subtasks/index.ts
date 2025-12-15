@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { logAI } from "../_shared/aiLogger.ts";
+import { logAIFromRequest } from "../_shared/aiLogger.ts";
 
 // Allowed origins for CORS
 const ALLOWED_ORIGINS = [
@@ -130,7 +130,7 @@ serve(async (req) => {
       .filter((line: string) => line.length > 0);
 
     // Log successful AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "generate-subtasks",
       provider: "openai",
       model: "gpt-4o-mini",
@@ -153,7 +153,7 @@ serve(async (req) => {
     console.error("Error in extract-subtasks:", error);
     
     // Log failed AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "generate-subtasks",
       provider: "openai",
       model: "gpt-4o-mini",

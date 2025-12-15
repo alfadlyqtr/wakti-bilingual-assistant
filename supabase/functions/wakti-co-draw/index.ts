@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { GoogleGenerativeAI } from "npm:@google/generative-ai@0.21.0";
-import { logAI } from "../_shared/aiLogger.ts";
-import { getUserIdFromRequest } from "../_shared/getUserIdFromRequest.ts";
+import { logAIFromRequest } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -34,7 +33,6 @@ serve(async (req) => {
   }
 
   try {
-    const userId = (await getUserIdFromRequest(req)) ?? undefined;
     const { imageBase64, prompt } = await req.json();
 
     if (!imageBase64 || !prompt) {
@@ -104,9 +102,8 @@ User's request: ${prompt}`
         const imageUrl = `data:image/png;base64,${imageData}`;
         
         // Log successful AI usage
-        await logAI({
+        await logAIFromRequest(req, {
           functionName: "wakti-co-draw",
-          userId,
           provider: "gemini",
           model: "gemini-2.0-flash-exp",
           inputText: prompt,
@@ -128,12 +125,10 @@ User's request: ${prompt}`
   } catch (err: unknown) {
     const error = err as Error;
     console.error('❌ Error:', error);
-    const userId = (await getUserIdFromRequest(req)) ?? undefined;
     
     // Log failed AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "wakti-co-draw",
-      userId,
       provider: "gemini",
       model: "gemini-2.0-flash-exp",
       status: "error",

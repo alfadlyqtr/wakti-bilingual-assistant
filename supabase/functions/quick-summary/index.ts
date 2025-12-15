@@ -1,6 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { logAI } from "../_shared/aiLogger.ts";
+import { logAIFromRequest } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -166,7 +166,7 @@ serve(async (req) => {
     }
     
     // Log successful AI usage (both transcription and summarization)
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "quick-summary",
       provider: "openai",
       model: "gpt-4o-mini",
@@ -189,7 +189,7 @@ serve(async (req) => {
     console.error('Unhandled error in quick-summary function:', error);
     
     // Log failed AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "quick-summary",
       provider: "openai",
       model: "gpt-4o-mini",

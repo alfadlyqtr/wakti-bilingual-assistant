@@ -1,7 +1,7 @@
 
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { logAI } from "../_shared/aiLogger.ts";
+import { logAIFromRequest } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -116,7 +116,7 @@ serve(async (req) => {
     console.log('🎤 WAKTI VOICE V2: Expected language was:', language, 'Result should be in same language');
 
     // Log successful AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "wakti-voice-v2",
       provider: "openai",
       model: "whisper-1",
@@ -139,7 +139,7 @@ serve(async (req) => {
     console.error("🎤 WAKTI VOICE V2: Error:", error);
     
     // Log failed AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "wakti-voice-v2",
       provider: "openai",
       model: "whisper-1",

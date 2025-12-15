@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { logAI } from "../_shared/aiLogger.ts";
+import { logAIFromRequest } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -302,7 +302,7 @@ serve(async (req) => {
     const responseContent = result.choices[0].message?.content || "";
     
     // Log successful AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "process-ai-intent",
       provider: "deepseek",
       model: "deepseek-chat",
@@ -324,7 +324,7 @@ serve(async (req) => {
     console.error("Error in process-ai-intent function:", error);
     
     // Log failed AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "process-ai-intent",
       provider: "deepseek",
       model: "deepseek-chat",

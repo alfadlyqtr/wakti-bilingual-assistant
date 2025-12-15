@@ -1,7 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
-import { logAI } from "../_shared/aiLogger.ts";
+// Note: This streaming function doesn't use logAI - logging happens in the frontend or via other mechanisms
 
 // Allowed origins (mirror brain stream behavior + dev fallbacks)
 const allowedOrigins = [
@@ -60,15 +60,11 @@ async function streamGemini(
   if (systemInstruction) body.system_instruction = { parts: [{ text: systemInstruction }] };
   if (generationConfig) body.generationConfig = generationConfig;
 
-  const resp = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Accept": "text/event-stream",
-      "x-goog-api-key": key,
-    },
-    body: JSON.stringify(body),
-  });
+  const resp = await fetch(url, { method: "POST", headers: {
+    "Content-Type": "application/json",
+    "Accept": "text/event-stream",
+    "x-goog-api-key": key,
+  }, body: JSON.stringify(body) });
 
   if (!resp.ok || !resp.body) {
     const t = await resp.text().catch(() => "");
@@ -482,15 +478,11 @@ serve(async (req) => {
             if (!ANTHROPIC_API_KEY) throw new Error('Claude API key not configured');
             const { system, messages } = convertToClaude(systemPrompt, prompt, language, norm);
             const m = model || 'claude-3-5-sonnet-20241022';
-            const claudeResp = await fetch('https://api.anthropic.com/v1/messages', {
-              method: 'POST',
-              headers: {
-                'x-api-key': ANTHROPIC_API_KEY,
-                'anthropic-version': '2023-06-01',
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({ model: m, system, messages, temperature: 0.2, max_tokens: options?.max_tokens || 2000, stream: false })
-            });
+            const claudeResp = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: {
+              'x-api-key': ANTHROPIC_API_KEY,
+              'anthropic-version': '2023-06-01',
+              'Content-Type': 'application/json'
+            }, body: JSON.stringify({ model: m, system, messages, temperature: 0.2, max_tokens: options?.max_tokens || 2000, stream: false }) });
             if (!claudeResp.ok) {
               const errTxt = await claudeResp.text();
               const err = { error: 'Claude failed', status: claudeResp.status, details: errTxt.slice(0, 300) };
@@ -585,11 +577,7 @@ serve(async (req) => {
           let lastErr: any = null;
           for (const m of openaiModels) {
             console.log(`VISION: Trying OpenAI model=${m} req=${requestId}`);
-            const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-              method: 'POST',
-              headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
-              body: JSON.stringify({ model: m, messages, temperature: 0.2, max_tokens: options?.max_tokens || 2000, stream: true })
-            });
+            const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', { method: 'POST', headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json', 'Accept': 'text/event-stream' }, body: JSON.stringify({ model: m, messages, temperature: 0.2, max_tokens: options?.max_tokens || 2000, stream: true }) });
             if (!openaiResponse.ok) {
               const msg = await openaiResponse.text();
               console.warn(`VISION: OpenAI model=${m} failed status=${openaiResponse.status} req=${requestId} body=${msg.slice(0,180)}`);
@@ -646,11 +634,7 @@ serve(async (req) => {
           let lastErr: any = null;
           for (const m of claudeModels) {
             console.log(`VISION: Trying Claude model=${m} req=${requestId}`);
-            const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
-              method: 'POST',
-              headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
-              body: JSON.stringify({ model: m, system, messages, temperature: 0.2, max_tokens: options?.max_tokens || 2000, stream: true })
-            });
+            const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json', 'Accept': 'text/event-stream' }, body: JSON.stringify({ model: m, system, messages, temperature: 0.2, max_tokens: options?.max_tokens || 2000, stream: true }) });
             if (!claudeResponse.ok) {
               const errTxt = await claudeResponse.text();
               console.warn(`VISION: Claude model=${m} failed status=${claudeResponse.status} req=${requestId} body=${errTxt.slice(0,180)}`);

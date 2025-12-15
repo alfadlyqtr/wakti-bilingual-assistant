@@ -1,6 +1,6 @@
 // @ts-nocheck: Deno/Supabase edge runtime
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { logAI } from "../_shared/aiLogger.ts";
+import { logAIFromRequest } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -265,7 +265,7 @@ Deno.serve(async (req) => {
     console.log("Generated " + validatedSlides.length + " Dokie-style slides");
 
     // Log successful AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "wakti-pitch-outline",
       provider: "gemini",
       model: "gemini-2.0-flash",
@@ -282,7 +282,7 @@ Deno.serve(async (req) => {
     console.error("Error:", error);
     
     // Log failed AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "wakti-pitch-outline",
       provider: "gemini",
       model: "gemini-2.0-flash",

@@ -1,7 +1,20 @@
 /**
  * AI Usage Logger - Shared helper for logging AI usage across all edge functions
  * 
- * Usage:
+ * RECOMMENDED Usage (auto-extracts userId from request):
+ *   import { logAIFromRequest } from "../_shared/aiLogger.ts";
+ *   
+ *   await logAIFromRequest(req, {
+ *     functionName: "generate-image",
+ *     provider: "runware",
+ *     model: "runware:97@2",
+ *     inputText: prompt,
+ *     outputText: "",
+ *     durationMs: Date.now() - startTime,
+ *     status: "success"
+ *   });
+ * 
+ * Legacy Usage (manual userId):
  *   import { logAI } from "../_shared/aiLogger.ts";
  *   
  *   await logAI({
@@ -10,13 +23,14 @@
  *     provider: "runware",
  *     model: "runware:97@2",
  *     inputText: prompt,
- *     outputText: "", // or response text for LLMs
+ *     outputText: "",
  *     durationMs: Date.now() - startTime,
  *     status: "success"
  *   });
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { getUserIdFromRequest } from "./getUserIdFromRequest.ts";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -255,4 +269,28 @@ export async function logAISimple(
     userId,
     durationMs,
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Request-based Logger (RECOMMENDED - auto-extracts userId)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Params for logAIFromRequest - same as AILogParams but userId is auto-extracted
+ */
+export type AILogParamsWithoutUserId = Omit<AILogParams, "userId">;
+
+/**
+ * Log AI usage with automatic userId extraction from request.
+ * This is the RECOMMENDED way to log AI usage - it extracts the user ID
+ * from the JWT token in the Authorization header (fast, no network call).
+ * 
+ * If no valid token is present, logs with userId = null (shows as "Unknown user" in admin).
+ */
+export async function logAIFromRequest(
+  req: Request,
+  params: AILogParamsWithoutUserId
+): Promise<void> {
+  const userId = getUserIdFromRequest(req) ?? undefined;
+  await logAI({ ...params, userId });
 }

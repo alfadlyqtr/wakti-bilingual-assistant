@@ -1,7 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
-import { logAI } from "../_shared/aiLogger.ts";
+import { logAIFromRequest } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -307,7 +307,7 @@ serve(async (req: Request) => {
         console.log('🎵 Google TTS audio generated successfully (concatenated):', { chunks: audioSegments.length, audioSize: audioBuffer.byteLength });
 
         // Log successful AI usage
-        await logAI({
+        await logAIFromRequest(req, {
           functionName: "voice-tts",
           provider: "google",
           model: "google-tts-chirp3",
@@ -332,7 +332,7 @@ serve(async (req: Request) => {
     console.error('🎵 TTS error:', error);
     
     // Log failed AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "voice-tts",
       provider: "google",
       model: "google-tts-chirp3",

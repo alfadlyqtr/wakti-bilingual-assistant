@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { logAI } from "../_shared/aiLogger.ts";
+import { logAIFromRequest } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -224,7 +224,7 @@ serve(async (req) => {
     console.log(`📊 Successfully generated ${generatedDiagrams.length} diagram(s)`);
 
     // Log successful AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "wakti-diagrams-v1",
       provider: "openai",
       model: "gpt-4o-mini",
@@ -247,7 +247,7 @@ serve(async (req) => {
     console.error("❌ Error:", err);
     
     // Log failed AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "wakti-diagrams-v1",
       provider: "openai",
       model: "gpt-4o-mini",

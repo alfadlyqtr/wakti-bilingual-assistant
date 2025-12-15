@@ -1,7 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { logAI } from "../_shared/aiLogger.ts";
+import { logAIFromRequest } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -261,7 +261,7 @@ serve(async (req) => {
     console.log('Transcription received:', transcription.text ? 'Success' : 'Empty');
 
     // Log successful AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "transcribe-audio",
       provider: "openai",
       model: "gpt-4o-transcribe",
@@ -279,7 +279,7 @@ serve(async (req) => {
     console.error('Unhandled error in transcription function:', error);
     
     // Log failed AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "transcribe-audio",
       provider: "openai",
       model: "gpt-4o-transcribe",

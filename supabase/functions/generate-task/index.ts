@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { logAI } from "../_shared/aiLogger.ts";
+import { logAIFromRequest } from "../_shared/aiLogger.ts";
 
 const ALLOWED_ORIGINS = [
   "https://wakti.app",
@@ -183,7 +183,7 @@ Always respond with JSON matching the provided schema. Preserve the input langua
     }
 
     // Log successful AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "generate-task",
       provider: "openai",
       model: MODEL,
@@ -201,7 +201,7 @@ Always respond with JSON matching the provided schema. Preserve the input langua
     console.error("Error in generate-task:", error);
     
     // Log failed AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "generate-task",
       provider: "openai",
       model: MODEL,

@@ -1,7 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { logAI } from "../_shared/aiLogger.ts"
+import { logAIFromRequest } from "../_shared/aiLogger.ts"
 
 // ENHANCED CORS CONFIGURATION FOR PRODUCTION
 const allowedOrigins = [
@@ -314,7 +314,7 @@ serve(async (req) => {
       .getPublicUrl(fileName)
 
     // Log successful AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "generate-event-image",
       provider: "runware",
       model: modelUsed,
@@ -339,7 +339,7 @@ serve(async (req) => {
     console.error('Error in generate-event-image function:', err)
     
     // Log failed AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "generate-event-image",
       provider: "runware",
       model: "runware:97@2",

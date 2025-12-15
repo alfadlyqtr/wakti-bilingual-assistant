@@ -2,7 +2,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { logAI } from "../_shared/aiLogger.ts";
+import { logAIFromRequest } from "../_shared/aiLogger.ts";
 
 // ENHANCED CORS CONFIGURATION FOR PRODUCTION
 const allowedOrigins = [
@@ -102,7 +102,7 @@ serve(async (req) => {
     console.log('🎨 Image saved permanently:', permanentUrl);
     
     // Log successful AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "generate-maw3d-background",
       provider: "runware",
       model: modelUsed,
@@ -123,7 +123,7 @@ serve(async (req) => {
     console.error('🎨 Error in generate-maw3d-background:', error);
     
     // Log failed AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "generate-maw3d-background",
       provider: "runware",
       model: "runware:97@2",

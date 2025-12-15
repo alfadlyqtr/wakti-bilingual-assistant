@@ -1,6 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { logAI } from "../_shared/aiLogger.ts";
+import { logAIFromRequest } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -517,7 +517,7 @@ ${maxHR ? `Max HR: ${maxHR} bpm` : ''}`;
     const content = json?.choices?.[0]?.message?.content || "{}";
     
     // Log successful AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "whoop-ai-insights",
       provider: "deepseek",
       model: "deepseek-chat",
@@ -531,7 +531,7 @@ ${maxHR ? `Max HR: ${maxHR} bpm` : ''}`;
     console.error("whoop-ai-insights error", e);
     
     // Log failed AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "whoop-ai-insights",
       provider: "deepseek",
       model: "deepseek-chat",

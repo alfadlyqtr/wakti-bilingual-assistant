@@ -317,6 +317,7 @@ async function generateImage(prompt: string | undefined, userId: string, languag
     // Log failed AI usage
     await logAI({
       functionName: "wakti-execute-action",
+      userId,
       provider: "runware",
       model: "runware:97@2",
       status: "error",

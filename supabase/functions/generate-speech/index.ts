@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { logAI } from "../_shared/aiLogger.ts";
+import { logAIFromRequest } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -90,7 +90,7 @@ serve(async (req) => {
     const base64Audio = btoa(binary);
 
     // Log successful AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "generate-speech",
       provider: "openai",
       model: "tts-1",
@@ -108,7 +108,7 @@ serve(async (req) => {
     console.error('Error in generate-speech function:', error && (error as Error).message);
     
     // Log failed AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "generate-speech",
       provider: "openai",
       model: "tts-1",

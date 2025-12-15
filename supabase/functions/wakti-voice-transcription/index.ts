@@ -1,7 +1,7 @@
 
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { logAI } from "../_shared/aiLogger.ts";
+import { logAIFromRequest } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -62,7 +62,7 @@ serve(async (req) => {
     const result = await response.json();
 
     // Log successful AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "wakti-voice-transcription",
       provider: "openai",
       model: "whisper-1",
@@ -83,7 +83,7 @@ serve(async (req) => {
     console.error("Voice transcription error:", error);
     
     // Log failed AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "wakti-voice-transcription",
       provider: "openai",
       model: "whisper-1",

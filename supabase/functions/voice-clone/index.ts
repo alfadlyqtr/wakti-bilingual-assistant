@@ -3,7 +3,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
 import { ElevenLabsClient } from "https://esm.sh/@elevenlabs/elevenlabs-js@2.4.1";
-import { logAI } from "../_shared/aiLogger.ts";
+import { logAIFromRequest } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -253,9 +253,8 @@ serve(async (req) => {
     console.log('🎙️ Voice clone saved successfully:', dbResult);
 
     // Log successful AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "voice-clone",
-      userId: user.id,
       provider: "elevenlabs",
       model: "elevenlabs-clone",
       status: "success",
@@ -277,7 +276,7 @@ serve(async (req) => {
     console.error(`🎙️ [${requestId}] Error stack:`, (error as Error).stack);
     
     // Log failed AI usage
-    await logAI({
+    await logAIFromRequest(req, {
       functionName: "voice-clone",
       provider: "elevenlabs",
       model: "elevenlabs-clone",
