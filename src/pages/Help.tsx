@@ -15,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { AppHeader } from '@/components/AppHeader';
 import { SimpleContactFormModal } from '@/components/support/SimpleContactFormModal';
 import { ChatThread } from '@/components/support/ChatThread';
+import { HelpAssistantChat } from '@/components/help/HelpAssistantChat';
 import { formatDistanceToNow } from 'date-fns';
 
 export default function Help() {
@@ -861,6 +862,8 @@ export default function Help() {
                     </CollapsibleContent>
                   </Collapsible>
                 </Card>
+
+                <HelpAssistantChat />
 
                 {/* Main Sections */}
                 <div className="space-y-6">
