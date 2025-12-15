@@ -1455,14 +1455,15 @@ class WaktiAIV2ServiceClass {
         if (mode === 'background-removal') {
           const firstImg = Array.isArray(attachedFiles) ? attachedFiles.find((f: any) => f?.type?.startsWith('image/')) : undefined;
           const rawB64 = firstImg?.data || firstImg?.content || '';
-          if (!rawB64) {
-            return { response: language === 'ar' ? 'الرجاء إرفاق صورة لإزالة/استبدال الخلفية.' : 'Please attach an image for background removal/replacement.', error: true };
-          }
+          const hasImage = !!rawB64;
+
           // Normalize to data URI if needed (Runware expects URL or dataURI)
           const mime = (firstImg?.type && typeof firstImg.type === 'string') ? firstImg.type : 'image/jpeg';
-          const imageParam = (typeof rawB64 === 'string' && (rawB64.startsWith('data:') || rawB64.startsWith('http')))
-            ? rawB64
-            : `data:${mime};base64,${rawB64}`;
+          const imageParam = hasImage
+            ? ((typeof rawB64 === 'string' && (rawB64.startsWith('data:') || rawB64.startsWith('http')))
+              ? rawB64
+              : `data:${mime};base64,${rawB64}`)
+            : null;
 
           const resp = await fetch(`${supabaseUrl}/functions/v1/image-background-removal`, {
             method: 'POST',
@@ -1471,7 +1472,7 @@ class WaktiAIV2ServiceClass {
               'Authorization': `Bearer ${session.access_token}`
             },
             body: JSON.stringify({
-              referenceImages: [imageParam],
+              ...(imageParam ? { referenceImages: [imageParam] } : {}),
               positivePrompt: (message || '').toString().replace(/"\s*$/,'').trim(),
               outputType: ["dataURI","URL"],
               outputFormat: 'JPEG',
@@ -1492,7 +1493,9 @@ class WaktiAIV2ServiceClass {
             return { response: language === 'ar' ? 'لم يتم توليد صورة. حاول تعديل التعليمات.' : 'No image generated. Please refine your instruction.', error: true } as any;
           }
           return {
-            response: language === 'ar' ? 'تم تعديل الخلفية.' : 'Background edited.',
+            response: hasImage
+              ? (language === 'ar' ? 'تم تعديل الصورة.' : 'Image edited.')
+              : (language === 'ar' ? 'تم إنشاء الصورة.' : 'Image generated.'),
             imageUrl: outUrl || outData,
             error: false,
             metadata: { provider: 'runware', model: (json as any)?.model || 'google:4@1', mode }
