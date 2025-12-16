@@ -112,7 +112,7 @@ function App() {
                 <Route path="/contact" element={<ContactUs />} />
                 <Route path="/help" element={
                   <GiftNotificationProvider>
-                    <Help />
+                    <AppLayout><Help /></AppLayout>
                   </GiftNotificationProvider>
                 } />
                 <Route path="/fitness" element={

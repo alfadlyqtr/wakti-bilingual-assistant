@@ -12,7 +12,6 @@ import { ChevronRight,
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
-import { AppHeader } from '@/components/AppHeader';
 import { SimpleContactFormModal } from '@/components/support/SimpleContactFormModal';
 import { ChatThread } from '@/components/support/ChatThread';
 import { HelpAssistantChat } from '@/components/help/HelpAssistantChat';
@@ -699,10 +698,9 @@ export default function Help() {
   }, [activeTab, userEmail]);
 
   return (
-    <div className="desktop-container">
-      <AppHeader />
-      <main className="px-4 md:px-6 lg:px-8 py-4 md:py-6">
-        <div className="flex-1 scrollbar-hide">
+    <div className="w-full">
+      <main className="w-full">
+        <div className="w-full scrollbar-hide">
           <div className="max-w-6xl mx-auto space-y-8">
             {/* Header */}
             <div className="text-center">

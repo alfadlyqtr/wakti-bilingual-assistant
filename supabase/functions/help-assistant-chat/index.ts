@@ -47,12 +47,81 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+// Cache browser CORS preflight for this function to reduce repeated OPTIONS latency
+const corsHeadersWithMaxAge = {
+  ...corsHeaders,
+  "Access-Control-Max-Age": "86400",
+};
+
 // Small in-memory cache per query (speeds up repeated questions)
 type CacheItem = { ts: number; entries: ManualEntry[] };
 const QUERY_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
 const queryCache = new Map<string, CacheItem>();
 
-function buildSystemPrompt(language: "en" | "ar", manualContext: string): string {
+// ============================================================================
+// SMART-SKIP: Canned responses for general/off-topic questions (NO AI CALL)
+// ============================================================================
+const GENERAL_REDIRECT_EN = `Hey! For help with your homework or any general question, "WAKTI AI" is your go-to buddy. It can explain concepts, solve problems, and even search the web for extra info. To get started, tap the "W logo" (top-left) to open the menu, then tap "WAKTI AI". In the input bar you'll see a mode selector — keep it on "Chat mode" (default) for normal conversations. Just type or speak your question and WAKTI AI will help you out. If you need to look something up online or watch a tutorial, switch to "Search mode" from that same selector (Web or YouTube). And honestly — for homework and studying, "Study mode" is usually the best: it explains step-by-step like a real tutor. Give it a try — it's like having a study partner right inside the app.`;
+
+const GENERAL_REDIRECT_AR = `مرحباً! إذا تحتاج مساعدة في الواجب أو أي سؤال عام، "WAKTI AI" هو صاحبك الأول. يشرح الأفكار، يحل المسائل، وحتى يقدر يبحث لك من الإنترنت لو تحتاج معلومات إضافية. عشان تبدأ: اضغط على "شعار W" (أعلى اليسار) عشان تفتح القائمة، بعدين اضغط "WAKTI AI". داخل خانة الكتابة بتشوف اختيار الوضع — خلّه على "Chat mode" (هذا الوضع الافتراضي للمحادثة). اكتب أو تكلم بسؤالك، وWAKTI AI بيساعدك فوراً. ولو تحتاج تبحث عن شيء أو تشوف شرح، بدّل إلى "Search mode" من نفس المكان (Web أو YouTube). وبصراحة للواجبات والدراسة، "Study mode" غالباً أفضل شيء لأنه يشرح خطوة بخطوة مثل مدرس. جرّبه — كأن عندك شريك مذاكرة داخل التطبيق.`;
+
+const GENERAL_CHIP: Chip = { label: "Open WAKTI AI", route: "/wakti-ai-v2" };
+const GENERAL_CHIP_AR: Chip = { label: "افتح WAKTI AI", route: "/wakti-ai-v2" };
+
+// Keywords that indicate a general/off-topic question (NOT about WAKTI features)
+const GENERAL_KEYWORDS = [
+  // Homework / study
+  "homework", "home work", "assignment", "exam", "test", "quiz", "study", "studying",
+  "math", "maths", "algebra", "geometry", "calculus", "physics", "chemistry", "biology",
+  "history", "geography", "english", "arabic", "science", "essay", "project",
+  "solve", "equation", "problem", "answer", "question", "help me with",
+  // Arabic homework keywords
+  "واجب", "امتحان", "اختبار", "مذاكرة", "دراسة", "رياضيات", "فيزياء", "كيمياء",
+  "احياء", "تاريخ", "جغرافيا", "انجليزي", "عربي", "علوم", "مشروع", "حل", "معادلة",
+  // General life / random
+  "weather", "news", "recipe", "cook", "movie", "song", "joke", "story",
+  "relationship", "advice", "life", "love", "friend", "family",
+  "الطقس", "اخبار", "وصفة", "طبخ", "فيلم", "اغنية", "نكتة", "قصة", "علاقة", "نصيحة",
+  // Explicit "help me" patterns
+  "can you help", "help me", "i need help", "ساعدني", "محتاج مساعدة",
+];
+
+// Keywords that indicate the question IS about WAKTI features (override general detection)
+const WAKTI_FEATURE_KEYWORDS = [
+  "wakti", "tasjeel", "maw3d", "voice studio", "voice clone", "tts", "text to speech",
+  "translator", "translate", "calendar", "task", "reminder", "contact", "journal",
+  "vitality", "whoop", "fitness", "sleep", "music studio", "games", "settings",
+  "dashboard", "search mode", "chat mode", "study mode", "image", "vision",
+  "sidebar", "menu", "w logo", "header", "avatar",
+  // Arabic feature keywords
+  "تسجيل", "موعد", "صوت", "استنساخ", "ترجمة", "تقويم", "مهمة", "تذكير", "جهات اتصال",
+  "يوميات", "حيوية", "نوم", "موسيقى", "العاب", "اعدادات", "لوحة", "قائمة",
+];
+
+function isGeneralQuestion(query: string): boolean {
+  const q = query.toLowerCase();
+  
+  // First check if it's clearly about WAKTI features
+  for (const kw of WAKTI_FEATURE_KEYWORDS) {
+    if (q.includes(kw)) return false;
+  }
+  
+  // Then check if it matches general/off-topic patterns
+  for (const kw of GENERAL_KEYWORDS) {
+    if (q.includes(kw)) return true;
+  }
+  
+  // Check for question patterns that are likely general
+  if (/^(what|how|why|when|where|who|can you|could you|please|i need|i want)/i.test(q)) {
+    // Only if it doesn't mention any WAKTI-related terms
+    const hasWaktiTerm = /wakti|app|feature|button|icon|menu|screen|page|mode/i.test(q);
+    if (!hasWaktiTerm) return true;
+  }
+  
+  return false;
+}
+
+ function buildSystemPrompt(language: "en" | "ar", manualContext: string): string {
   if (language === "ar") {
     return `أنت مساعد WAKTI الودود! تخيل نفسك كصديق يساعد المستخدم يكتشف التطبيق.
 
@@ -67,10 +136,12 @@ ${manualContext}
 - إذا الميزة في الهيدر (أعلى الشاشة)، قل "شوف أعلى الشاشة جنب صورتك".
 - إذا الميزة في القائمة، قل "اضغط شعار W أعلى اليسار لفتح القائمة".
 - إذا ما لقيت الجواب في الدليل، قل "ما عندي هالمعلومة، ممكن توضح سؤالك؟"
-- إذا السؤال عام (مثل أسئلة عن الطقس، الرياضيات، أخبار، أو أي شي مو عن ميزات WAKTI)، قل شي مثل: "أنا مساعد WAKTI هنا عشان أساعدك تتنقل وتفهم التطبيق! لكن لسؤالك هذا، WAKTI AI يقدر يساعدك أفضل، جربه!" وأضف [CHIP:Open WAKTI AI:/wakti-ai-v2]
+- إذا السؤال عام (مثل أسئلة عن الطقس، الرياضيات، أخبار، واجبات، أو أي شي مو عن ميزات WAKTI)، قل شي مثل: "تمام! بس تنبيه سريع: أنا مساعد WAKTI هنا عشان أساعدك تتنقل وتفهم التطبيق. لسؤالك هذا، WAKTI AI هو صاحبك. افتح القائمة واضغط شعار W (أعلى اليسار)، بعدين ادخل WAKTI AI. داخل WAKTI AI استخدم Chat mode للمساعدة السريعة، وStudy mode لو تبي شرح خطوة بخطوة مثل المدرّس. وإذا تحتاج تبحث: استخدم Search mode (ويب أو YouTube)." وأضف [CHIP:Open WAKTI AI:/wakti-ai-v2]
 - استخدم العربية فقط.`;
   }
   return `You are WAKTI's friendly helper! Think of yourself as a buddy helping the user discover the app.
+
+IMPORTANT: Only recommend features that are explicitly mentioned in the manual below. Do NOT make up features or suggest things not in the manual.
 
 Here is information from the WAKTI manual:
 ${manualContext}
@@ -79,11 +150,12 @@ Your style:
 - Talk naturally and warmly, like a friend explaining to a friend.
 - Use plain text only. Never use **, ##, -, or bullet points.
 - Explain steps clearly and simply.
+- ONLY recommend the specific feature from the manual that best matches what the user needs.
 - Mention icons when helpful (like: mic icon, music note icon).
 - If the feature is in the header (top of screen), say "Look at the top of your screen, next to your avatar".
 - If the feature is in the menu, say "Tap the W logo (top-left) to open the menu".
 - If you cannot find the answer in the manual, say "I don't have that info, can you clarify your question?"
-- If the question is general (like weather, math, news, or anything NOT about WAKTI features), say something like: "Hey! I'm WAKTI's Help Assistant, here to help you navigate and understand the app. For your question though, WAKTI AI can help you better, give it a try!" and add [CHIP:Open WAKTI AI:/wakti-ai-v2]
+- If the question is general (like weather, math, news, homework, or anything NOT about WAKTI features), say something like: "Hey! Quick heads-up: I'm WAKTI's Help Assistant, here to help you navigate and understand the app. For your question though, WAKTI AI is your go-to buddy. Tap the W logo (top-left) to open the menu, then open WAKTI AI. Use Chat mode for quick help, Study mode for step-by-step tutor style, and Search mode (Web/YouTube) when you need to look something up." and add [CHIP:Open WAKTI AI:/wakti-ai-v2]
 - Respond in English only.`;
 }
 
@@ -192,12 +264,11 @@ function cleanReply(text: string): string {
     .trim();
 }
 
-// Extract [CHIP:label:route] from AI response
-function extractChipFromResponse(text: string): Chip | null {
-  const match = text.match(/\[CHIP:([^:]+):([^\]]+)\]/);
-  if (match) {
-    return { label: match[1], route: match[2] };
-  }
+// SAFETY FIX: We no longer trust AI-provided chips.
+// Chips come ONLY from manual entries or our hardcoded safe chips.
+// This prevents random wrong chips like "Change Theme" appearing.
+function extractChipFromResponse(_text: string): Chip | null {
+  // Disabled: AI chips are not trusted anymore
   return null;
 }
 
@@ -265,7 +336,7 @@ async function callOpenAI(messages: ChatMessage[]): Promise<string | null> {
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeadersWithMaxAge });
   }
 
   const start = Date.now();
@@ -286,7 +357,33 @@ serve(async (req) => {
     if (!message) {
       return new Response(
         JSON.stringify({ error: "message is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...corsHeadersWithMaxAge, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ========================================================================
+    // SMART-SKIP: If it's a general question, return canned response INSTANTLY
+    // ========================================================================
+    if (isGeneralQuestion(message)) {
+      const durationMs = Date.now() - start;
+      const cannedReply = language === "ar" ? GENERAL_REDIRECT_AR : GENERAL_REDIRECT_EN;
+      const cannedChip = language === "ar" ? GENERAL_CHIP_AR : GENERAL_CHIP;
+      
+      console.log(`[SMART-SKIP] General question detected, returning canned response in ${durationMs}ms`);
+      
+      await logAIFromRequest(req, {
+        functionName: "help-assistant-chat",
+        provider: "smart-skip",
+        model: "canned-response",
+        inputText: message,
+        outputText: cannedReply,
+        durationMs,
+        status: "success",
+      });
+      
+      return new Response(
+        JSON.stringify({ reply: cannedReply, chips: [cannedChip] }),
+        { headers: { ...corsHeadersWithMaxAge, "Content-Type": "application/json" } }
       );
     }
 
@@ -309,16 +406,16 @@ serve(async (req) => {
 
     messages.push({ role: "user", content: message });
 
-    // Try DeepSeek first, fallback to OpenAI
-    let reply = await callDeepSeek(messages);
-    let provider = "deepseek";
-    let model = "deepseek-chat";
+    // Try OpenAI first (primary), fallback to DeepSeek
+    let reply = await callOpenAI(messages);
+    let provider = "openai";
+    let model = "gpt-4o-mini";
 
     if (!reply) {
-      console.log("DeepSeek failed, trying OpenAI fallback...");
-      reply = await callOpenAI(messages);
-      provider = "openai";
-      model = "gpt-4o-mini";
+      console.log("OpenAI failed, trying DeepSeek fallback...");
+      reply = await callDeepSeek(messages);
+      provider = "deepseek";
+      model = "deepseek-chat";
     }
 
     const durationMs = Date.now() - start;
@@ -341,7 +438,7 @@ serve(async (req) => {
             : "Sorry, I couldn't respond right now. Please try again.",
           chips: []
         }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { headers: { ...corsHeadersWithMaxAge, "Content-Type": "application/json" } }
       );
     }
 
@@ -366,7 +463,7 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ reply: cleanedReply, chips: finalChips }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeadersWithMaxAge, "Content-Type": "application/json" } }
     );
   } catch (e: unknown) {
     const durationMs = Date.now() - start;
@@ -386,7 +483,7 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ error: "Unexpected error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...corsHeadersWithMaxAge, "Content-Type": "application/json" } }
     );
   }
 });
