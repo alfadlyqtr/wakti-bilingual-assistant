@@ -66,8 +66,8 @@ ${manualContext}
 - اذكر الأيقونات لما تساعد (مثل: أيقونة المايك).
 - إذا الميزة في الهيدر (أعلى الشاشة)، قل "شوف أعلى الشاشة جنب صورتك".
 - إذا الميزة في القائمة، قل "اضغط شعار W أعلى اليسار لفتح القائمة".
-- إذا ما لقيت الجواب، قل "ما عندي هالمعلومة، ممكن توضح سؤالك؟"
-- إذا السؤال مو عن WAKTI، قل "أنا متخصص بـ WAKTI بس، كيف أقدر أساعدك فيه؟"
+- إذا ما لقيت الجواب في الدليل، قل "ما عندي هالمعلومة، ممكن توضح سؤالك؟"
+- إذا السؤال عام (مثل أسئلة عن الطقس، الرياضيات، أخبار، أو أي شي مو عن ميزات WAKTI)، قل شي مثل: "أنا مساعد WAKTI هنا عشان أساعدك تتنقل وتفهم التطبيق! لكن لسؤالك هذا، WAKTI AI يقدر يساعدك أفضل، جربه!" وأضف [CHIP:Open WAKTI AI:/wakti-ai-v2]
 - استخدم العربية فقط.`;
   }
   return `You are WAKTI's friendly helper! Think of yourself as a buddy helping the user discover the app.
@@ -82,8 +82,8 @@ Your style:
 - Mention icons when helpful (like: mic icon, music note icon).
 - If the feature is in the header (top of screen), say "Look at the top of your screen, next to your avatar".
 - If the feature is in the menu, say "Tap the W logo (top-left) to open the menu".
-- If you cannot find the answer, say "I don't have that info, can you clarify your question?"
-- If the question is not about WAKTI, say "I'm here to help with WAKTI only, what can I help you with?"
+- If you cannot find the answer in the manual, say "I don't have that info, can you clarify your question?"
+- If the question is general (like weather, math, news, or anything NOT about WAKTI features), say something like: "Hey! I'm WAKTI's Help Assistant, here to help you navigate and understand the app. For your question though, WAKTI AI can help you better, give it a try!" and add [CHIP:Open WAKTI AI:/wakti-ai-v2]
 - Respond in English only.`;
 }
 
@@ -98,21 +98,11 @@ async function searchManual(query: string, language: "en" | "ar"): Promise<Manua
 
   const keywords = queryLower.split(/\s+/).filter((w) => w.length > 2).slice(0, 6);
 
-  // Targeted DB search (fast): only pull likely matches
-  const ilikes = keywords.slice(0, 3).map((kw) => `%${kw}%`);
-  const titleField = language === "ar" ? "title_ar" : "title_en";
-  const contentField = language === "ar" ? "content_ar" : "content_en";
-  const orParts = ilikes.length
-    ? ilikes
-        .flatMap((p) => [`${titleField}.ilike.${p}`, `${contentField}.ilike.${p}`])
-        .join(",")
-    : `${titleField}.ilike.%${queryLower}%,${contentField}.ilike.%${queryLower}%`;
-
+  // Fetch all manual entries and filter/score in memory (manual is small ~40 entries)
+  // This ensures we search tags properly and don't miss anything
   const { data, error } = await supabase
     .from("help_manual")
-    .select("id,section,title_en,title_ar,content_en,content_ar,tags,route,chip_label_en,chip_label_ar")
-    .or(orParts)
-    .limit(20);
+    .select("id,section,title_en,title_ar,content_en,content_ar,tags,route,chip_label_en,chip_label_ar");
 
   if (error || !data) {
     console.error("Manual search error:", error);
@@ -198,7 +188,17 @@ function cleanReply(text: string): string {
     .replace(/^#{1,6}\s+/gm, "")       // ## heading -> heading
     .replace(/^[-•]\s+/gm, "")         // - bullet -> bullet
     .replace(/^\d+\.\s+/gm, (m) => m)  // keep numbered lists
+    .replace(/\[CHIP:[^\]]+\]/g, "")   // remove [CHIP:...] markers from visible text
     .trim();
+}
+
+// Extract [CHIP:label:route] from AI response
+function extractChipFromResponse(text: string): Chip | null {
+  const match = text.match(/\[CHIP:([^:]+):([^\]]+)\]/);
+  if (match) {
+    return { label: match[1], route: match[2] };
+  }
+  return null;
 }
 
 async function callDeepSeek(messages: ChatMessage[]): Promise<string | null> {
@@ -345,8 +345,14 @@ serve(async (req) => {
       );
     }
 
+    // Check if AI added a chip in its response (for general questions redirect)
+    const aiChip = extractChipFromResponse(reply);
+    
     // Clean markdown from reply
     const cleanedReply = cleanReply(reply);
+    
+    // Use AI chip if provided, otherwise use manual-based chips
+    const finalChips = aiChip ? [aiChip] : chips;
 
     await logAIFromRequest(req, {
       functionName: "help-assistant-chat",
@@ -359,7 +365,7 @@ serve(async (req) => {
     });
 
     return new Response(
-      JSON.stringify({ reply: cleanedReply, chips }),
+      JSON.stringify({ reply: cleanedReply, chips: finalChips }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e: unknown) {
