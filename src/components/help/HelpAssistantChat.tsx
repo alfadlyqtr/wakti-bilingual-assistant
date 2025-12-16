@@ -1,22 +1,58 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useTheme } from '@/providers/ThemeProvider';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Send, Bot, User } from 'lucide-react';
+import {
+  Loader2,
+  Send,
+  Bot,
+  User,
+  LayoutGrid,
+  Sparkles,
+  Mic,
+  Languages,
+  CheckSquare,
+  Calendar,
+  Users as UsersIcon,
+  Settings as SettingsIcon
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type HelpChatRole = 'user' | 'assistant';
+
+type Chip = {
+  label: string;
+  route: string;
+};
 
 type HelpChatMessage = {
   id: string;
   role: HelpChatRole;
   content: string;
+  chips?: Chip[];
 };
+
+function getChipIcon(route: string) {
+  const r = String(route || '').toLowerCase();
+
+  if (r.startsWith('/dashboard')) return LayoutGrid;
+  if (r.startsWith('/wakti-ai') || r.startsWith('/wakti-ai-v2')) return Sparkles;
+  if (r.startsWith('/tools/voice-studio') || r.startsWith('/tools/voice')) return Mic;
+  if (r.includes('text-translator') || r.includes('voice-translator')) return Languages;
+  if (r.startsWith('/tasks-reminders') || r.startsWith('/tr')) return CheckSquare;
+  if (r.startsWith('/calendar')) return Calendar;
+  if (r.startsWith('/contacts')) return UsersIcon;
+  if (r.startsWith('/settings') || r.startsWith('/account')) return SettingsIcon;
+
+  return Sparkles;
+}
 
 export function HelpAssistantChat() {
   const { language } = useTheme();
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<HelpChatMessage[]>(() => [
     {
       id: 'welcome',
@@ -86,6 +122,7 @@ export function HelpAssistantChat() {
       if (error) throw error;
 
       const assistantText = String(data?.reply || '').trim();
+      const chips: Chip[] = Array.isArray(data?.chips) ? data.chips : [];
       const assistantMsg: HelpChatMessage = {
         id: `a_${Date.now()}`,
         role: 'assistant',
@@ -93,7 +130,8 @@ export function HelpAssistantChat() {
           assistantText ||
           (language === 'ar'
             ? 'حدث خطأ. حاول مرة أخرى.'
-            : 'Something went wrong. Please try again.')
+            : 'Something went wrong. Please try again.'),
+        chips
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
@@ -125,8 +163,8 @@ export function HelpAssistantChat() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="rounded-2xl border bg-background/40">
-          <div className="max-h-[360px] overflow-y-auto p-4 space-y-3">
+        <div className="rounded-2xl border bg-background/40 flex flex-col min-h-[70vh]">
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {messages.map((m) => {
               const isUser = m.role === 'user';
               return (
@@ -136,15 +174,37 @@ export function HelpAssistantChat() {
                       <Bot className="h-4 w-4 text-primary" />
                     </div>
                   )}
-                  <div
-                    className={cn(
-                      'max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed',
-                      isUser
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted text-foreground'
+                  <div className="max-w-[85%]">
+                    <div
+                      className={cn(
+                        'rounded-2xl px-4 py-3 text-sm leading-relaxed',
+                        isUser
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-foreground'
+                      )}
+                    >
+                      {m.content}
+                    </div>
+                    {!isUser && m.chips && m.chips.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {m.chips.map((chip, idx) => (
+                          (() => {
+                            const Icon = getChipIcon(chip.route);
+                            return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => navigate(chip.route)}
+                            className="inline-flex items-center gap-1.5 h-9 px-4 text-sm font-medium rounded-full bg-gradient-to-r from-primary/90 to-primary text-primary-foreground shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all duration-150"
+                          >
+                            <Icon className="h-3.5 w-3.5" />
+                            {chip.label}
+                          </button>
+                            );
+                          })()
+                        ))}
+                      </div>
                     )}
-                  >
-                    {m.content}
                   </div>
                   {isUser && (
                     <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">

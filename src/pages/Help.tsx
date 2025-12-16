@@ -716,9 +716,12 @@ export default function Help() {
 
             {/* Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="enhanced-card grid w-full grid-cols-2">
+              <TabsList className="enhanced-card grid w-full grid-cols-3">
                 <TabsTrigger value="guides" className="data-[state=active]:bg-primary/20">
                   {language === 'ar' ? 'الأدلة' : 'Guides'}
+                </TabsTrigger>
+                <TabsTrigger value="assistant" className="data-[state=active]:bg-primary/20">
+                  {language === 'ar' ? 'المساعد' : 'Assistant'}
                 </TabsTrigger>
                 <TabsTrigger value="support" className="data-[state=active]:bg-primary/20">
                   {language === 'ar' ? 'الدعم' : 'Support'}
@@ -863,8 +866,6 @@ export default function Help() {
                   </Collapsible>
                 </Card>
 
-                <HelpAssistantChat />
-
                 {/* Main Sections */}
                 <div className="space-y-6">
                   {sections.map((section) => (
@@ -910,6 +911,10 @@ export default function Help() {
                   ))}
                 </div>
 
+              </TabsContent>
+
+              <TabsContent value="assistant" className="space-y-6">
+                <HelpAssistantChat />
               </TabsContent>
 
               <TabsContent value="support" className="space-y-6">

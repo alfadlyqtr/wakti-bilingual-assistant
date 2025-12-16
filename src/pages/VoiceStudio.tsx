@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { PenLine, Loader2, Copy } from 'lucide-react';
 import { VoiceCloneScreen1 } from '@/components/wakti-ai-v2/VoiceCloneScreen1';
 import { VoiceCloneScreen2 } from '@/components/wakti-ai-v2/VoiceCloneScreen2';
@@ -8,9 +9,19 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 
+const TAB_MAP: Record<string, number> = {
+  'tts': 4,
+  'text-to-speech': 4,
+  'clone': 2,
+  'clone-my-voice': 2,
+  'voice-translator': 3,
+  'text-translator': 5,
+};
+
 export default function VoiceStudio() {
   const { language } = useTheme();
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const [currentScreen, setCurrentScreen] = useState(0); // 0 = Welcome
   const [hasExistingVoices, setHasExistingVoices] = useState(false);
   // Text translator states
@@ -89,8 +100,15 @@ export default function VoiceStudio() {
   useEffect(() => {
     // On page mount, mirror popup behavior: check if user already has voices
     checkExistingVoices();
-    setCurrentScreen(0);
-  }, []);
+    
+    // Deep-link support: read ?tab= query param and open the correct tab
+    const tabParam = searchParams.get('tab');
+    if (tabParam && TAB_MAP[tabParam.toLowerCase()]) {
+      setCurrentScreen(TAB_MAP[tabParam.toLowerCase()]);
+    } else {
+      setCurrentScreen(0);
+    }
+  }, [searchParams]);
 
   const checkExistingVoices = async () => {
     try {
