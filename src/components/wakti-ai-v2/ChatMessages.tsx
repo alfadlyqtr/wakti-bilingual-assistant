@@ -577,6 +577,7 @@ export function ChatMessages({
           case 'image': return '🎨 Image';
           case 'vision': return '👁️ Vision';
           case 'parse_task': return '🎯 Task';
+          case 'talk': return '🎙️ Talk'; // Talk mode messages
           case 'chat': {
             // Only show Study badge when intent is 'chat' AND chatSubmode is 'study'
             if ((message as any)?.chatSubmode === 'study') return '📚 Study';
@@ -624,6 +625,7 @@ export function ChatMessages({
       return '🔍 Search';
     }
     if (message.intent === 'image') return '🎨 Image';
+    if (message.intent === 'talk') return '🎙️ Talk'; // Talk mode assistant messages
     if (message.intent === 'parse_task') return '🎯 Task';
 
     const content = message.content.toLowerCase();
@@ -1116,6 +1118,8 @@ export function ChatMessages({
         return 'border-orange-400';
       case 'vision':
         return 'border-cyan-400'; // Cyan/teal for Vision mode
+      case 'talk':
+        return 'border-pink-400'; // Pink border for Talk mode
       case 'parse_task':
         return 'border-blue-300';
       default:

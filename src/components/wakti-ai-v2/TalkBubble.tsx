@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { X, Mic } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { supabase } from '@/integrations/supabase/client';
+import { DEFAULT_VOICES } from './TalkBackSettings';
 
 interface TalkBubbleProps {
   isOpen: boolean;
@@ -22,6 +23,13 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const [error, setError] = useState<string | null>(null);
   const [isConnectionReady, setIsConnectionReady] = useState(false);
   const [userName, setUserName] = useState<string>('');
+  const [voiceGender, setVoiceGender] = useState<'male' | 'female'>('male');
+  const [aiTranscript, setAiTranscript] = useState<string>('');
+  const [conversationHistory, setConversationHistory] = useState<{role: 'user' | 'assistant', text: string}[]>([]);
+
+  // Use refs for values needed in callbacks to avoid stale closures
+  const userNameRef = useRef<string>('');
+  const voiceGenderRef = useRef<'male' | 'female'>('male');
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -34,32 +42,60 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const holdStartRef = useRef<number>(0);
   const isStoppingRef = useRef(false); // Guard against multiple stopRecording calls
 
-  // Fetch user's name for personal touch
+  // Fetch user's nickname from PersonalTouchManager and voice gender from TTS settings
   useEffect(() => {
-    const fetchUserName = async () => {
+    const fetchUserData = () => {
+      // Get nickname from PersonalTouchManager settings (localStorage)
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user?.id) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('first_name')
-            .eq('id', user.id)
-            .single();
-          if (profile?.first_name) {
-            setUserName(profile.first_name);
+        const personalTouchRaw = localStorage.getItem('wakti_personal_touch');
+        if (personalTouchRaw) {
+          const personalTouch = JSON.parse(personalTouchRaw);
+          if (personalTouch?.nickname) {
+            console.log('[Talk] Fetched nickname from PersonalTouch:', personalTouch.nickname);
+            setUserName(personalTouch.nickname);
+            userNameRef.current = personalTouch.nickname;
           }
         }
       } catch (e) {
-        console.warn('[Talk] Could not fetch user name:', e);
+        console.warn('[Talk] Could not fetch nickname from PersonalTouch:', e);
+      }
+
+      // Get voice gender from Talk Back settings (localStorage)
+      try {
+        const lsKey = language === 'ar' ? 'wakti_tts_voice_ar' : 'wakti_tts_voice_en';
+        const savedVoice = localStorage.getItem(lsKey) || '';
+        const femaleVoice = language === 'ar' ? DEFAULT_VOICES.ar.female : DEFAULT_VOICES.en.female;
+        const maleVoice = language === 'ar' ? DEFAULT_VOICES.ar.male : DEFAULT_VOICES.en.male;
+        
+        // Check if it's female voice
+        const isFemale = savedVoice === femaleVoice;
+        const gender = isFemale ? 'female' : 'male';
+        
+        console.log('[Talk] Voice gender check:', {
+          savedVoice,
+          femaleVoice,
+          maleVoice,
+          isFemale,
+          gender
+        });
+        
+        setVoiceGender(gender);
+        voiceGenderRef.current = gender;
+      } catch (e) {
+        console.warn('[Talk] Could not get voice gender:', e);
       }
     };
-    fetchUserName();
-  }, []);
+    fetchUserData();
+  }, [language]);
 
-  // Initialize connection when Talk bubble opens
+  // Initialize connection when Talk bubble opens - wait a bit for userName to be fetched
   useEffect(() => {
     if (isOpen) {
-      initializeConnection();
+      // Small delay to allow userName fetch to complete
+      const timer = setTimeout(() => {
+        initializeConnection();
+      }, 100);
+      return () => clearTimeout(timer);
     } else {
       cleanup();
     }
@@ -155,23 +191,37 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       dc.onopen = () => {
         console.log('[Talk] Data channel open - sending session config (manual turn detection)');
         
+        // Use refs to get current values (avoid stale closures)
+        const currentUserName = userNameRef.current;
+        const currentVoiceGender = voiceGenderRef.current;
+        
         // Build personal instructions with user's name - MUST use name in greeting
-        const personalTouch = userName ? (language === 'ar' 
-          ? `أنت تتحدث مع ${userName}. يجب أن تستخدم اسمه "${userName}" في ردك الأول وأحياناً في الردود الأخرى.`
-          : `You are talking to ${userName}. You MUST use their name "${userName}" in your first response and occasionally in other responses.`
+        const personalTouch = currentUserName ? (language === 'ar' 
+          ? `أنت تتحدث مع ${currentUserName}. يجب أن تستخدم اسمه "${currentUserName}" في ردك الأول وأحياناً في الردود الأخرى.`
+          : `You are talking to ${currentUserName}. You MUST use their name "${currentUserName}" in your first response and occasionally in other responses.`
         ) : '';
         
-        const instructions = language === 'ar'
-          ? `أنت مساعد Wakti الصوتي الذكي. ${personalTouch} أجب بإيجاز ووضوح. تحدث بالعربية. كن ودودًا ومفيدًا وطبيعياً. أجب كأنك صديق يساعد.`
-          : `You are Wakti, a smart voice assistant. ${personalTouch} Answer concisely and clearly. Be friendly, helpful, and natural. Respond like a helpful friend.`;
+        const waktiInfo = language === 'ar'
+          ? `عندما يسأل المستخدم "ما هو وقتي" أو أسئلة مشابهة: أجب بطريقة ودية: "بالتأكيد! وقتي هو تطبيق ذكاء اصطناعي شامل للإنتاجية. مصمم ليكون سهل الاستخدام ومتكيف مع احتياجاتك. للحصول على أدلة خطوة بخطوة، افتح المساعدة والأدلة - هناك 3 تبويبات: الأدلة، مساعد وقتي الصغير الذي سيشرح لك كل شيء، وتبويب الدعم للتواصل معنا."`
+          : `When asked "what is Wakti" or similar: Respond friendly: "Sure${currentUserName ? ', ' + currentUserName : ''}! Wakti AI is your all-in-one productivity AI app. It's built to be user-friendly and adaptable to your needs. For step-by-step guides, open Help & Guides - there are 3 tabs: Guides (like mini documents), my little brother Wakti Help Assistant who will walk you through everything if you don't feel like reading, and a Support tab to get in touch with us directly."`;
         
+        const instructions = language === 'ar'
+          ? `أنت مساعد Wakti الصوتي الذكي. ${personalTouch} أجب بإيجاز ووضوح. تحدث بالعربية. كن ودودًا ومفيدًا وطبيعياً. أجب كأنك صديق يساعد. ${waktiInfo}`
+          : `You are Wakti, a smart voice assistant. ${personalTouch} Answer concisely and clearly. Be friendly, helpful, and natural. Respond like a helpful friend. ${waktiInfo}`;
+        
+        // Select OpenAI Realtime voice based on Talk Back settings
+        // Valid voices: alloy, ash, ballad, coral, echo, sage, shimmer, verse, mann, cedar
+        // male=echo (deep), female=shimmer (expressive)
+        const openaiVoice = currentVoiceGender === 'female' ? 'shimmer' : 'echo';
         console.log('[Talk] Instructions:', instructions);
+        console.log('[Talk] User name:', currentUserName, '| Voice:', openaiVoice, '(gender:', currentVoiceGender, ')');
         
         // Use manual turn detection (null) - we control when to commit with hold-to-talk
         dc.send(JSON.stringify({
           type: 'session.update',
           session: {
             instructions,
+            voice: openaiVoice,
             input_audio_transcription: { model: 'whisper-1' },
             turn_detection: null, // Manual - we control when user finishes speaking
           }
@@ -244,7 +294,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       setStatus('ready');
       setIsConnectionReady(false);
     }
-  }, [language, userName]);
+  }, [language, userName, voiceGender]);
 
   // Continuous mic level animation
   const startMicLevelAnimation = useCallback(() => {
@@ -278,22 +328,27 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
         // User's speech transcribed
         if (msg.transcript) {
           setLiveTranscript(msg.transcript);
-          onUserMessage(msg.transcript);
+          setConversationHistory(prev => [...prev, { role: 'user', text: msg.transcript }]);
         }
         break;
       case 'response.audio_transcript.delta':
-        // AI speaking - partial transcript
+        // AI speaking - partial transcript (accumulate)
         setStatus('speaking');
+        if (msg.delta) {
+          setAiTranscript(prev => prev + msg.delta);
+        }
         break;
       case 'response.audio_transcript.done':
         // AI finished speaking - full transcript
         if (msg.transcript) {
-          onAssistantMessage(msg.transcript);
+          setAiTranscript(msg.transcript);
+          setConversationHistory(prev => [...prev, { role: 'assistant', text: msg.transcript }]);
         }
         break;
       case 'response.done':
         console.log('[Talk] Response complete - ready for next turn');
         setStatus('ready');
+        setError(null); // Clear any timeout error
         break;
       case 'error':
         console.error('[Talk] Realtime error:', msg);
@@ -312,7 +367,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       default:
         break;
     }
-  }, [onUserMessage, onAssistantMessage]);
+  }, []);
 
   // Stop recording and send to AI (defined first so startRecording can reference it)
   const stopRecording = useCallback(() => {
@@ -346,17 +401,17 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       isStoppingRef.current = false;
     }, 1000);
 
-    // Timeout fallback: if still processing after 15s, reset
+    // Timeout fallback: if still processing/speaking after 30s, reset
     setTimeout(() => {
       setStatus((prev) => {
-        if (prev === 'processing') {
-          console.warn('[Talk] Processing timeout, resetting to ready');
+        if (prev === 'processing' || prev === 'speaking') {
+          console.warn('[Talk] Response timeout, resetting to ready');
           setError(language === 'ar' ? 'انتهت المهلة' : 'Response timeout');
           return 'ready';
         }
         return prev;
       });
-    }, 15000);
+    }, 30000); // Increased to 30s to allow for longer responses
   }, [language]);
 
   // Start recording when user holds
@@ -373,6 +428,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     setError(null);
     setStatus('listening');
     setLiveTranscript('');
+    setAiTranscript(''); // Clear previous AI response
     setCountdown(MAX_RECORD_SECONDS);
     holdStartRef.current = Date.now();
 
@@ -589,10 +645,19 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
           {statusText[status]}
         </div>
 
-        {/* Live transcript */}
+        {/* User transcript (what you said) */}
         {liveTranscript && (
           <div className="max-w-xs text-center text-sm text-white/60 italic">
+            <span className="text-white/40 text-xs block mb-1">{language === 'ar' ? 'أنت:' : 'You:'}</span>
             "{liveTranscript}"
+          </div>
+        )}
+
+        {/* AI transcript (what AI said) */}
+        {aiTranscript && status !== 'listening' && (
+          <div className="max-w-xs text-center text-sm text-blue-300/80">
+            <span className="text-blue-300/50 text-xs block mb-1">{language === 'ar' ? 'واكتي:' : 'Wakti:'}</span>
+            "{aiTranscript}"
           </div>
         )}
 
@@ -648,10 +713,27 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
           </div>
         )}
 
+        {/* Instruction text */}
+        <p className="text-xs text-white/50 text-center max-w-[200px]">
+          {language === 'ar' 
+            ? 'اضغط مع الاستمرار للتحدث، ثم اتركه للإرسال'
+            : 'Press and hold to speak, release to send'}
+        </p>
+
         {/* End button - easier to reach on mobile than X in corner */}
         <button
-          onClick={onClose}
-          className="mt-6 px-8 py-3 rounded-full bg-white/10 hover:bg-white/20 text-white/80 text-base font-medium transition-colors"
+          onClick={() => {
+            // Save conversation to chat before closing
+            conversationHistory.forEach(item => {
+              if (item.role === 'user') {
+                onUserMessage(item.text);
+              } else {
+                onAssistantMessage(item.text);
+              }
+            });
+            onClose();
+          }}
+          className="mt-4 px-8 py-3 rounded-full bg-white/10 hover:bg-white/20 text-white/80 text-base font-medium transition-colors"
         >
           {language === 'ar' ? 'إنهاء' : 'End'}
         </button>

@@ -190,36 +190,7 @@ function buildSystemPrompt(language, currentDate, personalTouch, activeTrigger, 
     personalSection += `- Style: ${style}. Shape your responses to match this style.\n`;
   }
 
-  return `CRITICAL IDENTITY
-You are WAKTI AI — the ultimate productivity AI app built to simplify life, boost creativity, and make technology feel human.
-
-ABOUT WAKTI:
-- Purpose: Empower individuals and teams with intelligent tools that simplify daily life, enhance productivity, and remove barriers to creativity and communication.
-- Mission: Create an AI app people love and rely on every single day — the intelligent digital partner for modern life.
-
-WAKTI FEATURES:
-- Smart Tasks & Subtasks: Sharable tasks with real-time progress tracking
-- Event Invites: Live RSVP for gatherings
-- Voice Tools: Record meetings/lectures, convert to searchable transcripts and summaries
-- Voice Cloning & Translation: 60+ languages for text and audio
-- AI Chat: Intelligent conversation and assistance
-- Smart Search: Powerful web search integration
-- Content Generation: Text, images, and videos
-
-WHO MADE WAKTI:
-- Created by: TMW (The Modern Web)
-- Location: Doha, Qatar
-- Website: tmw.qa
-
-ABOUT TMW (The Modern Web):
-- Tagline: "Your Web, Your Success"
-- Services: AI chatbots, professional website design, AI-powered website builder, WordPress hosting, website security, NFC cards, domain registration
-- Specialty: Modern web solutions with AI-powered tools
-- Key Features: Best pricing, super easy to use, dedicated support
-
-When asked "who made you": Say "I was made by TMW (The Modern Web), a web solutions company based in Doha, Qatar. Visit tmw.qa to learn more."
-When asked "what is TMW": Say "TMW (The Modern Web) is a modern web solutions company in Doha, Qatar that specializes in AI chatbots, website design, hosting, and AI-powered tools. Their website is tmw.qa."
-When asked "tell me about TMW": Explain their services, AI-powered website builder, hosting solutions, and their mission to help businesses establish their online presence.
+  return `You are WAKTI AI, a helpful and friendly AI assistant.
 
 CRITICAL MULTI-LANGUAGE RULE
 - You are multilingual. Default to the UI language "${language}".
@@ -625,33 +596,6 @@ serve(async (req) => {
 
         if (!message) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Message required' })}\n\n`));
-          controller.close();
-          return;
-        }
-
-        // Chat mode: if the user is asking about WAKTI specifically, respond with a short promo + help routing.
-        // This avoids the model guessing app features/steps.
-        if (activeTrigger === 'chat' && chatSubmode === 'chat' && isWaktiInvolved(message)) {
-          const promoText = language === 'ar'
-            ? 'ملاحظة سريعة: Wakti هو تطبيق إنتاجية ذكي شامل (مهام، فعاليات، صوت، وأدوات AI).\nللخطوات الدقيقة افتح صفحة المساعدة والإرشادات.\nوإذا ما ودّك تقرأ، اسأل أخوي الصغير مساعد Wakti وهو بيرشدك خطوة بخطوة.'
-            : 'Quick note: Wakti is your all‑in‑one productivity AI app (tasks, events, voice, and AI tools).\nFor accurate step‑by‑step guides, open Help & Guides.\nIf you don’t feel like reading, ask my little brother Wakti Help Assistant and he’ll walk you through it.';
-
-          try {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-              metadata: {
-                helpGuideChip: {
-                  label: language === 'ar' ? 'افتح المساعدة والإرشادات' : 'Open Help & Guides',
-                  route: '/help'
-                }
-              }
-            })}\n\n`));
-          } catch (e) {
-            console.warn('helpGuideChip emit failed', e);
-          }
-
-          // Emit as a single chunk for simplicity
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: promoText, content: promoText })}\n\n`));
-          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
           return;
         }

@@ -498,6 +498,25 @@ const WaktiAIV2 = () => {
   const handleDeclineTask = () => { console.log('Task declined'); setShowTaskConfirmation(false); };
   const handleConfirmReminder = (reminderData: any) => { console.log('Reminder confirmed:', reminderData); };
 
+  // Handle Talk mode messages - add with "Talk" badge
+  const handleAddTalkMessage = useCallback((role: 'user' | 'assistant', text: string) => {
+    // Use timestamp + random suffix to ensure unique IDs even for rapid additions
+    const uniqueId = `${role}-talk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const newMessage: AIMessage = {
+      id: uniqueId,
+      role,
+      content: text,
+      timestamp: new Date(),
+      intent: 'talk', // Special intent for Talk messages
+      metadata: { isTalkMessage: true }, // Flag for Talk badge
+    };
+    setSessionMessages(prev => {
+      const updated = [...prev, newMessage];
+      EnhancedFrontendMemory.saveActiveConversation(updated, currentConversationId);
+      return updated;
+    });
+  }, [currentConversationId]);
+
   return (
     <div className="wakti-ai-page-container">
       <ChatDrawers
@@ -579,6 +598,7 @@ const WaktiAIV2 = () => {
               onImageModeChange={setActiveImageMode}
               chatSubmode={chatSubmode}
               onChatSubmodeChange={setChatSubmode}
+              onAddTalkMessage={handleAddTalkMessage}
             />
           </div>,
           portalRoot
@@ -598,6 +618,7 @@ const WaktiAIV2 = () => {
               onImageModeChange={setActiveImageMode}
               chatSubmode={chatSubmode}
               onChatSubmodeChange={setChatSubmode}
+              onAddTalkMessage={handleAddTalkMessage}
             />
           </div>
         )}

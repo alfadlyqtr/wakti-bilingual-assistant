@@ -59,6 +59,7 @@ interface ChatInputProps {
   videoTemplate?: string;
   chatSubmode?: ChatSubmode;
   onChatSubmodeChange?: (submode: ChatSubmode) => void;
+  onAddTalkMessage?: (role: 'user' | 'assistant', text: string) => void;
 }
 
 export function ChatInput({
@@ -78,7 +79,8 @@ export function ChatInput({
   videoCategory = 'custom',
   videoTemplate = 'image2video',
   chatSubmode = 'chat',
-  onChatSubmodeChange
+  onChatSubmodeChange,
+  onAddTalkMessage
 }: ChatInputProps) {
   const { language } = useTheme();
   const [wasAutoSwitchedToVision, setWasAutoSwitchedToVision] = useState(false);
@@ -1739,12 +1741,14 @@ export function ChatInput({
         isOpen={isTalkOpen}
         onClose={() => setIsTalkOpen(false)}
         onUserMessage={(text) => {
-          if (text.trim()) {
-            onSendMessage(text, 'chat', [], undefined, undefined, chatSubmode);
+          if (text.trim() && onAddTalkMessage) {
+            onAddTalkMessage('user', text);
           }
         }}
         onAssistantMessage={(text) => {
-          console.log('Assistant said:', text);
+          if (text.trim() && onAddTalkMessage) {
+            onAddTalkMessage('assistant', text);
+          }
         }}
       />,
       document.body
