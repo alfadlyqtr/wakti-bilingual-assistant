@@ -10,17 +10,18 @@ interface TalkBubbleProps {
   onAssistantMessage: (text: string, audioUrl?: string) => void;
 }
 
-const MAX_RECORD_SECONDS = 15;
+const MAX_RECORD_SECONDS = 10; // 10 second limit
 
 export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage }: TalkBubbleProps) {
   const { language } = useTheme();
   const [isHolding, setIsHolding] = useState(false);
   const [countdown, setCountdown] = useState(MAX_RECORD_SECONDS);
   const [liveTranscript, setLiveTranscript] = useState('');
-  const [status, setStatus] = useState<'idle' | 'listening' | 'processing' | 'speaking'>('idle');
+  const [status, setStatus] = useState<'connecting' | 'ready' | 'listening' | 'processing' | 'speaking'>('connecting');
   const [micLevel, setMicLevel] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [isResponsePending, setIsResponsePending] = useState(false);
+  const [isConnectionReady, setIsConnectionReady] = useState(false);
+  const [userName, setUserName] = useState<string>('');
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -28,12 +29,38 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const holdStartRef = useRef<number>(0);
+  const isStoppingRef = useRef(false); // Guard against multiple stopRecording calls
 
-  // Cleanup on unmount or close
+  // Fetch user's name for personal touch
   useEffect(() => {
-    if (!isOpen) {
+    const fetchUserName = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.id) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('first_name')
+            .eq('id', user.id)
+            .single();
+          if (profile?.first_name) {
+            setUserName(profile.first_name);
+          }
+        }
+      } catch (e) {
+        console.warn('[Talk] Could not fetch user name:', e);
+      }
+    };
+    fetchUserName();
+  }, []);
+
+  // Initialize connection when Talk bubble opens
+  useEffect(() => {
+    if (isOpen) {
+      initializeConnection();
+    } else {
       cleanup();
     }
     return () => cleanup();
@@ -44,57 +71,60 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
-    if (countdownIntervalRef.current) {
-      clearInterval(countdownIntervalRef.current);
-      countdownIntervalRef.current = null;
-    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
       streamRef.current = null;
     }
+    if (audioContextRef.current) {
+      try { audioContextRef.current.close(); } catch (e) { /* ignore */ }
+      audioContextRef.current = null;
+    }
     if (dcRef.current) {
-      dcRef.current.close();
+      try { dcRef.current.close(); } catch (e) { /* ignore */ }
       dcRef.current = null;
     }
     if (pcRef.current) {
-      pcRef.current.close();
+      try { pcRef.current.close(); } catch (e) { /* ignore */ }
       pcRef.current = null;
     }
-    setIsHolding(false);
-    setCountdown(MAX_RECORD_SECONDS);
     setLiveTranscript('');
-    setStatus('idle');
+    setStatus('connecting');
     setMicLevel(0);
     setError(null);
+    setIsConnectionReady(false);
   }, []);
 
-  // Mic level animation
-  const updateMicLevel = useCallback(() => {
-    if (!analyserRef.current) return;
-    const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
-    analyserRef.current.getByteFrequencyData(dataArray);
-    const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-    setMicLevel(Math.min(1, avg / 128));
-    if (isHolding) {
-      animationFrameRef.current = requestAnimationFrame(updateMicLevel);
-    }
-  }, [isHolding]);
-
-  // Start recording session
-  const startSession = useCallback(async () => {
+  // Initialize WebRTC connection when bubble opens
+  const initializeConnection = useCallback(async () => {
+    setStatus('connecting');
     setError(null);
-    setStatus('listening');
-    setLiveTranscript('');
-    setCountdown(MAX_RECORD_SECONDS);
-    holdStartRef.current = Date.now();
+    setIsConnectionReady(false);
+
+    // Clean up old connection first
+    if (dcRef.current) {
+      try { dcRef.current.close(); } catch (e) { /* ignore */ }
+      dcRef.current = null;
+    }
+    if (pcRef.current) {
+      try { pcRef.current.close(); } catch (e) { /* ignore */ }
+      pcRef.current = null;
+    }
 
     try {
-      // Get microphone
+      // Get fresh microphone stream
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+      }
+      
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
-      // Setup analyser for mic level
+      // Setup analyser for mic level visualization
+      if (audioContextRef.current) {
+        try { audioContextRef.current.close(); } catch (e) { /* ignore */ }
+      }
       const audioCtx = new AudioContext();
+      audioContextRef.current = audioCtx;
       const source = audioCtx.createMediaStreamSource(stream);
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 256;
@@ -123,19 +153,35 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       dcRef.current = dc;
 
       dc.onopen = () => {
-        // Send session.update with instructions
-        const instructions = language === 'ar'
-          ? `أنت مساعد Wakti الصوتي. أجب بإيجاز ووضوح. تحدث بالعربية. كن ودودًا ومفيدًا.`
-          : `You are Wakti Voice Assistant. Answer concisely and clearly. Be friendly and helpful. Keep responses brief.`;
+        console.log('[Talk] Data channel open - sending session config (manual turn detection)');
         
+        // Build personal instructions with user's name - MUST use name in greeting
+        const personalTouch = userName ? (language === 'ar' 
+          ? `أنت تتحدث مع ${userName}. يجب أن تستخدم اسمه "${userName}" في ردك الأول وأحياناً في الردود الأخرى.`
+          : `You are talking to ${userName}. You MUST use their name "${userName}" in your first response and occasionally in other responses.`
+        ) : '';
+        
+        const instructions = language === 'ar'
+          ? `أنت مساعد Wakti الصوتي الذكي. ${personalTouch} أجب بإيجاز ووضوح. تحدث بالعربية. كن ودودًا ومفيدًا وطبيعياً. أجب كأنك صديق يساعد.`
+          : `You are Wakti, a smart voice assistant. ${personalTouch} Answer concisely and clearly. Be friendly, helpful, and natural. Respond like a helpful friend.`;
+        
+        console.log('[Talk] Instructions:', instructions);
+        
+        // Use manual turn detection (null) - we control when to commit with hold-to-talk
         dc.send(JSON.stringify({
           type: 'session.update',
           session: {
             instructions,
             input_audio_transcription: { model: 'whisper-1' },
-            turn_detection: { type: 'server_vad' },
+            turn_detection: null, // Manual - we control when user finishes speaking
           }
         }));
+        
+        setIsConnectionReady(true);
+        setStatus('ready');
+        
+        // Start continuous mic level animation
+        startMicLevelAnimation();
       };
 
       dc.onmessage = (event) => {
@@ -145,6 +191,21 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
         } catch (e) {
           console.warn('Failed to parse realtime event:', e);
         }
+      };
+
+      dc.onerror = (err) => {
+        console.error('[Talk] Data channel error:', err);
+        setError(language === 'ar' ? 'خطأ في الاتصال' : 'Connection error');
+        setIsConnectionReady(false);
+      };
+
+      dc.onclose = () => {
+        console.log('[Talk] Data channel closed');
+        setIsConnectionReady(false);
+        // Don't auto-reconnect - connection should stay open with server_vad
+        // If it closes, show error and let user close/reopen
+        setStatus('connecting');
+        setError(language === 'ar' ? 'انقطع الاتصال' : 'Connection lost');
       };
 
       // Create offer
@@ -159,6 +220,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
 
+      console.log('[Talk] Calling Edge Function for SDP exchange...');
       const response = await supabase.functions.invoke('openai-realtime-session', {
         body: { sdp_offer: offer.sdp, language },
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
@@ -168,40 +230,49 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
         throw new Error(response.error?.message || 'Failed to get SDP answer');
       }
 
-      // Set remote description
+      console.log('[Talk] Got SDP answer, setting remote description...');
       await pc.setRemoteDescription({
         type: 'answer',
         sdp: response.data.sdp_answer,
       });
 
-      // Start countdown
-      countdownIntervalRef.current = setInterval(() => {
-        const elapsed = Math.floor((Date.now() - holdStartRef.current) / 1000);
-        const remaining = Math.max(0, MAX_RECORD_SECONDS - elapsed);
-        setCountdown(remaining);
-        if (remaining <= 0) {
-          stopRecording();
-        }
-      }, 200);
-
-      // Start mic level animation
-      updateMicLevel();
+      // Connection will be ready when dc.onopen fires
 
     } catch (err) {
-      console.error('Failed to start talk session:', err);
-      setError(language === 'ar' ? 'فشل بدء الجلسة' : 'Failed to start session');
-      setStatus('idle');
-      cleanup();
+      console.error('[Talk] Failed to initialize connection:', err);
+      setError(language === 'ar' ? 'فشل الاتصال' : 'Connection failed');
+      setStatus('ready');
+      setIsConnectionReady(false);
     }
-  }, [language, cleanup, updateMicLevel]);
+  }, [language, userName]);
+
+  // Continuous mic level animation
+  const startMicLevelAnimation = useCallback(() => {
+    const updateLevel = () => {
+      if (!analyserRef.current || !isOpen) return;
+      const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+      analyserRef.current.getByteFrequencyData(dataArray);
+      const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+      setMicLevel(Math.min(1, avg / 128));
+      animationFrameRef.current = requestAnimationFrame(updateLevel);
+    };
+    updateLevel();
+  }, [isOpen]);
+
 
   // Handle realtime events from OpenAI
   const handleRealtimeEvent = useCallback((msg: any) => {
     console.log('[Talk] Realtime event:', msg.type, msg);
     switch (msg.type) {
       case 'session.created':
+        console.log('[Talk] Session created');
+        break;
       case 'session.updated':
-        console.log('[Talk] Session ready');
+        console.log('[Talk] Session updated - ready for hold-to-talk');
+        break;
+      case 'input_audio_buffer.committed':
+        // Audio buffer committed
+        console.log('[Talk] Audio committed');
         break;
       case 'conversation.item.input_audio_transcription.completed':
         // User's speech transcribed
@@ -213,56 +284,53 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       case 'response.audio_transcript.delta':
         // AI speaking - partial transcript
         setStatus('speaking');
-        setIsResponsePending(true);
         break;
       case 'response.audio_transcript.done':
-        // AI finished speaking
+        // AI finished speaking - full transcript
         if (msg.transcript) {
           onAssistantMessage(msg.transcript);
         }
-        setStatus('idle');
         break;
       case 'response.done':
-        console.log('[Talk] Response complete');
-        setStatus('idle');
-        setIsResponsePending(false);
+        console.log('[Talk] Response complete - ready for next turn');
+        setStatus('ready');
         break;
       case 'error':
         console.error('[Talk] Realtime error:', msg);
-        // Ignore 'active response' error - just wait for it to complete
+        // Handle specific errors gracefully
         if (msg.error?.message?.includes('active response')) {
           console.log('[Talk] Waiting for active response to complete...');
+        } else if (msg.error?.message?.includes('buffer too small')) {
+          // Not enough audio detected - just go back to ready
+          console.log('[Talk] Buffer too small - waiting for more speech');
+          setStatus('ready');
         } else {
           setError(msg.error?.message || 'Realtime error');
+          setStatus('ready');
         }
-        setStatus('idle');
-        setIsResponsePending(false);
         break;
       default:
         break;
     }
   }, [onUserMessage, onAssistantMessage]);
 
-  // Stop recording
+  // Stop recording and send to AI (defined first so startRecording can reference it)
   const stopRecording = useCallback(() => {
+    // Guard against multiple calls
+    if (isStoppingRef.current) {
+      return;
+    }
+    isStoppingRef.current = true;
+
     if (countdownIntervalRef.current) {
       clearInterval(countdownIntervalRef.current);
       countdownIntervalRef.current = null;
-    }
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-
-    // Stop mic tracks but keep connection for response
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop());
     }
 
     setIsHolding(false);
     setStatus('processing');
 
-    // Send input_audio_buffer.commit to finalize
+    // Send input_audio_buffer.commit to finalize and request response
     if (dcRef.current && dcRef.current.readyState === 'open') {
       console.log('[Talk] Sending commit and response.create');
       dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
@@ -270,34 +338,67 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     } else {
       console.warn('[Talk] Data channel not open, cannot send commit');
       setError(language === 'ar' ? 'فشل الاتصال' : 'Connection failed');
-      setStatus('idle');
+      setStatus('ready');
     }
 
-    // Timeout fallback: if still processing after 15s, reset to idle
+    // Reset guard after short delay to allow next recording
+    setTimeout(() => {
+      isStoppingRef.current = false;
+    }, 1000);
+
+    // Timeout fallback: if still processing after 15s, reset
     setTimeout(() => {
       setStatus((prev) => {
         if (prev === 'processing') {
-          console.warn('[Talk] Processing timeout, resetting to idle');
+          console.warn('[Talk] Processing timeout, resetting to ready');
           setError(language === 'ar' ? 'انتهت المهلة' : 'Response timeout');
-          return 'idle';
+          return 'ready';
         }
         return prev;
       });
     }, 15000);
   }, [language]);
 
+  // Start recording when user holds
+  const startRecording = useCallback(() => {
+    if (!isConnectionReady || !dcRef.current || dcRef.current.readyState !== 'open') {
+      console.warn('[Talk] Cannot start recording - connection not ready');
+      setError(language === 'ar' ? 'الاتصال غير جاهز' : 'Connection not ready');
+      return;
+    }
+
+    // Reset the stopping guard when starting a new recording
+    isStoppingRef.current = false;
+
+    setError(null);
+    setStatus('listening');
+    setLiveTranscript('');
+    setCountdown(MAX_RECORD_SECONDS);
+    holdStartRef.current = Date.now();
+
+    // Start countdown
+    countdownIntervalRef.current = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - holdStartRef.current) / 1000);
+      const remaining = Math.max(0, MAX_RECORD_SECONDS - elapsed);
+      setCountdown(remaining);
+      if (remaining <= 0) {
+        stopRecording();
+      }
+    }, 200);
+  }, [isConnectionReady, language, stopRecording]);
+
   // Hold handlers
   const handleHoldStart = useCallback((e: React.TouchEvent | React.MouseEvent) => {
-    e.preventDefault(); // Prevent text selection on long press
-    if (status === 'idle' || status === 'speaking') {
-      setError(null); // Clear previous errors
+    e.preventDefault();
+    if (status === 'ready' && isConnectionReady) {
+      setError(null);
       setIsHolding(true);
-      startSession();
+      startRecording();
     }
-  }, [status, startSession]);
+  }, [status, isConnectionReady, startRecording]);
 
   const handleHoldEnd = useCallback((e: React.TouchEvent | React.MouseEvent) => {
-    e.preventDefault(); // Prevent text selection
+    e.preventDefault();
     if (isHolding) {
       stopRecording();
     }
@@ -305,10 +406,11 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
 
   if (!isOpen) return null;
 
-  const statusText = {
-    idle: language === 'ar' ? 'اضغط مع الاستمرار للتحدث' : 'Hold to talk',
-    listening: language === 'ar' ? 'جارٍ الاستماع...' : 'Listening...',
-    processing: language === 'ar' ? 'جارٍ المعالجة...' : 'Processing...',
+  const statusText: Record<typeof status, string> = {
+    connecting: language === 'ar' ? 'جارٍ الاتصال...' : 'Connecting...',
+    ready: language === 'ar' ? 'اضغط مع الاستمرار للتحدث' : 'Hold to talk',
+    listening: language === 'ar' ? 'أسمعك...' : 'Listening...',
+    processing: language === 'ar' ? 'جارٍ التفكير...' : 'Thinking...',
     speaking: language === 'ar' ? 'Wakti يتحدث...' : 'Wakti speaking...',
   };
 
@@ -328,7 +430,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
 
       <div className="flex flex-col items-center gap-5 p-6">
         {/* Siri-style animated orb with CSS animations */}
-        <div className={`siri-orb-container ${isHolding ? 'listening' : ''} ${status === 'speaking' ? 'speaking' : ''}`}>
+        <div className={`siri-orb-container ${status === 'listening' ? 'listening' : ''} ${status === 'speaking' ? 'speaking' : ''}`}>
           <div className="siri-orb">
             <div className="siri-orb-gradient"></div>
             <div className="siri-orb-highlight"></div>
@@ -482,13 +584,6 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
           }
         `}</style>
 
-        {/* Countdown */}
-        {isHolding && (
-          <div className="text-2xl font-bold text-white tabular-nums">
-            {countdown}s
-          </div>
-        )}
-
         {/* Status text */}
         <div className="text-lg text-white/80">
           {statusText[status]}
@@ -508,6 +603,13 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
           </div>
         )}
 
+        {/* Countdown when recording */}
+        {isHolding && (
+          <div className="text-2xl font-bold text-white tabular-nums">
+            {countdown}s
+          </div>
+        )}
+
         {/* Hold to talk button */}
         <button
           onMouseDown={handleHoldStart}
@@ -516,14 +618,14 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
           onTouchStart={handleHoldStart}
           onTouchEnd={handleHoldEnd}
           onContextMenu={(e) => e.preventDefault()}
-          disabled={status === 'processing'}
+          disabled={!isConnectionReady || status === 'processing' || status === 'speaking' || status === 'connecting'}
           className={`
             flex items-center justify-center w-20 h-20 rounded-full transition-all duration-150
             select-none touch-none
             ${isHolding 
               ? 'bg-red-500 scale-110 shadow-lg shadow-red-500/50' 
               : 'bg-white/20 hover:bg-white/30 active:scale-95'}
-            ${status === 'processing' ? 'opacity-50 cursor-not-allowed' : ''}
+            ${(!isConnectionReady || status === 'processing' || status === 'speaking' || status === 'connecting') ? 'opacity-50 cursor-not-allowed' : ''}
           `}
           style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
           aria-label={statusText[status]}
@@ -531,7 +633,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
           <Mic className={`w-8 h-8 ${isHolding ? 'text-white' : 'text-white/80'} pointer-events-none`} />
         </button>
 
-        {/* Waveform bars (simple visualization) */}
+        {/* Waveform bars - show when holding/listening */}
         {isHolding && (
           <div className="flex items-end gap-1 h-8">
             {[...Array(7)].map((_, i) => (
@@ -545,6 +647,14 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
             ))}
           </div>
         )}
+
+        {/* End button - easier to reach on mobile than X in corner */}
+        <button
+          onClick={onClose}
+          className="mt-6 px-8 py-3 rounded-full bg-white/10 hover:bg-white/20 text-white/80 text-base font-medium transition-colors"
+        >
+          {language === 'ar' ? 'إنهاء' : 'End'}
+        </button>
       </div>
     </div>
   );
