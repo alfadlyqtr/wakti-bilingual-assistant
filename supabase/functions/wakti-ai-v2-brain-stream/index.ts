@@ -600,6 +600,36 @@ serve(async (req) => {
           return;
         }
 
+        // Chat mode: if the user is asking about WAKTI specifically, respond with the correct format + chip
+        if (activeTrigger === 'chat' && chatSubmode === 'chat' && isWaktiInvolved(message)) {
+          const userName = (personalTouch as { nickname?: string })?.nickname || '';
+          const greeting = userName ? `Sure, ${userName}! ` : 'Sure! ';
+          
+          const promoText = language === 'ar'
+            ? `بالتأكيد${userName ? '، ' + userName : ''}! وقتي هو تطبيق ذكاء اصطناعي شامل للإنتاجية. مصمم ليكون سهل الاستخدام ومتكيف مع احتياجاتك.\n\nللحصول على أدلة خطوة بخطوة، افتح المساعدة والأدلة - هناك 3 تبويبات:\n- الأدلة (مثل المستندات المصغرة)\n- أخوي الصغير مساعد وقتي الذي سيشرح لك كل شيء إذا ما ودّك تقرأ\n- تبويب الدعم للتواصل معنا مباشرة`
+            : `${greeting}Wakti AI is your all-in-one productivity AI app. It's built to be user-friendly and adaptable to your needs.\n\nFor step-by-step guides, open Help & Guides - there are 3 tabs:\n- Guides (like mini documents)\n- My little brother Wakti Help Assistant who will walk you through everything if you don't feel like reading\n- A Support tab to get in touch with us directly`;
+
+          // Emit the chip first
+          try {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+              metadata: {
+                helpGuideChip: {
+                  label: language === 'ar' ? 'افتح المساعدة والإرشادات' : 'Open Help & Guides',
+                  route: '/help'
+                }
+              }
+            })}\n\n`));
+          } catch (e) {
+            console.warn('helpGuideChip emit failed', e);
+          }
+
+          // Emit the response text
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: promoText, content: promoText })}\n\n`));
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          controller.close();
+          return;
+        }
+
         const currentDate = new Date().toLocaleDateString('en-US', { 
           weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Qatar'
         });
