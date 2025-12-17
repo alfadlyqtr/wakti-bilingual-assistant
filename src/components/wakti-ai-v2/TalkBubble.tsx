@@ -20,6 +20,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const [status, setStatus] = useState<'idle' | 'listening' | 'processing' | 'speaking'>('idle');
   const [micLevel, setMicLevel] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [isResponsePending, setIsResponsePending] = useState(false);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -212,6 +213,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       case 'response.audio_transcript.delta':
         // AI speaking - partial transcript
         setStatus('speaking');
+        setIsResponsePending(true);
         break;
       case 'response.audio_transcript.done':
         // AI finished speaking
@@ -223,11 +225,18 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       case 'response.done':
         console.log('[Talk] Response complete');
         setStatus('idle');
+        setIsResponsePending(false);
         break;
       case 'error':
         console.error('[Talk] Realtime error:', msg);
-        setError(msg.error?.message || 'Realtime error');
+        // Ignore 'active response' error - just wait for it to complete
+        if (msg.error?.message?.includes('active response')) {
+          console.log('[Talk] Waiting for active response to complete...');
+        } else {
+          setError(msg.error?.message || 'Realtime error');
+        }
         setStatus('idle');
+        setIsResponsePending(false);
         break;
       default:
         break;
@@ -278,14 +287,17 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   }, [language]);
 
   // Hold handlers
-  const handleHoldStart = useCallback(() => {
+  const handleHoldStart = useCallback((e: React.TouchEvent | React.MouseEvent) => {
+    e.preventDefault(); // Prevent text selection on long press
     if (status === 'idle' || status === 'speaking') {
+      setError(null); // Clear previous errors
       setIsHolding(true);
       startSession();
     }
   }, [status, startSession]);
 
-  const handleHoldEnd = useCallback(() => {
+  const handleHoldEnd = useCallback((e: React.TouchEvent | React.MouseEvent) => {
+    e.preventDefault(); // Prevent text selection
     if (isHolding) {
       stopRecording();
     }
@@ -503,17 +515,20 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
           onMouseLeave={handleHoldEnd}
           onTouchStart={handleHoldStart}
           onTouchEnd={handleHoldEnd}
+          onContextMenu={(e) => e.preventDefault()}
           disabled={status === 'processing'}
           className={`
             flex items-center justify-center w-20 h-20 rounded-full transition-all duration-150
+            select-none touch-none
             ${isHolding 
               ? 'bg-red-500 scale-110 shadow-lg shadow-red-500/50' 
               : 'bg-white/20 hover:bg-white/30 active:scale-95'}
             ${status === 'processing' ? 'opacity-50 cursor-not-allowed' : ''}
           `}
+          style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
           aria-label={statusText[status]}
         >
-          <Mic className={`w-8 h-8 ${isHolding ? 'text-white' : 'text-white/80'}`} />
+          <Mic className={`w-8 h-8 ${isHolding ? 'text-white' : 'text-white/80'} pointer-events-none`} />
         </button>
 
         {/* Waveform bars (simple visualization) */}
