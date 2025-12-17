@@ -89,14 +89,27 @@ ${manualContext}
 
 واجهة WAKTI AI (لازم تعرفها بالضبط):
 - داخل WAKTI AI يوجد محدد رئيسي: Chat / Search / Image.
+- في وضع Chat يوجد حبة بجانب خانة الكتابة للتبديل بين: Chat / Study / Talk.
+  - Chat = محادثة عامة
+  - Study = مساعد دراسة مركز
+  - Talk = وضع الصوت المباشر (تتكلم بدل ما تكتب)
 - في وضع Search يوجد حبة بجانب خانة الكتابة للتبديل بين: Web / YouTube.
 - في وضع Image يوجد حبة بجانب خانة الكتابة للتبديل بين:
   Text to Image / Image to Image / Background Removal / Draw.
+
+وضع Talk (مهم جداً - هذا مو استوديو الصوت):
+- Talk موجود داخل WAKTI AI، تحت وضع Chat، في الحبة بجانب خانة الكتابة.
+- لاستخدام Talk: اذهب إلى WAKTI AI ← تأكد المحدد الرئيسي = Chat ← اضغط الحبة بجانب خانة الكتابة ← اختر Talk.
+- انتظر حتى تظهر "اضغط مع الاستمرار للتحدث" ← اضغط مع الاستمرار للتحدث (حد أقصى 10 ثوانٍ) ← اترك للإرسال.
+- اضغط X أو End للخروج من وضع Talk.
+- Talk للمحادثة الصوتية المباشرة مع WAKTI AI. هذا مو استوديو الصوت.
+- استوديو الصوت ميزة مختلفة في القائمة الجانبية للتحويل لصوت واستنساخ الصوت والترجمة.
 
 إذا المستخدم يسأل عن الأوضاع:
 - للمحادثة/الواجب/الشرح: WAKTI AI والمحدد الرئيسي = Chat.
 - لنتائج الإنترنت أو يوتيوب: WAKTI AI والمحدد الرئيسي = Search ثم الحبة = Web أو YouTube.
 - للصور: WAKTI AI والمحدد الرئيسي = Image ثم الحبة = Text to Image / Image to Image / Background Removal / Draw.
+- إذا يبي يتكلم بدل ما يكتب أو يستخدم صوته: WAKTI AI ← Chat ← اضغط الحبة ← اختر Talk. مو استوديو الصوت.
 
 الأسلوب:
 - كلام ودي مثل صديق.
@@ -160,14 +173,27 @@ ICONS (mention them when helpful, but only if relevant):
 
 WAKTI AI UI (you MUST know this exactly and guide correctly):
 - WAKTI AI has a MAIN mode selector: Chat / Search / Image.
+- In Chat mode, there's a small pill next to the input to switch: Chat / Study / Talk.
+  - Chat = general conversation
+  - Study = focused learning assistant
+  - Talk = LIVE VOICE MODE (user speaks instead of typing)
 - Search mode also has a small pill next to the input to switch: Web / YouTube.
 - Image mode also has a pill next to the input to switch:
   Text to Image / Image to Image / Background Removal / Draw.
+
+TALK MODE (CRITICAL - this is NOT Voice Studio):
+- Talk is inside WAKTI AI, under Chat mode, in the pill next to the input.
+- To use Talk: Go to WAKTI AI → make sure main selector is Chat → tap the pill next to input → choose Talk.
+- Wait for "Hold to talk" → press and hold to speak (max 10 seconds) → release to send.
+- Tap X or End to exit Talk mode.
+- Talk is for LIVE voice conversation with WAKTI AI. It is NOT Voice Studio.
+- Voice Studio is a DIFFERENT feature in the side menu for TTS, voice cloning, and translation.
 
 WHEN USER ASKS ABOUT MODES:
 - If user wants conversation, homework help, explanations: tell them to use WAKTI AI, main selector = Chat.
 - If user wants online results or YouTube tutorials: tell them to use WAKTI AI, main selector = Search, then pill = Web or YouTube.
 - If user wants images: tell them to use WAKTI AI, main selector = Image, then pill = Text to Image / Image to Image / Background Removal / Draw.
+- If user wants to SPEAK instead of type, or use voice to chat: tell them to use WAKTI AI → Chat → tap the pill → choose Talk. NOT Voice Studio.
 
 STYLE:
 - Friendly “buddy” tone.
@@ -369,6 +395,28 @@ function scoreEntryForQuery(entry: ManualEntry, query: string, language: "en" | 
   if (wantsLetters && titleField.includes("letters")) {
     score += 25;
     reasons.push("letters_intent");
+  }
+
+  // Talk (Voice Mode) - user wants to speak instead of type
+  // Keywords: "don't feel like typing", "without typing", "use voice", "talk to wakti", "speak"
+  const wantsTalkNotType = qRaw.includes("don't") || qRaw.includes("dont") || qRaw.includes("without typing") || qRaw.includes("no typing") || qRaw.includes("not type") || qRaw.includes("بدون كتابة") || qRaw.includes("ما ابي اكتب") || qRaw.includes("مو حابب اكتب");
+  const wantsVoiceChat = qRaw.includes("talk") || qRaw.includes("speak") || (qRaw.includes("voice") && !qRaw.includes("clone") && !qRaw.includes("studio") && !qRaw.includes("translator"));
+  const wantsTalk = wantsTalkNotType || wantsVoiceChat;
+  
+  // Strong boost for Talk (Voice Mode) entry
+  if (wantsTalk && titleField.includes("talk (voice mode)")) {
+    score += 50;
+    reasons.push("talk_voice_mode_intent_strong");
+  }
+  // Also boost the troubleshooting entry
+  if (wantsTalk && titleField.includes("talk:")) {
+    score += 40;
+    reasons.push("talk_troubleshooting_intent");
+  }
+  // Penalize Voice Studio when user wants Talk mode (they want WAKTI AI Talk, not Voice Studio)
+  if (wantsTalkNotType && (titleField.includes("voice studio") || titleField.includes("tts") || titleField.includes("clone"))) {
+    score -= 30;
+    reasons.push("penalize_voice_studio_for_talk");
   }
 
   // Image/Generate image/Picture → WAKTI AI Image Mode
@@ -612,6 +660,40 @@ serve(async (req) => {
     const manualEntries = await searchManual(message, language);
     const manualContext = buildManualContext(manualEntries, language);
     const chips = extractChips(manualEntries, message, language);
+
+    // DIRECT ANSWER BYPASS: For Talk mode queries, return manual content directly
+    // This prevents AI from hallucinating Voice Studio steps
+    const msgLower = message.toLowerCase();
+    const wantsTalkMode = (
+      (msgLower.includes("don't") || msgLower.includes("dont") || msgLower.includes("not")) &&
+      (msgLower.includes("type") || msgLower.includes("typing"))
+    ) || (
+      msgLower.includes("voice") && !msgLower.includes("studio") && !msgLower.includes("clone") && !msgLower.includes("translator")
+    ) || (
+      msgLower.includes("talk") && !msgLower.includes("talk back")
+    ) || (
+      msgLower.includes("speak") && msgLower.includes("wakti")
+    );
+
+    if (wantsTalkMode) {
+      // Find the Talk (Voice Mode) entry directly
+      const talkEntry = manualEntries.find(e => 
+        (e.title_en?.toLowerCase().includes("talk (voice mode)") || e.title_ar?.includes("Talk (وضع الصوت)"))
+      );
+      if (talkEntry) {
+        const directReply = language === "ar" 
+          ? `أكيد! ${talkEntry.content_ar}`
+          : `Got it! ${talkEntry.content_en}`;
+        const talkChip: Chip = {
+          label: (language === "ar" ? talkEntry.chip_label_ar : talkEntry.chip_label_en) || "Start Talk",
+          route: talkEntry.route || "/wakti-ai-v2"
+        };
+        return new Response(
+          JSON.stringify({ reply: directReply, chips: [talkChip] }),
+          { headers: { ...corsHeadersWithMaxAge, "Content-Type": "application/json" } }
+        );
+      }
+    }
 
     // Build system prompt with manual context
     const systemPrompt = buildSystemPrompt(language, manualContext);

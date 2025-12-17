@@ -1738,6 +1738,7 @@ export type TranslationKey =
   | "modesButtonDesc"
   | "chatSubMode"
   | "studySubMode"
+  | "talkSubMode"
   | "webSubMode"
   | "youtubeSubMode"
   | "extraTab"

@@ -65,7 +65,7 @@ class EnhancedFrontendMemoryClass {
       const activeData = {
         id: actualId,
         title,
-        messages: normalized.slice(-20), // Keep last 20 lightweight messages
+        messages: normalized.slice(-50), // Keep last 50 lightweight messages
         lastMessageAt: Date.now(),
         messageCount: normalized.length,
         createdAt: Date.now()
@@ -142,7 +142,7 @@ class EnhancedFrontendMemoryClass {
       const conversation: StoredConversation = {
         id: conversationId,
         title: this.generateConversationTitle(normalized[0]?.content || ''),
-        messages: normalized.slice(-20), // Keep last 20 messages
+        messages: normalized.slice(-50), // Keep last 50 messages
         lastMessageAt: new Date(),
         messageCount: normalized.length,
         createdAt: new Date()

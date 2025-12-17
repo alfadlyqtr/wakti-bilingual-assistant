@@ -440,8 +440,8 @@ class WaktiAIV2ServiceClass {
     ];
     
     return messages.filter((msg, index) => {
-      // Always keep the last 15 messages to maintain recent context
-      if (index >= messages.length - 15) return true;
+      // Always keep the last 20 messages to maintain recent context
+      if (index >= messages.length - 20) return true;
       
       // Filter out very short redundant responses
       if (msg.content && msg.content.length < 20) {
@@ -517,8 +517,8 @@ class WaktiAIV2ServiceClass {
 
   private saveMessagesToStorage(messages: AIMessage[]) {
     try {
-      // Keep only last 100 messages to prevent storage overflow
-      const messagesToStore = messages.slice(-100);
+      // Keep only last 30 messages to prevent storage overflow
+      const messagesToStore = messages.slice(-30);
       sessionStorage.setItem('wakti_conversation_memory', JSON.stringify(messagesToStore));
     } catch (error) {
       console.warn('Failed to save messages to storage:', error);

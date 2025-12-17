@@ -15,6 +15,7 @@ const MAX_RECORD_SECONDS = 10; // 10 second limit
 
 export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage }: TalkBubbleProps) {
   const { language } = useTheme();
+  const t = useCallback((en: string, ar: string) => (language === 'ar' ? ar : en), [language]);
   const [isHolding, setIsHolding] = useState(false);
   const [countdown, setCountdown] = useState(MAX_RECORD_SECONDS);
   const [liveTranscript, setLiveTranscript] = useState('');
@@ -26,10 +27,13 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const [voiceGender, setVoiceGender] = useState<'male' | 'female'>('male');
   const [aiTranscript, setAiTranscript] = useState<string>('');
   const [conversationHistory, setConversationHistory] = useState<{role: 'user' | 'assistant', text: string}[]>([]);
+  const [talkSummary, setTalkSummary] = useState<string>('');
 
   // Use refs for values needed in callbacks to avoid stale closures
   const userNameRef = useRef<string>('');
   const voiceGenderRef = useRef<'male' | 'female'>('male');
+  const conversationHistoryRef = useRef<{role: 'user' | 'assistant', text: string}[]>([]);
+  const talkSummaryRef = useRef<string>('');
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -128,7 +132,27 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     setMicLevel(0);
     setError(null);
     setIsConnectionReady(false);
+    setAiTranscript('');
+    setConversationHistory([]);
+    conversationHistoryRef.current = [];
+    setTalkSummary('');
+    talkSummaryRef.current = '';
   }, []);
+
+  const buildMemoryContext = useCallback((lang: string) => {
+    const lastTurns = conversationHistoryRef.current.slice(-4);
+    const summary = talkSummaryRef.current.trim();
+
+    if (!summary && lastTurns.length === 0) {
+      return '';
+    }
+
+    const lines = lastTurns.map(t => `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.text}`);
+    return t(
+      `Conversation memory (important):\nSummary so far: ${summary || '(none)'}\nLast 4 turns:\n${lines.join('\n')}`,
+      `ذاكرة المحادثة (مهم):\nملخص حتى الآن: ${summary || '(لا يوجد)'}\nآخر 4 رسائل:\n${lines.join('\n')}`
+    );
+  }, [t]);
 
   // Initialize WebRTC connection when bubble opens
   const initializeConnection = useCallback(async () => {
@@ -201,13 +225,43 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
           : `You are talking to ${currentUserName}. You MUST use their name "${currentUserName}" in your first response and occasionally in other responses.`
         ) : '';
         
-        const waktiInfo = language === 'ar'
-          ? `عندما يسأل المستخدم "ما هو وقتي" أو أسئلة مشابهة: أجب بطريقة ودية: "بالتأكيد! وقتي هو تطبيق ذكاء اصطناعي شامل للإنتاجية. مصمم ليكون سهل الاستخدام ومتكيف مع احتياجاتك. للحصول على أدلة خطوة بخطوة، افتح المساعدة والأدلة - هناك 3 تبويبات: الأدلة، مساعد وقتي الصغير الذي سيشرح لك كل شيء، وتبويب الدعم للتواصل معنا."`
-          : `When asked "what is Wakti" or similar: Respond friendly: "Sure${currentUserName ? ', ' + currentUserName : ''}! Wakti AI is your all-in-one productivity AI app. It's built to be user-friendly and adaptable to your needs. For step-by-step guides, open Help & Guides - there are 3 tabs: Guides (like mini documents), my little brother Wakti Help Assistant who will walk you through everything if you don't feel like reading, and a Support tab to get in touch with us directly."`;
-        
-        const instructions = language === 'ar'
-          ? `أنت مساعد Wakti الصوتي الذكي. ${personalTouch} أجب بإيجاز ووضوح. تحدث بالعربية. كن ودودًا ومفيدًا وطبيعياً. أجب كأنك صديق يساعد. ${waktiInfo}`
-          : `You are Wakti, a smart voice assistant. ${personalTouch} Answer concisely and clearly. Be friendly, helpful, and natural. Respond like a helpful friend. ${waktiInfo}`;
+        const waktiQuickRules = t(
+          `WAKTI quick rules (app questions):
+1) When asked "what is Wakti": answer friendly and mention Help & Guides has 3 tabs: Guides, my little brother Wakti Help Assistant, and Support.
+2) When asked "who made Wakti": say it was made by TMW (The Modern Web) in Doha, Qatar (tmw.qa).
+3) When asked "what can Wakti do": give a short list of key capabilities (tasks/events/voice tools/AI chat+search+content) then point to Help & Guides.`,
+          `قواعد WAKTI السريعة (عند السؤال عن التطبيق):
+1) عندما يسأل المستخدم "ما هو وقتي" أو سؤال مشابه: أجب بطريقة ودية واذكر أن "المساعدة والأدلة" فيها 3 تبويبات: الأدلة، مساعد وقتي الصغير، والدعم.
+2) عندما يسأل "من صنع وقتي" أو "من عمل وقتي": قل أنه تم تطويره بواسطة TMW (The Modern Web) في الدوحة، قطر (tmw.qa).
+3) عندما يسأل "ماذا يمكن لوقتي أن يفعل" أو "وش يسوي وقتي": أعطِ قائمة قصيرة بأهم القدرات (مهام/فعاليات/أدوات صوت/دردشة وبحث وذكاء) ثم وجّه للمساعدة والأدلة.`
+        );
+
+        const memoryContext = buildMemoryContext(language);
+
+        const instructions = t(
+          `You are WAKTI, a smart voice assistant. ${personalTouch}
+
+Style rules (important):
+- Always start with the direct answer (1-2 lines).
+- Then: max 2-6 lines.
+- Use bullet points for features/steps.
+- Don’t ramble or repeat.
+
+${waktiQuickRules}
+
+${memoryContext ? memoryContext : ''}`,
+          `أنت مساعد WAKTI الصوتي الذكي. ${personalTouch}
+
+قواعد أسلوب (مهم):
+- ابدأ دائماً بإجابة مباشرة (سطر أو سطرين).
+- بعد ذلك: 2 إلى 6 أسطر كحد أقصى.
+- استخدم نقاط عند ذكر ميزات أو خطوات.
+- لا تطوّل ولا تكرر.
+
+${waktiQuickRules}
+
+${memoryContext ? memoryContext : ''}`
+        );
         
         // Select OpenAI Realtime voice based on Talk Back settings
         // Valid voices: alloy, ash, ballad, coral, echo, sage, shimmer, verse, mann, cedar
@@ -328,7 +382,11 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
         // User's speech transcribed
         if (msg.transcript) {
           setLiveTranscript(msg.transcript);
-          setConversationHistory(prev => [...prev, { role: 'user', text: msg.transcript }]);
+          setConversationHistory(prev => {
+            const next = [...prev, { role: 'user' as const, text: String(msg.transcript) }];
+            conversationHistoryRef.current = next;
+            return next;
+          });
         }
         break;
       case 'response.audio_transcript.delta':
@@ -342,7 +400,22 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
         // AI finished speaking - full transcript
         if (msg.transcript) {
           setAiTranscript(msg.transcript);
-          setConversationHistory(prev => [...prev, { role: 'assistant', text: msg.transcript }]);
+          setConversationHistory(prev => {
+            const next = [...prev, { role: 'assistant' as const, text: String(msg.transcript) }];
+            conversationHistoryRef.current = next;
+            return next;
+          });
+
+          // Update rolling summary (simple, safe heuristic)
+          setTalkSummary(prev => {
+            const compact = (s: string) => s.replace(/\s+/g, ' ').trim();
+            const entry = compact(String(msg.transcript));
+            const base = compact(prev);
+            const merged = base ? `${base} | ${entry}` : entry;
+            const limited = merged.length > 320 ? merged.slice(merged.length - 320) : merged;
+            talkSummaryRef.current = limited;
+            return limited;
+          });
         }
         break;
       case 'response.done':
@@ -388,6 +461,61 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     // Send input_audio_buffer.commit to finalize and request response
     if (dcRef.current && dcRef.current.readyState === 'open') {
       console.log('[Talk] Sending commit and response.create');
+      // Inject memory right before creating a response (Option B: summary + last 4 turns)
+      try {
+        const currentUserName = userNameRef.current;
+        const personalTouch = currentUserName ? (language === 'ar'
+          ? `أنت تتحدث مع ${currentUserName}. يجب أن تستخدم اسمه "${currentUserName}" في ردك الأول وأحياناً في الردود الأخرى.`
+          : `You are talking to ${currentUserName}. You MUST use their name "${currentUserName}" in your first response and occasionally in other responses.`
+        ) : '';
+
+        const waktiQuickRules = t(
+          `WAKTI quick rules (app questions):
+1) When asked "what is Wakti": answer friendly and mention Help & Guides has 3 tabs: Guides, my little brother Wakti Help Assistant, and Support.
+2) When asked "who made Wakti": say it was made by TMW (The Modern Web) in Doha, Qatar (tmw.qa).
+3) When asked "what can Wakti do": give a short list of key capabilities (tasks/events/voice tools/AI chat+search+content) then point to Help & Guides.`,
+          `قواعد WAKTI السريعة (عند السؤال عن التطبيق):
+1) عندما يسأل المستخدم "ما هو وقتي" أو سؤال مشابه: أجب بطريقة ودية واذكر أن "المساعدة والأدلة" فيها 3 تبويبات: الأدلة، مساعد وقتي الصغير، والدعم.
+2) عندما يسأل "من صنع وقتي" أو "من عمل وقتي": قل أنه تم تطويره بواسطة TMW (The Modern Web) في الدوحة، قطر (tmw.qa).
+3) عندما يسأل "ماذا يمكن لوقتي أن يفعل" أو "وش يسوي وقتي": أعطِ قائمة قصيرة بأهم القدرات (مهام/فعاليات/أدوات صوت/دردشة وبحث وذكاء) ثم وجّه للمساعدة والأدلة.`
+        );
+
+        const memoryContext = buildMemoryContext(language);
+
+        const refreshedInstructions = t(
+          `You are WAKTI, a smart voice assistant. ${personalTouch}
+
+Style rules (important):
+- Always start with the direct answer (1-2 lines).
+- Then: max 2-6 lines.
+- Use bullet points for features/steps.
+- Don’t ramble or repeat.
+
+${waktiQuickRules}
+
+${memoryContext ? memoryContext : ''}`,
+          `أنت مساعد WAKTI الصوتي الذكي. ${personalTouch}
+
+قواعد أسلوب (مهم):
+- ابدأ دائماً بإجابة مباشرة (سطر أو سطرين).
+- بعد ذلك: 2 إلى 6 أسطر كحد أقصى.
+- استخدم نقاط عند ذكر ميزات أو خطوات.
+- لا تطوّل ولا تكرر.
+
+${waktiQuickRules}
+
+${memoryContext ? memoryContext : ''}`
+        );
+
+        dcRef.current.send(JSON.stringify({
+          type: 'session.update',
+          session: {
+            instructions: refreshedInstructions,
+          }
+        }));
+      } catch (e) {
+        console.warn('[Talk] Failed to inject memory before response:', e);
+      }
       dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
       dcRef.current.send(JSON.stringify({ type: 'response.create' }));
     } else {
@@ -412,7 +540,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
         return prev;
       });
     }, 30000); // Increased to 30s to allow for longer responses
-  }, [language]);
+  }, [buildMemoryContext, language, t]);
 
   // Start recording when user holds
   const startRecording = useCallback(() => {
@@ -478,252 +606,349 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       {/* Close button */}
       <button
         onClick={onClose}
-        className="absolute top-4 right-4 p-3 rounded-full bg-white/10 hover:bg-white/20 transition-colors z-10"
+        className="absolute top-4 right-4 p-3 rounded-full bg-white/10 hover:bg-white/20 transition-colors z-10 select-none"
         aria-label="Close"
       >
         <X className="w-7 h-7 text-white" />
       </button>
 
-      <div className="flex flex-col items-center gap-5 p-6">
-        {/* Siri-style animated orb with CSS animations */}
-        <div className={`siri-orb-container ${status === 'listening' ? 'listening' : ''} ${status === 'speaking' ? 'speaking' : ''}`}>
-          <div className="siri-orb">
-            <div className="siri-orb-gradient"></div>
-            <div className="siri-orb-highlight"></div>
-            <div className="siri-orb-shine"></div>
-          </div>
-          <div className="siri-glow"></div>
-        </div>
-        
-        {/* Siri orb CSS animations */}
+      <div className="flex flex-col items-center gap-6 p-6 select-none">
+        {/* Epic liquid orb CSS - Siri-inspired but better */}
         <style>{`
-          .siri-orb-container {
+          .voice-orb-wrapper {
             position: relative;
-            width: 140px;
-            height: 140px;
+            width: 220px;
+            height: 220px;
             display: flex;
             align-items: center;
             justify-content: center;
           }
           
-          .siri-orb {
+          /* Main orb button */
+          .voice-orb {
             position: relative;
-            width: 120px;
-            height: 120px;
+            width: 180px;
+            height: 180px;
             border-radius: 50%;
-            overflow: hidden;
-            animation: siriFloat 4s ease-in-out infinite;
-          }
-          
-          .siri-orb-gradient {
-            position: absolute;
-            inset: -50%;
-            background: conic-gradient(
-              from 0deg,
-              hsl(200, 100%, 60%),
-              hsl(260, 90%, 65%),
-              hsl(320, 85%, 60%),
-              hsl(280, 80%, 55%),
-              hsl(210, 100%, 65%),
-              hsl(200, 100%, 60%)
+            background: linear-gradient(145deg, 
+              #00d4ff 0%, 
+              #7b2ff7 25%, 
+              #f107a3 50%, 
+              #ff6b6b 75%, 
+              #00d4ff 100%
             );
-            animation: siriRotate 6s linear infinite;
-            filter: blur(8px);
+            background-size: 400% 400%;
+            animation: gradientShift 8s ease infinite;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border: none;
+            outline: none;
+            box-shadow: 
+              0 0 60px rgba(123, 47, 247, 0.5),
+              0 0 120px rgba(241, 7, 163, 0.3),
+              inset 0 0 60px rgba(255, 255, 255, 0.1);
+            overflow: visible;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
           }
           
-          .siri-orb-highlight {
+          .voice-orb:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            filter: grayscale(0.5);
+          }
+          
+          /* Inner glass sphere effect */
+          .orb-glass {
             position: absolute;
-            inset: 0;
+            inset: 8px;
             border-radius: 50%;
             background: radial-gradient(
-              ellipse 60% 40% at 30% 25%,
-              rgba(255, 255, 255, 0.8) 0%,
-              rgba(255, 255, 255, 0.2) 30%,
-              transparent 60%
-            );
-            animation: siriHighlight 3s ease-in-out infinite;
-          }
-          
-          .siri-orb-shine {
-            position: absolute;
-            inset: 0;
-            border-radius: 50%;
-            background: radial-gradient(
-              circle at 70% 70%,
-              rgba(255, 100, 200, 0.4) 0%,
-              transparent 50%
-            );
-            animation: siriShine 4s ease-in-out infinite reverse;
-          }
-          
-          .siri-glow {
-            position: absolute;
-            inset: -20px;
-            border-radius: 50%;
-            background: radial-gradient(
-              circle,
-              hsla(280, 90%, 65%, 0.4) 0%,
-              hsla(210, 100%, 60%, 0.2) 40%,
+              ellipse 80% 50% at 30% 20%,
+              rgba(255, 255, 255, 0.6) 0%,
+              rgba(255, 255, 255, 0.1) 40%,
               transparent 70%
             );
-            animation: siriGlow 3s ease-in-out infinite;
-            filter: blur(15px);
+            pointer-events: none;
           }
           
-          /* Listening state - more active */
-          .siri-orb-container.listening .siri-orb {
-            animation: siriFloat 1.5s ease-in-out infinite, siriBounce 0.3s ease-in-out infinite;
-          }
-          .siri-orb-container.listening .siri-orb-gradient {
-            animation: siriRotate 2s linear infinite;
-          }
-          .siri-orb-container.listening .siri-glow {
-            animation: siriGlowActive 0.5s ease-in-out infinite;
+          /* Floating plasma blobs */
+          .plasma {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(20px);
+            mix-blend-mode: screen;
+            pointer-events: none;
           }
           
-          /* Speaking state - pulsing */
-          .siri-orb-container.speaking .siri-orb {
-            animation: siriSpeak 0.8s ease-in-out infinite;
-          }
-          .siri-orb-container.speaking .siri-glow {
-            animation: siriGlowSpeak 0.8s ease-in-out infinite;
-          }
-          
-          @keyframes siriRotate {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
+          .plasma-1 {
+            width: 100px;
+            height: 100px;
+            background: radial-gradient(circle, rgba(0, 212, 255, 0.8) 0%, transparent 70%);
+            top: -20px;
+            left: -20px;
+            animation: plasmaFloat1 6s ease-in-out infinite;
           }
           
-          @keyframes siriFloat {
-            0%, 100% { transform: scale(1) translateY(0); }
-            50% { transform: scale(1.03) translateY(-3px); }
+          .plasma-2 {
+            width: 80px;
+            height: 80px;
+            background: radial-gradient(circle, rgba(241, 7, 163, 0.8) 0%, transparent 70%);
+            bottom: -15px;
+            right: -15px;
+            animation: plasmaFloat2 5s ease-in-out infinite;
           }
           
-          @keyframes siriBounce {
+          .plasma-3 {
+            width: 60px;
+            height: 60px;
+            background: radial-gradient(circle, rgba(123, 47, 247, 0.9) 0%, transparent 70%);
+            top: 50%;
+            left: -30px;
+            animation: plasmaFloat3 7s ease-in-out infinite;
+          }
+          
+          .plasma-4 {
+            width: 70px;
+            height: 70px;
+            background: radial-gradient(circle, rgba(255, 107, 107, 0.7) 0%, transparent 70%);
+            bottom: 20%;
+            right: -25px;
+            animation: plasmaFloat4 4s ease-in-out infinite;
+          }
+          
+          /* Outer ring pulses */
+          .ring-pulse {
+            position: absolute;
+            inset: -30px;
+            border-radius: 50%;
+            border: 2px solid rgba(123, 47, 247, 0.3);
+            animation: ringExpand 2s ease-out infinite;
+            pointer-events: none;
+          }
+          
+          .ring-pulse-2 {
+            animation-delay: 0.5s;
+          }
+          
+          .ring-pulse-3 {
+            animation-delay: 1s;
+          }
+          
+          /* === LISTENING STATE === */
+          .voice-orb-wrapper.listening .voice-orb {
+            transform: scale(1.15);
+            animation: gradientShift 2s ease infinite, orbPulse 0.5s ease-in-out infinite;
+            box-shadow: 
+              0 0 80px rgba(123, 47, 247, 0.7),
+              0 0 160px rgba(241, 7, 163, 0.5),
+              0 0 240px rgba(0, 212, 255, 0.3),
+              inset 0 0 80px rgba(255, 255, 255, 0.2);
+          }
+          
+          .voice-orb-wrapper.listening .plasma-1 {
+            animation: plasmaActive1 0.8s ease-in-out infinite;
+          }
+          .voice-orb-wrapper.listening .plasma-2 {
+            animation: plasmaActive2 0.6s ease-in-out infinite;
+          }
+          .voice-orb-wrapper.listening .plasma-3 {
+            animation: plasmaActive3 0.7s ease-in-out infinite;
+          }
+          .voice-orb-wrapper.listening .plasma-4 {
+            animation: plasmaActive4 0.5s ease-in-out infinite;
+          }
+          
+          .voice-orb-wrapper.listening .ring-pulse {
+            animation: ringExpandFast 0.8s ease-out infinite;
+            border-color: rgba(0, 212, 255, 0.5);
+          }
+          
+          /* === SPEAKING STATE === */
+          .voice-orb-wrapper.speaking .voice-orb {
+            animation: gradientShift 4s ease infinite, speakingBreath 1.5s ease-in-out infinite;
+            box-shadow: 
+              0 0 100px rgba(241, 7, 163, 0.6),
+              0 0 200px rgba(123, 47, 247, 0.4),
+              inset 0 0 60px rgba(255, 255, 255, 0.15);
+          }
+          
+          .voice-orb-wrapper.speaking .plasma {
+            animation-duration: 2s;
+          }
+          
+          .voice-orb-wrapper.speaking .ring-pulse {
+            border-color: rgba(241, 7, 163, 0.4);
+            animation: ringExpandSlow 3s ease-out infinite;
+          }
+          
+          /* === PROCESSING STATE === */
+          .voice-orb-wrapper.processing .voice-orb {
+            animation: gradientShift 3s ease infinite, processingGlow 1s ease-in-out infinite;
+          }
+          
+          /* === KEYFRAMES === */
+          @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+          }
+          
+          @keyframes orbPulse {
+            0%, 100% { transform: scale(1.15); }
+            50% { transform: scale(1.2); }
+          }
+          
+          @keyframes speakingBreath {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.08); }
           }
           
-          @keyframes siriHighlight {
-            0%, 100% { opacity: 0.8; transform: translateX(0) translateY(0); }
-            33% { opacity: 1; transform: translateX(5px) translateY(-3px); }
-            66% { opacity: 0.9; transform: translateX(-3px) translateY(2px); }
+          @keyframes processingGlow {
+            0%, 100% { opacity: 0.8; filter: brightness(1); }
+            50% { opacity: 1; filter: brightness(1.2); }
           }
           
-          @keyframes siriShine {
-            0%, 100% { opacity: 0.6; transform: translateX(0) translateY(0); }
-            50% { opacity: 1; transform: translateX(-5px) translateY(-5px); }
+          @keyframes plasmaFloat1 {
+            0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.8; }
+            25% { transform: translate(30px, 20px) scale(1.2); opacity: 1; }
+            50% { transform: translate(10px, 40px) scale(0.9); opacity: 0.7; }
+            75% { transform: translate(-20px, 15px) scale(1.1); opacity: 0.9; }
           }
           
-          @keyframes siriGlow {
-            0%, 100% { opacity: 0.6; transform: scale(1); }
-            50% { opacity: 0.9; transform: scale(1.1); }
+          @keyframes plasmaFloat2 {
+            0%, 100% { transform: translate(0, 0) scale(1) rotate(0deg); opacity: 0.8; }
+            33% { transform: translate(-25px, -30px) scale(1.3) rotate(120deg); opacity: 1; }
+            66% { transform: translate(15px, -20px) scale(0.8) rotate(240deg); opacity: 0.6; }
           }
           
-          @keyframes siriGlowActive {
-            0%, 100% { opacity: 0.7; transform: scale(1); }
-            50% { opacity: 1; transform: scale(1.2); }
+          @keyframes plasmaFloat3 {
+            0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.7; }
+            50% { transform: translate(40px, -25px) scale(1.4); opacity: 1; }
           }
           
-          @keyframes siriSpeak {
-            0%, 100% { transform: scale(1); }
-            25% { transform: scale(1.05); }
-            50% { transform: scale(0.98); }
-            75% { transform: scale(1.03); }
+          @keyframes plasmaFloat4 {
+            0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.7; }
+            50% { transform: translate(-30px, 20px) scale(1.2); opacity: 0.9; }
           }
           
-          @keyframes siriGlowSpeak {
-            0%, 100% { opacity: 0.6; transform: scale(1); }
-            25% { opacity: 1; transform: scale(1.15); }
-            50% { opacity: 0.7; transform: scale(1.05); }
-            75% { opacity: 0.9; transform: scale(1.2); }
+          @keyframes plasmaActive1 {
+            0%, 100% { transform: translate(0, 0) scale(1); opacity: 1; }
+            25% { transform: translate(50px, -40px) scale(1.5); }
+            50% { transform: translate(-30px, 50px) scale(0.7); }
+            75% { transform: translate(40px, 30px) scale(1.3); }
+          }
+          
+          @keyframes plasmaActive2 {
+            0%, 100% { transform: translate(0, 0) scale(1) rotate(0deg); }
+            50% { transform: translate(-50px, -50px) scale(1.6) rotate(180deg); }
+          }
+          
+          @keyframes plasmaActive3 {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(60px, -30px) scale(1.8); }
+            66% { transform: translate(30px, 40px) scale(0.6); }
+          }
+          
+          @keyframes plasmaActive4 {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(-60px, -40px) scale(1.5); }
+          }
+          
+          @keyframes ringExpand {
+            0% { transform: scale(1); opacity: 0.6; }
+            100% { transform: scale(1.8); opacity: 0; }
+          }
+          
+          @keyframes ringExpandFast {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(2); opacity: 0; }
+          }
+          
+          @keyframes ringExpandSlow {
+            0% { transform: scale(1); opacity: 0.5; }
+            100% { transform: scale(2.2); opacity: 0; }
           }
         `}</style>
 
+        {/* Epic voice orb */}
+        <div className={`voice-orb-wrapper ${status === 'listening' ? 'listening' : ''} ${status === 'speaking' ? 'speaking' : ''} ${status === 'processing' ? 'processing' : ''}`}>
+          {/* Expanding ring pulses */}
+          <div className="ring-pulse"></div>
+          <div className="ring-pulse ring-pulse-2"></div>
+          <div className="ring-pulse ring-pulse-3"></div>
+          
+          {/* Floating plasma blobs */}
+          <div className="plasma plasma-1"></div>
+          <div className="plasma plasma-2"></div>
+          <div className="plasma plasma-3"></div>
+          <div className="plasma plasma-4"></div>
+          
+          <button
+            onMouseDown={handleHoldStart}
+            onMouseUp={handleHoldEnd}
+            onMouseLeave={handleHoldEnd}
+            onTouchStart={handleHoldStart}
+            onTouchEnd={handleHoldEnd}
+            onContextMenu={(e) => e.preventDefault()}
+            disabled={!isConnectionReady || status === 'processing' || status === 'speaking' || status === 'connecting'}
+            className="voice-orb"
+            aria-label={statusText[status]}
+          >
+            {/* Inner glass highlight */}
+            <div className="orb-glass"></div>
+            <Mic className="w-16 h-16 text-white drop-shadow-lg relative z-10 pointer-events-none" />
+          </button>
+        </div>
+
         {/* Status text */}
-        <div className="text-lg text-white/80">
+        <div className="text-xl font-medium text-white/90 select-none">
           {statusText[status]}
         </div>
 
+        {/* Countdown when recording */}
+        {isHolding && (
+          <div className="text-4xl font-bold text-white tabular-nums select-none">
+            {countdown}s
+          </div>
+        )}
+
         {/* User transcript (what you said) */}
         {liveTranscript && (
-          <div className="max-w-xs text-center text-sm text-white/60 italic">
-            <span className="text-white/40 text-xs block mb-1">{language === 'ar' ? 'أنت:' : 'You:'}</span>
+          <div className="max-w-sm text-center text-base text-white/70 select-none">
+            <span className="text-white/50 text-sm block mb-1">{t('You:', 'أنت:')}</span>
             "{liveTranscript}"
           </div>
         )}
 
         {/* AI transcript (what AI said) */}
         {aiTranscript && status !== 'listening' && (
-          <div className="max-w-xs text-center text-sm text-blue-300/80">
-            <span className="text-blue-300/50 text-xs block mb-1">{language === 'ar' ? 'واكتي:' : 'Wakti:'}</span>
+          <div className="max-w-sm text-center text-base text-purple-300/90 select-none">
+            <span className="text-purple-300/60 text-sm block mb-1">{t('Wakti:', 'واكتي:')}</span>
             "{aiTranscript}"
           </div>
         )}
 
         {/* Error */}
         {error && (
-          <div className="text-sm text-red-400">
+          <div className="text-base text-red-400 font-medium select-none">
             {error}
           </div>
         )}
 
-        {/* Countdown when recording */}
-        {isHolding && (
-          <div className="text-2xl font-bold text-white tabular-nums">
-            {countdown}s
-          </div>
-        )}
-
-        {/* Hold to talk button */}
-        <button
-          onMouseDown={handleHoldStart}
-          onMouseUp={handleHoldEnd}
-          onMouseLeave={handleHoldEnd}
-          onTouchStart={handleHoldStart}
-          onTouchEnd={handleHoldEnd}
-          onContextMenu={(e) => e.preventDefault()}
-          disabled={!isConnectionReady || status === 'processing' || status === 'speaking' || status === 'connecting'}
-          className={`
-            flex items-center justify-center w-20 h-20 rounded-full transition-all duration-150
-            select-none touch-none
-            ${isHolding 
-              ? 'bg-red-500 scale-110 shadow-lg shadow-red-500/50' 
-              : 'bg-white/20 hover:bg-white/30 active:scale-95'}
-            ${(!isConnectionReady || status === 'processing' || status === 'speaking' || status === 'connecting') ? 'opacity-50 cursor-not-allowed' : ''}
-          `}
-          style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
-          aria-label={statusText[status]}
-        >
-          <Mic className={`w-8 h-8 ${isHolding ? 'text-white' : 'text-white/80'} pointer-events-none`} />
-        </button>
-
-        {/* Waveform bars - show when holding/listening */}
-        {isHolding && (
-          <div className="flex items-end gap-1 h-8">
-            {[...Array(7)].map((_, i) => (
-              <div
-                key={i}
-                className="w-1 bg-white/60 rounded-full transition-all duration-75"
-                style={{
-                  height: `${8 + Math.random() * micLevel * 24}px`,
-                }}
-              />
-            ))}
-          </div>
-        )}
-
         {/* Instruction text */}
-        <p className="text-xs text-white/50 text-center max-w-[200px]">
-          {language === 'ar' 
-            ? 'اضغط مع الاستمرار للتحدث، ثم اتركه للإرسال'
-            : 'Press and hold to speak, release to send'}
+        <p className="text-sm text-white/60 text-center max-w-[240px] select-none">
+          {t('Press and hold to speak, release to send', 'اضغط مع الاستمرار للتحدث، ثم اتركه للإرسال')}
         </p>
 
-        {/* End button - easier to reach on mobile than X in corner */}
+        {/* End button */}
         <button
           onClick={() => {
-            // Save conversation to chat before closing
             conversationHistory.forEach(item => {
               if (item.role === 'user') {
                 onUserMessage(item.text);
@@ -733,9 +958,9 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
             });
             onClose();
           }}
-          className="mt-4 px-8 py-3 rounded-full bg-white/10 hover:bg-white/20 text-white/80 text-base font-medium transition-colors"
+          className="mt-2 px-10 py-3 rounded-full bg-white/15 hover:bg-white/25 text-white text-lg font-medium transition-colors select-none"
         >
-          {language === 'ar' ? 'إنهاء' : 'End'}
+          {t('End', 'إنهاء')}
         </button>
       </div>
     </div>

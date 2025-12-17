@@ -1211,16 +1211,6 @@ export function ChatInput({
                       </div>
                     ) : activeTrigger === 'chat' ? (
                       <div className="relative flex items-center gap-2">
-                        {/* Talk Button */}
-                        <button
-                          type="button"
-                          onClick={() => setIsTalkOpen(true)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 h-8 rounded-full text-xs font-medium leading-none border bg-gradient-to-r from-pink-100 to-purple-100 text-pink-700 border-pink-200 dark:from-pink-900/30 dark:to-purple-900/30 dark:text-pink-400 dark:border-pink-700/50 hover:scale-105 active:scale-95 transition-transform"
-                          aria-label={language === 'ar' ? 'تحدث' : 'Talk'}
-                        >
-                          <Mic className="h-3 w-3" />
-                          <span className="text-xs">{language === 'ar' ? 'تحدث' : 'Talk'}</span>
-                        </button>
                         {/* Chat/Study Submode Dropdown */}
                         <button
                           ref={chatSubmodeBtnRef}
@@ -1288,6 +1278,16 @@ export function ChatInput({
                                     <span className="w-3 h-3 bg-purple-500 rounded-full"></span>
                                     {language === 'ar' ? 'دراسة' : 'Study'}
                                     <span className="text-[10px] text-purple-500 ml-1">📚</span>
+                                  </button>
+                                  <button 
+                                    onPointerUp={() => {
+                                      setChatSubmodeMenuPos(null);
+                                      setIsTalkOpen(true);
+                                    }} 
+                                    className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-2"
+                                  >
+                                    <Mic className="h-3 w-3 text-pink-600" />
+                                    {language === 'ar' ? 'تحدث' : 'Talk'}
                                   </button>
                                 </div>
                               </motion.div>

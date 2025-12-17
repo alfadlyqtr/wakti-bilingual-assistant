@@ -35,7 +35,7 @@ type HelpChatMessage = {
   chips?: Chip[];
 };
 
-const HELP_CHAT_STORAGE_KEY = 'wakti-help-assistant-chat-v1';
+const HELP_CHAT_STORAGE_KEY = 'wakti-help-assistant-chat-v2';
 
 function getChipIcon(route: string) {
   const r = String(route || '').toLowerCase();

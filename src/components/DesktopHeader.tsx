@@ -121,32 +121,42 @@ export function DesktopHeader() {
   const pageInfo = getPageTitleWithIcon();
   const PageIcon = pageInfo.icon;
 
-  // Define menu items with icons
+  // Define menu items with icons and vibrant colors
   const menuItems = [
     { 
       title: language === 'ar' ? 'الإعدادات' : 'Settings', 
       href: '/settings',
-      icon: <Settings className="w-4 h-4 mr-2 text-muted-foreground" />
+      icon: <Settings className="w-4 h-4" />,
+      colorClass: 'text-blue-500',
+      hoverClass: 'hover:bg-blue-500/10'
     },
     { 
       title: language === 'ar' ? 'الحساب' : 'Account', 
       href: '/account',
-      icon: <Account className="w-4 h-4 mr-2 text-muted-foreground" />
+      icon: <Account className="w-4 h-4" />,
+      colorClass: 'text-purple-500',
+      hoverClass: 'hover:bg-purple-500/10'
     },
     { 
       title: t("help", language), 
       href: '/help',
-      icon: <Help className="w-4 h-4 mr-2 text-muted-foreground" />
+      icon: <Help className="w-4 h-4" />,
+      colorClass: 'text-green-500',
+      hoverClass: 'hover:bg-green-500/10'
     },
     { 
       title: language === 'ar' ? 'جهات الاتصال' : 'Contacts', 
       href: '/contacts',
-      icon: <Contacts className="w-4 h-4 mr-2 text-muted-foreground" />
+      icon: <Contacts className="w-4 h-4" />,
+      colorClass: 'text-cyan-500',
+      hoverClass: 'hover:bg-cyan-500/10'
     },
     { 
       title: language === 'ar' ? 'تسجيل الخروج' : 'Logout', 
       onClick: handleLogout,
-      icon: <LogOut className="w-4 h-4 mr-2 text-muted-foreground" />
+      icon: <LogOut className="w-4 h-4" />,
+      colorClass: 'text-red-500',
+      hoverClass: 'hover:bg-red-500/10'
     }
   ];
 
@@ -263,30 +273,42 @@ export function DesktopHeader() {
               side="bottom"
               sideOffset={8}
               collisionPadding={16}
-              className="z-[1200] bg-white/95 dark:bg-[#0b0f14]/95 backdrop-blur-xl border border-white/20 dark:border-white/10 rounded-xl shadow-2xl"
+              className="z-[1200] min-w-[200px] overflow-hidden rounded-2xl border border-white/30 dark:border-white/10 p-2 backdrop-blur-2xl animate-in fade-in-0 zoom-in-95 slide-in-from-top-2 duration-200"
               style={{
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.2)'
+                background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.98) 50%, rgba(255,255,255,0.95) 100%)',
+                boxShadow: '0 25px 60px -12px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 10px 40px rgba(99, 102, 241, 0.15)'
               }}
             >
-              <DropdownMenuLabel>{language === 'ar' ? 'الحساب' : 'Account'}</DropdownMenuLabel>
-              <DropdownMenuSeparator />
+              {/* Glass sheen overlay */}
+              <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/40 via-transparent to-white/20 pointer-events-none" />
+              
+              <DropdownMenuLabel className="relative z-10 px-3 py-2 text-sm font-semibold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 bg-clip-text text-transparent">
+                {language === 'ar' ? 'الحساب' : 'Account'}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator className="bg-gradient-to-r from-transparent via-border/50 to-transparent" />
               {menuItems.map((item, index) => (
                 <DropdownMenuItem 
                   key={index} 
                   onClick={item.onClick} 
-                  className={cn(item.onClick ? "cursor-pointer" : "")}
+                  className={cn(
+                    "relative z-10 flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 group",
+                    item.hoverClass,
+                    "focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500/30",
+                    "animate-in fade-in-0 slide-in-from-top-2"
+                  )}
+                  style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'both' }}
                   asChild={!!item.href}
                 >
                   {item.href 
                     ? (
-                      <Link to={item.href} className="flex items-center">
-                        <span className="mr-2 flex items-center">{item.icon}</span>
-                        {item.title}
+                      <Link to={item.href} className="flex items-center gap-3 w-full">
+                        <span className={cn("flex items-center transition-transform duration-200 group-hover:scale-110", item.colorClass)}>{item.icon}</span>
+                        <span className="text-sm font-medium text-foreground/80 group-hover:text-foreground transition-colors">{item.title}</span>
                       </Link>
                     ) : (
-                      <span className="flex items-center">
-                        <span className="mr-2 flex items-center">{item.icon}</span>
-                        {item.title}
+                      <span className="flex items-center gap-3 w-full">
+                        <span className={cn("flex items-center transition-transform duration-200 group-hover:scale-110", item.colorClass)}>{item.icon}</span>
+                        <span className="text-sm font-medium text-foreground/80 group-hover:text-foreground transition-colors">{item.title}</span>
                       </span>
                     )
                   }

@@ -80,6 +80,7 @@ export default function Help() {
             <ul className="text-sm space-y-1 ml-4">
               <li className="text-blue-500">• {t('chatSubMode', language)}</li>
               <li className="text-purple-500">• {t('studySubMode', language)}</li>
+              <li className="text-pink-500">• {t('talkSubMode', language)}</li>
             </ul>
           </div>
           <div>

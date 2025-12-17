@@ -13,7 +13,7 @@ export interface SavedConversationRow {
 
 function normalizeMessages(messages: any[]): any[] {
   const safe = Array.isArray(messages) ? messages.filter(Boolean) : [];
-  return safe.slice(-20).map((m: any) => ({
+  return safe.slice(-50).map((m: any) => ({
     id: m?.id,
     role: m?.role || 'assistant',
     content: typeof m?.content === 'string' ? m.content : '',
