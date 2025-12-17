@@ -1,8 +1,8 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { corsHeaders } from "../_shared/cors.ts";
-import { logAIFromRequest } from "../_shared/aiLogger.ts";
+import { corsHeaders } from "./_shared/cors.ts";
+import { logAIFromRequest } from "./_shared/aiLogger.ts";
 
 type ChatRole = "system" | "user" | "assistant";
 
@@ -40,6 +40,8 @@ type Chip = {
   route: string;
 };
 
+ type ScoredEntry = { entry: ManualEntry; score: number; reasons: string[] };
+
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -58,105 +60,343 @@ type CacheItem = { ts: number; entries: ManualEntry[] };
 const QUERY_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
 const queryCache = new Map<string, CacheItem>();
 
-// ============================================================================
-// SMART-SKIP: Canned responses for general/off-topic questions (NO AI CALL)
-// ============================================================================
-const GENERAL_REDIRECT_EN = `Hey! For help with your homework or any general question, "WAKTI AI" is your go-to buddy. It can explain concepts, solve problems, and even search the web for extra info. To get started, tap the "W logo" (top-left) to open the menu, then tap "WAKTI AI". In the input bar you'll see a mode selector — keep it on "Chat mode" (default) for normal conversations. Just type or speak your question and WAKTI AI will help you out. If you need to look something up online or watch a tutorial, switch to "Search mode" from that same selector (Web or YouTube). And honestly — for homework and studying, "Study mode" is usually the best: it explains step-by-step like a real tutor. Give it a try — it's like having a study partner right inside the app.`;
+function buildSystemPrompt(language: "en" | "ar", manualContext: string): string {
+  if (language === "ar") {
+    return `أنت مساعد WAKTI للمساعدة داخل التطبيق. مهمتك بسيطة:
+1) تفهم سؤال المستخدم حتى لو كان كلامه غير مرتب.
+2) تجاوب فقط باستخدام دليل WAKTI الموجود بالأسفل (هو مصدر الحقيقة).
+3) تعطي خطوات واضحة "وين يضغط" باستخدام أماكن وأيقونات حقيقية.
 
-const GENERAL_REDIRECT_AR = `مرحباً! إذا تحتاج مساعدة في الواجب أو أي سؤال عام، "WAKTI AI" هو صاحبك الأول. يشرح الأفكار، يحل المسائل، وحتى يقدر يبحث لك من الإنترنت لو تحتاج معلومات إضافية. عشان تبدأ: اضغط على "شعار W" (أعلى اليسار) عشان تفتح القائمة، بعدين اضغط "WAKTI AI". داخل خانة الكتابة بتشوف اختيار الوضع — خلّه على "Chat mode" (هذا الوضع الافتراضي للمحادثة). اكتب أو تكلم بسؤالك، وWAKTI AI بيساعدك فوراً. ولو تحتاج تبحث عن شيء أو تشوف شرح، بدّل إلى "Search mode" من نفس المكان (Web أو YouTube). وبصراحة للواجبات والدراسة، "Study mode" غالباً أفضل شيء لأنه يشرح خطوة بخطوة مثل مدرس. جرّبه — كأن عندك شريك مذاكرة داخل التطبيق.`;
+دليل WAKTI (مصدر الحقيقة):
+${manualContext}
 
-const GENERAL_CHIP: Chip = { label: "Open WAKTI AI", route: "/wakti-ai-v2" };
-const GENERAL_CHIP_AR: Chip = { label: "افتح WAKTI AI", route: "/wakti-ai-v2" };
+قواعد صارمة (غير قابلة للنقاش):
+- ممنوع تخترع خطوات أو أزرار أو أيقونات أو أماكن. إذا الشيء مو موجود في الدليل، لا تقوله.
+- إذا الدليل ما فيه الجواب، قل: "ما عندي هالمعلومة حالياً—قل لي أنت بأي شاشة أو وش تحاول تسوي؟"
+- ركّز على أفضل ميزة/صفحة واحدة فقط. لا تخلط ميزات غير مرتبطة.
+- خلي الرد عملي وقصير: الميزة وش هي + وين تلقاها + كيف تستخدمها.
 
-// Keywords that indicate a general/off-topic question (NOT about WAKTI features)
-const GENERAL_KEYWORDS = [
-  // Homework / study
-  "homework", "home work", "assignment", "exam", "test", "quiz", "study", "studying",
-  "math", "maths", "algebra", "geometry", "calculus", "physics", "chemistry", "biology",
-  "history", "geography", "english", "arabic", "science", "essay", "project",
-  "solve", "equation", "problem", "answer", "question", "help me with",
-  // Arabic homework keywords
-  "واجب", "امتحان", "اختبار", "مذاكرة", "دراسة", "رياضيات", "فيزياء", "كيمياء",
-  "احياء", "تاريخ", "جغرافيا", "انجليزي", "عربي", "علوم", "مشروع", "حل", "معادلة",
-  // General life / random
-  "weather", "news", "recipe", "cook", "movie", "song", "joke", "story",
-  "relationship", "advice", "life", "love", "friend", "family",
-  "الطقس", "اخبار", "وصفة", "طبخ", "فيلم", "اغنية", "نكتة", "قصة", "علاقة", "نصيحة",
-  // Explicit "help me" patterns
-  "can you help", "help me", "i need help", "ساعدني", "محتاج مساعدة",
-];
+طريقة شرح التنقل (استخدم نفس الجمل):
+- إذا الميزة في القائمة: "اضغط شعار W (أعلى اليسار) لفتح القائمة، ثم اضغط <اسم الميزة>."
+- إذا الميزة في الهيدر: "شوف أعلى الشاشة جنب صورتك."
+- إذا الميزة في تبويبات: "في الأعلى بتشوف تبويبات. اضغط <اسم التبويب>."
+- إذا فيه حبة/شيب بجانب خانة الكتابة: "بجانب خانة الكتابة بتشوف حبة. اضغطها واختر <الخيار>."
 
-// Keywords that indicate the question IS about WAKTI features (override general detection)
-const WAKTI_FEATURE_KEYWORDS = [
-  "wakti", "tasjeel", "maw3d", "voice studio", "voice clone", "tts", "text to speech",
-  "translator", "translate", "calendar", "task", "reminder", "contact", "journal",
-  "vitality", "whoop", "fitness", "sleep", "music studio", "games", "settings",
-  "dashboard", "search mode", "chat mode", "study mode", "image", "vision",
-  "sidebar", "menu", "w logo", "header", "avatar",
-  // Arabic feature keywords
-  "تسجيل", "موعد", "صوت", "استنساخ", "ترجمة", "تقويم", "مهمة", "تذكير", "جهات اتصال",
-  "يوميات", "حيوية", "نوم", "موسيقى", "العاب", "اعدادات", "لوحة", "قائمة",
-];
+الأيقونات (اذكرها إذا لها علاقة بالسؤال):
+- شعار W (أعلى اليسار) يفتح القائمة.
+- أيقونة المايك = ميزات الصوت / استوديو الصوت.
+- أيقونة اللمعة = WAKTI AI.
 
-function isGeneralQuestion(query: string): boolean {
-  const q = query.toLowerCase();
-  
-  // First check if it's clearly about WAKTI features
-  for (const kw of WAKTI_FEATURE_KEYWORDS) {
-    if (q.includes(kw)) return false;
+واجهة WAKTI AI (لازم تعرفها بالضبط):
+- داخل WAKTI AI يوجد محدد رئيسي: Chat / Search / Image.
+- في وضع Search يوجد حبة بجانب خانة الكتابة للتبديل بين: Web / YouTube.
+- في وضع Image يوجد حبة بجانب خانة الكتابة للتبديل بين:
+  Text to Image / Image to Image / Background Removal / Draw.
+
+إذا المستخدم يسأل عن الأوضاع:
+- للمحادثة/الواجب/الشرح: WAKTI AI والمحدد الرئيسي = Chat.
+- لنتائج الإنترنت أو يوتيوب: WAKTI AI والمحدد الرئيسي = Search ثم الحبة = Web أو YouTube.
+- للصور: WAKTI AI والمحدد الرئيسي = Image ثم الحبة = Text to Image / Image to Image / Background Removal / Draw.
+
+الأسلوب:
+- كلام ودي مثل صديق.
+- نص عادي فقط (بدون تنسيق).
+- اذكر الأيقونات بين قوسين مثل: (شعار W)، (أيقونة المايك).
+- اكتب بالعربية فقط.
+`;
   }
-  
-  // Then check if it matches general/off-topic patterns
-  for (const kw of GENERAL_KEYWORDS) {
-    if (q.includes(kw)) return true;
-  }
-  
-  // Check for question patterns that are likely general
-  if (/^(what|how|why|when|where|who|can you|could you|please|i need|i want)/i.test(q)) {
-    // Only if it doesn't mention any WAKTI-related terms
-    const hasWaktiTerm = /wakti|app|feature|button|icon|menu|screen|page|mode/i.test(q);
-    if (!hasWaktiTerm) return true;
-  }
-  
-  return false;
+  return `You are WAKTI’s Help Assistant. Your job is simple:
+1) Understand what the user means (even if they speak casually).
+2) Answer ONLY using the WAKTI manual context provided below (it is the source of truth).
+3) Give clear “where to tap” directions using real UI locations and real icons.
+
+MANUAL CONTEXT (source of truth):
+${manualContext}
+
+NON‑NEGOTIABLE RULES:
+- Do not invent UI steps, icons, buttons, tabs, or locations. If it’s not in the manual context, do NOT say it.
+- If the manual context does not contain the answer, reply: "I don’t have that info yet—can you tell me what screen you’re on or what you’re trying to do?"
+- Prefer ONE best feature/page only. Do not mention multiple unrelated features.
+- Keep replies short and practical: what it is + where it is + how to use it.
+
+HOW TO GIVE NAVIGATION DIRECTIONS (use these exact patterns):
+- If something is in the side menu: say "Tap the W logo (top-left) to open the menu, then tap <Feature Name>."
+- If something is in the header: say "Look at the top of your screen next to your avatar."
+- If something is in tabs: say "At the top you’ll see tabs. Tap <Tab Name>."
+- If something uses a pill next to the input: say "Next to the input you’ll see a pill. Tap it and choose <Option>."
+
+ICONS (mention them when helpful, but only if relevant):
+- W logo (top-left) opens the menu.
+- Mic icon = Voice / Voice Studio.
+- Sparkles icon = WAKTI AI.
+
+WAKTI AI UI (you MUST know this exactly and guide correctly):
+- WAKTI AI has a MAIN mode selector: Chat / Search / Image.
+- Search mode also has a small pill next to the input to switch: Web / YouTube.
+- Image mode also has a pill next to the input to switch:
+  Text to Image / Image to Image / Background Removal / Draw.
+
+WHEN USER ASKS ABOUT MODES:
+- If user wants conversation, homework help, explanations: tell them to use WAKTI AI, main selector = Chat.
+- If user wants online results or YouTube tutorials: tell them to use WAKTI AI, main selector = Search, then pill = Web or YouTube.
+- If user wants images: tell them to use WAKTI AI, main selector = Image, then pill = Text to Image / Image to Image / Background Removal / Draw.
+
+STYLE:
+- Friendly “buddy” tone.
+- Plain text only. No markdown, no headings.
+- Mention icon names in parentheses like: (W logo), (mic icon).
+- Respond in English only.
+`;
 }
 
- function buildSystemPrompt(language: "en" | "ar", manualContext: string): string {
-  if (language === "ar") {
-    return `أنت مساعد WAKTI الودود! تخيل نفسك كصديق يساعد المستخدم يكتشف التطبيق.
+function normalizeText(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[^\p{L}\p{N}\s→-]/gu, "")
+    .trim();
+}
 
-إليك معلومات من دليل WAKTI:
-${manualContext}
+function buildKeywords(query: string): string[] {
+  const q = normalizeText(query);
+  return q.split(" ").filter((w) => w.length > 2).slice(0, 8);
+}
 
-أسلوبك:
-- تكلم بشكل طبيعي وودود، مثل صديق يشرح لصديقه.
-- استخدم نص عادي فقط. لا تستخدم ** أو ## أو - أو نقاط.
-- اشرح الخطوات بوضوح وبساطة.
-- اذكر الأيقونات لما تساعد (مثل: أيقونة المايك).
-- إذا الميزة في الهيدر (أعلى الشاشة)، قل "شوف أعلى الشاشة جنب صورتك".
-- إذا الميزة في القائمة، قل "اضغط شعار W أعلى اليسار لفتح القائمة".
-- إذا ما لقيت الجواب في الدليل، قل "ما عندي هالمعلومة، ممكن توضح سؤالك؟"
-- إذا السؤال عام (مثل أسئلة عن الطقس، الرياضيات، أخبار، واجبات، أو أي شي مو عن ميزات WAKTI)، قل شي مثل: "تمام! بس تنبيه سريع: أنا مساعد WAKTI هنا عشان أساعدك تتنقل وتفهم التطبيق. لسؤالك هذا، WAKTI AI هو صاحبك. افتح القائمة واضغط شعار W (أعلى اليسار)، بعدين ادخل WAKTI AI. داخل WAKTI AI استخدم Chat mode للمساعدة السريعة، وStudy mode لو تبي شرح خطوة بخطوة مثل المدرّس. وإذا تحتاج تبحث: استخدم Search mode (ويب أو YouTube)." وأضف [CHIP:Open WAKTI AI:/wakti-ai-v2]
-- استخدم العربية فقط.`;
+function scoreEntryForQuery(entry: ManualEntry, query: string, language: "en" | "ar"): ScoredEntry {
+  const qRaw = query.toLowerCase().trim();
+  const q = normalizeText(query);
+  const keywords = buildKeywords(query);
+
+  const titleField = normalizeText(language === "ar" ? entry.title_ar : entry.title_en);
+  const contentField = normalizeText(language === "ar" ? entry.content_ar : entry.content_en);
+  const tagsLower = (entry.tags ?? []).map((t) => normalizeText(t));
+  const allText = `${titleField} ${contentField} ${tagsLower.join(" ")}`.trim();
+
+  let score = 0;
+  const reasons: string[] = [];
+
+  // Strong exact phrase checks (helps short queries like "Text Translator")
+  if (q && titleField.includes(q)) {
+    score += 30;
+    reasons.push("title_phrase");
   }
-  return `You are WAKTI's friendly helper! Think of yourself as a buddy helping the user discover the app.
+  if (q && tagsLower.some((t) => t === q || t.includes(q) || q.includes(t))) {
+    score += 25;
+    reasons.push("tag_phrase");
+  }
 
-IMPORTANT: Only recommend features that are explicitly mentioned in the manual below. Do NOT make up features or suggest things not in the manual.
+  // Keyword scoring
+  for (const kw of keywords) {
+    if (titleField.includes(kw)) {
+      score += 8;
+      reasons.push(`title_kw:${kw}`);
+    }
+    if (tagsLower.some((t) => t.includes(kw))) {
+      score += 6;
+      reasons.push(`tag_kw:${kw}`);
+    }
+    if (allText.includes(kw)) {
+      score += 2;
+    }
+  }
 
-Here is information from the WAKTI manual:
-${manualContext}
+  // Specificity bias: prefer deep links when user asks for a specific tab/feature
+  const wantsTranslator = qRaw.includes("translator") || qRaw.includes("ترجم") || qRaw.includes("مترجم");
+  const wantsTts = qRaw.includes("text to speech") || qRaw.includes("tts") || qRaw.includes("نص") && qRaw.includes("كلام") || qRaw.includes("نص → كلام");
+  const wantsClone = qRaw.includes("clone") || qRaw.includes("voice clone") || qRaw.includes("استنسا") || qRaw.includes("نسخ صوت");
+  if ((wantsTranslator || wantsTts || wantsClone) && entry.route && entry.route.includes("?tab=")) {
+    score += 7;
+    reasons.push("deeplink_tab");
+  }
 
-Your style:
-- Talk naturally and warmly, like a friend explaining to a friend.
-- Use plain text only. Never use **, ##, -, or bullet points.
-- Explain steps clearly and simply.
-- ONLY recommend the specific feature from the manual that best matches what the user needs.
-- Mention icons when helpful (like: mic icon, music note icon).
-- If the feature is in the header (top of screen), say "Look at the top of your screen, next to your avatar".
-- If the feature is in the menu, say "Tap the W logo (top-left) to open the menu".
-- If you cannot find the answer in the manual, say "I don't have that info, can you clarify your question?"
-- If the question is general (like weather, math, news, homework, or anything NOT about WAKTI features), say something like: "Hey! Quick heads-up: I'm WAKTI's Help Assistant, here to help you navigate and understand the app. For your question though, WAKTI AI is your go-to buddy. Tap the W logo (top-left) to open the menu, then open WAKTI AI. Use Chat mode for quick help, Study mode for step-by-step tutor style, and Search mode (Web/YouTube) when you need to look something up." and add [CHIP:Open WAKTI AI:/wakti-ai-v2]
-- Respond in English only.`;
+  // Intent bias: boost the correct feature based on query intent
+  // Events/Invites → Maw3d
+  const wantsEvent = qRaw.includes("invite") || qRaw.includes("event") || qRaw.includes("dinner") || qRaw.includes("party") || qRaw.includes("gathering") || qRaw.includes("rsvp") || qRaw.includes("دعوة") || qRaw.includes("حفل") || qRaw.includes("مناسبة") || qRaw.includes("عشاء") || qRaw.includes("عزيمة");
+  if (wantsEvent && entry.route === "/maw3d") {
+    score += 20;
+    reasons.push("event_intent_maw3d");
+  }
+
+  // Tasks/Reminders/Todo → Tasks & Reminders
+  const wantsTasks = qRaw.includes("task") || qRaw.includes("todo") || qRaw.includes("reminder") || qRaw.includes("مهمة") || qRaw.includes("تذكير") || qRaw.includes("مهام");
+  if (wantsTasks && entry.route === "/tasks-reminders") {
+    score += 20;
+    reasons.push("task_intent");
+  }
+
+  // Calendar/Schedule → Calendar
+  const wantsCalendar = qRaw.includes("calendar") || qRaw.includes("schedule") || qRaw.includes("تقويم") || qRaw.includes("جدول");
+  if (wantsCalendar && entry.route === "/calendar") {
+    score += 20;
+    reasons.push("calendar_intent");
+  }
+
+  // Journal/Diary/Notes → Journal
+  const wantsJournal = qRaw.includes("journal") || qRaw.includes("diary") || qRaw.includes("note") || qRaw.includes("يوميات") || qRaw.includes("مذكرة");
+  if (wantsJournal && entry.route === "/journal") {
+    score += 20;
+    reasons.push("journal_intent");
+  }
+
+  // Music/Song/Generate music → Music Studio
+  const wantsMusic = qRaw.includes("music") || qRaw.includes("song") || qRaw.includes("موسيقى") || qRaw.includes("أغنية");
+  if (wantsMusic && entry.route === "/music") {
+    score += 20;
+    reasons.push("music_intent");
+  }
+
+  // Games → Games
+  const wantsGames = qRaw.includes("game") || qRaw.includes("play") || qRaw.includes("ألعاب") || qRaw.includes("لعبة");
+  if (wantsGames && entry.route === "/games") {
+    score += 20;
+    reasons.push("games_intent");
+  }
+
+  // Contacts/Message/Chat with friends → Contacts
+  const wantsContacts = (qRaw.includes("contact") || qRaw.includes("message") || qRaw.includes("chat") || qRaw.includes("جهات") || qRaw.includes("رسالة")) && !wantsEvent;
+  if (wantsContacts && entry.route === "/contacts") {
+    score += 20;
+    reasons.push("contacts_intent");
+  }
+
+  // Settings/Account/Theme → Settings
+  const wantsSettings = qRaw.includes("setting") || qRaw.includes("account") || qRaw.includes("theme") || qRaw.includes("dark mode") || qRaw.includes("light mode") || qRaw.includes("إعدادات") || qRaw.includes("حساب") || qRaw.includes("مظهر");
+  if (wantsSettings && entry.route === "/settings") {
+    score += 20;
+    reasons.push("settings_intent");
+  }
+
+  // Dashboard/Home/Widgets → Dashboard
+  const wantsDashboard = qRaw.includes("dashboard") || qRaw.includes("home") || qRaw.includes("widget") || qRaw.includes("لوحة") || qRaw.includes("الرئيسية");
+  if (wantsDashboard && entry.route === "/dashboard") {
+    score += 20;
+    reasons.push("dashboard_intent");
+  }
+
+  // Tasjeel/Record/Audio/Meeting/Lecture → Tasjeel
+  const wantsTasjeel = qRaw.includes("tasjeel") || qRaw.includes("record") || qRaw.includes("meeting") || qRaw.includes("lecture") || qRaw.includes("transcri") || qRaw.includes("summar") || qRaw.includes("تسجيل") || qRaw.includes("اجتماع") || qRaw.includes("محاضرة");
+  if (wantsTasjeel && entry.route === "/tasjeel") {
+    score += 20;
+    reasons.push("tasjeel_intent");
+  }
+
+  // Vitality/Health/WHOOP/Fitness → Fitness page
+  const wantsVitality = qRaw.includes("vitality") || qRaw.includes("health") || qRaw.includes("whoop") || qRaw.includes("fitness") || qRaw.includes("workout") || qRaw.includes("صحة") || qRaw.includes("لياقة") || qRaw.includes("تمرين");
+  if (wantsVitality && entry.route === "/fitness") {
+    score += 20;
+    reasons.push("vitality_intent");
+  }
+
+  // Account/Profile → Account page
+  const wantsAccount = qRaw.includes("account") || qRaw.includes("profile") || qRaw.includes("avatar") || qRaw.includes("my name") || qRaw.includes("حساب") || qRaw.includes("ملف") || qRaw.includes("صورتي");
+  if (wantsAccount && entry.route === "/account") {
+    score += 20;
+    reasons.push("account_intent");
+  }
+
+  // Create event → Maw3d Create
+  const wantsCreateEvent = qRaw.includes("create") && (qRaw.includes("event") || qRaw.includes("invite") || qRaw.includes("party"));
+  if (wantsCreateEvent && entry.route === "/maw3d/create") {
+    score += 25;
+    reasons.push("create_event_intent");
+  }
+
+  // Help/Support → Help page
+  const wantsHelp = qRaw.includes("help") || qRaw.includes("support") || qRaw.includes("مساعدة") || qRaw.includes("دعم");
+  if (wantsHelp && entry.route === "/help") {
+    score += 15;
+    reasons.push("help_intent");
+  }
+
+  // Contact → Contact page
+  const wantsContact = qRaw.includes("contact us") || qRaw.includes("feedback") || qRaw.includes("تواصل");
+  if (wantsContact && entry.route === "/contact") {
+    score += 20;
+    reasons.push("contact_intent");
+  }
+
+  // Background removal specific
+  const wantsBackgroundRemoval = qRaw.includes("background") || qRaw.includes("remove background") || qRaw.includes("خلفية") || qRaw.includes("إزالة");
+  if (wantsBackgroundRemoval && titleField.includes("background")) {
+    score += 25;
+    reasons.push("background_removal_intent");
+  }
+
+  // Study mode specific
+  const wantsStudy = qRaw.includes("study") || qRaw.includes("homework") || qRaw.includes("learn") || qRaw.includes("school") || qRaw.includes("دراسة") || qRaw.includes("واجب") || qRaw.includes("مدرسة");
+  if (wantsStudy && titleField.includes("study")) {
+    score += 25;
+    reasons.push("study_intent");
+  }
+
+  // YouTube specific
+  const wantsYoutube = qRaw.includes("youtube") || qRaw.includes("video") || qRaw.includes("يوتيوب") || qRaw.includes("فيديو");
+  if (wantsYoutube && titleField.includes("youtube")) {
+    score += 25;
+    reasons.push("youtube_intent");
+  }
+
+  // Letters game specific
+  const wantsLetters = qRaw.includes("letters") || qRaw.includes("word game") || qRaw.includes("حروف");
+  if (wantsLetters && titleField.includes("letters")) {
+    score += 25;
+    reasons.push("letters_intent");
+  }
+
+  // Image/Generate image/Picture → WAKTI AI Image Mode
+  const wantsImage = qRaw.includes("image") || qRaw.includes("picture") || qRaw.includes("photo") || qRaw.includes("generate image") || qRaw.includes("صورة");
+  if (wantsImage && entry.route === "/wakti-ai-v2" && titleField.includes("image")) {
+    score += 20;
+    reasons.push("image_intent");
+  }
+
+  // Search/Web/YouTube → WAKTI AI Search Mode
+  const wantsSearch = qRaw.includes("search") || qRaw.includes("web") || qRaw.includes("youtube") || qRaw.includes("بحث") || qRaw.includes("يوتيوب");
+  if (wantsSearch && entry.route === "/wakti-ai-v2" && titleField.includes("search")) {
+    score += 20;
+    reasons.push("search_intent");
+  }
+
+  // Presentation/Slides → Smart Text Presentations
+  const wantsPresentation = qRaw.includes("presentation") || qRaw.includes("slide") || qRaw.includes("عرض تقديمي") || qRaw.includes("شرائح");
+  if (wantsPresentation && titleField.includes("presentation")) {
+    score += 20;
+    reasons.push("presentation_intent");
+  }
+
+  // Diagram/Flowchart → Smart Text Diagrams
+  const wantsDiagram = qRaw.includes("diagram") || qRaw.includes("flowchart") || qRaw.includes("chart") || qRaw.includes("مخطط") || qRaw.includes("رسم بياني");
+  if (wantsDiagram && titleField.includes("diagram")) {
+    score += 20;
+    reasons.push("diagram_intent");
+  }
+
+  // Prefer entries that can provide a chip (helps avoid generic overview chips)
+  if (entry.route && ((language === "ar" ? entry.chip_label_ar : entry.chip_label_en) ?? "").trim()) {
+    score += 3;
+    reasons.push("has_chip");
+  }
+
+  return { entry, score, reasons };
+}
+
+function rerankEntriesForQuery(entries: ManualEntry[], query: string, language: "en" | "ar"): ManualEntry[] {
+  const scored = entries
+    .map((entry) => scoreEntryForQuery(entry, query, language))
+    .filter((s) => s.score > 0);
+
+  // Deterministic sort: score desc, then title asc, then route asc
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    const at = (language === "ar" ? a.entry.title_ar : a.entry.title_en) ?? "";
+    const bt = (language === "ar" ? b.entry.title_ar : b.entry.title_en) ?? "";
+    if (at !== bt) return at.localeCompare(bt);
+    const ar = a.entry.route ?? "";
+    const br = b.entry.route ?? "";
+    return ar.localeCompare(br);
+  });
+
+  return scored.map((s) => s.entry);
 }
 
 async function searchManual(query: string, language: "en" | "ar"): Promise<ManualEntry[]> {
@@ -168,7 +408,7 @@ async function searchManual(query: string, language: "en" | "ar"): Promise<Manua
     return cached.entries;
   }
 
-  const keywords = queryLower.split(/\s+/).filter((w) => w.length > 2).slice(0, 6);
+  const keywords = buildKeywords(query);
 
   // Fetch all manual entries and filter/score in memory (manual is small ~40 entries)
   // This ensures we search tags properly and don't miss anything
@@ -188,41 +428,21 @@ async function searchManual(query: string, language: "en" | "ar"): Promise<Manua
     return [];
   }
   
-  // Boost exact phrase matches and important keywords
-  const scored = entries.map(entry => {
-    let score = 0;
+  // Initial fast filter (keeps memory search cheap for large manuals)
+  const prelim = entries.filter((entry) => {
     const titleField = (language === "ar" ? entry.title_ar : entry.title_en).toLowerCase();
     const contentField = (language === "ar" ? entry.content_ar : entry.content_en).toLowerCase();
-    const tagsLower = entry.tags.map(t => t.toLowerCase());
+    const tagsLower = (entry.tags ?? []).map((t) => t.toLowerCase());
     const allText = `${titleField} ${contentField} ${tagsLower.join(" ")}`;
-
-    // Exact tag match = highest priority
-    for (const tag of tagsLower) {
-      if (queryLower.includes(tag) || tag.includes(queryLower)) {
-        score += 10;
-      }
-    }
-    
-    // Title match = high priority
-    for (const kw of keywords) {
-      if (titleField.includes(kw)) score += 5;
-    }
-    
-    // Content/tag keyword match
-    for (const kw of keywords) {
-      if (allText.includes(kw)) score += 2;
-      for (const tag of tagsLower) {
-        if (tag.includes(kw)) score += 3;
-      }
-    }
-    
-    return { entry, score };
+    if (!keywords.length) return true;
+    return keywords.some((kw) => allText.includes(kw));
   });
 
-  scored.sort((a, b) => b.score - a.score);
-  
-  // Return top 3 with score > 0
-  const top = scored.filter((s) => s.score > 0).slice(0, 3).map((s) => s.entry);
+  // Deterministic rerank (fixes short queries like "Text Translator" picking generic overview)
+  const reranked = rerankEntriesForQuery(prelim, query, language);
+
+  // Return top 5 (more context helps the model answer without drifting)
+  const top = reranked.slice(0, 5);
   queryCache.set(cacheKey, { ts: now, entries: top });
   return top;
 }
@@ -237,19 +457,18 @@ function buildManualContext(entries: ManualEntry[], language: "en" | "ar"): stri
   }).join("\n\n");
 }
 
-function extractChips(entries: ManualEntry[], language: "en" | "ar"): Chip[] {
-  // Only return 1 chip from the TOP result (most relevant)
-  // This avoids confusing users with multiple random chips
-  for (const e of entries.slice(0, 1)) {
+function extractChips(entries: ManualEntry[], query: string, language: "en" | "ar"): Chip[] {
+  // Choose the best chip candidate for the user query (not blindly the first result).
+  // This fixes cases where "Text Translator" returns the Voice Studio overview chip.
+  const reranked = rerankEntriesForQuery(entries, query, language);
+  for (const e of reranked) {
     if (!e.route) continue;
-    
-    const label = language === "ar" ? e.chip_label_ar : e.chip_label_en;
-    if (label) {
-      return [{ label, route: e.route }];
+    const label = (language === "ar" ? e.chip_label_ar : e.chip_label_en) ?? "";
+    if (label.trim()) {
+      return [{ label: label.trim(), route: e.route }];
     }
   }
-  
-  return []; // No chip if top result has no route
+  return [];
 }
 
 // Strip markdown formatting from AI response
@@ -267,7 +486,7 @@ function cleanReply(text: string): string {
 // SAFETY FIX: We no longer trust AI-provided chips.
 // Chips come ONLY from manual entries or our hardcoded safe chips.
 // This prevents random wrong chips like "Change Theme" appearing.
-function extractChipFromResponse(_text: string): Chip | null {
+function _extractChipFromResponse(_text: string): Chip | null {
   // Disabled: AI chips are not trusted anymore
   return null;
 }
@@ -361,36 +580,10 @@ serve(async (req) => {
       );
     }
 
-    // ========================================================================
-    // SMART-SKIP: If it's a general question, return canned response INSTANTLY
-    // ========================================================================
-    if (isGeneralQuestion(message)) {
-      const durationMs = Date.now() - start;
-      const cannedReply = language === "ar" ? GENERAL_REDIRECT_AR : GENERAL_REDIRECT_EN;
-      const cannedChip = language === "ar" ? GENERAL_CHIP_AR : GENERAL_CHIP;
-      
-      console.log(`[SMART-SKIP] General question detected, returning canned response in ${durationMs}ms`);
-      
-      await logAIFromRequest(req, {
-        functionName: "help-assistant-chat",
-        provider: "smart-skip",
-        model: "canned-response",
-        inputText: message,
-        outputText: cannedReply,
-        durationMs,
-        status: "success",
-      });
-      
-      return new Response(
-        JSON.stringify({ reply: cannedReply, chips: [cannedChip] }),
-        { headers: { ...corsHeadersWithMaxAge, "Content-Type": "application/json" } }
-      );
-    }
-
     // Search manual for relevant entries
     const manualEntries = await searchManual(message, language);
     const manualContext = buildManualContext(manualEntries, language);
-    const chips = extractChips(manualEntries, language);
+    const chips = extractChips(manualEntries, message, language);
 
     // Build system prompt with manual context
     const systemPrompt = buildSystemPrompt(language, manualContext);
@@ -406,16 +599,16 @@ serve(async (req) => {
 
     messages.push({ role: "user", content: message });
 
-    // Try OpenAI first (primary), fallback to DeepSeek
-    let reply = await callOpenAI(messages);
-    let provider = "openai";
-    let model = "gpt-4o-mini";
+    // Try DeepSeek first (primary), fallback to OpenAI
+    let reply = await callDeepSeek(messages);
+    let provider = "deepseek";
+    let model = "deepseek-chat";
 
     if (!reply) {
-      console.log("OpenAI failed, trying DeepSeek fallback...");
-      reply = await callDeepSeek(messages);
-      provider = "deepseek";
-      model = "deepseek-chat";
+      console.log("DeepSeek failed, trying OpenAI fallback...");
+      reply = await callOpenAI(messages);
+      provider = "openai";
+      model = "gpt-4o-mini";
     }
 
     const durationMs = Date.now() - start;
@@ -442,14 +635,11 @@ serve(async (req) => {
       );
     }
 
-    // Check if AI added a chip in its response (for general questions redirect)
-    const aiChip = extractChipFromResponse(reply);
-    
     // Clean markdown from reply
     const cleanedReply = cleanReply(reply);
-    
-    // Use AI chip if provided, otherwise use manual-based chips
-    const finalChips = aiChip ? [aiChip] : chips;
+
+    // Chips come ONLY from manual entries (safety)
+    const finalChips = chips;
 
     await logAIFromRequest(req, {
       functionName: "help-assistant-chat",

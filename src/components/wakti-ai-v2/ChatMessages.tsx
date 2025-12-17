@@ -14,6 +14,7 @@ import { YouTubePreview } from './YouTubePreview';
 import { StudyModeMessage } from './StudyModeMessage';
 import { supabase } from '@/integrations/supabase/client';
 import { getSelectedVoices } from './TalkBackSettings';
+import { useNavigate } from 'react-router-dom';
 // Removed useMobileKeyboard - no longer needed
 
 interface ChatMessagesProps {
@@ -54,6 +55,7 @@ export function ChatMessages({
   onUpdateMessage
 }: ChatMessagesProps) {
   const { language } = useTheme();
+  const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   // No longer need keyboard detection in ChatMessages
   const [inputHeight, setInputHeight] = useState<number>(80);
@@ -1052,6 +1054,21 @@ export function ChatMessages({
           >
             {content}
           </ReactMarkdown>
+          {(() => {
+            const chip = (message as any)?.metadata?.helpGuideChip as { label?: string; route?: string } | undefined;
+            if (!chip?.label || !chip?.route) return null;
+            return (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => navigate(chip.route as string)}
+                  className="inline-flex items-center gap-1.5 h-9 px-4 text-sm font-medium rounded-full bg-gradient-to-r from-primary/90 to-primary text-primary-foreground shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all duration-150"
+                >
+                  {chip.label}
+                </button>
+              </div>
+            );
+          })()}
           {message.intent === 'search' && Array.isArray(searchMeta?.followUps) && searchMeta.followUps.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-2">
               {searchMeta.followUps.slice(0, 6).map((q: string, i: number) => (

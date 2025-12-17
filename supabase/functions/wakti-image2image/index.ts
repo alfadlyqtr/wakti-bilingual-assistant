@@ -235,7 +235,7 @@ serve(async (req: Request) => {
           functionName: "wakti-image2image",
           provider: "runware",
           model: "runware:106@1",
-          inputText: prompt,
+          inputText: user_prompt,
           status: "success"
         });
 
@@ -252,7 +252,7 @@ serve(async (req: Request) => {
         functionName: "wakti-image2image",
         provider: "runware",
         model: "runware:106@1",
-        inputText: prompt,
+        inputText: user_prompt,
         status: "success"
       });
 

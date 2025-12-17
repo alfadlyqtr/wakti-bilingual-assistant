@@ -535,6 +535,7 @@ async function queryWolfram(input: string, timeoutMs: number = 4000): Promise<{ 
 
 // Detect if query is suitable for Wolfram (math/science/facts)
 function isWolframQuery(q: string): boolean {
+  if (!q) return false;
   const lower = q.toLowerCase();
   // Math patterns
   if (/\d+\s*[\+\-\*\/\^]\s*\d+/.test(q)) return true;
@@ -546,6 +547,16 @@ function isWolframQuery(q: string): boolean {
   if (/\d+\s*(km|m|cm|mm|ft|in|mi|kg|g|lb|oz|l|ml|gal|mph|kph|°[CF])/i.test(q)) return true;
   if (/\b(how (far|much|many|tall|big|old)|what is the)\b/i.test(lower)) return true;
   return false;
+}
+
+function isWaktiInvolved(q: string) {
+  try {
+    const s = String(q || '').trim();
+    if (!s) return false;
+    return /\bwakti\b/i.test(s) || /وقتي/.test(s);
+  } catch {
+    return false;
+  }
 }
 
 serve(async (req) => {
@@ -614,6 +625,33 @@ serve(async (req) => {
 
         if (!message) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Message required' })}\n\n`));
+          controller.close();
+          return;
+        }
+
+        // Chat mode: if the user is asking about WAKTI specifically, respond with a short promo + help routing.
+        // This avoids the model guessing app features/steps.
+        if (activeTrigger === 'chat' && chatSubmode === 'chat' && isWaktiInvolved(message)) {
+          const promoText = language === 'ar'
+            ? 'ملاحظة سريعة: Wakti هو تطبيق إنتاجية ذكي شامل (مهام، فعاليات، صوت، وأدوات AI).\nللخطوات الدقيقة افتح صفحة المساعدة والإرشادات.\nوإذا ما ودّك تقرأ، اسأل أخوي الصغير مساعد Wakti وهو بيرشدك خطوة بخطوة.'
+            : 'Quick note: Wakti is your all‑in‑one productivity AI app (tasks, events, voice, and AI tools).\nFor accurate step‑by‑step guides, open Help & Guides.\nIf you don’t feel like reading, ask my little brother Wakti Help Assistant and he’ll walk you through it.';
+
+          try {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+              metadata: {
+                helpGuideChip: {
+                  label: language === 'ar' ? 'افتح المساعدة والإرشادات' : 'Open Help & Guides',
+                  route: '/help'
+                }
+              }
+            })}\n\n`));
+          } catch (e) {
+            console.warn('helpGuideChip emit failed', e);
+          }
+
+          // Emit as a single chunk for simplicity
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: promoText, content: promoText })}\n\n`));
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
           return;
         }

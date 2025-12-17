@@ -35,6 +35,8 @@ type HelpChatMessage = {
   chips?: Chip[];
 };
 
+const HELP_CHAT_STORAGE_KEY = 'wakti-help-assistant-chat-v1';
+
 function getChipIcon(route: string) {
   const r = String(route || '').toLowerCase();
 
@@ -53,16 +55,40 @@ function getChipIcon(route: string) {
 export function HelpAssistantChat() {
   const { language } = useTheme();
   const navigate = useNavigate();
-  const [messages, setMessages] = useState<HelpChatMessage[]>(() => [
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content:
-        language === 'ar'
-          ? 'أنا مساعد WAKTI للمساعدة داخل التطبيق. اسألني عن أي ميزة أو أين تجدها وكيف تستخدمها.'
-          : "I'm WAKTI's Help Assistant. Ask me where to find any feature and how to use it."
+  const initialWelcomeText = useMemo(
+    () =>
+      language === 'ar'
+        ? 'أنا مساعد WAKTI للمساعدة داخل التطبيق. اسألني عن أي ميزة أو أين تجدها وكيف تستخدمها.'
+        : "I'm WAKTI's Help Assistant. Ask me where to find any feature and how to use it.",
+    [language]
+  );
+
+  const [messages, setMessages] = useState<HelpChatMessage[]>(() => {
+    const welcome: HelpChatMessage = { id: 'welcome', role: 'assistant', content: initialWelcomeText };
+    try {
+      const raw = localStorage.getItem(HELP_CHAT_STORAGE_KEY);
+      if (!raw) return [welcome];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [welcome];
+      const restored: HelpChatMessage[] = parsed
+        .filter((m: any) => m && typeof m === 'object')
+        .map((m: any) => ({
+          id: String(m.id ?? ''),
+          role: (m.role === 'user' ? 'user' : 'assistant') as HelpChatRole,
+          content: String(m.content ?? ''),
+          chips: Array.isArray(m.chips)
+            ? m.chips
+                .filter((c: any) => c && typeof c === 'object')
+                .map((c: any) => ({ label: String(c.label ?? ''), route: String(c.route ?? '') }))
+                .filter((c: Chip) => c.label && c.route)
+            : undefined
+        }))
+        .filter((m: HelpChatMessage) => m.id && m.content);
+      return [welcome, ...restored.filter((m) => m.id !== 'welcome')];
+    } catch {
+      return [welcome];
     }
-  ]);
+  });
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
@@ -88,6 +114,25 @@ export function HelpAssistantChat() {
       return next;
     });
   }, [language]);
+
+  useEffect(() => {
+    // Persist chat (excluding the dynamic welcome message content)
+    try {
+      const toStore = messages
+        .filter((m) => m.id !== 'welcome')
+        .map((m) => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          chips: Array.isArray(m.chips)
+            ? m.chips.map((c) => ({ label: c.label, route: c.route }))
+            : undefined
+        }));
+      localStorage.setItem(HELP_CHAT_STORAGE_KEY, JSON.stringify(toStore));
+    } catch {
+      // ignore storage failures
+    }
+  }, [messages]);
 
   const canSend = useMemo(() => input.trim().length > 0 && !isSending, [input, isSending]);
 

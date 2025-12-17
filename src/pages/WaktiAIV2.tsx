@@ -98,6 +98,15 @@ const WaktiAIV2 = () => {
     }
   }, [activeTrigger]);
 
+  const prevTriggerRef = useRef<string>(activeTrigger);
+  useEffect(() => {
+    const prev = prevTriggerRef.current;
+    prevTriggerRef.current = activeTrigger;
+    if (activeTrigger === 'image' && prev !== 'image') {
+      setActiveImageMode('text2image');
+    }
+  }, [activeTrigger]);
+
   useEffect(() => {
     loadUserProfile();
     loadPersonalTouch();

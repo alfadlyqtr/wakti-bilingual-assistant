@@ -1562,7 +1562,7 @@ class WaktiAIV2ServiceClass {
           response: language === 'ar' ? 'تم إنشاء الصورة.' : 'Image generated.',
           imageUrl: json.url,
           error: false,
-          metadata: { provider: 'runware', model: (json as any)?.model || (imageQuality === 'best_fast' ? 'runware:108@20' : 'runware:106@1'), quality: imageQuality || 'fast', mode }
+          metadata: { provider: 'runware', model: (json as any)?.model || (imageQuality === 'best_fast' ? 'runware:400@1' : 'runware:111@1'), quality: imageQuality || 'fast', mode }
         } as any;
       }
 

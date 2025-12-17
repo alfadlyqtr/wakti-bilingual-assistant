@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useAudioSession } from '@/hooks/useAudioSession';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Loader2, ChevronDown, ChevronLeft, ChevronRight, Plus, ImagePlus, MessageSquare, Search as SearchIcon, Image as ImageIcon, SlidersHorizontal, Wand2 } from 'lucide-react';
+import { Send, Loader2, ChevronDown, ChevronLeft, ChevronRight, Plus, ImagePlus, MessageSquare, Search as SearchIcon, Image as ImageIcon, SlidersHorizontal, Wand2, Mic } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -11,6 +11,7 @@ import { PlusMenu } from './PlusMenu';
 import { ActiveModeIndicator } from './ActiveModeIndicator';
 import { SimplifiedFileUpload } from './SimplifiedFileUpload';
 import { ImageModeFileUpload } from './ImageModeFileUpload';
+import { TalkBubble } from './TalkBubble';
 import type { UploadedFile } from '@/types/fileUpload';
 import { useSimplifiedFileUpload } from '@/hooks/useSimplifiedFileUpload';
 // Removed useMobileKeyboard hook - ChatInput now handles its own keyboard detection
@@ -122,6 +123,8 @@ export function ChatInput({
   // Chat/Study submode dropdown state
   const chatSubmodeBtnRef = useRef<HTMLButtonElement>(null);
   const [chatSubmodeMenuPos, setChatSubmodeMenuPos] = useState<{ top: number; left: number } | null>(null);
+  // Talk mode state
+  const [isTalkOpen, setIsTalkOpen] = useState(false);
 
   // Compute a safe, clamped viewport position for the QuickModes portal
   const getQuickModesPortalPos = () => {
@@ -142,6 +145,19 @@ export function ChatInput({
     { key: 'image', labelEn: 'Image', labelAr: 'صورة', color: 'bg-orange-500' },
   ];
   const currentMode = modesOrder[stepperIndex];
+
+  // Always default Image mode to Text2Image + Fast when the user ENTERS Image mode.
+  // Important: only run on transition into Image mode, so it doesn't override submode changes while already in Image.
+  const prevTriggerRef = useRef<string>(activeTrigger);
+  useEffect(() => {
+    const prev = prevTriggerRef.current;
+    prevTriggerRef.current = activeTrigger;
+    if (activeTrigger === 'image' && prev !== 'image') {
+      setImageMode('text2image');
+      setImageQuality('fast');
+      onImageModeChange?.('text2image');
+    }
+  }, [activeTrigger, onImageModeChange]);
   const attachDebugOverlay = () => {
     try {
       const id = 'wakti-modes-debug-overlay';
@@ -1193,6 +1209,16 @@ export function ChatInput({
                       </div>
                     ) : activeTrigger === 'chat' ? (
                       <div className="relative flex items-center gap-2">
+                        {/* Talk Button */}
+                        <button
+                          type="button"
+                          onClick={() => setIsTalkOpen(true)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 h-8 rounded-full text-xs font-medium leading-none border bg-gradient-to-r from-pink-100 to-purple-100 text-pink-700 border-pink-200 dark:from-pink-900/30 dark:to-purple-900/30 dark:text-pink-400 dark:border-pink-700/50 hover:scale-105 active:scale-95 transition-transform"
+                          aria-label={language === 'ar' ? 'تحدث' : 'Talk'}
+                        >
+                          <Mic className="h-3 w-3" />
+                          <span className="text-xs">{language === 'ar' ? 'تحدث' : 'Talk'}</span>
+                        </button>
                         {/* Chat/Study Submode Dropdown */}
                         <button
                           ref={chatSubmodeBtnRef}
@@ -1707,6 +1733,22 @@ export function ChatInput({
       multiple={false}
       hidden
     />
+    {/* Talk Bubble Overlay - rendered via portal to ensure full-screen */}
+    {createPortal(
+      <TalkBubble
+        isOpen={isTalkOpen}
+        onClose={() => setIsTalkOpen(false)}
+        onUserMessage={(text) => {
+          if (text.trim()) {
+            onSendMessage(text, 'chat', [], undefined, undefined, chatSubmode);
+          }
+        }}
+        onAssistantMessage={(text) => {
+          console.log('Assistant said:', text);
+        }}
+      />,
+      document.body
+    )}
     </>
   );
 }
