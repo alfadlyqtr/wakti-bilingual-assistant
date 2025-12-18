@@ -264,6 +264,12 @@ export function ImageModeFileUpload({
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('📥 File input triggered, files:', e.target.files?.length || 0);
+    if (e.target.files) {
+      for (let i = 0; i < e.target.files.length; i++) {
+        console.log('📥 Raw file from input:', e.target.files[i].name, 'type:', e.target.files[i].type, 'size:', e.target.files[i].size);
+      }
+    }
     handleFileSelect(e.target.files);
     // Reset input so same file can be chosen again
     if (e.target) e.target.value = '';
@@ -276,7 +282,7 @@ export function ImageModeFileUpload({
         type="file"
         ref={fileInputRef}
         onChange={handleFileInputChange}
-        accept="image/*"
+        accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp"
         multiple={maxFiles > 1}
         className="hidden"
         aria-label="Image mode file input"

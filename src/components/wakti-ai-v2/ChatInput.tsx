@@ -1738,7 +1738,7 @@ export function ChatInput({
       type="file"
       ref={seedFileInputRef}
       onChange={handleSeedFilesChange}
-      accept="image/*"
+      accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff"
       multiple={false}
       hidden
     />
@@ -1746,7 +1746,7 @@ export function ChatInput({
       type="file"
       ref={chatUploadInputRef}
       onChange={handleChatUploadChange}
-      accept="image/*"
+      accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff"
       multiple={false}
       hidden
     />
