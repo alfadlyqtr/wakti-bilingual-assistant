@@ -28,6 +28,13 @@ interface ImageModeFileUploadProps {
  */
 const getExifOrientation = (file: File): Promise<number> => {
   return new Promise((resolve) => {
+    // PNG screenshots and other non-JPEG files don't have EXIF - return 1 immediately
+    if (!file.type.includes('jpeg') && !file.type.includes('jpg') && !file.name.toLowerCase().match(/\.(jpe?g|heic|heif)$/)) {
+      console.log('📷 Non-JPEG file, skipping EXIF check:', file.name, file.type);
+      resolve(1);
+      return;
+    }
+    
     const reader = new FileReader();
     reader.onload = (e) => {
       const view = new DataView(e.target?.result as ArrayBuffer);
@@ -207,7 +214,10 @@ export function ImageModeFileUpload({
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       
+      console.log('📁 Processing file:', file.name, 'type:', file.type, 'size:', file.size);
+      
       if (!isImageFile(file)) {
+        console.warn('❌ File rejected - not an image:', file.name, file.type);
         showError(
           language === 'ar' 
             ? `${file.name} ليس ملف صورة صالح` 

@@ -590,8 +590,15 @@ export function ChatInput({
       const validFiles: UploadedFile[] = [];
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        if (!isImageFile(file)) continue;
-        if (file.size > 5 * 1024 * 1024) continue;
+        console.log('📁 ChatInput processing:', file.name, 'type:', file.type, 'size:', file.size);
+        if (!isImageFile(file)) {
+          console.warn('❌ ChatInput rejected - not image:', file.name, file.type);
+          continue;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          console.warn('❌ ChatInput rejected - too large:', file.name, file.size);
+          continue;
+        }
         try {
           const base64DataUrl = await fileToBase64(file);
           validFiles.push({
