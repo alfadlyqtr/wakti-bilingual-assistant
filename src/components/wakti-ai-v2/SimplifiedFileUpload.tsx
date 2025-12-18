@@ -74,11 +74,19 @@ export function SimplifiedFileUpload({
     
     const validFiles: UploadedFile[] = [];
     
+    // Helper to check if file is an image (handles iOS empty MIME types)
+    const isImageFile = (f: File): boolean => {
+      if (f.type.startsWith('image/')) return true;
+      // iOS often returns empty type for HEIC/photos - check extension
+      const ext = f.name.split('.').pop()?.toLowerCase() || '';
+      return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'bmp', 'tiff', 'svg'].includes(ext);
+    };
+
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
+      // Validate file type - use helper for iOS compatibility
+      if (!isImageFile(file)) {
         showError(`${file.name} ${language === 'ar' ? 'ليس ملف صورة صالح' : 'is not a valid image file'}`);
         continue;
       }

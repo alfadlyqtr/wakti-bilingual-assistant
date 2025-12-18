@@ -575,6 +575,14 @@ export function ChatInput({
       console.log('❌ SEND: No message or files to send');
     }
   };
+  // Helper to check if file is an image (handles iOS empty MIME types)
+  const isImageFile = (file: File): boolean => {
+    if (file.type.startsWith('image/')) return true;
+    // iOS often returns empty type for HEIC/photos - check extension
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'bmp', 'tiff', 'svg'].includes(ext);
+  };
+
   // Chat mode: handle simple image uploads from '+' button
   const handleChatUploadChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -582,7 +590,7 @@ export function ChatInput({
       const validFiles: UploadedFile[] = [];
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        if (!file.type.startsWith('image/')) continue;
+        if (!isImageFile(file)) continue;
         if (file.size > 5 * 1024 * 1024) continue;
         try {
           const base64DataUrl = await fileToBase64(file);
@@ -736,8 +744,8 @@ export function ChatInput({
       const validFiles: UploadedFile[] = [];
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        // Validate image type and size (5MB limit)
-        if (!file.type.startsWith('image/')) continue;
+        // Validate image type and size (5MB limit) - use helper for iOS compatibility
+        if (!isImageFile(file)) continue;
         if (file.size > 5 * 1024 * 1024) continue;
         try {
           const base64DataUrl = await fileToBase64(file);

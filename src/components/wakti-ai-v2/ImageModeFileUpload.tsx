@@ -190,10 +190,18 @@ export function ImageModeFileUpload({
 
     const validFiles: ImageModeUploadedFile[] = [];
 
+    // Helper to check if file is an image (handles iOS empty MIME types)
+    const isImageFile = (f: File): boolean => {
+      if (f.type.startsWith('image/')) return true;
+      // iOS often returns empty type for HEIC/photos - check extension
+      const ext = f.name.split('.').pop()?.toLowerCase() || '';
+      return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'bmp', 'tiff', 'svg'].includes(ext);
+    };
+
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       
-      if (!file.type.startsWith('image/')) {
+      if (!isImageFile(file)) {
         showError(
           language === 'ar' 
             ? `${file.name} ليس ملف صورة صالح` 
