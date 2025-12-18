@@ -244,7 +244,7 @@ export const SimpleContactFormModal: React.FC<ContactFormModalProps> = ({
             <input
               id="attachment-input"
               type="file"
-              accept="image/*"
+              accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff"
               multiple
               onChange={handleFileSelect}
               className="hidden"

@@ -759,7 +759,7 @@ export default function ChatPage() {
           </div>
 
           {/* Hidden file inputs */}
-          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelected} aria-label="Upload image" />
+          <input ref={fileInputRef} type="file" accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff" className="hidden" onChange={handleImageSelected} aria-label="Upload image" />
           <input ref={pdfInputRef} type="file" accept=".pdf" className="hidden" onChange={handlePDFSelected} aria-label="Upload PDF" />
 
           {/* Text input + send button */}

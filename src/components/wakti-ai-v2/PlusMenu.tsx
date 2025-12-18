@@ -185,7 +185,7 @@ export function PlusMenu({ onCamera, onUpload, isLoading }: PlusMenuProps) {
         ref={fileInputRef}
         type="file"
         multiple
-        accept="image/*,.txt"
+        accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff,.txt"
         onChange={handleFileSelect}
         className="hidden"
         aria-hidden="true"
@@ -194,7 +194,7 @@ export function PlusMenu({ onCamera, onUpload, isLoading }: PlusMenuProps) {
       <input
         ref={cameraInputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff"
         capture="environment"
         onChange={handleFileSelect}
         className="hidden"

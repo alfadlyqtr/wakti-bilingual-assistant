@@ -172,7 +172,7 @@ export default function BackgroundSelector({
             </div>
             <Input
               type="file"
-              accept="image/*"
+              accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff"
               onChange={handleImageUpload}
               className="hidden"
             />

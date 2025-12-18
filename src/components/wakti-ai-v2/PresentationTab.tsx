@@ -2014,7 +2014,7 @@ const PresentationTab: React.FC = () => {
                   <div className="flex-1 flex flex-col gap-2">
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff"
                       className={`text-[11px] file:text-[11px] file:px-3 file:py-1.5 ${language === 'ar' ? 'file:ml-2' : 'file:mr-2'} file:rounded-lg file:border-0 file:bg-primary file:text-white file:cursor-pointer`}
                       onChange={(e) => {
                         const file = e.target.files?.[0];

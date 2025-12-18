@@ -291,7 +291,7 @@ export default function BackgroundCustomizer({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff"
                 // Hint for mobile devices to use back camera when possible
                 // Some browsers ignore this attribute; safe to include
                 onChange={handleImageUpload}

@@ -385,7 +385,7 @@ export function ProfileImageUpload() {
       <input
         ref={cameraInputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff"
         capture="environment"
         onChange={handleImageUpload}
         className="hidden"
@@ -395,7 +395,7 @@ export function ProfileImageUpload() {
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff"
         onChange={handleImageUpload}
         className="hidden"
         disabled={isUploading}

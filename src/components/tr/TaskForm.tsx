@@ -509,7 +509,7 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
               <input
                 ref={generateFileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff"
                 className="hidden"
                 onChange={handleGenerateImageUpload}
                 aria-label="Upload image"
@@ -871,7 +871,7 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
                       <input
                         ref={fileInputRef}
                         type="file"
-                        accept="image/*"
+                        accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff"
                         className="hidden"
                         onChange={handleImageUpload}
                       />

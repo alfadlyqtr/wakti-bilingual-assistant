@@ -166,7 +166,7 @@ export function SimplifiedFileUpload({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff"
         multiple
         onChange={(e) => handleFileSelect(e.target.files)}
         className="hidden"
@@ -175,7 +175,7 @@ export function SimplifiedFileUpload({
       <input
         ref={cameraInputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff"
         capture="environment"
         onChange={(e) => handleFileSelect(e.target.files)}
         className="hidden"

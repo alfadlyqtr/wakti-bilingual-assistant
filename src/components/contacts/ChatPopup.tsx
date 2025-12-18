@@ -813,7 +813,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
               </div>
 
               {/* Hidden file inputs */}
-              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelected} />
+              <input ref={fileInputRef} type="file" accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff" className="hidden" onChange={handleImageSelected} />
               <input ref={pdfInputRef} type="file" accept=".pdf" className="hidden" onChange={handlePDFSelected} />
 
               {/* Bottom: text input + send button */}
