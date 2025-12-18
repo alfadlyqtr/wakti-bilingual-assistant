@@ -154,7 +154,13 @@ const normalizeImageOrientation = (file: File): Promise<string> => {
 
       img.onerror = () => {
         URL.revokeObjectURL(objectUrl);
-        reject(new Error('Failed to load image for orientation fix'));
+        // HEIC/HEIF images can't be loaded by Image() in most browsers
+        // Fall back to raw FileReader for unsupported formats
+        console.warn('Image load failed (possibly HEIC), falling back to raw base64');
+        const fallbackReader = new FileReader();
+        fallbackReader.onload = () => resolve(fallbackReader.result as string);
+        fallbackReader.onerror = () => reject(new Error('Failed to load image'));
+        fallbackReader.readAsDataURL(file);
       };
 
       img.src = objectUrl;

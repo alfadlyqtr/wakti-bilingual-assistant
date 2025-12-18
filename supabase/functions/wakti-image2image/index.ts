@@ -103,7 +103,7 @@ async function safeJson(resp: Response): Promise<any> {
 }
 
 async function callRunwareI2I(finalPrompt: string, inputDataUrl: string): Promise<any> {
-  // Working defaults requested: steps 28, outputQuality 85 (no width/height)
+  // Optimized for speed: reduced steps from 28 to 20, using faster scheduler
   const payload = {
     taskType: "imageInference",
     taskUUID: genUUID(),
@@ -113,11 +113,11 @@ async function callRunwareI2I(finalPrompt: string, inputDataUrl: string): Promis
     outputType: ["dataURI", "URL"],
     outputFormat: "jpeg",
     CFGScale: 2.5,
-    steps: 28,
-    scheduler: "Default",
+    steps: 20,
+    scheduler: "DPM++ 2M Karras",
     includeCost: true,
     referenceImages: [inputDataUrl],
-    outputQuality: 85,
+    outputQuality: 80,
   } as any;
 
   const doCreate = async () => {
