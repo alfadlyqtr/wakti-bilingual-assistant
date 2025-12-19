@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { X, Mic } from 'lucide-react';
+import { X, Mic, Search, MessageCircle } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { DEFAULT_VOICES } from './TalkBackSettings';
@@ -13,8 +13,77 @@ interface TalkBubbleProps {
 
 const MAX_RECORD_SECONDS = 10; // 10 second limit
 
+/**
+ * Clean transcript for better Tavily search results.
+ * Removes common filler/command phrases while preserving the actual query.
+ * Falls back to original if cleaned result is too short.
+ */
+function cleanSearchQuery(transcript: string): string {
+  if (!transcript || transcript.trim().length === 0) {
+    return transcript;
+  }
+
+  let cleaned = transcript.trim();
+
+  // English filler phrases to remove (case-insensitive)
+  const enPhrases = [
+    /^(hey\s+)?wakti[,\s]*/i,
+    /^(ok\s+)?google[,\s]*/i,
+    /^(hey\s+)?siri[,\s]*/i,
+    /\bcan you\b/gi,
+    /\bcould you\b/gi,
+    /\bplease\b/gi,
+    /\bkindly\b/gi,
+    /\bsearch\s+(for|the\s+web\s+for|online\s+for)\b/gi,
+    /\bsearch\b/gi,
+    /\blook\s+up\b/gi,
+    /\bfind\s+(me|out)\b/gi,
+    /\btell\s+me\s+about\b/gi,
+    /\bwhat\s+is\b/gi,
+    /\bwhat\s+are\b/gi,
+    /\bi\s+want\s+to\s+know\b/gi,
+    /\bi\s+need\s+to\s+know\b/gi,
+  ];
+
+  // Arabic filler phrases to remove
+  const arPhrases = [
+    /^(يا\s+)?واكتي[،,\s]*/,
+    /\bممكن\b/g,
+    /\bلو\s+سمحت\b/g,
+    /\bمن\s+فضلك\b/g,
+    /\bابحث\s+(عن|لي)\b/g,
+    /\bابحث\b/g,
+    /\bدور\s+(على|لي)\b/g,
+    /\bدور\b/g,
+    /\bأبي\b/g,
+    /\bأبغى\b/g,
+    /\bأريد\b/g,
+    /\bقل\s+لي\b/g,
+    /\bوش\s+هو\b/g,
+    /\bما\s+هو\b/g,
+    /\bشو\s+هو\b/g,
+  ];
+
+  // Apply all phrase removals
+  [...enPhrases, ...arPhrases].forEach(pattern => {
+    cleaned = cleaned.replace(pattern, ' ');
+  });
+
+  // Clean up extra spaces
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+
+  // Fallback: if cleaned is too short (< 3 chars), use original
+  if (cleaned.length < 3) {
+    console.log('[Talk] cleanSearchQuery: too short after cleanup, using original');
+    return transcript.trim();
+  }
+
+  console.log('[Talk] cleanSearchQuery:', transcript, '→', cleaned);
+  return cleaned;
+}
+
 export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage }: TalkBubbleProps) {
-  const { language } = useTheme();
+  const { language, theme } = useTheme();
   const t = useCallback((en: string, ar: string) => (language === 'ar' ? ar : en), [language]);
   const [isHolding, setIsHolding] = useState(false);
   const [countdown, setCountdown] = useState(MAX_RECORD_SECONDS);
@@ -28,12 +97,16 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const [aiTranscript, setAiTranscript] = useState<string>('');
   const [conversationHistory, setConversationHistory] = useState<{role: 'user' | 'assistant', text: string}[]>([]);
   const [talkSummary, setTalkSummary] = useState<string>('');
+  const [searchMode, setSearchMode] = useState(false); // One-turn search mode (auto-resets after use)
+  const [isSearching, setIsSearching] = useState(false); // Currently fetching search results
 
   // Use refs for values needed in callbacks to avoid stale closures
   const userNameRef = useRef<string>('');
   const voiceGenderRef = useRef<'male' | 'female'>('male');
   const conversationHistoryRef = useRef<{role: 'user' | 'assistant', text: string}[]>([]);
   const talkSummaryRef = useRef<string>('');
+  const searchModeRef = useRef(false); // Ref for search mode to avoid stale closures
+  const pendingTranscriptRef = useRef<string>(''); // Store transcript while waiting for search
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -137,6 +210,10 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     conversationHistoryRef.current = [];
     setTalkSummary('');
     talkSummaryRef.current = '';
+    setSearchMode(false);
+    searchModeRef.current = false;
+    setIsSearching(false);
+    pendingTranscriptRef.current = '';
   }, []);
 
   const buildMemoryContext = useCallback((lang: string) => {
@@ -229,11 +306,13 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
           `WAKTI quick rules (app questions):
 1) When asked "what is Wakti": answer friendly and mention Help & Guides has 3 tabs: Guides, my little brother Wakti Help Assistant, and Support.
 2) When asked "who made Wakti": say it was made by TMW (The Modern Web) in Doha, Qatar (tmw.qa).
-3) When asked "what can Wakti do": give a short list of key capabilities (tasks/events/voice tools/AI chat+search+content) then point to Help & Guides.`,
+3) When asked "what can Wakti do": give a short list of key capabilities (tasks/events/voice tools/AI chat+search+content) then point to Help & Guides.
+4) IMPORTANT - Web Search: You CANNOT browse the internet in Talk mode. If user asks you to search something, tell them: "I can't browse the web in Talk mode. Tap the Search toggle above, then ask me again and I'll search for real." Never pretend you searched.`,
           `قواعد WAKTI السريعة (عند السؤال عن التطبيق):
 1) عندما يسأل المستخدم "ما هو وقتي" أو سؤال مشابه: أجب بطريقة ودية واذكر أن "المساعدة والأدلة" فيها 3 تبويبات: الأدلة، مساعد وقتي الصغير، والدعم.
 2) عندما يسأل "من صنع وقتي" أو "من عمل وقتي": قل أنه تم تطويره بواسطة TMW (The Modern Web) في الدوحة، قطر (tmw.qa).
-3) عندما يسأل "ماذا يمكن لوقتي أن يفعل" أو "وش يسوي وقتي": أعطِ قائمة قصيرة بأهم القدرات (مهام/فعاليات/أدوات صوت/دردشة وبحث وذكاء) ثم وجّه للمساعدة والأدلة.`
+3) عندما يسأل "ماذا يمكن لوقتي أن يفعل" أو "وش يسوي وقتي": أعطِ قائمة قصيرة بأهم القدرات (مهام/فعاليات/أدوات صوت/دردشة وبحث وذكاء) ثم وجّه للمساعدة والأدلة.
+4) مهم - البحث: لا يمكنك تصفح الإنترنت في وضع المحادثة. إذا طلب المستخدم البحث، قل له: "لا أستطيع البحث في وضع المحادثة. اضغط على زر البحث في الأعلى، ثم اسألني مرة أخرى وسأبحث فعلاً." لا تتظاهر أبداً بأنك بحثت.`
         );
 
         const memoryContext = buildMemoryContext(language);
@@ -380,13 +459,43 @@ ${memoryContext ? memoryContext : ''}`
         break;
       case 'conversation.item.input_audio_transcription.completed':
         // User's speech transcribed
-        if (msg.transcript) {
-          setLiveTranscript(msg.transcript);
+        const transcript = msg.transcript?.trim() || '';
+        setLiveTranscript(transcript);
+        
+        // Only proceed if user actually said something (not empty/silence)
+        if (transcript.length > 0) {
           setConversationHistory(prev => {
-            const next = [...prev, { role: 'user' as const, text: String(msg.transcript) }];
+            const next = [...prev, { role: 'user' as const, text: transcript }];
             conversationHistoryRef.current = next;
             return next;
           });
+          
+          // If in search mode, perform web search then respond
+          if (searchModeRef.current) {
+            console.log('[Talk] Search mode active - performing web search for:', transcript);
+            pendingTranscriptRef.current = transcript;
+            
+            // Clean the transcript for better search results (removes filler words)
+            const cleanedQuery = cleanSearchQuery(transcript);
+            
+            // Perform search and then send response with results
+            performWebSearch(cleanedQuery).then((searchContext) => {
+              console.log('[Talk] Search complete, sending response with context');
+              sendResponseCreate(searchContext);
+              
+              // Auto-reset search mode after one use (A2 behavior)
+              setSearchMode(false);
+              searchModeRef.current = false;
+            });
+          } else {
+            // Talk mode - respond normally (transcript already validated as non-empty)
+            console.log('[Talk] Talk mode - sending response for:', transcript);
+            sendResponseCreate();
+          }
+        } else {
+          // User didn't say anything - go back to ready without responding
+          console.log('[Talk] Empty transcript - user did not speak, skipping response');
+          setStatus('ready');
         }
         break;
       case 'response.audio_transcript.delta':
@@ -442,6 +551,113 @@ ${memoryContext ? memoryContext : ''}`
     }
   }, []);
 
+  // Perform web search using live-talk-search Edge Function
+  const performWebSearch = useCallback(async (query: string): Promise<string> => {
+    try {
+      console.log('[Talk] Performing web search for:', query);
+      setIsSearching(true);
+      
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      
+      const response = await supabase.functions.invoke('live-talk-search', {
+        body: { query, language },
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      });
+      
+      if (response.error || !response.data?.success) {
+        console.error('[Talk] Search failed:', response.error || response.data?.error);
+        return t(
+          'Search failed. Please try again.',
+          'فشل البحث. يرجى المحاولة مرة أخرى.'
+        );
+      }
+      
+      console.log('[Talk] Search results:', response.data);
+      return response.data.context || t('No results found.', 'لم يتم العثور على نتائج.');
+    } catch (err) {
+      console.error('[Talk] Search error:', err);
+      return t('Search error occurred.', 'حدث خطأ في البحث.');
+    } finally {
+      setIsSearching(false);
+    }
+  }, [language, t]);
+
+  // Send response.create with optional search context
+  const sendResponseCreate = useCallback((searchContext?: string) => {
+    if (!dcRef.current || dcRef.current.readyState !== 'open') {
+      console.warn('[Talk] Data channel not open, cannot send response.create');
+      setError(language === 'ar' ? 'فشل الاتصال' : 'Connection failed');
+      setStatus('ready');
+      return;
+    }
+
+    try {
+      const currentUserName = userNameRef.current;
+      const personalTouch = currentUserName ? (language === 'ar'
+        ? `أنت تتحدث مع ${currentUserName}. يجب أن تستخدم اسمه "${currentUserName}" في ردك الأول وأحياناً في الردود الأخرى.`
+        : `You are talking to ${currentUserName}. You MUST use their name "${currentUserName}" in your first response and occasionally in other responses.`
+      ) : '';
+
+      // If we have search context, use special search instructions
+      const searchInstructions = searchContext ? t(
+        `\n\nWEB SEARCH RESULTS (use these to answer the user's question):\n${searchContext}\n\nIMPORTANT: Base your answer on the search results above. Cite sources when relevant.`,
+        `\n\nنتائج البحث على الويب (استخدمها للإجابة على سؤال المستخدم):\n${searchContext}\n\nمهم: بني إجابتك على نتائج البحث أعلاه. اذكر المصادر عند الحاجة.`
+      ) : '';
+
+      const waktiQuickRules = searchContext ? '' : t(
+        `WAKTI quick rules (app questions):
+1) When asked "what is Wakti": answer friendly and mention Help & Guides has 3 tabs: Guides, my little brother Wakti Help Assistant, and Support.
+2) When asked "who made Wakti": say it was made by TMW (The Modern Web) in Doha, Qatar (tmw.qa).
+3) When asked "what can Wakti do": give a short list of key capabilities (tasks/events/voice tools/AI chat+search+content) then point to Help & Guides.
+4) IMPORTANT - Web Search: You CANNOT browse the internet in Talk mode. If user asks you to search something, tell them: "I can't browse the web in Talk mode. Tap the Search toggle above, then ask me again and I'll search for real." Never pretend you searched.`,
+        `قواعد WAKTI السريعة (عند السؤال عن التطبيق):
+1) عندما يسأل المستخدم "ما هو وقتي" أو سؤال مشابه: أجب بطريقة ودية واذكر أن "المساعدة والأدلة" فيها 3 تبويبات: الأدلة، مساعد وقتي الصغير، والدعم.
+2) عندما يسأل "من صنع وقتي" أو "من عمل وقتي": قل أنه تم تطويره بواسطة TMW (The Modern Web) في الدوحة، قطر (tmw.qa).
+3) عندما يسأل "ماذا يمكن لوقتي أن يفعل" أو "وش يسوي وقتي": أعطِ قائمة قصيرة بأهم القدرات (مهام/فعاليات/أدوات صوت/دردشة وبحث وذكاء) ثم وجّه للمساعدة والأدلة.
+4) مهم - البحث: لا يمكنك تصفح الإنترنت في وضع المحادثة. إذا طلب المستخدم البحث، قل له: "لا أستطيع البحث في وضع المحادثة. اضغط على زر البحث في الأعلى، ثم اسألني مرة أخرى وسأبحث فعلاً." لا تتظاهر أبداً بأنك بحثت.`
+      );
+
+      const memoryContext = buildMemoryContext(language);
+
+      const refreshedInstructions = t(
+        `You are WAKTI, a smart voice assistant. ${personalTouch}
+
+Style rules (important):
+- Always start with the direct answer (1-2 lines).
+- Then: max 2-6 lines.
+- Use bullet points for features/steps.
+- Don't ramble or repeat.
+
+${waktiQuickRules}${searchInstructions}
+
+${memoryContext ? memoryContext : ''}`,
+        `أنت مساعد WAKTI الصوتي الذكي. ${personalTouch}
+
+قواعد أسلوب (مهم):
+- ابدأ دائماً بإجابة مباشرة (سطر أو سطرين).
+- بعد ذلك: 2 إلى 6 أسطر كحد أقصى.
+- استخدم نقاط عند ذكر ميزات أو خطوات.
+- لا تطوّل ولا تكرر.
+
+${waktiQuickRules}${searchInstructions}
+
+${memoryContext ? memoryContext : ''}`
+      );
+
+      dcRef.current.send(JSON.stringify({
+        type: 'session.update',
+        session: {
+          instructions: refreshedInstructions,
+        }
+      }));
+    } catch (e) {
+      console.warn('[Talk] Failed to inject instructions before response:', e);
+    }
+
+    dcRef.current.send(JSON.stringify({ type: 'response.create' }));
+  }, [buildMemoryContext, language, t]);
+
   // Stop recording and send to AI (defined first so startRecording can reference it)
   const stopRecording = useCallback(() => {
     // Guard against multiple calls
@@ -458,66 +674,14 @@ ${memoryContext ? memoryContext : ''}`
     setIsHolding(false);
     setStatus('processing');
 
-    // Send input_audio_buffer.commit to finalize and request response
+    // Send input_audio_buffer.commit to finalize
     if (dcRef.current && dcRef.current.readyState === 'open') {
-      console.log('[Talk] Sending commit and response.create');
-      // Inject memory right before creating a response (Option B: summary + last 4 turns)
-      try {
-        const currentUserName = userNameRef.current;
-        const personalTouch = currentUserName ? (language === 'ar'
-          ? `أنت تتحدث مع ${currentUserName}. يجب أن تستخدم اسمه "${currentUserName}" في ردك الأول وأحياناً في الردود الأخرى.`
-          : `You are talking to ${currentUserName}. You MUST use their name "${currentUserName}" in your first response and occasionally in other responses.`
-        ) : '';
-
-        const waktiQuickRules = t(
-          `WAKTI quick rules (app questions):
-1) When asked "what is Wakti": answer friendly and mention Help & Guides has 3 tabs: Guides, my little brother Wakti Help Assistant, and Support.
-2) When asked "who made Wakti": say it was made by TMW (The Modern Web) in Doha, Qatar (tmw.qa).
-3) When asked "what can Wakti do": give a short list of key capabilities (tasks/events/voice tools/AI chat+search+content) then point to Help & Guides.`,
-          `قواعد WAKTI السريعة (عند السؤال عن التطبيق):
-1) عندما يسأل المستخدم "ما هو وقتي" أو سؤال مشابه: أجب بطريقة ودية واذكر أن "المساعدة والأدلة" فيها 3 تبويبات: الأدلة، مساعد وقتي الصغير، والدعم.
-2) عندما يسأل "من صنع وقتي" أو "من عمل وقتي": قل أنه تم تطويره بواسطة TMW (The Modern Web) في الدوحة، قطر (tmw.qa).
-3) عندما يسأل "ماذا يمكن لوقتي أن يفعل" أو "وش يسوي وقتي": أعطِ قائمة قصيرة بأهم القدرات (مهام/فعاليات/أدوات صوت/دردشة وبحث وذكاء) ثم وجّه للمساعدة والأدلة.`
-        );
-
-        const memoryContext = buildMemoryContext(language);
-
-        const refreshedInstructions = t(
-          `You are WAKTI, a smart voice assistant. ${personalTouch}
-
-Style rules (important):
-- Always start with the direct answer (1-2 lines).
-- Then: max 2-6 lines.
-- Use bullet points for features/steps.
-- Don’t ramble or repeat.
-
-${waktiQuickRules}
-
-${memoryContext ? memoryContext : ''}`,
-          `أنت مساعد WAKTI الصوتي الذكي. ${personalTouch}
-
-قواعد أسلوب (مهم):
-- ابدأ دائماً بإجابة مباشرة (سطر أو سطرين).
-- بعد ذلك: 2 إلى 6 أسطر كحد أقصى.
-- استخدم نقاط عند ذكر ميزات أو خطوات.
-- لا تطوّل ولا تكرر.
-
-${waktiQuickRules}
-
-${memoryContext ? memoryContext : ''}`
-        );
-
-        dcRef.current.send(JSON.stringify({
-          type: 'session.update',
-          session: {
-            instructions: refreshedInstructions,
-          }
-        }));
-      } catch (e) {
-        console.warn('[Talk] Failed to inject memory before response:', e);
-      }
+      console.log('[Talk] Sending commit. SearchMode:', searchModeRef.current);
       dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
-      dcRef.current.send(JSON.stringify({ type: 'response.create' }));
+      
+      // Both Talk and Search modes now wait for transcript event before responding
+      // This allows us to check if user actually spoke (non-empty transcript)
+      // Response is triggered in handleRealtimeEvent for 'conversation.item.input_audio_transcription.completed'
     } else {
       console.warn('[Talk] Data channel not open, cannot send commit');
       setError(language === 'ar' ? 'فشل الاتصال' : 'Connection failed');
@@ -540,7 +704,7 @@ ${memoryContext ? memoryContext : ''}`
         return prev;
       });
     }, 30000); // Increased to 30s to allow for longer responses
-  }, [buildMemoryContext, language, t]);
+  }, [language, sendResponseCreate]);
 
   // Start recording when user holds
   const startRecording = useCallback(() => {
@@ -599,18 +763,58 @@ ${memoryContext ? memoryContext : ''}`
   };
 
   return (
-    <div className="fixed top-0 left-0 right-0 bottom-0 z-[9999] flex flex-col items-center justify-center bg-black/95 backdrop-blur-md" style={{ paddingTop: 'env(safe-area-inset-top, 20px)', paddingBottom: 'env(safe-area-inset-bottom, 20px)' }}>
+    <div className={`fixed top-0 left-0 right-0 bottom-0 z-[9999] flex flex-col items-center justify-center backdrop-blur-md ${theme === 'dark' ? 'bg-[#0c0f14]/95' : 'bg-[#fcfefd]/95'}`} style={{ paddingTop: 'env(safe-area-inset-top, 20px)', paddingBottom: 'env(safe-area-inset-bottom, 20px)' }}>
       {/* Hidden audio element for playback */}
       <audio ref={audioRef} autoPlay className="hidden" />
 
       {/* Close button */}
       <button
         onClick={onClose}
-        className="absolute top-4 right-4 p-3 rounded-full bg-white/10 hover:bg-white/20 transition-colors z-10 select-none"
+        className={`absolute top-4 right-4 p-3 rounded-full transition-colors z-10 select-none ${theme === 'dark' ? 'bg-white/10 hover:bg-white/20' : 'bg-black/10 hover:bg-black/20'}`}
         aria-label="Close"
       >
-        <X className="w-7 h-7 text-white" />
+        <X className={`w-7 h-7 ${theme === 'dark' ? 'text-white' : 'text-[#060541]'}`} />
       </button>
+
+      {/* Talk / Search Toggle - top center */}
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 select-none">
+        <div className={`flex items-center gap-1 p-1 rounded-full backdrop-blur-sm ${theme === 'dark' ? 'bg-white/10' : 'bg-black/10'}`}>
+          <button
+            onClick={() => {
+              setSearchMode(false);
+              searchModeRef.current = false;
+            }}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all ${
+              !searchMode 
+                ? (theme === 'dark' ? 'bg-white/20 text-white shadow-lg' : 'bg-black/20 text-[#060541] shadow-lg')
+                : (theme === 'dark' ? 'text-white/60 hover:text-white/80' : 'text-[#060541]/60 hover:text-[#060541]/80')
+            }`}
+          >
+            <MessageCircle className="w-4 h-4" />
+            {t('Talk', 'محادثة')}
+          </button>
+          <button
+            onClick={() => {
+              setSearchMode(true);
+              searchModeRef.current = true;
+            }}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all ${
+              searchMode 
+                ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg' 
+                : (theme === 'dark' ? 'text-white/60 hover:text-white/80' : 'text-[#060541]/60 hover:text-[#060541]/80')
+            }`}
+          >
+            <Search className="w-4 h-4" />
+            {t('Search', 'بحث')}
+          </button>
+        </div>
+        {/* Search mode indicator */}
+        {searchMode && (
+          <div className="text-center mt-2 text-xs text-cyan-400">
+            {t('Web search enabled for next question', 'البحث مفعّل للسؤال التالي')}
+          </div>
+        )}
+      </div>
 
       <div className="flex flex-col items-center gap-6 p-6 select-none">
         {/* Epic liquid orb CSS - Siri-inspired but better */}
@@ -677,48 +881,55 @@ ${memoryContext ? memoryContext : ''}`
             pointer-events: none;
           }
           
-          /* Floating plasma blobs */
+          /* Floating plasma blobs - hidden by default, show only when listening */
           .plasma {
             position: absolute;
             border-radius: 50%;
-            filter: blur(20px);
-            mix-blend-mode: screen;
+            filter: blur(25px);
+            mix-blend-mode: normal;
             pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease-out;
+          }
+          
+          /* Show plasma blobs when listening (holding button) */
+          .voice-orb-wrapper.listening .plasma {
+            opacity: 0.9;
           }
           
           .plasma-1 {
-            width: 100px;
-            height: 100px;
-            background: radial-gradient(circle, rgba(0, 212, 255, 0.8) 0%, transparent 70%);
-            top: -20px;
-            left: -20px;
+            width: 130px;
+            height: 130px;
+            background: radial-gradient(circle, rgba(0, 212, 255, 0.85) 0%, rgba(0, 212, 255, 0.4) 50%, transparent 70%);
+            top: -30px;
+            left: -30px;
             animation: plasmaFloat1 6s ease-in-out infinite;
           }
           
           .plasma-2 {
-            width: 80px;
-            height: 80px;
-            background: radial-gradient(circle, rgba(241, 7, 163, 0.8) 0%, transparent 70%);
-            bottom: -15px;
-            right: -15px;
+            width: 110px;
+            height: 110px;
+            background: radial-gradient(circle, rgba(241, 7, 163, 0.85) 0%, rgba(241, 7, 163, 0.4) 50%, transparent 70%);
+            bottom: -25px;
+            right: -25px;
             animation: plasmaFloat2 5s ease-in-out infinite;
           }
           
           .plasma-3 {
-            width: 60px;
-            height: 60px;
-            background: radial-gradient(circle, rgba(123, 47, 247, 0.9) 0%, transparent 70%);
+            width: 90px;
+            height: 90px;
+            background: radial-gradient(circle, rgba(123, 47, 247, 0.9) 0%, rgba(123, 47, 247, 0.5) 50%, transparent 70%);
             top: 50%;
-            left: -30px;
+            left: -40px;
             animation: plasmaFloat3 7s ease-in-out infinite;
           }
           
           .plasma-4 {
-            width: 70px;
-            height: 70px;
-            background: radial-gradient(circle, rgba(255, 107, 107, 0.7) 0%, transparent 70%);
+            width: 100px;
+            height: 100px;
+            background: radial-gradient(circle, rgba(255, 107, 107, 0.8) 0%, rgba(255, 107, 107, 0.4) 50%, transparent 70%);
             bottom: 20%;
-            right: -25px;
+            right: -35px;
             animation: plasmaFloat4 4s ease-in-out infinite;
           }
           
@@ -907,29 +1118,31 @@ ${memoryContext ? memoryContext : ''}`
         </div>
 
         {/* Status text */}
-        <div className="text-xl font-medium text-white/90 select-none">
-          {statusText[status]}
+        <div className={`text-xl font-medium select-none ${theme === 'dark' ? 'text-white/90' : 'text-[#060541]/90'}`}>
+          {isSearching 
+            ? (language === 'ar' ? 'جارٍ البحث...' : 'Searching...') 
+            : statusText[status]}
         </div>
 
         {/* Countdown when recording */}
         {isHolding && (
-          <div className="text-4xl font-bold text-white tabular-nums select-none">
+          <div className={`text-4xl font-bold tabular-nums select-none ${theme === 'dark' ? 'text-white' : 'text-[#060541]'}`}>
             {countdown}s
           </div>
         )}
 
         {/* User transcript (what you said) */}
         {liveTranscript && (
-          <div className="max-w-sm text-center text-base text-white/70 select-none">
-            <span className="text-white/50 text-sm block mb-1">{t('You:', 'أنت:')}</span>
+          <div className={`max-w-sm text-center text-base select-none ${theme === 'dark' ? 'text-white/70' : 'text-[#060541]/70'}`}>
+            <span className={`text-sm block mb-1 ${theme === 'dark' ? 'text-white/50' : 'text-[#060541]/50'}`}>{t('You:', 'أنت:')}</span>
             "{liveTranscript}"
           </div>
         )}
 
         {/* AI transcript (what AI said) */}
         {aiTranscript && status !== 'listening' && (
-          <div className="max-w-sm text-center text-base text-purple-300/90 select-none">
-            <span className="text-purple-300/60 text-sm block mb-1">{t('Wakti:', 'واكتي:')}</span>
+          <div className={`max-w-sm text-center text-base select-none ${theme === 'dark' ? 'text-purple-300/90' : 'text-purple-600/90'}`}>
+            <span className={`text-sm block mb-1 ${theme === 'dark' ? 'text-purple-300/60' : 'text-purple-600/60'}`}>{t('Wakti:', 'واكتي:')}</span>
             "{aiTranscript}"
           </div>
         )}
@@ -942,7 +1155,7 @@ ${memoryContext ? memoryContext : ''}`
         )}
 
         {/* Instruction text */}
-        <p className="text-sm text-white/60 text-center max-w-[240px] select-none">
+        <p className={`text-sm text-center max-w-[240px] select-none ${theme === 'dark' ? 'text-white/60' : 'text-[#060541]/60'}`}>
           {t('Press and hold to speak, release to send', 'اضغط مع الاستمرار للتحدث، ثم اتركه للإرسال')}
         </p>
 
@@ -958,7 +1171,7 @@ ${memoryContext ? memoryContext : ''}`
             });
             onClose();
           }}
-          className="mt-2 px-10 py-3 rounded-full bg-white/15 hover:bg-white/25 text-white text-lg font-medium transition-colors select-none"
+          className={`mt-2 px-10 py-3 rounded-full text-lg font-medium transition-colors select-none ${theme === 'dark' ? 'bg-white/15 hover:bg-white/25 text-white' : 'bg-black/10 hover:bg-black/20 text-[#060541]'}`}
         >
           {t('End', 'إنهاء')}
         </button>
