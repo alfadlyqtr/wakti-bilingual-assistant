@@ -784,12 +784,12 @@ ${memoryContext ? memoryContext : ''}`
   };
 
   return (
-    <div className={`fixed inset-0 z-[9999] flex flex-col backdrop-blur-md ${theme === 'dark' ? 'bg-[#0c0f14]/95' : 'bg-[#fcfefd]/95'}`} style={{ paddingTop: 'calc(env(safe-area-inset-top, 20px) + 60px)', paddingBottom: 'env(safe-area-inset-bottom, 20px)' }}>
+    <div className={`fixed inset-0 z-[9999] flex flex-col backdrop-blur-md ${theme === 'dark' ? 'bg-[#0c0f14]/95' : 'bg-[#fcfefd]/95'}`} style={{ paddingTop: 'calc(env(safe-area-inset-top, 20px) + 120px)', paddingBottom: 'env(safe-area-inset-bottom, 20px)' }}>
       {/* Hidden audio element for playback */}
       <audio ref={audioRef} autoPlay className="hidden" />
 
-      {/* Top bar with toggle and close button */}
-      <div className="absolute top-0 left-0 right-0 flex items-center justify-center px-4 z-20" style={{ paddingTop: 'calc(env(safe-area-inset-top, 20px) + 12px)', height: 'calc(env(safe-area-inset-top, 20px) + 60px)' }}>
+      {/* Top bar with toggle and close button - positioned below Natively header */}
+      <div className="absolute left-0 right-0 flex items-center justify-center px-4 z-20" style={{ top: 'calc(env(safe-area-inset-top, 20px) + 70px)' }}>
         {/* Talk / Search Toggle - center */}
         <div className={`flex items-center gap-1 p-1 rounded-full backdrop-blur-sm ${theme === 'dark' ? 'bg-white/10' : 'bg-black/10'}`}>
           <button
