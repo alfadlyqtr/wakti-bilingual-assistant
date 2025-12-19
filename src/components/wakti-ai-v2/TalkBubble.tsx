@@ -671,12 +671,28 @@ ${memoryContext ? memoryContext : ''}`
       countdownIntervalRef.current = null;
     }
 
+    // Check minimum hold duration (at least 0.5 seconds to avoid accidental taps)
+    const holdDuration = Date.now() - holdStartRef.current;
+    const MIN_HOLD_MS = 500; // 0.5 seconds minimum
+    
+    if (holdDuration < MIN_HOLD_MS) {
+      console.log('[Talk] Hold too short (' + holdDuration + 'ms), ignoring');
+      setIsHolding(false);
+      setStatus('ready');
+      // Clear the audio buffer to prevent accumulated audio
+      if (dcRef.current && dcRef.current.readyState === 'open') {
+        dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
+      }
+      setTimeout(() => { isStoppingRef.current = false; }, 300);
+      return;
+    }
+
     setIsHolding(false);
     setStatus('processing');
 
     // Send input_audio_buffer.commit to finalize
     if (dcRef.current && dcRef.current.readyState === 'open') {
-      console.log('[Talk] Sending commit. SearchMode:', searchModeRef.current);
+      console.log('[Talk] Sending commit. HoldDuration:', holdDuration, 'ms. SearchMode:', searchModeRef.current);
       dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
       
       // Both Talk and Search modes now wait for transcript event before responding
@@ -717,9 +733,14 @@ ${memoryContext ? memoryContext : ''}`
     // Reset the stopping guard when starting a new recording
     isStoppingRef.current = false;
 
+    // Clear any previous audio buffer to prevent accumulated/stale audio
+    dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
+    console.log('[Talk] Cleared audio buffer for fresh recording');
+
     setError(null);
     setStatus('listening');
     setLiveTranscript('');
+    pendingTranscriptRef.current = ''; // Clear pending transcript
     setAiTranscript(''); // Clear previous AI response
     setCountdown(MAX_RECORD_SECONDS);
     holdStartRef.current = Date.now();
@@ -763,21 +784,13 @@ ${memoryContext ? memoryContext : ''}`
   };
 
   return (
-    <div className={`fixed top-0 left-0 right-0 bottom-0 z-[9999] flex flex-col items-center justify-center backdrop-blur-md ${theme === 'dark' ? 'bg-[#0c0f14]/95' : 'bg-[#fcfefd]/95'}`} style={{ paddingTop: 'env(safe-area-inset-top, 20px)', paddingBottom: 'env(safe-area-inset-bottom, 20px)' }}>
+    <div className={`fixed inset-0 z-[9999] flex flex-col backdrop-blur-md ${theme === 'dark' ? 'bg-[#0c0f14]/95' : 'bg-[#fcfefd]/95'}`} style={{ paddingTop: 'calc(env(safe-area-inset-top, 20px) + 60px)', paddingBottom: 'env(safe-area-inset-bottom, 20px)' }}>
       {/* Hidden audio element for playback */}
       <audio ref={audioRef} autoPlay className="hidden" />
 
-      {/* Close button */}
-      <button
-        onClick={onClose}
-        className={`absolute top-4 right-4 p-3 rounded-full transition-colors z-10 select-none ${theme === 'dark' ? 'bg-white/10 hover:bg-white/20' : 'bg-black/10 hover:bg-black/20'}`}
-        aria-label="Close"
-      >
-        <X className={`w-7 h-7 ${theme === 'dark' ? 'text-white' : 'text-[#060541]'}`} />
-      </button>
-
-      {/* Talk / Search Toggle - top center */}
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 select-none">
+      {/* Top bar with toggle and close button */}
+      <div className="absolute top-0 left-0 right-0 flex items-center justify-center px-4 z-20" style={{ paddingTop: 'calc(env(safe-area-inset-top, 20px) + 12px)', height: 'calc(env(safe-area-inset-top, 20px) + 60px)' }}>
+        {/* Talk / Search Toggle - center */}
         <div className={`flex items-center gap-1 p-1 rounded-full backdrop-blur-sm ${theme === 'dark' ? 'bg-white/10' : 'bg-black/10'}`}>
           <button
             onClick={() => {
@@ -808,15 +821,19 @@ ${memoryContext ? memoryContext : ''}`
             {t('Search', 'بحث')}
           </button>
         </div>
-        {/* Search mode indicator */}
-        {searchMode && (
-          <div className="text-center mt-2 text-xs text-cyan-400">
-            {t('Web search enabled for next question', 'البحث مفعّل للسؤال التالي')}
-          </div>
-        )}
+
+        {/* Close button - absolute right */}
+        <button
+          onClick={onClose}
+          className={`absolute right-4 p-3 rounded-full transition-colors select-none ${theme === 'dark' ? 'bg-white/10 hover:bg-white/20' : 'bg-black/10 hover:bg-black/20'}`}
+          aria-label="Close"
+        >
+          <X className={`w-6 h-6 ${theme === 'dark' ? 'text-white' : 'text-[#060541]'}`} />
+        </button>
       </div>
 
-      <div className="flex flex-col items-center gap-6 p-6 select-none">
+      {/* Main content area - centered */}
+      <div className="flex-1 flex flex-col items-center justify-center gap-4 p-6 select-none overflow-auto">
         {/* Epic liquid orb CSS - Siri-inspired but better */}
         <style>{`
           .voice-orb-wrapper {
