@@ -650,6 +650,7 @@ export function ChatMessages({
     const yt = (message as any)?.metadata?.youtube;
     const ytErr = (message as any)?.metadata?.youtubeError as string | undefined;
     const searchMeta = (message as any)?.metadata?.search;
+    const geminiSearchMeta = (message as any)?.metadata?.geminiSearch;
 
     // YouTube search result preview
     if (message.role === 'assistant' && yt && yt.videoId) {
@@ -1052,6 +1053,58 @@ export function ChatMessages({
                 // Responsive images
                 <img className="max-w-full h-auto rounded-md border" {...props} />
               ),
+              a: ({ node, href, children, ...props }) => {
+                // Style Google Maps links with icon and color
+                const isGoogleMaps = href && (href.includes('google.com/maps') || href.includes('maps.google.com') || href.includes('goo.gl/maps'));
+                // Style phone links
+                const isPhone = href && href.startsWith('tel:');
+                
+                if (isGoogleMaps) {
+                  return (
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 font-medium hover:underline"
+                      {...props}
+                    >
+                      <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                      </svg>
+                      <span>{children || (language === 'ar' ? 'موقع خرائط جوجل' : 'Google Maps Location')}</span>
+                    </a>
+                  );
+                }
+                
+                if (isPhone) {
+                  const phoneNumber = href.replace('tel:', '');
+                  return (
+                    <a
+                      href={href}
+                      className="inline-flex items-center gap-1 text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300 font-medium hover:underline"
+                      {...props}
+                    >
+                      <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+                      </svg>
+                      <span>{children || phoneNumber}</span>
+                    </a>
+                  );
+                }
+                
+                // Default link styling
+                return (
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                    {...props}
+                  >
+                    {children}
+                  </a>
+                );
+              },
             }}
           >
             {content}
@@ -1088,6 +1141,29 @@ export function ChatMessages({
                 </button>
               ))}
             </div>
+          )}
+          {/* Gemini Search Sources (collapsible) */}
+          {message.intent === 'search' && geminiSearchMeta?.sources && geminiSearchMeta.sources.length > 0 && (
+            <details className="mt-3 text-xs">
+              <summary className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors">
+                {language === 'ar' ? `المصادر (${geminiSearchMeta.sources.length})` : `Sources (${geminiSearchMeta.sources.length})`}
+              </summary>
+              <ul className="mt-2 space-y-1 pl-2 border-l-2 border-border/50">
+                {geminiSearchMeta.sources.slice(0, 10).map((src: { url: string; title: string }, idx: number) => (
+                  <li key={idx} className="truncate">
+                    <a
+                      href={src.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                      title={src.url}
+                    >
+                      {src.title || src.url}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </details>
           )}
         </div>
       );

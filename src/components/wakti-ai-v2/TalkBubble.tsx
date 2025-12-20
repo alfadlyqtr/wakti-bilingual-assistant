@@ -99,6 +99,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const [talkSummary, setTalkSummary] = useState<string>('');
   const [searchMode, setSearchMode] = useState(false); // One-turn search mode (auto-resets after use)
   const [isSearching, setIsSearching] = useState(false); // Currently fetching search results
+  const [personalTouch, setPersonalTouch] = useState<any>(null);
 
   // Use refs for values needed in callbacks to avoid stale closures
   const userNameRef = useRef<string>('');
@@ -118,6 +119,27 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const holdStartRef = useRef<number>(0);
   const isStoppingRef = useRef(false); // Guard against multiple stopRecording calls
+  const personalTouchRef = useRef<any>(null);
+
+  // Build Personal Touch enforcement block
+  const buildPersonalTouchSection = useCallback(() => {
+    const pt = personalTouchRef.current;
+    if (!pt || typeof pt !== 'object') return '';
+
+    const userNick = (pt.nickname || '').toString().trim();
+    const aiNick = (pt.aiNickname || pt.ai_nickname || '').toString().trim();
+    const tone = (pt.tone || 'neutral').toString().trim();
+    const style = (pt.style || 'short answers').toString().trim();
+    const extra = (pt.instruction || '').toString().trim();
+
+    let section = '\nCRITICAL PERSONAL TOUCH ENFORCEMENT\n';
+    if (userNick) section += `- Use the user's nickname "${userNick}" naturally and warmly.\n`;
+    if (aiNick) section += `- Refer to yourself as "${aiNick}" when appropriate.\n`;
+    section += `- Tone: ${tone}. Maintain this tone consistently.\n`;
+    section += `- Style: ${style}. Shape responses to match this style.\n`;
+    if (extra) section += `- Custom note: ${extra}\n`;
+    return section;
+  }, []);
 
   // Fetch user's nickname from PersonalTouchManager and voice gender from TTS settings
   useEffect(() => {
@@ -164,6 +186,33 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     };
     fetchUserData();
   }, [language]);
+
+  // Load Personal Touch (nickname, aiNickname, tone, style, instruction)
+  useEffect(() => {
+    const loadPT = () => {
+      try {
+        const raw = localStorage.getItem('wakti_personal_touch');
+        const parsed = raw ? JSON.parse(raw) : null;
+        const pt = parsed && typeof parsed === 'object' ? parsed : null;
+        personalTouchRef.current = pt;
+        setPersonalTouch(pt);
+      } catch {
+        personalTouchRef.current = null;
+        setPersonalTouch(null);
+      }
+    };
+
+    loadPT();
+
+    // Listen for updates from PersonalTouchManager
+    const handler = (e: any) => {
+      const pt = e?.detail || null;
+      personalTouchRef.current = pt;
+      setPersonalTouch(pt);
+    };
+    window.addEventListener('wakti-personal-touch-updated', handler);
+    return () => window.removeEventListener('wakti-personal-touch-updated', handler);
+  }, []);
 
   // Initialize connection when Talk bubble opens - wait a bit for userName to be fetched
   useEffect(() => {
@@ -316,6 +365,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
         );
 
         const memoryContext = buildMemoryContext(language);
+        const personalTouchSection = buildPersonalTouchSection();
 
         const instructions = t(
           `You are WAKTI, a smart voice assistant. ${personalTouch}
@@ -327,6 +377,7 @@ Style rules (important):
 - Don’t ramble or repeat.
 
 ${waktiQuickRules}
+${personalTouchSection}
 
 ${memoryContext ? memoryContext : ''}`,
           `أنت مساعد WAKTI الصوتي الذكي. ${personalTouch}
@@ -338,6 +389,7 @@ ${memoryContext ? memoryContext : ''}`,
 - لا تطوّل ولا تكرر.
 
 ${waktiQuickRules}
+${personalTouchSection}
 
 ${memoryContext ? memoryContext : ''}`
         );
@@ -601,8 +653,8 @@ ${memoryContext ? memoryContext : ''}`
 
       // If we have search context, use special search instructions
       const searchInstructions = searchContext ? t(
-        `\n\nWEB SEARCH RESULTS (use these to answer the user's question):\n${searchContext}\n\nIMPORTANT: Base your answer on the search results above. Cite sources when relevant.`,
-        `\n\nنتائج البحث على الويب (استخدمها للإجابة على سؤال المستخدم):\n${searchContext}\n\nمهم: بني إجابتك على نتائج البحث أعلاه. اذكر المصادر عند الحاجة.`
+        `\n\nWEB SEARCH RESULTS (use these to answer the user's question):\n${searchContext}\n\nIMPORTANT: Base your answer on the search results above. Cite sources when relevant.\nAfter you finish the answer, add a short friendly note: "For advanced search, try Search mode in Wakti AI."`,
+        `\n\nنتائج البحث على الويب (استخدمها للإجابة على سؤال المستخدم):\n${searchContext}\n\nمهم: بني إجابتك على نتائج البحث أعلاه. اذكر المصادر عند الحاجة.\nبعد أن تنهي الإجابة، أضف ملاحظة ودية قصيرة: \"للبحث المتقدم، جرّب وضع البحث في Wakti AI.\"`
       ) : '';
 
       const waktiQuickRules = searchContext ? '' : t(
@@ -866,16 +918,13 @@ ${memoryContext ? memoryContext : ''}`
             cursor: pointer;
             border: none;
             outline: none;
-            box-shadow: 
-              0 0 60px rgba(123, 47, 247, 0.5),
-              0 0 120px rgba(241, 7, 163, 0.3),
-              inset 0 0 60px rgba(255, 255, 255, 0.1);
+            box-shadow: inset 0 0 60px rgba(255, 255, 255, 0.1);
             overflow: visible;
             -webkit-tap-highlight-color: transparent;
             touch-action: none;
             user-select: none;
             -webkit-user-select: none;
-            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            transition: box-shadow 0.3s ease-out, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
           }
           
           .voice-orb:disabled {
@@ -958,6 +1007,17 @@ ${memoryContext ? memoryContext : ''}`
             border: 2px solid rgba(123, 47, 247, 0.3);
             animation: ringExpand 2s ease-out infinite;
             pointer-events: none;
+            opacity: 0;
+            display: none;
+            transition: opacity 0.3s ease-out;
+          }
+
+          /* Show ring pulses only when active (holding/speaking/processing) */
+          .voice-orb-wrapper.listening .ring-pulse,
+          .voice-orb-wrapper.speaking .ring-pulse,
+          .voice-orb-wrapper.processing .ring-pulse {
+            opacity: 1;
+            display: block;
           }
           
           .ring-pulse-2 {
@@ -977,6 +1037,15 @@ ${memoryContext ? memoryContext : ''}`
               0 0 160px rgba(241, 7, 163, 0.5),
               0 0 240px rgba(0, 212, 255, 0.3),
               inset 0 0 80px rgba(255, 255, 255, 0.2);
+          }
+
+          /* === SPEAKING/PROCESSING STATES === */
+          .voice-orb-wrapper.speaking .voice-orb,
+          .voice-orb-wrapper.processing .voice-orb {
+            box-shadow: 
+              0 0 60px rgba(123, 47, 247, 0.5),
+              0 0 120px rgba(241, 7, 163, 0.3),
+              inset 0 0 60px rgba(255, 255, 255, 0.1);
           }
           
           .voice-orb-wrapper.listening .plasma-1 {
@@ -1018,6 +1087,10 @@ ${memoryContext ? memoryContext : ''}`
           /* === PROCESSING STATE === */
           .voice-orb-wrapper.processing .voice-orb {
             animation: gradientShift 3s ease infinite, processingGlow 1s ease-in-out infinite;
+            box-shadow: 
+              0 0 60px rgba(123, 47, 247, 0.5),
+              0 0 120px rgba(241, 7, 163, 0.3),
+              inset 0 0 60px rgba(255, 255, 255, 0.1);
           }
           
           /* === KEYFRAMES === */
@@ -1141,6 +1214,11 @@ ${memoryContext ? memoryContext : ''}`
             : statusText[status]}
         </div>
 
+        {/* Instruction text */}
+        <p className={`text-sm text-center max-w-[240px] select-none ${theme === 'dark' ? 'text-white/60' : 'text-[#060541]/60'}`}>
+          {t('Press and hold to speak, release to send', 'اضغط مع الاستمرار للتحدث، ثم اتركه للإرسال')}
+        </p>
+
         {/* Countdown when recording */}
         {isHolding && (
           <div className={`text-4xl font-bold tabular-nums select-none ${theme === 'dark' ? 'text-white' : 'text-[#060541]'}`}>
@@ -1152,7 +1230,9 @@ ${memoryContext ? memoryContext : ''}`
         {liveTranscript && (
           <div className={`max-w-sm text-center text-base select-none ${theme === 'dark' ? 'text-white/70' : 'text-[#060541]/70'}`}>
             <span className={`text-sm block mb-1 ${theme === 'dark' ? 'text-white/50' : 'text-[#060541]/50'}`}>{t('You:', 'أنت:')}</span>
-            "{liveTranscript}"
+            <div className="leading-snug max-h-[2.6em] overflow-y-auto overscroll-contain">
+              "{liveTranscript}"
+            </div>
           </div>
         )}
 
@@ -1160,7 +1240,9 @@ ${memoryContext ? memoryContext : ''}`
         {aiTranscript && status !== 'listening' && (
           <div className={`max-w-sm text-center text-base select-none ${theme === 'dark' ? 'text-purple-300/90' : 'text-purple-600/90'}`}>
             <span className={`text-sm block mb-1 ${theme === 'dark' ? 'text-purple-300/60' : 'text-purple-600/60'}`}>{t('Wakti:', 'واكتي:')}</span>
-            "{aiTranscript}"
+            <div className="leading-snug max-h-[2.6em] overflow-y-auto overscroll-contain">
+              "{aiTranscript}"
+            </div>
           </div>
         )}
 
@@ -1170,11 +1252,6 @@ ${memoryContext ? memoryContext : ''}`
             {error}
           </div>
         )}
-
-        {/* Instruction text */}
-        <p className={`text-sm text-center max-w-[240px] select-none ${theme === 'dark' ? 'text-white/60' : 'text-[#060541]/60'}`}>
-          {t('Press and hold to speak, release to send', 'اضغط مع الاستمرار للتحدث، ثم اتركه للإرسال')}
-        </p>
 
         {/* End button */}
         <button

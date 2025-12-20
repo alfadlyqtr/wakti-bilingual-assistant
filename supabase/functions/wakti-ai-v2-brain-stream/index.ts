@@ -169,6 +169,107 @@ async function streamGemini(model, contents, onToken, systemInstruction, generat
   }
 }
 
+// === GEMINI 3 FLASH WITH GOOGLE SEARCH GROUNDING (STREAMING) ===
+interface Gemini3SearchResult {
+  text: string;
+  groundingMetadata?: {
+    webSearchQueries?: string[];
+    groundingChunks?: Array<{ web?: { uri: string; title: string } }>;
+    groundingSupports?: Array<{
+      segment: { startIndex: number; endIndex: number; text: string };
+      groundingChunkIndices: number[];
+    }>;
+    searchEntryPoint?: { renderedContent?: string };
+  };
+}
+
+async function streamGemini3WithSearch(
+  query: string,
+  systemInstruction: string,
+  generationConfig: Record<string, unknown> | undefined,
+  onToken: (token: string) => void,
+  onGroundingMetadata: (meta: Gemini3SearchResult['groundingMetadata']) => void
+): Promise<string> {
+  const key = getGeminiApiKey();
+  const model = 'gemini-3-flash-preview';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
+
+  const body: Record<string, unknown> = {
+    contents: [{ role: 'user', parts: [{ text: query }] }],
+    tools: [{ google_search: {} }],
+  };
+  if (systemInstruction) {
+    body.system_instruction = { parts: [{ text: systemInstruction }] };
+  }
+  if (generationConfig) {
+    body.generationConfig = generationConfig;
+  }
+
+  console.log('🔍 GEMINI SEARCH: Streaming with Gemini 3 Flash + google_search...');
+
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'text/event-stream',
+      'x-goog-api-key': key,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!resp.ok || !resp.body) {
+    const errText = await resp.text().catch(() => '');
+    console.error('❌ GEMINI SEARCH ERROR:', resp.status, errText);
+    throw new Error(`Gemini search error: ${resp.status}`);
+  }
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let fullText = '';
+  let groundingMeta: Gemini3SearchResult['groundingMetadata'] = undefined;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (!line.startsWith('data:')) continue;
+      const data = line.slice(5).trim();
+      if (!data || data === '[DONE]') continue;
+      try {
+        const parsed = JSON.parse(data);
+        const cands = parsed?.candidates;
+        if (Array.isArray(cands) && cands.length > 0) {
+          const parts = cands[0]?.content?.parts || [];
+          for (const p of parts) {
+            const text = typeof p?.text === 'string' ? p.text : undefined;
+            if (text) {
+              fullText += text;
+              onToken(text);
+            }
+          }
+          // Capture grounding metadata from final chunk
+          if (cands[0]?.groundingMetadata) {
+            groundingMeta = cands[0].groundingMetadata;
+          }
+        }
+      } catch { /* ignore parse errors */ }
+    }
+  }
+
+  // Emit grounding metadata at the end
+  if (groundingMeta) {
+    onGroundingMetadata(groundingMeta);
+  }
+
+  console.log('✅ GEMINI SEARCH: Stream complete, length:', fullText.length, 'grounded:', !!groundingMeta);
+  return fullText;
+}
+
 // Build system prompt with Personal Touch
 function buildSystemPrompt(language, currentDate, personalTouch, activeTrigger, chatSubmode = 'chat') {
   const pt = personalTouch || {};
@@ -653,47 +754,113 @@ serve(async (req) => {
         
         // Track external service usage (update outer scope vars for catch block access)
         
-        // Inject web search context when in Search mode
+        // Search mode: Use Gemini 3 Flash with Google Search grounding (STREAMING)
         if (activeTrigger === 'search') {
           try {
-            const s = await executeRegularSearch(message, language);
+            // Build search-specific system prompt with Personal Touch
+            const pt = personalTouch || {};
+            const userNick = (pt.nickname || '').toString().trim();
+            const aiNick = (pt.ai_nickname || '').toString().trim();
+            const toneVal = (pt.tone || 'neutral').toString().trim();
+            const styleVal = (pt.style || 'short answers').toString().trim();
+            const customNote = (pt.instruction || '').toString().trim();
+
+            // Get current time in Qatar timezone
+            const qatarTime = new Date().toLocaleString('en-US', { 
+              timeZone: 'Asia/Qatar', 
+              weekday: 'long', 
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric',
+              hour: 'numeric',
+              minute: '2-digit',
+              hour12: true
+            });
+
+            const searchSystemPrompt = `You are Wakti AI.
+
+CURRENT DATE & TIME: ${qatarTime} (Qatar Time)
+
+${userNick ? `User nickname: "${userNick}" - use naturally in greeting.` : ''}
+${aiNick ? `Your name: "${aiNick}"` : ''}
+${toneVal !== 'neutral' ? `Tone: ${toneVal}` : ''}
+${styleVal !== 'short answers' ? `Style: ${styleVal}` : ''}
+${customNote ? `Note: ${customNote}` : ''}
+
+CRITICAL: Always provide google maps location link if needed when asking about a place.
+
+Language: ${language === 'ar' ? 'Arabic' : 'English'}`;
+
+            console.log('🔍 SEARCH: Streaming with Gemini 3 Flash + google_search...');
             
-            if (s?.success) {
-              tavilyUsedOuter = true;
-              tavilyResultsCountOuter = s.data?.total_results || s.data?.results?.length || 0;
-              // Emit metadata
+            let fullResponseText = '';
+            let groundingMetadata: Gemini3SearchResult['groundingMetadata'] | null = null;
+
+            // Stream tokens to client
+            await streamGemini3WithSearch(
+              message,
+              searchSystemPrompt,
+              { temperature: 1.0, maxOutputTokens: 2000 },
+              (token) => {
+                fullResponseText += token;
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`));
+              },
+              (meta) => {
+                groundingMetadata = meta;
+              }
+            );
+
+            // Emit grounding metadata for frontend citation injection
+            if (groundingMetadata) {
               try {
                 const metaPayload = {
                   metadata: {
-                    search: {
-                      answer: s.data?.answer || null,
-                      total: s.data?.total_results || 0,
-                      results: Array.isArray(s.data?.results) ? s.data.results.slice(0, 5) : [],
-                      followUpQuestions: s.data?.followUpQuestions || []
+                    geminiSearch: {
+                      queries: groundingMetadata.webSearchQueries || [],
+                      sources: (groundingMetadata.groundingChunks || []).map((c: { web?: { uri: string; title: string } }) => ({
+                        url: c.web?.uri || '',
+                        title: c.web?.title || ''
+                      })),
+                      supports: groundingMetadata.groundingSupports || []
                     }
                   }
                 };
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify(metaPayload)}\n\n`));
-              } catch {}
-
-              // Inject Tavily context into LLM conversation
-              if (s.context) {
-                const ctxPrefix = language === 'ar'
-                  ? 'استخدم نتائج البحث التالية للإجابة:\n'
-                  : 'Use the following search results to answer:\n';
-                
-                // Combine search context with user query in one message
-                const combinedMessage = `${ctxPrefix}${s.context}\n\nUser question: ${message}`;
-                messages.push({ role: 'user', content: combinedMessage });
-                console.log('🔎 SEARCH: Context + query combined into single message');
-              } else {
-                // No search context, just add user message normally
-                messages.push({ role: 'user', content: message });
-              }
+              } catch { /* ignore */ }
             }
+
+            // Log usage
+            if (fullResponseText) {
+              const inputTokens = estimateTokens(message);
+              const outputTokens = estimateTokens(fullResponseText);
+              logAIUsage({
+                userId,
+                functionName: 'brain_stream',
+                model: 'gemini-3-flash-preview',
+                status: 'success',
+                prompt: message,
+                response: fullResponseText.slice(0, 500),
+                metadata: { trigger: 'search', provider: 'gemini-search', grounded: !!groundingMetadata },
+                inputTokens,
+                outputTokens,
+                durationMs: Date.now() - startTime,
+                costCredits: calculateCost('gemini-2.0-flash', inputTokens, outputTokens)
+              });
+            }
+
+            if (!fullResponseText) {
+              // Fallback message if no response
+              const fallback = language === 'ar' ? 'لم أتمكن من العثور على نتائج.' : 'I could not find results for that query.';
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: fallback, content: fallback })}\n\n`));
+            }
+
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+            controller.close();
+            return; // Exit early - search handled completely by Gemini
+
           } catch (e) {
-            console.warn('⚠️ SEARCH ERROR:', e);
-            // If search fails, still add user message
+            console.warn('⚠️ GEMINI SEARCH ERROR:', e);
+            // Fallback: add user message and let normal flow handle it
             messages.push({ role: 'user', content: message });
           }
         } else {
