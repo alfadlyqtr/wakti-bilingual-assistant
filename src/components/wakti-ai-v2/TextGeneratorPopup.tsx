@@ -159,12 +159,44 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   const [error, setError] = useState('');
   const [generatedText, setGeneratedText] = useState('');
   const [copied, setCopied] = useState(false);
+  const [copyMenuOpen, setCopyMenuOpen] = useState(false);
 
   // Screenshot upload refs
   const composeFileInputRef = useRef<HTMLInputElement>(null);
   const replyFileInputRef = useRef<HTMLInputElement>(null);
   const [isExtractingCompose, setIsExtractingCompose] = useState(false);
   const [isExtractingReply, setIsExtractingReply] = useState(false);
+
+  // Extracted form fields (from screenshot)
+  interface ExtractedFormFields {
+    subject?: string;
+    category?: string;
+    service_affected?: string;
+    severity?: string;
+    message?: string;
+    sender?: string;
+    recipient?: string;
+  }
+  const [extractedForm, setExtractedForm] = useState<{ formType: string; fields: ExtractedFormFields } | null>(null);
+  const [formSubject, setFormSubject] = useState('');
+  const [formServiceAffected, setFormServiceAffected] = useState('');
+  const [formMessage, setFormMessage] = useState('');
+  const [formSeverity, setFormSeverity] = useState('');
+  const [showExtractedFields, setShowExtractedFields] = useState(false);
+
+  const buildFormSummary = useCallback((fields: ExtractedFormFields) => {
+    const subject = (fields.subject || '').trim();
+    const service = (fields.service_affected || fields.category || '').trim();
+    const severityVal = (fields.severity || '').trim();
+    const message = (fields.message || '').trim();
+
+    const lines: string[] = [];
+    if (subject) lines.push(`${language === 'ar' ? 'الموضوع' : 'Subject'}: ${subject}`);
+    if (service) lines.push(`${language === 'ar' ? 'الخدمة المتأثرة' : 'Service affected'}: ${service}`);
+    if (severityVal) lines.push(`${language === 'ar' ? 'الأولوية' : 'Severity'}: ${severityVal}`);
+    if (message) lines.push(`${language === 'ar' ? 'الرسالة' : 'Message'}: ${message}`);
+    return lines.join('\n');
+  }, [language]);
 
   // Cached generated texts (persisted)
   const CACHE_KEY = 'wakti_generated_text_cache_v1';
@@ -227,6 +259,37 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
       ].filter(Boolean);
       return parts.join('\n');
     } else if (activeTab === 'reply') {
+      // If a screenshot was detected as a form, switch Reply into Fill Mode.
+      // Output should be copy/paste friendly (Subject + Message), not a letter-style reply.
+      if (extractedForm) {
+        const parts = [
+          language === 'ar'
+            ? 'أنت تساعد المستخدم في تعبئة نموذج (Form).'
+            : 'You are helping the user fill out a form.',
+          language === 'ar'
+            ? 'اكتب نصًّا جاهزًا للصق في حقول النموذج.'
+            : 'Generate copy/paste-ready text for the form fields.',
+          language === 'ar'
+            ? 'أعد النتيجة بهذا الشكل فقط، بدون أي كلام إضافي:'
+            : 'Return ONLY in this exact format, with no extra text:',
+          'SUBJECT: <one short subject line>',
+          'MESSAGE: <the full message body to paste into the form>',
+          '',
+          language === 'ar' ? 'بيانات النموذج:' : 'Form details:',
+          `Subject (detected): ${formSubject || 'N/A'}`,
+          `Service affected (detected): ${formServiceAffected || 'N/A'}`,
+          formSeverity ? `Severity (detected): ${formSeverity}` : '',
+          `Message/context (detected): ${formMessage || 'N/A'}`,
+          keyPoints ? `Key points to include: ${keyPoints}` : '',
+          replyLength ? `Reply length: ${replyLength}` : '',
+          tone ? `Tone: ${tone}` : '',
+          register ? `Register: ${register}` : '',
+          languageVariant ? `Language Variant: ${languageVariant}` : '',
+          emojis ? `Emojis: ${emojis}` : '',
+        ].filter(Boolean);
+        return parts.join('\n');
+      }
+
       const parts = [
         'Craft a reply.',
         keyPoints ? `Key points to include: ${keyPoints}` : '',
@@ -258,6 +321,41 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
       setTimeout(() => setCopied(false), 1500);
     } catch { }
   }, [generatedText]);
+
+  const parsedGenerated = useMemo(() => {
+    const text = (generatedText || '').trim();
+    const subjectMatch = text.match(/\bSUBJECT:\s*(.+?)(?=\n\s*MESSAGE:|$)/is);
+    const messageMatch = text.match(/\bMESSAGE:\s*([\s\S]+)/i);
+    const subject = (subjectMatch?.[1] || '').trim();
+    const message = (messageMatch?.[1] || '').trim();
+    const hasFillFormat = !!(subject && message);
+    return { hasFillFormat, subject, message };
+  }, [generatedText]);
+
+  const copyWithFeedback = useCallback(async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch { }
+  }, []);
+
+  const handleCopySubject = useCallback(async () => {
+    if (!parsedGenerated.hasFillFormat) return;
+    await copyWithFeedback(parsedGenerated.subject);
+    setCopyMenuOpen(false);
+  }, [parsedGenerated, copyWithFeedback]);
+
+  const handleCopyMessage = useCallback(async () => {
+    if (!parsedGenerated.hasFillFormat) return;
+    await copyWithFeedback(parsedGenerated.message);
+    setCopyMenuOpen(false);
+  }, [parsedGenerated, copyWithFeedback]);
+
+  const handleCopyAll = useCallback(async () => {
+    await copyWithFeedback((generatedText || '').trim());
+    setCopyMenuOpen(false);
+  }, [generatedText, copyWithFeedback]);
 
   const handleShare = useCallback(async () => {
     try {
@@ -337,7 +435,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
 
   const title = language === 'ar' ? 'منشئ النص الذكي' : 'Smart Text Generator';
 
-  // Handle screenshot upload and extract text using vision AI (non-streaming)
+  // Handle screenshot upload and extract text using text-generator's extract mode
   const handleScreenshotUpload = useCallback(async (
     file: File,
     target: 'compose' | 'reply'
@@ -347,7 +445,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     setExtracting(true);
     setError('');
     try {
-      // Convert file to base64
+      // Convert file to base64 data URI
       const reader = new FileReader();
       const base64Promise = new Promise<string>((resolve, reject) => {
         reader.onload = () => resolve(reader.result as string);
@@ -356,35 +454,44 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
       });
       const base64 = await base64Promise;
 
-      // Call non-streaming vision endpoint
-      const resp = await callEdgeFunctionWithRetry<any>('wakti-ai-v2-brain', {
+      // Call text-generator with mode='extract' - same backend, no brain involved
+      const resp = await callEdgeFunctionWithRetry<any>('text-generator', {
         body: {
-          message: target === 'compose'
-            ? 'Extract ALL text content from this screenshot. If it\'s a form, extract all field labels and any filled values. Return only the extracted text, nothing else.'
-            : 'Extract the message or email content from this screenshot that needs a reply. Return only the message text, nothing else.',
-          mode: 'vision',
-          files: [{
-            name: file.name,
-            type: file.type,
-            data: base64,
-            content: base64
-          }],
+          mode: 'extract',
+          image: base64,
+          extractTarget: target,
           language
         },
         maxRetries: 2,
         retryDelay: 1000,
       });
 
-      const extractedText = resp?.text || resp?.content || resp?.response || '';
+      const extractedText = resp?.extractedText || '';
+      const formData = resp?.extractedForm;
       
-      if (extractedText.trim()) {
+      // If we detected a form, populate the form fields UI
+      if (formData && formData.fields) {
+        setExtractedForm(formData);
+        setFormSubject(formData.fields.subject || '');
+        setFormServiceAffected(formData.fields.service_affected || formData.fields.category || '');
+        setFormMessage(formData.fields.message || '');
+        setFormSeverity(formData.fields.severity || '');
+        setShowExtractedFields(false);
+        if (target === 'reply') {
+          const summary = buildFormSummary(formData.fields);
+          if (summary.trim()) {
+            setOriginalMessage(summary);
+          }
+        }
+      } else if (extractedText.trim()) {
+        // Fallback: no structured form detected, just fill the text field
         if (target === 'compose') {
           setTopic((prev) => prev ? `${prev}\n${extractedText.trim()}` : extractedText.trim());
         } else {
           setOriginalMessage((prev) => prev ? `${prev}\n${extractedText.trim()}` : extractedText.trim());
         }
       } else {
-        setError(language === 'ar' ? 'فشل استخراج النص من الصورة' : 'Failed to extract text from image');
+        setError(resp?.error || (language === 'ar' ? 'فشل استخراج النص من الصورة' : 'Failed to extract text from image'));
       }
     } catch (e: any) {
       console.error('Screenshot extraction error:', e);
@@ -392,7 +499,29 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     } finally {
       setExtracting(false);
     }
-  }, [language]);
+  }, [language, buildFormSummary]);
+
+  // Keep Original Message in sync with the editable extracted form fields
+  useEffect(() => {
+    if (!extractedForm) return;
+    const summary = buildFormSummary({
+      subject: formSubject,
+      service_affected: formServiceAffected,
+      severity: formSeverity,
+      message: formMessage,
+    });
+    if (summary.trim()) setOriginalMessage(summary);
+  }, [extractedForm, buildFormSummary, formSubject, formServiceAffected, formSeverity, formMessage]);
+
+  // Clear extracted form
+  const clearExtractedForm = useCallback(() => {
+    setExtractedForm(null);
+    setFormSubject('');
+    setFormServiceAffected('');
+    setFormMessage('');
+    setFormSeverity('');
+    setShowExtractedFields(false);
+  }, []);
 
   return (
     <div className="w-full h-full flex items-start justify-center p-4">
@@ -619,6 +748,101 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 />
               </div>
 
+              {/* Extracted Form Panel - shows when a form is detected from screenshot */}
+              {extractedForm && (
+                <div className="rounded-xl border-2 border-purple-500/30 bg-purple-50/50 dark:bg-purple-950/20 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-semibold text-purple-700 dark:text-purple-300">
+                        {language === 'ar' ? '📋 تم استخراج حقول من الصورة' : '📋 Extracted fields from screenshot'}
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => setShowExtractedFields((v) => !v)}
+                        className="text-xs px-2 py-1 rounded-md border border-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900"
+                      >
+                        {showExtractedFields
+                          ? (language === 'ar' ? 'إخفاء' : 'Hide')
+                          : (language === 'ar' ? 'تعديل الحقول' : 'Edit extracted fields')}
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={clearExtractedForm}
+                      className="text-xs px-2 py-1 rounded-md border border-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900"
+                    >
+                      {language === 'ar' ? 'إغلاق' : 'Close'}
+                    </button>
+                  </div>
+
+                  {showExtractedFields && (
+                    <div className="space-y-4">
+                      <div className="text-xs text-purple-700/80 dark:text-purple-300/80">
+                        {language === 'ar'
+                          ? 'عدّل الحقول هنا. سنولّد لك في الرد: SUBJECT + MESSAGE جاهزة للصق في النموذج.'
+                          : 'Edit these fields. In Reply, Generate Text will output SUBJECT + MESSAGE ready to paste into the form.'}
+                      </div>
+
+                      {/* Subject */}
+                      <div className="grid gap-1">
+                        <label className="text-xs font-medium text-purple-600 dark:text-purple-400">
+                          {language === 'ar' ? 'الموضوع' : 'Subject'}
+                        </label>
+                        <input
+                          type="text"
+                          className={`w-full border rounded px-3 py-2 text-sm ${fieldAccent}`}
+                          placeholder={language === 'ar' ? 'أدخل الموضوع...' : 'Enter subject...'}
+                          value={formSubject}
+                          onChange={(e) => setFormSubject(e.target.value)}
+                        />
+                      </div>
+
+                      {/* Service Affected */}
+                      <div className="grid gap-1">
+                        <label className="text-xs font-medium text-purple-600 dark:text-purple-400">
+                          {language === 'ar' ? 'الخدمة المتأثرة' : 'Which services are affected?'}
+                        </label>
+                        <input
+                          type="text"
+                          className={`w-full border rounded px-3 py-2 text-sm ${fieldAccent}`}
+                          placeholder={language === 'ar' ? 'أدخل الخدمة...' : 'Enter service...'}
+                          value={formServiceAffected}
+                          onChange={(e) => setFormServiceAffected(e.target.value)}
+                        />
+                      </div>
+
+                      {/* Severity (if detected) */}
+                      {formSeverity && (
+                        <div className="grid gap-1">
+                          <label className="text-xs font-medium text-purple-600 dark:text-purple-400">
+                            {language === 'ar' ? 'الأولوية' : 'Severity'}
+                          </label>
+                          <input
+                            type="text"
+                            className={`w-full border rounded px-3 py-2 text-sm ${fieldAccent}`}
+                            value={formSeverity}
+                            onChange={(e) => setFormSeverity(e.target.value)}
+                          />
+                        </div>
+                      )}
+
+                      {/* Message */}
+                      <div className="grid gap-1">
+                        <label className="text-xs font-medium text-purple-600 dark:text-purple-400">
+                          {language === 'ar' ? 'الرسالة' : 'Message'}
+                        </label>
+                        <textarea
+                          className={`w-full border rounded px-3 py-2 text-sm min-h-[100px] ${fieldAccent}`}
+                          placeholder={language === 'ar' ? 'أدخل رسالتك...' : 'Enter your message...'}
+                          value={formMessage}
+                          onChange={(e) => setFormMessage(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Row 1: Tone | Reply Length */}
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="grid gap-2">
@@ -707,9 +931,53 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 </div>
               )}
               <div className="flex gap-2">
-                <button className="px-3 py-1.5 rounded border hover:bg-muted" onClick={handleCopy}>
-                  {copied ? (language === 'ar' ? 'تم النسخ!' : 'Copied!') : (language === 'ar' ? 'نسخ' : 'Copy')}
-                </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    className="px-3 py-1.5 rounded border hover:bg-muted"
+                    onClick={() => setCopyMenuOpen((v) => !v)}
+                    disabled={!generatedText.trim()}
+                    aria-haspopup="menu"
+                    aria-expanded={copyMenuOpen ? 'true' : 'false'}
+                  >
+                    {copied ? (language === 'ar' ? 'تم النسخ!' : 'Copied!') : (language === 'ar' ? 'نسخ' : 'Copy')}
+                  </button>
+
+                  {copyMenuOpen && (
+                    <div
+                      className="absolute z-50 mt-2 w-44 rounded-md border bg-background shadow-lg p-1"
+                      role="menu"
+                      onMouseLeave={() => setCopyMenuOpen(false)}
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={`w-full text-left px-2 py-1.5 rounded hover:bg-muted text-sm ${parsedGenerated.hasFillFormat ? '' : 'opacity-50 cursor-not-allowed'}`}
+                        onClick={handleCopySubject}
+                        disabled={!parsedGenerated.hasFillFormat}
+                      >
+                        {language === 'ar' ? 'نسخ الموضوع' : 'Copy subject'}
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={`w-full text-left px-2 py-1.5 rounded hover:bg-muted text-sm ${parsedGenerated.hasFillFormat ? '' : 'opacity-50 cursor-not-allowed'}`}
+                        onClick={handleCopyMessage}
+                        disabled={!parsedGenerated.hasFillFormat}
+                      >
+                        {language === 'ar' ? 'نسخ الرسالة' : 'Copy message'}
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="w-full text-left px-2 py-1.5 rounded hover:bg-muted text-sm"
+                        onClick={handleCopyAll}
+                      >
+                        {language === 'ar' ? 'نسخ الكل' : 'Copy all'}
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <button className="px-3 py-1.5 rounded border hover:bg-muted" onClick={handleGenerate}>
                   {language === 'ar' ? 'إعادة توليد' : 'Regenerate'}
                 </button>

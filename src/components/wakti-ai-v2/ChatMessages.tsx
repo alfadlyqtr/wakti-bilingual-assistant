@@ -201,8 +201,10 @@ export function ChatMessages({
   // Transient visual state to keep the green glow briefly after audio ends
   const [fadeOutId, setFadeOutId] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<{ url: string; prompt?: string } | null>(null);
-  // Simplified audio playback state, inspired by AIInsights.tsx
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Web Audio API for reliable cross-browser playback (Gemini TTS returns WAV)
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null); // Fallback for HTML5 audio
   const audioCacheRef = useRef<Map<string, string>>(new Map()); // cacheKey -> object URL
   const PERSIST_CACHE_PREFIX = 'wakti_tts_cache_'; // sessionStorage key prefix
   const [fetchingIds, setFetchingIds] = useState<Set<string>>(new Set()); // active network fetches for playback
@@ -391,25 +393,43 @@ export function ChatMessages({
   // Cache-clearing logic removed as caching is now disabled for debugging.
 
   // Rewritten to use a single, persistent audio element for reliability on mobile.
-  const handleSpeak = async (text: string, messageId: string) => {
-    const el = audioRef.current;
-    if (!el) return;
+  // Stop any currently playing audio (Web Audio API or HTML5)
+  const stopCurrentAudio = () => {
+    // Stop Web Audio API source
+    if (audioSourceRef.current) {
+      try {
+        audioSourceRef.current.stop();
+        audioSourceRef.current.disconnect();
+      } catch {}
+      audioSourceRef.current = null;
+    }
+    // Stop HTML5 audio fallback
+    if (audioRef.current && !audioRef.current.paused) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+  };
 
-    // If this message is already playing, toggle pause.
+  // Initialize or get AudioContext (lazy init for mobile unlock)
+  const getAudioContext = (): AudioContext => {
+    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    return audioContextRef.current;
+  };
+
+  const handleSpeak = async (text: string, messageId: string) => {
+    // If this message is already playing, toggle pause/stop
     if (speakingMessageId === messageId) {
-      if (el.paused) {
-        try { await el.play(); setIsPaused(false); } catch {}
-      } else {
-        try { el.pause(); setIsPaused(true); } catch {}
-      }
+      // Web Audio API doesn't support pause, so we stop instead
+      stopCurrentAudio();
+      setSpeakingMessageId(null);
+      setIsPaused(false);
       return;
     }
 
-    // Stop any other message that is currently playing.
-    if (!el.paused) {
-      el.pause();
-      el.currentTime = 0;
-    }
+    // Stop any other message that is currently playing
+    stopCurrentAudio();
 
     let cleanText = sanitizeForTTS(text);
     if (!cleanText || cleanText.length < 3) {
@@ -431,74 +451,128 @@ export function ChatMessages({
       console.warn('[TTS] Skipping: no readable text after sanitization');
       return;
     }
-    const cacheKey = ''; // no cache (match AI Insights minimal flow)
 
-    // --- Mobile Unlock ---
-    // Play a tiny silent audio on the first user gesture to unlock the browser.
+    // --- Mobile Unlock (AudioContext) ---
+    // Resume AudioContext on first user gesture
     if (!audioUnlockedRef.current) {
       try {
-        el.src = 'data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
-        try { el.load(); } catch {}
-        await el.play();
-        el.pause();
-        el.currentTime = 0;
+        const ctx = getAudioContext();
+        if (ctx.state === 'suspended') {
+          await ctx.resume();
+        }
         audioUnlockedRef.current = true;
-        console.log('[TTS] Mobile audio unlocked.');
+        console.log('[TTS] AudioContext unlocked.');
       } catch (err) {
-        console.warn('[TTS] Mobile audio unlock failed, continuing...', err);
+        console.warn('[TTS] AudioContext unlock failed, continuing...', err);
       }
     }
 
-    // --- Playback Logic ---
-    const playAudio = async (url: string) => {
+    // --- Playback with Web Audio API ---
+    const playWithWebAudio = async (arrayBuffer: ArrayBuffer, contentType: string) => {
+      try {
+        const ctx = getAudioContext();
+        
+        // Resume if suspended (mobile browsers)
+        if (ctx.state === 'suspended') {
+          await ctx.resume();
+        }
+
+        // Decode the audio data
+        const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0)); // slice to avoid detached buffer
+        
+        // Create and configure source node
+        const source = ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(ctx.destination);
+        
+        // Store reference for stopping
+        audioSourceRef.current = source;
+        
+        // Set up event handlers
+        source.onended = () => {
+          setSpeakingMessageId(null);
+          setIsPaused(false);
+          triggerFadeOut(messageId);
+          audioSourceRef.current = null;
+        };
+
+        // Start playback
+        source.start(0);
+        setSpeakingMessageId(messageId);
+        setIsPaused(false);
+        
+        console.debug('[TTS] Web Audio playback started', {
+          duration: audioBuffer.duration,
+          sampleRate: audioBuffer.sampleRate,
+          channels: audioBuffer.numberOfChannels,
+          contentType,
+        });
+        
+        return true;
+      } catch (err) {
+        console.warn('[TTS] Web Audio decode failed, will try HTML5 fallback:', err);
+        return false;
+      }
+    };
+
+    // --- HTML5 Audio Fallback ---
+    const playWithHTML5 = async (blob: Blob, contentType: string) => {
+      const el = audioRef.current;
+      if (!el) {
+        console.error('[TTS] No HTML5 audio element available');
+        return;
+      }
+
       setSpeakingMessageId(messageId);
       setIsPaused(false);
 
-      // Ensure sane attributes before playback (iOS/PWA quirks)
       try {
         el.muted = false;
         el.volume = 1.0;
         el.preload = 'auto';
-        try { (el as any).crossOrigin = 'anonymous'; } catch {}
       } catch {}
 
-      el.src = url;
+      // iOS prefers data URLs
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || ((navigator.platform === 'MacIntel') && (navigator.maxTouchPoints > 1));
+      let audioUrl: string;
+      
+      if (isIOS) {
+        try {
+          const buf = await blob.arrayBuffer();
+          const b64 = bufferToBase64(buf);
+          audioUrl = `data:${contentType || 'audio/wav'};base64,${b64}`;
+        } catch {
+          audioUrl = URL.createObjectURL(blob);
+        }
+      } else {
+        audioUrl = URL.createObjectURL(blob);
+      }
+
+      el.src = audioUrl;
       try { el.load(); } catch {}
 
       el.onended = () => {
         setSpeakingMessageId(null);
         setIsPaused(false);
         triggerFadeOut(messageId);
-        // Do not revoke from cache, as it's shared.
       };
       el.onerror = (e) => {
-        console.error('[TTS] Audio playback error:', e);
+        console.error('[TTS] HTML5 Audio playback error:', e);
         setSpeakingMessageId(null);
         setIsPaused(false);
       };
 
       try {
         await el.play();
-        // Lightweight diagnostics to spot silent playback issues
-        try {
-          console.debug('[TTS] play() resolved', {
-            readyState: el.readyState,
-            duration: el.duration,
-            currentTime: el.currentTime,
-            paused: el.paused,
-            muted: el.muted,
-            volume: el.volume,
-          });
-        } catch {}
+        console.debug('[TTS] HTML5 Audio playback started');
       } catch (err) {
-        console.error('[TTS] el.play() rejected:', err);
+        console.error('[TTS] HTML5 play() rejected:', err);
         setSpeakingMessageId(null);
         setIsPaused(false);
       }
     };
 
-    // --- Fetch (no cache), match AI Insights ---
-    // Mark fetching for this message to show a spinner
+    // --- Fetch and Play ---
     setFetchingIds(prev => {
       const next = new Set(prev);
       next.add(messageId);
@@ -514,18 +588,24 @@ export function ChatMessages({
         throw new Error('VITE_SUPABASE_URL is not defined.');
       }
 
+      // Detect language for voice selection
       const isArabicText = /[\u0600-\u06FF]/.test(cleanText);
       const { ar, en } = getSelectedVoices();
       const voice_id = (isArabicText || language === 'ar') ? ar : en;
+      
+      // Determine gender from voice_id for Gemini TTS
+      const gender = voice_id.toLowerCase().includes('zephyr') || 
+                     voice_id.toLowerCase().includes('vindemiatrix') ||
+                     voice_id.toLowerCase().includes('female') ? 'female' : 'male';
 
       const response = await fetch(`${supabaseUrl}/functions/v1/voice-tts`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'audio/mpeg',
+          'Accept': 'audio/wav, audio/mpeg, audio/*',
           ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
         },
-        body: JSON.stringify({ text: cleanText, voice_id }),
+        body: JSON.stringify({ text: cleanText, voice_id, gender }),
       });
 
       if (!response.ok) {
@@ -533,34 +613,29 @@ export function ChatMessages({
         throw new Error(`TTS service failed: ${response.status} ${errorText}`);
       }
 
-      const audioBlob = await response.blob();
-      const contentType = response.headers.get('content-type') || '';
-      try {
-        console.debug('[TTS] blob received', { size: audioBlob.size, contentType });
-      } catch {}
+      const contentType = response.headers.get('content-type') || 'audio/wav';
+      const ttsProvider = response.headers.get('x-tts-provider') || 'unknown';
+      const ttsVoice = response.headers.get('x-tts-voice') || 'unknown';
+      
+      console.debug('[TTS] Response received', { contentType, ttsProvider, ttsVoice });
 
-      if (!audioBlob || audioBlob.size === 0) {
-        console.error('[TTS] Empty audio blob received. Aborting playback.');
+      const arrayBuffer = await response.arrayBuffer();
+      
+      if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+        console.error('[TTS] Empty audio received. Aborting playback.');
         setSpeakingMessageId(null);
         return;
       }
 
-      // iOS/PWA Safari sometimes plays object URLs silently. Prefer data URL on iOS.
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || ((navigator.platform === 'MacIntel') && (navigator.maxTouchPoints > 1));
-      if (isIOS) {
-        try {
-          const buf = await audioBlob.arrayBuffer();
-          const b64 = bufferToBase64(buf);
-          const dataUrl = `data:${contentType || 'audio/mpeg'};base64,${b64}`;
-          playAudio(dataUrl);
-        } catch (err) {
-          console.warn('[TTS] Data URL fallback failed, trying object URL...', err);
-          const objectUrl = URL.createObjectURL(audioBlob);
-          playAudio(objectUrl);
-        }
-      } else {
-        const objectUrl = URL.createObjectURL(audioBlob);
-        playAudio(objectUrl);
+      console.debug('[TTS] Audio data received', { size: arrayBuffer.byteLength, contentType });
+
+      // Try Web Audio API first (handles WAV from Gemini TTS)
+      const webAudioSuccess = await playWithWebAudio(arrayBuffer, contentType);
+      
+      if (!webAudioSuccess) {
+        // Fallback to HTML5 Audio
+        const blob = new Blob([arrayBuffer], { type: contentType });
+        await playWithHTML5(blob, contentType);
       }
 
     } catch (err) {

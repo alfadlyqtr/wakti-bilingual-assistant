@@ -12,7 +12,10 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 
-// Flexibly locate a Google TTS key from env without requiring an exact name
+// Gemini API Key for Gemini 2.5 Flash TTS
+const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
+
+// Flexibly locate a Google TTS key from env without requiring an exact name (fallback)
 const envObj = Deno.env.toObject?.() ?? {} as Record<string, string>;
 const googleKeyCandidates = Object.keys(envObj)
   .filter((k) => /GOOGLE/.test(k) && /TTS/.test(k) && /KEY/.test(k));
@@ -29,13 +32,74 @@ if (!GOOGLE_TTS_KEY) {
   }
 }
 
-console.log("🎵 VOICE TTS: Function loaded (Google-only)");
+console.log("🎵 VOICE TTS: Function loaded (Gemini 2.5 Flash TTS + Google fallback)");
+console.log("🎵 Gemini API Key available:", !!GEMINI_API_KEY);
 console.log("🎵 Google TTS Key picked:", GOOGLE_TTS_KEY_NAME || "<not found>");
 console.log("🎵 Google TTS Key available:", !!GOOGLE_TTS_KEY);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// No style mapping needed for Google-only path
+// ============================================================================
+// GEMINI 2.5 FLASH TTS - "Neural Actor" Configuration
+// ============================================================================
+
+// Voice mapping: Leda (female, sophisticated/warm), Orion (male, deep/authoritative)
+const GEMINI_VOICES = {
+  female: 'Leda',
+  male: 'Orus', // Note: Gemini uses "Orus" not "Orion"
+};
+
+// System prompt for the "Wakti Elite" Vocal Engine (used in Gemini TTS prompt field)
+const WAKTI_VOCAL_PROMPT = `Role: You are the 'Wakti Elite' Vocal Engine. You are a professional Neural Actor.
+Objective: Deliver speech with regional prestige, natural prosody, and emotional intelligence.
+
+1. ENGLISH (CANADIAN ELITE):
+   - Persona: A smart, professional technical lead from Toronto.
+   - Tone: Friendly, crisp, and neutral North American.
+   - Rules: Avoid exaggerated US accents. Keep vowels polite and rounded. Pace: 1.05x.
+
+2. ARABIC (GCC / QATARI MAJLIS):
+   - Persona: A high-status cultural attaché from Doha.
+   - Dialect: 100% White Khaliji (Qatari).
+   - Rules: ABSOLUTELY NO Formal MSA (Fusha). Soften 'Qaf' (ق) into a hard 'G'. 
+   - Suffixes: Use natural Gulf 'K' breaths. 
+   - Rhythm: Warm, rhythmic, and elite.
+
+3. ADAPTIVE LOGIC:
+   - Greeting: If user is "Abdullah", use the warmest tone for "Ya Hala والله بعبدالله".
+   - Data: If reading sports/stocks, speak with precision and clarity.`;
+
+// Build the style prompt for Gemini TTS based on language
+const getStylePrompt = (isArabic: boolean): string => {
+  if (isArabic) {
+    return `${WAKTI_VOCAL_PROMPT}
+
+For this text, use the ARABIC (GCC / QATARI MAJLIS) persona. Speak with warm, rhythmic Khaliji dialect. Soften the Qaf into a hard G sound.`;
+  }
+  return `${WAKTI_VOCAL_PROMPT}
+
+For this text, use the ENGLISH (CANADIAN ELITE) persona. Speak with friendly, crisp, neutral North American tone.`;
+};
+
+// Phonetic anchors to force the AI into the correct accent mode
+const getPhoneticAnchor = (isArabic: boolean, userName?: string) => {
+  if (isArabic) {
+    return userName ? `يا هلا والله ب${userName}.. ` : 'يا هلا والله.. ';
+  }
+  return userName ? `Hello ${userName}. ` : 'Hello. ';
+};
+
+// Detect if text is primarily Arabic
+const isArabicText = (text: string): boolean => {
+  const arabicChars = (text.match(/[\u0600-\u06FF]/g) || []).length;
+  const totalChars = text.replace(/\s/g, '').length;
+  return totalChars > 0 && (arabicChars / totalChars) > 0.3;
+};
+
+// Get language code for Gemini TTS
+const getLanguageCode = (isArabic: boolean): string => {
+  return isArabic ? 'ar-XA' : 'en-US';
+};
 
 // --- Helpers for robust long-text TTS ---
 // Split text into safe chunks for Google TTS: by sentence boundaries first, then hard-wrap long sentences.
@@ -43,7 +107,7 @@ function splitIntoChunks(text: string, maxChars: number = 350): string[] {
   try {
     if (!text) return [];
     // Normalize whitespace
-    let t = String(text).replace(/\s+/g, ' ').trim();
+    const t = String(text).replace(/\s+/g, ' ').trim();
     if (!t) return [];
 
     // First pass: split into sentences, keeping end punctuation (., !, ?, Arabic ؟)
@@ -161,11 +225,12 @@ serve(async (req: Request) => {
 
     // Get request data
     const requestBody = await req.json();
-    const { text, voice_id, mode } = requestBody;
+    const { text, voice_id, mode, gender } = requestBody;
     
     console.log(`🎵 TTS request:`, {
       textLength: text?.length || 0,
       voiceId: voice_id,
+      gender: gender,
       textPreview: text?.substring(0, 100)
     });
 
@@ -178,14 +243,124 @@ serve(async (req: Request) => {
       });
     }
 
-    // Check Google configuration
-    if (!GOOGLE_TTS_KEY) {
-      console.error('🎵 GOOGLE_TTS_KEY not found in environment');
-      throw new Error('Google TTS key not configured');
+    if (!text) {
+      throw new Error('Missing required field: text is required');
     }
 
-    if (!text || !voice_id) {
-      throw new Error('Missing required fields: text and voice_id are required');
+    // Determine if text is Arabic
+    const textIsArabic = isArabicText(text);
+    
+    // Determine voice gender from voice_id or explicit gender param
+    let voiceGender: 'male' | 'female' = 'male';
+    if (gender === 'female') {
+      voiceGender = 'female';
+    } else if (voice_id) {
+      // Detect from legacy voice_id patterns
+      const lowerVoice = voice_id.toLowerCase();
+      if (lowerVoice.includes('zephyr') || lowerVoice.includes('vindemiatrix') || lowerVoice.includes('leda') || lowerVoice.includes('female')) {
+        voiceGender = 'female';
+      }
+    }
+
+    // ========================================================================
+    // PRIMARY: Gemini 2.5 Flash TTS
+    // ========================================================================
+    if (GEMINI_API_KEY) {
+      console.log('🎵 Using Gemini 2.5 Flash TTS (Neural Actor mode)');
+      
+      const geminiVoice = GEMINI_VOICES[voiceGender];
+      const languageCode = getLanguageCode(textIsArabic);
+      
+      // Prepend phonetic anchor to force accent mode
+      const phoneticAnchor = getPhoneticAnchor(textIsArabic, 'Abdullah');
+      const preparedText = phoneticAnchor + text;
+      
+      console.log(`🎵 Gemini TTS config:`, {
+        voice: geminiVoice,
+        language: languageCode,
+        isArabic: textIsArabic,
+        gender: voiceGender,
+        textLength: preparedText.length
+      });
+
+      // Build the style prompt for Neural Actor mode
+      const stylePrompt = getStylePrompt(textIsArabic);
+      
+      const geminiResponse = await fetch(
+        `https://texttospeech.googleapis.com/v1/text:synthesize?key=${GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            input: {
+              text: preparedText,
+              prompt: stylePrompt, // Neural Actor style instructions
+            },
+            voice: {
+              languageCode: languageCode,
+              name: geminiVoice,
+              model_name: 'gemini-2.5-flash-tts', // Use Gemini TTS model
+            },
+            audioConfig: {
+              audioEncoding: 'LINEAR16', // WAV format for better browser compatibility
+              sampleRateHertz: 24000,
+            },
+          }),
+        }
+      );
+
+      if (geminiResponse.ok) {
+        const geminiData = await geminiResponse.json();
+        const audioContent = geminiData.audioContent;
+        
+        if (audioContent) {
+          const audioBytes = base64ToBytes(audioContent);
+          console.log('🎵 Gemini TTS audio generated successfully:', { audioSize: audioBytes.byteLength });
+          
+          // Log successful AI usage
+          await logAIFromRequest(req, {
+            functionName: "voice-tts",
+            provider: "gemini",
+            model: "gemini-2.5-flash-tts",
+            inputText: text,
+            status: "success",
+            metadata: { 
+              voice: geminiVoice, 
+              language: languageCode, 
+              audioSize: audioBytes.byteLength,
+              isArabic: textIsArabic
+            }
+          });
+
+          return new Response(audioBytes.buffer as ArrayBuffer, {
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'audio/wav',
+              'Content-Length': audioBytes.byteLength.toString(),
+              'X-TTS-Provider': 'gemini-2.5-flash-tts',
+              'X-TTS-Voice': geminiVoice,
+            },
+          });
+        }
+      } else {
+        const errorText = await geminiResponse.text();
+        console.warn('🎵 Gemini TTS failed, falling back to Google Chirp:', geminiResponse.status, errorText);
+      }
+    }
+
+    // ========================================================================
+    // FALLBACK: Google Cloud TTS (Chirp3-HD)
+    // ========================================================================
+    console.log('🎵 Using Google Cloud TTS fallback (Chirp3-HD)');
+    
+    // Check Google configuration
+    if (!GOOGLE_TTS_KEY) {
+      console.error('🎵 Neither GEMINI_API_KEY nor GOOGLE_TTS_KEY found in environment');
+      throw new Error('TTS API keys not configured');
+    }
+
+    if (!voice_id) {
+      throw new Error('Missing required field: voice_id is required for Google TTS fallback');
     }
 
     // Google-only; no external style settings

@@ -138,7 +138,7 @@ serve(async (req) => {
       requestBody = {};
     }
 
-    const { prompt, mode, language, languageVariant, messageAnalysis, modelPreference, temperature, contentType, length, replyLength, tone, register } = requestBody;
+    const { prompt, mode, language, languageVariant, messageAnalysis, modelPreference, temperature, contentType, length, replyLength, tone, register, image, extractTarget } = requestBody;
 
     console.log("🎯 Request details:", { 
       promptLength: prompt?.length || 0, 
@@ -148,9 +148,186 @@ serve(async (req) => {
       contentType,
       length,
       replyLength,
-      tone
+      tone,
+      hasImage: !!image,
+      extractTarget
     });
 
+    // ============================================
+    // MODE: extract - Extract text from screenshot
+    // ============================================
+    if (mode === 'extract' && image) {
+      console.log("🎯 Text Generator: EXTRACT MODE - Processing screenshot");
+      
+      if (!OPENAI_API_KEY) {
+        return new Response(
+          JSON.stringify({ 
+            success: false,
+            error: "OpenAI API key required for image extraction" 
+          }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      try {
+        // Prepare the image for OpenAI Vision API
+        let imageUrl = image;
+        if (!image.startsWith('http') && !image.startsWith('data:')) {
+          imageUrl = `data:image/jpeg;base64,${image}`;
+        }
+
+        // Use structured extraction prompt to detect form fields
+        const structuredPrompt = language === 'ar'
+          ? `انظر إلى هذه الصورة. إذا كانت تحتوي على نموذج (form) أو رسالة، استخرج المعلومات بتنسيق JSON التالي:
+{
+  "isForm": true/false,
+  "formType": "support_ticket" | "contact_form" | "email" | "message" | "other",
+  "fields": {
+    "subject": "العنوان أو الموضوع إن وجد",
+    "category": "الفئة أو نوع المشكلة إن وجد",
+    "service_affected": "الخدمة المتأثرة إن وجد",
+    "severity": "الأولوية أو الخطورة إن وجد",
+    "message": "نص الرسالة الرئيسي",
+    "sender": "اسم المرسل إن وجد",
+    "recipient": "اسم المستلم إن وجد"
+  },
+  "rawText": "كل النص المرئي في الصورة"
+}
+أعد JSON فقط، بدون أي نص إضافي.`
+          : `Look at this image. If it contains a form or message, extract the information in this JSON format:
+{
+  "isForm": true/false,
+  "formType": "support_ticket" | "contact_form" | "email" | "message" | "other",
+  "fields": {
+    "subject": "the subject or title if present",
+    "category": "the category or issue type if present",
+    "service_affected": "which service is affected if present",
+    "severity": "priority or severity if present",
+    "message": "the main message body text",
+    "sender": "sender name if present",
+    "recipient": "recipient name if present"
+  },
+  "rawText": "all visible text in the image"
+}
+Return ONLY the JSON, no additional text.`;
+
+        console.log("🎯 Text Generator: Calling OpenAI Vision for structured extraction");
+        const startVision = Date.now();
+        
+        const visionResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${OPENAI_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            messages: [
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: structuredPrompt },
+                  { type: "image_url", image_url: { url: imageUrl, detail: "high" } }
+                ]
+              }
+            ],
+            max_tokens: 2000,
+            temperature: 0.1,
+          }),
+        });
+
+        const visionDuration = Date.now() - startVision;
+        console.log(`🎯 Text Generator: Vision extraction completed in ${visionDuration}ms, status: ${visionResponse.status}`);
+
+        if (!visionResponse.ok) {
+          const errText = await visionResponse.text();
+          console.error("🎯 Text Generator: Vision API error:", errText);
+          return new Response(
+            JSON.stringify({ success: false, error: "Failed to extract text from image" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const visionResult = await visionResponse.json();
+        const rawContent = visionResult.choices?.[0]?.message?.content || "";
+
+        if (!rawContent.trim()) {
+          return new Response(
+            JSON.stringify({ success: false, error: "No text found in image" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Try to parse as JSON, fallback to raw text
+        let extractedData: {
+          isForm?: boolean;
+          formType?: string;
+          fields?: Record<string, string>;
+          rawText?: string;
+        } = {};
+        let extractedText = rawContent;
+
+        try {
+          // Clean up potential markdown code blocks
+          let jsonStr = rawContent.trim();
+          if (jsonStr.startsWith('```json')) jsonStr = jsonStr.slice(7);
+          if (jsonStr.startsWith('```')) jsonStr = jsonStr.slice(3);
+          if (jsonStr.endsWith('```')) jsonStr = jsonStr.slice(0, -3);
+          jsonStr = jsonStr.trim();
+          
+          extractedData = JSON.parse(jsonStr);
+          extractedText = extractedData.rawText || rawContent;
+          console.log("🎯 Text Generator: Successfully parsed structured form data:", {
+            isForm: extractedData.isForm,
+            formType: extractedData.formType,
+            fieldsCount: extractedData.fields ? Object.keys(extractedData.fields).length : 0
+          });
+        } catch (_parseErr) {
+          console.log("🎯 Text Generator: Could not parse as JSON, using raw text");
+          extractedData = { isForm: false, rawText: rawContent };
+        }
+
+        console.log("🎯 Text Generator: Successfully extracted, length:", extractedText.length);
+
+        // Log successful extraction
+        await logAIFromRequest(req, {
+          functionName: "text-generator",
+          provider: "openai",
+          model: "gpt-4o-mini-vision",
+          inputText: "[image extraction]",
+          outputText: extractedText,
+          durationMs: visionDuration,
+          status: "success"
+        });
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            extractedText,
+            extractedForm: extractedData.isForm ? {
+              formType: extractedData.formType || 'other',
+              fields: extractedData.fields || {}
+            } : null,
+            mode: 'extract',
+            extractTarget,
+            modelUsed: 'gpt-4o-mini'
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+
+      } catch (e: unknown) {
+        const err = e as Error;
+        console.error("🎯 Text Generator: Extraction error:", err.message);
+        return new Response(
+          JSON.stringify({ success: false, error: `Extraction failed: ${err.message}` }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // ============================================
+    // MODE: compose/reply - Normal text generation
+    // ============================================
     if (!prompt) {
       console.error("🎯 Text Generator: Missing prompt in request");
       return new Response(
