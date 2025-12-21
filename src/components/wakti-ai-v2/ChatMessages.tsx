@@ -12,10 +12,146 @@ import { Badge } from '@/components/ui/badge';
 import { ImageModal } from './ImageModal';
 import { YouTubePreview } from './YouTubePreview';
 import { StudyModeMessage } from './StudyModeMessage';
+import { SearchResultActions } from './SearchResultActions';
 import { supabase } from '@/integrations/supabase/client';
 import { getSelectedVoices } from './TalkBackSettings';
 import { useNavigate } from 'react-router-dom';
 // Removed useMobileKeyboard - no longer needed
+
+type SearchSource = { url: string; title: string };
+
+function normalizeGoogleMapsUrl(href: string, language: string): string {
+  try {
+    const u = new URL(href);
+    const isGoogleMaps = /(^|\.)google\.[^/]+$/.test(u.hostname) || u.hostname === 'maps.google.com';
+    if (!isGoogleMaps) return href;
+
+    if (language === 'ar') {
+      u.searchParams.set('hl', 'ar');
+    }
+    return u.toString();
+  } catch {
+    return href;
+  }
+}
+
+function SearchMessageCard({
+  message,
+  language,
+}: {
+  message: AIMessage;
+  language: string;
+}) {
+  const content = message.content || '';
+  const geminiSearchMeta = (message as any)?.metadata?.geminiSearch;
+  const sources: SearchSource[] = Array.isArray(geminiSearchMeta?.sources) ? geminiSearchMeta.sources : [];
+  const query = (message as any)?.metadata?.searchQuery || '';
+
+  return (
+    <div className="w-full space-y-4">
+      <div 
+        className="search-result-content prose prose-sm sm:prose-base max-w-none dark:prose-invert" 
+        dir="auto"
+      >
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          rehypePlugins={[rehypeRaw]}
+          components={{
+            h2: ({ children }) => (
+              <h2 className="text-base sm:text-lg font-bold mt-6 mb-2 text-foreground border-b border-border/40 pb-2">
+                {children}
+              </h2>
+            ),
+            h3: ({ children }) => (
+              <h3 className="text-sm sm:text-base font-semibold mt-4 mb-2 text-foreground">
+                {children}
+              </h3>
+            ),
+            p: ({ children }) => (
+              <p className="text-sm leading-relaxed text-muted-foreground mb-3">
+                {children}
+              </p>
+            ),
+            ul: ({ children }) => (
+              <ul className="space-y-1.5 my-3 list-none pl-0">
+                {children}
+              </ul>
+            ),
+            li: ({ children }) => (
+              <li className="text-sm text-muted-foreground flex items-start gap-2">
+                <span className="text-primary mt-0.5">•</span>
+                <span>{children}</span>
+              </li>
+            ),
+            strong: ({ children }) => (
+              <strong className="font-semibold text-foreground">{children}</strong>
+            ),
+            a: ({ href, children }) => {
+              const normalizedHref = href ? normalizeGoogleMapsUrl(href, language) : href;
+              const isGoogleMaps = normalizedHref && (
+                normalizedHref.includes('google.com/maps') || 
+                normalizedHref.includes('maps.google.com') || 
+                normalizedHref.includes('goo.gl/maps')
+              );
+              
+              if (isGoogleMaps) {
+                return (
+                  <a
+                    href={normalizedHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 font-medium hover:underline"
+                  >
+                    <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                    </svg>
+                    <span>{children || (language === 'ar' ? 'خرائط جوجل' : 'Google Maps')}</span>
+                  </a>
+                );
+              }
+              
+              return (
+                <a
+                  href={normalizedHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  {children}
+                </a>
+              );
+            },
+          }}
+        >
+          {content}
+        </ReactMarkdown>
+      </div>
+
+      {sources.length > 0 && (
+        <details className="rounded-xl border border-border/40 bg-muted/10 dark:bg-white/5 p-3">
+          <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+            {language === 'ar' ? `المصادر (${sources.length})` : `Sources (${sources.length})`}
+          </summary>
+          <ul className="mt-3 space-y-2">
+            {sources.slice(0, 10).map((s, idx) => (
+              <li key={idx} className="flex items-start gap-2 min-w-0">
+                <span className="text-muted-foreground text-xs mt-1">•</span>
+                <a
+                  href={s.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline text-xs break-words"
+                >
+                  {s.title || s.url}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+}
 
 interface ChatMessagesProps {
   sessionMessages: AIMessage[];
@@ -789,6 +925,11 @@ export function ChatMessages({
     }
     // Render assistant content using ReactMarkdown (tables, code, images)
     if (message.role === 'assistant') {
+      // Search: render the dedicated mobile-first Search UI
+      if (message.intent === 'search') {
+        return <SearchMessageCard message={message} language={language} />;
+      }
+
       // Vision JSON renderer (Option B): render structured results if present
       const vjson = (message as any)?.metadata?.visionJson || (message as any)?.metadata?.json;
       const isVision = message.intent === 'vision';
@@ -1055,16 +1196,17 @@ export function ChatMessages({
               ),
               a: ({ node, href, children, ...props }) => {
                 // Style Google Maps links with icon and color
-                const isGoogleMaps = href && (href.includes('google.com/maps') || href.includes('maps.google.com') || href.includes('goo.gl/maps'));
+                const normalizedHref = href ? normalizeGoogleMapsUrl(href, language) : href;
+                const isGoogleMaps = normalizedHref && (normalizedHref.includes('google.com/maps') || normalizedHref.includes('maps.google.com') || normalizedHref.includes('goo.gl/maps'));
                 // Style phone links
-                const isPhone = href && href.startsWith('tel:');
+                const isPhone = normalizedHref && normalizedHref.startsWith('tel:');
                 // Style email links
-                const isEmail = href && href.startsWith('mailto:');
+                const isEmail = normalizedHref && normalizedHref.startsWith('mailto:');
                 
                 if (isGoogleMaps) {
                   return (
                     <a
-                      href={href}
+                      href={normalizedHref}
                       target="_blank"
                       rel="noopener noreferrer"
                       dir="auto"
@@ -1080,10 +1222,10 @@ export function ChatMessages({
                 }
                 
                 if (isPhone) {
-                  const phoneNumber = href.replace('tel:', '');
+                  const phoneNumber = (normalizedHref || '').replace('tel:', '');
                   return (
                     <a
-                      href={href}
+                      href={normalizedHref}
                       className="inline-flex items-center gap-1 text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300 font-medium hover:underline"
                       {...props}
                     >
@@ -1096,10 +1238,10 @@ export function ChatMessages({
                 }
                 
                 if (isEmail) {
-                  const emailAddress = href.replace('mailto:', '');
+                  const emailAddress = (normalizedHref || '').replace('mailto:', '');
                   return (
                     <a
-                      href={href}
+                      href={normalizedHref}
                       className="inline-flex items-center gap-1 text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 font-medium hover:underline"
                       {...props}
                     >
@@ -1114,7 +1256,7 @@ export function ChatMessages({
                 // Default link styling
                 return (
                   <a
-                    href={href}
+                    href={normalizedHref}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-primary hover:underline"

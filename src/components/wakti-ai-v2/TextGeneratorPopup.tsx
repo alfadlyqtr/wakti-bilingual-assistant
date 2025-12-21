@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import { ImagePlus } from 'lucide-react';
 import { callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
 import DiagramsTab from './DiagramsTab';
@@ -158,6 +159,12 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   const [error, setError] = useState('');
   const [generatedText, setGeneratedText] = useState('');
   const [copied, setCopied] = useState(false);
+
+  // Screenshot upload refs
+  const composeFileInputRef = useRef<HTMLInputElement>(null);
+  const replyFileInputRef = useRef<HTMLInputElement>(null);
+  const [isExtractingCompose, setIsExtractingCompose] = useState(false);
+  const [isExtractingReply, setIsExtractingReply] = useState(false);
 
   // Cached generated texts (persisted)
   const CACHE_KEY = 'wakti_generated_text_cache_v1';
@@ -330,6 +337,63 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
 
   const title = language === 'ar' ? 'منشئ النص الذكي' : 'Smart Text Generator';
 
+  // Handle screenshot upload and extract text using vision AI (non-streaming)
+  const handleScreenshotUpload = useCallback(async (
+    file: File,
+    target: 'compose' | 'reply'
+  ) => {
+    if (!file) return;
+    const setExtracting = target === 'compose' ? setIsExtractingCompose : setIsExtractingReply;
+    setExtracting(true);
+    setError('');
+    try {
+      // Convert file to base64
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const base64 = await base64Promise;
+
+      // Call non-streaming vision endpoint
+      const resp = await callEdgeFunctionWithRetry<any>('wakti-ai-v2-brain', {
+        body: {
+          message: target === 'compose'
+            ? 'Extract ALL text content from this screenshot. If it\'s a form, extract all field labels and any filled values. Return only the extracted text, nothing else.'
+            : 'Extract the message or email content from this screenshot that needs a reply. Return only the message text, nothing else.',
+          mode: 'vision',
+          files: [{
+            name: file.name,
+            type: file.type,
+            data: base64,
+            content: base64
+          }],
+          language
+        },
+        maxRetries: 2,
+        retryDelay: 1000,
+      });
+
+      const extractedText = resp?.text || resp?.content || resp?.response || '';
+      
+      if (extractedText.trim()) {
+        if (target === 'compose') {
+          setTopic((prev) => prev ? `${prev}\n${extractedText.trim()}` : extractedText.trim());
+        } else {
+          setOriginalMessage((prev) => prev ? `${prev}\n${extractedText.trim()}` : extractedText.trim());
+        }
+      } else {
+        setError(language === 'ar' ? 'فشل استخراج النص من الصورة' : 'Failed to extract text from image');
+      }
+    } catch (e: any) {
+      console.error('Screenshot extraction error:', e);
+      setError(e?.message || (language === 'ar' ? 'فشل استخراج النص' : 'Text extraction failed'));
+    } finally {
+      setExtracting(false);
+    }
+  }, [language]);
+
   return (
     <div className="w-full h-full flex items-start justify-center p-4">
       <div className="w-full max-w-6xl rounded-xl border bg-background shadow-2xl">
@@ -385,14 +449,38 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
               <div className="grid gap-2">
                 <div className="flex items-center justify-between gap-2">
                   <label className="text-sm font-medium">{language === 'ar' ? 'الموضوع' : 'Topic to write'}</label>
-                  <button
-                    type="button"
-                    onClick={() => setTopic('')}
-                    className="text-xs px-2 py-1 rounded-md border hover:bg-muted"
-                    aria-label={language === 'ar' ? 'مسح النص' : 'Clear text'}
-                  >
-                    {language === 'ar' ? 'مسح' : 'Clear'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <input
+                      ref={composeFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleScreenshotUpload(file, 'compose');
+                        e.target.value = '';
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => composeFileInputRef.current?.click()}
+                      disabled={isExtractingCompose}
+                      className="text-xs px-2 py-1 rounded-md border hover:bg-muted flex items-center gap-1"
+                      aria-label={language === 'ar' ? 'رفع صورة' : 'Upload screenshot'}
+                      title={language === 'ar' ? 'رفع صورة لاستخراج النص' : 'Upload screenshot to extract text'}
+                    >
+                      <ImagePlus className={`w-3.5 h-3.5 ${isExtractingCompose ? 'animate-pulse' : ''}`} />
+                      {isExtractingCompose ? (language === 'ar' ? '...' : '...') : ''}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTopic('')}
+                      className="text-xs px-2 py-1 rounded-md border hover:bg-muted"
+                      aria-label={language === 'ar' ? 'مسح النص' : 'Clear text'}
+                    >
+                      {language === 'ar' ? 'مسح' : 'Clear'}
+                    </button>
+                  </div>
                 </div>
                 <textarea
                   className={`w-full border rounded p-3 min-h-[120px] ${fieldAccent}`}
@@ -490,14 +578,38 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
               <div className="grid gap-2">
                 <div className="flex items-center justify-between gap-2">
                   <label className="text-sm font-medium">{language === 'ar' ? 'الرسالة الأصلية' : 'Original Message'}</label>
-                  <button
-                    type="button"
-                    onClick={() => setOriginalMessage('')}
-                    className="text-xs px-2 py-1 rounded-md border hover:bg-muted"
-                    aria-label={language === 'ar' ? 'مسح النص' : 'Clear text'}
-                  >
-                    {language === 'ar' ? 'مسح' : 'Clear'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <input
+                      ref={replyFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleScreenshotUpload(file, 'reply');
+                        e.target.value = '';
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => replyFileInputRef.current?.click()}
+                      disabled={isExtractingReply}
+                      className="text-xs px-2 py-1 rounded-md border hover:bg-muted flex items-center gap-1"
+                      aria-label={language === 'ar' ? 'رفع صورة' : 'Upload screenshot'}
+                      title={language === 'ar' ? 'رفع صورة لاستخراج النص' : 'Upload screenshot to extract text'}
+                    >
+                      <ImagePlus className={`w-3.5 h-3.5 ${isExtractingReply ? 'animate-pulse' : ''}`} />
+                      {isExtractingReply ? (language === 'ar' ? '...' : '...') : ''}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOriginalMessage('')}
+                      className="text-xs px-2 py-1 rounded-md border hover:bg-muted"
+                      aria-label={language === 'ar' ? 'مسح النص' : 'Clear text'}
+                    >
+                      {language === 'ar' ? 'مسح' : 'Clear'}
+                    </button>
+                  </div>
                 </div>
                 <textarea
                   className={`w-full border rounded p-3 min-h-[140px] ${fieldAccent}`}
