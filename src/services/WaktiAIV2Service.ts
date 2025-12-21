@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase, ensurePassport, getCurrentUserId } from '@/integrations/supabase/client';
+import { getNativeLocation } from '@/integrations/natively/locationBridge';
 
 export interface AIMessage {
   id: string;
@@ -26,10 +27,23 @@ export interface AIConversation {
   createdAt: Date;
 }
 
+type UserLocationContext = {
+  country: string | null;
+  city: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  accuracy?: number | null;
+  timezone?: string | null;
+  source?: 'native' | 'ip' | 'profile';
+  updatedAt?: number;
+};
+
+const LOCATION_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
 class WaktiAIV2ServiceClass {
   private personalTouchCache: any = null;
   private conversationStorage = new Map<string, AIMessage[]>();
-  private locationCache: { country: string | null; city: string | null } | null = null;
+  private locationCache: UserLocationContext | null = null;
   private lastPTFetchAt: number | null = null;
 
   constructor() {
@@ -219,38 +233,98 @@ class WaktiAIV2ServiceClass {
     } catch {}
   }
 
-  // Fetch user's country/city once and cache (localStorage + memory)
-  private async getUserLocation(userId: string): Promise<{ country: string | null; city: string | null }> {
-    // In-memory cache first
-    if (this.locationCache) return this.locationCache;
-    // LocalStorage fallback
+  // Fetch user's location context once and cache (localStorage + memory)
+  private async getUserLocation(userId: string): Promise<UserLocationContext> {
+    const now = Date.now();
+    if (this.locationCache && this.locationCache.updatedAt && now - this.locationCache.updatedAt < LOCATION_CACHE_TTL) {
+      return this.locationCache;
+    }
+
+    // LocalStorage fallback with TTL validation
     try {
       const raw = localStorage.getItem('wakti_user_location');
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === 'object') {
-          this.locationCache = { country: parsed.country || null, city: parsed.city || null };
-          return this.locationCache;
+          parsed.timezone = parsed.timezone || this.getClientTimezone();
+          parsed.updatedAt = parsed.updatedAt || now;
+          const isFresh = parsed.updatedAt && (now - parsed.updatedAt) < LOCATION_CACHE_TTL;
+          if (isFresh) {
+            this.locationCache = parsed;
+            return this.locationCache;
+          }
         }
       }
     } catch {}
 
-    // Fetch from profiles
+    const timezone = this.getClientTimezone();
+    let resolved: UserLocationContext = {
+      country: null,
+      city: null,
+      latitude: null,
+      longitude: null,
+      accuracy: null,
+      timezone,
+      source: undefined,
+      updatedAt: now,
+    };
+
+    // Try native location first (Natively SDK)
     try {
-      const { data: prof } = await supabase
-        .from('profiles')
-        .select('country, city')
-        .eq('id', userId)
-        .maybeSingle();
-      const loc = { country: (prof as any)?.country || null, city: (prof as any)?.city || null };
-      this.locationCache = loc;
-      try { localStorage.setItem('wakti_user_location', JSON.stringify(loc)); } catch {}
-      return loc;
-    } catch {
-      const fallback = { country: null, city: null };
-      this.locationCache = fallback;
-      return fallback;
+      const nativeLoc = await getNativeLocation();
+      if (nativeLoc && typeof nativeLoc.latitude === 'number' && typeof nativeLoc.longitude === 'number') {
+        resolved = {
+          ...resolved,
+          latitude: nativeLoc.latitude,
+          longitude: nativeLoc.longitude,
+          accuracy: nativeLoc.accuracy ?? null,
+          city: nativeLoc.city || resolved.city,
+          country: nativeLoc.country || resolved.country,
+          source: 'native',
+        };
+      }
+    } catch (err) {
+      console.warn('[WaktiAIV2Service] Native location error:', err);
     }
+
+    // Fetch from profiles as fallback for city/country
+    if (!resolved.city || !resolved.country) {
+      try {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('country, city')
+          .eq('id', userId)
+          .maybeSingle();
+        if (prof) {
+          resolved.city = resolved.city || (prof as any)?.city || null;
+          resolved.country = resolved.country || (prof as any)?.country || null;
+          resolved.source = resolved.source || 'profile';
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    // IP-based fallback for coordinates/city/country if still missing
+    if (!resolved.latitude || !resolved.longitude || !resolved.city || !resolved.country) {
+      const ipLoc = await this.fetchIpLocation();
+      if (ipLoc) {
+        resolved = {
+          ...resolved,
+          latitude: resolved.latitude ?? ipLoc.latitude ?? null,
+          longitude: resolved.longitude ?? ipLoc.longitude ?? null,
+          city: resolved.city || ipLoc.city || null,
+          country: resolved.country || ipLoc.country || null,
+          source: resolved.source || ipLoc.source || 'ip',
+        };
+      }
+    }
+
+    resolved.timezone = timezone;
+    resolved.updatedAt = Date.now();
+    this.locationCache = resolved;
+    try { localStorage.setItem('wakti_user_location', JSON.stringify(resolved)); } catch {}
+    return resolved;
   }
 
   // Allow UI to explicitly refresh location (e.g., when user updates account page)
@@ -262,6 +336,35 @@ class WaktiAIV2ServiceClass {
       userId = user.id;
     }
     await this.getUserLocation(userId);
+  }
+
+  private getClientTimezone(): string {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    } catch {
+      return 'UTC';
+    }
+  }
+
+  private async fetchIpLocation(): Promise<Partial<UserLocationContext> | null> {
+    if (typeof fetch === 'undefined') return null;
+    try {
+      const resp = await fetch('https://ipapi.co/json/');
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      const latitude = typeof data.latitude === 'number' ? data.latitude : (typeof data.lat === 'number' ? data.lat : null);
+      const longitude = typeof data.longitude === 'number' ? data.longitude : (typeof data.lon === 'number' ? data.lon : null);
+      return {
+        latitude,
+        longitude,
+        city: data.city || null,
+        country: data.country_name || data.country || null,
+        source: 'ip',
+      };
+    } catch (err) {
+      console.warn('[WaktiAIV2Service] IP location lookup failed:', err);
+      return null;
+    }
   }
 
   private approxBase64Bytes(b64: string): number {
@@ -631,6 +734,7 @@ class WaktiAIV2ServiceClass {
 
       // Load user location (country, city) to include in metadata
       const location = await this.getUserLocation(userId);
+      const clientTimezone = location?.timezone || this.getClientTimezone();
 
       // Enhanced message handling with 20-message memory
       // CRITICAL: Strip large data to avoid huge request bodies that crash Edge Functions
@@ -756,6 +860,7 @@ class WaktiAIV2ServiceClass {
                 clientLocalHour,
                 isWelcomeBack,
                 location,
+                clientTimezone,
                 visionPrimary: primary,
                 visionFallback: primary === 'claude' ? 'openai' : 'claude'
               }),
@@ -787,7 +892,9 @@ class WaktiAIV2ServiceClass {
                       activeTrigger,
                       recentMessages: enhancedMessages,
                       conversationSummary: finalSummary,
-                      personalTouch: pt
+                      personalTouch: pt,
+                      location,
+                      clientTimezone
                     })
                   });
                   if (fallbackResp.ok) {

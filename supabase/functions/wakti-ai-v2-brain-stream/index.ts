@@ -33,6 +33,7 @@ const getCorsHeaders = (origin) => {
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const WOLFRAM_APP_ID = Deno.env.get('WOLFRAM_APP_ID') || 'VJT5YA9VGJ';
+const GOOGLE_MAPS_API_KEY = Deno.env.get('GOOGLE_MAPS_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
@@ -173,13 +174,25 @@ async function streamGemini(model, contents, onToken, systemInstruction, generat
 interface Gemini3SearchResult {
   text: string;
   groundingMetadata?: {
+    // Web Search fields
     webSearchQueries?: string[];
-    groundingChunks?: Array<{ web?: { uri: string; title: string } }>;
+    groundingChunks?: Array<{ 
+      web?: { uri: string; title: string };
+      place?: { placeId: string; name?: string; address?: string };
+    }>;
     groundingSupports?: Array<{
       segment: { startIndex: number; endIndex: number; text: string };
       groundingChunkIndices: number[];
     }>;
     searchEntryPoint?: { renderedContent?: string };
+    // Google Maps specific fields
+    googleMapsWidgetContextToken?: string;
+    places?: Array<{
+      placeId: string;
+      displayName?: { text: string };
+      formattedAddress?: string;
+      location?: { latitude: number; longitude: number };
+    }>;
   };
 }
 
@@ -188,7 +201,8 @@ async function streamGemini3WithSearch(
   systemInstruction: string,
   generationConfig: Record<string, unknown> | undefined,
   onToken: (token: string) => void,
-  onGroundingMetadata: (meta: Gemini3SearchResult['groundingMetadata']) => void
+  onGroundingMetadata: (meta: Gemini3SearchResult['groundingMetadata']) => void,
+  _userLocation?: { latitude: number; longitude: number } | null
 ): Promise<string> {
   const key = getGeminiApiKey();
   const model = 'gemini-3-flash-preview';
@@ -198,6 +212,7 @@ async function streamGemini3WithSearch(
     contents: [{ role: 'user', parts: [{ text: query }] }],
     tools: [{ google_search: {} }],
   };
+  
   if (systemInstruction) {
     body.system_instruction = { parts: [{ text: systemInstruction }] };
   }
@@ -631,6 +646,79 @@ function isWaktiInvolved(q: string) {
   }
 }
 
+// === GEOCODING FOR CITY DETECTION ===
+interface GeocodingResult {
+  city?: string;
+  country?: string;
+  formattedAddress?: string;
+}
+
+// Reverse geocode coordinates to get accurate city name
+async function reverseGeocode(lat: number, lng: number): Promise<GeocodingResult> {
+  if (!GOOGLE_MAPS_API_KEY) {
+    console.warn('⚠️ GEOCODING: No API key configured');
+    return {};
+  }
+
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${GOOGLE_MAPS_API_KEY}`;
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.status !== 'OK' || !data.results || data.results.length === 0) {
+      console.warn('⚠️ GEOCODING: No results', data.status);
+      return {};
+    }
+
+    const result = data.results[0];
+    const components = result.address_components || [];
+    
+    let city = '';
+    let country = '';
+
+    for (const comp of components) {
+      if (comp.types.includes('locality')) {
+        city = comp.long_name;
+      } else if (comp.types.includes('administrative_area_level_1') && !city) {
+        city = comp.long_name;
+      } else if (comp.types.includes('country')) {
+        country = comp.long_name;
+      }
+    }
+
+    console.log(`📍 GEOCODING: ${lat},${lng} → ${city}, ${country}`);
+    return {
+      city,
+      country,
+      formattedAddress: result.formatted_address
+    };
+  } catch (error) {
+    console.error('❌ GEOCODING ERROR:', error);
+    return {};
+  }
+}
+
+// Detect search intent from user query
+function detectSearchIntent(query: string): 'business' | 'news' | 'url' | 'general' {
+  const lower = query.toLowerCase();
+  
+  // URL pattern
+  if (/https?:\/\//.test(query) || /www\./i.test(query)) return 'url';
+  
+  // Business/location patterns (English)
+  if (/\b(near me|location|address|phone|email|hours|open|closed|directions|map|restaurant|cafe|coffee|shop|store|hotel|hospital|gym|bank|pharmacy|pharmacies)\b/i.test(lower)) return 'business';
+  if (/\b(where is|how to get to|find|search for)\b/i.test(lower) && /\b(place|business|store|restaurant|cafe|hotel)\b/i.test(lower)) return 'business';
+  
+  // Business/location patterns (Arabic)
+  if (/قريب|موقع|عنوان|هاتف|ساعات|مفتوح|مغلق|اتجاهات|خريطة|مطعم|مقهى|محل|فندق|مستشفى|صيدلية|بنك/.test(query)) return 'business';
+  
+  // News/research patterns
+  if (/\b(news|latest|breaking|update|today|yesterday|recent|current events|what happened|headlines)\b/i.test(lower)) return 'news';
+  if (/\b(research|study|paper|article|learn about|explain|what is|who is|history of)\b/i.test(lower)) return 'news';
+  
+  return 'general';
+}
+
 serve(async (req) => {
   const origin = req.headers.get('origin');
   const corsHeaders = getCorsHeaders(origin);
@@ -685,8 +773,10 @@ serve(async (req) => {
           recentMessages = [], 
           personalTouch = null, 
           activeTrigger = 'general',
-          chatSubmode = 'chat' // 'chat' or 'study'
-        } = body as { message?: string; language?: string; recentMessages?: unknown[]; personalTouch?: unknown; activeTrigger?: string; chatSubmode?: string };
+          chatSubmode = 'chat', // 'chat' or 'study'
+          location = null,
+          clientTimezone = 'UTC'
+        } = body as { message?: string; language?: string; recentMessages?: unknown[]; personalTouch?: unknown; activeTrigger?: string; chatSubmode?: string; location?: any; clientTimezone?: string };
 
         // Store for logging
         requestMessage = typeof message === 'string' ? message : '';
@@ -765,9 +855,13 @@ serve(async (req) => {
             const styleVal = (pt.style || 'short answers').toString().trim();
             const customNote = (pt.instruction || '').toString().trim();
 
-            // Get current time in Qatar timezone
-            const qatarTime = new Date().toLocaleString('en-US', { 
-              timeZone: 'Asia/Qatar', 
+            // Detect search intent
+            const searchIntent = detectSearchIntent(message);
+
+            // Get current time in user's timezone (fallback to UTC)
+            const userTimeZone = clientTimezone || 'UTC';
+            const localTime = new Date().toLocaleString('en-US', { 
+              timeZone: userTimeZone, 
               weekday: 'long', 
               year: 'numeric', 
               month: 'long', 
@@ -777,17 +871,51 @@ serve(async (req) => {
               hour12: true
             });
 
+            // Get accurate city from coordinates if available
+            let userCity = location?.city || '';
+            let userCountry = location?.country || '';
+            
+            if (location?.latitude && location?.longitude && !userCity) {
+              console.log('📍 Reverse geocoding to get accurate city...');
+              const geocoded = await reverseGeocode(location.latitude, location.longitude);
+              if (geocoded.city) userCity = geocoded.city;
+              if (geocoded.country) userCountry = geocoded.country;
+            }
+
+            // Build location context string
+            let locationContext = '';
+            if (userCity || userCountry) {
+              const parts = [];
+              if (userCity && userCountry) parts.push(`City: ${userCity}, ${userCountry}`);
+              else if (userCity) parts.push(`City: ${userCity}`);
+              else if (userCountry) parts.push(`Country: ${userCountry}`);
+              if (location?.latitude && location?.longitude) {
+                parts.push(`Coordinates: ${location.latitude.toFixed(4)}°N, ${location.longitude.toFixed(4)}°E`);
+              }
+              if (parts.length > 0) {
+                locationContext = `\n\nUSER LOCATION CONTEXT:\n${parts.join('\n')}`;
+              }
+            }
+
+            // Build intent-specific instructions
+            let intentInstructions = '';
+            if (searchIntent === 'business') {
+              intentInstructions = `\n\nQUERY TYPE: Business/Location Search\nFor "near me" or local business queries:\n- Provide accurate business names, addresses, and contact info\n- Include ratings and reviews when available\n- Show opening hours and current status (open/closed)\n- Add Google Maps links for directions`;
+            } else if (searchIntent === 'news') {
+              intentInstructions = `\n\nQUERY TYPE: News/Research\nFor news or research queries:\n- Summarize key points with bullet points\n- Include publication dates and timestamps\n- Highlight source credibility\n- Provide context for current events`;
+            } else if (searchIntent === 'url') {
+              intentInstructions = `\n\nQUERY TYPE: URL Analysis\nUser provided a URL. First summarize that specific page, then supplement with related search results if helpful.`;
+            }
+
             const searchSystemPrompt = `You are Wakti AI.
 
-CURRENT DATE & TIME: ${qatarTime} (Qatar Time)
+CURRENT DATE & TIME: ${localTime} (${userTimeZone})${locationContext}
 
 ${userNick ? `User nickname: "${userNick}" - use naturally in greeting.` : ''}
 ${aiNick ? `Your name: "${aiNick}"` : ''}
 ${toneVal !== 'neutral' ? `Tone: ${toneVal}` : ''}
 ${styleVal !== 'short answers' ? `Style: ${styleVal}` : ''}
-${customNote ? `Note: ${customNote}` : ''}
-
-CRITICAL: Always provide google maps location link if needed when asking about a place.
+${customNote ? `Note: ${customNote}` : ''}${intentInstructions}
 
 Language: ${language === 'ar' ? 'Arabic' : 'English'}`;
 
@@ -795,6 +923,11 @@ Language: ${language === 'ar' ? 'Arabic' : 'English'}`;
             
             let fullResponseText = '';
             let groundingMetadata: Gemini3SearchResult['groundingMetadata'] | null = null;
+
+            // Prepare location for Maps grounding (for business queries)
+            const userLocationForMaps = (searchIntent === 'business' && location?.latitude && location?.longitude) 
+              ? { latitude: location.latitude, longitude: location.longitude }
+              : null;
 
             // Stream tokens to client
             await streamGemini3WithSearch(
@@ -807,7 +940,8 @@ Language: ${language === 'ar' ? 'Arabic' : 'English'}`;
               },
               (meta) => {
                 groundingMetadata = meta;
-              }
+              },
+              userLocationForMaps
             );
 
             // Emit grounding metadata for frontend citation injection
