@@ -981,6 +981,51 @@ class WaktiAIV2ServiceClass {
           while (true) {
             const { done, value } = await reader.read();
             if (done) {
+              // Flush any remaining buffered SSE data (prevents final chunk from being dropped)
+              try {
+                const tail = (buffer || '').trim();
+                if (tail) {
+                  const tailLines = tail.split('\n');
+                  buffer = '';
+                  for (const tailLine of tailLines) {
+                    const line = tailLine.trim();
+                    if (!line.startsWith('data: ')) continue;
+                    const data = line.slice(6);
+                    console.log('🔍 SSE RAW (tail):', data);
+
+                    if (data === '[DONE]') {
+                      if (!isCompleted) { onComplete?.(metadata); isCompleted = true; }
+                      console.log(`🏁 FRONTEND BOSS: Received [DONE] (tail) [${requestId}] (primary=${primary})`);
+                      continue;
+                    }
+
+                    try {
+                      const parsed = JSON.parse(data);
+                      console.log('🔍 SSE PARSED (tail):', parsed);
+                      if (parsed.error) {
+                        const errObj = parsed.error;
+                        const errMsg = typeof errObj === 'string'
+                          ? errObj
+                          : (errObj?.message || errObj?.type || JSON.stringify(errObj));
+                        encounteredError = errMsg;
+                      } else {
+                        if (typeof parsed.token === 'string') { fullResponse += parsed.token; onToken?.(parsed.token); }
+                        else if (typeof parsed.response === 'string') { fullResponse += parsed.response; onToken?.(parsed.response); }
+                        else if (typeof parsed.content === 'string') { fullResponse += parsed.content; onToken?.(parsed.content); }
+                        if (parsed.metadata && typeof parsed.metadata === 'object') {
+                          metadata = { ...metadata, ...parsed.metadata };
+                        }
+                        if (parsed.done === true) {
+                          if (!isCompleted) { onComplete?.(parsed.metadata || metadata); isCompleted = true; }
+                        }
+                      }
+                    } catch {
+                      fullResponse += data;
+                      onToken?.(data);
+                    }
+                  }
+                }
+              } catch {}
               if (!isCompleted) onComplete?.(metadata);
               console.log(`✅ FRONTEND BOSS: Stream closed cleanly [${requestId}] (primary=${primary})`);
               break;
@@ -1270,6 +1315,37 @@ class WaktiAIV2ServiceClass {
           while (true) {
             const { done, value } = await reader.read();
             if (done) {
+              // Flush any remaining buffered SSE data (prevents final chunk from being dropped)
+              try {
+                const tail = (buffer || '').trim();
+                if (tail) {
+                  const tailLines = tail.split('\n');
+                  buffer = '';
+                  for (const tailLine of tailLines) {
+                    const line = tailLine.trim();
+                    if (!line.startsWith('data: ')) continue;
+                    const data = line.slice(6);
+                    if (data === '[DONE]') {
+                      if (!isCompleted) { onComplete?.(metadata); isCompleted = true; }
+                      continue;
+                    }
+                    try {
+                      const parsed = JSON.parse(data);
+                      if (parsed.error) {
+                        encounteredError = typeof parsed.error === 'string' ? parsed.error : (parsed.error?.message || 'vision_error');
+                        continue;
+                      }
+                      if (parsed.json && typeof parsed.json === 'object') { metadata = { ...metadata, visionJson: parsed.json }; continue; }
+                      if (typeof parsed.token === 'string') { onToken?.(parsed.token); fullResponse += parsed.token; }
+                      else if (typeof parsed.content === 'string') { onToken?.(parsed.content); fullResponse += parsed.content; }
+                      if (parsed.metadata && typeof parsed.metadata === 'object') { metadata = { ...metadata, ...parsed.metadata }; }
+                    } catch {
+                      onToken?.(data);
+                      fullResponse += data;
+                    }
+                  }
+                }
+              } catch {}
               if (!isCompleted) onComplete?.(metadata);
               console.log(`✅ VISION: Stream closed cleanly [${requestId}] (primary=${primary})`);
               break;
