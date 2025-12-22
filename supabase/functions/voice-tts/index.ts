@@ -12,6 +12,9 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 
+// Service Account JSON (preferred for Vertex/Gemini publisher model permissions)
+const GOOGLE_APPLICATION_CREDENTIALS_JSON = Deno.env.get('GOOGLE_APPLICATION_CREDENTIALS_JSON');
+
 // Gemini API Key for Gemini 2.5 Flash TTS
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
 
@@ -32,12 +35,130 @@ if (!GOOGLE_TTS_KEY) {
   }
 }
 
+// Effective key to call Google Cloud Text-to-Speech endpoint.
+// IMPORTANT: Gemini TTS here is accessed via the Cloud Text-to-Speech API, so a Cloud API key is required.
+// Prefer GOOGLE_TTS_KEY (Cloud key). Fall back to GEMINI_API_KEY only if it's actually a Cloud key.
+const GEMINI_TTS_KEY = GOOGLE_TTS_KEY || GEMINI_API_KEY;
+
 console.log("🎵 VOICE TTS: Function loaded (Gemini 2.5 Flash TTS + Google fallback)");
 console.log("🎵 Gemini API Key available:", !!GEMINI_API_KEY);
 console.log("🎵 Google TTS Key picked:", GOOGLE_TTS_KEY_NAME || "<not found>");
 console.log("🎵 Google TTS Key available:", !!GOOGLE_TTS_KEY);
+console.log("🎵 Gemini TTS effective key source:", GOOGLE_TTS_KEY ? (GOOGLE_TTS_KEY_NAME || 'GOOGLE_TTS_KEY') : (GEMINI_API_KEY ? 'GEMINI_API_KEY' : '<none>'));
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+type GoogleServiceAccountJson = {
+  client_email: string;
+  private_key: string;
+  token_uri?: string;
+};
+
+let cachedGoogleAccessToken: { token: string; expiresAtMs: number } | null = null;
+
+function base64UrlEncode(input: Uint8Array): string {
+  const b64 = btoa(String.fromCharCode(...input));
+  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function utf8Bytes(s: string): Uint8Array {
+  return new TextEncoder().encode(s);
+}
+
+function pemToDer(pem: string): ArrayBuffer {
+  const cleaned = pem
+    .replace(/-----BEGIN[\s\S]*?-----/g, '')
+    .replace(/-----END[\s\S]*?-----/g, '')
+    .replace(/\s+/g, '');
+  const raw = atob(cleaned);
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return bytes.buffer;
+}
+
+async function signJwtRs256(privateKeyPem: string, signingInput: string): Promise<string> {
+  const keyData = pemToDer(privateKeyPem);
+  const key = await crypto.subtle.importKey(
+    'pkcs8',
+    keyData,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const data = Uint8Array.from(utf8Bytes(signingInput));
+  const signature = await crypto.subtle.sign(
+    { name: 'RSASSA-PKCS1-v1_5' },
+    key,
+    data
+  );
+  return base64UrlEncode(new Uint8Array(signature));
+}
+
+async function getGoogleAccessTokenFromServiceAccount(): Promise<string | null> {
+  if (!GOOGLE_APPLICATION_CREDENTIALS_JSON) return null;
+
+  try {
+    if (cachedGoogleAccessToken && cachedGoogleAccessToken.expiresAtMs > Date.now() + 60_000) {
+      return cachedGoogleAccessToken.token;
+    }
+
+    const sa = JSON.parse(GOOGLE_APPLICATION_CREDENTIALS_JSON) as GoogleServiceAccountJson;
+    if (!sa?.client_email || !sa?.private_key) {
+      console.error('🎵 Service account JSON is missing client_email/private_key');
+      return null;
+    }
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    const expSec = nowSec + 3600;
+    const aud = sa.token_uri || 'https://oauth2.googleapis.com/token';
+    const scope = 'https://www.googleapis.com/auth/cloud-platform';
+
+    const header = base64UrlEncode(utf8Bytes(JSON.stringify({ alg: 'RS256', typ: 'JWT' })));
+    const payload = base64UrlEncode(utf8Bytes(JSON.stringify({
+      iss: sa.client_email,
+      sub: sa.client_email,
+      aud,
+      iat: nowSec,
+      exp: expSec,
+      scope,
+    })));
+    const signingInput = `${header}.${payload}`;
+    const sig = await signJwtRs256(sa.private_key, signingInput);
+    const assertion = `${signingInput}.${sig}`;
+
+    const tokenResp = await fetch(aud, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+        assertion,
+      }).toString(),
+    });
+
+    const tokenText = await tokenResp.text();
+    if (!tokenResp.ok) {
+      console.error('🎵 Failed to fetch Google OAuth token:', tokenResp.status, tokenText);
+      return null;
+    }
+
+    const tokenJson = JSON.parse(tokenText) as { access_token?: string; expires_in?: number };
+    if (!tokenJson.access_token) {
+      console.error('🎵 OAuth token response missing access_token');
+      return null;
+    }
+
+    const expiresIn = Math.max(60, tokenJson.expires_in ?? 3600);
+    cachedGoogleAccessToken = {
+      token: tokenJson.access_token,
+      expiresAtMs: Date.now() + expiresIn * 1000,
+    };
+
+    return tokenJson.access_token;
+  } catch (e) {
+    console.error('🎵 Error generating OAuth token from service account:', e);
+    return null;
+  }
+}
 
 // ============================================================================
 // GEMINI 2.5 FLASH TTS - "Neural Actor" Configuration
@@ -46,7 +167,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Voice mapping: Leda (female, sophisticated/warm), Orion (male, deep/authoritative)
 const GEMINI_VOICES = {
   female: 'Leda',
-  male: 'Orus', // Note: Gemini uses "Orus" not "Orion"
+  male: 'Puck',
 };
 
 // System prompt for the "Wakti Elite" Vocal Engine (used in Gemini TTS prompt field)
@@ -66,7 +187,7 @@ Objective: Deliver speech with regional prestige, natural prosody, and emotional
    - Rhythm: Warm, rhythmic, and elite.
 
 3. ADAPTIVE LOGIC:
-   - Greeting: If user is "Abdullah", use the warmest tone for "Ya Hala والله بعبدالله".
+   - Greeting: Do not add any greeting. Read the provided text exactly as-is.
    - Data: If reading sports/stocks, speak with precision and clarity.`;
 
 // Build the style prompt for Gemini TTS based on language
@@ -74,7 +195,13 @@ const getStylePrompt = (isArabic: boolean): string => {
   if (isArabic) {
     return `${WAKTI_VOCAL_PROMPT}
 
-For this text, use the ARABIC (GCC / QATARI MAJLIS) persona. Speak with warm, rhythmic Khaliji dialect. Soften the Qaf into a hard G sound.`;
+For this text, use the ARABIC (GCC / QATARI MAJLIS) persona.
+Hard requirements:
+- Pure Gulf / Khaliji / Qatari. NOT Egyptian. NOT Levantine. NOT MSA/Fusha.
+- Soften the Qaf (ق) into a hard G sound (گ) in pronunciation.
+- Warm, rhythmic majlis delivery with elite Doha vibe.
+- Avoid Egyptian markers/pronunciation (for example: إزايك / قوي / أوي).
+Read the text exactly as provided (no added greetings).`;
   }
   return `${WAKTI_VOCAL_PROMPT}
 
@@ -82,11 +209,8 @@ For this text, use the ENGLISH (CANADIAN ELITE) persona. Speak with friendly, cr
 };
 
 // Phonetic anchors to force the AI into the correct accent mode
-const getPhoneticAnchor = (isArabic: boolean, userName?: string) => {
-  if (isArabic) {
-    return userName ? `يا هلا والله ب${userName}.. ` : 'يا هلا والله.. ';
-  }
-  return userName ? `Hello ${userName}. ` : 'Hello. ';
+const getPhoneticAnchor = (_isArabic: boolean, _userName?: string) => {
+  return '';
 };
 
 // Detect if text is primarily Arabic
@@ -98,7 +222,7 @@ const isArabicText = (text: string): boolean => {
 
 // Get language code for Gemini TTS
 const getLanguageCode = (isArabic: boolean): string => {
-  return isArabic ? 'ar-XA' : 'en-US';
+  return isArabic ? 'ar-EG' : 'en-US';
 };
 
 // --- Helpers for robust long-text TTS ---
@@ -225,7 +349,7 @@ serve(async (req: Request) => {
 
     // Get request data
     const requestBody = await req.json();
-    const { text, voice_id, mode, gender } = requestBody;
+    const { text, voice_id, mode, gender, user_name } = requestBody;
     
     console.log(`🎵 TTS request:`, {
       textLength: text?.length || 0,
@@ -265,14 +389,16 @@ serve(async (req: Request) => {
     // ========================================================================
     // PRIMARY: Gemini 2.5 Flash TTS
     // ========================================================================
-    if (GEMINI_API_KEY) {
+    const bearerToken = await getGoogleAccessTokenFromServiceAccount();
+
+    if (bearerToken || GEMINI_TTS_KEY) {
       console.log('🎵 Using Gemini 2.5 Flash TTS (Neural Actor mode)');
       
       const geminiVoice = GEMINI_VOICES[voiceGender];
       const languageCode = getLanguageCode(textIsArabic);
       
       // Prepend phonetic anchor to force accent mode
-      const phoneticAnchor = getPhoneticAnchor(textIsArabic, 'Abdullah');
+      const phoneticAnchor = getPhoneticAnchor(textIsArabic, user_name);
       const preparedText = phoneticAnchor + text;
       
       console.log(`🎵 Gemini TTS config:`, {
@@ -286,12 +412,17 @@ serve(async (req: Request) => {
       // Build the style prompt for Neural Actor mode
       const stylePrompt = getStylePrompt(textIsArabic);
       
-      const geminiResponse = await fetch(
-        `https://texttospeech.googleapis.com/v1/text:synthesize?key=${GEMINI_API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+      const geminiUrl = bearerToken
+        ? 'https://texttospeech.googleapis.com/v1/text:synthesize'
+        : `https://texttospeech.googleapis.com/v1/text:synthesize?key=${GEMINI_TTS_KEY}`;
+
+      const geminiResponse = await fetch(geminiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(bearerToken ? { 'Authorization': `Bearer ${bearerToken}` } : {}),
+        },
+        body: JSON.stringify({
             input: {
               text: preparedText,
               prompt: stylePrompt, // Neural Actor style instructions
@@ -305,18 +436,17 @@ serve(async (req: Request) => {
               audioEncoding: 'LINEAR16', // WAV format for better browser compatibility
               sampleRateHertz: 24000,
             },
-          }),
-        }
-      );
+        }),
+      });
 
       if (geminiResponse.ok) {
         const geminiData = await geminiResponse.json();
         const audioContent = geminiData.audioContent;
-        
+
         if (audioContent) {
           const audioBytes = base64ToBytes(audioContent);
           console.log('🎵 Gemini TTS audio generated successfully:', { audioSize: audioBytes.byteLength });
-          
+
           // Log successful AI usage
           await logAIFromRequest(req, {
             functionName: "voice-tts",
@@ -324,11 +454,11 @@ serve(async (req: Request) => {
             model: "gemini-2.5-flash-tts",
             inputText: text,
             status: "success",
-            metadata: { 
-              voice: geminiVoice, 
-              language: languageCode, 
+            metadata: {
+              voice: geminiVoice,
+              language: languageCode,
               audioSize: audioBytes.byteLength,
-              isArabic: textIsArabic
+              isArabic: textIsArabic,
             }
           });
 
@@ -342,10 +472,36 @@ serve(async (req: Request) => {
             },
           });
         }
-      } else {
-        const errorText = await geminiResponse.text();
-        console.warn('🎵 Gemini TTS failed, falling back to Google Chirp:', geminiResponse.status, errorText);
+
+        // Option B: Gemini is configured; do NOT fall back. Surface the real error.
+        console.error('🎵 Gemini TTS succeeded but returned no audioContent');
+        return new Response(JSON.stringify({
+          success: false,
+          provider: 'gemini',
+          error: 'Gemini TTS returned no audioContent',
+        }), {
+          status: 502,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-TTS-Provider': 'gemini-2.5-flash-tts' },
+        });
       }
+
+      // Option B: Gemini is configured; do NOT fall back. Surface Gemini error.
+      const errorText = await geminiResponse.text();
+      console.error('🎵 Gemini TTS failed (no fallback):', geminiResponse.status, errorText);
+      return new Response(JSON.stringify({
+        success: false,
+        provider: 'gemini',
+        status: geminiResponse.status,
+        error: errorText?.slice(0, 2000) || 'Gemini TTS failed',
+      }), {
+        status: geminiResponse.status || 502,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+          'X-TTS-Provider': 'gemini-2.5-flash-tts',
+          'X-TTS-Voice': geminiVoice,
+        },
+      });
     }
 
     // ========================================================================

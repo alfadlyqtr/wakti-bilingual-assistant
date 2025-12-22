@@ -1,9 +1,70 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
-// Note: This streaming function doesn't use logAI - logging happens in the frontend or via other mechanisms
 
-// Allowed origins (mirror brain stream behavior + dev fallbacks)
+// ============================================================================
+// WAKTI VISION STREAM - Isolated Provider Architecture
+// Primary: Gemini 1.5 Flash → Fallback 1: GPT-4o → Fallback 2: Claude 3.5 Sonnet
+// ============================================================================
+
+// --- 1. THE NEW FORENSIC BRAIN (PREPENDED TO ALL PROMPTS) ---
+const FORENSIC_PROMPT = `
+### FORENSIC INTELLIGENCE PROTOCOL (STRICT)
+Role: You are Wakti Vision, an elite forensic image analyst.
+Objective: DEDUCE context, location, and status. Do not just describe pixels.
+
+### 🔍 DEDUCTION RULES:
+1. **MIRROR CHECK:** If image is a selfie (phone visible), assume text is FLIPPED. Mentally reverse it (e.g. "HASOM" -> "MOZAH").
+2. **GLOBAL FIRST (NO REGIONAL ASSUMPTIONS):** Do NOT assume Qatar or GCC. First identify likely Country and City using evidence: license plates, currency, language, road signs, time zone clues, plugs, architecture, landmarks.
+3. **LOGO ➜ HUB MAPPING:** If you see a logo, map it to its primary hub/site when reasonable.
+   Examples: Aramco ➜ Dhahran, Boeing ➜ Seattle, QatarEnergy ➜ Ras Laffan.
+4. **CONTEXT CLUES:** Analyze uniforms, PPE, badges, tools, and environment to infer role and industry (construction, refinery, aviation, healthcare, education, etc.).
+5. **EXPIRY MATH (CRITICAL):** When any document shows dates (issue/expiry/DOB/valid-until), compare them against the provided "Date:" in the prompt.
+   - If expiry/valid-until is in the past, your verdict MUST start with: 🔴 EXPIRED
+   - If it is not in the past, your verdict MUST include: 🟢 VALID
+   - If no expiry date is visible, say "Status: unknown" (do not guess).
+6. **ENVIRONMENTAL TRIANGULATION (THE UNSEEN):** Combine subtle clues (watch style, ring, badge clip, uniform fabric, lighting temperature, signage font, English spelling style like "Physiotherapy" vs "Physical Therapy") to infer socio-economic and regional context.
+7. **SEARCH-ONCE-BUT-SURE (GROUNDING):** You have access to Google Search grounding. Before searching, build one high-resolution query using ALL clues (name, organization, role, location hints, logo, uniform, watch, signage language).
+8. **TOTAL VISUAL SYNTHESIS (VISUAL FINGERPRINT):** Before any search, aggregate ALL visual data points into a Fingerprint:
+   Data Points: [Name] + [Company/Clinic Logo] + [Uniform Color/Material] + [Watch Model/Style] + [Signage Language/Font] + [Equipment Brand] + [Background Lighting].
+   Then create a "WOW" High-Resolution Query that includes multiple fingerprint tokens.
+ 9. **LEGACY & IMPACT (THE MIC DROP):** Once an entity (person/brand/building) is identified, you MUST perform a targeted search for their achievements, historical significance, or legacy.
+    - Constraint: Do NOT report just a job title. Report their legend status / impact role.
+    - Examples (style only): “Key architect of Qatar’s 1980s sports infrastructure” / “Leading figure in the 1981 FIFA World Youth Championship run”.
+ 10. **CHRONOLOGICAL TRIANGULATION (DECADE):** Use visual cues to estimate the decade/era.
+    Cues: photo quality/film grain, hairstyle/fashion, and brand/logo evolution (e.g., vintage Umbro/Adidas logo eras). Mention the estimated era in the evidence.
+ 11. **GROUNDING IS NOT OPTIONAL (VISION ➜ SEARCH ➜ ANSWER):**
+    - If you detect ANY of the following, you MUST use Google Search grounding before finalizing your verdict:
+      a) a person's full/partial name, b) a clinic/company/brand name, c) a distinctive logo, d) a venue/building name.
+    - The goal is not "who" only. The goal is: who + why they matter + when (era).
+    - If grounding is unavailable or returns weak/conflicting results, do NOT pretend. Output a conservative verdict and ask for ONE missing clue (e.g., city, spelling of the name, or a clearer logo crop).
+
+### 📝 OUTPUT POLICY (CRITICAL):
+- You MUST follow a strict structure internally, but you MUST NOT print the internal labels "📍 THE VERDICT", "THE VERDICT", "THE EVIDENCE", or "PRO TIP".
+- THE VERDICT FIRST (INTERNAL, NON-NEGOTIABLE): Your very first line must function as the verdict: **Bold identification + legacy title**.
+  - Do NOT show the label. Start directly with the verdict content.
+  - The first 5 words should already imply who they are + why they matter.
+- Then provide 3–6 bullets of evidence.
+  - Evidence must include: location inference AND estimated decade/era.
+  - Evidence must include: legacy/impact proof points (from grounding).
+  - Forbidden: A shallow role-only verdict like "X is a physiotherapist" with no grounded legacy/era.
+  - If you cannot ground legacy/era, downgrade confidence and ask ONE follow-up.
+- If the image is document-like, include a compact Markdown table of extracted fields.
+`;
+
+function getTodayISO(timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(new Date());
+  const y = parts.find((p) => p.type === 'year')?.value || '1970';
+  const m = parts.find((p) => p.type === 'month')?.value || '01';
+  const d = parts.find((p) => p.type === 'day')?.value || '01';
+  return `${y}-${m}-${d}`;
+}
+
+// Allowed origins
 const allowedOrigins = [
   'https://wakti.qa',
   'https://www.wakti.qa',
@@ -27,109 +88,34 @@ const getCorsHeaders = (origin: string | null) => {
   };
 };
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
-const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
+console.log("WAKTI VISION STREAM: Ready (Isolated Provider Architecture)");
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// ============================================================================
+// --- 2. IMAGE HELPERS ---
+// ============================================================================
 
-console.log("WAKTI VISION STREAM: Ready");
-
-// === GEMINI HELPER (inlined, no external import) ===
-function getGeminiApiKey() {
-  const k = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
-  if (!k) throw new Error("Gemini API key not configured");
-  return k;
+interface NormalizedImage {
+  mimeType: string;
+  base64: string;
 }
 
-function buildTextContent(role: string, text: string) {
-  return { role, parts: [{ text }] };
-}
-
-async function streamGemini(
-  model: string,
-  contents: any[],
-  onToken: (token: string) => void,
-  systemInstruction?: string,
-  generationConfig?: { temperature?: number; maxOutputTokens?: number }
-) {
-  const key = getGeminiApiKey();
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
-  const body: any = { contents };
-  if (systemInstruction) body.system_instruction = { parts: [{ text: systemInstruction }] };
-  if (generationConfig) body.generationConfig = generationConfig;
-
-  const resp = await fetch(url, { method: "POST", headers: {
-    "Content-Type": "application/json",
-    "Accept": "text/event-stream",
-    "x-goog-api-key": key,
-  }, body: JSON.stringify(body) });
-
-  if (!resp.ok || !resp.body) {
-    const t = await resp.text().catch(() => "");
-    throw new Error(`Gemini error: ${resp.status} - ${t}`);
-  }
-
-  const reader = resp.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
-    for (const line of lines) {
-      if (!line.startsWith("data:")) continue;
-      const data = line.slice(5).trim();
-      if (!data || data === "[DONE]") continue;
-      try {
-        const parsed = JSON.parse(data);
-        const cands = parsed?.candidates;
-        if (Array.isArray(cands) && cands.length > 0) {
-          const parts = cands[0]?.content?.parts || [];
-          for (const p of parts) {
-            const text = typeof p?.text === "string" ? p.text : undefined;
-            if (text) onToken(text);
-          }
-        }
-      } catch {
-        // ignore parse errors on individual SSE chunks
-      }
-    }
-  }
-}
-
-// --- Helpers ---
-function normalizeImage(input: { mimeType?: string; dataBase64?: string; url?: string } ) {
+function normalizeImage(input: { mimeType?: string; dataBase64?: string; url?: string; data?: string; content?: string }): NormalizedImage | null {
   const mime = (input.mimeType || '').toLowerCase().replace('image/jpg', 'image/jpeg');
-  let url = (input.url || '').trim();
-  // Defensive: strip any leading encoded spaces or invisible chars coming from some mobile clients
-  if (url) {
-    url = url.replace(/^%20+/, '').replace(/^[\u0000-\u001F\u007F\u00A0\u200B\u200C\u200D]+/, '');
-  }
-  let data = input.dataBase64 || '';
-  if (url) return { mimeType: mime || 'image/jpeg', url };
+  const data = input.dataBase64 || input.data || input.content || '';
   if (!data) return null;
-  // Accept data URI or raw base64
+  
   const dataUriMatch = data.match(/^data:(.*?);base64,(.*)$/);
   if (dataUriMatch) {
     const m = (dataUriMatch[1] || '').toLowerCase().replace('image/jpg', 'image/jpeg');
-    return { mimeType: m, base64: dataUriMatch[2] };
+    return { mimeType: m || 'image/jpeg', base64: dataUriMatch[2] };
   }
   return { mimeType: mime || 'image/jpeg', base64: data };
 }
 
-// Download an image by URL and return its base64 data and mime type
-async function fetchImageAsBase64(url: string): Promise<{ base64: string; mimeType: string; byteLength: number }>{
-  // Defensive sanitize for malformed mobile URLs (e.g., "%20https://...")
-  let cleanUrl = (url || '').trim()
-    .replace(/^%20+/, '') // strip leading encoded spaces
-    .replace(/^[\u0000-\u001F\u007F\u00A0\u200B\u200C\u200D]+/, ''); // invisible/nbspace chars
+async function fetchImageAsBase64(url: string): Promise<{ base64: string; mimeType: string; byteLength: number }> {
+  const cleanUrl = (url || '').trim().replace(/^%20+/, '');
   if (!/^https?:\/\//i.test(cleanUrl)) {
-    throw new Error(`Invalid image URL (unsupported scheme): ${cleanUrl.slice(0, 48)}...`);
+    throw new Error(`Invalid image URL: ${cleanUrl.slice(0, 48)}...`);
   }
   const res = await fetch(cleanUrl);
   if (!res.ok) throw new Error(`Failed to fetch image URL (${res.status})`);
@@ -137,7 +123,6 @@ async function fetchImageAsBase64(url: string): Promise<{ base64: string; mimeTy
   const ab = await res.arrayBuffer();
   const bytes = new Uint8Array(ab);
   let binary = '';
-  // Build binary string in chunks to avoid call stack limits for large files
   const chunkSize = 0x8000;
   for (let i = 0; i < bytes.length; i += chunkSize) {
     const sub = bytes.subarray(i, i + chunkSize);
@@ -147,7 +132,23 @@ async function fetchImageAsBase64(url: string): Promise<{ base64: string; mimeTy
   return { base64, mimeType: mimeHeader, byteLength: bytes.byteLength };
 }
 
-function buildSystemPrompt(language: string, currentDate: string, personalTouch: any, chatSubmode: string = 'chat') {
+// ============================================================================
+// --- 3. SYSTEM PROMPT BUILDER (Existing logic + Forensic prepend) ---
+// ============================================================================
+
+interface PersonalTouch {
+  nickname?: string;
+  tone?: string;
+  style?: string;
+}
+
+function buildSystemPrompt(
+  language: string,
+  currentDate: string,
+  todayISO: string,
+  personalTouch: PersonalTouch | null,
+  chatSubmode: string = 'chat'
+): string {
   const pt = personalTouch || {};
   const langRule = language === 'ar'
     ? 'CRITICAL: Respond ONLY in Arabic. Do NOT use English.'
@@ -159,217 +160,351 @@ function buildSystemPrompt(language: string, currentDate: string, personalTouch:
 
   const PT_ENFORCEMENT = `
 CRITICAL PERSONAL TOUCH ENFORCEMENT ===
-- Nickname: ${ptNick ? `Use the user's nickname "${ptNick}" frequently and naturally in your responses.` : 'No nickname provided.'}
+- Nickname: ${ptNick ? `Use the user's nickname "${ptNick}" frequently.` : 'No nickname provided.'}
 - Tone: ${ptTone ? `Maintain a ${ptTone} tone consistently.` : 'Default to neutral tone.'}
 - Style: ${ptStyle ? `Shape your structure as ${ptStyle}.` : 'Keep answers concise and clear.'}
 `;
 
-  const VISION_CAPS = `ENHANCED VISION CAPABILITIES (Documents + General Photos + Screenshots) ===
-- You can analyze images and describe their content in detail
-- You can identify and describe people, their appearance, activities, and clothing (do not identify real persons by name)
-- You can perform robust OCR on common document types (IDs, passports, licenses, visas, permits, certificates, contracts, forms, invoices, receipts, bank statements, utility bills, tax forms, payslips, tickets, boarding passes, professional IDs, business cards)
-- You can read printed and handwritten text and street/indoor signs (as quality allows)
-- You can detect tables and extract them (rows/columns) and key–value pairs
-- You can extract structured fields (name, number, DOB, issuer, …) from documents
-- You can detect and parse MRZ on passports/IDs and read barcodes/QR codes when present
-- You can normalize dates to ISO-8601 and validate logical date consistency
-- You can determine expiry status: expired, near_expiry (within 90 days), or valid
-- You should return results in a clear JSON schema with confidence per field when possible
-- You can compute totals/taxes from invoices/receipts when present
-- You can analyze screenshots for study or tech support; answer Q&A from images directly
-- You can interpret diagrams/charts/plots and extract numeric summaries
-- You can compare multiple images and explain differences; state uncertainty when needed
-- Always perform OCR on visible text; be precise and grounded in the image content
-- OCR LANGUAGE POLICY: Detect language automatically; if Arabic script is present, preserve Arabic text and numerals faithfully. Set ocr.language accordingly. Normalize dates to ISO-8601.`;
+  const GREETING_RULE = `
+GREETING (MANDATORY):
+- Do NOT place the greeting before the verdict line.
+- The greeting may appear immediately AFTER the verdict line (same paragraph), using the user's nickname if provided.
+- If tone is Formal: use "Greetings <nickname>".
+- If tone is Encouraging: use "Hello <nickname>!".
+- Otherwise: use a short friendly greeting.
+`;
+
+  const VISION_CAPS = `ENHANCED VISION CAPABILITIES ===
+- Analyze images and describe their content in detail
+- Perform robust OCR on documents (IDs, passports, licenses, invoices, receipts, etc.)
+- Read printed and handwritten text
+- Detect tables and extract rows/columns
+- Extract structured fields from documents
+- Detect and parse MRZ on passports/IDs
+- Normalize dates to ISO-8601
+- Determine expiry status: expired, near_expiry (within 90 days), or valid`;
 
   const TABLE_ENFORCEMENT = `
 CRITICAL TABLE MODE ENFORCEMENT ===
-- If the user requests a "table view", "tabular", "columns/rows", or similar formatting:
-  1) Populate the JSON 'tables' field with 'headers' and 'rows' reflecting extracted fields.
-  2) In PART 2 (SUMMARY), render a compact Markdown table mirroring the main extracted fields.
-- Prefer canonical field names (e.g., Name, Document No., Nationality, DOB, Expiry, Issuer, etc.).
-- Keep columns aligned; avoid overly wide texts; truncate where necessary.
+- If the user requests a "table view", "tabular", or similar:
+  1) Render a compact Markdown table of the main extracted fields.
+- Prefer canonical field names (Name, Document No., Nationality, DOB, Expiry, Issuer, etc.).
 `;
 
-  return `${langRule}
+  const STUDY_MODE = chatSubmode === 'study' ? `
+📚 STUDY MODE (TUTOR STYLE) - CRITICAL
+Act as a friendly, patient tutor who helps the user learn from this image.
+1. ANSWER FIRST: Start with the clear, direct answer (1-2 sentences).
+2. EXPLAIN STEP-BY-STEP: Break down the reasoning in simple, numbered steps.
+3. USE SIMPLE LANGUAGE: Avoid jargon.
+4. ADD EXAMPLES: When helpful, include a real-world example.
+` : `STRICT OUTPUT RULES (DO NOT SHOW INTERNAL LABELS):
+- Output style (Option 1):
+  1) First line is the verdict content: **Bold identification + legacy title** (do NOT print any verdict label).
+     - The first 5 words should already imply who they are + why they matter.
+  2) One short personalized greeting line (nickname if available, match tone).
+  2) 3–6 bullets of the key evidence/insights.
+  3) If the image is clearly a document/ID/permit/receipt/invoice, ALWAYS include a compact Markdown table of extracted fields.
+- IMPORTANT: Do NOT print the labels "THE VERDICT", "THE EVIDENCE", or "PRO TIP". Use that structure silently.
+- EXPIRY MATH: Use TODAY_ISO to compute VALID/EXPIRED.
+- LOCATION: If you detect an organization/place name (e.g., hospital/clinic/company), use Google Search grounding to infer likely city/country. If ambiguous, mention 1–3 candidates and state what evidence would resolve it.
+
+SYNTHESIS MODE (LEGACY + ERA):
+- Once you identify an entity, you MUST ground their legacy/impact (not just job title).
+- Evidence bullets MUST include the estimated decade/era and what cues support it (photo quality, fashion, brand/logo era).
+
+GROUNDING (SEARCH-ONCE-BUT-SURE):
+- Before searching, build a Visual Fingerprint from all clues.
+- Perform one high-resolution Google Search query that includes multiple fingerprint tokens.
+- Verify identity/location using official domains when possible (staff directory, clinic website, LinkedIn company page, government/licensing directory).
+- If results conflict, do NOT guess—state the top candidates and what evidence contradicts.
+
+DOCUMENT TABLE (WHEN DOCUMENT-LIKE):
+- Include a row for Status: 🔴 EXPIRED / 🟢 VALID / Status: unknown
+- Include dates as YYYY-MM-DD when possible
+`;
+
+  return `${FORENSIC_PROMPT}
+
+=== ADDITIONAL FORMATTING RULES ===
+
+${langRule}
 
 ${PT_ENFORCEMENT}
 
+${GREETING_RULE}
+
+TODAY_ISO: ${todayISO}
+
 You are WAKTI Vision — a specialized image understanding service. Date: ${currentDate}
-Your job: analyze user-uploaded images from Chat mode (not Image Mode), perform OCR/extraction/reasoning, and answer directly.
 
 ${VISION_CAPS}
 
 ${TABLE_ENFORCEMENT}
 
-${chatSubmode === 'study' ? `
-📚 STUDY MODE (TUTOR STYLE) - CRITICAL
-You are now in STUDY MODE. Act as a friendly, patient tutor who helps the user learn and understand from this image.
-
-STUDY MODE RULES:
-1. ANSWER FIRST: Always start with the clear, direct answer or key takeaway (1-2 sentences).
-2. EXPLAIN STEP-BY-STEP: Break down the reasoning or concept in simple, numbered steps.
-3. USE SIMPLE LANGUAGE: Avoid jargon. Explain like teaching a curious student.
-4. STRUCTURE CLEARLY: Use bullet points, numbered lists, or short paragraphs. Never a wall of text.
-5. ADD EXAMPLES: When helpful, include a real-world example or analogy.
-6. PRACTICE QUESTIONS (optional): For suitable topics, end with 1-2 short practice questions to test understanding.
-7. ENCOURAGE: Be supportive and encouraging. Learning should feel positive.
-
-This applies to ALL subjects in the image: math problems, science diagrams, history notes, programming code, exam prep, textbook pages, etc.
-Analyze the image content and teach based on what you see.
-` : `OUTPUT REQUIREMENTS (CONVERSATIONAL FIRST):
-- Open with a warm greeting using the user's nickname if available. Keep the brand tone and style.
-- Part 1: Short friendly summary in ${language}.
-- Part 2: 3–5 concise bullets for key insights, validations, and follow_ups.
-- Documents: After summary and bullets, include a compact Markdown table of the main fields (only when user asks for OCR/"extract text"/"table" OR when the image is clearly a document like IDs, invoices, receipts, tickets, forms, certificates). No JSON by default.
-- Reasoning tasks (math/puzzles): Short friendly intro, then clear numbered steps, and end with a bold line: "Final Answer: ...".
-- Avoid code fences unless rendering a Markdown table. Keep it brief and helpful.`}
-
-JSON SCHEMA GUIDANCE (use fields that apply):
-- type: "person_photo" | "screenshot" | "document" | "general_photo"
-- doc_subtype?: string  // e.g., "qatar_id", "passport", "invoice", "receipt", "boarding_pass", "chart", "table_screenshot"
-- people: [ { gender_appearance, age_range, clothing, pose, accessories, emotions, actions, context, confidence } ]
-- objects: [ { name, attributes?, confidence } ]
-- scene: { location_guess?, lighting?, time_of_day?, context_notes? }
-- ocr: { text?: string, language?: string, lines?: string[] }
-- tables: [ { headers: string[], rows: string[][] } ]
-- key_values: [ { key: string, value: string, confidence: number } ]
-- mrz: { raw?: string, parsed?: any }
-- barcodes: [ { type: string, value: string } ]
-- dates_normalized: [ { field: string, iso8601: string, confidence: number } ]
-- expiry_status: "expired" | "near_expiry" | "valid" | null
-- answers: [ { question: string, answer: string, confidence: number } ]
-- confidence_overall: number
- - insights?: string[]
- - validations?: [ { field?: string, issue: string, severity?: "info"|"warning"|"error" } ]
- - follow_ups?: string[]
- - actions?: [ { type: string, label: string, payload?: any } ]
-
-NORMALIZED FIELDS (if applicable):
-- normalized?: {
-    id?: { name?: string, nationality?: string, document_no?: string, issuer?: string, issue_date?: string, expiry_date?: string },
-    invoice?: { vendor?: string, address?: string, date?: string, currency?: string, subtotal?: string|number, tax?: string|number, total?: string|number },
-    ticket?: { passenger?: string, number?: string, origin?: string, destination?: string, gate_seat?: string, departure_time?: string, arrival_time?: string }
-  }
-
-DOC-TYPE AUTO-DETECTION AND NORMALIZATION:
-- Detect the document/photo type automatically and populate fields accordingly.
-- For IDs/permits/passports: fill key_values with Name, Nationality, Document No., Issuer, Issue Date, Expiry Date; extract MRZ to mrz.parsed; detect expiry_status; include barcodes.
-- For receipts/invoices/bills: vendor, address, date, currency, subtotal, tax, total; and tables[0] for line items with headers ["Item","Qty","Unit Price","Amount"].
-- For tickets/boarding passes: passenger, flight/train number, origin, destination, gate/seat, times, barcode.
-- For certificates/contracts/forms: parties, dates, identifiers, signature presence.
-- For charts/plots/tables screenshots: infer series/labels, summarize key trends; tables[0] should represent the main visible table when possible.
-- For general photos: people/objects/scene with grounded details; avoid identity claims.
-
-PERSONAL TOUCH + LANGUAGE POLICY:
-- Always greet by nickname when provided, and maintain the selected tone and style.
-- When language is 'ar', write the full response in Arabic. When language is 'en', write it in English. Table headers follow UI language.
-
-PEOPLE DESCRIPTION POLICY:
-- Freely describe appearance, clothing, activities, and emotions.
-- Do NOT identify real persons by name or claim identity.
-- Disclaimer usage: Only when the image is a person/photo, append a single friendly line at the very end: "I can’t identify real people by name, but here’s a description." Do not show this disclaimer for documents, puzzles, charts, or non-person scenes.
+${STUDY_MODE}
 
 Personal Touch:
 - Nickname: ${ptNick || 'N/A'}
 - Tone: ${ptTone || 'neutral'}
 - Style: ${ptStyle || 'short answers'}
-- Keep responses aligned with user language (${language}).`;
+- Language: ${language}`;
 }
 
-function convertToOpenAIMessages(systemPrompt: string, prompt: string, language: string, images: { mimeType: string; base64?: string; url?: string }[]) {
-  const content: any[] = [];
-  content.push({ type: 'text', text: `${language === 'ar' ? 'يرجى الرد باللغة العربية فقط.' : 'Please respond in English only.'} ${prompt || ''}`.trim() });
-  for (const img of images) {
-    if (img.url) {
-      content.push({ type: 'image_url', image_url: { url: img.url } });
-    } else if (img.base64) {
-      const dataUrl = `data:${img.mimeType};base64,${img.base64}`;
-      content.push({ type: 'image_url', image_url: { url: dataUrl } });
-    }
+// ============================================================================
+// --- 4. ISOLATED PROVIDER FUNCTIONS ---
+// Each provider uses ONLY its own API key and models. NO cross-contamination.
+// ============================================================================
+
+async function tryGemini(
+  images: NormalizedImage[],
+  systemInstruction: string,
+  prompt: string,
+  language: string,
+  personalTouch: PersonalTouch | null,
+  maxTokens: number,
+  controller: ReadableStreamDefaultController,
+  encoder: TextEncoder
+): Promise<void> {
+  const key = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
+  if (!key) throw new Error("No Gemini API Key configured");
+
+  // PRIMARY "ELITE" ENGINE: Gemini 2.0 Flash (exp) via v1beta streaming
+  // NOTE: Some Gemini variants reject `system_instruction` (400 schema mismatch).
+  // We embed the full system protocol as the first user text part instead.
+  const GEMINI_MODEL = "gemini-2.0-flash-exp";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse&key=${key}`;
+
+  const langPrefix = language === 'ar'
+    ? 'يرجى الرد باللغة العربية فقط. لا تستخدم الإنجليزية.'
+    : 'Please respond in English only. Do not use Arabic.';
+
+  const languageCode = language === 'ar' ? 'ar-EG' : 'en-US';
+
+  const pt = personalTouch || {};
+  const ptNick = (pt.nickname || '').toString().trim();
+  const ptTone = (pt.tone || '').toString().trim().toLowerCase();
+  const nameForGreeting = ptNick || (language === 'ar' ? 'صديقي' : 'friend');
+  const greetingLine = ptTone === 'formal'
+    ? (language === 'ar' ? `تحياتي ${nameForGreeting}.` : `Greetings ${nameForGreeting}.`)
+    : ptTone === 'encouraging'
+      ? (language === 'ar' ? `مرحباً ${nameForGreeting}!` : `Hello ${nameForGreeting}!`)
+      : (language === 'ar' ? `أهلاً ${nameForGreeting}.` : `Hi ${nameForGreeting}.`);
+
+  const groundingInstruction = `\n\nGROUNDING (GOOGLE SEARCH) — MANDATORY WHEN AN ENTITY IS DETECTED:\n- You have access to Google Search grounding (google_search tool).\n- Vision first, then Search, then Answer. No skipping.\n- Build a Visual Fingerprint from ALL clues (name, logo, uniform, watch, signage language/font, equipment brand, lighting, role keywords).\n- Then run EXACTLY ONE deep, high-resolution query that contains multiple fingerprint tokens.\n- Deep search phrases (use these patterns, do NOT use only the name):\n  - Person: "[Name] career history legacy highlights achievements [Location]"\n  - Organization/brand: "[Brand] logo history era evolution timeline"\n  - Venue/building: "[Place] history significance decade era"\n- Use the search result to upgrade: job title ➜ legacy/impact title AND to confirm/adjust the decade/era estimate.\n- Do NOT show sources or links in the user output.\n- If results are weak/conflicting: downgrade confidence, state 1–2 candidates, and ask for ONE missing clue.`;
+
+  const integratedProtocol = `SYSTEM PROTOCOL (OBEY RIGIDLY)\n${systemInstruction}\n\nLANGUAGE CODE (HINT): ${languageCode}\n\nGREETING TO USE (DO NOT PLACE BEFORE VERDICT LINE): ${greetingLine}\n\n${langPrefix}${groundingInstruction}\n\nUSER QUESTION:\n${(prompt || '').trim()}`.trim();
+
+  const contents = [{
+    role: "user",
+    parts: [
+      { text: integratedProtocol },
+      ...images.map(img => ({ inlineData: { mimeType: img.mimeType, data: img.base64 } }))
+    ]
+  }];
+
+  console.log(`VISION: Trying Gemini ${GEMINI_MODEL}`);
+
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents,
+      tools: [{ google_search: {} }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: maxTokens }
+    })
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => "");
+    throw new Error(`Gemini Error ${resp.status}: ${errText.slice(0, 200)}`);
   }
-  return [
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content }
-  ];
-}
 
-function convertToClaude(systemPrompt: string, prompt: string, language: string, images: { mimeType: string; base64?: string; url?: string }[]) {
-  const content: any[] = [];
-  content.push({ type: 'text', text: `${language === 'ar' ? 'يرجى الرد باللغة العربية فقط.' : 'Please respond in English only.'} ${prompt || ''}`.trim() });
-  for (const img of images) {
-    if (img.base64) {
-      content.push({ type: 'image', source: { type: 'base64', media_type: img.mimeType, data: img.base64 } });
-    }
-  }
-  return { system: systemPrompt, messages: [{ role: 'user', content }] };
-}
+  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: GEMINI_MODEL })}\n\n`));
 
-// Extract the first complete JSON object from a text stream and any remaining summary text
-function extractJsonAndSummary(text: string): { json: any | null; summary: string } {
-  let depth = 0; let inStr = false; let esc = false; let started = false; let buf = '';
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (!started) {
-      if (ch === '{') { started = true; depth = 1; buf = '{'; }
-      continue;
-    }
-    buf += ch;
-    if (inStr) {
-      if (esc) { esc = false; }
-      else if (ch === '\\') { esc = true; }
-      else if (ch === '"') { inStr = false; }
-    } else {
-      if (ch === '"') inStr = true;
-      else if (ch === '{') depth++;
-      else if (ch === '}') { depth--; if (depth === 0) {
-        try {
-          const obj = JSON.parse(buf);
-          const rest = text.slice(i + 1).trim();
-          return { json: obj, summary: rest };
-        } catch {
-          return { json: null, summary: text };
-        }
-      } }
-    }
-  }
-  return { json: null, summary: text };
-}
-
-async function streamClaudeResponse(reader: ReadableStreamDefaultReader, controller: ReadableStreamDefaultController, encoder: TextEncoder) {
+  const reader = resp.body!.getReader();
   const decoder = new TextDecoder();
-  let buffer = '';
-  let doneSent = false;
+  let buffer = "";
+  let emitted = "";
+
   while (true) {
     const { done, value } = await reader.read();
-    if (done) { break; }
+    if (done) break;
     buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
+
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) continue;
+
+      // Handle both formats:
+      // - SSE style: "data: {...}"
+      // - Raw streamed JSON: "{...}"
+      const jsonText = line.startsWith("data:") ? line.slice(5).trim() : line;
+      if (!jsonText || jsonText === "[DONE]") continue;
+
+      try {
+        const parsed = JSON.parse(jsonText);
+        const parts = parsed?.candidates?.[0]?.content?.parts;
+        const textFull = Array.isArray(parts)
+          ? parts.map((p: { text?: string }) => p?.text || "").join("")
+          : (parts?.[0]?.text || "");
+
+        if (!textFull) continue;
+
+        const delta = textFull.startsWith(emitted) ? textFull.slice(emitted.length) : textFull;
+        if (!delta) continue;
+        emitted = textFull.startsWith(emitted) ? (emitted + delta) : textFull;
+
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: delta, content: delta })}\n\n`));
+      } catch {
+        // ignore partial JSON lines
+      }
+    }
+  }
+  console.log(`VISION: Gemini streaming complete`);
+}
+
+async function tryOpenAI(
+  images: NormalizedImage[],
+  systemInstruction: string,
+  prompt: string,
+  language: string,
+  maxTokens: number,
+  controller: ReadableStreamDefaultController,
+  encoder: TextEncoder
+): Promise<void> {
+  const key = Deno.env.get("OPENAI_API_KEY");
+  if (!key) throw new Error("No OpenAI API Key configured");
+
+  const langPrefix = language === 'ar' ? 'يرجى الرد باللغة العربية فقط.' : 'Please respond in English only.';
+  const messages = [
+    { role: "system", content: systemInstruction },
+    {
+      role: "user",
+      content: [
+        { type: "text", text: `${langPrefix} ${prompt}`.trim() },
+        ...images.map(img => ({
+          type: "image_url",
+          image_url: { url: `data:${img.mimeType};base64,${img.base64}` }
+        }))
+      ]
+    }
+  ];
+
+  // ISOLATED: OpenAI uses ONLY gpt-4o - no shared model variable
+  const OPENAI_MODEL = "gpt-4o";
+  console.log(`VISION: Trying OpenAI ${OPENAI_MODEL}`);
+
+  const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: OPENAI_MODEL, messages, stream: true, max_tokens: maxTokens, temperature: 0.2 })
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => "");
+    throw new Error(`OpenAI Error ${resp.status}: ${errText.slice(0, 200)}`);
+  }
+
+  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: OPENAI_MODEL })}\n\n`));
+
+  const reader = resp.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
     for (const line of lines) {
-      if (!line.startsWith('data: ')) continue;
+      if (!line.startsWith("data: ")) continue;
+      const data = line.slice(6);
+      if (data === "[DONE]") break;
+      try {
+        const parsed = JSON.parse(data);
+        const text = parsed.choices?.[0]?.delta?.content;
+        if (text) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: text, content: text })}\n\n`));
+        }
+      } catch { /* ignore */ }
+    }
+  }
+  console.log(`VISION: OpenAI streaming complete`);
+}
+
+async function tryClaude(
+  images: NormalizedImage[],
+  systemInstruction: string,
+  prompt: string,
+  language: string,
+  maxTokens: number,
+  controller: ReadableStreamDefaultController,
+  encoder: TextEncoder
+): Promise<void> {
+  const key = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!key) throw new Error("No Anthropic API Key configured");
+
+  const langPrefix = language === 'ar' ? 'يرجى الرد باللغة العربية فقط.' : 'Please respond in English only.';
+  const content: Array<{type: string; text?: string; source?: {type: string; media_type: string; data: string}}> = [
+    { type: "text", text: `${langPrefix} ${prompt}`.trim() }
+  ];
+  for (const img of images) {
+    content.push({ type: "image", source: { type: "base64", media_type: img.mimeType, data: img.base64 } });
+  }
+
+  // ISOLATED: Claude uses ONLY claude-3-5-sonnet-20241022 - no shared model variable
+  const CLAUDE_MODEL = "claude-3-5-sonnet-20241022";
+  console.log(`VISION: Trying Claude ${CLAUDE_MODEL}`);
+
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: CLAUDE_MODEL, system: systemInstruction, messages: [{ role: "user", content }], stream: true, max_tokens: maxTokens, temperature: 0.2 })
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => "");
+    throw new Error(`Claude Error ${resp.status}: ${errText.slice(0, 200)}`);
+  }
+
+  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: CLAUDE_MODEL })}\n\n`));
+
+  const reader = resp.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
       const data = line.slice(6).trim();
-      if (data === '[DONE]') { controller.enqueue(encoder.encode('data: [DONE]\n\n')); doneSent = true; break; }
+      if (data === "[DONE]") break;
       try {
         const parsed = JSON.parse(data);
         if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-          const token = parsed.delta.text as string;
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: parsed.delta.text, content: parsed.delta.text })}\n\n`));
         }
-        if (parsed.type === 'message_stop') {
-          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-          doneSent = true;
-          break;
-        }
-      } catch {}
+        if (parsed.type === 'message_stop') break;
+      } catch { /* ignore */ }
     }
   }
-  if (!doneSent) {
-    try { controller.enqueue(encoder.encode('data: [DONE]\n\n')); } catch {}
-  }
+  console.log(`VISION: Claude streaming complete`);
 }
 
-serve(async (req) => {
+// ============================================================================
+// --- 5. MAIN SERVER ---
+// ============================================================================
+
+serve((req) => {
   const origin = req.headers.get('origin');
   const corsHeaders = getCorsHeaders(origin);
 
@@ -377,7 +512,6 @@ serve(async (req) => {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
-  // Basic JWT requirement
   const auth = req.headers.get('authorization') || '';
   if (!auth.startsWith('Bearer ')) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -387,315 +521,92 @@ serve(async (req) => {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        // Robust body parsing to avoid EOF errors from partially closed connections
-        let bodyRaw = '';
+        let body: Record<string, unknown> = {};
         try {
-          bodyRaw = await req.text();
-        } catch (e) {
-          console.error('VISION: failed to read request body text', e);
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Bad Request: unable to read body' })}\n\n`));
-          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-          return controller.close();
-        }
-        let body: any = {};
-        try {
+          const bodyRaw = await req.text();
           body = bodyRaw ? JSON.parse(bodyRaw) : {};
         } catch (e) {
-          console.error('VISION: invalid JSON body', (e as Error).message);
+          console.error('VISION: invalid JSON body', e);
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Bad Request: invalid JSON' })}\n\n`));
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-          return controller.close();
+          controller.close();
+          return;
         }
+
         const {
           requestId = crypto.randomUUID(),
           prompt = '',
           language = 'en',
           personalTouch = null,
-          provider = 'openai', // default to OpenAI for isolation
-          model,
           images = [],
-          options = { ocr: true, max_tokens: 1200 },
-          stream = false,
-          chatSubmode = 'chat' // 'chat' or 'study' - Study mode uses tutor-style responses
-        } = body || {};
+          options = { max_tokens: 2000 },
+          chatSubmode = 'chat'
+        } = body as {
+          requestId?: string;
+          prompt?: string;
+          language?: string;
+          personalTouch?: PersonalTouch | null;
+          images?: Array<{mimeType?: string; dataBase64?: string; url?: string; data?: string; content?: string}>;
+          options?: { max_tokens?: number };
+          chatSubmode?: string;
+        };
 
-        // Emit meta
+        const meta = { requestId, imagesCount: Array.isArray(images) ? images.length : 0 };
+        console.log('VISION: meta', meta);
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: meta })}\n\n`));
+        if (chatSubmode === 'study') {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { studyMode: true } })}\n\n`));
+        }
+
+        if (!Array.isArray(images) || images.length === 0) throw new Error('No images provided');
+        if (images.length > 4) throw new Error('Too many images (max 4)');
+
+        const normalizedImages: NormalizedImage[] = [];
+        for (const img of images) {
+          if (img.url) {
+            const { base64, mimeType } = await fetchImageAsBase64(img.url);
+            normalizedImages.push({ mimeType, base64 });
+          } else {
+            const norm = normalizeImage(img);
+            if (norm) normalizedImages.push(norm);
+          }
+        }
+        if (normalizedImages.length === 0) throw new Error('No valid images');
+
+        const timeZone = 'Asia/Qatar';
+        const now = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone });
+        const todayISO = getTodayISO(timeZone);
+        const systemPrompt = buildSystemPrompt(language as string, now, todayISO, personalTouch, chatSubmode as string);
+        const maxTokens = options?.max_tokens || 2000;
+
+        // STRICT FALLBACK: Gemini → OpenAI → Claude
         try {
-          const meta = { requestId, provider, model: model || null, imagesCount: Array.isArray(images) ? images.length : 0 };
-          console.log('VISION: meta', meta);
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: meta })}\n\n`));
-          // Emit Study mode metadata so frontend shows 📚 Study badge
-          if (chatSubmode === 'study') {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { studyMode: true } })}\n\n`));
-          }
-        } catch {}
-
-        // Validate images
-        if (!Array.isArray(images) || images.length === 0) {
-          throw new Error('No images provided');
-        }
-        if (images.length > 4) {
-          throw new Error('Too many images (max 4)');
-        }
-
-        // Normalize images
-        const norm = images.map((f: any) => normalizeImage({ mimeType: f?.mimeType || f?.type, dataBase64: f?.data || f?.content, url: f?.url }))
-                           .filter(Boolean) as { mimeType: string; base64?: string; url?: string }[];
-        if (norm.length === 0) throw new Error('No valid images');
-
-        // Convert any URL images to base64 for Anthropic compatibility
-        const MAX_BYTES = 8 * 1024 * 1024; // 8MB
-        for (const n of norm) {
-          if (n.url) {
-            const originalMime = n.mimeType; // preserve the original mime from the frontend
-            const { base64, mimeType, byteLength } = await fetchImageAsBase64(n.url);
-            if (byteLength > MAX_BYTES) {
-              throw new Error('Image too large (max 8MB). Please upload a smaller image.');
-            }
-            n.base64 = base64;
-            // Prefer the original mimeType coming from the client; fallback to fetched header
-            n.mimeType = originalMime || mimeType;
-            delete (n as any).url;
-          }
-        }
-
-        // Per-image size cap: validate base64 sizes as well (if images came in as base64)
-        for (const n of norm) {
-          if (n.base64) {
-            const approxBytes = Math.floor((n.base64.length * 3) / 4);
-            if (approxBytes > MAX_BYTES) {
-              throw new Error('Image too large (max 8MB). Please upload a smaller image.');
-            }
-          }
-        }
-
-        const now = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Qatar' });
-        const systemPrompt = buildSystemPrompt(language, now, personalTouch, chatSubmode);
-
-        // Non-streaming JSON mode
-        if (!stream) {
+          await tryGemini(normalizedImages, systemPrompt, prompt as string, language as string, personalTouch, maxTokens, controller, encoder);
+        } catch (geminiErr) {
+          console.error("VISION: Gemini Failed:", (geminiErr as Error).message);
           try {
-            if (!ANTHROPIC_API_KEY) throw new Error('Claude API key not configured');
-            const { system, messages } = convertToClaude(systemPrompt, prompt, language, norm);
-            const m = model || 'claude-3-5-sonnet-20241022';
-            const claudeResp = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: {
-              'x-api-key': ANTHROPIC_API_KEY,
-              'anthropic-version': '2023-06-01',
-              'Content-Type': 'application/json'
-            }, body: JSON.stringify({ model: m, system, messages, temperature: 0.2, max_tokens: options?.max_tokens || 2000, stream: false }) });
-            if (!claudeResp.ok) {
-              const errTxt = await claudeResp.text();
-              const err = { error: 'Claude failed', status: claudeResp.status, details: errTxt.slice(0, 300) };
-              return controller.enqueue(encoder.encode(`data: ${JSON.stringify(err)}\n\n`)), controller.close();
-            }
-            const data = await claudeResp.json();
-            const text = Array.isArray(data?.content)
-              ? (data.content.map((c: any) => c?.text || '').join(''))
-              : (data?.content?.[0]?.text || '');
-            const { json, summary } = extractJsonAndSummary(text || '');
-            const payload = { json, summary, metadata: { model: m } };
-            // Return a single JSON payload (no SSE) by closing the stream with one data event
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
-            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-            return controller.close();
-          } catch (e) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: (e as Error).message })}\n\n`));
-            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-            return controller.close();
-          }
-        }
-
-        // Provider selection with Gemini → OpenAI → Claude fallback
-        let streamReader: ReadableStreamDefaultReader | null = null;
-
-        const tryGeminiVision = async ()=>{
-          const systemText = systemPrompt;
-          const contents = [];
-          if (systemText) contents.push(buildTextContent('user', systemText));
-          const promptText = `${language === 'ar' ? 'يرجى الرد باللغة العربية فقط.' : 'Please respond in English only.'} ${prompt || ''}`.trim();
-          const userParts = [
-            {
-              text: promptText
-            }
-          ];
-          // Gemini requires base64 images, so fetch URLs and convert
-          for (const img of norm){
-            if (img?.base64 && img?.mimeType) {
-              userParts.push({
-                inlineData: {
-                  mimeType: img.mimeType,
-                  data: img.base64
-                }
-              });
-            } else if (img?.url) {
-              // Fetch the URL and convert to base64
-              try {
-                const imgResp = await fetch(img.url);
-                if (!imgResp.ok) throw new Error(`Failed to fetch image: ${imgResp.status}`);
-                const imgBlob = await imgResp.blob();
-                const imgBuffer = await imgBlob.arrayBuffer();
-                const imgBase64 = btoa(String.fromCharCode(...new Uint8Array(imgBuffer)));
-                userParts.push({
-                  inlineData: {
-                    mimeType: img.mimeType || 'image/jpeg',
-                    data: imgBase64
-                  }
-                });
-              } catch (fetchErr) {
-                console.error('Failed to fetch image URL for Gemini:', fetchErr);
-                throw new Error('Failed to fetch image for Gemini');
-              }
-            }
-          }
-          contents.push({
-            role: 'user',
-            parts: userParts
-          });
-          
-          const encoder = new TextEncoder();
-          // Emit providerUsed once before token stream
-          try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'gemini' })}\n\n`)); } catch { /* ignore */ }
-          await streamGemini(
-            'gemini-2.5-flash-lite',
-            contents,
-            (token) => {
-              try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`)); } catch { /* ignore */ }
-            },
-            systemText,
-            { temperature: 0.2, maxOutputTokens: options?.max_tokens || 2000 }
-          );
-        };
-
-        const tryOpenAI = async () => {
-          if (!OPENAI_API_KEY) throw new Error('OpenAI API key not configured');
-          const messages = convertToOpenAIMessages(systemPrompt, prompt, language, norm);
-          const openaiModels = [
-            model || 'gpt-4o-2024-08-06',
-            'gpt-4o',
-            'gpt-4o-mini'
-          ];
-          let lastErr: any = null;
-          for (const m of openaiModels) {
-            console.log(`VISION: Trying OpenAI model=${m} req=${requestId}`);
-            const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', { method: 'POST', headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json', 'Accept': 'text/event-stream' }, body: JSON.stringify({ model: m, messages, temperature: 0.2, max_tokens: options?.max_tokens || 2000, stream: true }) });
-            if (!openaiResponse.ok) {
-              const msg = await openaiResponse.text();
-              console.warn(`VISION: OpenAI model=${m} failed status=${openaiResponse.status} req=${requestId} body=${msg.slice(0,180)}`);
-              lastErr = new Error(`OpenAI failed: ${openaiResponse.status} ${msg}`);
-              // Try next model on 404/400 model errors
-              if (openaiResponse.status === 404 || openaiResponse.status === 400) continue;
-              // On overload, try next; otherwise break
-              if (openaiResponse.status === 429 || openaiResponse.status === 529) continue;
-              continue;
-            }
-            console.log(`VISION: OpenAI model=${m} streaming req=${requestId}`);
-            // Emit providerUsed once before token stream
-            try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'openai' })}\n\n`)); } catch { /* ignore */ }
-            streamReader = openaiResponse.body?.getReader() || null;
-            // Stream OpenAI conversational-first: emit tokens immediately
-            const decoder2 = new TextDecoder();
-            let buf2 = '';
-            let doneSent2 = false;
-            while (true) {
-              const { done, value } = await streamReader.read();
-              if (done) { break; }
-              buf2 += decoder2.decode(value, { stream: true });
-              const lines = buf2.split('\n');
-              buf2 = lines.pop() || '';
-              for (const line of lines) {
-                if (!line.startsWith('data: ')) continue;
-                const data = line.slice(6);
-                if (data === '[DONE]') { controller.enqueue(encoder.encode('data: [DONE]\n\n')); doneSent2 = true; break; }
-                try {
-                  const parsed = JSON.parse(data);
-                  const content = parsed.choices?.[0]?.delta?.content as string | undefined;
-                  if (content) {
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: content, content })}\n\n`));
-                  }
-                } catch {}
-              }
-            }
-            if (!doneSent2) { try { controller.enqueue(encoder.encode('data: [DONE]\n\n')); } catch {} }
-            return; // success
-          }
-          throw lastErr || new Error('OpenAI failed');
-        };
-
-        const tryClaude = async () => {
-          if (!ANTHROPIC_API_KEY) throw new Error('Claude API key not configured');
-          const { system, messages } = convertToClaude(systemPrompt, prompt, language, norm);
-          const claudeModels = [
-            model || 'claude-sonnet-4-5-20250929',
-            'claude-3-5-sonnet-latest',
-            'claude-3-5-sonnet-20241022',
-            'claude-3-5-sonnet-20240620',
-            'claude-3-haiku-20240307'
-          ];
-          let lastErr: any = null;
-          for (const m of claudeModels) {
-            console.log(`VISION: Trying Claude model=${m} req=${requestId}`);
-            const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json', 'Accept': 'text/event-stream' }, body: JSON.stringify({ model: m, system, messages, temperature: 0.2, max_tokens: options?.max_tokens || 2000, stream: true }) });
-            if (!claudeResponse.ok) {
-              const errTxt = await claudeResponse.text();
-              console.warn(`VISION: Claude model=${m} failed status=${claudeResponse.status} req=${requestId} body=${errTxt.slice(0,180)}`);
-              lastErr = new Error(`Claude failed: ${claudeResponse.status} ${errTxt}`);
-              // Try next on 404 (model not found) or overload codes
-              if (claudeResponse.status === 404 || claudeResponse.status === 429 || claudeResponse.status === 529) continue;
-              continue;
-            }
-            console.log(`VISION: Claude model=${m} streaming req=${requestId}`);
-            // Emit providerUsed once before token stream
-            try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ providerUsed: 'claude' })}\n\n`)); } catch { /* ignore */ }
-            streamReader = claudeResponse.body?.getReader() || null;
-            if (!streamReader) { lastErr = new Error('No stream from provider'); continue; }
-            await streamClaudeResponse(streamReader, controller, encoder);
-            return; // success
-          }
-          throw lastErr || new Error('Claude failed');
-        };
-
-        try {
-          // Gemini primary
-          try {
-            await tryGeminiVision();
-          } catch (errGem) {
-            console.warn('VISION: Gemini failed, trying OpenAI...', (errGem as Error).message);
+            await tryOpenAI(normalizedImages, systemPrompt, prompt as string, language as string, maxTokens, controller, encoder);
+          } catch (openAiErr) {
+            console.error("VISION: OpenAI Failed:", (openAiErr as Error).message);
             try {
-              await tryOpenAI();
-            } catch (firstErr) {
-              console.warn('VISION: OpenAI attempt failed, trying Claude...', firstErr);
-              try {
-                await tryClaude();
-              } catch (provErr) {
-                const msg = String((provErr as Error)?.message || provErr || '').toLowerCase();
-                const shouldFallback = msg.includes('not_found') || msg.includes('404') || msg.includes('overloaded') || msg.includes('529') || msg.includes('model') || msg.includes('claude');
-                if (shouldFallback) {
-                  console.warn('⚠️ Vision: Claude failed, retrying OpenAI...', provErr);
-                  await tryOpenAI();
-                } else {
-                  throw provErr;
-                }
-              }
+              await tryClaude(normalizedImages, systemPrompt, prompt as string, language as string, maxTokens, controller, encoder);
+            } catch (claudeErr) {
+              console.error("VISION: Claude Failed:", (claudeErr as Error).message);
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: "All Vision Providers Failed", details: (claudeErr as Error).message })}\n\n`));
             }
           }
-        } catch (error) {
-          console.error('🔥 VISION STREAM ERROR:', error);
-          try {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Vision service temporarily unavailable', details: (error as Error).message })}\n\n`));
-          } catch {}
         }
 
-        try {
-          controller.close();
-        } catch (closeErr) {
-          console.error('Controller already closed:', closeErr);
-        }
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        controller.close();
+
       } catch (error) {
-        console.error('🔥 VISION STREAM OUTER ERROR:', error);
+        console.error('🔥 VISION STREAM ERROR:', error);
         try {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Vision service temporarily unavailable', details: (error as Error).message })}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Vision service error', details: (error as Error).message })}\n\n`));
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
-        } catch {}
+        } catch { /* controller may already be closed */ }
       }
     }
   });

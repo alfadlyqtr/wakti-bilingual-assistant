@@ -592,6 +592,7 @@ export function ChatMessages({
       const isArabicText = /[\u0600-\u06FF]/.test(cleanText);
       const { ar, en } = getSelectedVoices();
       const voice_id = (isArabicText || language === 'ar') ? ar : en;
+      const user_name = personalTouch?.nickname || userProfile?.display_name || undefined;
       
       // Determine gender from voice_id for Gemini TTS
       const gender = voice_id.toLowerCase().includes('zephyr') || 
@@ -605,7 +606,7 @@ export function ChatMessages({
           'Accept': 'audio/wav, audio/mpeg, audio/*',
           ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
         },
-        body: JSON.stringify({ text: cleanText, voice_id, gender }),
+        body: JSON.stringify({ text: cleanText, voice_id, gender, user_name }),
       });
 
       if (!response.ok) {
