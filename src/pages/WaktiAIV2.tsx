@@ -252,9 +252,12 @@ const WaktiAIV2 = () => {
       setIsNewConversation(false);
     }
 
+    const effectiveChatSubmode: ChatSubmode = chatSubmodeParam || chatSubmode;
+    const usedStudyThisRequest = effectiveChatSubmode === 'study';
+
     // Route to Vision path if: explicit vision trigger OR Study mode with images
     const hasImages = attachedFiles && attachedFiles.length > 0 && attachedFiles.some((f: any) => f.type?.startsWith('image/'));
-    const isStudyWithImages = trigger === 'chat' && (chatSubmodeParam || chatSubmode) === 'study' && hasImages;
+    const isStudyWithImages = trigger === 'chat' && effectiveChatSubmode === 'study' && hasImages;
     const inputType = (trigger === 'vision' || isStudyWithImages) ? 'vision' : 'text';
     // Per-message language override: if user explicitly asks for Arabic translation, force 'ar' for this request
     const wantsArabic = /translate.+to\s+arabic/i.test(messageContent || '') || /إلى العربية/.test(messageContent || '');
@@ -268,7 +271,7 @@ const WaktiAIV2 = () => {
       intent: trigger,
       inputType,
       attachedFiles: attachedFiles,
-      chatSubmode: chatSubmodeParam || chatSubmode, // Store study/chat mode for bubble styling
+      chatSubmode: effectiveChatSubmode, // Store study/chat mode for bubble styling
     };
     const newMessages = [...sessionMessages, userMessage];
     setSessionMessages(newMessages);
@@ -345,7 +348,7 @@ const WaktiAIV2 = () => {
           (metadata: any) => { streamMeta = metadata || {}; },
           (err: string) => { console.error('Vision stream error:', err); },
           controller.signal,
-          chatSubmodeParam || chatSubmode // Pass chatSubmode for Study mode support in Vision
+          effectiveChatSubmode // Pass chatSubmode for Study mode support in Vision
         );
 
         const finalAssistantMessage: AIMessage = {
@@ -468,6 +471,14 @@ const WaktiAIV2 = () => {
       
       if (abortControllerRef.current === controller) {
         abortControllerRef.current = null;
+      }
+
+      // HARD RULE: Study mode must never persist.
+      // After ANY request that used Study, always snap back to Chat.
+      if (usedStudyThisRequest) {
+        setActiveTrigger('chat');
+        setChatSubmode('chat');
+        console.log('🔄 AUTO-SWITCH: Study used → Chat mode');
       }
       
       // Auto-switch back to Chat after certain modes to save backend credits

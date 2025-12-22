@@ -16,7 +16,7 @@ Objective: DEDUCE context, location, and status. Do not just describe pixels.
 1. **MIRROR CHECK:** If image is a selfie (phone visible), assume text is FLIPPED. Mentally reverse it (e.g. "HASOM" -> "MOZAH").
 2. **GLOBAL FIRST (NO REGIONAL ASSUMPTIONS):** Do NOT assume Qatar or GCC. First identify likely Country and City using evidence: license plates, currency, language, road signs, time zone clues, plugs, architecture, landmarks.
 3. **LOGO ➜ HUB MAPPING:** If you see a logo, map it to its primary hub/site when reasonable.
-   Examples: Aramco ➜ Dhahran, Boeing ➜ Seattle, QatarEnergy ➜ Ras Laffan.
+   Examples: Boeing ➜ Seattle, Samsung ➜ Seoul, Siemens ➜ Munich.
 4. **CONTEXT CLUES:** Analyze uniforms, PPE, badges, tools, and environment to infer role and industry (construction, refinery, aviation, healthcare, education, etc.).
 5. **EXPIRY MATH (CRITICAL):** When any document shows dates (issue/expiry/DOB/valid-until), compare them against the provided "Date:" in the prompt.
    - If expiry/valid-until is in the past, your verdict MUST start with: 🔴 EXPIRED
@@ -27,16 +27,20 @@ Objective: DEDUCE context, location, and status. Do not just describe pixels.
 8. **TOTAL VISUAL SYNTHESIS (VISUAL FINGERPRINT):** Before any search, aggregate ALL visual data points into a Fingerprint:
    Data Points: [Name] + [Company/Clinic Logo] + [Uniform Color/Material] + [Watch Model/Style] + [Signage Language/Font] + [Equipment Brand] + [Background Lighting].
    Then create a "WOW" High-Resolution Query that includes multiple fingerprint tokens.
- 9. **LEGACY & IMPACT (THE MIC DROP):** Once an entity (person/brand/building) is identified, you MUST perform a targeted search for their achievements, historical significance, or legacy.
+9. **LEGACY & IMPACT (THE MIC DROP):** Once an entity (person/brand/building) is identified, you MUST perform a targeted search for their achievements, historical significance, or legacy.
     - Constraint: Do NOT report just a job title. Report their legend status / impact role.
-    - Examples (style only): “Key architect of Qatar’s 1980s sports infrastructure” / “Leading figure in the 1981 FIFA World Youth Championship run”.
- 10. **CHRONOLOGICAL TRIANGULATION (DECADE):** Use visual cues to estimate the decade/era.
+    - Examples (style only): “Pioneer of early 1990s sports medicine in the region” / “Central figure in a landmark tournament run during the 1980s”.
+10. **CHRONOLOGICAL TRIANGULATION (DECADE):** Use visual cues to estimate the decade/era.
     Cues: photo quality/film grain, hairstyle/fashion, and brand/logo evolution (e.g., vintage Umbro/Adidas logo eras). Mention the estimated era in the evidence.
- 11. **GROUNDING IS NOT OPTIONAL (VISION ➜ SEARCH ➜ ANSWER):**
+11. **GROUNDING IS NOT OPTIONAL (VISION ➜ SEARCH ➜ ANSWER):**
     - If you detect ANY of the following, you MUST use Google Search grounding before finalizing your verdict:
       a) a person's full/partial name, b) a clinic/company/brand name, c) a distinctive logo, d) a venue/building name.
     - The goal is not "who" only. The goal is: who + why they matter + when (era).
     - If grounding is unavailable or returns weak/conflicting results, do NOT pretend. Output a conservative verdict and ask for ONE missing clue (e.g., city, spelling of the name, or a clearer logo crop).
+ 12. **LANDMARK IDENTIFICATION (FORCED WHEN DISTINCTIVE ARCHITECTURE EXISTS):**
+    - If you see a distinctive structure, skyline, monument, or unique interior, you MUST run a landmark-focused query before naming the location.
+    - Describe the landmark using architecture tokens: shape (mushroom/cylinder/arch), material (concrete/steel/glass), lighting (amber/LED), context (park/stadium/metro), and any visible language.
+    - If the landmark is not confidently identifiable, list 2–3 plausible cities/countries and what single clue would disambiguate.
 
 ### 📝 OUTPUT POLICY (CRITICAL):
 - You MUST follow a strict structure internally, but you MUST NOT print the internal labels "📍 THE VERDICT", "THE VERDICT", "THE EVIDENCE", or "PRO TIP".
@@ -291,7 +295,7 @@ async function tryGemini(
       ? (language === 'ar' ? `مرحباً ${nameForGreeting}!` : `Hello ${nameForGreeting}!`)
       : (language === 'ar' ? `أهلاً ${nameForGreeting}.` : `Hi ${nameForGreeting}.`);
 
-  const groundingInstruction = `\n\nGROUNDING (GOOGLE SEARCH) — MANDATORY WHEN AN ENTITY IS DETECTED:\n- You have access to Google Search grounding (google_search tool).\n- Vision first, then Search, then Answer. No skipping.\n- Build a Visual Fingerprint from ALL clues (name, logo, uniform, watch, signage language/font, equipment brand, lighting, role keywords).\n- Then run EXACTLY ONE deep, high-resolution query that contains multiple fingerprint tokens.\n- Deep search phrases (use these patterns, do NOT use only the name):\n  - Person: "[Name] career history legacy highlights achievements [Location]"\n  - Organization/brand: "[Brand] logo history era evolution timeline"\n  - Venue/building: "[Place] history significance decade era"\n- Use the search result to upgrade: job title ➜ legacy/impact title AND to confirm/adjust the decade/era estimate.\n- Do NOT show sources or links in the user output.\n- If results are weak/conflicting: downgrade confidence, state 1–2 candidates, and ask for ONE missing clue.`;
+  const groundingInstruction = `\n\nGROUNDING (GOOGLE SEARCH) — MANDATORY WHEN AN ENTITY OR LANDMARK IS DETECTED:\n- You have access to Google Search grounding (google_search tool).\n- Vision first, then Search, then Answer. No skipping.\n- Build a Visual Fingerprint from ALL clues (name, logo, uniform, watch, signage language/font, equipment brand, lighting, role keywords, landmark shape/material).\n- Then run EXACTLY ONE deep, high-resolution query that contains multiple fingerprint tokens.\n- Deep search phrases (use these patterns, do NOT use only the name):\n  - Person: "[Name] career history legacy highlights achievements [Location]"\n  - Organization/brand: "[Brand] logo history era evolution timeline"\n  - Venue/building: "[Place] history significance decade era"\n  - Landmark/architecture (when applicable): "[distinctive shape/material/lighting] landmark [city/country candidates]"\n- Use the search result to upgrade: job title ➜ legacy/impact title AND to confirm/adjust the decade/era estimate and location.\n- Do NOT show sources or links in the user output.\n- If results are weak/conflicting: downgrade confidence, state 1–2 candidates, and ask for ONE missing clue.`;
 
   const integratedProtocol = `SYSTEM PROTOCOL (OBEY RIGIDLY)\n${systemInstruction}\n\nLANGUAGE CODE (HINT): ${languageCode}\n\nGREETING TO USE (DO NOT PLACE BEFORE VERDICT LINE): ${greetingLine}\n\n${langPrefix}${groundingInstruction}\n\nUSER QUESTION:\n${(prompt || '').trim()}`.trim();
 
@@ -540,7 +544,8 @@ serve((req) => {
           personalTouch = null,
           images = [],
           options = { max_tokens: 2000 },
-          chatSubmode = 'chat'
+          chatSubmode = 'chat',
+          clientTimeZone = ''
         } = body as {
           requestId?: string;
           prompt?: string;
@@ -549,6 +554,7 @@ serve((req) => {
           images?: Array<{mimeType?: string; dataBase64?: string; url?: string; data?: string; content?: string}>;
           options?: { max_tokens?: number };
           chatSubmode?: string;
+          clientTimeZone?: string;
         };
 
         const meta = { requestId, imagesCount: Array.isArray(images) ? images.length : 0 };
@@ -573,7 +579,7 @@ serve((req) => {
         }
         if (normalizedImages.length === 0) throw new Error('No valid images');
 
-        const timeZone = 'Asia/Qatar';
+        const timeZone = (clientTimeZone || '').toString().trim() || 'UTC';
         const now = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone });
         const todayISO = getTodayISO(timeZone);
         const systemPrompt = buildSystemPrompt(language as string, now, todayISO, personalTouch, chatSubmode as string);

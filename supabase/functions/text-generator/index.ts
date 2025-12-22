@@ -178,8 +178,17 @@ serve(async (req) => {
 
         // Use structured extraction prompt to detect form fields
         const structuredPrompt = language === 'ar'
-          ? `انظر إلى هذه الصورة. إذا كانت تحتوي على نموذج (form) أو رسالة، استخرج المعلومات بتنسيق JSON التالي:
+          ? `انظر إلى هذه الصورة بعناية وحدد ما الذي تراه بالضبط (نوع المحتوى ومصدره)، ثم استخرج النص كاملاً قدر الإمكان.
+
+أعد النتيجة بتنسيق JSON فقط وبنفس البنية التالية. مهم جدًا:
+- لا تُرجع أي نص خارج JSON.
+- اجعل rawText شاملاً قدر الإمكان (لا تختصر).
+- إذا كان النص طويلًا، استخرج كل ما يمكنك رؤيته بوضوح.
+
 {
+  "isScreenshot": true/false,
+  "sourceType": "email" | "whatsapp" | "sms" | "imessage" | "support_portal" | "web_page" | "form" | "handwritten" | "photo" | "other",
+  "deviceType": "phone" | "tablet" | "desktop" | "unknown",
   "isForm": true/false,
   "formType": "support_ticket" | "contact_form" | "email" | "message" | "other",
   "fields": {
@@ -187,28 +196,39 @@ serve(async (req) => {
     "category": "الفئة أو نوع المشكلة إن وجد",
     "service_affected": "الخدمة المتأثرة إن وجد",
     "severity": "الأولوية أو الخطورة إن وجد",
-    "message": "نص الرسالة الرئيسي",
+    "message": "نص الرسالة الرئيسي / وصف المشكلة",
     "sender": "اسم المرسل إن وجد",
     "recipient": "اسم المستلم إن وجد"
   },
   "rawText": "كل النص المرئي في الصورة"
 }
+
 أعد JSON فقط، بدون أي نص إضافي.`
-          : `Look at this image. If it contains a form or message, extract the information in this JSON format:
+          : `Look at this image carefully and first identify what it is (type + source), then extract as much text as possible.
+
+Return ONLY valid JSON using this exact schema:
+- No extra text outside JSON.
+- rawText should include as much visible text as possible (do NOT summarize).
+- If the text is long, extract everything you can clearly read.
+
 {
+  "isScreenshot": true/false,
+  "sourceType": "email" | "whatsapp" | "sms" | "imessage" | "support_portal" | "web_page" | "form" | "handwritten" | "photo" | "other",
+  "deviceType": "phone" | "tablet" | "desktop" | "unknown",
   "isForm": true/false,
   "formType": "support_ticket" | "contact_form" | "email" | "message" | "other",
   "fields": {
-    "subject": "the subject or title if present",
-    "category": "the category or issue type if present",
+    "subject": "the subject/title if present",
+    "category": "category/issue type if present",
     "service_affected": "which service is affected if present",
     "severity": "priority or severity if present",
-    "message": "the main message body text",
+    "message": "the main message body / issue description",
     "sender": "sender name if present",
     "recipient": "recipient name if present"
   },
   "rawText": "all visible text in the image"
 }
+
 Return ONLY the JSON, no additional text.`;
 
         console.log("🎯 Text Generator: Calling OpenAI Vision for structured extraction");
@@ -221,7 +241,7 @@ Return ONLY the JSON, no additional text.`;
             "Authorization": `Bearer ${OPENAI_API_KEY}`,
           },
           body: JSON.stringify({
-            model: "gpt-4o-mini",
+            model: "gpt-4o",
             messages: [
               {
                 role: "user",
@@ -231,7 +251,8 @@ Return ONLY the JSON, no additional text.`;
                 ]
               }
             ],
-            max_tokens: 2000,
+            response_format: { type: "json_object" },
+            max_tokens: 4000,
             temperature: 0.1,
           }),
         });
@@ -260,6 +281,9 @@ Return ONLY the JSON, no additional text.`;
 
         // Try to parse as JSON, fallback to raw text
         let extractedData: {
+          isScreenshot?: boolean;
+          sourceType?: string;
+          deviceType?: string;
           isForm?: boolean;
           formType?: string;
           fields?: Record<string, string>;
@@ -293,7 +317,7 @@ Return ONLY the JSON, no additional text.`;
         await logAIFromRequest(req, {
           functionName: "text-generator",
           provider: "openai",
-          model: "gpt-4o-mini-vision",
+          model: "gpt-4o",
           inputText: "[image extraction]",
           outputText: extractedText,
           durationMs: visionDuration,
@@ -308,9 +332,14 @@ Return ONLY the JSON, no additional text.`;
               formType: extractedData.formType || 'other',
               fields: extractedData.fields || {}
             } : null,
+            extractedMeta: {
+              isScreenshot: extractedData.isScreenshot ?? true,
+              sourceType: extractedData.sourceType || 'other',
+              deviceType: extractedData.deviceType || 'unknown',
+            },
             mode: 'extract',
             extractTarget,
-            modelUsed: 'gpt-4o-mini'
+            modelUsed: 'gpt-4o'
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
@@ -373,7 +402,7 @@ Return ONLY the JSON, no additional text.`;
         const content = result?.candidates?.[0]?.content?.parts?.[0]?.text || "";
         if (content) {
           generatedText = content;
-          console.log("🎯 Text Generator: Successfully generated text, length:", generatedText.length, "model: gemini-2.5-flash-lite");
+          console.log("🎯 Text Generator: Successfully generated text, length:", generatedText?.length || 0, "model: gemini-2.5-flash-lite");
 
           // Log successful AI usage
           await logAIFromRequest(req, {
@@ -435,8 +464,8 @@ Return ONLY the JSON, no additional text.`;
           const content = openaiResult.choices?.[0]?.message?.content || "";
           if (content) {
             generatedText = content;
-            let modelUsed = genParams.model;
-            console.log("🎯 Text Generator: Successfully generated text, length:", generatedText.length, "model:", modelUsed);
+            const modelUsed = genParams.model;
+            console.log("🎯 Text Generator: Successfully generated text, length:", generatedText?.length || 0, "model:", modelUsed);
 
             return new Response(
               JSON.stringify({
@@ -491,8 +520,8 @@ Return ONLY the JSON, no additional text.`;
           const content = result.choices?.[0]?.message?.content || "";
           if (content) {
             generatedText = content;
-            let modelUsed = genParams.model;
-            console.log("🎯 Text Generator: Successfully generated text, length:", generatedText.length, "model:", modelUsed);
+            const modelUsed = genParams.model;
+            console.log("🎯 Text Generator: Successfully generated text, length:", generatedText?.length || 0, "model:", modelUsed);
 
             return new Response(
               JSON.stringify({

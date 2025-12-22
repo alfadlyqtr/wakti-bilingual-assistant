@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { ImagePlus } from 'lucide-react';
+import { ImagePlus, Loader2 } from 'lucide-react';
 import { callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
 import DiagramsTab from './DiagramsTab';
@@ -20,11 +20,11 @@ type ModelPreference = 'gpt-4o' | 'gpt-4o-mini' | 'auto';
 
 // Stable keys for option values; labels are localized at render time
 type ContentTypeKey =
-  | 'email' | 'text_message' | 'message' | 'blog_post' | 'story' | 'press_release' | 'cover_letter'
+  | 'auto' | 'email' | 'text_message' | 'message' | 'blog_post' | 'story' | 'press_release' | 'cover_letter'
   | 'research_brief' | 'research_report' | 'case_study' | 'how_to_guide' | 'policy_note' | 'product_description' | 'report' | 'essay' | 'proposal' | 'official_letter' | 'poem'
   | 'school_project' | 'questionnaire';
 type ToneKey =
-  | 'professional' | 'casual' | 'formal' | 'friendly' | 'persuasive' | 'romantic' | 'neutral' | 'empathetic' | 'confident' | 'humorous' | 'urgent'
+  | 'auto' | 'professional' | 'casual' | 'formal' | 'friendly' | 'persuasive' | 'romantic' | 'neutral' | 'empathetic' | 'confident' | 'humorous' | 'urgent'
   | 'apologetic' | 'inspirational' | 'motivational' | 'sympathetic' | 'sincere' | 'informative' | 'concise' | 'dramatic' | 'suspenseful' | 'authoritative' | 'educational';
 type RegisterKey = 'auto' | 'formal' | 'neutral' | 'casual' | 'slang' | 'poetic' | 'gen_z' | 'business_formal' | 'executive_brief';
 type LanguageVariantKey =
@@ -38,11 +38,13 @@ type LanguageVariantKey =
 type EmojisKey = 'auto' | 'none' | 'light' | 'rich' | 'extra';
 
 const CONTENT_TYPE_KEYS: ContentTypeKey[] = [
+  'auto',
   'email', 'text_message', 'message', 'blog_post', 'story', 'press_release', 'cover_letter',
   'research_brief', 'research_report', 'case_study', 'how_to_guide', 'policy_note', 'product_description', 'report', 'essay', 'proposal', 'official_letter', 'poem',
   'school_project', 'questionnaire'
 ];
 const TONE_KEYS: ToneKey[] = [
+  'auto',
   'professional', 'casual', 'formal', 'friendly', 'persuasive', 'romantic', 'neutral', 'empathetic', 'confident', 'humorous', 'urgent',
   'apologetic', 'inspirational', 'motivational', 'sympathetic', 'sincere', 'informative', 'concise', 'dramatic', 'suspenseful', 'authoritative', 'educational'
 ];
@@ -54,11 +56,13 @@ const EMOJIS_KEYS: EmojisKey[] = ['auto', 'none', 'light', 'rich', 'extra'];
 
 const ctLabel = (k: ContentTypeKey, lang: 'en' | 'ar') => {
   const en: Record<ContentTypeKey, string> = {
+    auto: 'Auto',
     email: 'Email', text_message: 'Text Message', message: 'Message', blog_post: 'Blog Post', story: 'Story', press_release: 'Press Release', cover_letter: 'Cover Letter',
     research_brief: 'Research Brief', research_report: 'Research Report', case_study: 'Case Study', how_to_guide: 'How-to Guide', policy_note: 'Policy Note', product_description: 'Product Description', report: 'Report', essay: 'Essay', proposal: 'Proposal', official_letter: 'Official Letter', poem: 'Poem',
     school_project: 'School Project', questionnaire: 'Questionnaire'
   };
   const ar: Record<ContentTypeKey, string> = {
+    auto: 'تلقائي',
     email: 'بريد إلكتروني', text_message: 'رسالة نصية', message: 'رسالة', blog_post: 'مقال مدونة', story: 'قصة', press_release: 'بيان صحفي', cover_letter: 'خطاب تقديم', poem: 'قصيدة',
     research_brief: 'موجز بحثي', research_report: 'تقرير بحثي', case_study: 'دراسة حالة', how_to_guide: 'دليل إرشادي', policy_note: 'مذكرة سياسات', product_description: 'وصف منتج', report: 'تقرير', essay: 'مقال', proposal: 'اقتراح', official_letter: 'خطاب رسمي',
     school_project: 'مشروع مدرسي', questionnaire: 'استبيان'
@@ -67,10 +71,12 @@ const ctLabel = (k: ContentTypeKey, lang: 'en' | 'ar') => {
 };
 const toneLabel = (k: ToneKey, lang: 'en' | 'ar') => {
   const en: Record<ToneKey, string> = {
+    auto: 'Auto',
     professional: 'Professional', casual: 'Casual', formal: 'Formal', friendly: 'Friendly', persuasive: 'Persuasive', romantic: 'Romantic', neutral: 'Neutral', empathetic: 'Empathetic', confident: 'Confident', humorous: 'Humorous', urgent: 'Urgent',
     apologetic: 'Apologetic', inspirational: 'Inspirational', motivational: 'Motivational', sympathetic: 'Sympathetic', sincere: 'Sincere', informative: 'Informative', concise: 'Concise', dramatic: 'Dramatic', suspenseful: 'Suspenseful', authoritative: 'Authoritative', educational: 'Educational'
   };
   const ar: Record<ToneKey, string> = {
+    auto: 'تلقائي',
     professional: 'مهني', casual: 'غير رسمي', formal: 'رسمي', friendly: 'ودود', persuasive: 'إقناعي', romantic: 'رومانسي', neutral: 'محايد', empathetic: 'متعاطف', confident: 'واثق', humorous: 'مرح', urgent: 'عاجل',
     apologetic: 'اعتذاري', inspirational: 'ملهم', motivational: 'تحفيزي', sympathetic: 'متعاطف', sincere: 'صادق', informative: 'معلوماتي', concise: 'موجز', dramatic: 'درامي', suspenseful: 'مشوّق', authoritative: 'موثوق', educational: 'تثقيفي'
   };
@@ -142,9 +148,9 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
 
   // Compose fields
   const [topic, setTopic] = useState('');
-  const [contentType, setContentType] = useState<ContentTypeKey>('email');
-  const [tone, setTone] = useState<ToneKey | ''>('');
-  const [length, setLength] = useState<'very_short' | 'short' | 'medium' | 'long' | 'very_long' | ''>('');
+  const [contentType, setContentType] = useState<ContentTypeKey>('auto');
+  const [tone, setTone] = useState<ToneKey>('auto');
+  const [length, setLength] = useState<'auto' | 'very_short' | 'short' | 'medium' | 'long' | 'very_long'>('auto');
   const [register, setRegister] = useState<RegisterKey>('auto');
   const [languageVariant, setLanguageVariant] = useState<LanguageVariantKey>('auto');
   const [emojis, setEmojis] = useState<EmojisKey>('auto');
@@ -152,7 +158,9 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   // Reply fields
   const [keyPoints, setKeyPoints] = useState('');
   const [originalMessage, setOriginalMessage] = useState('');
-  const [replyLength, setReplyLength] = useState<'very_short' | 'short' | 'medium' | 'long' | 'very_long' | ''>('');
+  const [replyLength, setReplyLength] = useState<'auto' | 'very_short' | 'short' | 'medium' | 'long' | 'very_long'>('auto');
+  const [replyAudience, setReplyAudience] = useState<'sender' | 'someone_else'>('sender');
+  const [replyRecipientName, setReplyRecipientName] = useState('');
 
   // UI state
   const [isLoading, setIsLoading] = useState(false);
@@ -166,6 +174,8 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   const replyFileInputRef = useRef<HTMLInputElement>(null);
   const [isExtractingCompose, setIsExtractingCompose] = useState(false);
   const [isExtractingReply, setIsExtractingReply] = useState(false);
+  const [extractProgressCompose, setExtractProgressCompose] = useState<{ current: number; total: number } | null>(null);
+  const [extractProgressReply, setExtractProgressReply] = useState<{ current: number; total: number } | null>(null);
 
   // Extracted form fields (from screenshot)
   interface ExtractedFormFields {
@@ -198,12 +208,32 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     return lines.join('\n');
   }, [language]);
 
+  const mergeExtractedFields = useCallback((base: ExtractedFormFields, incoming: ExtractedFormFields): ExtractedFormFields => {
+    const pick = (a?: string, b?: string) => (a && a.trim() ? a : (b && b.trim() ? b : ''));
+    const messageA = (base.message || '').trim();
+    const messageB = (incoming.message || '').trim();
+    const mergedMessage = messageA && messageB
+      ? `${messageA}\n\n${messageB}`
+      : (messageA || messageB);
+
+    return {
+      subject: pick(base.subject, incoming.subject),
+      category: pick(base.category, incoming.category),
+      service_affected: pick(base.service_affected, incoming.service_affected),
+      severity: pick(base.severity, incoming.severity),
+      message: mergedMessage,
+      sender: pick(base.sender, incoming.sender),
+      recipient: pick(base.recipient, incoming.recipient),
+    };
+  }, []);
+
   // Cached generated texts (persisted)
   const CACHE_KEY = 'wakti_generated_text_cache_v1';
   const [cachedTexts, setCachedTexts] = useState<string[]>([]);
 
   // Local accent for this page (match purple Text Generator icon)
   const fieldAccent = "border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500";
+  const placeholderMuted = "placeholder:text-muted-foreground/60 dark:placeholder:text-muted-foreground/50";
 
   // Load cache on mount
   useEffect(() => {
@@ -250,9 +280,11 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   const buildPrompt = (): string => {
     if (activeTab === 'compose') {
       const parts = [
-        `Write a ${ctLabel(contentType, language)} about: ${topic}`,
-        tone ? `Tone: ${tone}` : '',
-        length ? `Length: ${length}` : '',
+        contentType === 'auto'
+          ? `Write about: ${topic}`
+          : `Write a ${ctLabel(contentType, language)} about: ${topic}`,
+        tone !== 'auto' ? `Tone: ${tone}` : '',
+        length !== 'auto' ? `Length: ${length}` : '',
         register ? `Register: ${register}` : '',
         languageVariant ? `Language Variant: ${languageVariant}` : '',
         emojis ? `Emojis: ${emojis}` : '',
@@ -281,8 +313,8 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
           formSeverity ? `Severity (detected): ${formSeverity}` : '',
           `Message/context (detected): ${formMessage || 'N/A'}`,
           keyPoints ? `Key points to include: ${keyPoints}` : '',
-          replyLength ? `Reply length: ${replyLength}` : '',
-          tone ? `Tone: ${tone}` : '',
+          replyLength !== 'auto' ? `Reply length: ${replyLength}` : '',
+          tone !== 'auto' ? `Tone: ${tone}` : '',
           register ? `Register: ${register}` : '',
           languageVariant ? `Language Variant: ${languageVariant}` : '',
           emojis ? `Emojis: ${emojis}` : '',
@@ -290,15 +322,24 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         return parts.join('\n');
       }
 
+      // Normal reply flow (email/message): choose whether we are replying to the sender
+      // or messaging someone else (e.g., a friend) about the original message.
+      const audienceLine = replyAudience === 'someone_else'
+        ? `Write a message to my friend${replyRecipientName.trim() ? ` (${replyRecipientName.trim()})` : ''}. The message should be addressed to my friend, not to the original sender.`
+        : 'Craft a reply to the original sender.';
+
       const parts = [
-        'Craft a reply.',
-        keyPoints ? `Key points to include: ${keyPoints}` : '',
-        replyLength ? `Reply length: ${replyLength}` : '',
-        tone ? `Tone: ${tone}` : '',
+        audienceLine,
+        replyAudience === 'someone_else'
+          ? 'Your job: read the original message, extract the key issues/next steps, then write a clear message to my friend telling them what to do.'
+          : '',
+        keyPoints ? `Instructions / key points from me: ${keyPoints}` : '',
+        replyLength !== 'auto' ? `Reply length: ${replyLength}` : '',
+        tone !== 'auto' ? `Tone: ${tone}` : '',
         register ? `Register: ${register}` : '',
         languageVariant ? `Language Variant: ${languageVariant}` : '',
         emojis ? `Emojis: ${emojis}` : '',
-        'Original message:',
+        'Original message (context):',
         originalMessage,
       ].filter(Boolean);
       return parts.join('\n');
@@ -389,8 +430,8 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         return;
       }
       const modeForRequest: 'compose' | 'reply' = activeTab === 'compose' ? 'compose' : activeTab === 'reply' ? 'reply' : mode;
-      const effectiveLength = (val: string | ''): 'short' | 'medium' | 'long' | undefined => {
-        if (!val) return undefined;
+      const effectiveLength = (val: string): 'short' | 'medium' | 'long' | undefined => {
+        if (!val || val === 'auto') return undefined;
         if (val === 'very_short') return 'short';
         if (val === 'very_long') return 'long';
         return val as 'short' | 'medium' | 'long';
@@ -401,7 +442,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         language,
         modelPreference: modelPreference === 'auto' ? undefined : modelPreference,
         temperature,
-        contentType: modeForRequest === 'compose' ? contentType : undefined,
+        contentType: modeForRequest === 'compose' ? (contentType === 'auto' ? undefined : contentType) : undefined,
         length: modeForRequest === 'compose' ? effectiveLength(length) : undefined,
         replyLength: modeForRequest === 'reply' ? effectiveLength(replyLength) : undefined,
       };
@@ -435,71 +476,98 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
 
   const title = language === 'ar' ? 'منشئ النص الذكي' : 'Smart Text Generator';
 
-  // Handle screenshot upload and extract text using text-generator's extract mode
+  // Handle screenshot upload(s) and extract text using text-generator's extract mode
   const handleScreenshotUpload = useCallback(async (
-    file: File,
+    files: File[],
     target: 'compose' | 'reply'
   ) => {
-    if (!file) return;
+    if (!files?.length) return;
     const setExtracting = target === 'compose' ? setIsExtractingCompose : setIsExtractingReply;
+    const setProgress = target === 'compose' ? setExtractProgressCompose : setExtractProgressReply;
+
     setExtracting(true);
+    setProgress({ current: 0, total: files.length });
     setError('');
+
     try {
-      // Convert file to base64 data URI
-      const reader = new FileReader();
-      const base64Promise = new Promise<string>((resolve, reject) => {
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      const base64 = await base64Promise;
+      let combinedTextParts: string[] = [];
+      let combinedFields: ExtractedFormFields = {};
 
-      // Call text-generator with mode='extract' - same backend, no brain involved
-      const resp = await callEdgeFunctionWithRetry<any>('text-generator', {
-        body: {
-          mode: 'extract',
-          image: base64,
-          extractTarget: target,
-          language
-        },
-        maxRetries: 2,
-        retryDelay: 1000,
-      });
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        setProgress({ current: i + 1, total: files.length });
 
-      const extractedText = resp?.extractedText || '';
-      const formData = resp?.extractedForm;
-      
-      // If we detected a form, populate the form fields UI
-      if (formData && formData.fields) {
-        setExtractedForm(formData);
-        setFormSubject(formData.fields.subject || '');
-        setFormServiceAffected(formData.fields.service_affected || formData.fields.category || '');
-        setFormMessage(formData.fields.message || '');
-        setFormSeverity(formData.fields.severity || '');
-        setShowExtractedFields(false);
-        if (target === 'reply') {
-          const summary = buildFormSummary(formData.fields);
-          if (summary.trim()) {
-            setOriginalMessage(summary);
-          }
+        // Convert file to base64 data URI
+        const reader = new FileReader();
+        const base64Promise = new Promise<string>((resolve, reject) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        const base64 = await base64Promise;
+
+        const resp = await callEdgeFunctionWithRetry<any>('text-generator', {
+          body: {
+            mode: 'extract',
+            image: base64,
+            extractTarget: target,
+            language
+          },
+          maxRetries: 2,
+          retryDelay: 1000,
+        });
+
+        const extractedText = (resp?.extractedText || '').trim();
+        const formData = resp?.extractedForm;
+
+        if (formData?.fields) {
+          combinedFields = mergeExtractedFields(combinedFields, formData.fields as ExtractedFormFields);
         }
-      } else if (extractedText.trim()) {
-        // Fallback: no structured form detected, just fill the text field
+        if (extractedText) {
+          combinedTextParts.push(extractedText);
+        }
+      }
+
+      const combinedText = combinedTextParts.join('\n\n');
+
+      // If we detected any form fields across the uploads, treat it as a combined form
+      const hasAnyFormField = Object.values(combinedFields).some((v) => (v || '').toString().trim());
+      if (hasAnyFormField) {
+        setExtractedForm({ formType: extractedForm?.formType || 'other', fields: combinedFields });
+        setFormSubject(combinedFields.subject || '');
+        setFormServiceAffected(combinedFields.service_affected || combinedFields.category || '');
+        setFormMessage(combinedFields.message || '');
+        setFormSeverity(combinedFields.severity || '');
+        setShowExtractedFields(false);
+
+        if (target === 'reply') {
+          const summary = buildFormSummary(combinedFields);
+          if (summary.trim()) setOriginalMessage(summary);
+        } else if (combinedText) {
+          // Compose: if it was a form-like image set, also include raw combined text into topic
+          setTopic((prev) => prev ? `${prev}\n\n${combinedText}` : combinedText);
+        }
+        return;
+      }
+
+      // Fallback: no structured form detected, just fill/append the combined text
+      if (combinedText) {
         if (target === 'compose') {
-          setTopic((prev) => prev ? `${prev}\n${extractedText.trim()}` : extractedText.trim());
+          setTopic((prev) => prev ? `${prev}\n\n${combinedText}` : combinedText);
         } else {
-          setOriginalMessage((prev) => prev ? `${prev}\n${extractedText.trim()}` : extractedText.trim());
+          setOriginalMessage((prev) => prev ? `${prev}\n\n${combinedText}` : combinedText);
         }
       } else {
-        setError(resp?.error || (language === 'ar' ? 'فشل استخراج النص من الصورة' : 'Failed to extract text from image'));
+        setError(language === 'ar' ? 'فشل استخراج النص من الصورة' : 'Failed to extract text from image');
       }
     } catch (e: any) {
       console.error('Screenshot extraction error:', e);
       setError(e?.message || (language === 'ar' ? 'فشل استخراج النص' : 'Text extraction failed'));
     } finally {
       setExtracting(false);
+      setProgress(null);
     }
-  }, [language, buildFormSummary]);
+  }, [language, buildFormSummary, mergeExtractedFields, extractedForm?.formType]);
 
   // Keep Original Message in sync with the editable extracted form fields
   useEffect(() => {
@@ -583,10 +651,12 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                       ref={composeFileInputRef}
                       type="file"
                       accept="image/*"
+                      multiple
+                      aria-label={language === 'ar' ? 'رفع صور' : 'Upload screenshots'}
                       className="hidden"
                       onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) handleScreenshotUpload(file, 'compose');
+                        const files = Array.from(e.target.files || []);
+                        if (files.length) handleScreenshotUpload(files, 'compose');
                         e.target.value = '';
                       }}
                     />
@@ -594,12 +664,18 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                       type="button"
                       onClick={() => composeFileInputRef.current?.click()}
                       disabled={isExtractingCompose}
-                      className="text-xs px-2 py-1 rounded-md border hover:bg-muted flex items-center gap-1"
+                      className={`text-xs px-2 py-1 rounded-md border hover:bg-muted flex items-center gap-1 ${isExtractingCompose ? 'bg-purple-100 dark:bg-purple-900/30 border-purple-400 animate-pulse' : ''}`}
                       aria-label={language === 'ar' ? 'رفع صورة' : 'Upload screenshot'}
                       title={language === 'ar' ? 'رفع صورة لاستخراج النص' : 'Upload screenshot to extract text'}
                     >
-                      <ImagePlus className={`w-3.5 h-3.5 ${isExtractingCompose ? 'animate-pulse' : ''}`} />
-                      {isExtractingCompose ? (language === 'ar' ? '...' : '...') : ''}
+                      {isExtractingCompose
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : <ImagePlus className="w-3.5 h-3.5" />}
+                      {isExtractingCompose
+                        ? (extractProgressCompose
+                          ? `${extractProgressCompose.current}/${extractProgressCompose.total}`
+                          : (language === 'ar' ? 'جارٍ...' : '...'))
+                        : ''}
                     </button>
                     <button
                       type="button"
@@ -612,7 +688,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                   </div>
                 </div>
                 <textarea
-                  className={`w-full border rounded p-3 min-h-[120px] ${fieldAccent}`}
+                  className={`w-full border rounded p-3 min-h-[120px] ${fieldAccent} ${placeholderMuted}`}
                   placeholder={language === 'ar' ? 'أدخل الموضوع أو الفكرة...' : 'Topic or idea you want to write about...'}
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
@@ -630,7 +706,6 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 <div className="grid gap-2">
                   <label className="text-sm font-medium">{language === 'ar' ? 'النبرة' : 'Tone'}</label>
                   <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={tone} onChange={(e) => setTone(e.target.value as ToneKey)}>
-                    <option value="">{language === 'ar' ? 'اختر النبرة' : 'Select tone'}</option>
                     {TONE_KEYS.map((k) => (<option key={k} value={k}>{toneLabel(k, language)}</option>))}
                   </select>
                 </div>
@@ -641,7 +716,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 <div className="grid gap-2">
                   <label className="text-sm font-medium">{language === 'ar' ? 'الطول' : 'Length'}</label>
                   <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={length} onChange={(e) => setLength(e.target.value as any)}>
-                    <option value="">{language === 'ar' ? 'اختر الطول' : 'Select length'}</option>
+                    <option value="auto">{language === 'ar' ? 'تلقائي' : 'Auto'}</option>
                     <option value="very_short">{language === 'ar' ? 'قصير جدًا' : 'Very short'}</option>
                     <option value="short">{language === 'ar' ? 'قصير' : 'Short'}</option>
                     <option value="medium">{language === 'ar' ? 'متوسط' : 'Medium'}</option>
@@ -694,7 +769,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                   </button>
                 </div>
                 <textarea
-                  className={`w-full border rounded px-3 py-2 min-h-[96px] ${fieldAccent}`}
+                  className={`w-full border rounded px-3 py-2 min-h-[96px] ${fieldAccent} ${placeholderMuted}`}
                   placeholder={
                     language === 'ar'
                       ? 'نقاط أساسية مفصولة بفواصل. مثال: اعتذار عن التأخير، رقم الطلب #1234، إرسال البديل، رقم التتبع، خصم 10%'
@@ -704,6 +779,35 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                   onChange={(e) => setKeyPoints(e.target.value)}
                 />
               </div>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium" htmlFor="replyAudienceSelect">{language === 'ar' ? 'لمن هذه الرسالة؟' : 'Who is this message for?'} </label>
+                  <select
+                    id="replyAudienceSelect"
+                    className={`border rounded px-3 py-2 ${fieldAccent}`}
+                    value={replyAudience}
+                    onChange={(e) => setReplyAudience(e.target.value as 'sender' | 'someone_else')}
+                  >
+                    <option value="sender">{language === 'ar' ? 'الرد على المرسل الأصلي' : 'Reply to original sender'}</option>
+                    <option value="someone_else">{language === 'ar' ? 'رسالة لشخص آخر (صديق/زميل)' : 'Message someone else (friend)'}</option>
+                  </select>
+                </div>
+
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium" htmlFor="replyRecipientNameInput">{language === 'ar' ? 'اسم الشخص (اختياري)' : 'Name (optional)'} </label>
+                  <input
+                    id="replyRecipientNameInput"
+                    type="text"
+                    className={`border rounded px-3 py-2 ${fieldAccent} ${placeholderMuted}`}
+                    placeholder={language === 'ar' ? 'مثال: Jan' : 'e.g., Jan'}
+                    value={replyRecipientName}
+                    onChange={(e) => setReplyRecipientName(e.target.value)}
+                    disabled={replyAudience !== 'someone_else'}
+                  />
+                </div>
+              </div>
+
               <div className="grid gap-2">
                 <div className="flex items-center justify-between gap-2">
                   <label className="text-sm font-medium">{language === 'ar' ? 'الرسالة الأصلية' : 'Original Message'}</label>
@@ -712,10 +816,12 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                       ref={replyFileInputRef}
                       type="file"
                       accept="image/*"
+                      multiple
+                      aria-label={language === 'ar' ? 'رفع صور' : 'Upload screenshots'}
                       className="hidden"
                       onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) handleScreenshotUpload(file, 'reply');
+                        const files = Array.from(e.target.files || []);
+                        if (files.length) handleScreenshotUpload(files, 'reply');
                         e.target.value = '';
                       }}
                     />
@@ -723,12 +829,18 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                       type="button"
                       onClick={() => replyFileInputRef.current?.click()}
                       disabled={isExtractingReply}
-                      className="text-xs px-2 py-1 rounded-md border hover:bg-muted flex items-center gap-1"
+                      className={`text-xs px-2 py-1 rounded-md border hover:bg-muted flex items-center gap-1 ${isExtractingReply ? 'bg-purple-100 dark:bg-purple-900/30 border-purple-400 animate-pulse' : ''}`}
                       aria-label={language === 'ar' ? 'رفع صورة' : 'Upload screenshot'}
                       title={language === 'ar' ? 'رفع صورة لاستخراج النص' : 'Upload screenshot to extract text'}
                     >
-                      <ImagePlus className={`w-3.5 h-3.5 ${isExtractingReply ? 'animate-pulse' : ''}`} />
-                      {isExtractingReply ? (language === 'ar' ? '...' : '...') : ''}
+                      {isExtractingReply
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : <ImagePlus className="w-3.5 h-3.5" />}
+                      {isExtractingReply
+                        ? (extractProgressReply
+                          ? `${extractProgressReply.current}/${extractProgressReply.total}`
+                          : (language === 'ar' ? 'جارٍ...' : '...'))
+                        : ''}
                     </button>
                     <button
                       type="button"
@@ -741,7 +853,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                   </div>
                 </div>
                 <textarea
-                  className={`w-full border rounded p-3 min-h-[140px] ${fieldAccent}`}
+                  className={`w-full border rounded p-3 min-h-[140px] ${fieldAccent} ${placeholderMuted}`}
                   placeholder={language === 'ar' ? 'الرسالة التي تريد الرد عليها...' : 'Original message you want to reply to...'}
                   value={originalMessage}
                   onChange={(e) => setOriginalMessage(e.target.value)}
@@ -790,7 +902,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                         </label>
                         <input
                           type="text"
-                          className={`w-full border rounded px-3 py-2 text-sm ${fieldAccent}`}
+                          className={`w-full border rounded px-3 py-2 text-sm ${fieldAccent} ${placeholderMuted}`}
                           placeholder={language === 'ar' ? 'أدخل الموضوع...' : 'Enter subject...'}
                           value={formSubject}
                           onChange={(e) => setFormSubject(e.target.value)}
@@ -804,7 +916,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                         </label>
                         <input
                           type="text"
-                          className={`w-full border rounded px-3 py-2 text-sm ${fieldAccent}`}
+                          className={`w-full border rounded px-3 py-2 text-sm ${fieldAccent} ${placeholderMuted}`}
                           placeholder={language === 'ar' ? 'أدخل الخدمة...' : 'Enter service...'}
                           value={formServiceAffected}
                           onChange={(e) => setFormServiceAffected(e.target.value)}
@@ -832,7 +944,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                           {language === 'ar' ? 'الرسالة' : 'Message'}
                         </label>
                         <textarea
-                          className={`w-full border rounded px-3 py-2 text-sm min-h-[100px] ${fieldAccent}`}
+                          className={`w-full border rounded px-3 py-2 text-sm min-h-[100px] ${fieldAccent} ${placeholderMuted}`}
                           placeholder={language === 'ar' ? 'أدخل رسالتك...' : 'Enter your message...'}
                           value={formMessage}
                           onChange={(e) => setFormMessage(e.target.value)}
@@ -848,14 +960,13 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 <div className="grid gap-2">
                   <label className="text-sm font-medium">{language === 'ar' ? 'النبرة' : 'Tone'}</label>
                   <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={tone} onChange={(e) => setTone(e.target.value as ToneKey)}>
-                    <option value="">{language === 'ar' ? 'اختر النبرة' : 'Select tone'}</option>
                     {TONE_KEYS.map((k) => (<option key={k} value={k}>{toneLabel(k, language)}</option>))}
                   </select>
                 </div>
                 <div className="grid gap-2">
                   <label className="text-sm font-medium">{language === 'ar' ? 'الطول' : 'Length'}</label>
                   <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={replyLength} onChange={(e) => setReplyLength(e.target.value as any)}>
-                    <option value="">{language === 'ar' ? 'اختر الطول' : 'Select length'}</option>
+                    <option value="auto">{language === 'ar' ? 'تلقائي' : 'Auto'}</option>
                     <option value="very_short">{language === 'ar' ? 'قصير جدًا' : 'Very short'}</option>
                     <option value="short">{language === 'ar' ? 'قصير' : 'Short'}</option>
                     <option value="medium">{language === 'ar' ? 'متوسط' : 'Medium'}</option>
