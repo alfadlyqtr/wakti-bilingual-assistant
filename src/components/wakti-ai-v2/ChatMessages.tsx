@@ -206,6 +206,8 @@ export function ChatMessages({
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null); // Fallback for HTML5 audio
   const audioCacheRef = useRef<Map<string, string>>(new Map()); // cacheKey -> object URL
+  const ttsIdbRef = useRef<IDBDatabase | null>(null);
+  const ttsIdbOpenPromiseRef = useRef<Promise<IDBDatabase> | null>(null);
   const PERSIST_CACHE_PREFIX = 'wakti_tts_cache_'; // sessionStorage key prefix
   const [fetchingIds, setFetchingIds] = useState<Set<string>>(new Set()); // active network fetches for playback
   const [progressMap, setProgressMap] = useState<Map<string, number>>(new Map());
@@ -224,6 +226,95 @@ export function ChatMessages({
     const len = bytes.byteLength;
     for (let i = 0; i < len; i++) binary += String.fromCharCode(bytes[i]);
     return btoa(binary);
+  };
+
+  const bytesToHex = (bytes: Uint8Array) => {
+    let hex = '';
+    for (let i = 0; i < bytes.length; i++) {
+      hex += bytes[i].toString(16).padStart(2, '0');
+    }
+    return hex;
+  };
+
+  const openTtsIdb = (): Promise<IDBDatabase> => {
+    if (ttsIdbRef.current) return Promise.resolve(ttsIdbRef.current);
+    if (ttsIdbOpenPromiseRef.current) return ttsIdbOpenPromiseRef.current;
+
+    ttsIdbOpenPromiseRef.current = new Promise((resolve, reject) => {
+      try {
+        const req = indexedDB.open('wakti_tts_cache', 1);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains('clips')) {
+            db.createObjectStore('clips', { keyPath: 'key' });
+          }
+        };
+        req.onsuccess = () => {
+          ttsIdbRef.current = req.result;
+          resolve(req.result);
+        };
+        req.onerror = () => {
+          reject(req.error);
+        };
+      } catch (e) {
+        reject(e);
+      }
+    });
+
+    return ttsIdbOpenPromiseRef.current;
+  };
+
+  const computeTtsCacheKey = async (parts: {
+    text: string;
+    voice_id: string;
+    gender: string;
+    language: string;
+  }): Promise<string> => {
+    const payload = `${parts.language}::${parts.voice_id}::${parts.gender}::${parts.text}`;
+    const data = new TextEncoder().encode(payload);
+    const digest = await crypto.subtle.digest('SHA-256', data);
+    return bytesToHex(new Uint8Array(digest));
+  };
+
+  const idbGetClip = async (key: string): Promise<{ mime: string; data: ArrayBuffer } | null> => {
+    try {
+      const db = await openTtsIdb();
+      const tx = db.transaction('clips', 'readonly');
+      const store = tx.objectStore('clips');
+      const req = store.get(key);
+      const result = await new Promise<any>((resolve, reject) => {
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      if (!result?.data) return null;
+      return { mime: result.mime || 'audio/mpeg', data: result.data as ArrayBuffer };
+    } catch {
+      return null;
+    }
+  };
+
+  const idbPutClip = async (key: string, mime: string, data: ArrayBuffer) => {
+    try {
+      const db = await openTtsIdb();
+      const tx = db.transaction('clips', 'readwrite');
+      tx.objectStore('clips').put({ key, mime, data, ts: Date.now(), size: data.byteLength });
+      await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      });
+    } catch {}
+  };
+
+  const canUseHtmlAudioForMime = (mime: string) => {
+    try {
+      const a = audioRef.current;
+      if (!a) return false;
+      const test = a.canPlayType(mime);
+      return test === 'probably' || test === 'maybe';
+    } catch {
+      return false;
+    }
   };
 
   const logPlayFailure = (where: string, err: any, a: HTMLAudioElement) => {
@@ -279,8 +370,22 @@ export function ChatMessages({
       t = t.replace(/\s{2,}/g, ' ').trim();
       return t;
     } catch {
-      return raw;
+      return raw || '';
     }
+  };
+
+  const capTtsText = (raw: string, maxChars: number) => {
+    const t = (raw || '').trim();
+    if (t.length <= maxChars) return t;
+    const slice = t.slice(0, maxChars);
+    const lastEnd = Math.max(
+      slice.lastIndexOf('.'),
+      slice.lastIndexOf('!'),
+      slice.lastIndexOf('?'),
+      slice.lastIndexOf('؟')
+    );
+    if (lastEnd >= Math.floor(maxChars * 0.6)) return slice.slice(0, lastEnd + 1).trim();
+    return slice.trim();
   };
 
   // Session manager now arbitrates audio; no event-based coupling needed here.
@@ -419,22 +524,12 @@ export function ChatMessages({
   };
 
   const handleSpeak = async (text: string, messageId: string) => {
-    // If this message is already playing, toggle pause/stop
-    if (speakingMessageId === messageId) {
-      // Web Audio API doesn't support pause, so we stop instead
-      stopCurrentAudio();
-      setSpeakingMessageId(null);
-      setIsPaused(false);
-      return;
-    }
-
     // Stop any other message that is currently playing
     stopCurrentAudio();
 
     let cleanText = sanitizeForTTS(text);
     if (!cleanText || cleanText.length < 3) {
       try {
-        // Fallback: keep content but neutralize tables/pipes and markdown
         let alt = text || '';
         alt = alt.replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1');
         alt = alt.replace(/`{1,3}[^`]*`{1,3}/g, ' ');
@@ -452,8 +547,9 @@ export function ChatMessages({
       return;
     }
 
+    const spokenText = cleanText;
+
     // --- Mobile Unlock (AudioContext) ---
-    // Resume AudioContext on first user gesture
     if (!audioUnlockedRef.current) {
       try {
         const ctx = getAudioContext();
@@ -471,24 +567,18 @@ export function ChatMessages({
     const playWithWebAudio = async (arrayBuffer: ArrayBuffer, contentType: string) => {
       try {
         const ctx = getAudioContext();
-        
-        // Resume if suspended (mobile browsers)
         if (ctx.state === 'suspended') {
           await ctx.resume();
         }
 
-        // Decode the audio data
-        const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0)); // slice to avoid detached buffer
-        
-        // Create and configure source node
+        const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
+
         const source = ctx.createBufferSource();
         source.buffer = audioBuffer;
         source.connect(ctx.destination);
-        
-        // Store reference for stopping
+
         audioSourceRef.current = source;
-        
-        // Set up event handlers
+
         source.onended = () => {
           setSpeakingMessageId(null);
           setIsPaused(false);
@@ -496,18 +586,17 @@ export function ChatMessages({
           audioSourceRef.current = null;
         };
 
-        // Start playback
         source.start(0);
         setSpeakingMessageId(messageId);
         setIsPaused(false);
-        
+
         console.debug('[TTS] Web Audio playback started', {
           duration: audioBuffer.duration,
           sampleRate: audioBuffer.sampleRate,
           channels: audioBuffer.numberOfChannels,
           contentType,
         });
-        
+
         return true;
       } catch (err) {
         console.warn('[TTS] Web Audio decode failed, will try HTML5 fallback:', err);
@@ -532,10 +621,9 @@ export function ChatMessages({
         el.preload = 'auto';
       } catch {}
 
-      // iOS prefers data URLs
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || ((navigator.platform === 'MacIntel') && (navigator.maxTouchPoints > 1));
       let audioUrl: string;
-      
+
       if (isIOS) {
         try {
           const buf = await blob.arrayBuffer();
@@ -588,16 +676,41 @@ export function ChatMessages({
         throw new Error('VITE_SUPABASE_URL is not defined.');
       }
 
-      // Detect language for voice selection
-      const isArabicText = /[\u0600-\u06FF]/.test(cleanText);
+      const isArabicText = /[\u0600-\u06FF]/.test(spokenText);
       const { ar, en } = getSelectedVoices();
       const voice_id = (isArabicText || language === 'ar') ? ar : en;
       const user_name = personalTouch?.nickname || userProfile?.display_name || undefined;
-      
-      // Determine gender from voice_id for Gemini TTS
-      const gender = voice_id.toLowerCase().includes('zephyr') || 
+
+      const gender = voice_id.toLowerCase().includes('zephyr') ||
                      voice_id.toLowerCase().includes('vindemiatrix') ||
                      voice_id.toLowerCase().includes('female') ? 'female' : 'male';
+
+      const cacheKey = await computeTtsCacheKey({
+        text: spokenText,
+        voice_id,
+        gender,
+        language,
+      });
+
+      const cached = await idbGetClip(cacheKey);
+      if (cached?.data?.byteLength) {
+        const mime = cached.mime || 'audio/mpeg';
+        const cachedBuf = cached.data;
+        console.debug('[TTS] Cache hit (IndexedDB)', { messageId, mime, size: cachedBuf.byteLength });
+
+        if (canUseHtmlAudioForMime(mime)) {
+          const blob = new Blob([cachedBuf], { type: mime });
+          await playWithHTML5(blob, mime);
+        } else {
+          const ok = await playWithWebAudio(cachedBuf, mime);
+          if (!ok) {
+            const blob = new Blob([cachedBuf], { type: mime });
+            await playWithHTML5(blob, mime);
+          }
+        }
+
+        return;
+      }
 
       const response = await fetch(`${supabaseUrl}/functions/v1/voice-tts`, {
         method: 'POST',
@@ -606,7 +719,7 @@ export function ChatMessages({
           'Accept': 'audio/wav, audio/mpeg, audio/*',
           ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
         },
-        body: JSON.stringify({ text: cleanText, voice_id, gender, user_name }),
+        body: JSON.stringify({ text: spokenText, voice_id, gender, user_name }),
       });
 
       if (!response.ok) {
@@ -615,13 +728,9 @@ export function ChatMessages({
       }
 
       const contentType = response.headers.get('content-type') || 'audio/wav';
-      const ttsProvider = response.headers.get('x-tts-provider') || 'unknown';
-      const ttsVoice = response.headers.get('x-tts-voice') || 'unknown';
-      
-      console.debug('[TTS] Response received', { contentType, ttsProvider, ttsVoice });
+      console.debug('[TTS] Response received', { contentType });
 
       const arrayBuffer = await response.arrayBuffer();
-      
       if (!arrayBuffer || arrayBuffer.byteLength === 0) {
         console.error('[TTS] Empty audio received. Aborting playback.');
         setSpeakingMessageId(null);
@@ -630,13 +739,19 @@ export function ChatMessages({
 
       console.debug('[TTS] Audio data received', { size: arrayBuffer.byteLength, contentType });
 
-      // Try Web Audio API first (handles WAV from Gemini TTS)
-      const webAudioSuccess = await playWithWebAudio(arrayBuffer, contentType);
-      
-      if (!webAudioSuccess) {
-        // Fallback to HTML5 Audio
+      if (contentType && /^audio\//i.test(contentType)) {
+        await idbPutClip(cacheKey, contentType, arrayBuffer);
+      }
+
+      if (contentType && /^audio\//i.test(contentType) && canUseHtmlAudioForMime(contentType)) {
         const blob = new Blob([arrayBuffer], { type: contentType });
         await playWithHTML5(blob, contentType);
+      } else {
+        const webAudioSuccess = await playWithWebAudio(arrayBuffer, contentType);
+        if (!webAudioSuccess) {
+          const blob = new Blob([arrayBuffer], { type: contentType });
+          await playWithHTML5(blob, contentType);
+        }
       }
 
     } catch (err) {

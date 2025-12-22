@@ -37,7 +37,7 @@ const GOOGLE_MAPS_API_KEY = Deno.env.get('GOOGLE_MAPS_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-console.log("WAKTI AI V2 STREAMING BRAIN: Ready (with Wolfram|Alpha + AI Logging)");
+console.log("WAKTI AI V2 STREAMING BRAIN: Ready (with verified facts + AI Logging)");
 
 // === TOKEN ESTIMATION ===
 // Rough estimate: ~4 chars = 1 token for English, ~3 chars for mixed/Arabic
@@ -900,7 +900,7 @@ serve(async (req) => {
             // Intent detection is now built into the system prompt itself
             // (searchIntent is still used for Maps grounding below)
 
-            const searchSystemPrompt = `You are Wakti AI — an elite, hyper-intelligent Search Intelligence.
+            const searchSystemPrompt = `You are WAKTI AI — an elite, hyper-intelligent Search Intelligence.
 You are the Al Jazeera of news (deep context), the ESPN of sports (real-time stakes), and the Oxford of research (academic rigor).
 You do not "chat". You perform REAL-TIME SYNTHESIS. You are a digital strategist with the brain of a researcher and the style of a high-end concierge.
 
@@ -1234,12 +1234,12 @@ If you are running out of space, keep this order and drop the rest:
                 // Build context for AI
                 if (chatSubmode === 'study') {
                   wolframContext = language === 'ar'
-                    ? `[بيانات Wolfram|Alpha الدقيقة]\nالسؤال: ${wolfResult.interpretation || message}\nالإجابة: ${wolfResult.answer}${wolfResult.steps?.length ? '\nالخطوات: ' + wolfResult.steps.join(' → ') : ''}\n\nاستخدم هذه البيانات لشرح الإجابة بطريقة تعليمية واضحة. اعرض الإجابة أولاً ثم الشرح.`
-                    : `[Wolfram|Alpha verified data]\nQuestion: ${wolfResult.interpretation || message}\nAnswer: ${wolfResult.answer}${wolfResult.steps?.length ? '\nSteps: ' + wolfResult.steps.join(' → ') : ''}\n\nUse this data to explain the answer in a clear, educational way. Present the answer first, then explain.`;
+                    ? `[بيانات موثقة]\nالسؤال: ${wolfResult.interpretation || message}\nالإجابة: ${wolfResult.answer}${wolfResult.steps?.length ? '\nالخطوات: ' + wolfResult.steps.join(' → ') : ''}\n\nاستخدم هذه البيانات لشرح الإجابة بطريقة تعليمية واضحة. اعرض الإجابة أولاً ثم الشرح.`
+                    : `[Verified data]\nQuestion: ${wolfResult.interpretation || message}\nAnswer: ${wolfResult.answer}${wolfResult.steps?.length ? '\nSteps: ' + wolfResult.steps.join(' → ') : ''}\n\nUse this data to explain the answer in a clear, educational way. Present the answer first, then explain.`;
                 } else {
                   wolframContext = language === 'ar'
-                    ? `[حقيقة موثقة من Wolfram|Alpha: ${wolfResult.answer}]\n\nاستخدم هذه الحقيقة في إجابتك بشكل طبيعي.`
-                    : `[Verified fact from Wolfram|Alpha: ${wolfResult.answer}]\n\nUse this fact naturally in your response.`;
+                    ? `[حقيقة موثقة: ${wolfResult.answer}]\n\nاستخدم هذه الحقيقة في إجابتك بشكل طبيعي.`
+                    : `[Verified fact: ${wolfResult.answer}]\n\nUse this fact naturally in your response.`;
                 }
                 console.log('✅ WOLFRAM: Data injected into prompt');
                 wolframUsedOuter = true; // Mark that Wolfram was successfully used

@@ -433,8 +433,7 @@ serve(async (req: Request) => {
               model_name: 'gemini-2.5-flash-tts', // Use Gemini TTS model
             },
             audioConfig: {
-              audioEncoding: 'LINEAR16', // WAV format for better browser compatibility
-              sampleRateHertz: 24000,
+              audioEncoding: 'MP3',
             },
         }),
       });
@@ -465,10 +464,9 @@ serve(async (req: Request) => {
           return new Response(audioBytes.buffer as ArrayBuffer, {
             headers: {
               ...corsHeaders,
-              'Content-Type': 'audio/wav',
+              'Content-Type': 'audio/mpeg',
               'Content-Length': audioBytes.byteLength.toString(),
-              'X-TTS-Provider': 'gemini-2.5-flash-tts',
-              'X-TTS-Voice': geminiVoice,
+              'Cache-Control': 'private, max-age=604800, immutable',
             },
           });
         }
@@ -481,7 +479,7 @@ serve(async (req: Request) => {
           error: 'Gemini TTS returned no audioContent',
         }), {
           status: 502,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-TTS-Provider': 'gemini-2.5-flash-tts' },
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
@@ -498,8 +496,6 @@ serve(async (req: Request) => {
         headers: {
           ...corsHeaders,
           'Content-Type': 'application/json',
-          'X-TTS-Provider': 'gemini-2.5-flash-tts',
-          'X-TTS-Voice': geminiVoice,
         },
       });
     }
@@ -595,7 +591,8 @@ serve(async (req: Request) => {
           headers: {
             ...corsHeaders,
             "Content-Type": "audio/mpeg",
-            "Content-Length": audioBuffer.byteLength.toString()
+            "Content-Length": audioBuffer.byteLength.toString(),
+            'Cache-Control': 'private, max-age=604800, immutable',
           }
         });
       } else {
@@ -653,7 +650,8 @@ serve(async (req: Request) => {
           headers: { 
             ...corsHeaders, 
             "Content-Type": "audio/mpeg",
-            "Content-Length": audioBuffer.byteLength.toString()
+            "Content-Length": audioBuffer.byteLength.toString(),
+            'Cache-Control': 'private, max-age=604800, immutable',
           }
         });
       }
