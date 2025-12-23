@@ -35,6 +35,121 @@ function normalizeGoogleMapsUrl(href: string, language: string): string {
   }
 }
 
+/**
+ * Repairs malformed markdown tables that the AI sometimes outputs.
+ * Fixes: missing separator rows, inconsistent column counts, merged headers.
+ */
+function repairMarkdownTables(markdown: string): string {
+  // Only repair true markdown pipe tables.
+  // IMPORTANT: Do not treat normal prose that contains "|" (e.g. "Open Now | Metro | Parking") as a table.
+  const lines = markdown.split('\n');
+  const result: string[] = [];
+
+  const isSeparatorLine = (l: string) => /^\s*\|?\s*:?[-]{3,}\s*:?(\s*\|\s*:?[-]{3,}\s*:?)+\s*\|?\s*$/.test(l);
+  const isTableRowLine = (l: string) => {
+    const t = l.trim();
+    if (!t.startsWith('|')) return false;
+    const pipeCount = (t.match(/\|/g) || []).length;
+    return pipeCount >= 2;
+  };
+  const nextNonEmptyLine = (startIndex: number) => {
+    for (let j = startIndex; j < lines.length; j++) {
+      if (lines[j].trim() !== '') return lines[j];
+    }
+    return null;
+  };
+
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // Start only when the row looks like a real markdown table row (must start with '|')
+    // and the next non-empty line looks like a separator or another table row.
+    if (isTableRowLine(trimmed) && !isSeparatorLine(trimmed)) {
+      const next = nextNonEmptyLine(i + 1);
+      const nextOk = !!next && (isSeparatorLine(next) || isTableRowLine(next));
+      if (nextOk) {
+        const tableLines: string[] = [];
+        while (i < lines.length) {
+          const cur = lines[i];
+          const curTrim = cur.trim();
+          if (curTrim === '') break;
+          if (!isTableRowLine(curTrim) && !isSeparatorLine(curTrim)) break;
+          tableLines.push(cur);
+          i++;
+        }
+
+        if (tableLines.length > 0) {
+          const fixedTable = fixTable(tableLines);
+          result.push(...fixedTable);
+          continue;
+        }
+      }
+    }
+
+    result.push(line);
+    i++;
+  }
+
+  return result.join('\n');
+}
+
+function fixTable(tableLines: string[]): string[] {
+  // Parse each row into cells
+  const rows: string[][] = tableLines.map(line => {
+    // Normalize: ensure line starts and ends with |
+    let normalized = line.trim();
+    if (!normalized.startsWith('|')) normalized = '|' + normalized;
+    if (!normalized.endsWith('|')) normalized = normalized + '|';
+    
+    // Split by | and filter empty edge cells
+    const cells = normalized.split('|').slice(1, -1).map(c => c.trim());
+    return cells;
+  });
+
+  if (rows.length === 0) return tableLines;
+
+  // Find max column count
+  const maxCols = Math.max(...rows.map(r => r.length));
+  
+  // Pad all rows to have same column count
+  const paddedRows = rows.map(row => {
+    while (row.length < maxCols) row.push('');
+    return row;
+  });
+
+  // Check if row 1 is a separator row
+  const isSeparator = (row: string[]) => row.every(cell => /^[:\-\s]*$/.test(cell) && cell.includes('-'));
+  
+  const output: string[] = [];
+  
+  // Output header (first row)
+  output.push('| ' + paddedRows[0].join(' | ') + ' |');
+  
+  // Check if second row is separator, if not add one
+  if (paddedRows.length > 1 && isSeparator(paddedRows[1])) {
+    output.push('| ' + paddedRows[1].map(() => '---').join(' | ') + ' |');
+    // Add remaining rows
+    for (let i = 2; i < paddedRows.length; i++) {
+      if (!isSeparator(paddedRows[i])) {
+        output.push('| ' + paddedRows[i].join(' | ') + ' |');
+      }
+    }
+  } else {
+    // Add separator row
+    output.push('| ' + paddedRows[0].map(() => '---').join(' | ') + ' |');
+    // Add all other rows (skip separators)
+    for (let i = 1; i < paddedRows.length; i++) {
+      if (!isSeparator(paddedRows[i])) {
+        output.push('| ' + paddedRows[i].join(' | ') + ' |');
+      }
+    }
+  }
+
+  return output;
+}
+
 function SearchMessageCard({
   message,
   language,
@@ -42,7 +157,8 @@ function SearchMessageCard({
   message: AIMessage;
   language: string;
 }) {
-  const content = message.content || '';
+  const rawContent = message.content || '';
+  const content = repairMarkdownTables(rawContent);
   const geminiSearchMeta = (message as any)?.metadata?.geminiSearch;
   const sources: SearchSource[] = Array.isArray(geminiSearchMeta?.sources) ? geminiSearchMeta.sources : [];
   const query = (message as any)?.metadata?.searchQuery || '';
@@ -1121,6 +1237,9 @@ export function ChatMessages({
         return <SearchMessageCard message={message} language={language} />;
       }
 
+      // Apply table repair to all assistant messages (fixes malformed AI tables)
+      const content = repairMarkdownTables(message.content || '');
+
       // Vision JSON renderer (Option B): render structured results if present
       const vjson = (message as any)?.metadata?.visionJson || (message as any)?.metadata?.json;
       const isVision = message.intent === 'vision';
@@ -1359,15 +1478,29 @@ export function ChatMessages({
             rehypePlugins={[rehypeRaw]}
             components={{
               table: ({ node, ...props }) => (
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse text-sm" {...props} />
+                <div className="my-3 overflow-hidden rounded-xl border border-border/60 bg-white/70 shadow-sm dark:bg-black/20">
+                  <div className="max-w-full overflow-x-auto">
+                    <table className="w-full min-w-[720px] border-separate border-spacing-0 text-sm" {...props} />
+                  </div>
                 </div>
               ),
               th: ({ node, ...props }) => (
-                <th className="border border-border px-2 py-1 bg-muted/40 text-left" {...props} />
+                <th
+                  className="sticky top-0 z-10 border-b border-border/70 bg-muted/80 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-foreground/80 backdrop-blur"
+                  {...props}
+                />
+              ),
+              tr: ({ node, ...props }) => (
+                <tr className="odd:bg-transparent even:bg-muted/20 hover:bg-muted/30 transition-colors" {...props} />
               ),
               td: ({ node, ...props }) => (
-                <td className="border border-border px-2 py-1 align-top" {...props} />
+                <td className="border-b border-border/40 px-3 py-2 align-top" {...props} />
+              ),
+              thead: ({ node, ...props }) => (
+                <thead className="[&>tr>th:not(:last-child)]:border-r [&>tr>th:not(:last-child)]:border-border/40" {...props} />
+              ),
+              tbody: ({ node, ...props }) => (
+                <tbody className="[&>tr>td:not(:last-child)]:border-r [&>tr>td:not(:last-child)]:border-border/30" {...props} />
               ),
               code: (rawProps) => {
                 const { className, children, ...props } = (rawProps as any);

@@ -9,7 +9,7 @@ const allowedOrigins = [
   'http://127.0.0.1:8080'
 ];
 
-const getCorsHeaders = (origin) => {
+const getCorsHeaders = (origin: string | null) => {
   // Allow any localhost/127.0.0.1 port for development
   const isLocalDev = origin && (
     origin.startsWith('http://localhost:') ||
@@ -115,14 +115,24 @@ function getGeminiApiKey() {
   return k;
 }
 
-function buildTextContent(role, text) {
+type GeminiRole = 'user' | 'model';
+type GeminiContentPart = { text: string };
+type GeminiContent = { role: GeminiRole; parts: GeminiContentPart[] };
+
+function buildTextContent(role: GeminiRole, text: string): GeminiContent {
   return { role, parts: [{ text }] };
 }
 
-async function streamGemini(model, contents, onToken, systemInstruction, generationConfig) {
+async function streamGemini(
+  model: string,
+  contents: GeminiContent[],
+  onToken: (token: string) => void,
+  systemInstruction?: string,
+  generationConfig?: Record<string, unknown>
+) {
   const key = getGeminiApiKey();
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
-  const body = { contents };
+  const body: Record<string, unknown> = { contents };
   if (systemInstruction) body.system_instruction = { parts: [{ text: systemInstruction }] };
   if (generationConfig) body.generationConfig = generationConfig;
 
@@ -208,8 +218,10 @@ async function streamGemini3WithSearch(
   const model = 'gemini-3-flash-preview';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
 
+  const latestQuery = `${query}\n\nLATEST-FIRST RULE (CRITICAL): Use the newest available sources/snippets. Prefer results updated today/this hour when present. If sources conflict, choose the most recently updated. Do not use memory for live facts.`;
+
   const body: Record<string, unknown> = {
-    contents: [{ role: 'user', parts: [{ text: query }] }],
+    contents: [{ role: 'user', parts: [{ text: latestQuery }] }],
     tools: [{ google_search: {} }],
   };
   
@@ -286,12 +298,18 @@ async function streamGemini3WithSearch(
 }
 
 // Build system prompt with Personal Touch
-function buildSystemPrompt(language, currentDate, personalTouch, activeTrigger, chatSubmode = 'chat') {
-  const pt = personalTouch || {};
-  const userNick = (pt.nickname || '').toString().trim();
-  const aiNick = (pt.ai_nickname || '').toString().trim();
-  const tone = (pt.tone || 'neutral').toString().trim();
-  const style = (pt.style || 'short answers').toString().trim();
+function buildSystemPrompt(
+  language: string,
+  currentDate: string,
+  personalTouch: Record<string, unknown> | null | undefined,
+  activeTrigger: string,
+  chatSubmode = 'chat'
+) {
+  const pt = (personalTouch || {}) as Record<string, unknown>;
+  const userNick = ((pt.nickname as string | undefined) || '').toString().trim();
+  const aiNick = ((pt.ai_nickname as string | undefined) || '').toString().trim();
+  const tone = ((pt.tone as string | undefined) || 'neutral').toString().trim();
+  const style = ((pt.style as string | undefined) || 'short answers').toString().trim();
 
   let personalSection = '';
   if (userNick || aiNick) {
@@ -317,6 +335,13 @@ CRITICAL OUTPUT FORMAT
 - Bulleted list: for steps, checklists, 1–2 results.
 - Paragraph: for conversational replies.
 - Use Markdown links ONLY when a real URL is provided.
+
+${activeTrigger === 'chat' && chatSubmode === 'chat' ? `
+CHAT FRESHNESS PROTOCOL (CHAT MODE ONLY)
+- Be fast and conversational by default.
+- If the user asks for time-sensitive facts (e.g., latest news, scores/standings, prices, flights, "open now" hours), you MUST NOT guess.
+- If up-to-date information is not available, say it clearly and ask a short follow-up question to narrow what to check.
+` : ''}
 
 ${chatSubmode === 'study' ? `
 📚 STUDY MODE (TUTOR STYLE) - CRITICAL
@@ -370,9 +395,11 @@ Here's what's happening today, abdullah:
 You are WAKTI AI — date: ${currentDate}.`;
 }
 
-function convertMessagesToClaudeFormat(messages) {
-  const systemMessage = messages.find((m) => m.role === 'system');
-  const conversationMessages = messages.filter((m) => m.role !== 'system');
+type ChatMessage = { role: string; content: string };
+
+function convertMessagesToClaudeFormat(messages: ChatMessage[]) {
+  const systemMessage = messages.find((m: ChatMessage) => m.role === 'system');
+  const conversationMessages = messages.filter((m: ChatMessage) => m.role !== 'system');
   return {
     system: systemMessage?.content || '',
     messages: conversationMessages
@@ -427,7 +454,7 @@ async function streamClaudeResponse(
 }
 
 
-async function executeRegularSearch(query, language = 'en') {
+async function executeRegularSearch(query: string, language = 'en') {
   const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
   
   console.log('🔍 SEARCH: Starting search for:', query.substring(0, 50));
@@ -476,7 +503,7 @@ async function executeRegularSearch(query, language = 'en') {
       throw new Error('Empty response from search service');
     }
 
-    let searchData;
+    let searchData: unknown;
     try {
       searchData = JSON.parse(responseText);
     } catch (jsonError) {
@@ -486,9 +513,12 @@ async function executeRegularSearch(query, language = 'en') {
     }
 
     // Extract information safely
-    const results = Array.isArray(searchData.results) ? searchData.results : [];
-    const answer = searchData.answer || '';
-    const followUpQuestions = Array.isArray(searchData.follow_up_questions) ? searchData.follow_up_questions : [];
+    const sd = (searchData && typeof searchData === 'object') ? (searchData as Record<string, unknown>) : {};
+    const results = Array.isArray(sd.results) ? (sd.results as Array<Record<string, unknown>>) : [];
+    const answer = typeof sd.answer === 'string' ? sd.answer : '';
+    const followUpQuestions = Array.isArray(sd.follow_up_questions)
+      ? (sd.follow_up_questions as string[])
+      : [];
     
     // Build context from search results
     let context = '';
@@ -498,11 +528,14 @@ async function executeRegularSearch(query, language = 'en') {
     
     if (results.length > 0) {
       context += 'Search Results:\n';
-      results.forEach((result, index) => {
+      results.forEach((result: Record<string, unknown>, index: number) => {
         if (result && typeof result === 'object') {
-          context += `${index + 1}. ${result.title || 'No title'}\n`;
-          context += `   ${result.content || 'No content'}\n`;
-          context += `   Source: ${result.url || 'No URL'}\n\n`;
+          const title = typeof result.title === 'string' ? result.title : 'No title';
+          const content = typeof result.content === 'string' ? result.content : 'No content';
+          const url = typeof result.url === 'string' ? result.url : 'No URL';
+          context += `${index + 1}. ${title}\n`;
+          context += `   ${content}\n`;
+          context += `   Source: ${url}\n\n`;
         }
       });
     }
@@ -521,15 +554,16 @@ async function executeRegularSearch(query, language = 'en') {
       context: context.trim()
     };
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('❌ SEARCH: Critical error:', error);
+    const details = error instanceof Error ? error.message : String(error);
     
     return {
       success: false,
       error: 'Search failed',
       data: null,
       context: '',
-      details: error.message
+      details
     };
   }
 }
@@ -610,13 +644,15 @@ async function queryWolfram(input: string, timeoutMs: number = 4000): Promise<{ 
     console.log('✅ WOLFRAM: Got answer');
     return { success: true, answer, steps: steps.length > 0 ? steps : undefined, interpretation };
 
-  } catch (err: any) {
-    if (err.name === 'AbortError') {
+  } catch (err: unknown) {
+    const errName = (err && typeof err === 'object' && 'name' in err) ? (err as { name?: unknown }).name : undefined;
+    const errMessage = err instanceof Error ? err.message : String(err);
+    if (errName === 'AbortError') {
       console.warn('⚠️ WOLFRAM: Timeout after', timeoutMs, 'ms');
       return { success: false, error: 'Timeout' };
     }
-    console.error('❌ WOLFRAM: Error:', err.message);
-    return { success: false, error: err.message };
+    console.error('❌ WOLFRAM: Error:', errMessage);
+    return { success: false, error: errMessage };
   }
 }
 
@@ -717,6 +753,29 @@ function detectSearchIntent(query: string): 'business' | 'news' | 'url' | 'gener
   if (/\b(research|study|paper|article|learn about|explain|what is|who is|history of)\b/i.test(lower)) return 'news';
   
   return 'general';
+}
+
+function scoreChatNeedsFreshSearch(message: string): number {
+  const txt = (message || '').trim();
+  if (!txt) return 0;
+  const lower = txt.toLowerCase();
+
+  if (txt.length <= 3) return 0;
+  if (/^(hi|hey|hello|yo|sup|good (morning|afternoon|evening))\b/i.test(lower)) return 0;
+
+  let score = 0;
+  if (/\b(latest|today|now|current|updated|update|breaking|live|right now|as of)\b/i.test(lower)) score += 0.5;
+  if (/\b(score|scores|standings|ranking|rankings|leaderboard|odds|injury report|lineup)\b/i.test(lower)) score += 0.45;
+  if (/\b(stock|stocks|price|prices|crypto|bitcoin|eth|exchange rate|forex|gold|oil|market|nasdaq|dow|s\&p|sp500)\b/i.test(lower)) score += 0.45;
+  if (/\b(flight|gate|terminal|delay|departure|arrival)\b/i.test(lower)) score += 0.45;
+  if (/\b(weather)\b/i.test(lower)) score += 0.35;
+  if (/\b(open now|closed now|hours today|closing time|opens at|closes at)\b/i.test(lower)) score += 0.35;
+
+  if (/\b(202\d|\d{1,2}[:.]\d{2})\b/.test(lower)) score += 0.15;
+  if (/\b(doha|qatar)\b/i.test(lower)) score += 0.05;
+
+  if (score > 1) score = 1;
+  return score;
 }
 
 serve(async (req) => {
@@ -826,18 +885,26 @@ serve(async (req) => {
         });
 
         // Build enhanced system prompt (pass chatSubmode for Study mode tutor instructions)
-        const systemPrompt = buildSystemPrompt(language, currentDate, personalTouch, activeTrigger, chatSubmode);
+        const systemPrompt = buildSystemPrompt(
+          language,
+          currentDate,
+          personalTouch as Record<string, unknown> | null | undefined,
+          activeTrigger,
+          chatSubmode
+        );
         
         const messages = [
           { role: 'system', content: systemPrompt }
         ];
 
         // Add history
-        if (recentMessages && recentMessages.length > 0) {
-          const historyMessages = recentMessages.slice(-6);
-          historyMessages.forEach((msg) => {
-            if (msg.role === 'user' || msg.role === 'assistant') {
-              messages.push({ role: msg.role, content: msg.content });
+        if (Array.isArray(recentMessages) && recentMessages.length > 0) {
+          const historyMessages = (recentMessages as Array<Record<string, unknown>>).slice(-6);
+          historyMessages.forEach((msg: Record<string, unknown>) => {
+            const role = typeof msg.role === 'string' ? msg.role : undefined;
+            const content = typeof msg.content === 'string' ? msg.content : '';
+            if (role === 'user' || role === 'assistant') {
+              messages.push({ role, content });
             }
           });
         }
@@ -848,12 +915,12 @@ serve(async (req) => {
         if (activeTrigger === 'search') {
           try {
             // Build search-specific system prompt with Personal Touch
-            const pt = personalTouch || {};
-            const userNick = (pt.nickname || '').toString().trim();
-            const aiNick = (pt.ai_nickname || '').toString().trim();
-            const toneVal = (pt.tone || 'neutral').toString().trim();
-            const _styleVal = (pt.style || 'short answers').toString().trim(); // unused but kept for future
-            const customNote = (pt.instruction || '').toString().trim();
+            const pt = (personalTouch || {}) as Record<string, unknown>;
+            const userNick = ((pt.nickname as string | undefined) || '').toString().trim();
+            const aiNick = ((pt.ai_nickname as string | undefined) || '').toString().trim();
+            const toneVal = ((pt.tone as string | undefined) || 'neutral').toString().trim();
+            const _styleVal = ((pt.style as string | undefined) || 'short answers').toString().trim(); // unused but kept for future
+            const customNote = ((pt.instruction as string | undefined) || '').toString().trim();
 
             // Detect search intent
             const searchIntent = detectSearchIntent(message);
@@ -1041,6 +1108,14 @@ Rules:
 - For flights: include terminal/gate/delay if available. Add weather at destination if relevant.
 - Keep tables compact (max ~10 rows unless user asks for more).
 
+TABLE FORMAT ENFORCEMENT (CRITICAL):
+- You MUST output a VALID Markdown pipe table.
+- You MUST include the required separator row (example: | --- | --- | --- |).
+- Every row MUST have the exact same number of | columns as the header.
+- NEVER output a pseudo-table using spaces/alignment. If you cannot produce a valid pipe table, do NOT output a table.
+- Prevent merged headers (example: never output "PointsThe Stakes / Impact"). Ensure each header is a separate cell separated by |.
+- Avoid hard line breaks inside table cells; keep each row on a single line.
+
 *${language === 'ar' ? 'المصادر' : 'Sources'}: [Verified Source 1], [Verified Source 2]*
 
 End with:
@@ -1134,11 +1209,11 @@ If you are running out of space, keep this order and drop the rest:
               message,
               searchSystemPrompt,
               { temperature: 1.0, maxOutputTokens: 2000 },
-              (token) => {
+              (token: string) => {
                 fullResponseText += token;
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`));
               },
-              (meta) => {
+              (meta: Gemini3SearchResult['groundingMetadata']) => {
                 groundingMetadata = meta;
               },
               userLocationForMaps
@@ -1147,15 +1222,16 @@ If you are running out of space, keep this order and drop the rest:
             // Emit grounding metadata for frontend citation injection
             if (groundingMetadata) {
               try {
+                const gm = groundingMetadata as NonNullable<Gemini3SearchResult['groundingMetadata']>;
                 const metaPayload = {
                   metadata: {
                     geminiSearch: {
-                      queries: groundingMetadata.webSearchQueries || [],
-                      sources: (groundingMetadata.groundingChunks || []).map((c: { web?: { uri: string; title: string } }) => ({
+                      queries: gm.webSearchQueries || [],
+                      sources: (gm.groundingChunks || []).map((c: { web?: { uri: string; title: string } }) => ({
                         url: c.web?.uri || '',
                         title: c.web?.title || ''
                       })),
-                      supports: groundingMetadata.groundingSupports || []
+                      supports: gm.groundingSupports || []
                     }
                   }
                 };
@@ -1198,6 +1274,36 @@ If you are running out of space, keep this order and drop the rest:
             messages.push({ role: 'user', content: message });
           }
         } else {
+          if (activeTrigger === 'chat' && chatSubmode === 'chat') {
+            const freshnessScore = scoreChatNeedsFreshSearch(message);
+            if (freshnessScore >= 0.8) {
+              try {
+                let fullResponseText = '';
+                await streamGemini3WithSearch(
+                  message,
+                  systemPrompt,
+                  { temperature: 0.7, maxOutputTokens: 2000 },
+                  (token: string) => {
+                    fullResponseText += token;
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`));
+                  },
+                  () => {}
+                );
+
+                if (!fullResponseText) {
+                  const fallback = language === 'ar' ? 'لم أتمكن من العثور على نتائج.' : 'I could not find results for that query.';
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: fallback, content: fallback })}\n\n`));
+                }
+
+                controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                controller.close();
+                return;
+              } catch (e) {
+                console.warn('⚠️ CHAT FRESH SEARCH ERROR:', e);
+              }
+            }
+          }
+
           // Emit Study mode metadata so frontend can show 📚 Study badge (even without Wolfram)
           if (chatSubmode === 'study') {
             try {
@@ -1260,7 +1366,7 @@ If you are running out of space, keep this order and drop the rest:
         }
 
         let aiProvider = 'none';
-        let streamReader = null;
+        let streamReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
         let modelUsed = '';
         let responseText = ''; // Track full response for token estimation
 
@@ -1358,16 +1464,19 @@ If you are running out of space, keep this order and drop the rest:
           try {
             await tryGemini();
           } catch (errGemini) {
-            console.warn('⚠️ Gemini failed, trying OpenAI...', errGemini.message);
+            const errMsg = errGemini instanceof Error ? errGemini.message : String(errGemini);
+            console.warn('⚠️ Gemini failed, trying OpenAI...', errMsg);
             try {
               await tryOpenAI();
             } catch (errOpenAI) {
-              console.warn('⚠️ OpenAI failed, trying Claude...', errOpenAI.message);
+              const errMsg2 = errOpenAI instanceof Error ? errOpenAI.message : String(errOpenAI);
+              console.warn('⚠️ OpenAI failed, trying Claude...', errMsg2);
               await tryClaude();
             }
           }
         } catch (finalErr) {
-          console.error('❌ All providers failed', finalErr.message);
+          const errMsg = finalErr instanceof Error ? finalErr.message : String(finalErr);
+          console.error('❌ All providers failed', errMsg);
           throw finalErr;
         }
 
@@ -1403,10 +1512,12 @@ If you are running out of space, keep this order and drop the rest:
         if (!streamReader) throw new Error('No stream reader available');
 
         if (aiProvider === 'openai') {
+          const sr = streamReader;
+          if (!sr) throw new Error('No stream reader available');
           const decoder = new TextDecoder();
           let buffer = '';
           while (true) {
-            const { done, value } = await streamReader.read();
+            const { done, value } = await sr.read();
             if (done) break;
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split('\n');
