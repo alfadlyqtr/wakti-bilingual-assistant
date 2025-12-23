@@ -119,6 +119,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const holdStartRef = useRef<number>(0);
   const isStoppingRef = useRef(false); // Guard against multiple stopRecording calls
+  const isHoldingRef = useRef(false); // Track holding state for audio processor callback
   const personalTouchRef = useRef<any>(null);
 
   // Build Personal Touch enforcement block
@@ -132,12 +133,17 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     const style = (pt.style || 'short answers').toString().trim();
     const extra = (pt.instruction || '').toString().trim();
 
-    let section = '\nCRITICAL PERSONAL TOUCH ENFORCEMENT\n';
-    if (userNick) section += `- Use the user's nickname "${userNick}" naturally and warmly.\n`;
-    if (aiNick) section += `- Refer to yourself as "${aiNick}" when appropriate.\n`;
-    section += `- Tone: ${tone}. Maintain this tone consistently.\n`;
-    section += `- Style: ${style}. Shape responses to match this style.\n`;
-    if (extra) section += `- Custom note: ${extra}\n`;
+    let section = '\n🎯 CRITICAL PERSONAL TOUCH ENFORCEMENT (MUST FOLLOW)\n';
+    if (userNick) {
+      section += `- YOU MUST call the user "${userNick}" - use this nickname in EVERY response!\n`;
+      section += `- Start responses with "Hey ${userNick}" or "${userNick}," or similar.\n`;
+    }
+    if (aiNick) {
+      section += `- When referring to yourself, use "${aiNick}" instead of "I" or "Wakti".\n`;
+    }
+    section += `- 🎭 TONE: Be ${tone}. Every response must reflect this tone.\n`;
+    section += `- 📝 STYLE: Use ${style} format for all responses.\n`;
+    if (extra) section += `- 📌 CUSTOM INSTRUCTION: ${extra}\n`;
     return section;
   }, []);
 
@@ -192,11 +198,14 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     const loadPT = () => {
       try {
         const raw = localStorage.getItem('wakti_personal_touch');
+        console.log('[Talk] Loading Personal Touch from localStorage:', raw);
         const parsed = raw ? JSON.parse(raw) : null;
         const pt = parsed && typeof parsed === 'object' ? parsed : null;
+        console.log('[Talk] Parsed Personal Touch:', pt);
         personalTouchRef.current = pt;
         setPersonalTouch(pt);
-      } catch {
+      } catch (e) {
+        console.warn('[Talk] Failed to load Personal Touch:', e);
         personalTouchRef.current = null;
         setPersonalTouch(null);
       }
@@ -213,20 +222,6 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     window.addEventListener('wakti-personal-touch-updated', handler);
     return () => window.removeEventListener('wakti-personal-touch-updated', handler);
   }, []);
-
-  // Initialize connection when Talk bubble opens - wait a bit for userName to be fetched
-  useEffect(() => {
-    if (isOpen) {
-      // Small delay to allow userName fetch to complete
-      const timer = setTimeout(() => {
-        initializeConnection();
-      }, 100);
-      return () => clearTimeout(timer);
-    } else {
-      cleanup();
-    }
-    return () => cleanup();
-  }, [isOpen]);
 
   const cleanup = useCallback(() => {
     if (animationFrameRef.current) {
@@ -254,15 +249,49 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     setMicLevel(0);
     setError(null);
     setIsConnectionReady(false);
-    setAiTranscript('');
-    setConversationHistory([]);
-    conversationHistoryRef.current = [];
-    setTalkSummary('');
-    talkSummaryRef.current = '';
-    setSearchMode(false);
-    searchModeRef.current = false;
-    setIsSearching(false);
-    pendingTranscriptRef.current = '';
+  }, []);
+
+  const toBase64 = useCallback((bytes: Uint8Array) => {
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
+  }, []);
+
+  const fromBase64 = useCallback((b64: string) => {
+    const bin = atob(b64);
+    const buf = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+    return buf;
+  }, []);
+
+  const downsampleFloat32ToInt16 = useCallback((input: Float32Array, inputSampleRate: number, targetSampleRate: number) => {
+    if (targetSampleRate === inputSampleRate) {
+      const out = new Int16Array(input.length);
+      for (let i = 0; i < input.length; i++) {
+        const s = Math.max(-1, Math.min(1, input[i]));
+        out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+      }
+      return out;
+    }
+
+    const ratio = inputSampleRate / targetSampleRate;
+    const outLength = Math.floor(input.length / ratio);
+    const out = new Int16Array(outLength);
+    let offset = 0;
+    for (let i = 0; i < outLength; i++) {
+      const nextOffset = Math.floor((i + 1) * ratio);
+      let sum = 0;
+      let count = 0;
+      for (let j = offset; j < nextOffset && j < input.length; j++) {
+        sum += input[j];
+        count++;
+      }
+      const avg = count ? sum / count : 0;
+      const s = Math.max(-1, Math.min(1, avg));
+      out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+      offset = nextOffset;
+    }
+    return out;
   }, []);
 
   const buildMemoryContext = useCallback((lang: string) => {
@@ -280,13 +309,26 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     );
   }, [t]);
 
+  // Continuous mic level animation
+  const startMicLevelAnimation = useCallback(() => {
+    const updateLevel = () => {
+      if (!analyserRef.current || !isOpen) return;
+      const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+      analyserRef.current.getByteFrequencyData(dataArray);
+      const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+      setMicLevel(Math.min(1, avg / 128));
+      animationFrameRef.current = requestAnimationFrame(updateLevel);
+    };
+    updateLevel();
+  }, [isOpen]);
+
   // Initialize WebRTC connection when bubble opens
   const initializeConnection = useCallback(async () => {
     setStatus('connecting');
     setError(null);
     setIsConnectionReady(false);
 
-    // Clean up old connection first
+    // Clean up old OpenAI connection
     if (dcRef.current) {
       try { dcRef.current.close(); } catch (e) { /* ignore */ }
       dcRef.current = null;
@@ -479,21 +521,21 @@ ${memoryContext ? memoryContext : ''}`
       setStatus('ready');
       setIsConnectionReady(false);
     }
-  }, [language, userName, voiceGender]);
+  }, [buildMemoryContext, buildPersonalTouchSection, language, startMicLevelAnimation, t]);
 
-  // Continuous mic level animation
-  const startMicLevelAnimation = useCallback(() => {
-    const updateLevel = () => {
-      if (!analyserRef.current || !isOpen) return;
-      const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
-      analyserRef.current.getByteFrequencyData(dataArray);
-      const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-      setMicLevel(Math.min(1, avg / 128));
-      animationFrameRef.current = requestAnimationFrame(updateLevel);
-    };
-    updateLevel();
-  }, [isOpen]);
-
+  // Initialize connection when Talk bubble opens or engine changes
+  useEffect(() => {
+    if (isOpen) {
+      // Small delay to allow userName fetch to complete
+      const timer = setTimeout(() => {
+        initializeConnection();
+      }, 100);
+      return () => clearTimeout(timer);
+    } else {
+      cleanup();
+    }
+    return () => cleanup();
+  }, [isOpen, initializeConnection, cleanup]);
 
   // Handle realtime events from OpenAI
   const handleRealtimeEvent = useCallback((msg: any) => {
@@ -730,6 +772,7 @@ ${memoryContext ? memoryContext : ''}`
     if (holdDuration < MIN_HOLD_MS) {
       console.log('[Talk] Hold too short (' + holdDuration + 'ms), ignoring');
       setIsHolding(false);
+      isHoldingRef.current = false;
       setStatus('ready');
       // Clear the audio buffer to prevent accumulated audio
       if (dcRef.current && dcRef.current.readyState === 'open') {
@@ -740,6 +783,7 @@ ${memoryContext ? memoryContext : ''}`
     }
 
     setIsHolding(false);
+    isHoldingRef.current = false;
     setStatus('processing');
 
     // Send input_audio_buffer.commit to finalize
@@ -785,8 +829,7 @@ ${memoryContext ? memoryContext : ''}`
     // Reset the stopping guard when starting a new recording
     isStoppingRef.current = false;
 
-    // Clear any previous audio buffer to prevent accumulated/stale audio
-    dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
+    dcRef.current?.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
     console.log('[Talk] Cleared audio buffer for fresh recording');
 
     setError(null);
@@ -806,7 +849,7 @@ ${memoryContext ? memoryContext : ''}`
         stopRecording();
       }
     }, 200);
-  }, [isConnectionReady, language, stopRecording]);
+  }, [isConnectionReady, isHolding, language, stopRecording]);
 
   // Hold handlers
   const handleHoldStart = useCallback((e: React.TouchEvent | React.MouseEvent) => {
@@ -814,6 +857,7 @@ ${memoryContext ? memoryContext : ''}`
     if (status === 'ready' && isConnectionReady) {
       setError(null);
       setIsHolding(true);
+      isHoldingRef.current = true; // Update ref for audio processor callback
       startRecording();
     }
   }, [status, isConnectionReady, startRecording]);
@@ -842,36 +886,39 @@ ${memoryContext ? memoryContext : ''}`
 
       {/* Top bar with toggle and close button - positioned below Natively header */}
       <div className="absolute left-0 right-0 flex items-center justify-center px-4 z-20" style={{ top: 'calc(env(safe-area-inset-top, 20px) + 70px)' }}>
-        {/* Talk / Search Toggle - center */}
-        <div className={`flex items-center gap-1 p-1 rounded-full backdrop-blur-sm ${theme === 'dark' ? 'bg-white/10' : 'bg-black/10'}`}>
-          <button
-            onClick={() => {
-              setSearchMode(false);
-              searchModeRef.current = false;
-            }}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all ${
-              !searchMode 
-                ? (theme === 'dark' ? 'bg-white/20 text-white shadow-lg' : 'bg-black/20 text-[#060541] shadow-lg')
-                : (theme === 'dark' ? 'text-white/60 hover:text-white/80' : 'text-[#060541]/60 hover:text-[#060541]/80')
-            }`}
-          >
-            <MessageCircle className="w-4 h-4" />
-            {t('Talk', 'محادثة')}
-          </button>
-          <button
-            onClick={() => {
-              setSearchMode(true);
-              searchModeRef.current = true;
-            }}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all ${
-              searchMode 
-                ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg' 
-                : (theme === 'dark' ? 'text-white/60 hover:text-white/80' : 'text-[#060541]/60 hover:text-[#060541]/80')
-            }`}
-          >
-            <Search className="w-4 h-4" />
-            {t('Search', 'بحث')}
-          </button>
+        <div className="flex flex-col items-center gap-2">
+          {/* Talk / Search Toggle - center */}
+          <div className={`flex items-center gap-1 p-1 rounded-full backdrop-blur-sm ${theme === 'dark' ? 'bg-white/10' : 'bg-black/10'}`}>
+            <button
+              onClick={() => {
+                setSearchMode(false);
+                searchModeRef.current = false;
+              }}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                !searchMode 
+                  ? (theme === 'dark' ? 'bg-white/20 text-white shadow-lg' : 'bg-black/20 text-[#060541] shadow-lg')
+                  : (theme === 'dark' ? 'text-white/60 hover:text-white/80' : 'text-[#060541]/60 hover:text-[#060541]/80')
+              }`}
+            >
+              <MessageCircle className="w-4 h-4" />
+              {t('Talk', 'محادثة')}
+            </button>
+            <button
+              onClick={() => {
+                setSearchMode(true);
+                searchModeRef.current = true;
+              }}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                searchMode 
+                  ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg' 
+                  : (theme === 'dark' ? 'text-white/60 hover:text-white/80' : 'text-[#060541]/60 hover:text-[#060541]/80')
+              }`}
+            >
+              <Search className="w-4 h-4" />
+              {t('Search', 'بحث')}
+            </button>
+          </div>
+
         </div>
 
         {/* Close button - absolute right */}
