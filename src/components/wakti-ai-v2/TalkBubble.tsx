@@ -295,7 +295,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   }, []);
 
   const buildMemoryContext = useCallback((lang: string) => {
-    const lastTurns = conversationHistoryRef.current.slice(-4);
+    const lastTurns = conversationHistoryRef.current.slice(-10);
     const summary = talkSummaryRef.current.trim();
 
     if (!summary && lastTurns.length === 0) {
@@ -304,8 +304,8 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
 
     const lines = lastTurns.map(t => `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.text}`);
     return t(
-      `Conversation memory (important):\nSummary so far: ${summary || '(none)'}\nLast 4 turns:\n${lines.join('\n')}`,
-      `ذاكرة المحادثة (مهم):\nملخص حتى الآن: ${summary || '(لا يوجد)'}\nآخر 4 رسائل:\n${lines.join('\n')}`
+      `Conversation memory (important):\nSummary so far: ${summary || '(none)'}\nLast 10 turns:\n${lines.join('\n')}`,
+      `ذاكرة المحادثة (مهم):\nملخص حتى الآن: ${summary || '(لا يوجد)'}\nآخر 10 رسائل:\n${lines.join('\n')}`
     );
   }, [t]);
 
@@ -575,7 +575,7 @@ ${memoryContext ? memoryContext : ''}`
             // Perform search and then send response with results
             performWebSearch(cleanedQuery).then((searchContext) => {
               console.log('[Talk] Search complete, sending response with context');
-              sendResponseCreate(searchContext);
+              sendResponseCreate(searchContext, transcript);
               
               // Auto-reset search mode after one use (A2 behavior)
               setSearchMode(false);
@@ -584,7 +584,7 @@ ${memoryContext ? memoryContext : ''}`
           } else {
             // Talk mode - respond normally (transcript already validated as non-empty)
             console.log('[Talk] Talk mode - sending response for:', transcript);
-            sendResponseCreate();
+            sendResponseCreate(undefined, transcript);
           }
         } else {
           // User didn't say anything - go back to ready without responding
@@ -615,7 +615,7 @@ ${memoryContext ? memoryContext : ''}`
             const entry = compact(String(msg.transcript));
             const base = compact(prev);
             const merged = base ? `${base} | ${entry}` : entry;
-            const limited = merged.length > 320 ? merged.slice(merged.length - 320) : merged;
+            const limited = merged.length > 1200 ? merged.slice(merged.length - 1200) : merged;
             talkSummaryRef.current = limited;
             return limited;
           });
@@ -678,7 +678,7 @@ ${memoryContext ? memoryContext : ''}`
   }, [language, t]);
 
   // Send response.create with optional search context
-  const sendResponseCreate = useCallback((searchContext?: string) => {
+  const sendResponseCreate = useCallback((searchContext?: string, userUtterance?: string) => {
     if (!dcRef.current || dcRef.current.readyState !== 'open') {
       console.warn('[Talk] Data channel not open, cannot send response.create');
       setError(language === 'ar' ? 'فشل الاتصال' : 'Connection failed');
@@ -714,6 +714,23 @@ ${memoryContext ? memoryContext : ''}`
 
       const memoryContext = buildMemoryContext(language);
 
+      let followUpContext = '';
+      const u = (userUtterance || '').trim();
+      if (u) {
+        const isShort = u.length <= 20;
+        const isAmbiguousFollowup = /^(since when|when\?|since\?|why\?|how\?|what\?|which\?|who\?)$/i.test(u);
+        if (isShort || isAmbiguousFollowup) {
+          const lastAssistant = [...conversationHistoryRef.current].reverse().find(x => x.role === 'assistant')?.text || '';
+          if (lastAssistant) {
+            const clipped = lastAssistant.length > 500 ? `${lastAssistant.slice(0, 500)}...` : lastAssistant;
+            followUpContext = t(
+              `\n\nFollow-up context (important): The user's short follow-up "${u}" refers to the previous assistant message:\n${clipped}`,
+              `\n\nسياق المتابعة (مهم): سؤال المستخدم القصير "${u}" يشير إلى رسالة المساعد السابقة:\n${clipped}`
+            );
+          }
+        }
+      }
+
       const refreshedInstructions = t(
         `You are WAKTI, a smart voice assistant. ${personalTouch}
 
@@ -723,7 +740,7 @@ Style rules (important):
 - Use bullet points for features/steps.
 - Don't ramble or repeat.
 
-${waktiQuickRules}${searchInstructions}
+${waktiQuickRules}${searchInstructions}${followUpContext}
 
 ${memoryContext ? memoryContext : ''}`,
         `أنت مساعد WAKTI الصوتي الذكي. ${personalTouch}
@@ -734,7 +751,7 @@ ${memoryContext ? memoryContext : ''}`,
 - استخدم نقاط عند ذكر ميزات أو خطوات.
 - لا تطوّل ولا تكرر.
 
-${waktiQuickRules}${searchInstructions}
+${waktiQuickRules}${searchInstructions}${followUpContext}
 
 ${memoryContext ? memoryContext : ''}`
       );

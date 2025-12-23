@@ -529,8 +529,8 @@ class WaktiAIV2ServiceClass {
     // Sort by timestamp
     uniqueMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     
-    // Apply smart filtering and return last 20
-    return this.smartFilterMessages(uniqueMessages).slice(-20);
+    // Apply smart filtering and return last 30
+    return this.smartFilterMessages(uniqueMessages).slice(-30);
   }
 
   private smartFilterMessages(messages: AIMessage[]): AIMessage[] {
@@ -543,8 +543,8 @@ class WaktiAIV2ServiceClass {
     ];
     
     return messages.filter((msg, index) => {
-      // Always keep the last 20 messages to maintain recent context
-      if (index >= messages.length - 20) return true;
+      // Always keep the last 30 messages to maintain recent context
+      if (index >= messages.length - 30) return true;
       
       // Filter out very short redundant responses
       if (msg.content && msg.content.length < 20) {
@@ -560,8 +560,8 @@ class WaktiAIV2ServiceClass {
   private generateConversationSummary(messages: AIMessage[]): string {
     if (!messages || messages.length < 10) return '';
     
-    // Take messages except the last 10 for summary (keep last 10 as recent context)
-    const summaryMessages = messages.slice(0, -10);
+    // Take messages except the last 12 for summary (keep last 12 as recent context)
+    const summaryMessages = messages.slice(0, -12);
     if (summaryMessages.length === 0) return '';
     
     // Extract key topics and context
@@ -1529,7 +1529,25 @@ class WaktiAIV2ServiceClass {
       } catch {}
 
       const pieces = [conversationSummary, storedSummary, generatedSummary].filter((s) => !!(s && (s as string).trim())) as string[];
-      const finalSummary = pieces.join(' ').slice(0, 1200);
+      let finalSummary = pieces.join(' ').slice(0, 1200);
+
+      // Follow-up anchoring: if the user message is very short/ambiguous, attach the previous assistant message
+      // so questions like "since when?" don't lose context.
+      try {
+        const u = (message || '').trim();
+        const isShort = u.length > 0 && u.length <= 24;
+        const isAmbiguous = /^(since\s+when\??|when\??|why\??|how\??|what\??|which\??|who\??|من\s+متى\??|متى\??|ليش\??|لماذا\??|كيف\??|وش\??|ما\??)$/i.test(u);
+        if (isShort || isAmbiguous) {
+          const lastAssistant = [...enhancedMessages].reverse().find(m => m.role === 'assistant' && typeof m.content === 'string' && m.content.trim().length > 0)?.content || '';
+          if (lastAssistant) {
+            const clipped = lastAssistant.length > 500 ? `${lastAssistant.slice(0, 500)}...` : lastAssistant;
+            const anchor = language === 'ar'
+              ? `\n\nسياق المتابعة (مهم): سؤال المستخدم القصير "${u}" يشير إلى آخر رد من المساعد:\n${clipped}`
+              : `\n\nFollow-up context (important): The user's short follow-up "${u}" refers to the previous assistant reply:\n${clipped}`;
+            finalSummary = (finalSummary + anchor).slice(0, 1700);
+          }
+        }
+      } catch {}
 
       // Special-case: YouTube Search via Edge Function when in Search mode and message is prefixed with 'yt:' or 'yt '
       if (activeTrigger === 'search') {
