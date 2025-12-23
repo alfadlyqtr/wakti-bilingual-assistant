@@ -693,6 +693,8 @@ ${memoryContext ? memoryContext : ''}`
         : `You are talking to ${currentUserName}. You MUST use their name "${currentUserName}" in your first response and occasionally in other responses.`
       ) : '';
 
+      const personalTouchSection = buildPersonalTouchSection();
+
       // If we have search context, use special search instructions
       const searchInstructions = searchContext ? t(
         `\n\nWEB SEARCH RESULTS (use these to answer the user's question):\n${searchContext}\n\nIMPORTANT: Base your answer on the search results above. Cite sources when relevant.\nAfter you finish the answer, add a short friendly note: "For advanced search, try Search mode in Wakti AI."`,
@@ -742,6 +744,8 @@ Style rules (important):
 
 ${waktiQuickRules}${searchInstructions}${followUpContext}
 
+${personalTouchSection}
+
 ${memoryContext ? memoryContext : ''}`,
         `أنت مساعد WAKTI الصوتي الذكي. ${personalTouch}
 
@@ -752,6 +756,8 @@ ${memoryContext ? memoryContext : ''}`,
 - لا تطوّل ولا تكرر.
 
 ${waktiQuickRules}${searchInstructions}${followUpContext}
+
+${personalTouchSection}
 
 ${memoryContext ? memoryContext : ''}`
       );
@@ -767,7 +773,7 @@ ${memoryContext ? memoryContext : ''}`
     }
 
     dcRef.current.send(JSON.stringify({ type: 'response.create' }));
-  }, [buildMemoryContext, language, t]);
+  }, [buildMemoryContext, buildPersonalTouchSection, language, t]);
 
   // Stop recording and send to AI (defined first so startRecording can reference it)
   const stopRecording = useCallback(() => {

@@ -22,6 +22,47 @@ interface SlideOutline {
   footer?: string;
 }
 
+async function callGeminiGrounded(prompt: string): Promise<SlideOutline[]> {
+  const geminiKey = Deno.env.get("GEMINI_API_KEY");
+  if (!geminiKey) throw new Error("GEMINI_API_KEY not configured");
+
+  const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-001:generateContent?key=" + geminiKey;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      tools: [{ google_search_retrieval: {} }],
+      generationConfig: {
+        temperature: 0.8,
+        maxOutputTokens: 8000,
+        responseMimeType: "application/json",
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("Gemini grounded error:", text);
+    throw new Error("Gemini grounded API error: " + res.status);
+  }
+
+  const data = await res.json();
+  const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!responseText) throw new Error("No response from Gemini grounded");
+
+  try {
+    const parsed = JSON.parse(responseText);
+    return parsed.slides || parsed;
+  } catch {
+    const match = responseText.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error("Failed to parse grounded response");
+    const p = JSON.parse(match[0]);
+    return p.slides || p;
+  }
+}
+
 const LAYOUT_MAP: Record<string, string> = {
   cover: "cover",
   contents: "contents",
@@ -40,7 +81,7 @@ const LAYOUT_MAP: Record<string, string> = {
   thank_you: "cover",
 };
 
-async function callGemini(prompt: string): Promise<SlideOutline[]> {
+async function _callGemini(prompt: string): Promise<SlideOutline[]> {
   const geminiKey = Deno.env.get("GEMINI_API_KEY");
   if (!geminiKey) throw new Error("GEMINI_API_KEY not configured");
 
@@ -137,6 +178,7 @@ Deno.serve(async (req) => {
     const _theme = body.theme || "professional"; // Reserved for future use
     const inputMode: InputMode = body.inputMode || "topic_only";
     const originalText: string = body.originalText || "";
+    const researchMode: boolean = Boolean(body.researchMode);
 
     if (!brief?.subject) {
       return new Response(
@@ -231,16 +273,16 @@ Deno.serve(async (req) => {
       ? buildArabicPrompt(brief, slideCount, inputMode, originalText)
       : buildEnglishPrompt(brief, slideCount, inputMode, originalText);
 
-    let slides = null;
+    let slides: SlideOutline[] | null = null;
+    let usedProvider: "openai" | "gemini" = "openai";
+    let usedModel = "gpt-4o-mini";
 
-    try {
-      slides = await callGemini(prompt);
-      console.log("Using Gemini");
-    } catch (err) {
-      console.error("Gemini failed:", err);
-    }
-
-    if (!slides || slides.length === 0) {
+    if (researchMode) {
+      slides = await callGeminiGrounded(prompt);
+      usedProvider = "gemini";
+      usedModel = "gemini-2.0-flash-001";
+      console.log("Using Gemini grounded");
+    } else {
       slides = await callOpenAI(prompt);
       console.log("Using OpenAI");
     }
@@ -267,8 +309,8 @@ Deno.serve(async (req) => {
     // Log successful AI usage
     await logAIFromRequest(req, {
       functionName: "wakti-pitch-outline",
-      provider: "gemini",
-      model: "gemini-2.0-flash",
+      provider: usedProvider,
+      model: usedModel,
       inputText: brief.subject,
       status: "success",
       metadata: { slideCount: validatedSlides.length }
@@ -284,8 +326,8 @@ Deno.serve(async (req) => {
     // Log failed AI usage
     await logAIFromRequest(req, {
       functionName: "wakti-pitch-outline",
-      provider: "gemini",
-      model: "gemini-2.0-flash",
+      provider: "openai",
+      model: "gpt-4o-mini",
       status: "error",
       errorMessage: (error as Error).message
     });
@@ -300,7 +342,13 @@ Deno.serve(async (req) => {
 // Content type classifier - determines how the AI should behave
 type ContentType = 'personal' | 'creative' | 'informational';
 
-function detectContentType(subject: string, originalText: string, brief?: any): ContentType {
+type BriefLike = {
+  objective?: string;
+  audience?: string;
+  tone?: string;
+};
+
+function detectContentType(subject: string, originalText: string, brief?: BriefLike): ContentType {
   // Personal / Love / Tribute indicators
   const personalKeywords = /\b(love|wife|husband|spouse|partner|darling|dearest|dear|tribute|anniversary|wedding|romantic|heart|family|home|mom|dad|mother|father|son|daughter|baby|child|friend|bestie|bff|thank you|grateful|appreciation|memory|memories|miss you|i love)\b/i;
   
@@ -335,7 +383,7 @@ function detectContentType(subject: string, originalText: string, brief?: any): 
 }
 
 // Smart image hint generator based on content type
-function getImageHint(role: string, subject: string, brief?: any): string {
+function getImageHint(role: string, subject: string, brief?: BriefLike): string {
   // Detect if this is a love/tribute/personal scenario
   const loveKeywords = /\b(love|wife|husband|spouse|partner|darling|dearest|tribute|anniversary|wedding|romantic|heart|family|home)\b/i;
   const isPersonal = loveKeywords.test(subject) || 

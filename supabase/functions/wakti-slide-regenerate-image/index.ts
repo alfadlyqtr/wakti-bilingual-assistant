@@ -177,7 +177,7 @@ Deno.serve(async (req) => {
       userPrompt = "",
     } = body;
 
-    if (!title && bullets.length === 0) {
+    if (!title && bullets.length === 0 && !(userPrompt && String(userPrompt).trim())) {
       return new Response(
         JSON.stringify({ success: false, error: "Title or bullets required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -253,9 +253,14 @@ Deno.serve(async (req) => {
     console.log("Runware API response:", JSON.stringify(result).slice(0, 500));
 
     // Find the image inference result
-    const imageResult = result.data?.find((item: any) => item.taskType === "imageInference");
+    const imageResult = Array.isArray(result?.data)
+      ? result.data.find((item: unknown) =>
+        Boolean(item && typeof item === "object" && (item as { taskType?: unknown }).taskType === "imageInference")
+      )
+      : undefined;
 
-    if (imageResult && imageResult.imageURL) {
+    if (imageResult && typeof imageResult === "object" && (imageResult as { imageURL?: unknown }).imageURL) {
+      const imageURL = String((imageResult as { imageURL: unknown }).imageURL);
       // Log successful AI usage
       await logAIFromRequest(req, {
         functionName: "wakti-slide-regenerate-image",
@@ -268,7 +273,7 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: true,
-          imageUrl: imageResult.imageURL,
+          imageUrl: imageURL,
           prompt,
           contentType,
           modelUsed,

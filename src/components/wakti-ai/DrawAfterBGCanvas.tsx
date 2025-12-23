@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Loader2, Trash2, Undo2, Redo2, Download, Sparkles, ChevronDown } from 'lucide-react';
+import { Loader2, Trash2, Undo2, Redo2, Download, Sparkles, ChevronDown, ImagePlus, Move, RotateCcw, ZoomIn, ZoomOut, Settings2 } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,11 +25,24 @@ export interface DrawAfterBGCanvasRef {
 export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCanvasProps>(({ prompt }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const bgImageRef = useRef<HTMLImageElement | null>(null);
+  const bgImageSrcRef = useRef<string | null>(null);
+  const isPanningBgRef = useRef(false);
+  const lastPanPointRef = useRef<{ x: number; y: number } | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const lastGenerationTimeRef = useRef<number>(0);
   const { language } = useTheme();
   const isArabic = language === 'ar';
-  
+  const isMobile = useIsMobile();
+  const [hasBackground, setHasBackground] = useState(false);
+  const [isEditingBackground, setIsEditingBackground] = useState(false);
+  const [bgOpacity, setBgOpacity] = useState(1);
+  const [bgScale, setBgScale] = useState(1);
+  const [bgRotationDeg, setBgRotationDeg] = useState(0);
+  const [bgOffset, setBgOffset] = useState({ x: 0, y: 0 });
+
   // Bilingual prompt suggestions by category
   const promptCategories = isArabic ? {
     "🎨 تحسينات": [
@@ -141,14 +155,109 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
       "add a forest setting"
     ]
   };
-  
+
   const generationIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  
+
   // Undo/Redo history management
   const [history, setHistory] = useState<string[]>([]);
   const [historyStep, setHistoryStep] = useState(-1);
 
   const { isConnected, isGenerating, lastGeneratedImage, sendGenerationRequest, resetImage } = useDrawAfterBG();
+
+  const drawBackground = useCallback(() => {
+    const bgCanvas = bgCanvasRef.current;
+    const img = bgImageRef.current;
+    if (!bgCanvas) return;
+    const ctx = bgCanvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+    if (!img) return;
+
+    ctx.save();
+    ctx.globalAlpha = bgOpacity;
+    const cx = bgCanvas.width / 2 + bgOffset.x;
+    const cy = bgCanvas.height / 2 + bgOffset.y;
+    ctx.translate(cx, cy);
+    ctx.rotate((bgRotationDeg * Math.PI) / 180);
+    ctx.scale(bgScale, bgScale);
+    ctx.drawImage(img, -img.width / 2, -img.height / 2);
+    ctx.restore();
+  }, [bgOpacity, bgOffset.x, bgOffset.y, bgRotationDeg, bgScale]);
+
+  const fitBackgroundToCanvas = useCallback(() => {
+    const bgCanvas = bgCanvasRef.current;
+    const img = bgImageRef.current;
+    if (!bgCanvas || !img) return;
+    if (img.width === 0 || img.height === 0) return;
+
+    // Smart fit: only downscale if image is larger than canvas, otherwise keep original size
+    const needsDownscale = img.width > bgCanvas.width || img.height > bgCanvas.height;
+    const scale = needsDownscale
+      ? Math.min(bgCanvas.width / img.width, bgCanvas.height / img.height)
+      : 1;
+    setBgScale(scale);
+    setBgRotationDeg(0);
+    setBgOffset({ x: 0, y: 0 });
+    setBgOpacity(1);
+  }, []);
+
+  const loadBackgroundFromUrl = useCallback((url: string, opts?: { keepTransform?: boolean }) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      bgImageRef.current = img;
+      bgImageSrcRef.current = url;
+      setHasBackground(true);
+      if (!opts?.keepTransform) {
+        fitBackgroundToCanvas();
+      } else {
+        drawBackground();
+      }
+    };
+    img.onerror = (err) => {
+      console.error('Failed to load background image:', err);
+      toast.error(isArabic ? 'فشل تحميل الصورة' : 'Failed to load image');
+    };
+    img.src = url;
+  }, [drawBackground, fitBackgroundToCanvas, isArabic]);
+
+  const importFileAsBackground = useCallback((file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast.error(isArabic ? 'الملف ليس صورة' : 'File is not an image');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const url = String(reader.result || '');
+      if (!url) {
+        toast.error(isArabic ? 'فشل تحميل الصورة' : 'Failed to load image');
+        return;
+      }
+      loadBackgroundFromUrl(url);
+      toast.success(isArabic ? 'تم استيراد الصورة' : 'Image imported');
+    };
+    reader.onerror = () => {
+      toast.error(isArabic ? 'فشل تحميل الصورة' : 'Failed to load image');
+    };
+    reader.readAsDataURL(file);
+  }, [isArabic, loadBackgroundFromUrl]);
+
+  const clearDrawingLayer = useCallback(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    try {
+      const initialState = canvas.toDataURL();
+      setHistory([initialState]);
+      setHistoryStep(0);
+    } catch (err) {
+      console.error('Failed to save initial canvas state:', err);
+      setHistory([]);
+      setHistoryStep(-1);
+    }
+  }, []);
 
   // Initialize canvases
   useEffect(() => {
@@ -173,7 +282,7 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
       ctx.lineJoin = 'round';
       ctx.lineWidth = 3;
       ctx.strokeStyle = '#000000';
-      
+
       // Save initial blank state to history so undo works from first stroke
       try {
         const initialState = canvas.toDataURL();
@@ -185,53 +294,21 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
     }
   }, []);
 
-  // Render generated image on background canvas
+  // Repaint background when background transform changes
+  useEffect(() => {
+    drawBackground();
+  }, [drawBackground]);
+
+  // Render generated image as the new background (keeps drawing layer separate)
   useEffect(() => {
     console.log('🔄 lastGeneratedImage changed:', lastGeneratedImage ? 'HAS URL' : 'NO URL', lastGeneratedImage);
-    
+
     if (!lastGeneratedImage || !bgCanvasRef.current) return;
 
-    const bgCanvas = bgCanvasRef.current;
-    const bgCtx = bgCanvas.getContext('2d');
-    if (!bgCtx) return;
-
-    const img = new Image();
-    img.crossOrigin = 'anonymous'; // Try to handle CORS
-    
-    img.onload = () => {
-      console.log('✅ AI image loaded, replacing canvas content');
-      
-      // Draw AI result to the DRAWING canvas (replaces sketch)
-      const canvas = canvasRef.current;
-      const ctx = canvas?.getContext('2d');
-      
-      if (!canvas || !ctx) {
-        console.error('❌ Canvas not available');
-        return;
-      }
-      
-      if (canvas.width === 0 || canvas.height === 0) {
-        console.error('❌ Canvas has zero dimensions');
-        toast.error('Canvas error - please refresh');
-        return;
-      }
-      
-      // Clear and draw AI result to drawing canvas
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      console.log('✅ AI result drawn to canvas - you can now draw on top!');
-      
-      toast.success('AI enhanced! Draw more and send again to keep building.');
-    };
-    
-    img.onerror = (err) => {
-      console.error('❌ Image failed to load:', err);
-      console.error('❌ Failed URL was:', lastGeneratedImage);
-      toast.error('Failed to load generated image');
-    };
-    
-    console.log('🔄 Setting img.src to:', lastGeneratedImage);
-    img.src = lastGeneratedImage;
+    console.log('🔄 Setting background src to:', lastGeneratedImage);
+    loadBackgroundFromUrl(lastGeneratedImage);
+    clearDrawingLayer();
+    toast.success(isArabic ? 'تم تحسين الصورة! ارسم وأرسل مرة أخرى للبناء.' : 'AI enhanced! Draw and send again to keep building.');
   }, [lastGeneratedImage]);
 
   // Save current canvas state to history
@@ -301,11 +378,10 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
 
   const captureCanvasAsBase64 = useCallback((): string | null => {
     const canvas = canvasRef.current;
-    if (!canvas) return null;
+    const bgCanvas = bgCanvasRef.current;
+    if (!canvas || !bgCanvas) return null;
 
     try {
-      // Render onto an offscreen canvas with a solid white background
-      // so the model sees a white sketch instead of transparency (which becomes black in JPEG).
       const exportCanvas = document.createElement('canvas');
       exportCanvas.width = canvas.width;
       exportCanvas.height = canvas.height;
@@ -314,6 +390,7 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
 
       exportCtx.fillStyle = '#ffffff';
       exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+      exportCtx.drawImage(bgCanvas, 0, 0);
       exportCtx.drawImage(canvas, 0, 0);
 
       return exportCanvas.toDataURL('image/jpeg', 0.9);
@@ -356,6 +433,7 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
   }), [triggerGeneration]);
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (isEditingBackground) return;
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
@@ -370,9 +448,13 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
 
     ctx.beginPath();
     ctx.moveTo(x, y);
+    // Draw a dot immediately so single taps register
+    ctx.lineTo(x + 0.1, y + 0.1);
+    ctx.stroke();
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (isEditingBackground) return;
     if (!isDrawing) return;
 
     const canvas = canvasRef.current;
@@ -391,6 +473,7 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
   };
 
   const handleMouseUp = () => {
+    if (isEditingBackground) return;
     if (isDrawing) {
       setIsDrawing(false);
       // Save to history after stroke completion
@@ -400,6 +483,7 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
   };
 
   const handleMouseLeave = () => {
+    if (isEditingBackground) return;
     if (isDrawing) {
       setIsDrawing(false);
       saveToHistory();
@@ -408,6 +492,7 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
 
   // Touch event handlers for mobile/tablet support
   const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (isEditingBackground) return;
     e.preventDefault(); // Prevent scrolling while drawing
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
@@ -425,9 +510,13 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
 
     ctx.beginPath();
     ctx.moveTo(x, y);
+    // Draw a dot immediately so single taps register
+    ctx.lineTo(x + 0.1, y + 0.1);
+    ctx.stroke();
   };
 
   const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (isEditingBackground) return;
     e.preventDefault(); // Prevent scrolling while drawing
     if (!isDrawing) return;
 
@@ -449,6 +538,7 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
   };
 
   const handleTouchEnd = () => {
+    if (isEditingBackground) return;
     if (isDrawing) {
       setIsDrawing(false);
       // Save to history after stroke completion
@@ -458,21 +548,71 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
   };
 
   const clearCanvas = () => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
-
-    if (ctx && canvas) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    }
-
-    // Reset history when canvas is cleared
-    setHistory([]);
-    setHistoryStep(-1);
-    
-    // Reset AI image state
+    clearDrawingLayer();
+    bgImageRef.current = null;
+    bgImageSrcRef.current = null;
+    setHasBackground(false);
+    setIsEditingBackground(false);
+    setBgOpacity(1);
+    setBgScale(1);
+    setBgRotationDeg(0);
+    setBgOffset({ x: 0, y: 0 });
+    drawBackground();
     resetImage();
-
     toast.success(isArabic ? 'تم مسح اللوحة - جاهز للرسم!' : 'Canvas cleared - ready to draw!');
+  };
+
+  const removeBackground = useCallback(() => {
+    bgImageRef.current = null;
+    bgImageSrcRef.current = null;
+    setHasBackground(false);
+    setIsEditingBackground(false);
+    setBgOpacity(1);
+    setBgScale(1);
+    setBgRotationDeg(0);
+    setBgOffset({ x: 0, y: 0 });
+    drawBackground();
+  }, [drawBackground]);
+
+  const getCanvasPoint = useCallback((evt: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = evt.currentTarget;
+    const rect = canvas.getBoundingClientRect();
+    return { x: evt.clientX - rect.left, y: evt.clientY - rect.top };
+  }, []);
+
+  const handleBgPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isEditingBackground) return;
+    e.preventDefault();
+    (e.currentTarget as HTMLCanvasElement).setPointerCapture(e.pointerId);
+    isPanningBgRef.current = true;
+    lastPanPointRef.current = getCanvasPoint(e);
+  };
+
+  const handleBgPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isEditingBackground) return;
+    if (!isPanningBgRef.current) return;
+    const pt = getCanvasPoint(e);
+    const prev = lastPanPointRef.current;
+    if (!prev) {
+      lastPanPointRef.current = pt;
+      return;
+    }
+    const dx = pt.x - prev.x;
+    const dy = pt.y - prev.y;
+    lastPanPointRef.current = pt;
+    setBgOffset((o) => ({ x: o.x + dx, y: o.y + dy }));
+  };
+
+  const handleBgPointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isEditingBackground) return;
+    e.preventDefault();
+    try {
+      (e.currentTarget as HTMLCanvasElement).releasePointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+    isPanningBgRef.current = false;
+    lastPanPointRef.current = null;
   };
 
   // Cleanup interval ref on unmount (no longer used for auto-generation)
@@ -510,8 +650,8 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
         <div className="flex items-center gap-2">
           <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
           <span className="text-sm text-muted-foreground">
-            {isConnected 
-              ? (isArabic ? 'متصل • الرسم في الوقت الفعلي نشط' : 'Connected • Real-time drawing active') 
+            {isConnected
+              ? (isArabic ? 'متصل • الرسم في الوقت الفعلي نشط' : 'Connected • Real-time drawing active')
               : (isArabic ? 'جاري الاتصال...' : 'Connecting...')}
           </span>
         </div>
@@ -525,16 +665,36 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
 
       {/* Canvas Container */}
       <div className="relative flex-1 border-2 border-border rounded-lg overflow-hidden bg-white">
-        {/* Single canvas for drawing and AI results */}
+        {/* Background canvas (imported sketch/photo or AI result) */}
         <canvas
-          ref={canvasRef}
-          className="absolute inset-0 w-full h-full cursor-crosshair select-none"
-          style={{ 
+          ref={bgCanvasRef}
+          className={"absolute inset-0 w-full h-full select-none"}
+          style={{
             backgroundColor: 'white',
             touchAction: 'none',
             WebkitUserSelect: 'none',
             userSelect: 'none',
-            WebkitTouchCallout: 'none'
+            WebkitTouchCallout: 'none',
+            cursor: isEditingBackground ? 'grab' : 'default'
+          }}
+          onPointerDown={handleBgPointerDown}
+          onPointerMove={handleBgPointerMove}
+          onPointerUp={handleBgPointerUp}
+          onPointerCancel={handleBgPointerUp}
+        />
+
+        {/* Drawing canvas (strokes) */}
+        <canvas
+          ref={canvasRef}
+          className={"absolute inset-0 w-full h-full select-none"}
+          style={{
+            backgroundColor: 'transparent',
+            touchAction: 'none',
+            WebkitUserSelect: 'none',
+            userSelect: 'none',
+            WebkitTouchCallout: 'none',
+            cursor: isEditingBackground ? 'not-allowed' : 'crosshair',
+            pointerEvents: isEditingBackground ? 'none' : 'auto'
           }}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
@@ -544,19 +704,16 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         />
-        
-        {/* Hidden background canvas - only used for loading AI images */}
-        <canvas
-          ref={bgCanvasRef}
-          style={{ display: 'none' }}
-        />
       </div>
 
       {/* Quick Prompts Dropdown */}
       <div className="mb-4">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="w-full justify-between gap-2">
+            <Button
+              variant="outline"
+              className="w-full justify-between gap-2"
+            >
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4" />
                 <span>{isArabic ? 'اقتراحات سريعة' : 'Quick Prompts'}</span>
@@ -590,50 +747,268 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
       </div>
 
       {/* Controls */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-2">
+      <div className={isMobile ? "flex items-center gap-1.5 overflow-x-auto pb-2 -mx-2 px-2" : "flex items-center gap-2 flex-wrap"}>
+        <div className={isMobile ? "flex items-center gap-1.5 flex-nowrap" : "flex items-center gap-2"}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            aria-label={isArabic ? 'رفع صورة للرسم' : 'Upload image for drawing'}
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) importFileAsBackground(file);
+              e.currentTarget.value = '';
+            }}
+          />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            aria-label={isArabic ? 'التقاط صورة للرسم' : 'Capture photo for drawing'}
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) importFileAsBackground(file);
+              e.currentTarget.value = '';
+            }}
+          />
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                title={isArabic ? 'استيراد صورة / رسم' : 'Import sketch/photo'}
+              >
+                <ImagePlus className="w-4 h-4" />
+                {!isMobile && (isArabic ? 'استيراد' : 'Import')}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="top" align="start" sideOffset={8}>
+              <DropdownMenuLabel>{isArabic ? 'استيراد' : 'Import'}</DropdownMenuLabel>
+              <DropdownMenuItem
+                onClick={() => {
+                  cameraInputRef.current?.click();
+                }}
+              >
+                {isArabic ? 'الكاميرا' : 'Camera'}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  fileInputRef.current?.click();
+                }}
+              >
+                {isArabic ? 'رفع صورة' : 'Upload'}
+              </DropdownMenuItem>
+              {hasBackground && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => {
+                      removeBackground();
+                    }}
+                    className="text-red-600"
+                  >
+                    {isArabic ? 'إزالة الخلفية' : 'Remove background'}
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Mobile: group background controls in a dropdown */}
+          {isMobile ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  disabled={!hasBackground}
+                  title={isArabic ? 'أدوات الخلفية' : 'Background tools'}
+                >
+                  <Settings2 className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="top" align="start" sideOffset={8} className="min-w-[180px]">
+                <DropdownMenuLabel>{isArabic ? 'أدوات الخلفية' : 'Background Tools'}</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => setIsEditingBackground((v) => !v)}>
+                  <Move className="w-4 h-4 mr-2" />
+                  {isEditingBackground ? (isArabic ? 'إيقاف التحريك' : 'Stop Move') : (isArabic ? 'تحريك' : 'Move')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => fitBackgroundToCanvas()}>
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  {isArabic ? 'ملاءمة' : 'Fit'}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setBgScale((s) => s * 1.1)}>
+                  <ZoomIn className="w-4 h-4 mr-2" />
+                  {isArabic ? 'تكبير' : 'Zoom In'}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setBgScale((s) => s / 1.1)}>
+                  <ZoomOut className="w-4 h-4 mr-2" />
+                  {isArabic ? 'تصغير' : 'Zoom Out'}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setBgRotationDeg((r) => r - 15)}>
+                  ⟲ {isArabic ? 'تدوير يسار' : 'Rotate Left'}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setBgRotationDeg((r) => r + 15)}>
+                  ⟳ {isArabic ? 'تدوير يمين' : 'Rotate Right'}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <div className="px-2 py-1.5">
+                  <span className="text-xs text-muted-foreground block mb-1">{isArabic ? 'شفافية' : 'Opacity'}</span>
+                  <input
+                    type="range"
+                    min={0.1}
+                    max={1}
+                    step={0.05}
+                    value={bgOpacity}
+                    onChange={(e) => setBgOpacity(Number(e.target.value))}
+                    aria-label={isArabic ? 'شفافية الخلفية' : 'Background opacity'}
+                    className="w-full"
+                  />
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            /* Desktop: show all buttons inline */
+            <>
+              <Button
+                variant={isEditingBackground ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setIsEditingBackground((v) => !v)}
+                disabled={!hasBackground}
+                className="gap-2"
+                title={isArabic ? 'تحريك الخلفية' : 'Move background'}
+              >
+                <Move className="w-4 h-4" />
+                {isArabic ? 'تحريك' : 'Move'}
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  fitBackgroundToCanvas();
+                }}
+                disabled={!hasBackground}
+                className="gap-2"
+                title={isArabic ? 'ملء اللوحة' : 'Fit to canvas'}
+              >
+                <RotateCcw className="w-4 h-4" />
+                {isArabic ? 'ملاءمة' : 'Fit'}
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setBgScale((s) => s * 1.1)}
+                disabled={!hasBackground}
+                className="gap-2"
+                title={isArabic ? 'تكبير الخلفية' : 'Zoom in background'}
+              >
+                <ZoomIn className="w-4 h-4" />
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setBgScale((s) => s / 1.1)}
+                disabled={!hasBackground}
+                className="gap-2"
+                title={isArabic ? 'تصغير الخلفية' : 'Zoom out background'}
+              >
+                <ZoomOut className="w-4 h-4" />
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setBgRotationDeg((r) => r - 15)}
+                disabled={!hasBackground}
+                className="gap-2"
+                title={isArabic ? 'تدوير يسار' : 'Rotate left'}
+              >
+                ⟲
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setBgRotationDeg((r) => r + 15)}
+                disabled={!hasBackground}
+                className="gap-2"
+                title={isArabic ? 'تدوير يمين' : 'Rotate right'}
+              >
+                ⟳
+              </Button>
+
+              <div className="flex items-center gap-2 px-2">
+                <span className="text-xs text-muted-foreground">{isArabic ? 'شفافية' : 'Opacity'}</span>
+                <input
+                  type="range"
+                  min={0.1}
+                  max={1}
+                  step={0.05}
+                  value={bgOpacity}
+                  onChange={(e) => setBgOpacity(Number(e.target.value))}
+                  disabled={!hasBackground}
+                  aria-label={isArabic ? 'شفافية الخلفية' : 'Background opacity'}
+                  style={{ width: 110 }}
+                />
+              </div>
+            </>
+          )}
+
           <Button
             variant="outline"
             size="sm"
             onClick={handleUndo}
             disabled={historyStep <= 0}
-            className="gap-2"
+            className={isMobile ? "p-2 min-w-[36px]" : "gap-2"}
             title={isArabic ? 'تراجع' : 'Undo (Ctrl+Z)'}
           >
             <Undo2 className="w-4 h-4" />
-            {isArabic ? 'تراجع' : 'Undo'}
+            {!isMobile && (isArabic ? 'تراجع' : 'Undo')}
           </Button>
-          
+
           <Button
             variant="outline"
             size="sm"
             onClick={handleRedo}
             disabled={historyStep >= history.length - 1}
-            className="gap-2"
+            className={isMobile ? "p-2 min-w-[36px]" : "gap-2"}
             title={isArabic ? 'إعادة' : 'Redo (Ctrl+Y)'}
           >
             <Redo2 className="w-4 h-4" />
-            {isArabic ? 'إعادة' : 'Redo'}
+            {!isMobile && (isArabic ? 'إعادة' : 'Redo')}
           </Button>
-          
+
           <Button
             variant="outline"
             size="sm"
             onClick={clearCanvas}
-            className="gap-2"
+            className={isMobile ? "p-2 min-w-[36px]" : "gap-2"}
             title={isArabic ? 'مسح اللوحة' : 'Clear canvas'}
           >
             <Trash2 className="w-4 h-4" />
-            {isArabic ? 'مسح' : 'Clear'}
+            {!isMobile && (isArabic ? 'مسح' : 'Clear')}
           </Button>
-          
+
           <Button
             variant="outline"
             size="sm"
             onClick={() => {
               const canvas = canvasRef.current;
+              const bgCanvas = bgCanvasRef.current;
               if (!canvas) return;
-              
+              if (!bgCanvas) return;
+
               try {
                 // Create an offscreen canvas with white background for proper export
                 const exportCanvas = document.createElement('canvas');
@@ -644,19 +1019,20 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
                   toast.error(isArabic ? 'فشل في حفظ الرسم' : 'Failed to save drawing');
                   return;
                 }
-                
+
                 // Fill with white background
                 exportCtx.fillStyle = '#ffffff';
                 exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+                exportCtx.drawImage(bgCanvas, 0, 0);
                 exportCtx.drawImage(canvas, 0, 0);
-                
+
                 // Convert to blob for better mobile compatibility
                 exportCanvas.toBlob((blob) => {
                   if (!blob) {
                     toast.error(isArabic ? 'فشل في حفظ الرسم' : 'Failed to save drawing');
                     return;
                   }
-                  
+
                   const url = URL.createObjectURL(blob);
                   const link = document.createElement('a');
                   link.download = `wakti-drawing-${Date.now()}.png`;
@@ -665,7 +1041,7 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
                   link.click();
                   document.body.removeChild(link);
                   URL.revokeObjectURL(url);
-                  
+
                   toast.success(isArabic ? 'تم حفظ الرسم!' : 'Drawing saved!');
                 }, 'image/png');
               } catch (err) {
@@ -673,11 +1049,11 @@ export const DrawAfterBGCanvas = forwardRef<DrawAfterBGCanvasRef, DrawAfterBGCan
                 toast.error(isArabic ? 'فشل في حفظ الرسم' : 'Failed to save drawing');
               }
             }}
-            className="gap-2"
+            className={isMobile ? "p-2 min-w-[36px]" : "gap-2"}
             title={isArabic ? 'حفظ الرسم' : 'Save drawing'}
           >
             <Download className="w-4 h-4" />
-            {isArabic ? 'حفظ' : 'Save'}
+            {!isMobile && (isArabic ? 'حفظ' : 'Save')}
           </Button>
         </div>
       </div>

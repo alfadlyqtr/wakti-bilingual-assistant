@@ -25,6 +25,20 @@ const buildGradient = (color1: string, color2: string, angle: number): string =>
   return `gradient:${color1},${color2},${angle}`;
 };
 
+const angleToVector = (angle: number): { x: number; y: number } => {
+  const radians = (angle * Math.PI) / 180;
+  const x = Math.cos(radians);
+  const y = -Math.sin(radians);
+  const clamp = (n: number) => Math.max(-100, Math.min(100, Math.round(n)));
+  return { x: clamp(x * 100), y: clamp(y * 100) };
+};
+
+const vectorToAngle = (x: number, y: number): number => {
+  const radians = Math.atan2(-y, x);
+  const deg = (radians * 180) / Math.PI;
+  return (Math.round(deg) + 360) % 360;
+};
+
 // Get CSS for preview
 const getPreviewStyle = (value: string): React.CSSProperties => {
   const gradient = parseGradient(value);
@@ -49,6 +63,8 @@ export const ColorPickerWithGradient: React.FC<ColorPickerWithGradientProps> = (
   const [gradientColor1, setGradientColor1] = useState(gradient?.color1 || '#000000');
   const [gradientColor2, setGradientColor2] = useState(gradient?.color2 || '#ffffff');
   const [gradientAngle, setGradientAngle] = useState(gradient?.angle || 135);
+  const [gradientX, setGradientX] = useState(() => angleToVector(gradient?.angle || 135).x);
+  const [gradientY, setGradientY] = useState(() => angleToVector(gradient?.angle || 135).y);
 
   // Sync internal state when value prop changes
   useEffect(() => {
@@ -60,6 +76,9 @@ export const ColorPickerWithGradient: React.FC<ColorPickerWithGradientProps> = (
         setGradientColor1(g.color1);
         setGradientColor2(g.color2);
         setGradientAngle(g.angle);
+        const v = angleToVector(g.angle);
+        setGradientX(v.x);
+        setGradientY(v.y);
       }
     } else {
       setMode('solid');
@@ -87,12 +106,23 @@ export const ColorPickerWithGradient: React.FC<ColorPickerWithGradientProps> = (
     setGradientColor1(color1);
     setGradientColor2(color2);
     setGradientAngle(angle);
+    const v = angleToVector(angle);
+    setGradientX(v.x);
+    setGradientY(v.y);
     if (mode === 'gradient') {
       onChange(buildGradient(color1, color2, angle));
     }
   };
 
-  const angles = [0, 45, 90, 135, 180, 225, 270, 315];
+  const handleGradientVectorChange = (nextX: number, nextY: number) => {
+    setGradientX(nextX);
+    setGradientY(nextY);
+    const angle = vectorToAngle(nextX, nextY);
+    setGradientAngle(angle);
+    if (mode === 'gradient') {
+      onChange(buildGradient(gradientColor1, gradientColor2, angle));
+    }
+  };
 
   return (
     <div className="flex flex-col gap-2">
@@ -130,12 +160,16 @@ export const ColorPickerWithGradient: React.FC<ColorPickerWithGradientProps> = (
         <div className="flex items-center gap-2">
           <input
             type="color"
+            aria-label="Solid color"
+            title="Solid color"
             value={solidColor}
             onChange={(e) => handleSolidChange(e.target.value)}
             className="w-8 h-8 rounded cursor-pointer border-2 border-slate-300"
           />
           <input
             type="text"
+            aria-label="Solid color hex"
+            title="Solid color hex"
             value={solidColor}
             onChange={(e) => handleSolidChange(e.target.value)}
             className="w-20 px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
@@ -152,12 +186,16 @@ export const ColorPickerWithGradient: React.FC<ColorPickerWithGradientProps> = (
             <span className="text-xs text-slate-400 w-8">From:</span>
             <input
               type="color"
+              aria-label="Gradient from color"
+              title="Gradient from color"
               value={gradientColor1}
               onChange={(e) => handleGradientChange(e.target.value, gradientColor2, gradientAngle)}
               className="w-7 h-7 rounded cursor-pointer border-2 border-slate-300"
             />
             <input
               type="text"
+              aria-label="Gradient from color hex"
+              title="Gradient from color hex"
               value={gradientColor1}
               onChange={(e) => handleGradientChange(e.target.value, gradientColor2, gradientAngle)}
               className="w-20 px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
@@ -169,34 +207,57 @@ export const ColorPickerWithGradient: React.FC<ColorPickerWithGradientProps> = (
             <span className="text-xs text-slate-400 w-8">To:</span>
             <input
               type="color"
+              aria-label="Gradient to color"
+              title="Gradient to color"
               value={gradientColor2}
               onChange={(e) => handleGradientChange(gradientColor1, e.target.value, gradientAngle)}
               className="w-7 h-7 rounded cursor-pointer border-2 border-slate-300"
             />
             <input
               type="text"
+              aria-label="Gradient to color hex"
+              title="Gradient to color hex"
               value={gradientColor2}
               onChange={(e) => handleGradientChange(gradientColor1, e.target.value, gradientAngle)}
               className="w-20 px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
               placeholder="#hex"
             />
           </div>
-          {/* Angle */}
-          <div className="flex items-center gap-1 flex-wrap">
-            <span className="text-xs text-slate-400 w-8">Angle:</span>
-            {angles.map((angle) => (
-              <button
-                key={angle}
-                onClick={() => handleGradientChange(gradientColor1, gradientColor2, angle)}
-                className={`px-1.5 py-0.5 text-xs rounded ${
-                  gradientAngle === angle 
-                    ? 'bg-primary text-white' 
-                    : 'bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500'
-                }`}
-              >
-                {angle}°
-              </button>
-            ))}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400 w-20">Left↔Right:</span>
+              <input
+                type="range"
+                aria-label="Gradient direction left to right"
+                title="Gradient direction left to right"
+                min={-100}
+                max={100}
+                step={1}
+                value={gradientX}
+                onChange={(e) => handleGradientVectorChange(parseInt(e.target.value, 10), gradientY)}
+                className="flex-1"
+              />
+              <span className="text-[10px] text-slate-500 w-10 text-right">{gradientX}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400 w-20">Top↕Bottom:</span>
+              <input
+                type="range"
+                aria-label="Gradient direction top to bottom"
+                title="Gradient direction top to bottom"
+                min={-100}
+                max={100}
+                step={1}
+                value={gradientY}
+                onChange={(e) => handleGradientVectorChange(gradientX, parseInt(e.target.value, 10))}
+                className="flex-1"
+              />
+              <span className="text-[10px] text-slate-500 w-10 text-right">{gradientY}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-400 w-20">Angle:</span>
+            <span className="text-xs text-slate-600 dark:text-slate-300">{gradientAngle}°</span>
           </div>
         </div>
       )}

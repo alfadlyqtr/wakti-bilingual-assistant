@@ -29,6 +29,7 @@ import {
   FilePlus2
 } from 'lucide-react';
 import { ColorPickerWithGradient, getColorStyle, isGradientValue } from '@/components/ui/ColorPickerWithGradient';
+import { Switch } from '@/components/ui/switch';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -119,7 +120,7 @@ interface Slide {
 
 type Step = 'topic' | 'brief' | 'outline' | 'slides';
 type ThemeKey = 'starter' | 'professional' | 'pitch_deck' | 'creative' | 'academic';
-type InputMode = 'verbatim' | 'polish' | 'topic_only';
+type InputMode = 'verbatim' | 'polish' | 'topic_only' | 'blank';
 
 interface ThemeConfig {
   key: ThemeKey;
@@ -240,6 +241,11 @@ const INPUT_MODES: { key: InputMode; label: { en: string; ar: string }; descript
     key: 'topic_only',
     label: { en: 'Treat as topic only', ar: 'استخدمه كموضوع فقط' },
     description: { en: 'Use as inspiration, create fresh content', ar: 'استخدمه كإلهام وأنشئ محتوى جديد' },
+  },
+  {
+    key: 'blank',
+    label: { en: 'Blank (start without typing anything)', ar: 'فارغ (ابدأ بدون كتابة شيء)' },
+    description: { en: 'Start with empty slides and fill everything in Edit', ar: 'ابدأ بشرائح فارغة واملأ كل شيء في وضع التعديل' },
   },
 ];
 
@@ -448,6 +454,7 @@ const PresentationTab: React.FC = () => {
   const [topic, setTopic] = useState('');
   const [slideCount, setSlideCount] = useState(4);
   const [researchMode, setResearchMode] = useState(false);
+  const [researchModeType, setResearchModeType] = useState<'global' | 'per_slide'>('global');
   const [inputMode, setInputMode] = useState<InputMode>('topic_only');
 
   // Brief
@@ -465,6 +472,7 @@ const PresentationTab: React.FC = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingField, setEditingField] = useState<'title' | 'subtitle' | 'bullet' | null>(null);
   const [editingBulletIndex, setEditingBulletIndex] = useState<number | null>(null);
+  const [applyStyleToAllSlides, setApplyStyleToAllSlides] = useState(false);
 
   // Export state
   const [isExporting, setIsExporting] = useState(false);
@@ -474,17 +482,49 @@ const PresentationTab: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isRegeneratingImage, setIsRegeneratingImage] = useState(false);
+  const [isSlideResearching, setIsSlideResearching] = useState(false);
+  const [slideResearchQuery, setSlideResearchQuery] = useState('');
+  const [imagePromptText, setImagePromptText] = useState('');
 
   // ─────────────────────────────────────────────────────────────────────────
   // Handlers
   // ─────────────────────────────────────────────────────────────────────────
 
   const handleGenerateBrief = useCallback(async () => {
-    if (!topic.trim()) return;
+    if (inputMode !== 'blank' && !topic.trim()) return;
     setIsLoading(true);
     setError('');
 
     try {
+      if (inputMode === 'blank') {
+        setResearchMode(false);
+        setResearchModeType('global');
+
+        const now = Date.now();
+        const blankSlides: Slide[] = Array.from({ length: slideCount }).map((_, idx) => {
+          const isCover = idx === 0;
+          const isThankYou = idx === slideCount - 1;
+          return {
+            id: `slide-blank-${now}-${idx}`,
+            slideNumber: idx + 1,
+            role: isCover ? 'cover' : isThankYou ? 'thank_you' : 'content',
+            layoutType: isCover || isThankYou ? 'cover' : 'title_and_bullets',
+            theme: selectedTheme,
+            title: '',
+            subtitle: '',
+            bullets: [],
+          };
+        });
+
+        setBrief(null);
+        setOutline([]);
+        setSlides(blankSlides);
+        setSelectedSlideIndex(0);
+        setIsEditMode(true);
+        setCurrentStep('slides');
+        return;
+      }
+
       // Call the edge function to generate brief
       const response = await callEdgeFunctionWithRetry<{
         success: boolean;
@@ -514,7 +554,7 @@ const PresentationTab: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [topic, slideCount, researchMode, inputMode, language]);
+  }, [inputMode, language, researchMode, selectedTheme, slideCount, topic]);
 
   const handleGenerateOutline = useCallback(async () => {
     if (!brief) return;
@@ -522,6 +562,8 @@ const PresentationTab: React.FC = () => {
     setError('');
 
     try {
+      const effectiveSlideCount = researchMode && researchModeType === 'per_slide' ? 3 : slideCount;
+
       // Call the edge function to generate outline
       const response = await callEdgeFunctionWithRetry<{
         success: boolean;
@@ -537,7 +579,7 @@ const PresentationTab: React.FC = () => {
             tone: brief.tone,
           },
           originalText: topic, // Pass the original user text for verbatim/polish modes
-          slideCount,
+          slideCount: effectiveSlideCount,
           researchMode,
           inputMode,
           language,
@@ -559,7 +601,31 @@ const PresentationTab: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [brief, topic, slideCount, researchMode, inputMode, language, selectedTheme]);
+  }, [brief, topic, slideCount, researchMode, researchModeType, inputMode, language, selectedTheme]);
+
+  const applyPerSlideResearchBlanks = useCallback((nextSlides: Slide[]) => {
+    if (!researchMode || researchModeType !== 'per_slide') return nextSlides;
+
+    const coverIndex = 0;
+    const firstContentIndex = Math.min(1, nextSlides.length - 1);
+    const thankYouIndex = nextSlides.length - 1;
+
+    return nextSlides.map((s, idx) => {
+      if (idx === coverIndex || idx === firstContentIndex || idx === thankYouIndex) return s;
+      if (s.role === 'cover' || s.role === 'thank_you') return s;
+      return {
+        ...s,
+        role: 'content',
+        title: '',
+        subtitle: '',
+        bullets: [],
+        highlightedStats: undefined,
+        columns: undefined,
+        imageUrl: undefined,
+        imageMeta: undefined,
+      };
+    });
+  }, [researchMode, researchModeType]);
 
   const handleGenerateSlides = useCallback(async () => {
     if (outline.length === 0) return;
@@ -567,6 +633,8 @@ const PresentationTab: React.FC = () => {
     setError('');
 
     try {
+      const isPerSlideResearch = researchMode && researchModeType === 'per_slide';
+
       // Call the edge function to generate slides with images
       const response = await callEdgeFunctionWithRetry<{
         success: boolean;
@@ -610,7 +678,36 @@ const PresentationTab: React.FC = () => {
         finalSlides = [...finalSlides, thankYouSlide];
       }
 
-      setSlides(finalSlides);
+      let slidesForDisplay = finalSlides;
+
+      if (isPerSlideResearch) {
+        const cover = slidesForDisplay[0];
+        const firstContent = slidesForDisplay[1] || slidesForDisplay[0];
+        const thankYou = slidesForDisplay[slidesForDisplay.length - 1];
+
+        const blanksNeeded = Math.max(0, slideCount - 3);
+        const blankSlides: Slide[] = Array.from({ length: blanksNeeded }).map((_, idx) => ({
+          id: `slide-blank-${Date.now()}-${idx}`,
+          slideNumber: 3 + idx,
+          role: 'content',
+          layoutType: 'title_and_bullets',
+          theme: selectedTheme,
+          title: '',
+          subtitle: '',
+          bullets: [],
+        }));
+
+        slidesForDisplay = [
+          { ...cover, slideNumber: 1, role: 'cover' },
+          { ...firstContent, slideNumber: 2, role: firstContent.role === 'thank_you' ? 'content' : firstContent.role },
+          ...blankSlides,
+          { ...thankYou, slideNumber: slideCount, role: 'thank_you' },
+        ];
+      } else {
+        slidesForDisplay = applyPerSlideResearchBlanks(slidesForDisplay);
+      }
+
+      setSlides(slidesForDisplay);
       setSelectedSlideIndex(0);
       setCurrentStep('slides');
     } catch (e: any) {
@@ -619,7 +716,7 @@ const PresentationTab: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [outline, selectedTheme, brief, language]);
+  }, [outline, selectedTheme, brief, language, applyPerSlideResearchBlanks, researchMode, researchModeType, slideCount]);
 
   // Regenerate image for current slide using AI (simple auto-only)
   const handleRegenerateImage = useCallback(async () => {
@@ -631,6 +728,19 @@ const PresentationTab: React.FC = () => {
     setIsRegeneratingImage(true);
 
     try {
+      // If slide is empty and no custom prompt, use a default based on role
+      let effectivePrompt = imagePromptText.trim();
+      const hasContent = currentSlide.title || (currentSlide.bullets && currentSlide.bullets.length > 0);
+      if (!hasContent && !effectivePrompt) {
+        // Provide a sensible default for blank slides
+        const defaultPrompts: Record<string, string> = {
+          cover: 'professional presentation cover, modern design, clean',
+          content: 'professional business scene, modern, clean composition',
+          thank_you: 'thank you, celebration, success, professional',
+        };
+        effectivePrompt = defaultPrompts[currentSlide.role] || defaultPrompts.content;
+      }
+
       const response = await callEdgeFunctionWithRetry<{
         success: boolean;
         imageUrl?: string;
@@ -643,6 +753,7 @@ const PresentationTab: React.FC = () => {
           objective: brief?.objective,
           audience: brief?.audience,
           tone: brief?.tone,
+          userPrompt: effectivePrompt || undefined,
         },
         maxRetries: 2,
         retryDelay: 1000,
@@ -657,6 +768,8 @@ const PresentationTab: React.FC = () => {
         i === selectedSlideIndex ? { ...s, imageUrl: response.imageUrl } : s
       ));
 
+      setImagePromptText('');
+
       toast.success(language === 'ar' ? 'تم إنشاء الصورة بنجاح' : 'Image regenerated successfully');
     } catch (e: any) {
       console.error('Image regeneration error:', e);
@@ -664,7 +777,7 @@ const PresentationTab: React.FC = () => {
     } finally {
       setIsRegeneratingImage(false);
     }
-  }, [slides, selectedSlideIndex, brief, language]);
+  }, [slides, selectedSlideIndex, brief, language, imagePromptText]);
 
   // Export as PDF
   const handleExportPDF = useCallback(async () => {
@@ -757,36 +870,100 @@ const PresentationTab: React.FC = () => {
   }, [selectedSlideIndex]);
 
   const addSlideBullet = useCallback(() => {
-    setSlides(prev => prev.map((slide, i) => {
-      if (i !== selectedSlideIndex) return slide;
-      return { ...slide, bullets: [...(slide.bullets || []), 'New bullet point'] };
-    }));
+    setSlides(prev => {
+      const newSlides = [...prev];
+      const slide = newSlides[selectedSlideIndex];
+      if (slide) {
+        const newBullets = [...(slide.bullets || []), ''];
+        newSlides[selectedSlideIndex] = { ...slide, bullets: newBullets };
+      }
+      return newSlides;
+    });
   }, [selectedSlideIndex]);
+
+  const renumberSlides = useCallback((nextSlides: Slide[]) => {
+    return nextSlides.map((s, idx) => ({ ...s, slideNumber: idx + 1 }));
+  }, []);
+
+  const isLockedSlide = useCallback((slide?: Slide) => {
+    return slide?.role === 'cover' || slide?.role === 'thank_you';
+  }, []);
+
+  const handleAddSlideAfterCurrent = useCallback(() => {
+    if (slides.length === 0) return;
+
+    const currentSlide = slides[selectedSlideIndex];
+    const lastIndex = slides.length - 1;
+    const hasThankYouAtEnd = slides[lastIndex]?.role === 'thank_you';
+    const maxInsertIndex = hasThankYouAtEnd ? lastIndex : slides.length;
+    const insertIndex = Math.min(selectedSlideIndex + 1, maxInsertIndex);
+
+    const newSlide: Slide = {
+      id: `slide-custom-${Date.now()}`,
+      slideNumber: insertIndex + 1,
+      role: 'content',
+      layoutType: 'title_and_bullets',
+      theme: selectedTheme,
+      title: language === 'ar' ? 'شريحة جديدة' : 'New Slide',
+      subtitle: '',
+      bullets: [language === 'ar' ? 'نقطة جديدة' : 'New bullet point'],
+    };
+
+    const next = [...slides.slice(0, insertIndex), newSlide, ...slides.slice(insertIndex)];
+    const renumbered = renumberSlides(next);
+    setSlides(renumbered);
+    setSelectedSlideIndex(insertIndex);
+  }, [language, renumberSlides, selectedSlideIndex, selectedTheme, slides]);
+
+  const handleDeleteCurrentSlide = useCallback(() => {
+    if (slides.length === 0) return;
+
+    const currentSlide = slides[selectedSlideIndex];
+    if (isLockedSlide(currentSlide)) {
+      toast.error(language === 'ar' ? 'لا يمكن حذف شريحة الغلاف أو شريحة الشكر' : 'Cover and Thank You slides cannot be deleted');
+      return;
+    }
+
+    const next = slides.filter((_, idx) => idx !== selectedSlideIndex);
+    const renumbered = renumberSlides(next);
+
+    const nextIndex = Math.min(selectedSlideIndex, Math.max(0, renumbered.length - 1));
+    setSlides(renumbered);
+    setSelectedSlideIndex(nextIndex);
+  }, [isLockedSlide, language, renumberSlides, selectedSlideIndex, slides]);
 
   // Update text styling
+  const applySlideUpdate = useCallback(
+    (updateFn: (slide: Slide) => Slide) => {
+      setSlides(prev =>
+        prev.map((slide, i) =>
+          applyStyleToAllSlides || i === selectedSlideIndex ? updateFn(slide) : slide
+        )
+      );
+    },
+    [applyStyleToAllSlides, selectedSlideIndex]
+  );
+
   const updateTitleStyle = useCallback((updates: Partial<TextStyle>) => {
-    setSlides(prev => prev.map((slide, i) => {
-      if (i !== selectedSlideIndex) return slide;
+    applySlideUpdate((slide) => {
       const currentStyle = slide.titleStyle || { fontSize: 'medium', fontWeight: 'bold', color: '#ffffff' };
       return { ...slide, titleStyle: { ...currentStyle, ...updates } };
-    }));
-  }, [selectedSlideIndex]);
+    });
+  }, [applySlideUpdate]);
 
   const updateBulletStyle = useCallback((updates: Partial<TextStyle>) => {
-    setSlides(prev => prev.map((slide, i) => {
-      if (i !== selectedSlideIndex) return slide;
+    applySlideUpdate((slide) => {
       const currentStyle = slide.bulletStyle || { fontSize: 'medium', fontWeight: 'normal', color: '#e2e8f0' };
       return { ...slide, bulletStyle: { ...currentStyle, ...updates } };
-    }));
-  }, [selectedSlideIndex]);
+    });
+  }, [applySlideUpdate]);
 
   const updateSubtitleStyle = useCallback((updates: Partial<TextStyle>) => {
-    setSlides(prev => prev.map((slide, i) => {
-      if (i !== selectedSlideIndex) return slide;
+    applySlideUpdate((slide) => {
       const currentStyle = slide.subtitleStyle || { fontSize: 'medium', fontWeight: 'normal', color: '#94a3b8' };
       return { ...slide, subtitleStyle: { ...currentStyle, ...updates } };
-    }));
-  }, [selectedSlideIndex]);
+    });
+  }, [applySlideUpdate]);
 
   // Start new presentation - reset all state
   const handleStartNew = useCallback(() => {
@@ -794,6 +971,7 @@ const PresentationTab: React.FC = () => {
     setTopic('');
     setSlideCount(4);
     setResearchMode(false);
+    setResearchModeType('global');
     setInputMode('topic_only');
     setBrief(null);
     setOutline([]);
@@ -802,6 +980,62 @@ const PresentationTab: React.FC = () => {
     setIsEditMode(false);
     setError('');
   }, []);
+
+  const handleResearchCurrentSlide = useCallback(async () => {
+    if (!brief) return;
+    if (!researchMode || researchModeType !== 'per_slide') return;
+    if (slides.length === 0) return;
+
+    const currentSlide = slides[selectedSlideIndex];
+    if (!currentSlide) return;
+    if (currentSlide.role === 'cover' || currentSlide.role === 'thank_you') return;
+
+    setIsSlideResearching(true);
+    try {
+      const response = await callEdgeFunctionWithRetry<{
+        success: boolean;
+        slide?: { title: string; subtitle?: string; bullets: string[] };
+        error?: string;
+      }>('wakti-presentation-slide-research', {
+        body: {
+          topic: topic.trim(),
+          slideNumber: currentSlide.slideNumber,
+          slideCount,
+          language,
+          objective: brief.objective,
+          audience: brief.audience,
+          scenario: brief.scenario,
+          tone: brief.tone,
+          currentTitle: currentSlide.title,
+          currentBullets: currentSlide.bullets || [],
+          query: slideResearchQuery || undefined,
+        },
+        maxRetries: 2,
+        retryDelay: 1000,
+      });
+
+      if (!response?.success || !response?.slide) {
+        throw new Error(response?.error || 'Failed to research slide');
+      }
+
+      setSlides(prev => prev.map((s, i) => {
+        if (i !== selectedSlideIndex) return s;
+        return {
+          ...s,
+          title: response.slide!.title,
+          subtitle: response.slide!.subtitle || '',
+          bullets: Array.isArray(response.slide!.bullets) ? response.slide!.bullets : [],
+        };
+      }));
+
+      toast.success(language === 'ar' ? 'تمت إضافة البحث للشريحة' : 'Slide updated with research');
+    } catch (e: any) {
+      console.error('Per-slide research error:', e);
+      toast.error(language === 'ar' ? 'فشل البحث للشريحة' : 'Failed to research slide');
+    } finally {
+      setIsSlideResearching(false);
+    }
+  }, [brief, language, researchMode, researchModeType, selectedSlideIndex, slideCount, slideResearchQuery, slides, topic]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render helpers
@@ -904,7 +1138,8 @@ const PresentationTab: React.FC = () => {
             ))}
 
             {/* Research Mode - inside the same section */}
-            <div className="border-t border-border/50 pt-3 mt-2">
+            {inputMode !== 'blank' && (
+              <div className="border-t border-border/50 pt-3 mt-2">
               <label
                 className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
                   researchMode
@@ -915,7 +1150,11 @@ const PresentationTab: React.FC = () => {
                 <input
                   type="checkbox"
                   checked={researchMode}
-                  onChange={() => setResearchMode(!researchMode)}
+                  onChange={() => {
+                    const next = !researchMode;
+                    setResearchMode(next);
+                    if (!next) setResearchModeType('global');
+                  }}
                   className="mt-1 accent-primary"
                 />
                 <div className="flex-1">
@@ -928,9 +1167,44 @@ const PresentationTab: React.FC = () => {
                       ? 'ابحث في الإنترنت للحصول على معلومات حديثة'
                       : 'Search the web for up-to-date information'}
                   </p>
+
+                  {researchMode && (
+                    <div className="mt-2 flex flex-col gap-2">
+                      <div className="flex items-center gap-3 text-xs">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="presentationResearchMode"
+                            checked={researchModeType === 'global'}
+                            onChange={() => setResearchModeType('global')}
+                            className="accent-primary"
+                          />
+                          {language === 'ar' ? 'لكل العرض' : 'Global'}
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="presentationResearchMode"
+                            checked={researchModeType === 'per_slide'}
+                            onChange={() => setResearchModeType('per_slide')}
+                            className="accent-primary"
+                          />
+                          {language === 'ar' ? 'حسب كل شريحة' : 'As per slide'}
+                        </label>
+                      </div>
+                      {researchModeType === 'per_slide' && (
+                        <p className="text-[11px] text-muted-foreground leading-snug">
+                          {language === 'ar'
+                            ? 'سيتم إنشاء الغلاف + الشريحة التالية + شريحة الشكر فقط، والباقي سيكون فارغاً لتعبئته عبر البحث داخل التعديل.'
+                            : 'Will generate only Cover + next slide + Thank You. Other slides will be left empty for per-slide research in Edit.'}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </label>
-            </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -964,7 +1238,7 @@ const PresentationTab: React.FC = () => {
       <div className="flex justify-end pt-4">
         <button
           onClick={handleGenerateBrief}
-          disabled={!topic.trim() || isLoading}
+          disabled={(inputMode !== 'blank' && !topic.trim()) || isLoading}
           className="px-6 py-3 rounded-xl bg-gradient-to-r from-[#060541] to-[#0a0a6b] text-white font-medium shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
         >
           {isLoading ? (
@@ -1270,6 +1544,22 @@ const PresentationTab: React.FC = () => {
               <FilePlus2 className="w-4 h-4" />
             </button>
             <button
+              onClick={handleAddSlideAfterCurrent}
+              disabled={slides.length === 0}
+              className="p-2 rounded-lg border hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title={language === 'ar' ? 'إضافة شريحة بعد الحالية' : 'Add slide after current'}
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+            <button
+              onClick={handleDeleteCurrentSlide}
+              disabled={slides.length === 0 || isLockedSlide(slides[selectedSlideIndex])}
+              className="p-2 rounded-lg border hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title={language === 'ar' ? 'حذف الشريحة الحالية' : 'Delete current slide'}
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+            <button
               onClick={() => setIsEditMode(!isEditMode)}
               className={`p-2 rounded-lg border transition-colors ${isEditMode ? 'bg-primary text-white' : 'hover:bg-muted'}`}
               title={language === 'ar' ? 'تعديل' : 'Edit'}
@@ -1556,6 +1846,11 @@ const PresentationTab: React.FC = () => {
                             ) : word + ' '
                           )}
                         </h2>
+                        {currentSlide.subtitle && (
+                          <p className={`${getFontSizeClass(currentSlide.subtitleStyle?.fontSize)} mt-2`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>
+                            {currentSlide.subtitle}
+                          </p>
+                        )}
                         <div className="flex items-center gap-1 mt-2">
                           <div className={`${currentSlide.bulletDotSize === 'medium' ? 'w-2.5 h-2.5' : currentSlide.bulletDotSize === 'large' ? 'w-3 h-3' : 'w-2 h-2'} rounded-full`} style={{ backgroundColor: currentSlide.accentColor || getThemeAccent(selectedTheme).hex }} />
                           <div className={`${currentSlide.bulletDotSize === 'medium' ? 'w-2.5 h-2.5' : currentSlide.bulletDotSize === 'large' ? 'w-3 h-3' : 'w-2 h-2'} rounded-full`} style={{ backgroundColor: currentSlide.accentColor || getThemeAccent(selectedTheme).hex }} />
@@ -1662,6 +1957,11 @@ const PresentationTab: React.FC = () => {
                       {/* Fallback: No image but layout selected (show as text_only) */}
                       {!currentSlide.imageUrl && currentSlide.layoutVariant && currentSlide.layoutVariant !== 'text_only' && (
                         <div className="flex-1 overflow-hidden">
+                          {currentSlide.subtitle && (
+                            <p className={`${getFontSizeClass(currentSlide.subtitleStyle?.fontSize)} mb-3`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>
+                              {currentSlide.subtitle}
+                            </p>
+                          )}
                           <ul className="space-y-1.5">
                             {currentSlide.bullets?.slice(0, 5).map((b, i) => (
                               <li key={i} className="flex items-start gap-2">
@@ -1706,6 +2006,28 @@ const PresentationTab: React.FC = () => {
                     </div>
                   )}
 
+                  {/* Empty content slide (no image, no columns, no bullets) - still render title/subtitle so edits are visible */}
+                  {currentSlide.role !== 'cover' && currentSlide.role !== 'thank_you' && !currentSlide.imageUrl && (!currentSlide.columns || currentSlide.columns.length === 0) && (!currentSlide.bullets || currentSlide.bullets.length === 0) && !currentSlide.layoutVariant && (
+                    <div className="flex-1 flex flex-col items-center justify-center text-center">
+                      <h2
+                        className={`${getFontSizeClass(currentSlide.titleStyle?.fontSize, 'title')} ${currentSlide.titleStyle?.fontWeight === 'normal' ? 'font-normal' : 'font-bold'} ${currentSlide.titleStyle?.fontStyle === 'italic' ? 'italic' : ''} ${currentSlide.titleStyle?.textDecoration === 'underline' ? 'underline' : ''} mb-2 leading-tight`}
+                        style={{ color: currentSlide.titleStyle?.color || '#ffffff' }}
+                      >
+                        {currentSlide.title}
+                      </h2>
+                      {currentSlide.subtitle && (
+                        <p className={`${getFontSizeClass(currentSlide.subtitleStyle?.fontSize)} mb-4`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>
+                          {currentSlide.subtitle}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-1">
+                        <div className={`w-2 h-2 rounded-full ${getThemeAccent(selectedTheme).bg}`} />
+                        <div className={`w-2 h-2 rounded-full ${getThemeAccent(selectedTheme).bg}`} />
+                        <div className={`w-2 h-2 rounded-full ${getThemeAccent(selectedTheme).bg}`} />
+                      </div>
+                    </div>
+                  )}
+
                   {/* Content slides with bullets only (no image, no columns, not using dynamic layout) - fallback */}
                   {currentSlide.role !== 'cover' && currentSlide.role !== 'thank_you' && !currentSlide.imageUrl && (!currentSlide.columns || currentSlide.columns.length === 0) && currentSlide.bullets && currentSlide.bullets.length > 0 && currentSlide.layoutVariant !== 'text_only' && (
                     <div className="flex-1 flex flex-col">
@@ -1717,6 +2039,11 @@ const PresentationTab: React.FC = () => {
                         >
                           {currentSlide.title}
                         </h2>
+                        {currentSlide.subtitle && (
+                          <p className={`${getFontSizeClass(currentSlide.subtitleStyle?.fontSize)} mb-3`} style={{ color: currentSlide.subtitleStyle?.color || '#94a3b8' }}>
+                            {currentSlide.subtitle}
+                          </p>
+                        )}
                         <div className="flex items-center gap-1">
                           <div className={`w-2 h-2 rounded-full ${getThemeAccent(selectedTheme).bg}`} />
                           <div className={`w-2 h-2 rounded-full ${getThemeAccent(selectedTheme).bg}`} />
@@ -1765,6 +2092,40 @@ const PresentationTab: React.FC = () => {
             <h3 className="text-sm font-semibold mb-3 text-slate-700 dark:text-slate-300">
               {language === 'ar' ? '✏️ تعديل الشريحة' : '✏️ Edit Slide'}
             </h3>
+
+            {researchMode && researchModeType === 'per_slide' && currentSlide.role !== 'cover' && currentSlide.role !== 'thank_you' && (
+              <div className="mb-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                <label className="text-xs text-slate-500 mb-2 block font-medium">
+                  🔎 {language === 'ar' ? 'بحث للعرض (حسب الشريحة)' : 'Presentation Web Search (per slide)'}
+                </label>
+                <div className="flex flex-col gap-2">
+                  <input
+                    type="text"
+                    value={slideResearchQuery}
+                    onChange={(e) => setSlideResearchQuery(e.target.value)}
+                    placeholder={language === 'ar' ? 'مثال: إحصائيات حديثة، تعريف، أمثلة...' : 'e.g., latest stats, definition, examples...'}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:ring-2 focus:ring-primary/50 outline-none"
+                  />
+                  <button
+                    onClick={handleResearchCurrentSlide}
+                    disabled={isSlideResearching}
+                    className="px-3 py-2 rounded-lg bg-primary text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isSlideResearching ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        {language === 'ar' ? 'جارٍ البحث...' : 'Searching...'}
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        {language === 'ar' ? 'بحث وملء الشريحة' : 'Search & fill this slide'}
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
             
             {/* Title */}
             <div className="mb-3">
@@ -1889,7 +2250,7 @@ const PresentationTab: React.FC = () => {
             </div>
             
             {/* Bullets */}
-            {currentSlide.bullets && currentSlide.bullets.length > 0 && (
+            {currentSlide.role !== 'cover' && currentSlide.role !== 'thank_you' && (
               <div className="mb-3">
                 <label className="text-xs text-slate-500 mb-2 block font-medium">{language === 'ar' ? 'النقاط' : 'Bullet Points'}</label>
                 {/* Bullet Style Controls - Row 1: Size & Style */}
@@ -1938,7 +2299,7 @@ const PresentationTab: React.FC = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  {currentSlide.bullets.map((bullet, i) => (
+                  {(currentSlide.bullets && currentSlide.bullets.length > 0 ? currentSlide.bullets : ['']).map((bullet, i) => (
                     <div key={i} className="flex gap-2">
                       <input
                         type="text"
@@ -1946,19 +2307,27 @@ const PresentationTab: React.FC = () => {
                         onChange={(e) => updateSlideBullet(i, e.target.value)}
                         className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:ring-2 focus:ring-primary/50 outline-none"
                       />
-                      <button
-                        onClick={() => deleteSlideBullet(i)}
-                        className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                        title={language === 'ar' ? 'حذف' : 'Delete'}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {currentSlide.bullets && currentSlide.bullets.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => deleteSlideBullet(i)}
+                          className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                          title={language === 'ar' ? 'حذف' : 'Delete'}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
                 <button
-                  onClick={addSlideBullet}
-                  className="mt-2 flex items-center gap-1 text-sm text-primary hover:underline"
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    addSlideBullet();
+                  }}
+                  className="mt-2 flex items-center gap-1 text-sm text-primary hover:underline cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
                   {language === 'ar' ? 'إضافة نقطة' : 'Add bullet'}
@@ -2027,6 +2396,13 @@ const PresentationTab: React.FC = () => {
                     />
                     <div className={`flex items-center gap-2 ${language === 'ar' ? 'flex-row-reverse' : ''}`}>
                       {/* Regenerate Image with AI - nicer button */}
+                      <input
+                        type="text"
+                        value={imagePromptText}
+                        onChange={(e) => setImagePromptText(e.target.value)}
+                        placeholder={language === 'ar' ? 'وصف قصير للصورة...' : 'Short image prompt...'}
+                        className="flex-1 min-w-[140px] px-2 py-1.5 text-[11px] rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:ring-2 focus:ring-primary/50 outline-none"
+                      />
                       <button
                         onClick={handleRegenerateImage}
                         disabled={isRegeneratingImage}
@@ -2106,9 +2482,7 @@ const PresentationTab: React.FC = () => {
                   {(['small', 'medium', 'large'] as const).map(size => (
                     <button
                       key={size}
-                      onClick={() => setSlides(prev => prev.map((s, i) => 
-                        i === selectedSlideIndex ? { ...s, accentFontSize: size } : s
-                      ))}
+                      onClick={() => applySlideUpdate((s) => ({ ...s, accentFontSize: size }))}
                       className={`px-2 py-1 text-xs rounded ${(currentSlide.accentFontSize || 'medium') === size ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
                     >
                       {size === 'small' ? 'S' : size === 'medium' ? 'M' : 'L'}
@@ -2118,25 +2492,19 @@ const PresentationTab: React.FC = () => {
                 <div className="flex items-center gap-1">
                   <span className="text-xs text-slate-400 font-medium">{language === 'ar' ? 'الخط:' : 'Style:'}</span>
                   <button
-                    onClick={() => setSlides(prev => prev.map((s, i) => 
-                      i === selectedSlideIndex ? { ...s, accentFontWeight: 'normal' } : s
-                    ))}
+                    onClick={() => applySlideUpdate((s) => ({ ...s, accentFontWeight: 'normal' }))}
                     className={`px-2 py-1 text-xs rounded ${(currentSlide.accentFontWeight || 'bold') === 'normal' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
                   >
                     Normal
                   </button>
                   <button
-                    onClick={() => setSlides(prev => prev.map((s, i) => 
-                      i === selectedSlideIndex ? { ...s, accentFontWeight: 'bold' } : s
-                    ))}
+                    onClick={() => applySlideUpdate((s) => ({ ...s, accentFontWeight: 'bold' }))}
                     className={`px-2 py-1 text-xs rounded font-bold ${(currentSlide.accentFontWeight || 'bold') === 'bold' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
                   >
                     Bold
                   </button>
                   <button
-                    onClick={() => setSlides(prev => prev.map((s, i) => 
-                      i === selectedSlideIndex ? { ...s, accentFontStyle: currentSlide.accentFontStyle === 'italic' ? 'normal' : 'italic' } : s
-                    ))}
+                    onClick={() => applySlideUpdate((s) => ({ ...s, accentFontStyle: currentSlide.accentFontStyle === 'italic' ? 'normal' : 'italic' }))}
                     className={`px-2 py-1 text-xs rounded italic ${currentSlide.accentFontStyle === 'italic' ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
                   >
                     Italic
@@ -2148,9 +2516,7 @@ const PresentationTab: React.FC = () => {
                 <span className="text-xs text-slate-400 font-medium block mb-1">{language === 'ar' ? 'اللون:' : 'Color:'}</span>
                 <ColorPickerWithGradient
                   value={currentSlide.accentColor || '#f97316'}
-                  onChange={(color) => setSlides(prev => prev.map((s, i) => 
-                    i === selectedSlideIndex ? { ...s, accentColor: color } : s
-                  ))}
+                  onChange={(color) => applySlideUpdate((s) => ({ ...s, accentColor: color }))}
                   label="keywords"
                 />
               </div>
@@ -2174,9 +2540,7 @@ const PresentationTab: React.FC = () => {
                 ] as const).map(shape => (
                   <button
                     key={shape.key}
-                    onClick={() => setSlides(prev => prev.map((s, i) => 
-                      i === selectedSlideIndex ? { ...s, bulletDotShape: shape.key } : s
-                    ))}
+                    onClick={() => applySlideUpdate((s) => ({ ...s, bulletDotShape: shape.key }))}
                     className={`px-2 py-1 text-sm rounded ${(currentSlide.bulletDotShape || 'dot') === shape.key ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
                     title={shape.title}
                   >
@@ -2191,9 +2555,7 @@ const PresentationTab: React.FC = () => {
                   {(['small', 'medium', 'large'] as const).map(size => (
                     <button
                       key={size}
-                      onClick={() => setSlides(prev => prev.map((s, i) => 
-                        i === selectedSlideIndex ? { ...s, bulletDotSize: size } : s
-                      ))}
+                      onClick={() => applySlideUpdate((s) => ({ ...s, bulletDotSize: size }))}
                       className={`px-2 py-1 text-xs rounded ${(currentSlide.bulletDotSize || 'small') === size ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-600'}`}
                     >
                       {size === 'small' ? 'S' : size === 'medium' ? 'M' : 'L'}
@@ -2206,9 +2568,7 @@ const PresentationTab: React.FC = () => {
                 <span className="text-xs text-slate-400 font-medium block mb-1">{language === 'ar' ? 'اللون:' : 'Color:'}</span>
                 <ColorPickerWithGradient
                   value={currentSlide.bulletDotColor || '#f97316'}
-                  onChange={(color) => setSlides(prev => prev.map((s, i) => 
-                    i === selectedSlideIndex ? { ...s, bulletDotColor: color } : s
-                  ))}
+                  onChange={(color) => applySlideUpdate((s) => ({ ...s, bulletDotColor: color }))}
                   label="bulletDots"
                 />
               </div>
@@ -2216,14 +2576,18 @@ const PresentationTab: React.FC = () => {
 
             {/* Slide Background - Color Picker */}
             <div className="mb-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
-              <label className="text-xs text-slate-500 mb-2 block font-medium">
-                🎨 {language === 'ar' ? 'خلفية الشريحة' : 'Slide Background'}
-              </label>
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <label className="text-xs text-slate-500 block font-medium">
+                  🎨 {language === 'ar' ? 'خلفية الشريحة' : 'Slide Background'}
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500">{language === 'ar' ? 'لكل الشرائح' : 'All slides'}</span>
+                  <Switch checked={applyStyleToAllSlides} onCheckedChange={(v) => setApplyStyleToAllSlides(!!v)} />
+                </div>
+              </div>
               <ColorPickerWithGradient
                 value={currentSlide.slideBg || '#1e293b'}
-                onChange={(color) => setSlides(prev => prev.map((s, i) => 
-                  i === selectedSlideIndex ? { ...s, slideBg: color } : s
-                ))}
+                onChange={(color) => applySlideUpdate((s) => ({ ...s, slideBg: color }))}
                 label="background"
               />
             </div>

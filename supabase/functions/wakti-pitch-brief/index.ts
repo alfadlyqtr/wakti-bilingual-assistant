@@ -33,52 +33,38 @@ interface BriefResponse {
   error?: string;
 }
 
-// Tavily search for research mode
-async function searchWithTavily(query: string): Promise<string> {
-  const tavilyKey = Deno.env.get("TAVILY_API_KEY");
-  if (!tavilyKey) {
-    console.warn("TAVILY_API_KEY not configured, skipping research");
-    return "";
-  }
+async function callGeminiGrounded(systemPrompt: string, userPrompt: string): Promise<string | null> {
+  const geminiKey = Deno.env.get("GEMINI_API_KEY");
+  if (!geminiKey) return null;
 
   try {
-    console.log("🔍 Tavily search for:", query);
-    const response = await fetch("https://api.tavily.com/search", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        api_key: tavilyKey,
-        query: query,
-        search_depth: "advanced",
-        include_answer: true,
-        max_results: 5
-      })
-    });
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-001:generateContent?key=${geminiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
+          tools: [{ google_search_retrieval: {} }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 2048,
+            responseMimeType: "application/json",
+          },
+        }),
+      }
+    );
 
     if (!response.ok) {
-      console.error("Tavily error:", response.status);
-      return "";
+      console.error("Gemini grounded error:", response.status);
+      return null;
     }
 
     const data = await response.json();
-    let context = "";
-    
-    if (data.answer) {
-      context += `Research Summary: ${data.answer}\n\n`;
-    }
-    
-    if (data.results && data.results.length > 0) {
-      context += "Key Facts:\n";
-      data.results.slice(0, 3).forEach((r: any, i: number) => {
-        context += `${i + 1}. ${r.title}: ${r.content?.substring(0, 200) || ""}\n`;
-      });
-    }
-    
-    console.log("✅ Tavily research found:", context.substring(0, 200));
-    return context;
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text || null;
   } catch (err) {
-    console.error("Tavily search error:", err);
-    return "";
+    console.error("Gemini grounded call failed:", err);
+    return null;
   }
 }
 
@@ -186,11 +172,8 @@ Deno.serve(async (req: Request) => {
     const loveKeywords = /\b(my wife|my husband|my love|my dear|my darling|beloved|زوجتي|زوجي|حبيبي|حبيبتي|عزيزي|عزيزتي|يا حياتي)\b/i;
     const isPersonalTribute = loveKeywords.test(topic);
 
-    // If research mode is ON, search with Tavily first
-    let researchContext = "";
-    if (researchMode) {
-      researchContext = await searchWithTavily(topic);
-    }
+    let usedProvider: "openai" | "gemini" = "openai";
+    let usedModel = "gpt-4o-mini";
 
     // Build prompts based on input mode and content type
     let modeInstruction = '';
@@ -225,7 +208,8 @@ Deno.serve(async (req: Request) => {
   "audience": "partner_spouse أو family أو students أو investors أو general_public",
   "scenario": "anniversary أو private_celebration أو classroom أو conference",
   "tone": "romantic أو heartfelt أو professional أو inspirational",
-  "themeHint": "romantic_pink أو academic_blue أو dark_fintech أو clean_minimal"
+  "themeHint": "romantic_pink أو academic_blue أو dark_fintech أو clean_minimal",
+  "researchContext": "(optional) ملخص بحثي موجز مع أهم الحقائق"
 }`
       : `You are a presentation expert. ${modeInstruction}${personalHint}
 
@@ -236,25 +220,33 @@ Respond with JSON only:
   "audience": "partner_spouse or family or students or investors or general_public",
   "scenario": "anniversary or private_celebration or classroom or conference",
   "tone": "romantic or heartfelt or professional or inspirational",
-  "themeHint": "romantic_pink or academic_blue or dark_fintech or clean_minimal"
+  "themeHint": "romantic_pink or academic_blue or dark_fintech or clean_minimal",
+  "researchContext": "(optional) brief research summary and key facts"
 }`;
 
-    let userPrompt = language === 'ar'
+    const userPrompt = language === 'ar'
       ? `أنشئ ملخصًا للعرض التقديمي حول: "${topic}"\nعدد الشرائح: ${slideCount}`
       : `Create a presentation brief for: "${topic}"\nSlide count: ${slideCount}`;
 
-    // Add research context if available
-    if (researchContext) {
-      userPrompt += `\n\nResearch findings to incorporate:\n${researchContext}`;
-    }
+    let responseText: string | null = null;
 
-    // Try OpenAI first, then Gemini
-    console.log("🤖 Trying OpenAI...");
-    let responseText = await callOpenAI(systemPrompt, userPrompt);
-    
-    if (!responseText) {
-      console.log("🤖 OpenAI failed, trying Gemini...");
-      responseText = await callGemini(systemPrompt, userPrompt);
+    if (researchMode) {
+      console.log("🤖 Research mode ON: using Gemini grounded (no OpenAI)");
+      responseText = await callGeminiGrounded(systemPrompt, userPrompt);
+      usedProvider = "gemini";
+      usedModel = "gemini-2.0-flash-001";
+    } else {
+      console.log("🤖 Trying OpenAI...");
+      responseText = await callOpenAI(systemPrompt, userPrompt);
+
+      if (!responseText) {
+        console.log("🤖 OpenAI failed, trying Gemini...");
+        responseText = await callGemini(systemPrompt, userPrompt);
+        if (responseText) {
+          usedProvider = "gemini";
+          usedModel = "gemini-2.0-flash-001";
+        }
+      }
     }
 
     if (!responseText) {
@@ -267,7 +259,7 @@ Respond with JSON only:
     let briefData;
     try {
       briefData = JSON.parse(responseText);
-    } catch (e) {
+    } catch {
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         briefData = JSON.parse(jsonMatch[0]);
@@ -290,7 +282,7 @@ Respond with JSON only:
       tone: briefData.tone || defaultTone,
       language,
       themeHint: briefData.themeHint || (isPersonalTribute ? 'romantic_pink' : 'academic_blue'),
-      researchContext: researchContext || undefined,
+      researchContext: briefData.researchContext || undefined,
       inputMode, // Pass through so outline/slides can use it
     };
 
@@ -299,8 +291,8 @@ Respond with JSON only:
     // Log successful AI usage
     await logAIFromRequest(req, {
       functionName: "wakti-pitch-brief",
-      provider: "openai",
-      model: "gpt-4o-mini",
+      provider: usedProvider,
+      model: usedModel,
       inputText: topic,
       outputText: responseText,
       status: "success"
