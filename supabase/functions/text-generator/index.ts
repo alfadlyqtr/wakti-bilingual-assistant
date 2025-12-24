@@ -16,28 +16,28 @@ const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GE
 // Content type configurations
 const contentConfig = {
   // Short form content types (emails, messages, etc.)
-  email: { baseTokens: 1024, model: 'gpt-4o-mini', temperature: 0.7 },
-  text_message: { baseTokens: 512, model: 'gpt-4o-mini', temperature: 0.7 },
-  message: { baseTokens: 768, model: 'gpt-4o-mini', temperature: 0.7 },
+  email: { baseTokens: 1024, model: 'gpt-4.1-mini', temperature: 0.7 },
+  text_message: { baseTokens: 512, model: 'gpt-4.1-mini', temperature: 0.7 },
+  message: { baseTokens: 768, model: 'gpt-4.1-mini', temperature: 0.7 },
   
   // Long form content types
-  blog_post: { baseTokens: 2048, model: 'gpt-4o', temperature: 0.7 },
-  story: { baseTokens: 3072, model: 'gpt-4o', temperature: 0.8 },
-  press_release: { baseTokens: 1536, model: 'gpt-4o', temperature: 0.5 },
-  cover_letter: { baseTokens: 1024, model: 'gpt-4o', temperature: 0.6 },
-  research_brief: { baseTokens: 2048, model: 'gpt-4o', temperature: 0.4 },
-  research_report: { baseTokens: 4096, model: 'gpt-4o', temperature: 0.4 },
-  case_study: { baseTokens: 3072, model: 'gpt-4o', temperature: 0.6 },
-  how_to_guide: { baseTokens: 2048, model: 'gpt-4o', temperature: 0.5 },
-  policy_note: { baseTokens: 1536, model: 'gpt-4o', temperature: 0.4 },
-  product_description: { baseTokens: 768, model: 'gpt-4o-mini', temperature: 0.7 },
-  essay: { baseTokens: 3072, model: 'gpt-4o', temperature: 0.7 },
-  proposal: { baseTokens: 2560, model: 'gpt-4o', temperature: 0.6 },
-  official_letter: { baseTokens: 1024, model: 'gpt-4o', temperature: 0.5 },
-  poem: { baseTokens: 1024, model: 'gpt-4o', temperature: 0.9 },
+  blog_post: { baseTokens: 2048, model: 'gpt-4.1-mini', temperature: 0.7 },
+  story: { baseTokens: 3072, model: 'gpt-4.1-mini', temperature: 0.8 },
+  press_release: { baseTokens: 1536, model: 'gpt-4.1-mini', temperature: 0.5 },
+  cover_letter: { baseTokens: 1024, model: 'gpt-4.1-mini', temperature: 0.6 },
+  research_brief: { baseTokens: 2048, model: 'gpt-4.1-mini', temperature: 0.4 },
+  research_report: { baseTokens: 4096, model: 'gpt-4.1-mini', temperature: 0.4 },
+  case_study: { baseTokens: 3072, model: 'gpt-4.1-mini', temperature: 0.6 },
+  how_to_guide: { baseTokens: 2048, model: 'gpt-4.1-mini', temperature: 0.5 },
+  policy_note: { baseTokens: 1536, model: 'gpt-4.1-mini', temperature: 0.4 },
+  product_description: { baseTokens: 768, model: 'gpt-4.1-mini', temperature: 0.7 },
+  essay: { baseTokens: 3072, model: 'gpt-4.1-mini', temperature: 0.7 },
+  proposal: { baseTokens: 2560, model: 'gpt-4.1-mini', temperature: 0.6 },
+  official_letter: { baseTokens: 1024, model: 'gpt-4.1-mini', temperature: 0.5 },
+  poem: { baseTokens: 1024, model: 'gpt-4.1-mini', temperature: 0.9 },
   
   // Default fallback
-  default: { baseTokens: 1024, model: 'gpt-4o-mini', temperature: 0.7 }
+  default: { baseTokens: 1024, model: 'gpt-4.1-mini', temperature: 0.7 }
 };
 
 // Length multipliers
@@ -384,58 +384,7 @@ Return ONLY the JSON, no additional text.`;
 
     let generatedText: string | undefined;
 
-    // Try Gemini first if available
-    if (GEMINI_API_KEY) {
-      try {
-        console.log("🎯 Text Generator: Attempting Gemini (gemini-2.5-flash-lite)");
-        const startGemini = Date.now();
-        const result = await generateGemini(
-          'gemini-2.5-flash-lite',
-          [{ role: 'user', parts: [{ text: prompt }] }],
-          systemPrompt,
-          { temperature: genParams.temperature, maxOutputTokens: genParams.max_tokens },
-          []
-        );
-        const geminiDuration = Date.now() - startGemini;
-        console.log(`🎯 Text Generator: Gemini request completed in ${geminiDuration}ms`);
-
-        const content = result?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-        if (content) {
-          generatedText = content;
-          console.log("🎯 Text Generator: Successfully generated text, length:", generatedText?.length || 0, "model: gemini-2.5-flash-lite");
-
-          // Log successful AI usage
-          await logAIFromRequest(req, {
-            functionName: "text-generator",
-            provider: "gemini",
-            model: "gemini-2.5-flash-lite",
-            inputText: prompt,
-            outputText: generatedText,
-            durationMs: geminiDuration,
-            status: "success"
-          });
-
-          return new Response(
-            JSON.stringify({
-              success: true,
-              generatedText,
-              mode,
-              language,
-              modelUsed: 'gemini-2.5-flash-lite',
-              temperatureUsed: genParams.temperature,
-              contentType: contentType || null
-            }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        } else {
-          console.warn("🎯 Text Generator: Gemini returned no content");
-        }
-      } catch (e) {
-        console.warn("🎯 Text Generator: Gemini request threw error:", e);
-      }
-    }
-
-    // Fallback to OpenAI if Gemini failed or unavailable
+    // Primary: OpenAI (gpt-4.1-mini)
     if (OPENAI_API_KEY && !generatedText) {
       try {
         console.log("🎯 Text Generator: Attempting OpenAI", genParams.model);
@@ -491,6 +440,56 @@ Return ONLY the JSON, no additional text.`;
       }
     }
 
+    // Fallback: Gemini (only if OpenAI failed/unavailable)
+    if (GEMINI_API_KEY && !generatedText) {
+      try {
+        console.log("🎯 Text Generator: Falling back to Gemini (gemini-2.5-flash-lite)");
+        const startGemini = Date.now();
+        const result = await generateGemini(
+          'gemini-2.5-flash-lite',
+          [{ role: 'user', parts: [{ text: prompt }] }],
+          systemPrompt,
+          { temperature: genParams.temperature, maxOutputTokens: genParams.max_tokens },
+          []
+        );
+        const geminiDuration = Date.now() - startGemini;
+        console.log(`🎯 Text Generator: Gemini request completed in ${geminiDuration}ms`);
+
+        const content = result?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        if (content) {
+          generatedText = content;
+          console.log("🎯 Text Generator: Successfully generated text, length:", generatedText?.length || 0, "model: gemini-2.5-flash-lite");
+
+          await logAIFromRequest(req, {
+            functionName: "text-generator",
+            provider: "gemini",
+            model: "gemini-2.5-flash-lite",
+            inputText: prompt,
+            outputText: generatedText,
+            durationMs: geminiDuration,
+            status: "success"
+          });
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              generatedText,
+              mode,
+              language,
+              modelUsed: 'gemini-2.5-flash-lite',
+              temperatureUsed: genParams.temperature,
+              contentType: contentType || null
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        } else {
+          console.warn("🎯 Text Generator: Gemini returned no content");
+        }
+      } catch (e) {
+        console.warn("🎯 Text Generator: Gemini request threw error:", e);
+      }
+    }
+
     // Fallback to DeepSeek if needed and available
     if (!OPENAI_API_KEY || (!generatedText && DEEPSEEK_API_KEY)) {
       try {
@@ -503,7 +502,7 @@ Return ONLY the JSON, no additional text.`;
             "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
           },
           body: JSON.stringify({
-            model: genParams.model,
+            model: 'deepseek-chat',
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: prompt }
@@ -520,7 +519,7 @@ Return ONLY the JSON, no additional text.`;
           const content = result.choices?.[0]?.message?.content || "";
           if (content) {
             generatedText = content;
-            const modelUsed = genParams.model;
+            const modelUsed = 'deepseek-chat';
             console.log("🎯 Text Generator: Successfully generated text, length:", generatedText?.length || 0, "model:", modelUsed);
 
             return new Response(

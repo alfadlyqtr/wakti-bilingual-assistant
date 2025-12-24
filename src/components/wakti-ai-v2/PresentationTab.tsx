@@ -26,7 +26,8 @@ import {
   Trash2,
   FileText,
   FileSpreadsheet,
-  FilePlus2
+  FilePlus2,
+  Video
 } from 'lucide-react';
 import { ColorPickerWithGradient, getColorStyle, isGradientValue } from '@/components/ui/ColorPickerWithGradient';
 import { Switch } from '@/components/ui/switch';
@@ -116,6 +117,8 @@ interface Slide {
   imageSize?: ImageSize;
   imageFit?: ImageFit;
   slideBg?: string;
+  // Narration voice (for MP4 export)
+  voiceGender?: 'male' | 'female';
 }
 
 type Step = 'topic' | 'brief' | 'outline' | 'slides';
@@ -439,6 +442,127 @@ const getSlideBgClass = (bgKey?: string) => {
   return bgMap[bgKey || 'dark'] || 'from-slate-900 to-slate-800';
 };
 
+/**
+ * Build narration text from slide content (Title + Subtitle + Bullets)
+ * Used for MP4 video export with per-slide audio narration
+ */
+const buildNarrationText = (slide: { title: string; subtitle?: string; bullets: string[] }): string => {
+  const parts: string[] = [];
+  
+  if (slide.title) {
+    parts.push(slide.title);
+  }
+  
+  if (slide.subtitle) {
+    parts.push(slide.subtitle);
+  }
+  
+  if (slide.bullets && slide.bullets.length > 0) {
+    parts.push(...slide.bullets.filter(b => b.trim()));
+  }
+  
+  return parts.join('. ').replace(/\.\./g, '.').trim();
+};
+
+/**
+ * Convert AudioBuffer to WAV Blob for video export
+ */
+function audioBufferToWav(buffer: AudioBuffer): Blob {
+  const numChannels = buffer.numberOfChannels;
+  const sampleRate = buffer.sampleRate;
+  const format = 1;
+  const bitDepth = 16;
+  const bytesPerSample = bitDepth / 8;
+  const blockAlign = numChannels * bytesPerSample;
+  const dataLength = buffer.length * blockAlign;
+  const bufferLength = 44 + dataLength;
+  const arrayBuffer = new ArrayBuffer(bufferLength);
+  const view = new DataView(arrayBuffer);
+  
+  const writeString = (offset: number, str: string) => {
+    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+  };
+  
+  writeString(0, 'RIFF');
+  view.setUint32(4, bufferLength - 8, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, format, true);
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * blockAlign, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitDepth, true);
+  writeString(36, 'data');
+  view.setUint32(40, dataLength, true);
+  
+  const channels: Float32Array[] = [];
+  for (let i = 0; i < numChannels; i++) channels.push(buffer.getChannelData(i));
+  
+  let offset = 44;
+  for (let i = 0; i < buffer.length; i++) {
+    for (let ch = 0; ch < numChannels; ch++) {
+      const sample = Math.max(-1, Math.min(1, channels[ch][i]));
+      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+      offset += 2;
+    }
+  }
+  return new Blob([arrayBuffer], { type: 'audio/wav' });
+}
+
+/**
+ * Render a slide to canvas for video export
+ */
+function renderSlideToCanvas(
+  ctx: CanvasRenderingContext2D,
+  slide: { title: string; subtitle?: string; bullets: string[]; slideBg?: string },
+  width: number,
+  height: number,
+  _theme: string
+): void {
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(0, 0, width, height);
+  
+  if (slide.slideBg) {
+    if (slide.slideBg.startsWith('gradient:')) {
+      const parts = slide.slideBg.replace('gradient:', '').split(',');
+      if (parts.length >= 2) {
+        const gradient = ctx.createLinearGradient(0, 0, width, height);
+        gradient.addColorStop(0, parts[0]);
+        gradient.addColorStop(1, parts[1]);
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+      }
+    } else if (slide.slideBg.startsWith('#')) {
+      ctx.fillStyle = slide.slideBg;
+      ctx.fillRect(0, 0, width, height);
+    }
+  }
+  
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 72px system-ui, -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(slide.title || '', width / 2, 200, width - 100);
+  
+  if (slide.subtitle) {
+    ctx.font = '48px system-ui, -apple-system, sans-serif';
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText(slide.subtitle, width / 2, 280, width - 100);
+  }
+  
+  if (slide.bullets && slide.bullets.length > 0) {
+    ctx.font = '36px system-ui, -apple-system, sans-serif';
+    ctx.fillStyle = '#e2e8f0';
+    ctx.textAlign = 'left';
+    slide.bullets.forEach((bullet, i) => {
+      if (bullet.trim()) {
+        ctx.fillText(`• ${bullet}`, 150, 380 + i * 60, width - 200);
+      }
+    });
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
@@ -457,6 +581,8 @@ const PresentationTab: React.FC = () => {
   const [researchModeType, setResearchModeType] = useState<'global' | 'per_slide'>('global');
   const [inputMode, setInputMode] = useState<InputMode>('topic_only');
 
+  const effectiveResearchMode = inputMode === 'topic_only' && researchMode;
+
   // Brief
   const [brief, setBrief] = useState<Brief | null>(null);
 
@@ -472,7 +598,8 @@ const PresentationTab: React.FC = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingField, setEditingField] = useState<'title' | 'subtitle' | 'bullet' | null>(null);
   const [editingBulletIndex, setEditingBulletIndex] = useState<number | null>(null);
-  const [applyStyleToAllSlides, setApplyStyleToAllSlides] = useState(false);
+  const [applyBackgroundToAllSlides, setApplyBackgroundToAllSlides] = useState(false);
+  const [applyVoiceToAllSlides, setApplyVoiceToAllSlides] = useState(true);
 
   // Export state
   const [isExporting, setIsExporting] = useState(false);
@@ -486,125 +613,8 @@ const PresentationTab: React.FC = () => {
   const [slideResearchQuery, setSlideResearchQuery] = useState('');
   const [imagePromptText, setImagePromptText] = useState('');
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Handlers
-  // ─────────────────────────────────────────────────────────────────────────
-
-  const handleGenerateBrief = useCallback(async () => {
-    if (inputMode !== 'blank' && !topic.trim()) return;
-    setIsLoading(true);
-    setError('');
-
-    try {
-      if (inputMode === 'blank') {
-        setResearchMode(false);
-        setResearchModeType('global');
-
-        const now = Date.now();
-        const blankSlides: Slide[] = Array.from({ length: slideCount }).map((_, idx) => {
-          const isCover = idx === 0;
-          const isThankYou = idx === slideCount - 1;
-          return {
-            id: `slide-blank-${now}-${idx}`,
-            slideNumber: idx + 1,
-            role: isCover ? 'cover' : isThankYou ? 'thank_you' : 'content',
-            layoutType: isCover || isThankYou ? 'cover' : 'title_and_bullets',
-            theme: selectedTheme,
-            title: '',
-            subtitle: '',
-            bullets: [],
-          };
-        });
-
-        setBrief(null);
-        setOutline([]);
-        setSlides(blankSlides);
-        setSelectedSlideIndex(0);
-        setIsEditMode(true);
-        setCurrentStep('slides');
-        return;
-      }
-
-      // Call the edge function to generate brief
-      const response = await callEdgeFunctionWithRetry<{
-        success: boolean;
-        brief?: Brief;
-        error?: string;
-      }>('wakti-pitch-brief', {
-        body: {
-          topic: topic.trim(),
-          slideCount,
-          researchMode,
-          inputMode,
-          language,
-        },
-        maxRetries: 2,
-        retryDelay: 1000,
-      });
-
-      if (!response?.success || !response?.brief) {
-        throw new Error(response?.error || 'Failed to generate brief');
-      }
-
-      setBrief(response.brief);
-      setCurrentStep('brief');
-    } catch (e: any) {
-      console.error('Brief generation error:', e);
-      setError(e?.message || 'Failed to generate brief');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [inputMode, language, researchMode, selectedTheme, slideCount, topic]);
-
-  const handleGenerateOutline = useCallback(async () => {
-    if (!brief) return;
-    setIsLoading(true);
-    setError('');
-
-    try {
-      const effectiveSlideCount = researchMode && researchModeType === 'per_slide' ? 3 : slideCount;
-
-      // Call the edge function to generate outline
-      const response = await callEdgeFunctionWithRetry<{
-        success: boolean;
-        outline?: SlideOutline[];
-        error?: string;
-      }>('wakti-pitch-outline', {
-        body: {
-          brief: {
-            subject: brief.subject,
-            objective: brief.objective,
-            audience: brief.audience,
-            scenario: brief.scenario,
-            tone: brief.tone,
-          },
-          originalText: topic, // Pass the original user text for verbatim/polish modes
-          slideCount: effectiveSlideCount,
-          researchMode,
-          inputMode,
-          language,
-          theme: selectedTheme, // Pass theme for layout decisions
-        },
-        maxRetries: 2,
-        retryDelay: 1000,
-      });
-
-      if (!response?.success || !response?.outline) {
-        throw new Error(response?.error || 'Failed to generate outline');
-      }
-
-      setOutline(response.outline);
-      setCurrentStep('outline');
-    } catch (e: any) {
-      console.error('Outline generation error:', e);
-      setError(e?.message || 'Failed to generate outline');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [brief, topic, slideCount, researchMode, researchModeType, inputMode, language, selectedTheme]);
-
   const applyPerSlideResearchBlanks = useCallback((nextSlides: Slide[]) => {
-    if (!researchMode || researchModeType !== 'per_slide') return nextSlides;
+    if (!effectiveResearchMode || researchModeType !== 'per_slide') return nextSlides;
 
     const coverIndex = 0;
     const firstContentIndex = Math.min(1, nextSlides.length - 1);
@@ -625,7 +635,107 @@ const PresentationTab: React.FC = () => {
         imageMeta: undefined,
       };
     });
-  }, [researchMode, researchModeType]);
+  }, [effectiveResearchMode, researchModeType]);
+
+  const handleGenerateBrief = useCallback(async () => {
+    setIsLoading(true);
+    setError('');
+
+    try {
+      if (inputMode === 'blank') {
+        setResearchMode(false);
+        setResearchModeType('global');
+
+        const now = Date.now();
+        const blankSlides: Slide[] = Array.from({ length: slideCount }).map((_, idx) => {
+          const role: Slide['role'] = idx === 0 ? 'cover' : idx === slideCount - 1 ? 'thank_you' : 'content';
+          return {
+            id: `slide-blank-${now}-${idx}`,
+            slideNumber: idx + 1,
+            role,
+            layoutType: role === 'thank_you' ? 'thank_you' : role === 'cover' ? 'cover' : 'title_and_bullets',
+            theme: selectedTheme,
+            title: '',
+            subtitle: '',
+            bullets: [],
+          };
+        });
+
+        setBrief(null);
+        setOutline([]);
+        setSlides(blankSlides);
+        setSelectedSlideIndex(0);
+        setCurrentStep('slides');
+        setIsEditMode(true);
+        return;
+      }
+
+      const response = await callEdgeFunctionWithRetry<{ success: boolean; brief?: Brief; error?: string }>('wakti-pitch-brief', {
+        body: {
+          topic: topic.trim(),
+          slideCount,
+          researchMode: effectiveResearchMode,
+          inputMode,
+          language,
+        },
+        maxRetries: 2,
+        retryDelay: 1000,
+      });
+
+      if (!response?.success || !response?.brief) {
+        throw new Error(response?.error || 'Failed to generate brief');
+      }
+
+      setBrief(response.brief);
+      setCurrentStep('brief');
+    } catch (e: any) {
+      console.error('Brief generation error:', e);
+      setError(e?.message || 'Failed to generate brief');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [effectiveResearchMode, inputMode, language, selectedTheme, slideCount, topic]);
+
+  const handleGenerateOutline = useCallback(async () => {
+    if (!brief) return;
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const effectiveSlideCount = effectiveResearchMode && researchModeType === 'per_slide' ? 3 : slideCount;
+
+      const response = await callEdgeFunctionWithRetry<{
+        success: boolean;
+        outline?: SlideOutline[];
+        error?: string;
+      }>('wakti-pitch-outline', {
+        body: {
+          brief,
+          slideCount: effectiveSlideCount,
+          theme: selectedTheme,
+          language,
+          inputMode,
+          originalText: topic,
+          researchMode: effectiveResearchMode,
+        },
+        maxRetries: 2,
+        retryDelay: 1000,
+      });
+
+      if (!response?.success || !response?.outline) {
+        throw new Error(response?.error || 'Failed to generate outline');
+      }
+
+      setOutline(response.outline);
+      setCurrentStep('outline');
+    } catch (e: any) {
+      console.error('Outline generation error:', e);
+      setError(e?.message || 'Failed to generate outline');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [brief, effectiveResearchMode, inputMode, language, researchModeType, selectedTheme, slideCount, topic]);
 
   const handleGenerateSlides = useCallback(async () => {
     if (outline.length === 0) return;
@@ -633,7 +743,7 @@ const PresentationTab: React.FC = () => {
     setError('');
 
     try {
-      const isPerSlideResearch = researchMode && researchModeType === 'per_slide';
+      const isPerSlideResearch = effectiveResearchMode && researchModeType === 'per_slide';
 
       // Call the edge function to generate slides with images
       const response = await callEdgeFunctionWithRetry<{
@@ -716,7 +826,7 @@ const PresentationTab: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [outline, selectedTheme, brief, language, applyPerSlideResearchBlanks, researchMode, researchModeType, slideCount]);
+  }, [outline, selectedTheme, brief, language, applyPerSlideResearchBlanks, effectiveResearchMode, researchModeType, slideCount]);
 
   // Regenerate image for current slide using AI (simple auto-only)
   const handleRegenerateImage = useCallback(async () => {
@@ -845,6 +955,260 @@ const PresentationTab: React.FC = () => {
     }
   }, [slides, brief, topic, selectedTheme, language]);
 
+  // Cache for generated slide audio (persists during session)
+  const slideAudioCache = React.useRef<Map<string, { blob: Blob; durationMs: number }>>(new Map());
+
+  // Generate a hash for slide content to detect changes
+  const getSlideHash = (slide: Slide, voiceGender: string): string => {
+    const text = buildNarrationText(slide);
+    return `${text}-${voiceGender}-${language}`;
+  };
+
+  // Generate or retrieve cached audio for a slide
+  const getSlideAudio = async (
+    slide: Slide,
+    slideIndex: number,
+    toastId: string | number,
+    token: string
+  ): Promise<{ blob: Blob; durationMs: number } | null> => {
+    const hash = getSlideHash(slide, slide.voiceGender || 'male');
+    
+    // Check cache first
+    if (slideAudioCache.current.has(hash)) {
+      console.log(`Using cached audio for slide ${slideIndex + 1}`);
+      return slideAudioCache.current.get(hash)!;
+    }
+
+    const narrationText = buildNarrationText(slide);
+    if (!narrationText.trim()) {
+      return null;
+    }
+
+    toast.loading(
+      language === 'ar' 
+        ? `جارٍ إنشاء الصوت للشريحة ${slideIndex + 1}/${slides.length}...`
+        : `Generating audio for slide ${slideIndex + 1}/${slides.length}...`,
+      { id: toastId }
+    );
+
+    const response = await fetch(
+      'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/presentation-elevenlabs-tts',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          text: narrationText,
+          language: language,
+          gender: slide.voiceGender || 'male',
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      console.error(`TTS error for slide ${slideIndex + 1}:`, await response.text());
+      return null;
+    }
+
+    const audioBlob = await response.blob();
+    
+    // Get actual duration by decoding audio
+    let durationMs = 5000; // Default fallback
+    try {
+      const audioContext = new AudioContext();
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+      durationMs = audioBuffer.duration * 1000;
+      await audioContext.close();
+    } catch (e) {
+      // Estimate: ~150 words per minute, ~5 chars per word
+      durationMs = Math.max(3000, (narrationText.length / 5 / 150) * 60 * 1000);
+    }
+
+    const result = { blob: audioBlob, durationMs };
+    slideAudioCache.current.set(hash, result);
+    return result;
+  };
+
+  // Export video with narration
+  const handleExportMP4 = useCallback(async () => {
+    if (slides.length === 0) return;
+    setIsExporting(true);
+    setShowExportMenu(false);
+    
+    toast.dismiss();
+    const toastId = toast.loading(
+      language === 'ar' 
+        ? 'جارٍ إنشاء الفيديو...' 
+        : 'Creating video...'
+    );
+    
+    try {
+      const { supabase } = await import('@/integrations/supabase/client');
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      if (!token) throw new Error('Not authenticated');
+
+      // Step 1: Generate/retrieve audio for all slides
+      const slideAudioData: { blob: Blob | null; durationMs: number }[] = [];
+      const TRANSITION_MS = 2000;
+
+      for (let i = 0; i < slides.length; i++) {
+        const audio = await getSlideAudio(slides[i], i, toastId, token);
+        slideAudioData.push(audio || { blob: null, durationMs: 3000 });
+      }
+
+      toast.loading(
+        language === 'ar' ? 'جارٍ تجميع الفيديو...' : 'Assembling video...',
+        { id: toastId }
+      );
+
+      // Step 2: Create canvas for rendering slides
+      const canvas = document.createElement('canvas');
+      canvas.width = 1920;
+      canvas.height = 1080;
+      const ctx = canvas.getContext('2d')!;
+
+      // Step 3: Combine all audio into one track
+      const audioContext = new AudioContext();
+      let totalDurationMs = 0;
+      const slideTiming: { startMs: number; durationMs: number }[] = [];
+
+      for (const audio of slideAudioData) {
+        const slideDuration = audio.durationMs + TRANSITION_MS;
+        slideTiming.push({ startMs: totalDurationMs, durationMs: slideDuration });
+        totalDurationMs += slideDuration;
+      }
+
+      // Create combined audio buffer
+      const totalSamples = Math.ceil((totalDurationMs / 1000) * audioContext.sampleRate);
+      const combinedBuffer = audioContext.createBuffer(2, totalSamples, audioContext.sampleRate);
+
+      let sampleOffset = 0;
+      for (let i = 0; i < slideAudioData.length; i++) {
+        const audio = slideAudioData[i];
+        if (audio.blob && audio.blob.size > 0) {
+          try {
+            const arrayBuffer = await audio.blob.arrayBuffer();
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            const channelData = audioBuffer.getChannelData(0);
+            const leftChannel = combinedBuffer.getChannelData(0);
+            const rightChannel = combinedBuffer.getChannelData(1);
+            
+            for (let j = 0; j < channelData.length && sampleOffset + j < totalSamples; j++) {
+              leftChannel[sampleOffset + j] = channelData[j];
+              rightChannel[sampleOffset + j] = audioBuffer.numberOfChannels > 1 
+                ? audioBuffer.getChannelData(1)[j] 
+                : channelData[j];
+            }
+          } catch (e) {
+            console.error(`Failed to decode audio for slide ${i}:`, e);
+          }
+        }
+        sampleOffset += Math.ceil((slideTiming[i].durationMs / 1000) * audioContext.sampleRate);
+      }
+
+      // Step 4: Create video with proper audio sync using MediaRecorder + AudioContext
+      const wavBlob = audioBufferToWav(combinedBuffer);
+      
+      // Create audio source that plays through destination
+      const audioSource = audioContext.createBufferSource();
+      audioSource.buffer = combinedBuffer;
+      
+      // Create MediaStreamDestination to capture audio
+      const audioDestination = audioContext.createMediaStreamDestination();
+      audioSource.connect(audioDestination);
+      audioSource.connect(audioContext.destination); // Also play to speakers (muted later)
+      
+      // Combine canvas stream with audio stream
+      const canvasStream = canvas.captureStream(30);
+      const audioTrack = audioDestination.stream.getAudioTracks()[0];
+      canvasStream.addTrack(audioTrack);
+
+      // Create MediaRecorder with combined stream
+      const mediaRecorder = new MediaRecorder(canvasStream, { 
+        mimeType: 'video/webm;codecs=vp9,opus',
+        videoBitsPerSecond: 5000000,
+        audioBitsPerSecond: 128000,
+      });
+      
+      const chunks: Blob[] = [];
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      const recordingPromise = new Promise<Blob>((resolve) => {
+        mediaRecorder.onstop = () => {
+          resolve(new Blob(chunks, { type: 'video/webm' }));
+        };
+      });
+
+      // Start recording and audio playback together
+      mediaRecorder.start(100); // Collect data every 100ms
+      audioSource.start(0);
+
+      // Render slides to canvas based on timing
+      const startTime = Date.now();
+      
+      const renderLoop = () => {
+        const elapsed = Date.now() - startTime;
+        
+        // Find current slide
+        let currentSlideIndex = 0;
+        for (let i = 0; i < slideTiming.length; i++) {
+          if (elapsed >= slideTiming[i].startMs && elapsed < slideTiming[i].startMs + slideTiming[i].durationMs) {
+            currentSlideIndex = i;
+            break;
+          }
+        }
+
+        // Render slide
+        renderSlideToCanvas(ctx, slides[currentSlideIndex], canvas.width, canvas.height, selectedTheme);
+
+        if (elapsed < totalDurationMs) {
+          requestAnimationFrame(renderLoop);
+        } else {
+          mediaRecorder.stop();
+          audioSource.stop();
+        }
+      };
+
+      renderLoop();
+
+      const videoBlob = await recordingPromise;
+      await audioContext.close();
+
+      // Download video
+      const safeTopic = (brief?.subject || topic || 'presentation')
+        .toLowerCase()
+        .replace(/[^a-z0-9\u0600-\u06FF\s]/g, '')
+        .replace(/\s+/g, '-')
+        .slice(0, 50);
+      const filename = `${safeTopic}-${Date.now()}.webm`;
+      await downloadBlob(videoBlob, filename);
+
+      toast.dismiss(toastId);
+      toast.success(
+        language === 'ar' 
+          ? `تم حفظ الفيديو: ${filename}`
+          : `Video saved: ${filename}`
+      );
+
+    } catch (err) {
+      console.error('Video export error:', err);
+      toast.dismiss(toastId);
+      toast.error(
+        language === 'ar' 
+          ? 'فشل في تصدير الفيديو'
+          : 'Failed to export video'
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  }, [slides, brief, topic, selectedTheme, language]);
+
   // Edit slide content
   const updateSlideField = useCallback((field: 'title' | 'subtitle', value: string) => {
     setSlides(prev => prev.map((slide, i) => 
@@ -935,13 +1299,18 @@ const PresentationTab: React.FC = () => {
   // Update text styling
   const applySlideUpdate = useCallback(
     (updateFn: (slide: Slide) => Slide) => {
+      setSlides(prev => prev.map((slide, i) => (i === selectedSlideIndex ? updateFn(slide) : slide)));
+    },
+    [selectedSlideIndex]
+  );
+
+  const applySlideBackgroundUpdate = useCallback(
+    (updateFn: (slide: Slide) => Slide) => {
       setSlides(prev =>
-        prev.map((slide, i) =>
-          applyStyleToAllSlides || i === selectedSlideIndex ? updateFn(slide) : slide
-        )
+        prev.map((slide, i) => (applyBackgroundToAllSlides || i === selectedSlideIndex ? updateFn(slide) : slide))
       );
     },
-    [applyStyleToAllSlides, selectedSlideIndex]
+    [applyBackgroundToAllSlides, selectedSlideIndex]
   );
 
   const updateTitleStyle = useCallback((updates: Partial<TextStyle>) => {
@@ -983,7 +1352,7 @@ const PresentationTab: React.FC = () => {
 
   const handleResearchCurrentSlide = useCallback(async () => {
     if (!brief) return;
-    if (!researchMode || researchModeType !== 'per_slide') return;
+    if (!effectiveResearchMode || researchModeType !== 'per_slide') return;
     if (slides.length === 0) return;
 
     const currentSlide = slides[selectedSlideIndex];
@@ -1035,7 +1404,7 @@ const PresentationTab: React.FC = () => {
     } finally {
       setIsSlideResearching(false);
     }
-  }, [brief, language, researchMode, researchModeType, selectedSlideIndex, slideCount, slideResearchQuery, slides, topic]);
+  }, [brief, language, effectiveResearchMode, researchModeType, selectedSlideIndex, slideCount, slideResearchQuery, slides, topic]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render helpers
@@ -1127,84 +1496,86 @@ const PresentationTab: React.FC = () => {
                   name="inputMode"
                   value={mode.key}
                   checked={inputMode === mode.key}
-                  onChange={() => setInputMode(mode.key)}
+                  onChange={() => {
+                    setInputMode(mode.key);
+                    if (mode.key !== 'topic_only') {
+                      setResearchMode(false);
+                      setResearchModeType('global');
+                    }
+                  }}
                   className="mt-1 accent-primary"
                 />
                 <div className="flex-1">
                   <span className="font-medium text-sm">{mode.label[language]}</span>
                   <p className="text-xs text-muted-foreground mt-0.5">{mode.description[language]}</p>
-                </div>
-              </label>
-            ))}
 
-            {/* Research Mode - inside the same section */}
-            {inputMode !== 'blank' && (
-              <div className="border-t border-border/50 pt-3 mt-2">
-              <label
-                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                  researchMode
-                    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                    : 'border-transparent hover:bg-muted/50'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={researchMode}
-                  onChange={() => {
-                    const next = !researchMode;
-                    setResearchMode(next);
-                    if (!next) setResearchModeType('global');
-                  }}
-                  className="mt-1 accent-primary"
-                />
-                <div className="flex-1">
-                  <span className="font-medium text-sm flex items-center gap-1.5">
-                    <Sparkles className={`w-3.5 h-3.5 ${researchMode ? 'text-primary' : ''}`} />
-                    {language === 'ar' ? 'بحث متقدم' : 'Web Research'}
-                  </span>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {language === 'ar' 
-                      ? 'ابحث في الإنترنت للحصول على معلومات حديثة'
-                      : 'Search the web for up-to-date information'}
-                  </p>
+                  {mode.key === 'topic_only' && (
+                    <div className="mt-3">
+                      <div className="flex items-start gap-2">
+                        <input
+                          type="checkbox"
+                          checked={researchMode}
+                          onChange={() => {
+                            const next = !researchMode;
+                            setResearchMode(next);
+                            if (!next) setResearchModeType('global');
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="mt-0.5 accent-primary"
+                          aria-label={language === 'ar' ? 'بحث متقدم' : 'Web Research'}
+                          title={language === 'ar' ? 'بحث متقدم' : 'Web Research'}
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-1.5 text-sm font-medium">
+                            <Sparkles className={`w-3.5 h-3.5 ${researchMode ? 'text-primary' : 'text-muted-foreground'}`} />
+                            <span>{language === 'ar' ? 'بحث متقدم' : 'Web Research'}</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {language === 'ar'
+                              ? 'ابحث في الإنترنت للحصول على معلومات حديثة'
+                              : 'Search the web for up-to-date information'}
+                          </p>
 
-                  {researchMode && (
-                    <div className="mt-2 flex flex-col gap-2">
-                      <div className="flex items-center gap-3 text-xs">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="presentationResearchMode"
-                            checked={researchModeType === 'global'}
-                            onChange={() => setResearchModeType('global')}
-                            className="accent-primary"
-                          />
-                          {language === 'ar' ? 'لكل العرض' : 'Global'}
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="presentationResearchMode"
-                            checked={researchModeType === 'per_slide'}
-                            onChange={() => setResearchModeType('per_slide')}
-                            className="accent-primary"
-                          />
-                          {language === 'ar' ? 'حسب كل شريحة' : 'As per slide'}
-                        </label>
+                          {researchMode && (
+                            <div className="mt-2 flex flex-col gap-2">
+                              <div className="flex items-center gap-3 text-xs">
+                                <label className="flex items-center gap-2 cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                                  <input
+                                    type="radio"
+                                    name="presentationResearchMode"
+                                    checked={researchModeType === 'global'}
+                                    onChange={() => setResearchModeType('global')}
+                                    className="accent-primary"
+                                  />
+                                  {language === 'ar' ? 'لكل العرض' : 'Global'}
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                                  <input
+                                    type="radio"
+                                    name="presentationResearchMode"
+                                    checked={researchModeType === 'per_slide'}
+                                    onChange={() => setResearchModeType('per_slide')}
+                                    className="accent-primary"
+                                  />
+                                  {language === 'ar' ? 'حسب كل شريحة' : 'As per slide'}
+                                </label>
+                              </div>
+                              {researchModeType === 'per_slide' && (
+                                <p className="text-[11px] text-muted-foreground leading-snug">
+                                  {language === 'ar'
+                                    ? 'سيتم إنشاء الغلاف + الشريحة التالية + شريحة الشكر فقط، والباقي سيكون فارغاً لتعبئته عبر البحث داخل التعديل.'
+                                    : 'Will generate only Cover + next slide + Thank You. Other slides will be left empty for per-slide research in Edit.'}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      {researchModeType === 'per_slide' && (
-                        <p className="text-[11px] text-muted-foreground leading-snug">
-                          {language === 'ar'
-                            ? 'سيتم إنشاء الغلاف + الشريحة التالية + شريحة الشكر فقط، والباقي سيكون فارغاً لتعبئته عبر البحث داخل التعديل.'
-                            : 'Will generate only Cover + next slide + Thank You. Other slides will be left empty for per-slide research in Edit.'}
-                        </p>
-                      )}
                     </div>
                   )}
                 </div>
               </label>
-              </div>
-            )}
+            ))}
           </div>
         </div>
 
@@ -1604,6 +1975,13 @@ const PresentationTab: React.FC = () => {
                   >
                     <FileSpreadsheet className="w-4 h-4 text-orange-500" />
                     PowerPoint
+                  </button>
+                  <button
+                    onClick={handleExportMP4}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2 transition-colors"
+                  >
+                    <Video className="w-4 h-4 text-purple-500" />
+                    {language === 'ar' ? 'فيديو (مع صوت)' : 'Video (with audio)'}
                   </button>
                 </div>
               )}
@@ -2093,7 +2471,7 @@ const PresentationTab: React.FC = () => {
               {language === 'ar' ? '✏️ تعديل الشريحة' : '✏️ Edit Slide'}
             </h3>
 
-            {researchMode && researchModeType === 'per_slide' && currentSlide.role !== 'cover' && currentSlide.role !== 'thank_you' && (
+            {effectiveResearchMode && researchModeType === 'per_slide' && currentSlide.role !== 'cover' && currentSlide.role !== 'thank_you' && (
               <div className="mb-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
                 <label className="text-xs text-slate-500 mb-2 block font-medium">
                   🔎 {language === 'ar' ? 'بحث للعرض (حسب الشريحة)' : 'Presentation Web Search (per slide)'}
@@ -2103,6 +2481,8 @@ const PresentationTab: React.FC = () => {
                     type="text"
                     value={slideResearchQuery}
                     onChange={(e) => setSlideResearchQuery(e.target.value)}
+                    aria-label={language === 'ar' ? 'طلب البحث' : 'Research query'}
+                    title={language === 'ar' ? 'طلب البحث' : 'Research query'}
                     placeholder={language === 'ar' ? 'مثال: إحصائيات حديثة، تعريف، أمثلة...' : 'e.g., latest stats, definition, examples...'}
                     className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:ring-2 focus:ring-primary/50 outline-none"
                   />
@@ -2134,6 +2514,8 @@ const PresentationTab: React.FC = () => {
                 type="text"
                 value={currentSlide.title}
                 onChange={(e) => updateSlideField('title', e.target.value)}
+                aria-label={language === 'ar' ? 'العنوان' : 'Title'}
+                title={language === 'ar' ? 'العنوان' : 'Title'}
                 className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:ring-2 focus:ring-primary/50 outline-none"
               />
               {/* Title Style Controls */}
@@ -2195,6 +2577,8 @@ const PresentationTab: React.FC = () => {
                 type="text"
                 value={currentSlide.subtitle || ''}
                 onChange={(e) => updateSlideField('subtitle', e.target.value)}
+                aria-label={language === 'ar' ? 'العنوان الفرعي' : 'Subtitle'}
+                title={language === 'ar' ? 'العنوان الفرعي' : 'Subtitle'}
                 className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:ring-2 focus:ring-primary/50 outline-none"
               />
               {/* Subtitle Style Controls */}
@@ -2305,6 +2689,8 @@ const PresentationTab: React.FC = () => {
                         type="text"
                         value={bullet}
                         onChange={(e) => updateSlideBullet(i, e.target.value)}
+                        aria-label={language === 'ar' ? `نقطة ${i + 1}` : `Bullet ${i + 1}`}
+                        title={language === 'ar' ? `نقطة ${i + 1}` : `Bullet ${i + 1}`}
                         className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:ring-2 focus:ring-primary/50 outline-none"
                       />
                       {currentSlide.bullets && currentSlide.bullets.length > 0 && (
@@ -2582,14 +2968,88 @@ const PresentationTab: React.FC = () => {
                 </label>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-slate-500">{language === 'ar' ? 'لكل الشرائح' : 'All slides'}</span>
-                  <Switch checked={applyStyleToAllSlides} onCheckedChange={(v) => setApplyStyleToAllSlides(!!v)} />
+                  <Switch
+                    checked={applyBackgroundToAllSlides}
+                    onCheckedChange={(v) => {
+                      const next = !!v;
+                      if (next && currentSlide?.slideBg) {
+                        const bg = currentSlide.slideBg;
+                        setSlides(prev => prev.map((s) => ({ ...s, slideBg: bg })));
+                      }
+                      setApplyBackgroundToAllSlides(next);
+                    }}
+                  />
                 </div>
               </div>
               <ColorPickerWithGradient
                 value={currentSlide.slideBg || '#1e293b'}
-                onChange={(color) => applySlideUpdate((s) => ({ ...s, slideBg: color }))}
+                onChange={(color) => applySlideBackgroundUpdate((s) => ({ ...s, slideBg: color }))}
                 label="background"
               />
+            </div>
+
+            {/* Narration Voice - for MP4 export */}
+            <div className="mb-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <label className="text-xs text-slate-500 block font-medium">
+                  🎤 {language === 'ar' ? 'صوت السرد (للفيديو)' : 'Narration Voice (for Video)'}
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500">{language === 'ar' ? 'لكل الشرائح' : 'All slides'}</span>
+                  <Switch
+                    checked={applyVoiceToAllSlides}
+                    onCheckedChange={(v) => {
+                      const next = !!v;
+                      if (next && currentSlide?.voiceGender) {
+                        const voice = currentSlide.voiceGender;
+                        setSlides(prev => prev.map((s) => ({ ...s, voiceGender: voice })));
+                      }
+                      setApplyVoiceToAllSlides(next);
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    const newGender = 'male';
+                    if (applyVoiceToAllSlides) {
+                      setSlides(prev => prev.map((s) => ({ ...s, voiceGender: newGender })));
+                    } else {
+                      setSlides(prev => prev.map((s, i) => i === selectedSlideIndex ? { ...s, voiceGender: newGender } : s));
+                    }
+                  }}
+                  className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
+                    (currentSlide.voiceGender || 'male') === 'male'
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-500'
+                  }`}
+                >
+                  👨 {language === 'ar' ? 'ذكر' : 'Male'}
+                </button>
+                <button
+                  onClick={() => {
+                    const newGender = 'female';
+                    if (applyVoiceToAllSlides) {
+                      setSlides(prev => prev.map((s) => ({ ...s, voiceGender: newGender })));
+                    } else {
+                      setSlides(prev => prev.map((s, i) => i === selectedSlideIndex ? { ...s, voiceGender: newGender } : s));
+                    }
+                  }}
+                  className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
+                    currentSlide.voiceGender === 'female'
+                      ? 'bg-pink-600 text-white shadow-md'
+                      : 'bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-500'
+                  }`}
+                >
+                  👩 {language === 'ar' ? 'أنثى' : 'Female'}
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-2">
+                {language === 'ar' 
+                  ? 'يُستخدم الصوت عند تصدير الفيديو (MP4) فقط. PDF و PowerPoint بدون صوت.'
+                  : 'Voice is used for video (MP4) export only. PDF & PowerPoint have no audio.'}
+              </p>
             </div>
           </div>
         )}
@@ -2628,20 +3088,22 @@ const PresentationTab: React.FC = () => {
             <button
               key={slide.id}
               onClick={() => setSelectedSlideIndex(i)}
-              aria-label={`${language === 'ar' ? 'الشريحة' : 'Slide'} ${i + 1}`}
-              className={`flex-shrink-0 w-20 md:w-28 aspect-video rounded-lg overflow-hidden border-2 transition-all ${
-                i === selectedSlideIndex
-                  ? `${selectedTheme === 'pitch_deck' ? 'border-emerald-500 ring-emerald-500/30' : selectedTheme === 'creative' ? 'border-orange-500 ring-orange-500/30' : selectedTheme === 'professional' ? 'border-indigo-500 ring-indigo-500/30' : 'border-blue-500 ring-blue-500/30'} ring-2 shadow-lg scale-105`
+              className={`relative w-24 h-16 rounded-lg border-2 flex-shrink-0 overflow-hidden transition-all ${
+                selectedSlideIndex === i
+                  ? `border-emerald-400 shadow-lg scale-105`
                   : `border-slate-600 hover:${selectedTheme === 'pitch_deck' ? 'border-emerald-400' : selectedTheme === 'creative' ? 'border-orange-400' : selectedTheme === 'professional' ? 'border-indigo-400' : 'border-blue-400'}`
               }`}
             >
               {/* Mini slide preview - theme-aware */}
-              <div className={`w-full h-full p-1 flex flex-col bg-gradient-to-br ${
-                selectedTheme === 'pitch_deck' ? 'from-slate-900 via-emerald-900/20 to-slate-900' :
-                selectedTheme === 'creative' ? 'from-orange-600 to-pink-700' :
-                selectedTheme === 'professional' ? 'from-slate-800 to-indigo-900' :
-                'from-slate-900 to-slate-800'
-              }`}>
+              <div
+                className={`w-full h-full p-1 flex flex-col ${slide.slideBg ? '' : `bg-gradient-to-br ${
+                  selectedTheme === 'pitch_deck' ? 'from-slate-900 via-emerald-900/20 to-slate-900' :
+                  selectedTheme === 'creative' ? 'from-orange-600 to-pink-700' :
+                  selectedTheme === 'professional' ? 'from-slate-800 to-indigo-900' :
+                  'from-slate-900 to-slate-800'
+                }`}`}
+                style={slide.slideBg ? getColorStyle(slide.slideBg, 'background') : undefined}
+              >
                 {/* Mini title bar */}
                 <div className="flex items-center gap-0.5 mb-1">
                   <div className={`w-1 h-1 rounded-full ${getThemeAccent(selectedTheme).bg}`} />

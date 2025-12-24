@@ -26,7 +26,7 @@ async function callGeminiGrounded(prompt: string): Promise<SlideOutline[]> {
   const geminiKey = Deno.env.get("GEMINI_API_KEY");
   if (!geminiKey) throw new Error("GEMINI_API_KEY not configured");
 
-  const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-001:generateContent?key=" + geminiKey;
+  const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=" + geminiKey;
 
   const res = await fetch(url, {
     method: "POST",
@@ -85,7 +85,7 @@ async function _callGemini(prompt: string): Promise<SlideOutline[]> {
   const geminiKey = Deno.env.get("GEMINI_API_KEY");
   if (!geminiKey) throw new Error("GEMINI_API_KEY not configured");
 
-  const url = "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=" + geminiKey;
+  const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=" + geminiKey;
   
   const res = await fetch(url, {
     method: "POST",
@@ -164,6 +164,46 @@ async function callOpenAI(prompt: string): Promise<SlideOutline[]> {
 }
 
 type InputMode = 'verbatim' | 'polish' | 'topic_only';
+
+async function callGemini(prompt: string): Promise<SlideOutline[]> {
+  const geminiKey = Deno.env.get("GEMINI_API_KEY");
+  if (!geminiKey) throw new Error("GEMINI_API_KEY not configured");
+
+  const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=" + geminiKey;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.8,
+        maxOutputTokens: 8000,
+        responseMimeType: "application/json",
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("Gemini error:", text);
+    throw new Error("Gemini API error: " + res.status);
+  }
+
+  const data = await res.json();
+  const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!responseText) throw new Error("No response from Gemini");
+
+  try {
+    const parsed = JSON.parse(responseText);
+    return parsed.slides || parsed;
+  } catch {
+    const match = responseText.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error("Failed to parse response");
+    const p = JSON.parse(match[0]);
+    return p.slides || p;
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -280,10 +320,17 @@ Deno.serve(async (req) => {
     if (researchMode) {
       slides = await callGeminiGrounded(prompt);
       usedProvider = "gemini";
-      usedModel = "gemini-2.0-flash-001";
+      usedModel = "gemini-2.5-flash-lite";
       console.log("Using Gemini grounded");
+    } else if (inputMode === 'topic_only') {
+      slides = await callGemini(prompt);
+      usedProvider = "gemini";
+      usedModel = "gemini-2.5-flash-lite";
+      console.log("Using Gemini");
     } else {
       slides = await callOpenAI(prompt);
+      usedProvider = "openai";
+      usedModel = "gpt-4o-mini";
       console.log("Using OpenAI");
     }
 

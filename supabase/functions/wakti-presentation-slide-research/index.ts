@@ -29,7 +29,7 @@ async function callGeminiGrounded(prompt: string): Promise<string> {
   if (!geminiKey) throw new Error("GEMINI_API_KEY not configured");
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-001:generateContent?key=${geminiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -159,7 +159,7 @@ Deno.serve(async (req: Request) => {
     await logAIFromRequest(req, {
       functionName: "wakti-presentation-slide-research",
       provider: "gemini",
-      model: "gemini-2.0-flash-001",
+      model: "gemini-2.5-flash-lite",
       inputText: body.topic,
       status: "success",
       metadata: { slideNumber: body.slideNumber, slideCount: body.slideCount },
@@ -174,7 +174,7 @@ Deno.serve(async (req: Request) => {
     await logAIFromRequest(req, {
       functionName: "wakti-presentation-slide-research",
       provider: "gemini",
-      model: "gemini-2.0-flash-001",
+      model: "gemini-2.5-flash-lite",
       status: "error",
       errorMessage: error instanceof Error ? error.message : "Unknown error",
     });

@@ -24,7 +24,7 @@ type ContentTypeKey =
   | 'research_brief' | 'research_report' | 'case_study' | 'how_to_guide' | 'policy_note' | 'product_description' | 'report' | 'essay' | 'proposal' | 'official_letter' | 'poem'
   | 'school_project' | 'questionnaire';
 type ToneKey =
-  | 'auto' | 'professional' | 'casual' | 'formal' | 'friendly' | 'persuasive' | 'romantic' | 'neutral' | 'empathetic' | 'confident' | 'humorous' | 'urgent'
+  | 'auto' | 'human' | 'professional' | 'casual' | 'formal' | 'friendly' | 'persuasive' | 'romantic' | 'neutral' | 'empathetic' | 'confident' | 'humorous' | 'urgent'
   | 'apologetic' | 'inspirational' | 'motivational' | 'sympathetic' | 'sincere' | 'informative' | 'concise' | 'dramatic' | 'suspenseful' | 'authoritative' | 'educational';
 type RegisterKey = 'auto' | 'formal' | 'neutral' | 'casual' | 'slang' | 'poetic' | 'gen_z' | 'business_formal' | 'executive_brief';
 type LanguageVariantKey =
@@ -45,6 +45,7 @@ const CONTENT_TYPE_KEYS: ContentTypeKey[] = [
 ];
 const TONE_KEYS: ToneKey[] = [
   'auto',
+  'human',
   'professional', 'casual', 'formal', 'friendly', 'persuasive', 'romantic', 'neutral', 'empathetic', 'confident', 'humorous', 'urgent',
   'apologetic', 'inspirational', 'motivational', 'sympathetic', 'sincere', 'informative', 'concise', 'dramatic', 'suspenseful', 'authoritative', 'educational'
 ];
@@ -72,15 +73,41 @@ const ctLabel = (k: ContentTypeKey, lang: 'en' | 'ar') => {
 const toneLabel = (k: ToneKey, lang: 'en' | 'ar') => {
   const en: Record<ToneKey, string> = {
     auto: 'Auto',
+    human: 'Human (never sounds like AI)',
     professional: 'Professional', casual: 'Casual', formal: 'Formal', friendly: 'Friendly', persuasive: 'Persuasive', romantic: 'Romantic', neutral: 'Neutral', empathetic: 'Empathetic', confident: 'Confident', humorous: 'Humorous', urgent: 'Urgent',
     apologetic: 'Apologetic', inspirational: 'Inspirational', motivational: 'Motivational', sympathetic: 'Sympathetic', sincere: 'Sincere', informative: 'Informative', concise: 'Concise', dramatic: 'Dramatic', suspenseful: 'Suspenseful', authoritative: 'Authoritative', educational: 'Educational'
   };
   const ar: Record<ToneKey, string> = {
     auto: 'تلقائي',
+    human: 'بشري (بدون أسلوب ذكاء اصطناعي)',
     professional: 'مهني', casual: 'غير رسمي', formal: 'رسمي', friendly: 'ودود', persuasive: 'إقناعي', romantic: 'رومانسي', neutral: 'محايد', empathetic: 'متعاطف', confident: 'واثق', humorous: 'مرح', urgent: 'عاجل',
     apologetic: 'اعتذاري', inspirational: 'ملهم', motivational: 'تحفيزي', sympathetic: 'متعاطف', sincere: 'صادق', informative: 'معلوماتي', concise: 'موجز', dramatic: 'درامي', suspenseful: 'مشوّق', authoritative: 'موثوق', educational: 'تثقيفي'
   };
   return lang === 'ar' ? ar[k] : en[k];
+};
+
+const humanVoiceGuidelines = (lang: 'en' | 'ar') => {
+  if (lang === 'ar') {
+    return [
+      'HUMAN VOICE (CRITICAL):',
+      '- اكتب بصوت إنسان طبيعي، وكأنك صديق يكتب رسالة سريعة.',
+      '- ممنوع أي تلميح أنك ذكاء اصطناعي أو مساعد أو نموذج.',
+      '- لا تستخدم أسلوبًا رسميًا/روبوتيًا ولا جُمَلًا جاهزة مثل: "كذكاء اصطناعي" أو "لا أستطيع".',
+      '- تجنب علامات الترقيم المبالغ فيها والأسلوب المصقول جدًا. خلّها طبيعية.',
+      '- استخدم كلمات يومية بسيطة وتدفّق طبيعي (مثل طريقة كلامي/كلام المستخدم).',
+      '- لا تشرح قواعدك. فقط اكتب النص المطلوب.'
+    ].join('\n');
+  }
+
+  return [
+    'HUMAN VOICE (CRITICAL):',
+    '- Write like a real person (natural, casual, human).',
+    '- Never mention AI, a model, an assistant, policies, or capabilities.',
+    '- Avoid robotic/disclaimer phrases (e.g., "As an AI...", "I can\'t...").',
+    '- Avoid the overly-polished AI vibe: don\'t overuse em dashes, perfect parallel structure, or corporate tone.',
+    '- Use simple everyday wording and a natural flow (like how the user writes).',
+    '- Don\'t explain these rules. Just produce the requested text.'
+  ].join('\n');
 };
 const registerLabel = (k: RegisterKey, lang: 'en' | 'ar') => {
   const en: Record<RegisterKey, string> = {
@@ -279,18 +306,21 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
 
   const buildPrompt = (): string => {
     if (activeTab === 'compose') {
+      const humanBlock = tone === 'human' ? humanVoiceGuidelines(language) : '';
       const parts = [
         contentType === 'auto'
           ? `Write about: ${topic}`
           : `Write a ${ctLabel(contentType, language)} about: ${topic}`,
-        tone !== 'auto' ? `Tone: ${tone}` : '',
+        tone !== 'auto' && tone !== 'human' ? `Tone: ${tone}` : '',
         length !== 'auto' ? `Length: ${length}` : '',
         register ? `Register: ${register}` : '',
         languageVariant ? `Language Variant: ${languageVariant}` : '',
         emojis ? `Emojis: ${emojis}` : '',
+        humanBlock,
       ].filter(Boolean);
       return parts.join('\n');
     } else if (activeTab === 'reply') {
+      const humanBlock = tone === 'human' ? humanVoiceGuidelines(language) : '';
       // If a screenshot was detected as a form, switch Reply into Fill Mode.
       // Output should be copy/paste friendly (Subject + Message), not a letter-style reply.
       if (extractedForm) {
@@ -314,10 +344,11 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
           `Message/context (detected): ${formMessage || 'N/A'}`,
           keyPoints ? `Key points to include: ${keyPoints}` : '',
           replyLength !== 'auto' ? `Reply length: ${replyLength}` : '',
-          tone !== 'auto' ? `Tone: ${tone}` : '',
+          tone !== 'auto' && tone !== 'human' ? `Tone: ${tone}` : '',
           register ? `Register: ${register}` : '',
           languageVariant ? `Language Variant: ${languageVariant}` : '',
           emojis ? `Emojis: ${emojis}` : '',
+          humanBlock,
         ].filter(Boolean);
         return parts.join('\n');
       }
@@ -335,10 +366,11 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
           : '',
         keyPoints ? `Instructions / key points from me: ${keyPoints}` : '',
         replyLength !== 'auto' ? `Reply length: ${replyLength}` : '',
-        tone !== 'auto' ? `Tone: ${tone}` : '',
+        tone !== 'auto' && tone !== 'human' ? `Tone: ${tone}` : '',
         register ? `Register: ${register}` : '',
         languageVariant ? `Language Variant: ${languageVariant}` : '',
         emojis ? `Emojis: ${emojis}` : '',
+        humanBlock,
         'Original message (context):',
         originalMessage,
       ].filter(Boolean);

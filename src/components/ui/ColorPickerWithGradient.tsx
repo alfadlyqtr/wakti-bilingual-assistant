@@ -6,23 +6,49 @@ interface ColorPickerWithGradientProps {
   label?: string;
 }
 
-// Parse gradient string: "gradient:#color1,#color2,angle"
-const parseGradient = (value: string): { color1: string; color2: string; angle: number } | null => {
+// Parse gradient string:
+// - legacy: "gradient:#color1,#color2,angle"
+// - current: "gradient:#color1,#color2,x,y"
+const parseGradient = (
+  value: string
+): { color1: string; color2: string; angle: number; x: number; y: number } | null => {
   if (!value.startsWith('gradient:')) return null;
   const parts = value.replace('gradient:', '').split(',');
-  if (parts.length >= 2) {
+  if (parts.length < 2) return null;
+
+  const color1 = parts[0] || '#000000';
+  const color2 = parts[1] || '#ffffff';
+
+  // Prefer x/y (stable sliders)
+  if (parts.length >= 4) {
+    const x = Number.parseInt(parts[2] || '0', 10);
+    const y = Number.parseInt(parts[3] || '0', 10);
+    const angle = vectorToAngle(x, y);
     return {
-      color1: parts[0] || '#000000',
-      color2: parts[1] || '#ffffff',
-      angle: parseInt(parts[2]) || 135,
+      color1,
+      color2,
+      angle,
+      x: Number.isFinite(x) ? x : 0,
+      y: Number.isFinite(y) ? y : 0,
     };
   }
+
+  // Legacy: angle only
+  const angle = Number.parseInt(parts[2] || '135', 10) || 135;
+  const v = angleToVector(angle);
+  return {
+    color1,
+    color2,
+    angle,
+    x: v.x,
+    y: v.y,
+  };
   return null;
 };
 
-// Build gradient string
-const buildGradient = (color1: string, color2: string, angle: number): string => {
-  return `gradient:${color1},${color2},${angle}`;
+// Build gradient string (stable sliders)
+const buildGradient = (color1: string, color2: string, x: number, y: number): string => {
+  return `gradient:${color1},${color2},${x},${y}`;
 };
 
 const angleToVector = (angle: number): { x: number; y: number } => {
@@ -62,9 +88,9 @@ export const ColorPickerWithGradient: React.FC<ColorPickerWithGradientProps> = (
   const [solidColor, setSolidColor] = useState(isGradient ? '#000000' : (value || '#000000'));
   const [gradientColor1, setGradientColor1] = useState(gradient?.color1 || '#000000');
   const [gradientColor2, setGradientColor2] = useState(gradient?.color2 || '#ffffff');
-  const [gradientAngle, setGradientAngle] = useState(gradient?.angle || 135);
-  const [gradientX, setGradientX] = useState(() => angleToVector(gradient?.angle || 135).x);
-  const [gradientY, setGradientY] = useState(() => angleToVector(gradient?.angle || 135).y);
+  const [gradientX, setGradientX] = useState(gradient?.x ?? angleToVector(gradient?.angle || 135).x);
+  const [gradientY, setGradientY] = useState(gradient?.y ?? angleToVector(gradient?.angle || 135).y);
+  const [gradientAngle, setGradientAngle] = useState(gradient?.angle || vectorToAngle(gradientX, gradientY));
 
   // Sync internal state when value prop changes
   useEffect(() => {
@@ -75,10 +101,9 @@ export const ColorPickerWithGradient: React.FC<ColorPickerWithGradientProps> = (
         setMode('gradient');
         setGradientColor1(g.color1);
         setGradientColor2(g.color2);
+        setGradientX(g.x);
+        setGradientY(g.y);
         setGradientAngle(g.angle);
-        const v = angleToVector(g.angle);
-        setGradientX(v.x);
-        setGradientY(v.y);
       }
     } else {
       setMode('solid');
@@ -91,7 +116,7 @@ export const ColorPickerWithGradient: React.FC<ColorPickerWithGradientProps> = (
     if (newMode === 'solid') {
       onChange(solidColor);
     } else {
-      onChange(buildGradient(gradientColor1, gradientColor2, gradientAngle));
+      onChange(buildGradient(gradientColor1, gradientColor2, gradientX, gradientY));
     }
   };
 
@@ -102,15 +127,11 @@ export const ColorPickerWithGradient: React.FC<ColorPickerWithGradientProps> = (
     }
   };
 
-  const handleGradientChange = (color1: string, color2: string, angle: number) => {
+  const handleGradientColorsChange = (color1: string, color2: string) => {
     setGradientColor1(color1);
     setGradientColor2(color2);
-    setGradientAngle(angle);
-    const v = angleToVector(angle);
-    setGradientX(v.x);
-    setGradientY(v.y);
     if (mode === 'gradient') {
-      onChange(buildGradient(color1, color2, angle));
+      onChange(buildGradient(color1, color2, gradientX, gradientY));
     }
   };
 
@@ -120,7 +141,7 @@ export const ColorPickerWithGradient: React.FC<ColorPickerWithGradientProps> = (
     const angle = vectorToAngle(nextX, nextY);
     setGradientAngle(angle);
     if (mode === 'gradient') {
-      onChange(buildGradient(gradientColor1, gradientColor2, angle));
+      onChange(buildGradient(gradientColor1, gradientColor2, nextX, nextY));
     }
   };
 
@@ -151,7 +172,7 @@ export const ColorPickerWithGradient: React.FC<ColorPickerWithGradientProps> = (
         {/* Preview */}
         <div 
           className="w-6 h-6 rounded border border-slate-400 ml-auto"
-          style={getPreviewStyle(mode === 'solid' ? solidColor : buildGradient(gradientColor1, gradientColor2, gradientAngle))}
+          style={getPreviewStyle(mode === 'solid' ? solidColor : buildGradient(gradientColor1, gradientColor2, gradientX, gradientY))}
         />
       </div>
 
@@ -189,7 +210,7 @@ export const ColorPickerWithGradient: React.FC<ColorPickerWithGradientProps> = (
               aria-label="Gradient from color"
               title="Gradient from color"
               value={gradientColor1}
-              onChange={(e) => handleGradientChange(e.target.value, gradientColor2, gradientAngle)}
+              onChange={(e) => handleGradientColorsChange(e.target.value, gradientColor2)}
               className="w-7 h-7 rounded cursor-pointer border-2 border-slate-300"
             />
             <input
@@ -197,7 +218,7 @@ export const ColorPickerWithGradient: React.FC<ColorPickerWithGradientProps> = (
               aria-label="Gradient from color hex"
               title="Gradient from color hex"
               value={gradientColor1}
-              onChange={(e) => handleGradientChange(e.target.value, gradientColor2, gradientAngle)}
+              onChange={(e) => handleGradientColorsChange(e.target.value, gradientColor2)}
               className="w-20 px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
               placeholder="#hex"
             />
@@ -210,7 +231,7 @@ export const ColorPickerWithGradient: React.FC<ColorPickerWithGradientProps> = (
               aria-label="Gradient to color"
               title="Gradient to color"
               value={gradientColor2}
-              onChange={(e) => handleGradientChange(gradientColor1, e.target.value, gradientAngle)}
+              onChange={(e) => handleGradientColorsChange(gradientColor1, e.target.value)}
               className="w-7 h-7 rounded cursor-pointer border-2 border-slate-300"
             />
             <input
@@ -218,7 +239,7 @@ export const ColorPickerWithGradient: React.FC<ColorPickerWithGradientProps> = (
               aria-label="Gradient to color hex"
               title="Gradient to color hex"
               value={gradientColor2}
-              onChange={(e) => handleGradientChange(gradientColor1, e.target.value, gradientAngle)}
+              onChange={(e) => handleGradientColorsChange(gradientColor1, e.target.value)}
               className="w-20 px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
               placeholder="#hex"
             />

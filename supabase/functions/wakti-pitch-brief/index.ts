@@ -39,7 +39,7 @@ async function callGeminiGrounded(systemPrompt: string, userPrompt: string): Pro
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-001:generateContent?key=${geminiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -106,13 +106,13 @@ async function callOpenAI(systemPrompt: string, userPrompt: string): Promise<str
 }
 
 // Call Gemini API (fallback)
-async function callGemini(systemPrompt: string, userPrompt: string): Promise<string | null> {
+async function callGemini(systemPrompt: string, userPrompt: string): Promise<{ text: string; model: string } | null> {
   const geminiKey = Deno.env.get("GEMINI_API_KEY");
   if (!geminiKey) return null;
 
   try {
     // Try correct Gemini model names
-    const models = ["gemini-2.0-flash-001", "gemini-1.5-flash", "gemini-pro"];
+    const models = ["gemini-2.5-flash-lite", "gemini-2.0-flash-001", "gemini-1.5-flash", "gemini-pro"];
     
     for (const model of models) {
       try {
@@ -136,7 +136,7 @@ async function callGemini(systemPrompt: string, userPrompt: string): Promise<str
           const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
           if (text) {
             console.log(`✅ Gemini ${model} succeeded`);
-            return text;
+            return { text, model };
           }
         }
         console.log(`⚠️ Gemini ${model} failed, trying next...`);
@@ -234,17 +234,37 @@ Respond with JSON only:
       console.log("🤖 Research mode ON: using Gemini grounded (no OpenAI)");
       responseText = await callGeminiGrounded(systemPrompt, userPrompt);
       usedProvider = "gemini";
-      usedModel = "gemini-2.0-flash-001";
+      usedModel = "gemini-2.5-flash-lite";
     } else {
-      console.log("🤖 Trying OpenAI...");
-      responseText = await callOpenAI(systemPrompt, userPrompt);
-
-      if (!responseText) {
-        console.log("🤖 OpenAI failed, trying Gemini...");
-        responseText = await callGemini(systemPrompt, userPrompt);
-        if (responseText) {
+      if (inputMode === 'topic_only') {
+        console.log("🤖 Topic-only mode: trying Gemini (no grounding)...");
+        const gemini = await callGemini(systemPrompt, userPrompt);
+        if (gemini?.text) {
+          responseText = gemini.text;
           usedProvider = "gemini";
-          usedModel = "gemini-2.0-flash-001";
+          usedModel = gemini.model;
+        } else {
+          console.log("🤖 Gemini failed, trying OpenAI...");
+          responseText = await callOpenAI(systemPrompt, userPrompt);
+          if (responseText) {
+            usedProvider = "openai";
+            usedModel = "gpt-4o-mini";
+          }
+        }
+      } else {
+        console.log("🤖 Trying OpenAI...");
+        responseText = await callOpenAI(systemPrompt, userPrompt);
+        if (responseText) {
+          usedProvider = "openai";
+          usedModel = "gpt-4o-mini";
+        } else {
+          console.log("🤖 OpenAI failed, trying Gemini...");
+          const gemini = await callGemini(systemPrompt, userPrompt);
+          if (gemini?.text) {
+            responseText = gemini.text;
+            usedProvider = "gemini";
+            usedModel = gemini.model;
+          }
         }
       }
     }
