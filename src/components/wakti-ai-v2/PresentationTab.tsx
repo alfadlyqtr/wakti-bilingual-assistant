@@ -1,8 +1,9 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import html2canvas from 'html2canvas';
 import { 
   exportSlidesToPDFClean, 
   exportSlidesToPPTX, 
@@ -512,54 +513,416 @@ function audioBufferToWav(buffer: AudioBuffer): Blob {
 }
 
 /**
- * Render a slide to canvas for video export
+ * Parse gradient string for canvas rendering
  */
-function renderSlideToCanvas(
+function parseGradientForCanvas(value: string): { color1: string; color2: string; angle: number } | null {
+  if (!value.startsWith('gradient:')) return null;
+  const parts = value.replace('gradient:', '').split(',');
+  if (parts.length < 2) return null;
+  const color1 = parts[0] || '#000000';
+  const color2 = parts[1] || '#ffffff';
+  // Parse angle from x,y or direct angle
+  let angle = 135;
+  if (parts.length >= 4) {
+    const x = parseInt(parts[2] || '0', 10);
+    const y = parseInt(parts[3] || '0', 10);
+    angle = (Math.round(Math.atan2(-y, x) * 180 / Math.PI) + 360) % 360;
+  } else if (parts.length >= 3) {
+    angle = parseInt(parts[2] || '135', 10);
+  }
+  return { color1, color2, angle };
+}
+
+/**
+ * Get theme accent color hex
+ */
+function getThemeAccentHex(theme: string): string {
+  switch (theme) {
+    case 'pitch_deck': return '#10b981';
+    case 'creative': return '#f97316';
+    case 'professional': return '#6366f1';
+    case 'academic': return '#06b6d4';
+    default: return '#64748b';
+  }
+}
+
+/**
+ * Get theme background colors for canvas
+ */
+function getThemeBackgroundColors(theme: string): { from: string; to: string; overlay?: string } {
+  switch (theme) {
+    case 'academic':
+      return { from: '#0f172a', to: '#1e293b', overlay: 'rgba(30, 58, 138, 0.1)' };
+    case 'pitch_deck':
+      return { from: '#0f172a', to: '#1e293b', overlay: 'rgba(16, 185, 129, 0.1)' };
+    case 'creative':
+      return { from: '#ea580c', to: '#db2777', overlay: 'rgba(249, 115, 22, 0.1)' };
+    case 'professional':
+      return { from: '#1e293b', to: '#312e81', overlay: 'rgba(99, 102, 241, 0.1)' };
+    default:
+      return { from: '#1e293b', to: '#0f172a' };
+  }
+}
+
+/**
+ * Render a slide to canvas for video export - matches actual UI appearance
+ */
+async function renderSlideToCanvasAsync(
   ctx: CanvasRenderingContext2D,
-  slide: { title: string; subtitle?: string; bullets: string[]; slideBg?: string },
+  slide: Slide,
   width: number,
   height: number,
-  _theme: string
-): void {
-  ctx.fillStyle = '#1e293b';
-  ctx.fillRect(0, 0, width, height);
-  
+  theme: string,
+  loadedImages: Map<string, HTMLImageElement>
+): Promise<void> {
+  // Step 1: Draw background
   if (slide.slideBg) {
-    if (slide.slideBg.startsWith('gradient:')) {
-      const parts = slide.slideBg.replace('gradient:', '').split(',');
-      if (parts.length >= 2) {
-        const gradient = ctx.createLinearGradient(0, 0, width, height);
-        gradient.addColorStop(0, parts[0]);
-        gradient.addColorStop(1, parts[1]);
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, width, height);
-      }
-    } else if (slide.slideBg.startsWith('#')) {
+    // Custom slide background
+    const gradient = parseGradientForCanvas(slide.slideBg);
+    if (gradient) {
+      // Calculate gradient endpoints based on angle
+      const angleRad = (gradient.angle * Math.PI) / 180;
+      const x1 = width / 2 - Math.cos(angleRad) * width;
+      const y1 = height / 2 + Math.sin(angleRad) * height;
+      const x2 = width / 2 + Math.cos(angleRad) * width;
+      const y2 = height / 2 - Math.sin(angleRad) * height;
+      const canvasGradient = ctx.createLinearGradient(x1, y1, x2, y2);
+      canvasGradient.addColorStop(0, gradient.color1);
+      canvasGradient.addColorStop(1, gradient.color2);
+      ctx.fillStyle = canvasGradient;
+      ctx.fillRect(0, 0, width, height);
+    } else {
+      // Solid color
       ctx.fillStyle = slide.slideBg;
       ctx.fillRect(0, 0, width, height);
     }
+  } else {
+    // Theme-based gradient background
+    const colors = getThemeBackgroundColors(theme);
+    const bgGradient = ctx.createLinearGradient(0, 0, width, height);
+    bgGradient.addColorStop(0, colors.from);
+    bgGradient.addColorStop(1, colors.to);
+    ctx.fillStyle = bgGradient;
+    ctx.fillRect(0, 0, width, height);
+    
+    // Add subtle overlay
+    if (colors.overlay) {
+      ctx.fillStyle = colors.overlay;
+      ctx.fillRect(0, 0, width, height);
+    }
   }
+
+  // Step 2: Determine layout and draw content
+  const padding = 80;
+  const hasImage = slide.imageUrl && loadedImages.has(slide.imageUrl);
+  const image = hasImage ? loadedImages.get(slide.imageUrl!) : null;
+  const isCoverOrThankYou = slide.role === 'cover' || slide.role === 'thank_you';
+  const accentColor = getThemeAccentHex(theme);
   
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 72px system-ui, -apple-system, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(slide.title || '', width / 2, 200, width - 100);
+  // Title styling
+  const titleColor = slide.titleStyle?.color || '#ffffff';
+  const titleSize = slide.titleStyle?.fontSize === 'small' ? 56 : slide.titleStyle?.fontSize === 'large' ? 96 : 72;
+  const titleWeight = slide.titleStyle?.fontWeight === 'normal' ? 'normal' : 'bold';
   
-  if (slide.subtitle) {
-    ctx.font = '48px system-ui, -apple-system, sans-serif';
-    ctx.fillStyle = '#94a3b8';
-    ctx.fillText(slide.subtitle, width / 2, 280, width - 100);
-  }
+  // Subtitle styling
+  const subtitleColor = slide.subtitleStyle?.color || '#94a3b8';
+  const subtitleSize = slide.subtitleStyle?.fontSize === 'small' ? 32 : slide.subtitleStyle?.fontSize === 'large' ? 56 : 44;
   
-  if (slide.bullets && slide.bullets.length > 0) {
-    ctx.font = '36px system-ui, -apple-system, sans-serif';
-    ctx.fillStyle = '#e2e8f0';
-    ctx.textAlign = 'left';
-    slide.bullets.forEach((bullet, i) => {
-      if (bullet.trim()) {
-        ctx.fillText(`• ${bullet}`, 150, 380 + i * 60, width - 200);
+  // Bullet styling
+  const bulletColor = slide.bulletStyle?.color || '#e2e8f0';
+  const bulletSize = slide.bulletStyle?.fontSize === 'small' ? 28 : slide.bulletStyle?.fontSize === 'large' ? 44 : 36;
+  const bulletDotColor = slide.bulletDotColor || accentColor;
+
+  if (isCoverOrThankYou && !hasImage) {
+    // Centered layout for cover/thank you without image
+    ctx.textAlign = 'center';
+    
+    // Title
+    ctx.fillStyle = titleColor;
+    ctx.font = `${titleWeight} ${titleSize}px system-ui, -apple-system, sans-serif`;
+    ctx.fillText(slide.title || '', width / 2, height / 2 - 40, width - padding * 2);
+    
+    // Subtitle
+    if (slide.subtitle) {
+      ctx.fillStyle = subtitleColor;
+      ctx.font = `${subtitleSize}px system-ui, -apple-system, sans-serif`;
+      ctx.fillText(slide.subtitle, width / 2, height / 2 + 40, width - padding * 2);
+    }
+    
+    // Accent line
+    ctx.fillStyle = accentColor;
+    ctx.fillRect(width / 2 - 60, height / 2 + 80, 120, 4);
+    
+  } else if (hasImage && image) {
+    // Layout with image
+    const layout = slide.layoutVariant || 'text_left';
+    const imgSizeRatio = slide.imageSize === 'small' ? 0.33 : slide.imageSize === 'large' ? 0.6 : 0.45;
+    
+    if (layout === 'image_left') {
+      // Image on left, text on right
+      const imgWidth = (width - padding * 3) * imgSizeRatio;
+      const imgHeight = height - padding * 2;
+      const imgX = padding;
+      const imgY = padding;
+      
+      // Draw image with rounded corners simulation
+      ctx.save();
+      ctx.fillStyle = 'rgba(51, 65, 85, 0.5)';
+      ctx.fillRect(imgX, imgY, imgWidth, imgHeight);
+      ctx.drawImage(image, imgX, imgY, imgWidth, imgHeight);
+      ctx.restore();
+      
+      // Text on right
+      const textX = imgX + imgWidth + padding;
+      const textWidth = width - textX - padding;
+      ctx.textAlign = 'left';
+      
+      ctx.fillStyle = titleColor;
+      ctx.font = `${titleWeight} ${titleSize * 0.9}px system-ui, -apple-system, sans-serif`;
+      wrapText(ctx, slide.title || '', textX, height / 2 - 60, textWidth, titleSize);
+      
+      if (slide.subtitle) {
+        ctx.fillStyle = subtitleColor;
+        ctx.font = `${subtitleSize * 0.9}px system-ui, -apple-system, sans-serif`;
+        ctx.fillText(slide.subtitle, textX, height / 2 + 20, textWidth);
       }
-    });
+      
+      // Accent line
+      ctx.fillStyle = accentColor;
+      ctx.fillRect(textX, height / 2 + 60, 80, 4);
+      
+    } else if (layout === 'image_top') {
+      // Image on top, text below
+      const imgHeight = (height - padding * 3) * imgSizeRatio;
+      const imgWidth = width - padding * 2;
+      
+      ctx.drawImage(image, padding, padding, imgWidth, imgHeight);
+      
+      const textY = padding + imgHeight + padding;
+      ctx.textAlign = 'center';
+      
+      ctx.fillStyle = titleColor;
+      ctx.font = `${titleWeight} ${titleSize * 0.85}px system-ui, -apple-system, sans-serif`;
+      ctx.fillText(slide.title || '', width / 2, textY + 60, width - padding * 2);
+      
+      if (slide.subtitle) {
+        ctx.fillStyle = subtitleColor;
+        ctx.font = `${subtitleSize * 0.85}px system-ui, -apple-system, sans-serif`;
+        ctx.fillText(slide.subtitle, width / 2, textY + 120, width - padding * 2);
+      }
+      
+    } else if (layout === 'image_bottom') {
+      // Text on top, image below
+      ctx.textAlign = 'center';
+      
+      ctx.fillStyle = titleColor;
+      ctx.font = `${titleWeight} ${titleSize * 0.85}px system-ui, -apple-system, sans-serif`;
+      ctx.fillText(slide.title || '', width / 2, padding + 80, width - padding * 2);
+      
+      if (slide.subtitle) {
+        ctx.fillStyle = subtitleColor;
+        ctx.font = `${subtitleSize * 0.85}px system-ui, -apple-system, sans-serif`;
+        ctx.fillText(slide.subtitle, width / 2, padding + 140, width - padding * 2);
+      }
+      
+      const imgHeight = (height - padding * 3) * imgSizeRatio;
+      const imgY = height - padding - imgHeight;
+      ctx.drawImage(image, padding, imgY, width - padding * 2, imgHeight);
+      
+    } else {
+      // Default: text_left (image on right)
+      const imgWidth = (width - padding * 3) * imgSizeRatio;
+      const imgHeight = height - padding * 2;
+      const imgX = width - padding - imgWidth;
+      
+      ctx.drawImage(image, imgX, padding, imgWidth, imgHeight);
+      
+      // Text on left
+      const textWidth = imgX - padding * 2;
+      ctx.textAlign = 'left';
+      
+      ctx.fillStyle = titleColor;
+      ctx.font = `${titleWeight} ${titleSize * 0.9}px system-ui, -apple-system, sans-serif`;
+      wrapText(ctx, slide.title || '', padding, height / 2 - 60, textWidth, titleSize);
+      
+      if (slide.subtitle) {
+        ctx.fillStyle = subtitleColor;
+        ctx.font = `${subtitleSize * 0.9}px system-ui, -apple-system, sans-serif`;
+        ctx.fillText(slide.subtitle, padding, height / 2 + 20, textWidth);
+      }
+      
+      // Accent line
+      ctx.fillStyle = accentColor;
+      ctx.fillRect(padding, height / 2 + 60, 80, 4);
+    }
+    
+  } else {
+    // Content slide without image (title + bullets)
+    ctx.textAlign = 'left';
+    
+    // Title at top
+    ctx.fillStyle = titleColor;
+    ctx.font = `${titleWeight} ${titleSize}px system-ui, -apple-system, sans-serif`;
+    ctx.fillText(slide.title || '', padding, padding + titleSize, width - padding * 2);
+    
+    // Subtitle
+    let contentY = padding + titleSize + 40;
+    if (slide.subtitle) {
+      ctx.fillStyle = subtitleColor;
+      ctx.font = `${subtitleSize}px system-ui, -apple-system, sans-serif`;
+      ctx.fillText(slide.subtitle, padding, contentY + subtitleSize, width - padding * 2);
+      contentY += subtitleSize + 40;
+    }
+    
+    // Bullets
+    if (slide.bullets && slide.bullets.length > 0) {
+      ctx.font = `${bulletSize}px system-ui, -apple-system, sans-serif`;
+      const lineHeight = bulletSize + 24;
+      
+      slide.bullets.forEach((bullet, i) => {
+        if (bullet.trim()) {
+          const y = contentY + 60 + i * lineHeight;
+          
+          // Draw bullet dot
+          ctx.fillStyle = bulletDotColor;
+          ctx.beginPath();
+          ctx.arc(padding + 12, y - bulletSize / 3, 6, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // Draw bullet text
+          ctx.fillStyle = bulletColor;
+          ctx.fillText(bullet, padding + 40, y, width - padding * 2 - 40);
+        }
+      });
+    }
+  }
+}
+
+/**
+ * Helper to wrap text on canvas
+ */
+function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number): void {
+  const words = text.split(' ');
+  let line = '';
+  let currentY = y;
+  
+  for (const word of words) {
+    const testLine = line + word + ' ';
+    const metrics = ctx.measureText(testLine);
+    if (metrics.width > maxWidth && line !== '') {
+      ctx.fillText(line.trim(), x, currentY);
+      line = word + ' ';
+      currentY += lineHeight;
+    } else {
+      line = testLine;
+    }
+  }
+  ctx.fillText(line.trim(), x, currentY);
+}
+
+/**
+ * Synchronous wrapper for backward compatibility
+ */
+function renderSlideToCanvas(
+  ctx: CanvasRenderingContext2D,
+  slide: { title: string; subtitle?: string; bullets: string[]; slideBg?: string; imageUrl?: string; role?: string; layoutVariant?: string; imageSize?: string; titleStyle?: { color?: string; fontSize?: string; fontWeight?: string }; subtitleStyle?: { color?: string; fontSize?: string }; bulletStyle?: { color?: string; fontSize?: string }; bulletDotColor?: string },
+  width: number,
+  height: number,
+  theme: string
+): void {
+  // Simplified sync version - just renders without images
+  // For full rendering with images, use renderSlideToCanvasAsync
+  
+  // Draw background
+  if (slide.slideBg) {
+    const gradient = parseGradientForCanvas(slide.slideBg);
+    if (gradient) {
+      const angleRad = (gradient.angle * Math.PI) / 180;
+      const x1 = width / 2 - Math.cos(angleRad) * width;
+      const y1 = height / 2 + Math.sin(angleRad) * height;
+      const x2 = width / 2 + Math.cos(angleRad) * width;
+      const y2 = height / 2 - Math.sin(angleRad) * height;
+      const canvasGradient = ctx.createLinearGradient(x1, y1, x2, y2);
+      canvasGradient.addColorStop(0, gradient.color1);
+      canvasGradient.addColorStop(1, gradient.color2);
+      ctx.fillStyle = canvasGradient;
+      ctx.fillRect(0, 0, width, height);
+    } else {
+      ctx.fillStyle = slide.slideBg;
+      ctx.fillRect(0, 0, width, height);
+    }
+  } else {
+    const colors = getThemeBackgroundColors(theme);
+    const bgGradient = ctx.createLinearGradient(0, 0, width, height);
+    bgGradient.addColorStop(0, colors.from);
+    bgGradient.addColorStop(1, colors.to);
+    ctx.fillStyle = bgGradient;
+    ctx.fillRect(0, 0, width, height);
+    if (colors.overlay) {
+      ctx.fillStyle = colors.overlay;
+      ctx.fillRect(0, 0, width, height);
+    }
+  }
+
+  const padding = 80;
+  const accentColor = getThemeAccentHex(theme);
+  const titleColor = slide.titleStyle?.color || '#ffffff';
+  const titleSize = slide.titleStyle?.fontSize === 'small' ? 56 : slide.titleStyle?.fontSize === 'large' ? 96 : 72;
+  const titleWeight = slide.titleStyle?.fontWeight === 'normal' ? 'normal' : 'bold';
+  const subtitleColor = slide.subtitleStyle?.color || '#94a3b8';
+  const subtitleSize = slide.subtitleStyle?.fontSize === 'small' ? 32 : slide.subtitleStyle?.fontSize === 'large' ? 56 : 44;
+  const bulletColor = slide.bulletStyle?.color || '#e2e8f0';
+  const bulletSize = slide.bulletStyle?.fontSize === 'small' ? 28 : slide.bulletStyle?.fontSize === 'large' ? 44 : 36;
+  const bulletDotColor = slide.bulletDotColor || accentColor;
+
+  const isCoverOrThankYou = slide.role === 'cover' || slide.role === 'thank_you';
+
+  if (isCoverOrThankYou) {
+    // Centered layout
+    ctx.textAlign = 'center';
+    ctx.fillStyle = titleColor;
+    ctx.font = `${titleWeight} ${titleSize}px system-ui, -apple-system, sans-serif`;
+    ctx.fillText(slide.title || '', width / 2, height / 2 - 40, width - padding * 2);
+    
+    if (slide.subtitle) {
+      ctx.fillStyle = subtitleColor;
+      ctx.font = `${subtitleSize}px system-ui, -apple-system, sans-serif`;
+      ctx.fillText(slide.subtitle, width / 2, height / 2 + 40, width - padding * 2);
+    }
+    
+    ctx.fillStyle = accentColor;
+    ctx.fillRect(width / 2 - 60, height / 2 + 80, 120, 4);
+  } else {
+    // Content slide
+    ctx.textAlign = 'left';
+    ctx.fillStyle = titleColor;
+    ctx.font = `${titleWeight} ${titleSize}px system-ui, -apple-system, sans-serif`;
+    ctx.fillText(slide.title || '', padding, padding + titleSize, width - padding * 2);
+    
+    let contentY = padding + titleSize + 40;
+    if (slide.subtitle) {
+      ctx.fillStyle = subtitleColor;
+      ctx.font = `${subtitleSize}px system-ui, -apple-system, sans-serif`;
+      ctx.fillText(slide.subtitle, padding, contentY + subtitleSize, width - padding * 2);
+      contentY += subtitleSize + 40;
+    }
+    
+    if (slide.bullets && slide.bullets.length > 0) {
+      ctx.font = `${bulletSize}px system-ui, -apple-system, sans-serif`;
+      const lineHeight = bulletSize + 24;
+      
+      slide.bullets.forEach((bullet, i) => {
+        if (bullet.trim()) {
+          const y = contentY + 60 + i * lineHeight;
+          ctx.fillStyle = bulletDotColor;
+          ctx.beginPath();
+          ctx.arc(padding + 12, y - bulletSize / 3, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = bulletColor;
+          ctx.fillText(bullet, padding + 40, y, width - padding * 2 - 40);
+        }
+      });
+    }
   }
 }
 
@@ -610,6 +973,11 @@ const PresentationTab: React.FC = () => {
   const [error, setError] = useState('');
   const [isRegeneratingImage, setIsRegeneratingImage] = useState(false);
   const [isSlideResearching, setIsSlideResearching] = useState(false);
+  const [isRegeneratingField, setIsRegeneratingField] = useState<{ title: boolean; subtitle: boolean; bullets: Record<number, boolean> }>({
+    title: false,
+    subtitle: false,
+    bullets: {},
+  });
   const [slideResearchQuery, setSlideResearchQuery] = useState('');
   const [imagePromptText, setImagePromptText] = useState('');
 
@@ -957,6 +1325,9 @@ const PresentationTab: React.FC = () => {
 
   // Cache for generated slide audio (persists during session)
   const slideAudioCache = React.useRef<Map<string, { blob: Blob; durationMs: number }>>(new Map());
+  
+  // Ref for the slide preview element (used for html2canvas capture)
+  const slidePreviewRef = useRef<HTMLDivElement>(null);
 
   // Generate a hash for slide content to detect changes
   const getSlideHash = (slide: Slide, voiceGender: string): string => {
@@ -1032,9 +1403,14 @@ const PresentationTab: React.FC = () => {
     return result;
   };
 
-  // Export video with narration
+  // Export video with narration - uses html2canvas for HD capture + MediaRecorder for fast encoding
   const handleExportMP4 = useCallback(async () => {
     if (slides.length === 0) return;
+    if (!slidePreviewRef.current) {
+      toast.error(language === 'ar' ? 'خطأ: لم يتم العثور على الشريحة' : 'Error: Slide preview not found');
+      return;
+    }
+    
     setIsExporting(true);
     setShowExportMenu(false);
     
@@ -1044,6 +1420,9 @@ const PresentationTab: React.FC = () => {
         ? 'جارٍ إنشاء الفيديو...' 
         : 'Creating video...'
     );
+    
+    // Store original slide index to restore later
+    const originalSlideIndex = selectedSlideIndex;
     
     try {
       const { supabase } = await import('@/integrations/supabase/client');
@@ -1056,22 +1435,103 @@ const PresentationTab: React.FC = () => {
       const TRANSITION_MS = 2000;
 
       for (let i = 0; i < slides.length; i++) {
+        toast.loading(
+          language === 'ar' ? `جارٍ إنشاء الصوت ${i + 1}/${slides.length}...` : `Audio ${i + 1}/${slides.length}...`,
+          { id: toastId }
+        );
         const audio = await getSlideAudio(slides[i], i, toastId, token);
         slideAudioData.push(audio || { blob: null, durationMs: 3000 });
       }
+
+      // Step 2: Capture each slide as a high-quality image using html2canvas
+      toast.loading(
+        language === 'ar' ? 'جارٍ التقاط الشرائح...' : 'Capturing slides...',
+        { id: toastId }
+      );
+
+      const capturedSlideCanvases: HTMLCanvasElement[] = [];
+      
+      for (let i = 0; i < slides.length; i++) {
+        toast.loading(
+          language === 'ar' ? `التقاط ${i + 1}/${slides.length}...` : `Capture ${i + 1}/${slides.length}...`,
+          { id: toastId }
+        );
+        
+        // Switch to this slide
+        setSelectedSlideIndex(i);
+        
+        // Wait for React to re-render the slide
+        await new Promise(resolve => setTimeout(resolve, 400));
+        
+        // Capture the slide preview element with html2canvas
+        if (slidePreviewRef.current) {
+          try {
+            const capturedCanvas = await html2canvas(slidePreviewRef.current, {
+              scale: 2, // Good quality without being too slow
+              useCORS: true,
+              allowTaint: true,
+              backgroundColor: '#000000',
+              logging: false,
+            });
+            
+            // Scale to exactly 1920x1080 for video
+            const scaledCanvas = document.createElement('canvas');
+            scaledCanvas.width = 1920;
+            scaledCanvas.height = 1080;
+            const scaledCtx = scaledCanvas.getContext('2d')!;
+            
+            // Fill with black background
+            scaledCtx.fillStyle = '#000000';
+            scaledCtx.fillRect(0, 0, 1920, 1080);
+            
+            // Calculate scaling to fill 1920x1080 while maintaining aspect ratio
+            const srcAspect = capturedCanvas.width / capturedCanvas.height;
+            const dstAspect = 1920 / 1080;
+            
+            let drawWidth, drawHeight, drawX, drawY;
+            if (srcAspect > dstAspect) {
+              // Source is wider - fit to height
+              drawHeight = 1080;
+              drawWidth = 1080 * srcAspect;
+              drawX = (1920 - drawWidth) / 2;
+              drawY = 0;
+            } else {
+              // Source is taller - fit to width
+              drawWidth = 1920;
+              drawHeight = 1920 / srcAspect;
+              drawX = 0;
+              drawY = (1080 - drawHeight) / 2;
+            }
+            
+            scaledCtx.drawImage(capturedCanvas, drawX, drawY, drawWidth, drawHeight);
+            capturedSlideCanvases.push(scaledCanvas);
+          } catch (e) {
+            console.error(`Failed to capture slide ${i + 1}:`, e);
+            // Create a fallback canvas
+            const fallbackCanvas = document.createElement('canvas');
+            fallbackCanvas.width = 1920;
+            fallbackCanvas.height = 1080;
+            const fallbackCtx = fallbackCanvas.getContext('2d')!;
+            fallbackCtx.fillStyle = '#1e293b';
+            fallbackCtx.fillRect(0, 0, 1920, 1080);
+            fallbackCtx.fillStyle = '#ffffff';
+            fallbackCtx.font = 'bold 72px system-ui';
+            fallbackCtx.textAlign = 'center';
+            fallbackCtx.fillText(slides[i].title || `Slide ${i + 1}`, 960, 540);
+            capturedSlideCanvases.push(fallbackCanvas);
+          }
+        }
+      }
+
+      // Restore original slide
+      setSelectedSlideIndex(originalSlideIndex);
 
       toast.loading(
         language === 'ar' ? 'جارٍ تجميع الفيديو...' : 'Assembling video...',
         { id: toastId }
       );
 
-      // Step 2: Create canvas for rendering slides
-      const canvas = document.createElement('canvas');
-      canvas.width = 1920;
-      canvas.height = 1080;
-      const ctx = canvas.getContext('2d')!;
-
-      // Step 3: Combine all audio into one track
+      // Step 3: Setup audio
       const audioContext = new AudioContext();
       let totalDurationMs = 0;
       const slideTiming: { startMs: number; durationMs: number }[] = [];
@@ -1110,28 +1570,30 @@ const PresentationTab: React.FC = () => {
         sampleOffset += Math.ceil((slideTiming[i].durationMs / 1000) * audioContext.sampleRate);
       }
 
-      // Step 4: Create video with proper audio sync using MediaRecorder + AudioContext
-      const wavBlob = audioBufferToWav(combinedBuffer);
-      
-      // Create audio source that plays through destination
+      // Step 4: Create video canvas and setup recording
+      const videoCanvas = document.createElement('canvas');
+      videoCanvas.width = 1920;
+      videoCanvas.height = 1080;
+      const ctx = videoCanvas.getContext('2d')!;
+
+      // Setup audio playback
       const audioSource = audioContext.createBufferSource();
       audioSource.buffer = combinedBuffer;
       
-      // Create MediaStreamDestination to capture audio
       const audioDestination = audioContext.createMediaStreamDestination();
       audioSource.connect(audioDestination);
-      audioSource.connect(audioContext.destination); // Also play to speakers (muted later)
+      audioSource.connect(audioContext.destination);
       
       // Combine canvas stream with audio stream
-      const canvasStream = canvas.captureStream(30);
+      const canvasStream = videoCanvas.captureStream(30);
       const audioTrack = audioDestination.stream.getAudioTracks()[0];
       canvasStream.addTrack(audioTrack);
 
-      // Create MediaRecorder with combined stream
+      // Create MediaRecorder with high quality settings
       const mediaRecorder = new MediaRecorder(canvasStream, { 
         mimeType: 'video/webm;codecs=vp9,opus',
-        videoBitsPerSecond: 5000000,
-        audioBitsPerSecond: 128000,
+        videoBitsPerSecond: 15000000, // 15 Mbps for HD quality
+        audioBitsPerSecond: 192000,
       });
       
       const chunks: Blob[] = [];
@@ -1145,27 +1607,31 @@ const PresentationTab: React.FC = () => {
         };
       });
 
-      // Start recording and audio playback together
-      mediaRecorder.start(100); // Collect data every 100ms
+      // Start recording and audio playback
+      mediaRecorder.start(100);
       audioSource.start(0);
 
-      // Render slides to canvas based on timing
+      // Render captured slide images to video canvas based on timing
       const startTime = Date.now();
+      let lastSlideIndex = -1;
       
       const renderLoop = () => {
         const elapsed = Date.now() - startTime;
         
         // Find current slide
-        let currentSlideIndex = 0;
+        let currentSlideIdx = 0;
         for (let i = 0; i < slideTiming.length; i++) {
           if (elapsed >= slideTiming[i].startMs && elapsed < slideTiming[i].startMs + slideTiming[i].durationMs) {
-            currentSlideIndex = i;
+            currentSlideIdx = i;
             break;
           }
         }
 
-        // Render slide
-        renderSlideToCanvas(ctx, slides[currentSlideIndex], canvas.width, canvas.height, selectedTheme);
+        // Only re-render if slide changed
+        if (currentSlideIdx !== lastSlideIndex && capturedSlideCanvases[currentSlideIdx]) {
+          lastSlideIndex = currentSlideIdx;
+          ctx.drawImage(capturedSlideCanvases[currentSlideIdx], 0, 0);
+        }
 
         if (elapsed < totalDurationMs) {
           requestAnimationFrame(renderLoop);
@@ -1175,6 +1641,11 @@ const PresentationTab: React.FC = () => {
         }
       };
 
+      // Initial render
+      if (capturedSlideCanvases[0]) {
+        ctx.drawImage(capturedSlideCanvases[0], 0, 0);
+      }
+      
       renderLoop();
 
       const videoBlob = await recordingPromise;
@@ -1207,7 +1678,7 @@ const PresentationTab: React.FC = () => {
     } finally {
       setIsExporting(false);
     }
-  }, [slides, brief, topic, selectedTheme, language]);
+  }, [slides, brief, topic, selectedTheme, language, selectedSlideIndex]);
 
   // Edit slide content
   const updateSlideField = useCallback((field: 'title' | 'subtitle', value: string) => {
@@ -1405,6 +1876,85 @@ const PresentationTab: React.FC = () => {
       setIsSlideResearching(false);
     }
   }, [brief, language, effectiveResearchMode, researchModeType, selectedSlideIndex, slideCount, slideResearchQuery, slides, topic]);
+
+  const handleRegenerateField = useCallback(async (params: { field: 'title' | 'subtitle' | 'bullet'; bulletIndex?: number }) => {
+    if (!brief) return;
+    if (slides.length === 0) return;
+    const currentSlide = slides[selectedSlideIndex];
+    if (!currentSlide) return;
+
+    const currentText =
+      params.field === 'title'
+        ? currentSlide.title
+        : params.field === 'subtitle'
+          ? (currentSlide.subtitle || '')
+          : (typeof params.bulletIndex === 'number' ? (currentSlide.bullets?.[params.bulletIndex] || '') : '');
+
+    if (!currentText.trim()) return;
+
+    setIsRegeneratingField(prev => {
+      if (params.field === 'title') return { ...prev, title: true };
+      if (params.field === 'subtitle') return { ...prev, subtitle: true };
+      return {
+        ...prev,
+        bullets: { ...prev.bullets, [params.bulletIndex as number]: true },
+      };
+    });
+
+    try {
+      const response = await callEdgeFunctionWithRetry<{ success: boolean; text?: string; error?: string }>('wakti-presentation-regenerate-field', {
+        body: {
+          topic: topic.trim(),
+          slideNumber: currentSlide.slideNumber,
+          slideCount,
+          language,
+          objective: brief.objective,
+          audience: brief.audience,
+          scenario: brief.scenario,
+          tone: brief.tone,
+          field: params.field,
+          currentText,
+          currentTitle: currentSlide.title,
+          currentSubtitle: currentSlide.subtitle || '',
+          currentBullets: currentSlide.bullets || [],
+          bulletIndex: params.field === 'bullet' ? params.bulletIndex : undefined,
+        },
+        maxRetries: 2,
+        retryDelay: 1000,
+      });
+
+      if (!response?.success || !response?.text) {
+        throw new Error(response?.error || 'Failed to regenerate');
+      }
+
+      const newText = response.text.trim();
+      if (!newText) throw new Error('Empty result');
+
+      setSlides(prev => prev.map((s, i) => {
+        if (i !== selectedSlideIndex) return s;
+        if (params.field === 'title') return { ...s, title: newText };
+        if (params.field === 'subtitle') return { ...s, subtitle: newText };
+        if (params.field === 'bullet' && typeof params.bulletIndex === 'number') {
+          const nextBullets = [...(s.bullets || [])];
+          nextBullets[params.bulletIndex] = newText;
+          return { ...s, bullets: nextBullets };
+        }
+        return s;
+      }));
+    } catch (e) {
+      console.error('Regenerate field error:', e);
+      toast.error(language === 'ar' ? 'فشل إعادة الصياغة' : 'Failed to regenerate');
+    } finally {
+      setIsRegeneratingField(prev => {
+        if (params.field === 'title') return { ...prev, title: false };
+        if (params.field === 'subtitle') return { ...prev, subtitle: false };
+        const idx = params.bulletIndex as number;
+        const next = { ...prev.bullets };
+        delete next[idx];
+        return { ...prev, bullets: next };
+      });
+    }
+  }, [brief, slides, selectedSlideIndex, topic, slideCount, language]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render helpers
@@ -1992,6 +2542,7 @@ const PresentationTab: React.FC = () => {
         {/* Main slide canvas - Theme-aware with per-slide background */}
         <div className="relative max-w-4xl mx-auto">
           <div 
+            ref={slidePreviewRef}
             className={`aspect-video rounded-2xl overflow-hidden ${theme?.cardShadow || 'shadow-2xl'} relative`}
             style={currentSlide?.slideBg ? getColorStyle(currentSlide.slideBg, 'background') : undefined}
           >
@@ -2509,7 +3060,23 @@ const PresentationTab: React.FC = () => {
             
             {/* Title */}
             <div className="mb-3">
-              <label className="text-xs text-slate-500 mb-1 block">{language === 'ar' ? 'العنوان' : 'Title'}</label>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <label className="text-xs text-slate-500 block">{language === 'ar' ? 'العنوان' : 'Title'}</label>
+                <button
+                  type="button"
+                  onClick={() => handleRegenerateField({ field: 'title' })}
+                  disabled={isRegeneratingField.title}
+                  className="p-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={language === 'ar' ? 'إعادة الصياغة' : 'Regenerate'}
+                  aria-label={language === 'ar' ? 'إعادة صياغة العنوان' : 'Regenerate title'}
+                >
+                  {isRegeneratingField.title ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </div>
               <input
                 type="text"
                 value={currentSlide.title}
@@ -2572,7 +3139,23 @@ const PresentationTab: React.FC = () => {
             
             {/* Subtitle */}
             <div className="mb-3">
-              <label className="text-xs text-slate-500 mb-1 block">{language === 'ar' ? 'العنوان الفرعي' : 'Subtitle'}</label>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <label className="text-xs text-slate-500 block">{language === 'ar' ? 'العنوان الفرعي' : 'Subtitle'}</label>
+                <button
+                  type="button"
+                  onClick={() => handleRegenerateField({ field: 'subtitle' })}
+                  disabled={isRegeneratingField.subtitle}
+                  className="p-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={language === 'ar' ? 'إعادة الصياغة' : 'Regenerate'}
+                  aria-label={language === 'ar' ? 'إعادة صياغة العنوان الفرعي' : 'Regenerate subtitle'}
+                >
+                  {isRegeneratingField.subtitle ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </div>
               <input
                 type="text"
                 value={currentSlide.subtitle || ''}
@@ -2693,6 +3276,20 @@ const PresentationTab: React.FC = () => {
                         title={language === 'ar' ? `نقطة ${i + 1}` : `Bullet ${i + 1}`}
                         className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:ring-2 focus:ring-primary/50 outline-none"
                       />
+                      <button
+                        type="button"
+                        onClick={() => handleRegenerateField({ field: 'bullet', bulletIndex: i })}
+                        disabled={!!isRegeneratingField.bullets[i]}
+                        className="p-2 text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={language === 'ar' ? 'إعادة الصياغة' : 'Regenerate'}
+                        aria-label={language === 'ar' ? `إعادة صياغة النقطة ${i + 1}` : `Regenerate bullet ${i + 1}`}
+                      >
+                        {isRegeneratingField.bullets[i] ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <RefreshCw className="w-4 h-4" />
+                        )}
+                      </button>
                       {currentSlide.bullets && currentSlide.bullets.length > 0 && (
                         <button
                           type="button"
