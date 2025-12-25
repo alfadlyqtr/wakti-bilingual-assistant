@@ -798,10 +798,30 @@ function isWaktiInvolved(q: string) {
   try {
     const s = String(q || '').trim();
     if (!s) return false;
-    return /\bwakti\b/i.test(s) || /وقتي/.test(s);
+    const hasWakti = /\bwakti\b/i.test(s) || /وقتي/.test(s);
+    if (!hasWakti) return false;
+    // Exclude dev/meta messages about building/debugging Wakti itself
+    const devTerms = /\b(brain|prompt|supabase|model|edge function|deploy|debug|code|api|backend|frontend|gemini|openai|claude|anthropic)\b/i;
+    if (devTerms.test(s)) return false;
+    return true;
   } catch {
     return false;
   }
+}
+
+// Detect if Chat query needs verified lookup (contacts, hours, nearest, open-now)
+function needsVerifiedLookup(q: string): boolean {
+  const s = (q || '').trim().toLowerCase();
+  if (!s) return false;
+  // Phone/contact/website/email patterns
+  if (/\b(phone|number|call|contact|website|email|whatsapp|instagram|facebook|tiktok)\b/i.test(s)) return true;
+  // Hours/open-now patterns
+  if (/\b(hours|open now|closed now|opening|closing|open today|closes at|opens at)\b/i.test(s)) return true;
+  // Nearest/location patterns
+  if (/\b(nearest|closest|near me|nearby|around me)\b/i.test(s)) return true;
+  // Arabic equivalents
+  if (/هاتف|رقم|اتصال|موقع|ايميل|واتساب|انستقرام|فيسبوك|تيك توك|ساعات|مفتوح|مغلق|أقرب|قريب/.test(s)) return true;
+  return false;
 }
 
 // === GEOCODING FOR CITY DETECTION ===
@@ -1466,31 +1486,22 @@ If you are running out of space, keep this order and drop the rest:
           }
         } else {
           if (activeTrigger === 'chat' && chatSubmode === 'chat') {
-            const freshnessScore = scoreChatNeedsFreshSearch(message);
-            if (freshnessScore >= 0.8) {
-              const pt = (personalTouch as Record<string, unknown> | null) || null;
-              const userNick = (pt && typeof pt.nickname === 'string') ? pt.nickname : '';
+            const pt = (personalTouch as Record<string, unknown> | null) || null;
+            const userNick = (pt && typeof pt.nickname === 'string') ? pt.nickname : '';
 
-              if (userDeclinedSearch(message, recentMessages)) {
-                const txt = language === 'ar'
-                  ? `${userNick ? `تمام يا ${userNick}. ` : 'تمام. '}ما راح أبحث الآن. تبغاني أعطيك جواب عام من غير تحديث مباشر، ولا تحدد لي المدينة/الدولة عشان أبحث؟`
-                  : `${userNick ? `No problem, ${userNick}. ` : 'No problem. '}I won’t search right now. Do you want a general answer without live checking, or tell me your city/country and I’ll search?`;
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: txt, content: txt })}\n\n`));
-                controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-                controller.close();
-                return;
-              }
+            // ─── STEP 1: Handle yes/no replies FIRST (before freshness scoring) ───
+            if (userDeclinedSearch(message, recentMessages)) {
+              const txt = language === 'ar'
+                ? `${userNick ? `تمام يا ${userNick}. ` : 'تمام. '}ما راح أبحث الآن. تبغاني أعطيك جواب عام من غير تحديث مباشر، ولا تحدد لي المدينة/الدولة عشان أبحث؟`
+                : `${userNick ? `No problem, ${userNick}. ` : 'No problem. '}I won't search right now. Do you want a general answer without live checking, or tell me your city/country and I'll search?`;
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: txt, content: txt })}\n\n`));
+              controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+              controller.close();
+              return;
+            }
 
-              if (!userApprovedSearch(message, recentMessages)) {
-                const txt = language === 'ar'
-                  ? `${userNick ? `يا ${userNick}، ` : ''}هذا يحتاج تحديث مباشر. تبغاني أبحث لك الآن؟ (نعم/لا)`
-                  : `${userNick ? `${userNick}, ` : ''}This needs a live check. Want me to search it now? (yes/no)`;
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: txt, content: txt, metadata: { needsSearchApproval: true } })}\n\n`));
-                controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-                controller.close();
-                return;
-              }
-
+            if (userApprovedSearch(message, recentMessages)) {
+              // User said YES → run grounded search using the previous user question
               try {
                 let fullResponseText = '';
                 const previousUserQuestion = getLastTextMessage(recentMessages, 'user');
@@ -1515,8 +1526,26 @@ If you are running out of space, keep this order and drop the rest:
                 controller.close();
                 return;
               } catch (e) {
-                console.warn('⚠️ CHAT FRESH SEARCH ERROR:', e);
+                console.warn('⚠️ CHAT APPROVED SEARCH ERROR:', e);
               }
+            }
+
+            // ─── STEP 2: Verified lookup gate (contacts, hours, nearest, open-now) ───
+            const requiresVerifiedLookup = needsVerifiedLookup(message);
+
+            // ─── STEP 3: Freshness scoring for time-sensitive queries ───
+            const freshnessScore = scoreChatNeedsFreshSearch(message);
+            const needsLiveSearch = freshnessScore >= 0.8 || requiresVerifiedLookup;
+
+            if (needsLiveSearch) {
+              // Ask for permission before searching
+              const txt = language === 'ar'
+                ? `${userNick ? `يا ${userNick}، ` : ''}هذا يحتاج تحديث مباشر. تبغاني أبحث لك الآن؟ (نعم/لا)`
+                : `${userNick ? `${userNick}, ` : ''}This needs a live check. Want me to search it now? (yes/no)`;
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: txt, content: txt, metadata: { needsSearchApproval: true } })}\n\n`));
+              controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+              controller.close();
+              return;
             }
           }
 
