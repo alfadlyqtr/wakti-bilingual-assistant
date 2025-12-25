@@ -20,6 +20,15 @@ type LayoutVariant = 'text_left' | 'image_left' | 'image_top' | 'image_bottom' |
 type ImageSize = 'small' | 'medium' | 'large' | 'full';
 type ImageFit = 'crop' | 'fit' | 'fill';
 
+type ImageFocusX = 'left' | 'center' | 'right';
+type ImageFocusY = 'top' | 'center' | 'bottom';
+
+interface ImageTransform {
+  scale: number;
+  xPct: number;
+  yPct: number;
+}
+
 // Bullet dot shape type
 type BulletDotShape = 'dot' | 'diamond' | 'arrow' | 'dash' | 'number' | 'letter';
 
@@ -54,6 +63,80 @@ interface ExportSlide {
   layoutVariant?: LayoutVariant;
   imageSize?: ImageSize;
   imageFit?: ImageFit;
+  imageTransform?: ImageTransform;
+  imageFocusX?: ImageFocusX;
+  imageFocusY?: ImageFocusY;
+}
+
+const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
+
+const EXPORT_CANVAS_W = 1920;
+
+function get16by9Height(widthPx: number): number {
+  return Math.round((widthPx * 9) / 16);
+}
+
+function getSideImageWidthPctForCover(imageSize?: ImageSize): number {
+  if (imageSize === 'small') return 1 / 3;
+  if (imageSize === 'large') return 2 / 3;
+  return 1 / 2;
+}
+
+function getSideImageWidthPctForContent(imageSize?: ImageSize): number {
+  switch (imageSize) {
+    case 'small':
+      return 0.35;
+    case 'large':
+      return 0.55;
+    case 'full':
+      return 0.6;
+    default:
+      return 0.45;
+  }
+}
+
+function getTopBottomWidthPct(imageSize?: ImageSize): number {
+  if (imageSize === 'small') return 0.7;
+  if (imageSize === 'large' || imageSize === 'full') return 1;
+  return 0.85;
+}
+
+function focusToXY(fx?: ImageFocusX, fy?: ImageFocusY): { xPct: number; yPct: number } {
+  const xPct = fx === 'left' ? -25 : fx === 'right' ? 25 : 0;
+  const yPct = fy === 'top' ? -25 : fy === 'bottom' ? 25 : 0;
+  return { xPct, yPct };
+}
+
+function getExportImageStyle(slide: ExportSlide): { wrapperStyle: string; imgStyle: string } {
+  const fit = slide.imageFit || 'crop';
+
+  // For crop, we mimic the in-app behavior: overflow-hidden wrapper, and transformed img.
+  if (fit === 'crop') {
+    const t = slide.imageTransform || { scale: 1, xPct: 0, yPct: 0 };
+    const scale = clamp(t.scale ?? 1, 1, 3);
+    const effectiveScale = scale * 1.15;
+    const xPct = clamp(t.xPct ?? 0, -50, 50);
+    const yPct = clamp(t.yPct ?? 0, -50, 50);
+    // Match PresentationTab crop behavior: xPct/yPct represent moving the image itself
+    // (positive moves image right/down), so object-position is inverted.
+    const objX = clamp(50 - xPct, 0, 100);
+    const objY = clamp(50 - yPct, 0, 100);
+
+    const wrapperStyle = 'position: relative; overflow: hidden; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.3);';
+    const imgStyle = `width: 100%; height: 100%; object-fit: cover; object-position: ${objX}% ${objY}%; transform: scale(${effectiveScale}); transform-origin: center center;`;
+    return { wrapperStyle, imgStyle };
+  }
+
+  // For fit/fill, use object-fit and object-position from focus (if any)
+  const fitMode = fit === 'fit' ? 'contain' : 'fill';
+  const focus = focusToXY(slide.imageFocusX, slide.imageFocusY);
+  // Map focus percentages into object-position percentage space (50% is center)
+  const objX = clamp(50 + focus.xPct, 0, 100);
+  const objY = clamp(50 + focus.yPct, 0, 100);
+
+  const wrapperStyle = 'position: relative; overflow: hidden; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.3);';
+  const imgStyle = `width: 100%; height: 100%; object-fit: ${fitMode}; object-position: ${objX}% ${objY}%;`;
+  return { wrapperStyle, imgStyle };
 }
 
 // Theme colors for PDF/PPTX - bg now uses gradients matching PresentationTab
@@ -433,8 +516,15 @@ function renderSlideToHTML(
   // Cover/Thank You slide - centered layout (no image) or with layout variants if image added
   if (isCoverOrThankYou) {
     const hasSlideImage = slide.imageUrl;
-    const imgSize = slide.imageSize === 'small' ? '30%' : slide.imageSize === 'large' ? '50%' : '40%';
-    const imgHeight = slide.imageSize === 'small' ? '250px' : slide.imageSize === 'large' ? '450px' : '350px';
+    const paddingPx = 60;
+    const gapPx = 60;
+    const innerW = EXPORT_CANVAS_W - paddingPx * 2;
+    const sidePct = getSideImageWidthPctForCover(slide.imageSize);
+    const sideW = Math.round((innerW - gapPx) * sidePct);
+    const sideH = get16by9Height(sideW);
+    const topPct = getTopBottomWidthPct(slide.imageSize);
+    const topW = Math.round(innerW * topPct);
+    const topH = get16by9Height(topW);
     
     // No image - centered layout
     if (!hasSlideImage) {
@@ -476,8 +566,10 @@ function renderSlideToHTML(
     if (slideLayout === 'image_left') {
       return `
         <div style="width: 1920px; height: 1080px; background: ${bgColor}; font-family: 'Noto Sans Arabic', 'Segoe UI', sans-serif; direction: ${isRtl ? 'rtl' : 'ltr'}; display: flex; padding: 60px; gap: 60px; box-sizing: border-box; position: relative;">
-          <div style="width: ${imgSize}; display: flex; align-items: center; justify-content: center;">
-            <img src="${slide.imageUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 20px;" crossorigin="anonymous" />
+          <div style="width: ${sideW}px; display: flex; align-items: center; justify-content: center;">
+            <div style="width: 100%; height: ${sideH}px; ${getExportImageStyle(slide).wrapperStyle}">
+              <img src="${slide.imageUrl}" style="${getExportImageStyle(slide).imgStyle}" crossorigin="anonymous" />
+            </div>
           </div>
           <div style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
             <h1 style="font-size: 64px; font-weight: bold; color: ${titleColor}; margin: 0 0 24px 0;">${processedTitle}</h1>
@@ -500,8 +592,10 @@ function renderSlideToHTML(
     if (slideLayout === 'image_top') {
       return `
         <div style="width: 1920px; height: 1080px; background: ${bgColor}; font-family: 'Noto Sans Arabic', 'Segoe UI', sans-serif; direction: ${isRtl ? 'rtl' : 'ltr'}; display: flex; flex-direction: column; padding: 60px; gap: 40px; box-sizing: border-box; position: relative;">
-          <div style="width: 100%; height: ${imgHeight}; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 20px;">
-            <img src="${slide.imageUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 20px;" crossorigin="anonymous" />
+          <div style="width: ${topW}px; height: ${topH}px; margin: 0 auto;">
+            <div style="width: 100%; height: 100%; ${getExportImageStyle(slide).wrapperStyle}">
+              <img src="${slide.imageUrl}" style="${getExportImageStyle(slide).imgStyle}" crossorigin="anonymous" />
+            </div>
           </div>
           <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
             <h1 style="font-size: 64px; font-weight: bold; color: ${titleColor}; margin: 0 0 24px 0;">${processedTitle}</h1>
@@ -533,8 +627,10 @@ function renderSlideToHTML(
             </div>
             ${slide.subtitle ? `<p style="font-size: 28px; color: ${subtitleColor}; margin: 0;">${slide.subtitle}</p>` : ''}
           </div>
-          <div style="width: 100%; height: ${imgHeight}; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 20px;">
-            <img src="${slide.imageUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 20px;" crossorigin="anonymous" />
+          <div style="width: ${topW}px; height: ${topH}px; margin: 0 auto;">
+            <div style="width: 100%; height: 100%; ${getExportImageStyle(slide).wrapperStyle}">
+              <img src="${slide.imageUrl}" style="${getExportImageStyle(slide).imgStyle}" crossorigin="anonymous" />
+            </div>
           </div>
           <div style="position: absolute; bottom: 30px; left: 60px; right: 60px; display: flex; justify-content: space-between; color: #64748b; font-size: 16px;">
             <span>${language === 'ar' ? 'Wakti AI وقتي' : 'Wakti AI'}</span>
@@ -556,8 +652,10 @@ function renderSlideToHTML(
           </div>
           ${slide.subtitle ? `<p style="font-size: 28px; color: ${subtitleColor}; margin: 0;">${slide.subtitle}</p>` : ''}
         </div>
-        <div style="width: ${imgSize}; display: flex; align-items: center; justify-content: center;">
-          <img src="${slide.imageUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 20px;" crossorigin="anonymous" />
+        <div style="width: ${sideW}px; display: flex; align-items: center; justify-content: center;">
+          <div style="width: 100%; height: ${sideH}px; ${getExportImageStyle(slide).wrapperStyle}">
+            <img src="${slide.imageUrl}" style="${getExportImageStyle(slide).imgStyle}" crossorigin="anonymous" />
+          </div>
         </div>
         <div style="position: absolute; bottom: 30px; left: 60px; right: 60px; display: flex; justify-content: space-between; color: #64748b; font-size: 16px;">
           <span>${language === 'ar' ? 'Wakti AI وقتي' : 'Wakti AI'}</span>
@@ -584,19 +682,20 @@ function renderSlideToHTML(
       default: return { width: '45%', height: 'auto' };
     }
   };
-  
-  // Image fit mapping - respect the UI's imageFit setting
-  const getImageFit = () => {
-    switch (slide.imageFit) {
-      case 'crop': return 'cover';
-      case 'fit': return 'contain';
-      case 'fill': return 'fill';
-      default: return 'cover';
-    }
-  };
-  
+
   const imgSize = getImageSize();
-  const imgFit = getImageFit();
+
+  const { wrapperStyle: imgWrapperStyle, imgStyle: imgInnerStyle } = getExportImageStyle(slide);
+
+  const paddingPx = 60;
+  const gapPx = 60;
+  const innerW = EXPORT_CANVAS_W - paddingPx * 2;
+  const sidePct = getSideImageWidthPctForContent(slide.imageSize);
+  const sideW = Math.round((innerW - gapPx) * sidePct);
+  const sideH = get16by9Height(sideW);
+  const topPct = getTopBottomWidthPct(slide.imageSize);
+  const topW = Math.round(innerW * topPct);
+  const topH = get16by9Height(topW);
 
   // Layout: Image Left
   if ((hasImage || hasImagePlaceholder) && layout === 'image_left') {
@@ -614,8 +713,10 @@ function renderSlideToHTML(
         position: relative;
       ">
         <!-- Image Column (LEFT) -->
-        <div style="width: ${imgSize.width}; display: flex; align-items: center; justify-content: center;">
-          <img src="${slide.imageUrl}" style="max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.3);" crossorigin="anonymous" />
+        <div style="width: ${sideW}px; display: flex; align-items: center; justify-content: center;">
+          <div style="width: 100%; height: ${sideH}px; ${imgWrapperStyle}">
+            <img src="${slide.imageUrl}" style="${imgInnerStyle}" crossorigin="anonymous" />
+          </div>
         </div>
         
         <!-- Text Column (RIGHT) -->
@@ -664,9 +765,11 @@ function renderSlideToHTML(
           <div style="width: 12px; height: 12px; border-radius: 50%; background: ${accentColor};"></div>
         </div>
         
-        <!-- Image (TOP) - Takes all remaining space -->
-        <div style="width: 100%; flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 20px; min-height: 200px;">
-          <img src="${slide.imageUrl}" style="max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.3);" crossorigin="anonymous" />
+        <!-- Image (TOP) - Fixed 16:9 frame to match preview -->
+        <div style="width: ${topW}px; height: ${topH}px; margin: 0 auto;">
+          <div style="width: 100%; height: 100%; ${imgWrapperStyle}">
+            <img src="${slide.imageUrl}" style="${imgInnerStyle}" crossorigin="anonymous" />
+          </div>
         </div>
         
         <!-- Bullets (BOTTOM) - Auto-size based on content -->
@@ -712,9 +815,11 @@ function renderSlideToHTML(
           ${bulletHtml}
         </div>
         
-        <!-- Image (BOTTOM) - Takes all remaining space -->
-        <div style="width: 100%; flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 20px; min-height: 200px;">
-          <img src="${slide.imageUrl}" style="max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.3);" crossorigin="anonymous" />
+        <!-- Image (BOTTOM) - Fixed 16:9 frame to match preview -->
+        <div style="width: ${topW}px; height: ${topH}px; margin: 0 auto;">
+          <div style="width: 100%; height: 100%; ${imgWrapperStyle}">
+            <img src="${slide.imageUrl}" style="${imgInnerStyle}" crossorigin="anonymous" />
+          </div>
         </div>
         
         <!-- Footer -->
@@ -755,8 +860,10 @@ function renderSlideToHTML(
         </div>
         
         <!-- Image Column (RIGHT) -->
-        <div style="width: ${imgSize.width}; display: flex; align-items: center; justify-content: center;">
-          <img src="${slide.imageUrl}" style="max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.3);" crossorigin="anonymous" />
+        <div style="width: ${sideW}px; display: flex; align-items: center; justify-content: center;">
+          <div style="width: 100%; height: ${sideH}px; ${imgWrapperStyle}">
+            <img src="${slide.imageUrl}" style="${imgInnerStyle}" crossorigin="anonymous" />
+          </div>
         </div>
         
         <!-- Footer -->

@@ -33,6 +33,7 @@ interface SlidesRequest {
   };
   theme: string;
   language: string;
+  generateImages?: boolean;
 }
 
 // Final slide with all data for rendering
@@ -127,6 +128,7 @@ Deno.serve(async (req) => {
     const outline = body.outline;
     const brief = body.brief;
     const theme = body.theme || "professional";
+    const generateImages = body.generateImages !== false;
 
     if (!outline || outline.length === 0) {
       return new Response(
@@ -151,7 +153,7 @@ Deno.serve(async (req) => {
       let imageData = null;
       const skipImage = SKIP_IMAGE_ROLES.includes(role);
       
-      if (!skipImage && imageCount < maxImages) {
+      if (generateImages && !skipImage && imageCount < maxImages) {
         // ALWAYS use the presentation topic as the PRIMARY search term
         // This ensures images are relevant to the actual topic
         const mainTopic = brief.subject;
@@ -194,8 +196,8 @@ Deno.serve(async (req) => {
         bullets: outlineSlide.bullets || [],
         highlightedStats: outlineSlide.highlightedStats || [],
         columns: outlineSlide.columns || null,
-        imageUrl: imageData ? imageData.url : null,
-        imageMeta: imageData ? imageData.meta : null,
+        imageUrl: generateImages && imageData ? imageData.url : null,
+        imageMeta: generateImages && imageData ? imageData.meta : null,
         footer: outlineSlide.footer || brief.subject.substring(0, 30).toUpperCase(),
       };
 

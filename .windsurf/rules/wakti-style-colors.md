@@ -25,7 +25,27 @@ Pink	320 70% 80%	320 75% 70%
 Cyan	180 80% 70%	180 85% 60%
 Amber	45 100% 70%	45 100% 60%
 Emerald	160 75% 65%	160 80% 55%
-✨ Gradients
+
+🌙 Dark Mode (Primary Brand Feel)
+
+These are the core identity colors — modern, calm, premium.
+
+#0C0F14 → Main background (deep dark)
+
+#606062 → Secondary surfaces / cards
+
+#858384 → Text, icons, subtle UI elements
+
+☀️ Light Mode
+
+Clean, warm, and elegant — still very “WAKTI”.
+
+#FCFEFD → Main background (almost white)
+
+#E9CEB0 → Soft accent / highlights
+
+#060541 → Primary brand color (headers, CTAs, emphasis)
+✨ Gradients use our colors 
 Light Mode Gradients
 Primary: linear-gradient(135deg, #060541 0%, hsl(260 70% 25%) 50%, #060541 100%)
 Secondary: linear-gradient(135deg, #e9ceb0 0%, hsl(45 80% 75%) 50%, #e9ceb0 100%)

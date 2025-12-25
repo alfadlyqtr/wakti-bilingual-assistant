@@ -73,7 +73,7 @@ import LettersWaiting from "./pages/LettersWaiting";
 import LettersJoin from "./pages/LettersJoin";
 import LettersPlay from "./pages/LettersPlay";
 import LettersResults from "./pages/LettersResults";
- 
+import PresentationSharePlayer from "./pages/PresentationSharePlayer";
 
 import "./App.css";
 
@@ -139,6 +139,9 @@ function App() {
                 
                 {/* Shared task route (public) */}
                 <Route path="/shared-task/:shareLink" element={<SharedTask />} />
+
+                {/* Public presentation share player */}
+                <Route path="/p/:token" element={<PresentationSharePlayer />} />
                 
                 {/* Maw3d public view */}
                 <Route path="/maw3d/:shortId" element={<Maw3dView />} />

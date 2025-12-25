@@ -37,6 +37,128 @@ const GOOGLE_MAPS_API_KEY = Deno.env.get('GOOGLE_MAPS_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
+type IpGeoLite = {
+  city?: string;
+  region?: string;
+  country?: string;
+  timezone?: string;
+  latitude?: number;
+  longitude?: number;
+};
+
+const ipGeoCache = new Map<string, { at: number; geo: IpGeoLite | null }>();
+
+function extractClientIp(req: Request): string {
+  const xr = req.headers.get('x-real-ip');
+  if (xr && xr.trim()) return xr.trim();
+  const xff = req.headers.get('x-forwarded-for');
+  if (xff && xff.trim()) {
+    const first = xff.split(',')[0]?.trim();
+    if (first) return first;
+  }
+  return '';
+}
+
+function isPublicRoutableIp(ip: string): boolean {
+  const v = (ip || '').trim();
+  if (!v) return false;
+  if (v === '::1' || v === '127.0.0.1') return false;
+  if (v.startsWith('10.')) return false;
+  if (v.startsWith('192.168.')) return false;
+  if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(v)) return false;
+  if (v.startsWith('fc') || v.startsWith('fd')) return false;
+  return true;
+}
+
+async function lookupIpGeo(ip: string): Promise<IpGeoLite | null> {
+  const key = (ip || '').trim();
+  if (!key || !isPublicRoutableIp(key)) return null;
+
+  const cached = ipGeoCache.get(key);
+  const now = Date.now();
+  if (cached && now - cached.at < 6 * 60 * 60 * 1000) return cached.geo;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 400);
+  try {
+    const resp = await fetch(`https://ipapi.co/${encodeURIComponent(key)}/json/`, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      signal: controller.signal,
+    });
+    if (!resp.ok) {
+      ipGeoCache.set(key, { at: now, geo: null });
+      return null;
+    }
+    const data = await resp.json().catch(() => null) as Record<string, unknown> | null;
+    if (!data || typeof data !== 'object') {
+      ipGeoCache.set(key, { at: now, geo: null });
+      return null;
+    }
+    const geo: IpGeoLite = {
+      city: typeof data.city === 'string' ? data.city : undefined,
+      region: typeof data.region === 'string' ? data.region : undefined,
+      country: typeof data.country_name === 'string' ? data.country_name : (typeof data.country === 'string' ? data.country : undefined),
+      timezone: typeof data.timezone === 'string' ? data.timezone : undefined,
+      latitude: typeof data.latitude === 'number' ? data.latitude : (typeof data.latitude === 'string' ? Number(data.latitude) : undefined),
+      longitude: typeof data.longitude === 'number' ? data.longitude : (typeof data.longitude === 'string' ? Number(data.longitude) : undefined),
+    };
+    ipGeoCache.set(key, { at: now, geo });
+    return geo;
+  } catch {
+    ipGeoCache.set(key, { at: now, geo: null });
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function buildStayHotSummary(recentMessages: unknown[]): string {
+  try {
+    if (!Array.isArray(recentMessages) || recentMessages.length === 0) return '';
+    const msgs = recentMessages
+      .filter((m) => m && typeof m === 'object')
+      .slice(-16)
+      .map((m) => m as Record<string, unknown>);
+
+    const texts: Array<{ role: string; content: string }> = [];
+    for (const m of msgs) {
+      const role = typeof m.role === 'string' ? m.role : '';
+      const content = typeof m.content === 'string' ? m.content : '';
+      if (!content) continue;
+      if (role !== 'user' && role !== 'assistant') continue;
+      texts.push({ role, content: content.slice(0, 500) });
+    }
+    if (texts.length === 0) return '';
+
+    const lastUser = [...texts].reverse().find((t) => t.role === 'user')?.content || '';
+    const corpus = texts.map((t) => t.content).join(' ').toLowerCase();
+    const stop = new Set([
+      'the','and','for','with','that','this','have','from','you','your','are','was','were','what','when','where','why','how','can','could','should','would','will','just','like','need','want','also','too','into','about','than','then','them','they','our','we','i','me','my','it','its','a','an','to','of','in','on','at','as','is','be','or','if','but','not','do','does','did'
+    ]);
+    const words = corpus
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter((w) => w.length >= 4 && !stop.has(w));
+    const freq = new Map<string, number>();
+    for (const w of words) freq.set(w, (freq.get(w) || 0) + 1);
+    const top = [...freq.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([w]) => w);
+    const topic = top.length > 0 ? top.join(', ') : '';
+
+    const lines: string[] = [];
+    if (topic) lines.push(`Active Topic Keywords: ${topic}`);
+    if (lastUser) lines.push(`Latest User Request: ${lastUser.slice(0, 220)}`);
+    const summary = lines.join('\n');
+    if (!summary.trim()) return '';
+    return `STAY HOT CONTEXT (Conversation Summary)\n${summary}`;
+  } catch {
+    return '';
+  }
+}
+
 console.log("WAKTI AI V2 STREAMING BRAIN: Ready (with verified facts + AI Logging)");
 
 // === TOKEN ESTIMATION ===
@@ -778,6 +900,49 @@ function scoreChatNeedsFreshSearch(message: string): number {
   return score;
 }
 
+function getLastTextMessage(recentMessages: unknown[], role: 'user' | 'assistant'): string {
+  try {
+    if (!Array.isArray(recentMessages)) return '';
+    for (let i = recentMessages.length - 1; i >= 0; i -= 1) {
+      const m = recentMessages[i] as Record<string, unknown> | undefined;
+      if (!m || typeof m !== 'object') continue;
+      if (m.role !== role) continue;
+      const content = typeof m.content === 'string' ? m.content : '';
+      if (content) return content;
+    }
+    return '';
+  } catch {
+    return '';
+  }
+}
+
+function userApprovedSearch(message: string, recentMessages: unknown[]): boolean {
+  const userMsg = (message || '').trim().toLowerCase();
+  if (!userMsg) return false;
+
+  const lastAssistant = getLastTextMessage(recentMessages, 'assistant').toLowerCase();
+  const askedToSearch = /\b(search|look it up|check online|live check|google)\b/i.test(lastAssistant) && /\?/.test(lastAssistant);
+  if (!askedToSearch) return false;
+
+  // Simple “yes” intent in EN/AR
+  if (/^(yes|yep|yeah|sure|ok|okay|do it|go ahead|please|yalla)\b/.test(userMsg)) return true;
+  if (/^(نعم|اي|أيوه|ايوه|تمام|اوكي|حاضر|تفضل|يلا)\b/.test(userMsg)) return true;
+  return false;
+}
+
+function userDeclinedSearch(message: string, recentMessages: unknown[]): boolean {
+  const userMsg = (message || '').trim().toLowerCase();
+  if (!userMsg) return false;
+
+  const lastAssistant = getLastTextMessage(recentMessages, 'assistant').toLowerCase();
+  const askedToSearch = /\b(search|look it up|check online|live check|google)\b/i.test(lastAssistant) && /\?/.test(lastAssistant);
+  if (!askedToSearch) return false;
+
+  if (/^(no|nah|nope|don\s?t|do not|skip|not now)\b/.test(userMsg)) return true;
+  if (/^(لا|مو|مو\s?الحين|لا\s?ابي|لا\s?أبي)\b/.test(userMsg)) return true;
+  return false;
+}
+
 serve(async (req) => {
   const origin = req.headers.get('origin');
   const corsHeaders = getCorsHeaders(origin);
@@ -850,6 +1015,28 @@ serve(async (req) => {
           return;
         }
 
+        const stayHotSummary = buildStayHotSummary(Array.isArray(recentMessages) ? recentMessages : []);
+
+        // IP-based geo (fast + cached). Used only as fallback when client doesn't send location.
+        const clientIp = extractClientIp(req);
+        const ipGeo = (!location || (!location?.city && !location?.country && !location?.latitude && !location?.longitude))
+          ? await lookupIpGeo(clientIp)
+          : null;
+        const effectiveTimezone = (clientTimezone && clientTimezone !== 'UTC')
+          ? clientTimezone
+          : (ipGeo?.timezone || clientTimezone || 'UTC');
+
+        const ipLocationLine = (() => {
+          if (!ipGeo) return '';
+          const parts: string[] = [];
+          if (ipGeo.city) parts.push(ipGeo.city);
+          if (ipGeo.region) parts.push(ipGeo.region);
+          if (ipGeo.country) parts.push(ipGeo.country);
+          const label = parts.length > 0 ? parts.join(', ') : '';
+          if (!label) return '';
+          return `User Location (via IP): ${label}${ipGeo.timezone ? ` | Timezone: ${ipGeo.timezone}` : ''}`;
+        })();
+
         // Chat mode: if the user is asking about WAKTI specifically, respond with the correct format + chip
         if (activeTrigger === 'chat' && chatSubmode === 'chat' && isWaktiInvolved(message)) {
           const userName = (personalTouch as { nickname?: string })?.nickname || '';
@@ -881,17 +1068,19 @@ serve(async (req) => {
         }
 
         const currentDate = new Date().toLocaleDateString('en-US', { 
-          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Qatar'
+          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: effectiveTimezone
         });
 
         // Build enhanced system prompt (pass chatSubmode for Study mode tutor instructions)
-        const systemPrompt = buildSystemPrompt(
+        const systemPromptBase = buildSystemPrompt(
           language,
           currentDate,
           personalTouch as Record<string, unknown> | null | undefined,
           activeTrigger,
           chatSubmode
         );
+
+        const systemPrompt = `${stayHotSummary ? stayHotSummary + "\n\n" : ''}${ipLocationLine ? ipLocationLine + "\n\n" : ''}${systemPromptBase}`;
         
         const messages = [
           { role: 'system', content: systemPrompt }
@@ -926,7 +1115,7 @@ serve(async (req) => {
             const searchIntent = detectSearchIntent(message);
 
             // Get current time in user's timezone (fallback to UTC)
-            const userTimeZone = clientTimezone || 'UTC';
+            const userTimeZone = effectiveTimezone || 'UTC';
             const localTime = new Date().toLocaleString('en-US', { 
               timeZone: userTimeZone, 
               weekday: 'long', 
@@ -941,6 +1130,8 @@ serve(async (req) => {
             // Get accurate city from coordinates if available
             let userCity = location?.city || '';
             let userCountry = location?.country || '';
+            if (!userCity && ipGeo?.city) userCity = ipGeo.city;
+            if (!userCountry && ipGeo?.country) userCountry = ipGeo.country;
             
             if (location?.latitude && location?.longitude && !userCity) {
               console.log('📍 Reverse geocoding to get accurate city...');
@@ -967,7 +1158,7 @@ serve(async (req) => {
             // Intent detection is now built into the system prompt itself
             // (searchIntent is still used for Maps grounding below)
 
-            const searchSystemPrompt = `You are WAKTI AI — an elite, hyper-intelligent Search Intelligence.
+            const searchSystemPrompt = `${stayHotSummary ? stayHotSummary + "\n\n" : ''}${ipLocationLine ? ipLocationLine + "\n\n" : ''}You are WAKTI AI — an elite, hyper-intelligent Search Intelligence.
 You are the Al Jazeera of news (deep context), the ESPN of sports (real-time stakes), and the Oxford of research (academic rigor).
 You do not "chat". You perform REAL-TIME SYNTHESIS. You are a digital strategist with the brain of a researcher and the style of a high-end concierge.
 
@@ -1277,10 +1468,35 @@ If you are running out of space, keep this order and drop the rest:
           if (activeTrigger === 'chat' && chatSubmode === 'chat') {
             const freshnessScore = scoreChatNeedsFreshSearch(message);
             if (freshnessScore >= 0.8) {
+              const pt = (personalTouch as Record<string, unknown> | null) || null;
+              const userNick = (pt && typeof pt.nickname === 'string') ? pt.nickname : '';
+
+              if (userDeclinedSearch(message, recentMessages)) {
+                const txt = language === 'ar'
+                  ? `${userNick ? `تمام يا ${userNick}. ` : 'تمام. '}ما راح أبحث الآن. تبغاني أعطيك جواب عام من غير تحديث مباشر، ولا تحدد لي المدينة/الدولة عشان أبحث؟`
+                  : `${userNick ? `No problem, ${userNick}. ` : 'No problem. '}I won’t search right now. Do you want a general answer without live checking, or tell me your city/country and I’ll search?`;
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: txt, content: txt })}\n\n`));
+                controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                controller.close();
+                return;
+              }
+
+              if (!userApprovedSearch(message, recentMessages)) {
+                const txt = language === 'ar'
+                  ? `${userNick ? `يا ${userNick}، ` : ''}هذا يحتاج تحديث مباشر. تبغاني أبحث لك الآن؟ (نعم/لا)`
+                  : `${userNick ? `${userNick}, ` : ''}This needs a live check. Want me to search it now? (yes/no)`;
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: txt, content: txt, metadata: { needsSearchApproval: true } })}\n\n`));
+                controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                controller.close();
+                return;
+              }
+
               try {
                 let fullResponseText = '';
+                const previousUserQuestion = getLastTextMessage(recentMessages, 'user');
+                const groundedQuery = previousUserQuestion || message;
                 await streamGemini3WithSearch(
-                  message,
+                  groundedQuery,
                   systemPrompt,
                   { temperature: 0.7, maxOutputTokens: 2000 },
                   (token: string) => {
