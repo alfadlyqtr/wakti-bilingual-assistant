@@ -257,7 +257,7 @@ export default function PresentationSharePlayer(): React.ReactElement {
               <ChevronLeft className="w-5 h-5" />
             </button>
             <div className="flex flex-col items-center">
-              <span className="text-lg font-bold text-primary">
+              <span className="text-lg font-bold text-white px-2 py-0.5 rounded-md bg-black/40 border border-white/10">
                 {activeSlideIndex + 1}/{state.manifest.slides.length}
               </span>
               <span className="text-xs text-slate-500">
