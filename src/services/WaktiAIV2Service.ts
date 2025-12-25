@@ -287,6 +287,65 @@ class WaktiAIV2ServiceClass {
       console.warn('[WaktiAIV2Service] Native location error:', err);
     }
 
+    if ((!resolved.latitude || !resolved.longitude) && typeof navigator !== 'undefined' && (navigator as any)?.geolocation?.getCurrentPosition) {
+      try {
+        const browserLoc = await new Promise<{ latitude: number; longitude: number; accuracy?: number } | null>((resolve) => {
+          let settled = false;
+          const timer = setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            resolve(null);
+          }, 7000);
+
+          try {
+            (navigator as any).geolocation.getCurrentPosition(
+              (pos: any) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                const coords = pos?.coords;
+                const latitude = typeof coords?.latitude === 'number' ? coords.latitude : null;
+                const longitude = typeof coords?.longitude === 'number' ? coords.longitude : null;
+                if (typeof latitude === 'number' && typeof longitude === 'number') {
+                  resolve({
+                    latitude,
+                    longitude,
+                    accuracy: typeof coords?.accuracy === 'number' ? coords.accuracy : undefined,
+                  });
+                } else {
+                  resolve(null);
+                }
+              },
+              () => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                resolve(null);
+              },
+              { enableHighAccuracy: false, timeout: 6500, maximumAge: 10 * 60 * 1000 }
+            );
+          } catch {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            resolve(null);
+          }
+        });
+
+        if (browserLoc && typeof browserLoc.latitude === 'number' && typeof browserLoc.longitude === 'number') {
+          resolved = {
+            ...resolved,
+            latitude: browserLoc.latitude,
+            longitude: browserLoc.longitude,
+            accuracy: typeof browserLoc.accuracy === 'number' ? browserLoc.accuracy : resolved.accuracy,
+            source: resolved.source || 'browser',
+          };
+        }
+      } catch (err) {
+        console.warn('[WaktiAIV2Service] Browser geolocation error:', err);
+      }
+    }
+
     // Fetch from profiles as fallback for city/country
     if (!resolved.city || !resolved.country) {
       try {

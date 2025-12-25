@@ -9,7 +9,8 @@ import { toast } from 'sonner';
 import { createPortal } from 'react-dom';
 import { AudioPlayer } from '@/components/music/AudioPlayer';
 import ShareButton from '@/components/ui/ShareButton';
-import { Info, Wand2, Trash2 } from 'lucide-react';
+import { Info, Wand2, Trash2, Music, Video } from 'lucide-react';
+import VideoMaker from '@/components/video-maker/VideoMaker';
 
 // Helper function to download audio files on mobile
 const handleDownload = async (url: string, filename: string) => {
@@ -56,26 +57,68 @@ const handleDownload = async (url: string, filename: string) => {
 
 export default function MusicStudio() {
   const { language } = useTheme();
-  const [activeTab, setActiveTab] = useState<'compose' | 'editor'>('compose');
-
+  const [mainTab, setMainTab] = useState<'music' | 'video'>('music');
+  const [musicSubTab, setMusicSubTab] = useState<'compose' | 'editor'>('compose');
 
   return (
     <div className="w-full max-w-6xl mx-auto p-3 md:p-6 pb-20 md:pb-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl md:text-2xl font-bold">{language === 'ar' ? 'استوديو الموسيقى' : 'Music Studio'}</h1>
-        <div />
+      {/* Main tabs: Music | Video */}
+      <div className="flex items-center gap-2 border-b border-border pb-3">
+        <button
+          onClick={() => setMainTab('music')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+            mainTab === 'music'
+              ? 'bg-primary text-primary-foreground shadow-md'
+              : 'bg-muted hover:bg-muted/80 text-muted-foreground'
+          }`}
+        >
+          <Music className="h-4 w-4" />
+          {language === 'ar' ? 'الموسيقى' : 'Music'}
+        </button>
+        <button
+          onClick={() => setMainTab('video')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+            mainTab === 'video'
+              ? 'bg-primary text-primary-foreground shadow-md'
+              : 'bg-muted hover:bg-muted/80 text-muted-foreground'
+          }`}
+        >
+          <Video className="h-4 w-4" />
+          {language === 'ar' ? 'الفيديو' : 'Video'}
+        </button>
       </div>
 
-      <nav className="flex gap-2 border-b border-border pb-2">
-        <Button variant={activeTab === 'compose' ? 'default' : 'outline'} size="sm" onClick={() => setActiveTab('compose')}>
-          {language === 'ar' ? 'إنشاء' : 'Compose'}
-        </Button>
-        <Button variant={activeTab === 'editor' ? 'default' : 'outline'} size="sm" onClick={() => setActiveTab('editor')}>
-          {language === 'ar' ? 'المحفوظات' : 'Saved'}
-        </Button>
-      </nav>
+      {/* Music Tab Content */}
+      {mainTab === 'music' && (
+        <>
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl md:text-2xl font-bold">{language === 'ar' ? 'استوديو الموسيقى' : 'Music Studio'}</h1>
+            <div />
+          </div>
 
-      {activeTab === 'compose' ? <ComposeTab onSaved={()=>setActiveTab('editor')} /> : <EditorTab />}
+          <nav className="flex gap-2 border-b border-border pb-2">
+            <Button variant={musicSubTab === 'compose' ? 'default' : 'outline'} size="sm" onClick={() => setMusicSubTab('compose')}>
+              {language === 'ar' ? 'إنشاء' : 'Compose'}
+            </Button>
+            <Button variant={musicSubTab === 'editor' ? 'default' : 'outline'} size="sm" onClick={() => setMusicSubTab('editor')}>
+              {language === 'ar' ? 'المحفوظات' : 'Saved'}
+            </Button>
+          </nav>
+
+          {musicSubTab === 'compose' ? <ComposeTab onSaved={()=>setMusicSubTab('editor')} /> : <EditorTab />}
+        </>
+      )}
+
+      {/* Video Tab Content */}
+      {mainTab === 'video' && (
+        <>
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl md:text-2xl font-bold">{language === 'ar' ? 'صانع الفيديو' : 'Video Maker'}</h1>
+            <div />
+          </div>
+          <VideoMaker />
+        </>
+      )}
     </div>
   );
 }

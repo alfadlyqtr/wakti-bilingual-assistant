@@ -9,6 +9,11 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
     strictPort: true, // Always use 8080, fail if busy
     open: true,
+    // Required for FFmpeg.wasm to work (enables SharedArrayBuffer)
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
   },
   plugins: [
     react(),

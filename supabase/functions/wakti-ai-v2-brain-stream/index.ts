@@ -49,12 +49,22 @@ type IpGeoLite = {
 const ipGeoCache = new Map<string, { at: number; geo: IpGeoLite | null }>();
 
 function extractClientIp(req: Request): string {
-  const xr = req.headers.get('x-real-ip');
-  if (xr && xr.trim()) return xr.trim();
-  const xff = req.headers.get('x-forwarded-for');
-  if (xff && xff.trim()) {
-    const first = xff.split(',')[0]?.trim();
-    if (first) return first;
+  // Check common CDN/proxy headers in priority order
+  const headers = [
+    'cf-connecting-ip',    // Cloudflare
+    'true-client-ip',      // Akamai, Cloudflare Enterprise
+    'x-real-ip',           // Nginx proxy
+    'x-client-ip',         // Apache
+    'x-forwarded-for',     // Standard proxy header (first IP)
+    'fly-client-ip',       // Fly.io
+    'x-vercel-forwarded-for', // Vercel
+  ];
+  for (const h of headers) {
+    const val = req.headers.get(h);
+    if (val && val.trim()) {
+      const ip = val.split(',')[0]?.trim();
+      if (ip) return ip;
+    }
   }
   return '';
 }
@@ -328,6 +338,81 @@ interface Gemini3SearchResult {
   };
 }
 
+// Chat mode: gemini-2.5-flash with grounding (smooth, fast, conversational)
+async function streamGemini25FlashGrounded(
+  query: string,
+  systemInstruction: string,
+  onToken: (token: string) => void
+): Promise<string> {
+  const key = getGeminiApiKey();
+  const model = 'gemini-2.5-flash-lite';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
+
+  const body: Record<string, unknown> = {
+    contents: [{ role: 'user', parts: [{ text: query }] }],
+    tools: [{ google_search: {} }],
+    generationConfig: { temperature: 0.4, maxOutputTokens: 1100 },
+  };
+  if (systemInstruction) {
+    body.system_instruction = { parts: [{ text: systemInstruction }] };
+  }
+
+  console.log('💬 CHAT GROUNDED: Streaming with Gemini 2.5 Flash + google_search...');
+
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'text/event-stream',
+      'x-goog-api-key': key,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!resp.ok || !resp.body) {
+    const errText = await resp.text().catch(() => '');
+    console.error('❌ CHAT GROUNDED ERROR:', resp.status, errText);
+    throw new Error(`Chat grounded error: ${resp.status}`);
+  }
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let fullText = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (!line.startsWith('data:')) continue;
+      const data = line.slice(5).trim();
+      if (!data || data === '[DONE]') continue;
+      try {
+        const parsed = JSON.parse(data);
+        const cands = parsed?.candidates;
+        if (Array.isArray(cands) && cands.length > 0) {
+          const parts = cands[0]?.content?.parts || [];
+          for (const p of parts) {
+            const text = typeof p?.text === 'string' ? p.text : undefined;
+            if (text) {
+              fullText += text;
+              onToken(text);
+            }
+          }
+        }
+      } catch { /* ignore parse errors */ }
+    }
+  }
+
+  console.log('✅ CHAT GROUNDED: Stream complete, length:', fullText.length);
+  return fullText;
+}
+
+// Search mode: gemini-3-flash-preview with grounding (power + formatting)
 async function streamGemini3WithSearch(
   query: string,
   systemInstruction: string,
@@ -1419,7 +1504,7 @@ If you are running out of space, keep this order and drop the rest:
             await streamGemini3WithSearch(
               message,
               searchSystemPrompt,
-              { temperature: 1.0, maxOutputTokens: 2000 },
+              { temperature: 0.8, maxOutputTokens: 4000 },
               (token: string) => {
                 fullResponseText += token;
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`));
@@ -1485,67 +1570,30 @@ If you are running out of space, keep this order and drop the rest:
             messages.push({ role: 'user', content: message });
           }
         } else {
+          // ─── CHAT MODE: Always grounded with Gemini 2.5 Flash (smooth, no prompts) ───
           if (activeTrigger === 'chat' && chatSubmode === 'chat') {
-            const pt = (personalTouch as Record<string, unknown> | null) || null;
-            const userNick = (pt && typeof pt.nickname === 'string') ? pt.nickname : '';
-
-            // ─── STEP 1: Handle yes/no replies FIRST (before freshness scoring) ───
-            if (userDeclinedSearch(message, recentMessages)) {
-              const txt = language === 'ar'
-                ? `${userNick ? `تمام يا ${userNick}. ` : 'تمام. '}ما راح أبحث الآن. تبغاني أعطيك جواب عام من غير تحديث مباشر، ولا تحدد لي المدينة/الدولة عشان أبحث؟`
-                : `${userNick ? `No problem, ${userNick}. ` : 'No problem. '}I won't search right now. Do you want a general answer without live checking, or tell me your city/country and I'll search?`;
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: txt, content: txt })}\n\n`));
-              controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-              controller.close();
-              return;
-            }
-
-            if (userApprovedSearch(message, recentMessages)) {
-              // User said YES → run grounded search using the previous user question
-              try {
-                let fullResponseText = '';
-                const previousUserQuestion = getLastTextMessage(recentMessages, 'user');
-                const groundedQuery = previousUserQuestion || message;
-                await streamGemini3WithSearch(
-                  groundedQuery,
-                  systemPrompt,
-                  { temperature: 0.7, maxOutputTokens: 2000 },
-                  (token: string) => {
-                    fullResponseText += token;
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`));
-                  },
-                  () => {}
-                );
-
-                if (!fullResponseText) {
-                  const fallback = language === 'ar' ? 'لم أتمكن من العثور على نتائج.' : 'I could not find results for that query.';
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: fallback, content: fallback })}\n\n`));
+            try {
+              let fullResponseText = '';
+              await streamGemini25FlashGrounded(
+                message,
+                systemPrompt,
+                (token: string) => {
+                  fullResponseText += token;
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`));
                 }
+              );
 
-                controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-                controller.close();
-                return;
-              } catch (e) {
-                console.warn('⚠️ CHAT APPROVED SEARCH ERROR:', e);
+              if (!fullResponseText) {
+                const fallback = language === 'ar' ? 'لم أتمكن من الرد.' : 'I could not generate a response.';
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: fallback, content: fallback })}\n\n`));
               }
-            }
 
-            // ─── STEP 2: Verified lookup gate (contacts, hours, nearest, open-now) ───
-            const requiresVerifiedLookup = needsVerifiedLookup(message);
-
-            // ─── STEP 3: Freshness scoring for time-sensitive queries ───
-            const freshnessScore = scoreChatNeedsFreshSearch(message);
-            const needsLiveSearch = freshnessScore >= 0.8 || requiresVerifiedLookup;
-
-            if (needsLiveSearch) {
-              // Ask for permission before searching
-              const txt = language === 'ar'
-                ? `${userNick ? `يا ${userNick}، ` : ''}هذا يحتاج تحديث مباشر. تبغاني أبحث لك الآن؟ (نعم/لا)`
-                : `${userNick ? `${userNick}, ` : ''}This needs a live check. Want me to search it now? (yes/no)`;
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: txt, content: txt, metadata: { needsSearchApproval: true } })}\n\n`));
               controller.enqueue(encoder.encode('data: [DONE]\n\n'));
               controller.close();
               return;
+            } catch (e) {
+              console.warn('⚠️ CHAT GROUNDED ERROR:', e);
+              // Fallback to normal chat flow below
             }
           }
 
