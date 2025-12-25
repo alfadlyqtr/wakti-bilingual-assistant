@@ -30,7 +30,7 @@ import {
   Save
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useFFmpegVideo } from '@/hooks/useFFmpegVideo';
+import { useCanvasVideo } from '@/hooks/useCanvasVideo';
 
 // Types
 interface Slide {
@@ -106,8 +106,8 @@ export default function VideoMaker() {
     isPublic: false
   });
 
-  // FFmpeg hook
-  const { loadFFmpeg, generateVideo, isLoading: ffmpegLoading, isReady: ffmpegReady } = useFFmpegVideo();
+  // Canvas Video hook
+  const { generateVideo, progress: canvasProgress, status: canvasStatus, error: canvasError, isLoading: canvasLoading, isReady: canvasReady } = useCanvasVideo();
 
   // UI state
   const [step, setStep] = useState<'upload' | 'customize' | 'generate'>('upload');
@@ -126,6 +126,16 @@ export default function VideoMaker() {
   // Calculate total duration
   const totalDuration = project.slides.reduce((sum, s) => sum + s.durationSec, 0);
   const remainingDuration = MAX_DURATION_SEC - totalDuration;
+
+  // Sync Canvas progress with local state
+  useEffect(() => {
+    if (canvasLoading) {
+      setGenerationProgress(canvasProgress);
+      if (canvasStatus) {
+        setGenerationStatus(canvasStatus);
+      }
+    }
+  }, [canvasLoading, canvasProgress, canvasStatus]);
 
   // Load user's saved music tracks
   const loadSavedTracks = useCallback(async () => {
@@ -878,46 +888,36 @@ export default function VideoMaker() {
     </div>
   );
 
-  // Handle video generation with FFmpeg.wasm
+  // Handle video generation with IMG.LY CE.SDK
   const handleGenerate = async () => {
     setIsGenerating(true);
     setGenerationProgress(0);
     setGenerationStatus(language === 'ar' ? 'جاري تحميل المحرك...' : 'Loading video engine...');
 
     try {
-      // Load FFmpeg if not ready
-      if (!ffmpegReady) {
-        const loaded = await loadFFmpeg();
-        if (!loaded) {
-          throw new Error('Failed to load video engine');
-        }
+      // Extract image files from slides
+      const imageFiles = project.slides
+        .filter(slide => slide.imageFile)
+        .map(slide => slide.imageFile as File);
+
+      if (imageFiles.length === 0) {
+        throw new Error('No images to process');
       }
 
-      // Generate video
+      // Calculate average duration per image
+      const avgDuration = project.slides.reduce((sum, s) => sum + s.durationSec, 0) / project.slides.length;
+
+      // Generate video using Canvas + MediaRecorder
       const videoBlob = await generateVideo({
-        slides: project.slides,
-        audioUrl: project.audio?.url,
-        template: TEMPLATES[project.template],
-        aspectRatio: '9:16',
-        onProgress: (progress, status) => {
-          setGenerationProgress(progress);
-          // Translate status messages
-          if (status.includes('Processing images')) {
-            setGenerationStatus(language === 'ar' ? 'جاري معالجة الصور...' : status);
-          } else if (status.includes('Creating video')) {
-            setGenerationStatus(language === 'ar' ? 'جاري إنشاء الفيديو...' : status);
-          } else if (status.includes('Finalizing')) {
-            setGenerationStatus(language === 'ar' ? 'جاري الإنهاء...' : status);
-          } else if (status.includes('Complete')) {
-            setGenerationStatus(language === 'ar' ? 'اكتمل!' : status);
-          } else {
-            setGenerationStatus(language === 'ar' ? 'جاري المعالجة...' : status);
-          }
-        }
+        images: imageFiles,
+        audioUrl: project.audio?.url || null,
+        durationPerImage: avgDuration,
+        width: 1080,
+        height: 1920,
       });
 
       if (!videoBlob) {
-        throw new Error('Video generation failed');
+        throw new Error(canvasError || 'Video generation failed');
       }
 
       // Create object URL for preview

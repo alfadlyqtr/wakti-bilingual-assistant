@@ -128,23 +128,82 @@ function buildStayHotSummary(recentMessages: unknown[]): string {
     if (!Array.isArray(recentMessages) || recentMessages.length === 0) return '';
     const msgs = recentMessages
       .filter((m) => m && typeof m === 'object')
-      .slice(-16)
+      .slice(-20)
       .map((m) => m as Record<string, unknown>);
 
-    const texts: Array<{ role: string; content: string }> = [];
+    const texts: Array<{ role: string; content: string; idx: number }> = [];
+    let idx = 0;
     for (const m of msgs) {
       const role = typeof m.role === 'string' ? m.role : '';
       const content = typeof m.content === 'string' ? m.content : '';
       if (!content) continue;
       if (role !== 'user' && role !== 'assistant') continue;
-      texts.push({ role, content: content.slice(0, 500) });
+      texts.push({ role, content: content.slice(0, 600), idx: idx++ });
     }
     if (texts.length === 0) return '';
 
+    const lowerAll = texts.map(t => t.content).join(' ').toLowerCase();
     const lastUser = [...texts].reverse().find((t) => t.role === 'user')?.content || '';
+    const lastUserLower = lastUser.toLowerCase();
+
+    const bracketedEntities: string[] = [];
+    const addEntity = (s: string) => {
+      if (!s) return;
+      if (!bracketedEntities.includes(s)) bracketedEntities.push(s);
+    };
+
+    const vehicleBrands = ['chevy','chevrolet','silverado','gmc','sierra','ford','f-150','f150','ram','toyota','tacoma','tundra','nissan','patrol','land cruiser','landcruiser','lexus'];
+    for (const b of vehicleBrands) {
+      if (lowerAll.includes(b)) {
+        if (b.includes('silverado')) addEntity('[Car Model: Silverado]');
+        if (b === 'chevy' || b === 'chevrolet') addEntity('[Car Brand: Chevrolet]');
+        if (b === 'gmc') addEntity('[Car Brand: GMC]');
+        if (b === 'sierra') addEntity('[Car Model: Sierra]');
+        if (b === 'ford') addEntity('[Car Brand: Ford]');
+        if (b === 'ram') addEntity('[Car Brand: RAM]');
+        if (b === 'toyota') addEntity('[Car Brand: Toyota]');
+        if (b === 'nissan') addEntity('[Car Brand: Nissan]');
+      }
+    }
+    const yearMatch = lowerAll.match(/\b(19\d{2}|20\d{2})\b/);
+    if (yearMatch) addEntity(`[Year Mentioned: ${yearMatch[1]}]`);
+    const seriesMatch = lowerAll.match(/\b(1500|2500|3500)\b/);
+    if (seriesMatch) addEntity(`[Series: ${seriesMatch[1]}]`);
+
+    if (lowerAll.includes('wakti')) addEntity('[Topic: Wakti / App]');
+    if (lowerAll.includes('image') && (lowerAll.includes('cost') || lowerAll.includes('price') || lowerAll.includes('credits'))) addEntity('[Topic: Image Costs]');
+
+    const cityCountryPairs: Array<{ city: string; country: string }> = [
+      { city: 'alkhor', country: 'qatar' },
+      { city: 'al khor', country: 'qatar' },
+      { city: 'doha', country: 'qatar' },
+    ];
+    for (const p of cityCountryPairs) {
+      if (lowerAll.includes(p.city) && lowerAll.includes(p.country)) {
+        addEntity(`[User Location: ${p.city.replace(/\b\w/g, (c) => c.toUpperCase())}, ${p.country.toUpperCase()}]`);
+        break;
+      }
+    }
+
+    const capEntityPattern = /\b[A-Z][a-zA-Z]{2,}\b/g;
+    const entityFreq = new Map<string, number>();
+    for (const t of texts) {
+      const matches = t.content.match(capEntityPattern) || [];
+      for (const e of matches) {
+        const key = e.toLowerCase();
+        if (['the','and','for','with','that','this','have','from','you','your','are','was','were','what','when','where','why','how','can','could','should','would','will','just','like','need','want','hey','hello','hi','yes','yeah','sure','okay','thanks','please'].includes(key)) continue;
+        entityFreq.set(e, (entityFreq.get(e) || 0) + 1);
+      }
+    }
+    const topCaps = [...entityFreq.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([e]) => e);
+
+    // Extract topic keywords (frequency-based)
     const corpus = texts.map((t) => t.content).join(' ').toLowerCase();
     const stop = new Set([
-      'the','and','for','with','that','this','have','from','you','your','are','was','were','what','when','where','why','how','can','could','should','would','will','just','like','need','want','also','too','into','about','than','then','them','they','our','we','i','me','my','it','its','a','an','to','of','in','on','at','as','is','be','or','if','but','not','do','does','did'
+      'the','and','for','with','that','this','have','from','you','your','are','was','were','what','when','where','why','how','can','could','should','would','will','just','like','need','want','also','too','into','about','than','then','them','they','our','we','i','me','my','it','its','a','an','to','of','in','on','at','as','is','be','or','if','but','not','do','does','did','hey','hello','hi','yes','yeah','sure','okay','thanks','please','know','think','really','very','much','some','more','here','there','been','being','has','had','get','got','going','come','came','make','made','take','took','find','found','give','gave','tell','told','say','said','see','saw','look','looking','thing','things','something','anything','nothing','everything','way','ways','time','times','good','great','nice','cool','awesome','right','well','back','now','still','already','maybe','probably','actually','basically','literally','definitely'
     ]);
     const words = corpus
       .replace(/[^a-z0-9\s]/g, ' ')
@@ -152,18 +211,63 @@ function buildStayHotSummary(recentMessages: unknown[]): string {
       .filter((w) => w.length >= 4 && !stop.has(w));
     const freq = new Map<string, number>();
     for (const w of words) freq.set(w, (freq.get(w) || 0) + 1);
-    const top = [...freq.entries()]
+    const topKeywords = [...freq.entries()]
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
+      .slice(0, 8)
       .map(([w]) => w);
-    const topic = top.length > 0 ? top.join(', ') : '';
+
+    const userMsgs = texts.filter(t => t.role === 'user');
+    const recentUserRequests: string[] = [];
+    for (let i = 0; i < Math.min(userMsgs.length, 6); i++) {
+      const msg = userMsgs[userMsgs.length - 1 - i];
+      if (msg && msg.content.length > 4) recentUserRequests.push(msg.content.slice(0, 220));
+    }
+
+    let intent = 'General Chat';
+    if (/\b(near me|nearest|closest|around me|nearby)\b/i.test(lastUserLower)) intent = 'Local Search / Nearby Places';
+    else if (/\b(cost|price|pricing|credits|subscription|plan)\b/i.test(lastUserLower)) intent = 'Pricing / Costs';
+    else if (/\b(engine|oil|towing|tow|payload|spec|specs|trim|model year|maintenance|problem|issue|fix)\b/i.test(lastUserLower)) intent = 'Tech Support / Specs';
+    else if (/\b(image|video|audio|music|generate|generator)\b/i.test(lastUserLower)) intent = 'Creation / Generation';
+
+    const facts: string[] = [];
+    const addFact = (f: string) => { if (f && !facts.includes(f)) facts.push(f); };
+    if (lowerAll.includes('silverado')) addFact('[Vehicle: Silverado]');
+    if (yearMatch) addFact(`[Vehicle Year: ${yearMatch[1]}]`);
+    if (seriesMatch) addFact(`[Vehicle Series: ${seriesMatch[1]}]`);
+    const colorMatch = lowerAll.match(/\b(red|black|white|silver|gray|grey|blue|green)\b/);
+    if (colorMatch) addFact(`[Vehicle Color: ${colorMatch[1]}]`);
+    if (/\b(full cabin|crew cab|double cab|extended cab)\b/i.test(lowerAll)) addFact('[Cabin: Full / Crew]');
+
+    const locationLine = bracketedEntities.find(e => e.startsWith('[User Location:')) || '';
 
     const lines: string[] = [];
-    if (topic) lines.push(`Active Topic Keywords: ${topic}`);
-    if (lastUser) lines.push(`Latest User Request: ${lastUser.slice(0, 220)}`);
+    lines.push('KEY ENTITIES DETECTED');
+    const keyEntitiesOut = [...bracketedEntities];
+    for (const c of topCaps) keyEntitiesOut.push(`[Entity: ${c}]`);
+    if (keyEntitiesOut.length > 0) lines.push(`- ${keyEntitiesOut.slice(0, 14).join('\n- ')}`);
+    else lines.push('- [None]');
+
+    lines.push('USER INTENT (BEST GUESS)');
+    lines.push(`- [User Intent: ${intent}]`);
+
+    lines.push('USER LOCATION (BEST AVAILABLE)');
+    lines.push(`- ${locationLine || '[User Location: Unknown]'}`);
+
+    lines.push('FACTS THE USER STATED (HIGH VALUE)');
+    if (facts.length > 0) lines.push(`- ${facts.join('\n- ')}`);
+    else lines.push('- [None]');
+
+    lines.push('ACTIVE TOPICS / KEYWORDS');
+    if (topKeywords.length > 0) lines.push(`- ${topKeywords.slice(0, 10).join(', ')}`);
+    else lines.push('- [None]');
+
+    lines.push('RECENT USER REQUESTS (NEWEST FIRST)');
+    if (recentUserRequests.length > 0) lines.push(`- ${recentUserRequests.map((t, i) => `[${i + 1}] ${t}`).join('\n- ')}`);
+    else lines.push('- [None]');
+
     const summary = lines.join('\n');
     if (!summary.trim()) return '';
-    return `STAY HOT CONTEXT (Conversation Summary)\n${summary}`;
+    return `STAY HOT SUMMARY (STRUCTURED)\n${summary}`;
   } catch {
     return '';
   }
@@ -342,14 +446,41 @@ interface Gemini3SearchResult {
 async function streamGemini25FlashGrounded(
   query: string,
   systemInstruction: string,
+  recentMessages: unknown[] | undefined,
   onToken: (token: string) => void
 ): Promise<string> {
   const key = getGeminiApiKey();
   const model = 'gemini-2.5-flash-lite';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
 
+  const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+  try {
+    if (Array.isArray(recentMessages) && recentMessages.length > 0) {
+      const msgs = recentMessages
+        .filter((m) => m && typeof m === 'object')
+        .slice(-30)
+        .map((m) => m as Record<string, unknown>);
+
+      for (const m of msgs) {
+        const r = typeof m.role === 'string' ? m.role : '';
+        const c = typeof m.content === 'string' ? m.content : '';
+        if (!c) continue;
+        if (r !== 'user' && r !== 'assistant') continue;
+        const role: 'user' | 'model' = r === 'assistant' ? 'model' : 'user';
+        contents.push({ role, parts: [{ text: c.slice(0, 900) }] });
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  if (contents.length === 0) contents.push({ role: 'user', parts: [{ text: query }] });
+  else {
+    const last = contents[contents.length - 1];
+    if (last?.role !== 'user') contents.push({ role: 'user', parts: [{ text: query }] });
+  }
+
   const body: Record<string, unknown> = {
-    contents: [{ role: 'user', parts: [{ text: query }] }],
+    contents,
     tools: [{ google_search: {} }],
     generationConfig: { temperature: 0.4, maxOutputTokens: 1100 },
   };
@@ -357,7 +488,13 @@ async function streamGemini25FlashGrounded(
     body.system_instruction = { parts: [{ text: systemInstruction }] };
   }
 
-  console.log('💬 CHAT GROUNDED: Streaming with Gemini 2.5 Flash + google_search...');
+  console.log('💬 CHAT GROUNDED: Streaming with Gemini 2.5 Flash + google_search...', {
+    contentsCount: contents.length,
+    firstRole: contents[0]?.role,
+    lastRole: contents[contents.length - 1]?.role,
+    lastText: contents[contents.length - 1]?.parts?.[0]?.text?.slice(0, 100),
+    systemLen: systemInstruction?.length || 0
+  });
 
   const resp = await fetch(url, {
     method: 'POST',
@@ -425,7 +562,9 @@ async function streamGemini3WithSearch(
   const model = 'gemini-3-flash-preview';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
 
-  const latestQuery = `${query}\n\nLATEST-FIRST RULE (CRITICAL): Use the newest available sources/snippets. Prefer results updated today/this hour when present. If sources conflict, choose the most recently updated. Do not use memory for live facts.`;
+  // Inject today's date into the query so Google Search grounding fetches current results
+  const todayStr = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const latestQuery = `${query} (as of ${todayStr})\n\nLATEST-FIRST RULE (CRITICAL): Today is ${todayStr}. Use the newest available sources/snippets. Prefer results updated today/this hour when present. If sources conflict, choose the most recently updated. Do not use memory for live facts.`;
 
   const body: Record<string, unknown> = {
     contents: [{ role: 'user', parts: [{ text: latestQuery }] }],
@@ -569,11 +708,23 @@ If the user uploads an image (photo of notes, textbook, problem), analyze it and
 CRITICAL SEARCH FORMATTING RULES (NON-NEGOTIABLE)
 You are in SEARCH MODE. You will receive search results in the conversation.
 
+SEARCH MODE = FACTS FIRST (CRITICAL)
+- Your priority is ACCURACY, not entertainment.
+- NO jokes, no storytelling, no assumptions, no "filler".
+- For live facts (sports standings/scores, prices, flights, news):
+  - You MUST ONLY output numbers/facts that appear in the retrieved web snippets.
+  - If you cannot find the exact standings table or exact numbers, say so clearly and ask a short follow-up (e.g., "Which conference/division?").
+- Do NOT use pre-trained memory for standings/scores.
+- If sources conflict, prefer the most recent dated source and say which one you used.
+- When you present a table/dashboard with numbers, include a short "Sources" section with direct URLs.
+
 FORMATTING ENFORCEMENT:
 - NEVER respond with a single long paragraph. This is FORBIDDEN.
-- If the user's style is "short answers": Use 1-2 sentence intro + max 3 short bullet points.
-- If the user's style is "detailed": Use 2-3 sentence intro + 5-7 bullet points.
-- If the user's style contains "bullet": Use minimal intro + only bullet points for content.
+- ALWAYS use one of these formats:
+  1) Dashboard layout
+  2) Short answers: Use 1-2 sentence intro + max 3 short bullet points.
+  3) Detailed answers: Use 2-3 sentence intro + 5-7 bullet points.
+  4) Bullet points only: Use minimal intro + only bullet points for content.
 - If there are 3 or more distinct events/items: Use a Markdown table with columns like: Event | Key Detail | Source (optional).
 - If there are 1-2 items: Use bullet points, NOT a table.
 - ALWAYS start with a greeting using the user's nickname if provided (e.g., "Here's what's happening today, ${userNick || 'friend'}:").
@@ -1504,7 +1655,7 @@ If you are running out of space, keep this order and drop the rest:
             await streamGemini3WithSearch(
               message,
               searchSystemPrompt,
-              { temperature: 0.8, maxOutputTokens: 4000 },
+              { temperature: 0.3, maxOutputTokens: 4000 },
               (token: string) => {
                 fullResponseText += token;
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`));
@@ -1572,11 +1723,47 @@ If you are running out of space, keep this order and drop the rest:
         } else {
           // ─── CHAT MODE: Always grounded with Gemini 2.5 Flash (smooth, no prompts) ───
           if (activeTrigger === 'chat' && chatSubmode === 'chat') {
+            // ─── LOCATION FOLLOW-UP DETECTION ───
+            // If assistant previously asked for location and user just replied with a place,
+            // combine with the original intent and run a proper grounded search
+            let effectiveMessage = message;
+            try {
+              const lastAssistant = getLastTextMessage(recentMessages, 'assistant').toLowerCase();
+              const askedForLocation = /\b(where|location|whereabouts|city|area|region)\b/i.test(lastAssistant) && /\?/.test(lastAssistant);
+              
+              if (askedForLocation) {
+                // User likely replied with a location - find the original intent from earlier messages
+                const userMsgs = (recentMessages as Array<{role?: string; content?: string}>)
+                  .filter(m => m?.role === 'user' && m?.content)
+                  .map(m => m.content || '');
+                
+                // Look for the original "near me" or location-based request (skip the current message)
+                let originalIntent = '';
+                for (let i = userMsgs.length - 2; i >= 0 && i >= userMsgs.length - 5; i--) {
+                  const msg = userMsgs[i].toLowerCase();
+                  if (/\b(near me|closest|nearest|find|looking for|where can i|recommend)\b/i.test(msg)) {
+                    originalIntent = userMsgs[i];
+                    break;
+                  }
+                }
+                
+                if (originalIntent) {
+                  // Combine: "Find the closest coffee shop" + "Al Khor Qatar" → "Find the closest coffee shop near Al Khor, Qatar"
+                  const locationReply = message.trim();
+                  effectiveMessage = `${originalIntent.replace(/\b(near me|around me|close to me)\b/gi, '')} near ${locationReply}`.trim();
+                  console.log(`📍 LOCATION FOLLOW-UP: Combined "${originalIntent}" + "${locationReply}" → "${effectiveMessage}"`);
+                }
+              }
+            } catch (err) {
+              console.warn('⚠️ Location follow-up detection error:', err);
+            }
+
             try {
               let fullResponseText = '';
               await streamGemini25FlashGrounded(
-                message,
+                effectiveMessage,
                 systemPrompt,
+                recentMessages,
                 (token: string) => {
                   fullResponseText += token;
                   controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`));
