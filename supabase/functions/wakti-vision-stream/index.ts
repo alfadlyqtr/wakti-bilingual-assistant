@@ -549,7 +549,7 @@ serve((req) => {
           language = 'en',
           personalTouch = null,
           images = [],
-          options = { max_tokens: 2000 },
+          options = { max_tokens: 4000 },
           chatSubmode = 'chat',
           clientTimeZone = ''
         } = body as {
@@ -589,7 +589,7 @@ serve((req) => {
         const now = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone });
         const todayISO = getTodayISO(timeZone);
         const systemPrompt = buildSystemPrompt(language as string, now, todayISO, personalTouch, chatSubmode as string);
-        const maxTokens = options?.max_tokens || 2000;
+        const maxTokens = options?.max_tokens || 4000;
 
         // STRICT FALLBACK: Gemini → OpenAI → Claude
         try {

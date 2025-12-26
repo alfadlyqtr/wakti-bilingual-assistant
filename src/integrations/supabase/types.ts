@@ -2919,6 +2919,54 @@ export type Database = {
         }
         Relationships: []
       }
+      user_translations: {
+        Row: {
+          created_at: string
+          id: string
+          preview_image_storage_path: string | null
+          source_filename: string | null
+          source_mime_type: string | null
+          source_storage_path: string | null
+          source_text_length: number | null
+          target_language: string
+          translated_pdf_storage_path: string
+          translated_text: string | null
+          translated_text_length: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          preview_image_storage_path?: string | null
+          source_filename?: string | null
+          source_mime_type?: string | null
+          source_storage_path?: string | null
+          source_text_length?: number | null
+          target_language: string
+          translated_pdf_storage_path: string
+          translated_text?: string | null
+          translated_text_length?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          preview_image_storage_path?: string | null
+          source_filename?: string | null
+          source_mime_type?: string | null
+          source_storage_path?: string | null
+          source_text_length?: number | null
+          target_language?: string
+          translated_pdf_storage_path?: string
+          translated_text?: string | null
+          translated_text_length?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_voice_translation_quotas: {
         Row: {
           created_at: string

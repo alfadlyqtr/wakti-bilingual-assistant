@@ -33,6 +33,15 @@ import { useNavigate } from 'react-router-dom';
 import { useCanvasVideo } from '@/hooks/useCanvasVideo';
 
 // Types
+type TransitionType = 'fade' | 'slide-left' | 'slide-right' | 'zoom-in' | 'zoom-out' | 'none';
+type TextAnimation = 'none' | 'fade-in' | 'slide-up' | 'typewriter';
+
+interface SlideFilters {
+  brightness: number;
+  contrast: number;
+  saturation: number;
+}
+
 interface Slide {
   id: string;
   imageUrl: string;
@@ -40,7 +49,11 @@ interface Slide {
   text: string;
   textPosition: 'top' | 'center' | 'bottom';
   textColor: string;
+  textSize: 'small' | 'medium' | 'large';
+  textAnimation: TextAnimation;
   durationSec: number;
+  transition: TransitionType;
+  filters: SlideFilters;
 }
 
 interface AudioTrack {
@@ -48,6 +61,18 @@ interface AudioTrack {
   name: string;
   url: string;
   source: 'upload' | 'music_gen' | 'tts';
+}
+
+interface SavedVideo {
+  id: string;
+  title: string | null;
+  thumbnail_url?: string | null;
+  storage_path: string | null;
+  duration_seconds: number | null;
+  is_public: boolean;
+  created_at: string;
+  signedUrl?: string | null;
+  thumbnailSignedUrl?: string | null;
 }
 
 type TemplateStyle = 'dark-glow' | 'warm-minimal' | 'vibrant-gradient';
@@ -90,12 +115,16 @@ const MIN_SLIDES = 2;
 const MAX_DURATION_SEC = 60;
 const MAX_AUDIO_SIZE_MB = 10;
 
-export default function VideoMaker() {
+type VideoMakerTab = 'create' | 'saved';
+
+export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab } = {}) {
   const { language } = useTheme();
   const { user } = useAuth();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
+
+  const [activeTab, setActiveTab] = useState<VideoMakerTab>(initialTab || 'create');
 
   // Project state
   const [project, setProject] = useState<VideoProject>({
@@ -122,6 +151,10 @@ export default function VideoMaker() {
   const [generatedVideoBlob, setGeneratedVideoBlob] = useState<Blob | null>(null);
   const [savedVideoId, setSavedVideoId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  const [savedVideos, setSavedVideos] = useState<SavedVideo[]>([]);
+  const [loadingVideos, setLoadingVideos] = useState(false);
+  const [activePreviewId, setActivePreviewId] = useState<string | null>(null);
 
   // Calculate total duration
   const totalDuration = project.slides.reduce((sum, s) => sum + s.durationSec, 0);
@@ -182,6 +215,127 @@ export default function VideoMaker() {
     }
   }, [showAudioPicker, loadSavedTracks]);
 
+  const loadSavedVideos = useCallback(async () => {
+    if (!user) return;
+    setLoadingVideos(true);
+    try {
+      const { data, error } = await (supabase as any)
+        .from('user_videos')
+        .select('id, title, thumbnail_url, storage_path, duration_seconds, is_public, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const rows: SavedVideo[] = (data || []) as SavedVideo[];
+
+      const withUrls: SavedVideo[] = await Promise.all(
+        rows.map(async (v) => {
+          let signedUrl: string | null = null;
+          let thumbnailSignedUrl: string | null = null;
+
+          if (v.storage_path) {
+            const { data: urlData } = await supabase.storage
+              .from('videos')
+              .createSignedUrl(v.storage_path, 3600);
+            signedUrl = urlData?.signedUrl || null;
+          }
+
+          if ((v as any).thumbnail_url) {
+            const { data: tUrl } = await supabase.storage
+              .from('videos')
+              .createSignedUrl((v as any).thumbnail_url, 3600);
+            thumbnailSignedUrl = tUrl?.signedUrl || null;
+          }
+
+          return { ...v, signedUrl, thumbnailSignedUrl };
+        })
+      );
+
+      setSavedVideos(withUrls);
+    } catch (e) {
+      console.error('Failed to load saved videos:', e);
+      toast.error(language === 'ar' ? 'فشل تحميل الفيديوهات' : 'Failed to load videos');
+    } finally {
+      setLoadingVideos(false);
+    }
+  }, [language, user]);
+
+  useEffect(() => {
+    if (activeTab === 'saved') {
+      loadSavedVideos();
+    }
+  }, [activeTab, loadSavedVideos]);
+
+  const formatDuration = (sec: number | null | undefined) => {
+    if (!sec || sec <= 0) return '';
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return m > 0 ? `${m}:${String(s).padStart(2, '0')}` : `${s}s`;
+  };
+
+  const handleDeleteSavedVideo = async (v: SavedVideo) => {
+    if (!user) return;
+    const confirmText = language === 'ar' ? 'هل تريد حذف هذا الفيديو؟' : 'Delete this video?';
+    if (!window.confirm(confirmText)) return;
+
+    try {
+      if (v.storage_path) {
+        await supabase.storage.from('videos').remove([v.storage_path]);
+      }
+      if ((v as any).thumbnail_url) {
+        await supabase.storage.from('videos').remove([(v as any).thumbnail_url]);
+      }
+      await (supabase as any)
+        .from('user_videos')
+        .delete()
+        .eq('id', v.id)
+        .eq('user_id', user.id);
+
+      setSavedVideos((prev) => prev.filter((x) => x.id !== v.id));
+      if (activePreviewId === v.id) setActivePreviewId(null);
+      toast.success(language === 'ar' ? 'تم الحذف' : 'Deleted');
+    } catch (e) {
+      console.error('Delete failed:', e);
+      toast.error(language === 'ar' ? 'فشل الحذف' : 'Delete failed');
+    }
+  };
+
+  const handleShareSavedVideo = async (v: SavedVideo) => {
+    const shareUrl = `${window.location.origin}/video/${v.id}`;
+    if (!v.is_public) {
+      toast.error(language === 'ar' ? 'اجعل الفيديو عاماً أولاً' : 'Make the video public first');
+      return;
+    }
+
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: v.title || 'Wakti Video', url: shareUrl });
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+        toast.success(language === 'ar' ? 'تم نسخ الرابط' : 'Link copied');
+      }
+    } catch (_) {}
+  };
+
+  const handleTogglePublic = async (v: SavedVideo) => {
+    if (!user) return;
+    try {
+      const next = !v.is_public;
+      const { error } = await (supabase as any)
+        .from('user_videos')
+        .update({ is_public: next })
+        .eq('id', v.id)
+        .eq('user_id', user.id);
+      if (error) throw error;
+      setSavedVideos((prev) => prev.map((x) => (x.id === v.id ? { ...x, is_public: next } : x)));
+      toast.success(next ? (language === 'ar' ? 'تم جعله عاماً' : 'Now public') : (language === 'ar' ? 'تم جعله خاصاً' : 'Now private'));
+    } catch (e) {
+      console.error('Toggle public failed:', e);
+      toast.error(language === 'ar' ? 'فشل التحديث' : 'Update failed');
+    }
+  };
+
   // Handle image upload
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -201,7 +355,11 @@ export default function VideoMaker() {
         text: '',
         textPosition: 'bottom',
         textColor: TEMPLATES[project.template].textColor,
-        durationSec: Math.min(3, remainingDuration / (maxToAdd || 1))
+        textSize: 'medium',
+        textAnimation: 'fade-in',
+        durationSec: Math.min(3, remainingDuration / (maxToAdd || 1)),
+        transition: 'fade',
+        filters: { brightness: 100, contrast: 100, saturation: 100 }
       });
     });
 
@@ -299,17 +457,6 @@ export default function VideoMaker() {
   // Render upload step
   const renderUploadStep = () => (
     <div className="space-y-4">
-      {/* Device disclaimer */}
-      <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
-        <AlertCircle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
-        <p className="text-sm text-amber-600 dark:text-amber-400">
-          {language === 'ar' 
-            ? 'يعمل بشكل أفضل على iPhone 11+ / Android 2020+'
-            : 'Works best on iPhone 11+ / Android 2020+'
-          }
-        </p>
-      </div>
-
       {/* Upload area */}
       <Card 
         className="p-6 border-2 border-dashed border-border hover:border-primary/50 transition-colors cursor-pointer"
@@ -526,6 +673,99 @@ export default function VideoMaker() {
                       </div>
                     </div>
                   )}
+
+                  {/* Text size */}
+                  {slide.text && (
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-muted-foreground w-16">
+                        {language === 'ar' ? 'الحجم' : 'Size'}
+                      </label>
+                      <div className="flex gap-1">
+                        {(['small', 'medium', 'large'] as const).map((size) => (
+                          <Button
+                            key={size}
+                            variant={slide.textSize === size ? 'default' : 'outline'}
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => updateSlide(slide.id, { textSize: size })}
+                          >
+                            {size === 'small' ? 'S' : size === 'medium' ? 'M' : 'L'}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Transition */}
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-muted-foreground w-16">
+                      {language === 'ar' ? 'الانتقال' : 'Transition'}
+                    </label>
+                    <select
+                      value={slide.transition}
+                      onChange={(e) => updateSlide(slide.id, { transition: e.target.value as TransitionType })}
+                      className="h-8 px-2 text-xs rounded-md border border-input bg-background"
+                    >
+                      <option value="fade">{language === 'ar' ? 'تلاشي' : 'Fade'}</option>
+                      <option value="slide-left">{language === 'ar' ? 'انزلاق يسار' : 'Slide Left'}</option>
+                      <option value="slide-right">{language === 'ar' ? 'انزلاق يمين' : 'Slide Right'}</option>
+                      <option value="zoom-in">{language === 'ar' ? 'تكبير' : 'Zoom In'}</option>
+                      <option value="zoom-out">{language === 'ar' ? 'تصغير' : 'Zoom Out'}</option>
+                      <option value="none">{language === 'ar' ? 'بدون' : 'None'}</option>
+                    </select>
+                  </div>
+
+                  {/* Filters */}
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-muted-foreground w-16">
+                        {language === 'ar' ? 'السطوع' : 'Brightness'}
+                      </label>
+                      <input
+                        type="range"
+                        min="50"
+                        max="150"
+                        value={slide.filters.brightness}
+                        onChange={(e) => updateSlide(slide.id, { 
+                          filters: { ...slide.filters, brightness: parseInt(e.target.value) }
+                        })}
+                        className="flex-1 h-2"
+                      />
+                      <span className="text-xs w-8">{slide.filters.brightness}%</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-muted-foreground w-16">
+                        {language === 'ar' ? 'التباين' : 'Contrast'}
+                      </label>
+                      <input
+                        type="range"
+                        min="50"
+                        max="150"
+                        value={slide.filters.contrast}
+                        onChange={(e) => updateSlide(slide.id, { 
+                          filters: { ...slide.filters, contrast: parseInt(e.target.value) }
+                        })}
+                        className="flex-1 h-2"
+                      />
+                      <span className="text-xs w-8">{slide.filters.contrast}%</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-muted-foreground w-16">
+                        {language === 'ar' ? 'التشبع' : 'Saturation'}
+                      </label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="200"
+                        value={slide.filters.saturation}
+                        onChange={(e) => updateSlide(slide.id, { 
+                          filters: { ...slide.filters, saturation: parseInt(e.target.value) }
+                        })}
+                        className="flex-1 h-2"
+                      />
+                      <span className="text-xs w-8">{slide.filters.saturation}%</span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Reorder / Delete */}
@@ -888,32 +1128,39 @@ export default function VideoMaker() {
     </div>
   );
 
-  // Handle video generation with IMG.LY CE.SDK
+  // Handle video generation with Canvas + Ken Burns + Transitions
   const handleGenerate = async () => {
     setIsGenerating(true);
     setGenerationProgress(0);
     setGenerationStatus(language === 'ar' ? 'جاري تحميل المحرك...' : 'Loading video engine...');
 
     try {
-      // Extract image files from slides
-      const imageFiles = project.slides
+      // Build slides config for the new hook
+      const slidesConfig = project.slides
         .filter(slide => slide.imageFile)
-        .map(slide => slide.imageFile as File);
+        .map(slide => ({
+          imageFile: slide.imageFile as File,
+          text: slide.text || undefined,
+          textPosition: slide.textPosition,
+          textColor: slide.textColor,
+          textSize: slide.textSize,
+          textAnimation: slide.textAnimation,
+          durationSec: slide.durationSec,
+          transition: slide.transition,
+          filters: slide.filters,
+        }));
 
-      if (imageFiles.length === 0) {
+      if (slidesConfig.length === 0) {
         throw new Error('No images to process');
       }
 
-      // Calculate average duration per image
-      const avgDuration = project.slides.reduce((sum, s) => sum + s.durationSec, 0) / project.slides.length;
-
-      // Generate video using Canvas + MediaRecorder
+      // Generate video using Canvas + Ken Burns + Crossfade transitions
       const videoBlob = await generateVideo({
-        images: imageFiles,
+        slides: slidesConfig,
         audioUrl: project.audio?.url || null,
-        durationPerImage: avgDuration,
         width: 1080,
         height: 1920,
+        transitionDuration: 0.5,
       });
 
       if (!videoBlob) {
@@ -941,6 +1188,61 @@ export default function VideoMaker() {
 
     setIsSaving(true);
     try {
+      let thumbnailPath: string | null = null;
+      try {
+        const thumb = await (async () => {
+          const url = URL.createObjectURL(generatedVideoBlob);
+          try {
+            const video = document.createElement('video');
+            video.muted = true;
+            video.playsInline = true;
+            video.preload = 'auto';
+            video.src = url;
+            await new Promise<void>((resolve, reject) => {
+              const onLoaded = () => resolve();
+              const onError = () => reject(new Error('Video thumbnail load failed'));
+              video.addEventListener('loadeddata', onLoaded, { once: true });
+              video.addEventListener('error', onError, { once: true });
+            });
+            const targetTime = Math.min(0.1, Math.max(0, (video.duration || 0) * 0.01));
+            if (!Number.isNaN(targetTime)) {
+              try {
+                video.currentTime = targetTime;
+                await new Promise<void>((resolve) => {
+                  video.addEventListener('seeked', () => resolve(), { once: true });
+                });
+              } catch (_) {}
+            }
+            const canvas = document.createElement('canvas');
+            const w = video.videoWidth || 720;
+            const h = video.videoHeight || 1280;
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return null;
+            ctx.drawImage(video, 0, 0, w, h);
+            return await new Promise<Blob | null>((resolve) => {
+              canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.82);
+            });
+          } finally {
+            URL.revokeObjectURL(url);
+          }
+        })();
+
+        if (thumb) {
+          const thumbName = `${user.id}/thumbnails/${Date.now()}.jpg`;
+          const { data: tData, error: tErr } = await supabase.storage
+            .from('videos')
+            .upload(thumbName, thumb, {
+              contentType: 'image/jpeg',
+              cacheControl: '3600'
+            });
+          if (!tErr) thumbnailPath = tData?.path || null;
+        }
+      } catch (_) {
+        thumbnailPath = null;
+      }
+
       // Upload video to storage
       const fileName = `${user.id}/${Date.now()}.mp4`;
       const { data: uploadData, error: uploadError } = await supabase.storage
@@ -958,6 +1260,7 @@ export default function VideoMaker() {
         .insert({
           user_id: user.id,
           title: project.title || null,
+          thumbnail_url: thumbnailPath,
           storage_path: uploadData.path,
           duration_seconds: totalDuration,
           aspect_ratio: '9:16',
@@ -1042,37 +1345,159 @@ export default function VideoMaker() {
     { key: 'generate', label: language === 'ar' ? 'إنشاء' : 'Generate', icon: Play }
   ];
 
-  return (
+  const renderSavedTab = () => (
     <div className="space-y-4">
-      {/* Step indicator */}
-      <div className="flex items-center justify-between">
-        {steps.map((s, i) => (
-          <React.Fragment key={s.key}>
-            <div className="flex flex-col items-center gap-1">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-                step === s.key 
-                  ? 'bg-primary text-primary-foreground' 
-                  : steps.findIndex(x => x.key === step) > i
-                  ? 'bg-primary/20 text-primary'
-                  : 'bg-muted text-muted-foreground'
-              }`}>
-                <s.icon className="h-5 w-5" />
-              </div>
-              <span className="text-xs">{s.label}</span>
-            </div>
-            {i < steps.length - 1 && (
-              <div className={`flex-1 h-0.5 mx-2 ${
-                steps.findIndex(x => x.key === step) > i ? 'bg-primary' : 'bg-muted'
-              }`} />
-            )}
-          </React.Fragment>
-        ))}
+      <div className="flex gap-2">
+        <Button className="flex-1" onClick={() => { setActiveTab('create'); setStep('upload'); }}>
+          {language === 'ar' ? 'إنشاء فيديو جديد' : 'Create New Video'}
+        </Button>
+        <Button variant="outline" onClick={loadSavedVideos} disabled={loadingVideos}>
+          {loadingVideos ? <Loader2 className="h-4 w-4 animate-spin" /> : (language === 'ar' ? 'تحديث' : 'Refresh')}
+        </Button>
       </div>
 
-      {/* Step content */}
-      {step === 'upload' && renderUploadStep()}
-      {step === 'customize' && renderCustomizeStep()}
-      {step === 'generate' && renderGenerateStep()}
+      {loadingVideos ? (
+        <Card className="p-6">
+          <div className="flex items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        </Card>
+      ) : savedVideos.length === 0 ? (
+        <Card className="p-6 text-center">
+          <p className="text-sm text-muted-foreground">
+            {language === 'ar' ? 'لا توجد فيديوهات محفوظة بعد' : 'No saved videos yet'}
+          </p>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {savedVideos.map((v) => (
+            <Card key={v.id} className="overflow-hidden">
+              <button
+                className="w-full aspect-[9/16] bg-muted relative"
+                onClick={() => setActivePreviewId((prev) => (prev === v.id ? null : v.id))}
+              >
+                {v.thumbnailSignedUrl ? (
+                  <img
+                    src={v.thumbnailSignedUrl}
+                    alt={v.title || 'Wakti Video'}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                ) : v.signedUrl ? (
+                  <video
+                    src={v.signedUrl}
+                    className="w-full h-full object-cover"
+                    muted
+                    playsInline
+                    preload="metadata"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">
+                    {language === 'ar' ? 'لا يوجد معاينة' : 'No preview'}
+                  </div>
+                )}
+                <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
+                  <div className="text-xs px-2 py-1 rounded bg-black/60 text-white truncate max-w-[70%]">
+                    {v.title || (language === 'ar' ? 'بدون عنوان' : 'Untitled')}
+                  </div>
+                  {!!v.duration_seconds && (
+                    <div className="text-xs px-2 py-1 rounded bg-black/60 text-white">
+                      {formatDuration(v.duration_seconds)}
+                    </div>
+                  )}
+                </div>
+              </button>
+
+              {activePreviewId === v.id && v.signedUrl && (
+                <div className="p-2">
+                  <video src={v.signedUrl} controls className="w-full rounded" />
+                </div>
+              )}
+
+              <div className="p-2 space-y-2">
+                <div className="flex items-center justify-between">
+                  <Button
+                    variant={v.is_public ? 'default' : 'outline'}
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => handleTogglePublic(v)}
+                  >
+                    {v.is_public ? (language === 'ar' ? 'عام' : 'Public') : (language === 'ar' ? 'خاص' : 'Private')}
+                  </Button>
+                                  </div>
+
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" className="flex-1" onClick={() => handleShareSavedVideo(v)}>
+                    <Share2 className="h-4 w-4 mr-2" />
+                    {language === 'ar' ? 'مشاركة' : 'Share'}
+                  </Button>
+                  <Button variant="destructive" size="sm" onClick={() => handleDeleteSavedVideo(v)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      {/* Tab switcher */}
+      <div className="flex gap-2 border-b border-border pb-2">
+        <Button
+          variant={activeTab === 'create' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setActiveTab('create')}
+        >
+          {language === 'ar' ? 'إنشاء' : 'Create'}
+        </Button>
+        <Button
+          variant={activeTab === 'saved' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setActiveTab('saved')}
+        >
+          {language === 'ar' ? 'المحفوظات' : 'My Videos'}
+        </Button>
+      </div>
+
+      {activeTab === 'saved' ? (
+        renderSavedTab()
+      ) : (
+        <>
+          {/* Step indicator */}
+          <div className="flex items-center justify-between">
+            {steps.map((s, i) => (
+              <React.Fragment key={s.key}>
+                <div className="flex flex-col items-center gap-1">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                    step === s.key 
+                      ? 'bg-primary text-primary-foreground' 
+                      : steps.findIndex(x => x.key === step) > i
+                      ? 'bg-primary/20 text-primary'
+                      : 'bg-muted text-muted-foreground'
+                  }`}>
+                    <s.icon className="h-5 w-5" />
+                  </div>
+                  <span className="text-xs">{s.label}</span>
+                </div>
+                {i < steps.length - 1 && (
+                  <div className={`flex-1 h-0.5 mx-2 ${
+                    steps.findIndex(x => x.key === step) > i ? 'bg-primary' : 'bg-muted'
+                  }`} />
+                )}
+              </React.Fragment>
+            ))}
+          </div>
+
+          {/* Step content */}
+          {step === 'upload' && renderUploadStep()}
+          {step === 'customize' && renderCustomizeStep()}
+          {step === 'generate' && renderGenerateStep()}
+        </>
+      )}
     </div>
   );
 }

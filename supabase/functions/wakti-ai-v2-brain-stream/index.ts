@@ -482,7 +482,7 @@ async function streamGemini25FlashGrounded(
   const body: Record<string, unknown> = {
     contents,
     tools: [{ google_search: {} }],
-    generationConfig: { temperature: 0.4, maxOutputTokens: 1100 },
+    generationConfig: { temperature: 0.4, maxOutputTokens: 4000 },
   };
   if (systemInstruction) {
     body.system_instruction = { parts: [{ text: systemInstruction }] };
@@ -563,8 +563,16 @@ async function streamGemini3WithSearch(
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
 
   // Inject today's date into the query so Google Search grounding fetches current results
-  const todayStr = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  const latestQuery = `${query} (as of ${todayStr})\n\nLATEST-FIRST RULE (CRITICAL): Today is ${todayStr}. Use the newest available sources/snippets. Prefer results updated today/this hour when present. If sources conflict, choose the most recently updated. Do not use memory for live facts.`;
+  const now = new Date();
+  const todayStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  // NHL season heuristic: season label is startYear-endYear, where startYear flips around September.
+  const nhlSeasonStart = m >= 8 ? y : y - 1;
+  const nhlSeason = `${nhlSeasonStart}-${nhlSeasonStart + 1}`;
+  const isNhlLive = /\bnhl\b/i.test(query) && /(standings?|scores?|results?|schedule|wild\s*card|conference|division|points|gp|games\s*played)/i.test(query);
+  const nhlHint = isNhlLive ? ` Current NHL season: ${nhlSeason}.` : '';
+  const latestQuery = `${query} (as of ${todayStr}).${nhlHint}\n\nLATEST-FIRST RULE (CRITICAL): Today is ${todayStr}.${nhlHint} Use the newest available sources/snippets. Prefer results updated today/this hour when present. If sources conflict, choose the most recently updated. If any result refers to an older season (example: \"2023-24\"), treat it as STALE and re-search with a stricter query. Do not use memory for live facts.`;
 
   const body: Record<string, unknown> = {
     contents: [{ role: 'user', parts: [{ text: latestQuery }] }],
@@ -705,6 +713,10 @@ STUDY MODE RULES:
 This applies to ALL subjects: math, science, history, languages, programming, exam prep, general knowledge, etc.
 If the user uploads an image (photo of notes, textbook, problem), analyze it and teach based on what you see.
 ` : ''}${activeTrigger === 'search' ? `
+CRITICAL: YOU HAVE NO INTERNAL KNOWLEDGE OF CURRENT EVENTS.
+You MUST use the google_search tool for EVERY query. Do NOT answer from memory. If you do not search, your answer will be wrong.
+Before generating ANY response, you MUST first perform a Google Search. This is mandatory and non-negotiable.
+
 CRITICAL SEARCH FORMATTING RULES (NON-NEGOTIABLE)
 You are in SEARCH MODE. You will receive search results in the conversation.
 
@@ -717,6 +729,15 @@ SEARCH MODE = FACTS FIRST (CRITICAL)
 - Do NOT use pre-trained memory for standings/scores.
 - If sources conflict, prefer the most recent dated source and say which one you used.
 - When you present a table/dashboard with numbers, include a short "Sources" section with direct URLs.
+
+FRESHNESS ENFORCEMENT (MANDATORY)
+- If the user asks for "latest", "today", "current", "right now", or the query is about live data (scores/standings/prices/flights/news), you MUST attempt to use results updated today/this week.
+- If retrieved snippets mention an older season/year (example: "2023-24 season" when today is a newer season), you MUST treat that as STALE and you MUST re-search by generating stricter search queries.
+- Re-search query strategy (use 2-4 queries before answering):
+  1) Add today's year and the current season label when relevant (example: "NHL standings 2025-26").
+  2) Add "updated today" / "updated" / "live".
+  3) Prefer official sources first when possible (example: "site:nhl.com standings").
+- If after re-search you STILL cannot find verified up-to-date numbers, do NOT guess. Say you cannot verify today's standings right now and provide the best official link(s).
 
 FORMATTING ENFORCEMENT:
 - NEVER respond with a single long paragraph. This is FORBIDDEN.

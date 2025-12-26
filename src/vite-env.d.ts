@@ -123,3 +123,23 @@ declare module '@/utils/translations' {
     // AI Assistant text interface
   }
 }
+
+declare module 'mammoth' {
+  const mammoth: any;
+  export default mammoth;
+}
+
+declare module 'pdfjs-dist' {
+  const pdfjs: any;
+  export = pdfjs;
+}
+
+declare module 'pdfjs-dist/build/pdf.worker?url' {
+  const workerSrc: string;
+  export default workerSrc;
+}
+
+declare module 'tesseract.js' {
+  const Tesseract: any;
+  export default Tesseract;
+}

@@ -11,6 +11,7 @@ import { AudioPlayer } from '@/components/music/AudioPlayer';
 import ShareButton from '@/components/ui/ShareButton';
 import { Info, Wand2, Trash2, Music, Video } from 'lucide-react';
 import VideoMaker from '@/components/video-maker/VideoMaker';
+import { useLocation } from 'react-router-dom';
 
 // Helper function to download audio files on mobile
 const handleDownload = async (url: string, filename: string) => {
@@ -59,6 +60,14 @@ export default function MusicStudio() {
   const { language } = useTheme();
   const [mainTab, setMainTab] = useState<'music' | 'video'>('music');
   const [musicSubTab, setMusicSubTab] = useState<'compose' | 'editor'>('compose');
+  const location = useLocation();
+
+  useEffect(() => {
+    const state = (location.state || {}) as any;
+    if (state?.openVideoTab) {
+      setMainTab('video');
+    }
+  }, [location.state]);
 
   return (
     <div className="w-full max-w-6xl mx-auto p-3 md:p-6 pb-20 md:pb-6 space-y-4">
@@ -116,7 +125,7 @@ export default function MusicStudio() {
             <h1 className="text-xl md:text-2xl font-bold">{language === 'ar' ? 'صانع الفيديو' : 'Video Maker'}</h1>
             <div />
           </div>
-          <VideoMaker />
+          <VideoMaker initialTab={(location.state as any)?.openVideoTab} />
         </>
       )}
     </div>
