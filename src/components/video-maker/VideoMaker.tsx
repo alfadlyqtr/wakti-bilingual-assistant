@@ -61,6 +61,9 @@ interface AudioTrack {
   name: string;
   url: string;
   source: 'upload' | 'music_gen' | 'tts';
+  duration?: number;
+  trimStart?: number;
+  trimEnd?: number;
 }
 
 interface SavedVideo {
@@ -75,7 +78,7 @@ interface SavedVideo {
   thumbnailSignedUrl?: string | null;
 }
 
-type TemplateStyle = 'dark-glow' | 'warm-minimal' | 'vibrant-gradient';
+type TemplateStyle = 'dark-glow' | 'warm-minimal' | 'vibrant-gradient' | 'ocean-blue' | 'sunset-orange' | 'forest-green' | 'royal-purple' | 'midnight-black' | 'rose-pink';
 
 interface VideoProject {
   slides: Slide[];
@@ -107,6 +110,48 @@ const TEMPLATES: Record<TemplateStyle, { name: string; nameAr: string; bgGradien
     bgGradient: 'linear-gradient(135deg, hsl(210 100% 60%) 0%, hsl(280 70% 65%) 50%, hsl(25 95% 60%) 100%)',
     textColor: '#f2f2f2',
     accentColor: 'hsl(45 100% 60%)'
+  },
+  'ocean-blue': {
+    name: 'Ocean Blue',
+    nameAr: 'أزرق المحيط',
+    bgGradient: 'linear-gradient(135deg, hsl(200 80% 20%) 0%, hsl(210 90% 35%) 50%, hsl(195 85% 45%) 100%)',
+    textColor: '#ffffff',
+    accentColor: 'hsl(180 70% 60%)'
+  },
+  'sunset-orange': {
+    name: 'Sunset Orange',
+    nameAr: 'غروب برتقالي',
+    bgGradient: 'linear-gradient(135deg, hsl(15 90% 55%) 0%, hsl(35 95% 60%) 50%, hsl(45 100% 65%) 100%)',
+    textColor: '#ffffff',
+    accentColor: 'hsl(0 80% 50%)'
+  },
+  'forest-green': {
+    name: 'Forest Green',
+    nameAr: 'أخضر الغابة',
+    bgGradient: 'linear-gradient(135deg, hsl(140 50% 20%) 0%, hsl(150 60% 30%) 50%, hsl(160 70% 40%) 100%)',
+    textColor: '#ffffff',
+    accentColor: 'hsl(120 60% 50%)'
+  },
+  'royal-purple': {
+    name: 'Royal Purple',
+    nameAr: 'بنفسجي ملكي',
+    bgGradient: 'linear-gradient(135deg, hsl(270 60% 25%) 0%, hsl(280 70% 40%) 50%, hsl(290 80% 55%) 100%)',
+    textColor: '#ffffff',
+    accentColor: 'hsl(300 70% 70%)'
+  },
+  'midnight-black': {
+    name: 'Midnight Black',
+    nameAr: 'أسود منتصف الليل',
+    bgGradient: 'linear-gradient(135deg, #000000 0%, #1a1a2e 50%, #16213e 100%)',
+    textColor: '#ffffff',
+    accentColor: 'hsl(220 80% 60%)'
+  },
+  'rose-pink': {
+    name: 'Rose Pink',
+    nameAr: 'وردي',
+    bgGradient: 'linear-gradient(135deg, hsl(340 80% 55%) 0%, hsl(350 85% 65%) 50%, hsl(0 90% 75%) 100%)',
+    textColor: '#ffffff',
+    accentColor: 'hsl(330 70% 80%)'
   }
 };
 
@@ -397,15 +442,38 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
     }
 
     const url = URL.createObjectURL(file);
-    setProject(prev => ({
-      ...prev,
-      audio: {
-        id: crypto.randomUUID(),
-        name: file.name,
-        url,
-        source: 'upload'
-      }
-    }));
+    
+    // Get audio duration
+    const audio = new Audio(url);
+    audio.addEventListener('loadedmetadata', () => {
+      const duration = audio.duration;
+      setProject(prev => ({
+        ...prev,
+        audio: {
+          id: crypto.randomUUID(),
+          name: file.name,
+          url,
+          source: 'upload',
+          duration: duration,
+          trimStart: 0,
+          trimEnd: Math.min(duration, MAX_DURATION_SEC)
+        }
+      }));
+    });
+    
+    // Fallback if metadata doesn't load
+    audio.addEventListener('error', () => {
+      setProject(prev => ({
+        ...prev,
+        audio: {
+          id: crypto.randomUUID(),
+          name: file.name,
+          url,
+          source: 'upload'
+        }
+      }));
+    });
+    
     setShowAudioPicker(false);
 
     if (audioInputRef.current) {
@@ -441,7 +509,27 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
 
   // Select saved track as audio
   const selectSavedTrack = useCallback((track: AudioTrack) => {
-    setProject(prev => ({ ...prev, audio: track }));
+    // Get audio duration for trimmer
+    if (track.url) {
+      const audio = new Audio(track.url);
+      audio.addEventListener('loadedmetadata', () => {
+        const duration = audio.duration;
+        setProject(prev => ({ 
+          ...prev, 
+          audio: {
+            ...track,
+            duration: duration,
+            trimStart: 0,
+            trimEnd: Math.min(duration, MAX_DURATION_SEC)
+          }
+        }));
+      });
+      audio.addEventListener('error', () => {
+        setProject(prev => ({ ...prev, audio: track }));
+      });
+    } else {
+      setProject(prev => ({ ...prev, audio: track }));
+    }
     setShowAudioPicker(false);
   }, []);
 
@@ -621,7 +709,7 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
 
                 {/* Controls */}
                 <div className="flex-1 space-y-2">
-                  {/* Duration */}
+                  {/* Duration - max is 60/numSlides */}
                   <div className="flex items-center gap-2">
                     <label className="text-xs text-muted-foreground w-16">
                       {language === 'ar' ? 'المدة' : 'Duration'}
@@ -629,12 +717,15 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
                     <Input
                       type="number"
                       min={1}
-                      max={10}
+                      max={Math.floor(MAX_DURATION_SEC / project.slides.length)}
                       value={slide.durationSec}
-                      onChange={(e) => updateSlide(slide.id, { durationSec: Math.min(10, Math.max(1, parseInt(e.target.value) || 1)) })}
+                      onChange={(e) => {
+                        const maxPerSlide = Math.floor(MAX_DURATION_SEC / project.slides.length);
+                        updateSlide(slide.id, { durationSec: Math.min(maxPerSlide, Math.max(1, parseInt(e.target.value) || 1)) });
+                      }}
                       className="h-8 w-20"
                     />
-                    <span className="text-xs text-muted-foreground">s</span>
+                    <span className="text-xs text-muted-foreground">s (max {Math.floor(MAX_DURATION_SEC / project.slides.length)})</span>
                   </div>
 
                   {/* Text */}
@@ -810,7 +901,7 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
         </p>
         
         {project.audio ? (
-          <Card className="p-3">
+          <Card className="p-3 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Music className="h-4 w-4 text-primary" />
@@ -833,6 +924,56 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
                 <X className="h-4 w-4" />
               </Button>
             </div>
+            
+            {/* Audio Trimmer */}
+            {project.audio.duration && project.audio.duration > 0 && (
+              <div className="space-y-2 pt-2 border-t">
+                <p className="text-xs text-muted-foreground">
+                  {language === 'ar' ? 'قص الصوت' : 'Trim Audio'} ({Math.floor(project.audio.duration)}s {language === 'ar' ? 'إجمالي' : 'total'})
+                </p>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-muted-foreground w-12">
+                    {language === 'ar' ? 'بداية' : 'Start'}
+                  </label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={(project.audio.trimEnd || project.audio.duration) - 1}
+                    value={project.audio.trimStart || 0}
+                    onChange={(e) => {
+                      const val = Math.max(0, parseInt(e.target.value) || 0);
+                      setProject(prev => ({
+                        ...prev,
+                        audio: prev.audio ? { ...prev.audio, trimStart: val } : null
+                      }));
+                    }}
+                    className="h-8 w-16"
+                  />
+                  <span className="text-xs">s</span>
+                  <label className="text-xs text-muted-foreground w-12 ml-2">
+                    {language === 'ar' ? 'نهاية' : 'End'}
+                  </label>
+                  <Input
+                    type="number"
+                    min={(project.audio.trimStart || 0) + 1}
+                    max={project.audio.duration}
+                    value={project.audio.trimEnd || Math.floor(project.audio.duration)}
+                    onChange={(e) => {
+                      const val = Math.min(project.audio.duration || 60, parseInt(e.target.value) || 0);
+                      setProject(prev => ({
+                        ...prev,
+                        audio: prev.audio ? { ...prev.audio, trimEnd: val } : null
+                      }));
+                    }}
+                    className="h-8 w-16"
+                  />
+                  <span className="text-xs">s</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {language === 'ar' ? 'المدة المحددة:' : 'Selected duration:'} {((project.audio.trimEnd || project.audio.duration) - (project.audio.trimStart || 0)).toFixed(0)}s
+                </p>
+              </div>
+            )}
           </Card>
         ) : (
           <div className="space-y-2">

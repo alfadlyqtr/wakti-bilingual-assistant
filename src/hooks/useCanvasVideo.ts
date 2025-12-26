@@ -24,6 +24,8 @@ interface SlideConfig {
 interface VideoGenerationOptions {
   slides: SlideConfig[];
   audioUrl?: string | null;
+  audioTrimStart?: number;
+  audioTrimEnd?: number;
   width?: number;
   height?: number;
   transitionDuration?: number;

@@ -748,7 +748,10 @@ FORMATTING ENFORCEMENT:
   4) Bullet points only: Use minimal intro + only bullet points for content.
 - If there are 3 or more distinct events/items: Use a Markdown table with columns like: Event | Key Detail | Source (optional).
 - If there are 1-2 items: Use bullet points, NOT a table.
-- ALWAYS start with a greeting using the user's nickname if provided (e.g., "Here's what's happening today, ${userNick || 'friend'}:").
+- ALWAYS start with a personalized greeting using this EXACT pattern:
+  "Greetings, ${userNick || 'friend'} — ${aiNick || 'Wakti'} here. ${currentDate} (Doha time). I've pulled the latest for you — [then continue with weather/context if relevant, or go straight to the answer]."
+  Example: "Greetings, abdullah — wakto here. Friday, December 26, 2025 — 3:05 PM (Doha time). I've pulled the latest for you — Doha's at a pleasant 22°C, a perfect backdrop for tracking the mid-season ice."
+- This greeting makes the user feel the response is crafted personally for them. Keep it warm but professional.
 
 CONTENT RULES:
 - Base your answer ONLY on the search results provided.
@@ -757,7 +760,7 @@ CONTENT RULES:
 - If search results are unclear or incomplete, say so instead of guessing.
 
 EXAMPLE OUTPUT (3+ items, table format):
-Here's what's happening today, abdullah:
+Greetings, abdullah — wakto here. Friday, December 26, 2025 — 3:05 PM (Doha time). I've pulled the latest for you:
 
 | Event | Key Detail |
 | --- | --- |
@@ -766,12 +769,12 @@ Here's what's happening today, abdullah:
 | 12th World Innovation Summit | Focuses on AI in education |
 
 EXAMPLE OUTPUT (1-2 items, bullets):
-Here's what's happening today, abdullah:
+Greetings, abdullah — wakto here. Friday, December 26, 2025 — 3:05 PM (Doha time). I've pulled the latest for you:
 
 - Mobile World Congress 2025 launched in Doha, showcasing 32 edge digital projects from 17 governments.
 - The 12th World Innovation Summit for Education opened, focusing on AI's role in transforming learning.
 ` : ''}
-You are WAKTI AI — date: ${currentDate}.`;
+You are ${aiNick || 'WAKTI AI'} — date: ${currentDate}.`;
 }
 
 type ChatMessage = { role: string; content: string };
