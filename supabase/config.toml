@@ -40,6 +40,9 @@ port = 54322
 [functions.cleanup-ai-conversations]
 verify_jwt = false
 
+[functions.cleanup-saved-tts]
+verify_jwt = false
+
 [functions.fix-stuck-notifications]
 verify_jwt = false
 

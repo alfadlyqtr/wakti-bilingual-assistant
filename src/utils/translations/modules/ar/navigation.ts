@@ -1,4 +1,3 @@
-
 export const navigationAr = {
   dashboard: "لوحة التحكم",
   tasks: "المهام",
@@ -14,5 +13,6 @@ export const navigationAr = {
   wakti_ai: "WAKTI AI",
   tasjeel: "تسجيل",
   knowledge: "المعرفة",
-  vitality: "حيوية"
+  vitality: "حيوية",
+  music: "استوديو"
 };

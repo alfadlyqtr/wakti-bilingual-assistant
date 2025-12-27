@@ -1,4 +1,3 @@
-
 export const navigation = {
   dashboard: "Dashboard",
   tasks: "Tasks",
@@ -14,5 +13,6 @@ export const navigation = {
   wakti_ai: "WAKTI AI",
   tasjeel: "Tasjeel",
   knowledge: "Knowledge",
-  vitality: "Vitality"
+  vitality: "Vitality",
+  music: "Studio"
 };

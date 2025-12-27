@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Copy, Loader2, PenLine } from 'lucide-react';
+import { Copy, Loader2, PenLine, Trash2 } from 'lucide-react';
 import mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker?url';
@@ -9,6 +9,16 @@ import html2canvas from 'html2canvas';
 import { supabase } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
@@ -87,6 +97,14 @@ export default function TextTranslateTab() {
   const [ttMyTranslationsLoading, setTtMyTranslationsLoading] = useState(false);
   const [ttMyTranslationsError, setTtMyTranslationsError] = useState<string>('');
   const [ttSignedUrls, setTtSignedUrls] = useState<Record<string, { pdfUrl?: string; previewUrl?: string }>>({});
+  const [ttDeletingTranslationId, setTtDeletingTranslationId] = useState<string | null>(null);
+  const [ttDeleteConfirmOpen, setTtDeleteConfirmOpen] = useState(false);
+  const [ttPendingDeleteRow, setTtPendingDeleteRow] = useState<null | {
+    id: string;
+    source_filename: string | null;
+    translated_pdf_storage_path: string;
+    preview_image_storage_path: string | null;
+  }>(null);
 
   const [ttHistory, setTtHistory] = useState<{ target: string; sourceLen: number; preview: string; ts: number }[]>(() => {
     try {
@@ -164,6 +182,64 @@ export default function TextTranslateTab() {
     navigate(`/tools/text/translation/${row.id}`,
       { state: { from: `${location.pathname}${location.search}`, canGoBack: true } }
     );
+  };
+
+  const deleteMyTranslationRow = async (row: {
+    id: string;
+    source_filename: string | null;
+    translated_pdf_storage_path: string;
+    preview_image_storage_path: string | null;
+  }) => {
+    if (!user?.id) return;
+    if (ttDeletingTranslationId) return;
+
+    setTtDeletingTranslationId(row.id);
+    setTtMyTranslationsError('');
+
+    try {
+      const pathsToDelete = [row.translated_pdf_storage_path].filter(Boolean);
+      if (row.preview_image_storage_path) pathsToDelete.push(row.preview_image_storage_path);
+
+      if (pathsToDelete.length > 0) {
+        const { error: storageError } = await supabase.storage
+          .from('translations')
+          .remove(pathsToDelete);
+
+        if (storageError) throw storageError;
+      }
+
+      const { error: deleteError } = await supabase
+        .from('user_translations')
+        .delete()
+        .eq('id', row.id);
+
+      if (deleteError) throw deleteError;
+
+      setTtMyTranslations((prev) => prev.filter((r) => r.id !== row.id));
+      setTtSignedUrls((prev) => {
+        const next = { ...prev };
+        delete next[row.id];
+        return next;
+      });
+
+      await loadMyTranslations();
+    } catch (e) {
+      console.error(e);
+      setTtMyTranslationsError(language === 'ar' ? 'فشل حذف الترجمة' : 'Failed to delete translation');
+    } finally {
+      setTtDeletingTranslationId(null);
+    }
+  };
+
+  const requestDeleteMyTranslationRow = (row: {
+    id: string;
+    source_filename: string | null;
+    translated_pdf_storage_path: string;
+    preview_image_storage_path: string | null;
+  }) => {
+    if (!user?.id) return;
+    setTtPendingDeleteRow(row);
+    setTtDeleteConfirmOpen(true);
   };
 
   const downloadFromSignedUrl = async (signedUrl: string, filename: string) => {
@@ -850,6 +926,22 @@ export default function TextTranslateTab() {
                           >
                             {language === 'ar' ? 'تنزيل PDF' : 'Download PDF'}
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              requestDeleteMyTranslationRow({
+                                id: row.id,
+                                source_filename: row.source_filename,
+                                translated_pdf_storage_path: row.translated_pdf_storage_path,
+                                preview_image_storage_path: row.preview_image_storage_path,
+                              });
+                            }}
+                            disabled={ttDeletingTranslationId === row.id}
+                            className="h-9 px-3 rounded-xl text-xs font-semibold bg-red-600 text-white hover:bg-red-700 btn-3d-pop disabled:opacity-60 active:scale-95 inline-flex items-center gap-2"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            {language === 'ar' ? 'حذف' : 'Delete'}
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -860,6 +952,40 @@ export default function TextTranslateTab() {
           </div>
         </div>
       )}
+
+      <AlertDialog open={ttDeleteConfirmOpen} onOpenChange={setTtDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{language === 'ar' ? 'حذف الترجمة؟' : 'Delete translation?'}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {(() => {
+                const name = ttPendingDeleteRow?.source_filename || (language === 'ar' ? 'هذه الترجمة' : 'this translation');
+                return language === 'ar'
+                  ? `سيتم حذف ${name} نهائياً (PDF والمعاينة). لا يمكن التراجع عن هذا الإجراء.`
+                  : `This will permanently delete ${name} (PDF and preview). This action cannot be undone.`;
+              })()}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={!!ttDeletingTranslationId}>
+              {language === 'ar' ? 'إلغاء' : 'Cancel'}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!ttPendingDeleteRow || !!ttDeletingTranslationId}
+              onClick={async () => {
+                if (!ttPendingDeleteRow) return;
+                setTtDeleteConfirmOpen(false);
+                const row = ttPendingDeleteRow;
+                setTtPendingDeleteRow(null);
+                await deleteMyTranslationRow(row);
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {language === 'ar' ? 'حذف' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

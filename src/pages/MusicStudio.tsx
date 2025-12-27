@@ -3,14 +3,39 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useTheme } from '@/providers/ThemeProvider';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { createPortal } from 'react-dom';
 import { AudioPlayer } from '@/components/music/AudioPlayer';
 import ShareButton from '@/components/ui/ShareButton';
-import { Info, Wand2, Trash2, Music, Video } from 'lucide-react';
-import VideoMaker from '@/components/video-maker/VideoMaker';
+import {
+  Info,
+  Wand2,
+  Trash2,
+  Music,
+  Video,
+  RefreshCw,
+  Plus,
+  Loader2,
+  Play,
+  Eye,
+  EyeOff,
+  Share2,
+  AlertCircle,
+} from 'lucide-react';
+import VideoEditorPro from '@/components/video-maker/VideoEditorPro';
 import { useLocation } from 'react-router-dom';
 
 // Helper function to download audio files on mobile
@@ -56,10 +81,394 @@ const handleDownload = async (url: string, filename: string) => {
   }
 };
 
+type VideoSubTab = 'create' | 'saved';
+
+interface SavedVideo {
+  id: string;
+  title: string | null;
+  thumbnail_url?: string | null;
+  storage_path: string | null;
+  duration_seconds: number | null;
+  is_public: boolean;
+  created_at: string;
+  signedUrl?: string | null;
+  thumbnailSignedUrl?: string | null;
+}
+
+function VideoPlayer({ url, language }: { url: string; language: string }) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    let objectUrl: string | null = null;
+    const controller = new AbortController();
+
+    const fetchVideo = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await fetch(url, { signal: controller.signal });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const blob = await response.blob();
+        const headerType = response.headers.get('content-type') || '';
+        const mime = blob.type || headerType || 'video/mp4';
+        const videoBlob = new Blob([blob], { type: mime });
+        objectUrl = URL.createObjectURL(videoBlob);
+        if (mounted) {
+          setBlobUrl(objectUrl);
+          setLoading(false);
+        }
+      } catch (err) {
+        if ((err as any)?.name === 'AbortError') return;
+        console.error('Video fetch error:', err);
+        if (mounted) {
+          setError(language === 'ar' ? 'فشل تحميل الفيديو' : 'Failed to load video');
+          setLoading(false);
+        }
+      }
+    };
+    fetchVideo();
+    return () => {
+      mounted = false;
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [language, url]);
+
+  if (loading) {
+    return (
+      <div className="px-3 pb-3">
+        <div className="w-full h-48 bg-black rounded-lg flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-white" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="px-3 pb-3">
+        <div className="w-full h-48 bg-black rounded-lg flex items-center justify-center text-white text-sm">
+          {error}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-3 pb-3">
+      <video
+        src={blobUrl || url}
+        controls
+        autoPlay
+        playsInline
+        className="w-full max-h-[60vh] rounded-lg bg-black object-contain"
+      />
+    </div>
+  );
+}
+
+function SavedVideosTab({ onCreate }: { onCreate: () => void }) {
+  const { language } = useTheme();
+  const { user } = useAuth();
+
+  const [savedVideos, setSavedVideos] = useState<SavedVideo[]>([]);
+  const [loadingVideos, setLoadingVideos] = useState(false);
+  const [activePreviewId, setActivePreviewId] = useState<string | null>(null);
+
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [pendingDeleteVideo, setPendingDeleteVideo] = useState<SavedVideo | null>(null);
+
+  const loadSavedVideos = async () => {
+    if (!user) return;
+    setLoadingVideos(true);
+    try {
+      const { data, error } = await (supabase as any)
+        .from('user_videos')
+        .select('id, title, thumbnail_url, storage_path, duration_seconds, is_public, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const rows: SavedVideo[] = (data || []) as SavedVideo[];
+      const withUrls: SavedVideo[] = await Promise.all(
+        rows.map(async (v) => {
+          let signedUrl: string | null = null;
+          let thumbnailSignedUrl: string | null = null;
+
+          if (v.storage_path) {
+            const { data: urlData, error: urlErr } = await supabase.storage.from('videos').createSignedUrl(v.storage_path, 3600);
+            if (urlErr) {
+              console.error('[MusicStudio] Signed URL error:', urlErr);
+              const { data: pubData } = supabase.storage.from('videos').getPublicUrl(v.storage_path);
+              signedUrl = pubData?.publicUrl || null;
+            } else {
+              signedUrl = urlData?.signedUrl || null;
+            }
+          }
+
+          if ((v as any).thumbnail_url) {
+            const thumbPath = (v as any).thumbnail_url as string;
+            const { data: tSigned, error: tErr } = await supabase.storage.from('videos').createSignedUrl(thumbPath, 3600);
+            if (tErr) {
+              console.error('[MusicStudio] Thumbnail signed URL error:', tErr);
+              const { data: tUrl } = supabase.storage.from('videos').getPublicUrl(thumbPath);
+              thumbnailSignedUrl = tUrl?.publicUrl || null;
+            } else {
+              thumbnailSignedUrl = tSigned?.signedUrl || null;
+            }
+          }
+
+          return { ...v, signedUrl, thumbnailSignedUrl };
+        })
+      );
+
+      setSavedVideos(withUrls);
+    } catch (e) {
+      console.error('Failed to load saved videos:', e);
+      toast.error(language === 'ar' ? 'فشل تحميل الفيديوهات' : 'Failed to load videos');
+    } finally {
+      setLoadingVideos(false);
+    }
+  };
+
+  useEffect(() => {
+    loadSavedVideos();
+  }, [user?.id]);
+
+  const formatDuration = (sec: number | null | undefined) => {
+    if (!sec || sec <= 0) return '';
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return m > 0 ? `${m}:${String(s).padStart(2, '0')}` : `${s}s`;
+  };
+
+  const confirmDeleteSavedVideo = async () => {
+    if (!user || !pendingDeleteVideo) return;
+    const v = pendingDeleteVideo;
+    try {
+      if (v.storage_path) {
+        await supabase.storage.from('videos').remove([v.storage_path]);
+      }
+      if ((v as any).thumbnail_url) {
+        await supabase.storage.from('videos').remove([(v as any).thumbnail_url]);
+      }
+      await (supabase as any).from('user_videos').delete().eq('id', v.id).eq('user_id', user.id);
+
+      setSavedVideos((prev) => prev.filter((x) => x.id !== v.id));
+      if (activePreviewId === v.id) setActivePreviewId(null);
+      toast.success(language === 'ar' ? 'تم الحذف' : 'Deleted');
+    } catch (e) {
+      console.error('Delete failed:', e);
+      toast.error(language === 'ar' ? 'فشل الحذف' : 'Delete failed');
+    } finally {
+      setDeleteDialogOpen(false);
+      setPendingDeleteVideo(null);
+    }
+  };
+
+  const handleDeleteSavedVideo = (v: SavedVideo) => {
+    setPendingDeleteVideo(v);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleShareSavedVideo = async (v: SavedVideo) => {
+    const shareUrl = `${window.location.origin}/video/${v.id}`;
+    if (!v.is_public) {
+      toast.error(language === 'ar' ? 'اجعل الفيديو عاماً أولاً' : 'Make the video public first');
+      return;
+    }
+
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: v.title || 'Wakti Video', url: shareUrl });
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+        toast.success(language === 'ar' ? 'تم نسخ الرابط' : 'Link copied');
+      }
+    } catch (_) {}
+  };
+
+  const handleTogglePublic = async (v: SavedVideo) => {
+    if (!user) return;
+    try {
+      const next = !v.is_public;
+      const { error } = await (supabase as any).from('user_videos').update({ is_public: next }).eq('id', v.id).eq('user_id', user.id);
+      if (error) throw error;
+      setSavedVideos((prev) => prev.map((x) => (x.id === v.id ? { ...x, is_public: next } : x)));
+      toast.success(
+        next ? (language === 'ar' ? 'تم جعله عاماً' : 'Now public') : (language === 'ar' ? 'تم جعله خاصاً' : 'Now private')
+      );
+    } catch (e) {
+      console.error('Toggle public failed:', e);
+      toast.error(language === 'ar' ? 'فشل التحديث' : 'Update failed');
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">
+          {language === 'ar' ? 'فيديوهاتي' : 'My Videos'}
+          {savedVideos.length > 0 && (
+            <span className="ml-2 text-sm font-normal text-muted-foreground">({savedVideos.length})</span>
+          )}
+        </h2>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={loadSavedVideos} disabled={loadingVideos}>
+            {loadingVideos ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          </Button>
+          <Button size="sm" onClick={onCreate}>
+            <Plus className="h-4 w-4 mr-1" />
+            {language === 'ar' ? 'جديد' : 'New'}
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+        <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+        <p className="text-sm text-amber-700 dark:text-amber-400">
+          {language === 'ar'
+            ? 'يتم حذف الفيديوهات المحفوظة تلقائياً بعد 20 يوماً'
+            : 'Saved videos are automatically deleted after 20 days'}
+        </p>
+      </div>
+
+      {loadingVideos ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : savedVideos.length === 0 ? (
+        <Card className="p-8 text-center border-dashed">
+          <div className="flex flex-col items-center gap-3">
+            <div className="p-4 rounded-full bg-muted">
+              <Video className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <div>
+              <p className="font-medium">{language === 'ar' ? 'لا توجد فيديوهات بعد' : 'No videos yet'}</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                {language === 'ar' ? 'أنشئ أول فيديو لك!' : 'Create your first video!'}
+              </p>
+            </div>
+            <Button onClick={onCreate} className="mt-2">
+              <Plus className="h-4 w-4 mr-2" />
+              {language === 'ar' ? 'إنشاء فيديو' : 'Create Video'}
+            </Button>
+          </div>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {savedVideos.map((v) => (
+            <Card key={v.id} className="overflow-hidden">
+              <div className="flex gap-3 p-3">
+                <button
+                  className="w-20 h-28 md:w-24 md:h-32 rounded-lg overflow-hidden bg-gradient-to-br from-primary/20 to-primary/5 shrink-0 relative group"
+                  onClick={() => setActivePreviewId((prev) => (prev === v.id ? null : v.id))}
+                >
+                  {v.thumbnailSignedUrl ? (
+                    <img
+                      src={v.thumbnailSignedUrl}
+                      alt={v.title || 'Video'}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Video className="h-6 w-6 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Play className="h-8 w-8 text-white" />
+                  </div>
+                  {!!v.duration_seconds && (
+                    <div className="absolute bottom-1 right-1 text-[10px] px-1.5 py-0.5 rounded bg-black/70 text-white font-medium">
+                      {formatDuration(v.duration_seconds)}
+                    </div>
+                  )}
+                </button>
+
+                <div className="flex-1 min-w-0 flex flex-col justify-between py-1">
+                  <div>
+                    <h3 className="font-medium truncate">{v.title || (language === 'ar' ? 'بدون عنوان' : 'Untitled')}</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {new Date(v.created_at).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}
+                    </p>
+                    <div className="flex items-center gap-1 mt-1">
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full ${
+                          v.is_public
+                            ? 'bg-green-500/10 text-green-600 dark:text-green-400'
+                            : 'bg-muted text-muted-foreground'
+                        }`}
+                      >
+                        {v.is_public ? (language === 'ar' ? 'عام' : 'Public') : (language === 'ar' ? 'خاص' : 'Private')}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 mt-2">
+                    <Button variant="outline" size="sm" className="h-8 px-3" onClick={() => handleTogglePublic(v)}>
+                      {v.is_public ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-8 px-3" onClick={() => handleShareSavedVideo(v)}>
+                      <Share2 className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-3 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                      onClick={() => handleDeleteSavedVideo(v)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {activePreviewId === v.id && v.signedUrl && <VideoPlayer url={v.signedUrl} language={language} />}
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <AlertDialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          setDeleteDialogOpen(open);
+          if (!open) setPendingDeleteVideo(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{language === 'ar' ? 'حذف الفيديو؟' : 'Delete video?'}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {language === 'ar' ? 'لا يمكن التراجع عن هذا الإجراء.' : "This action can't be undone."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{language === 'ar' ? 'إلغاء' : 'Cancel'}</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={confirmDeleteSavedVideo}>
+              {language === 'ar' ? 'حذف' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
 export default function MusicStudio() {
   const { language } = useTheme();
   const [mainTab, setMainTab] = useState<'music' | 'video'>('music');
   const [musicSubTab, setMusicSubTab] = useState<'compose' | 'editor'>('compose');
+  const [videoSubTab, setVideoSubTab] = useState<VideoSubTab>('create');
   const location = useLocation();
 
   useEffect(() => {
@@ -125,7 +534,16 @@ export default function MusicStudio() {
             <h1 className="text-xl md:text-2xl font-bold">{language === 'ar' ? 'صانع الفيديو' : 'Video Maker'}</h1>
             <div />
           </div>
-          <VideoMaker initialTab={(location.state as any)?.openVideoTab} />
+          <nav className="flex gap-2 border-b border-border pb-2">
+            <Button variant={videoSubTab === 'create' ? 'default' : 'outline'} size="sm" onClick={() => setVideoSubTab('create')}>
+              {language === 'ar' ? 'إنشاء' : 'Create'}
+            </Button>
+            <Button variant={videoSubTab === 'saved' ? 'default' : 'outline'} size="sm" onClick={() => setVideoSubTab('saved')}>
+              {language === 'ar' ? 'المحفوظات' : 'Saved'}
+            </Button>
+          </nav>
+
+          {videoSubTab === 'create' ? <VideoEditorPro /> : <SavedVideosTab onCreate={() => setVideoSubTab('create')} />}
         </>
       )}
     </div>

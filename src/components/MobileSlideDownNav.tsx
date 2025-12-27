@@ -7,6 +7,7 @@ import { Calendar, CalendarClock, Mic, Sparkles, ListTodo, LayoutDashboard, PenT
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { waktiBadges } from "@/services/waktiBadges";
 import { motion } from "framer-motion";
+import { t } from "@/utils/translations";
 
 interface MobileSlideDownNavProps {
   isOpen: boolean;
@@ -110,7 +111,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
       colorClass: 'nav-icon-ai',
     },
     {
-      name: language === 'ar' ? 'الموسيقى' : 'Music',
+      name: t('music', language),
       path: '/music',
       icon: 'music',
       colorClass: 'text-fuchsia-500',
@@ -138,7 +139,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
       colorClass: 'text-purple-500',
     },
     {
-      name: language === 'ar' ? 'الصوت والمترجم' : 'Voice & Translator',
+      name: language === 'ar' ? 'صوت' : 'Voice',
       path: '/tools/voice-studio',
       icon: 'mic',
       colorClass: 'text-pink-500',

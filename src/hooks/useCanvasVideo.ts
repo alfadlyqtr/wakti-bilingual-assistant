@@ -14,7 +14,11 @@ interface SlideFilters {
 }
 
 interface SlideConfig {
-  imageFile: File;
+  mediaType?: 'image' | 'video';
+  imageFile?: File;
+  videoFile?: File;
+  clipMuted?: boolean;
+  clipVolume?: number; // 0..1
   text?: string;
   textPosition?: 'top' | 'center' | 'bottom';
   textColor?: string;
@@ -83,6 +87,19 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
       return null;
     }
 
+    // Validate slide media
+    for (const s of slides) {
+      const type = s.mediaType || (s.videoFile ? 'video' : 'image');
+      if (type === 'image' && !s.imageFile) {
+        setError('One of your image slides is missing its file');
+        return null;
+      }
+      if (type === 'video' && !s.videoFile) {
+        setError('One of your video slides is missing its file');
+        return null;
+      }
+    }
+
     setIsLoading(true);
     setError(null);
     setProgress(0);
@@ -98,49 +115,112 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
         throw new Error('Canvas not supported');
       }
 
-      setStatus('Loading your photos...');
+      setStatus('Loading your media...');
       setProgress(5);
-      
-      const loadedImages: HTMLImageElement[] = [];
+
+      const mediaObjectUrls: string[] = [];
+      const loadedImages: Array<HTMLImageElement | null> = [];
+      const loadedVideos: Array<HTMLVideoElement | null> = [];
+
       for (let i = 0; i < slides.length; i++) {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        
-        await new Promise<void>((resolve, reject) => {
-          img.onload = () => resolve();
-          img.onerror = () => reject(new Error(`Failed to load image ${i + 1}`));
-          img.src = URL.createObjectURL(slides[i].imageFile);
-        });
-        
-        loadedImages.push(img);
+        const slide = slides[i];
+        const mediaType = slide.mediaType || (slide.videoFile ? 'video' : 'image');
+
+        if (mediaType === 'video') {
+          const url = URL.createObjectURL(slide.videoFile as File);
+          mediaObjectUrls.push(url);
+          loadedImages.push(null);
+
+          const video = document.createElement('video');
+          video.src = url;
+          video.crossOrigin = 'anonymous';
+          video.muted = true; // we mix audio ourselves
+          video.playsInline = true;
+          video.preload = 'auto';
+
+          await new Promise<void>((resolve, reject) => {
+            const timeout = window.setTimeout(() => reject(new Error(`Video load timeout ${i + 1}`)), 15000);
+            const cleanup = () => {
+              window.clearTimeout(timeout);
+              video.onloadedmetadata = null;
+              video.oncanplay = null;
+              video.onerror = null;
+            };
+            video.onloadedmetadata = () => {
+              cleanup();
+              resolve();
+            };
+            video.oncanplay = () => {
+              cleanup();
+              resolve();
+            };
+            video.onerror = () => {
+              cleanup();
+              reject(new Error(`Failed to load video ${i + 1}`));
+            };
+            video.load();
+          });
+
+          loadedVideos.push(video);
+        } else {
+          const url = URL.createObjectURL(slide.imageFile as File);
+          mediaObjectUrls.push(url);
+          loadedVideos.push(null);
+
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+
+          await new Promise<void>((resolve, reject) => {
+            img.onload = () => resolve();
+            img.onerror = () => reject(new Error(`Failed to load image ${i + 1}`));
+            img.src = url;
+          });
+
+          loadedImages.push(img);
+        }
+
         setProgress(5 + (i / slides.length) * 15);
-        setStatus(`Loading photo ${i + 1} of ${slides.length}...`);
+        setStatus(`Loading media ${i + 1} of ${slides.length}...`);
       }
 
       setStatus('Creating your video...');
       setProgress(25);
 
       const stream = canvas.captureStream(30);
-      
+
+      // Audio mixing (background audio + clip audio)
       let audioElement: HTMLAudioElement | null = null;
       let audioContext: AudioContext | null = null;
-      if (audioUrl) {
-        try {
-          console.log('[useCanvasVideo] Loading audio from:', audioUrl.substring(0, 100) + '...');
+      let mixedDestination: MediaStreamAudioDestinationNode | null = null;
+      let bgGain: GainNode | null = null;
+      const clipGainNodes: Array<GainNode | null> = [];
+      const clipSourceNodes: Array<MediaElementAudioSourceNode | null> = [];
+
+      try {
+        audioContext = new AudioContext();
+        if (audioContext.state !== 'running') {
+          await audioContext.resume();
+        }
+        mixedDestination = audioContext.createMediaStreamDestination();
+
+        // Background audio (optional)
+        if (audioUrl) {
+          console.log('[useCanvasVideo] Loading background audio from:', audioUrl.substring(0, 100) + '...');
           setStatus('Loading audio...');
-          
-          // Fetch audio as blob to avoid CORS issues with signed URLs
+
           const audioResponse = await fetch(audioUrl);
           if (!audioResponse.ok) {
             throw new Error(`Audio fetch failed: ${audioResponse.status}`);
           }
           const audioBlob = await audioResponse.blob();
           const audioBlobUrl = URL.createObjectURL(audioBlob);
-          console.log('[useCanvasVideo] Audio blob created, size:', audioBlob.size);
-          
+          mediaObjectUrls.push(audioBlobUrl);
+
           audioElement = new Audio(audioBlobUrl);
+          audioElement.crossOrigin = 'anonymous';
+          audioElement.preload = 'auto';
           audioElement.volume = 1;
-          
+
           if (typeof audioTrimEnd === 'number' && Number.isFinite(audioTrimEnd)) {
             audioElement.addEventListener('timeupdate', () => {
               if (!audioElement) return;
@@ -149,41 +229,66 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
               }
             });
           }
-          
+
           await new Promise<void>((resolve, reject) => {
             const timeout = setTimeout(() => reject(new Error('Audio load timeout')), 10000);
             audioElement!.oncanplaythrough = () => {
               clearTimeout(timeout);
-              console.log('[useCanvasVideo] Audio ready, duration:', audioElement!.duration);
               resolve();
             };
-            audioElement!.onerror = (e) => {
+            audioElement!.onerror = () => {
               clearTimeout(timeout);
-              console.error('[useCanvasVideo] Audio error:', e);
               reject(new Error('Audio element error'));
             };
             audioElement!.load();
           });
-          
-          audioContext = new AudioContext();
-          if (audioContext.state !== 'running') {
-            await audioContext.resume();
-          }
-          const source = audioContext.createMediaElementSource(audioElement);
-          const destination = audioContext.createMediaStreamDestination();
-          source.connect(destination);
-          source.connect(audioContext.destination);
-          
-          destination.stream.getAudioTracks().forEach(track => {
-            stream.addTrack(track);
-          });
-          
-          console.log('[useCanvasVideo] Audio connected to stream successfully');
-        } catch (audioErr) {
-          console.error('[useCanvasVideo] Audio loading failed:', audioErr);
-          setStatus('Audio failed, continuing without sound...');
-          // Continue without audio
+
+          const bgSource = audioContext.createMediaElementSource(audioElement);
+          bgGain = audioContext.createGain();
+          bgGain.gain.value = 1;
+          bgSource.connect(bgGain);
+          bgGain.connect(mixedDestination);
         }
+
+        // Clip audio (only for video slides)
+        for (let i = 0; i < slides.length; i++) {
+          const slide = slides[i];
+          const mediaType = slide.mediaType || (slide.videoFile ? 'video' : 'image');
+          if (mediaType !== 'video' || !loadedVideos[i] || !audioContext) {
+            clipGainNodes.push(null);
+            clipSourceNodes.push(null);
+            continue;
+          }
+
+          const v = loadedVideos[i] as HTMLVideoElement;
+
+          const gain = audioContext.createGain();
+          gain.gain.value = 0; // off by default; enabled when slide is active
+
+          const source = audioContext.createMediaElementSource(v);
+          source.connect(gain);
+          gain.connect(mixedDestination);
+
+          clipGainNodes.push(gain);
+          clipSourceNodes.push(source);
+        }
+
+        mixedDestination.stream.getAudioTracks().forEach((track) => {
+          stream.addTrack(track);
+        });
+
+        console.log('[useCanvasVideo] Audio mixing ready');
+      } catch (audioErr) {
+        console.error('[useCanvasVideo] Audio setup failed (continuing without audio):', audioErr);
+        try {
+          audioContext?.close();
+        } catch (_) {}
+        audioContext = null;
+        mixedDestination = null;
+        audioElement = null;
+        bgGain = null;
+        clipGainNodes.length = 0;
+        clipSourceNodes.length = 0;
       }
 
       let mimeType = 'video/webm;codecs=vp9';
@@ -222,9 +327,17 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
       const totalDurationSec = slides.reduce((sum, s) => sum + s.durationSec, 0);
       const totalFrames = Math.ceil(totalDurationSec * fps);
       
-      const kenBurnsPerSlide: KenBurnsDirection[] = slides.map((_, i) => 
-        KEN_BURNS_DIRECTIONS[i % KEN_BURNS_DIRECTIONS.length]
-      );
+      const kenBurnsPerSlide: KenBurnsDirection[] = slides.map((s, i) => {
+        // Preserve previous behavior for images unless slide.kenBurns is set.
+        if (s.kenBurns === 'pan-left') return 'panLeft';
+        if (s.kenBurns === 'pan-right') return 'panRight';
+        if (s.kenBurns === 'pan-up') return 'panUp';
+        if (s.kenBurns === 'pan-down') return 'panDown';
+        if (s.kenBurns === 'zoom-in') return 'zoomIn';
+        if (s.kenBurns === 'zoom-out') return 'zoomOut';
+        if (s.kenBurns === 'random') return KEN_BURNS_DIRECTIONS[i % KEN_BURNS_DIRECTIONS.length];
+        return KEN_BURNS_DIRECTIONS[i % KEN_BURNS_DIRECTIONS.length];
+      });
 
       const drawImageWithKenBurns = (
         img: HTMLImageElement,
@@ -291,7 +404,8 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
         const b = filters.brightness / 100;
         const c = filters.contrast / 100;
         const s = filters.saturation / 100;
-        ctx.filter = `brightness(${b}) contrast(${c}) saturate(${s})`;
+        const blurPx = Math.max(0, filters.blur || 0);
+        ctx.filter = `brightness(${b}) contrast(${c}) saturate(${s}) blur(${blurPx}px)`;
       };
 
       const resetFilters = () => {
@@ -305,7 +419,9 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
         textColor?: string,
         textSize?: 'small' | 'medium' | 'large',
         animation?: TextAnimation,
-        animationProgress?: number
+        animationProgress?: number,
+        textFont?: TextFont,
+        textShadow?: boolean
       ) => {
         if (!text || text.trim() === '') return;
         
@@ -313,7 +429,14 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
         
         const sizeMultiplier = textSize === 'small' ? 0.04 : textSize === 'large' ? 0.07 : 0.055;
         const fontSize = Math.floor(width * sizeMultiplier);
-        ctx.font = `bold ${fontSize}px system-ui, -apple-system, sans-serif`;
+        const family =
+          textFont === 'serif'
+            ? 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif'
+            : textFont === 'mono'
+            ? 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace'
+            : 'system-ui, -apple-system, sans-serif';
+        const weight = textFont === 'bold' ? '900' : '700';
+        ctx.font = `${weight} ${fontSize}px ${family}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         
@@ -375,10 +498,17 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
         ctx.fill();
         
         ctx.fillStyle = textColor || '#ffffff';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-        ctx.shadowBlur = 8;
-        ctx.shadowOffsetX = 2;
-        ctx.shadowOffsetY = 2;
+        if (textShadow !== false) {
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+          ctx.shadowBlur = 8;
+          ctx.shadowOffsetX = 2;
+          ctx.shadowOffsetY = 2;
+        } else {
+          ctx.shadowColor = 'transparent';
+          ctx.shadowBlur = 0;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 0;
+        }
         
         lines.forEach((line, i) => {
           ctx.fillText(line, width / 2, startY + i * lineHeight);
@@ -388,6 +518,9 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
       };
 
       let currentFrame = 0;
+
+      // Playback state for video clips
+      let activeVideoIndex: number | null = null;
       
       await new Promise<void>((resolve) => {
         const renderFrame = () => {
@@ -410,6 +543,53 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
           const slide = slides[currentSlideIndex];
           const timeInSlide = currentTimeSec - slideStartTime;
           const slideProgress = Math.min(timeInSlide / slide.durationSec, 1);
+
+          // Clip audio/playing management
+          const currentMediaType = slide.mediaType || (slide.videoFile ? 'video' : 'image');
+          if (currentMediaType === 'video' && loadedVideos[currentSlideIndex]) {
+            if (activeVideoIndex !== currentSlideIndex) {
+              // Disable previous clip audio + pause
+              if (activeVideoIndex !== null) {
+                const prevV = loadedVideos[activeVideoIndex];
+                const prevGain = clipGainNodes[activeVideoIndex];
+                if (prevGain) prevGain.gain.value = 0;
+                if (prevV) {
+                  try { prevV.pause(); } catch (_) {}
+                }
+              }
+
+              // Activate new clip
+              activeVideoIndex = currentSlideIndex;
+              const v = loadedVideos[currentSlideIndex] as HTMLVideoElement;
+              const gain = clipGainNodes[currentSlideIndex];
+              if (gain) {
+                const vol = slide.clipMuted ? 0 : (typeof slide.clipVolume === 'number' ? slide.clipVolume : 1);
+                gain.gain.value = Math.max(0, Math.min(1, vol));
+              }
+              try {
+                v.currentTime = 0;
+              } catch (_) {}
+              v.play().catch(() => {});
+            } else {
+              // Keep volume updated
+              const gain = clipGainNodes[currentSlideIndex];
+              if (gain) {
+                const vol = slide.clipMuted ? 0 : (typeof slide.clipVolume === 'number' ? slide.clipVolume : 1);
+                gain.gain.value = Math.max(0, Math.min(1, vol));
+              }
+            }
+          } else {
+            // Not a video slide: stop any playing clip and silence all clip audio
+            if (activeVideoIndex !== null) {
+              const prevV = loadedVideos[activeVideoIndex];
+              const prevGain = clipGainNodes[activeVideoIndex];
+              if (prevGain) prevGain.gain.value = 0;
+              if (prevV) {
+                try { prevV.pause(); } catch (_) {}
+              }
+              activeVideoIndex = null;
+            }
+          }
           
           ctx.fillStyle = '#000000';
           ctx.fillRect(0, 0, width, height);
@@ -426,14 +606,23 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
             
             applyFilters(slide.filters);
             ctx.globalAlpha = 1 - easedProgress;
-            drawImageWithKenBurns(loadedImages[currentSlideIndex], slideProgress, kenBurnsPerSlide[currentSlideIndex]);
+            if (currentMediaType === 'video' && loadedVideos[currentSlideIndex]) {
+              ctx.drawImage(loadedVideos[currentSlideIndex] as HTMLVideoElement, 0, 0, width, height);
+            } else {
+              drawImageWithKenBurns(loadedImages[currentSlideIndex] as HTMLImageElement, slideProgress, kenBurnsPerSlide[currentSlideIndex]);
+            }
             resetFilters();
             
-            if (currentSlideIndex + 1 < loadedImages.length) {
+            if (currentSlideIndex + 1 < slides.length) {
               const nextSlide = slides[currentSlideIndex + 1];
+              const nextType = nextSlide.mediaType || (nextSlide.videoFile ? 'video' : 'image');
               applyFilters(nextSlide.filters);
               ctx.globalAlpha = easedProgress;
-              drawImageWithKenBurns(loadedImages[currentSlideIndex + 1], 0, kenBurnsPerSlide[currentSlideIndex + 1]);
+              if (nextType === 'video' && loadedVideos[currentSlideIndex + 1]) {
+                ctx.drawImage(loadedVideos[currentSlideIndex + 1] as HTMLVideoElement, 0, 0, width, height);
+              } else {
+                drawImageWithKenBurns(loadedImages[currentSlideIndex + 1] as HTMLImageElement, 0, kenBurnsPerSlide[currentSlideIndex + 1]);
+              }
               resetFilters();
             }
             
@@ -441,28 +630,36 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
             
             if (slide.text) {
               const textOpacity = 1 - easedProgress;
-              drawText(slide.text, slide.textPosition || 'bottom', textOpacity, slide.textColor, slide.textSize, slide.textAnimation, 1);
+              drawText(slide.text, slide.textPosition || 'bottom', textOpacity, slide.textColor, slide.textSize, slide.textAnimation, 1, slide.textFont, slide.textShadow);
             }
           } else if (isInTransitionIn) {
             applyFilters(slide.filters);
             ctx.globalAlpha = 1;
-            drawImageWithKenBurns(loadedImages[currentSlideIndex], slideProgress, kenBurnsPerSlide[currentSlideIndex]);
+            if (currentMediaType === 'video' && loadedVideos[currentSlideIndex]) {
+              ctx.drawImage(loadedVideos[currentSlideIndex] as HTMLVideoElement, 0, 0, width, height);
+            } else {
+              drawImageWithKenBurns(loadedImages[currentSlideIndex] as HTMLImageElement, slideProgress, kenBurnsPerSlide[currentSlideIndex]);
+            }
             resetFilters();
             
             const transitionProgress = timeInSlide / transitionDurationSec;
             const textOpacity = easeOutQuad(transitionProgress);
             
             if (slide.text) {
-              drawText(slide.text, slide.textPosition || 'bottom', textOpacity, slide.textColor, slide.textSize, slide.textAnimation, textAnimProgress);
+              drawText(slide.text, slide.textPosition || 'bottom', textOpacity, slide.textColor, slide.textSize, slide.textAnimation, textAnimProgress, slide.textFont, slide.textShadow);
             }
           } else {
             applyFilters(slide.filters);
             ctx.globalAlpha = 1;
-            drawImageWithKenBurns(loadedImages[currentSlideIndex], slideProgress, kenBurnsPerSlide[currentSlideIndex]);
+            if (currentMediaType === 'video' && loadedVideos[currentSlideIndex]) {
+              ctx.drawImage(loadedVideos[currentSlideIndex] as HTMLVideoElement, 0, 0, width, height);
+            } else {
+              drawImageWithKenBurns(loadedImages[currentSlideIndex] as HTMLImageElement, slideProgress, kenBurnsPerSlide[currentSlideIndex]);
+            }
             resetFilters();
             
             if (slide.text) {
-              drawText(slide.text, slide.textPosition || 'bottom', 1, slide.textColor, slide.textSize, slide.textAnimation, textAnimProgress);
+              drawText(slide.text, slide.textPosition || 'bottom', 1, slide.textColor, slide.textSize, slide.textAnimation, textAnimProgress, slide.textFont, slide.textShadow);
             }
           }
 
@@ -491,6 +688,14 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
         audioElement.pause();
       }
 
+      // Stop any playing clip
+      if (activeVideoIndex !== null) {
+        const v = loadedVideos[activeVideoIndex];
+        if (v) {
+          try { v.pause(); } catch (_) {}
+        }
+      }
+
       await new Promise<void>((resolve) => {
         mediaRecorder.onstop = () => resolve();
         mediaRecorder.stop();
@@ -498,7 +703,9 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
 
       const videoBlob = new Blob(chunks, { type: mimeType });
       
-      loadedImages.forEach(img => URL.revokeObjectURL(img.src));
+      mediaObjectUrls.forEach((u) => {
+        try { URL.revokeObjectURL(u); } catch (_) {}
+      });
       stream.getTracks().forEach(track => track.stop());
       if (audioContext) {
         try { audioContext.close(); } catch (_) {}

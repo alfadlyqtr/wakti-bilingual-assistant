@@ -29,7 +29,7 @@ export function QuickActionsPanel({
   }, {
     id: 'voice',
     icon: <Mic />,
-    label: language === 'ar' ? 'الصوت والمترجم' : 'Voice & Translator',
+    label: language === 'ar' ? 'صوت' : 'Voice',
     action: () => onOpenTool && onOpenTool('voice'),
     color: 'text-pink-500',
     path: '/tools/voice-studio'

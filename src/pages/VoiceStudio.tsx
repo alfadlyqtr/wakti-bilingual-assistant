@@ -174,7 +174,7 @@ export default function VoiceStudio() {
         {/* Page header (icon removed per request) */}
         <div className="text-center mb-2 md:mb-3">
           <h1 className="text-2xl font-semibold">
-            {language === 'ar' ? 'الصوت والمترجم' : 'Voice & Translator'}
+            {language === 'ar' ? 'صوت' : 'Voice'}
           </h1>
         </div>
 

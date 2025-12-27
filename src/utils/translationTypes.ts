@@ -1,4 +1,3 @@
-
 export type SupportedLanguage = "en" | "ar";
 
 export type TranslationKey = 
@@ -20,6 +19,7 @@ export type TranslationKey =
   | "tasks"
   | "events"
   | "calendar"
+  | "music"
   | "settings"
   | "logout"
   | "profile"

@@ -3,11 +3,14 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Copy, Download, Check } from 'lucide-react';
+import { Loader2, Copy, Download, Check, Save, Trash2, Play, Clock, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
+import { useAuth } from '@/contexts/AuthContext';
 import EnhancedAudioControls from '@/components/tasjeel/EnhancedAudioControls';
+import { Card } from '@/components/ui/card';
+import { formatDate } from '@/utils/datetime';
 
 interface VoiceClone {
   id: string;
@@ -92,6 +95,23 @@ export default function VoiceTTS() {
   // Removed external style details; info kept inside dropdown items
   const [defaultVoiceId, setDefaultVoiceId] = useState<string>('');
   const [defaultStyle, setDefaultStyle] = useState<string>('neutral');
+  const [activeSubTab, setActiveSubTab] = useState<'create' | 'saved'>('create');
+  const [savedTTSList, setSavedTTSList] = useState<Array<{
+    id: string;
+    text: string;
+    voice_name: string;
+    audio_url: string | null;
+    storage_path?: string | null;
+    created_at: string;
+    expires_at: string;
+  }>>([]);
+  const [loadingSaved, setLoadingSaved] = useState(false);
+  const [savingAudio, setSavingAudio] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const audioPlayerRef = React.useRef<HTMLAudioElement | null>(null);
+
+  const { user } = useAuth();
 
   const { userVoiceQuota, isLoadingVoiceQuota, loadUserVoiceQuota, totalAvailableCharacters, canUseVoice } =
     useExtendedQuotaManagement(language);
@@ -230,6 +250,154 @@ export default function VoiceTTS() {
     }
   };
 
+  // Load saved TTS list
+  const loadSavedTTS = async () => {
+    if (!user?.id) return;
+    setLoadingSaved(true);
+    try {
+      const { data, error } = await (supabase as any)
+        .from('saved_tts')
+        .select('id, text, voice_name, audio_url, storage_path, created_at, expires_at')
+        .eq('user_id', user.id)
+        .eq('source', 'tts')
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      setSavedTTSList((data || []) as any);
+    } catch (e) {
+      console.error('Failed to load saved TTS:', e);
+    } finally {
+      setLoadingSaved(false);
+    }
+  };
+
+  const getSavedTtsPlayableUrl = async (item: { audio_url?: string | null; storage_path?: string | null }) => {
+    console.log('🔊 getSavedTtsPlayableUrl called with:', { storage_path: item.storage_path, audio_url: item.audio_url });
+    if (item.storage_path) {
+      // Download the file as blob to avoid CORS issues with signed URLs
+      const { data, error } = await supabase.storage.from('saved-tts').download(item.storage_path);
+      console.log('🔊 download result:', { data, error });
+      if (error) {
+        console.error('🔊 Download error:', error);
+        throw error;
+      }
+      if (!data) throw new Error('No audio data');
+      // Create a blob URL for playback
+      const blobUrl = URL.createObjectURL(data);
+      return blobUrl;
+    }
+    if (item.audio_url) return item.audio_url;
+    throw new Error('Missing audio URL');
+  };
+
+  // Save current audio
+  const saveCurrentAudio = async () => {
+    if (!user?.id || !audioUrl || !text.trim()) return;
+    setSavingAudio(true);
+    try {
+      const selectedVoice = voices.find(v => v.voice_id === selectedVoiceId);
+      const audioResp = await fetch(audioUrl);
+      if (!audioResp.ok) throw new Error('Failed to read generated audio');
+      const audioBlob = await audioResp.blob();
+      if (!audioBlob || audioBlob.size === 0) throw new Error('Empty audio');
+
+      const safeVoice = (selectedVoice?.voice_name || 'voice').replace(/[^a-z0-9_-]+/gi, '-').slice(0, 40);
+      const storagePath = `${user.id}/tts/${Date.now()}-${safeVoice}.mp3`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('saved-tts')
+        .upload(storagePath, audioBlob, { contentType: 'audio/mpeg', upsert: false });
+      if (uploadError) throw uploadError;
+
+      const { error: insertError } = await (supabase as any).from('saved_tts').insert({
+        user_id: user.id,
+        text: text.trim().substring(0, 500),
+        voice_name: selectedVoice?.voice_name || 'Unknown',
+        voice_id: selectedVoiceId,
+        audio_url: null,
+        storage_path: storagePath,
+        source: 'tts',
+      });
+      if (insertError) throw insertError;
+
+      toast.success(language === 'ar' ? 'تم الحفظ!' : 'Saved!');
+      await loadSavedTTS();
+    } catch (e: any) {
+      toast.error(language === 'ar' ? 'فشل الحفظ' : 'Failed to save');
+      console.error(e);
+    } finally {
+      setSavingAudio(false);
+    }
+  };
+
+  // Delete saved TTS
+  const deleteSavedTTS = async (id: string) => {
+    if (!user?.id) return;
+    setDeletingId(id);
+    try {
+      const item = savedTTSList.find(i => i.id === id);
+      if (item?.storage_path) {
+        const { error: storageError } = await supabase.storage.from('saved-tts').remove([item.storage_path]);
+        if (storageError) throw storageError;
+      }
+
+      const { error } = await (supabase as any).from('saved_tts').delete().eq('id', id).eq('user_id', user.id);
+      if (error) throw error;
+      setSavedTTSList(prev => prev.filter(item => item.id !== id));
+      toast.success(language === 'ar' ? 'تم الحذف' : 'Deleted');
+    } catch (e) {
+      toast.error(language === 'ar' ? 'فشل الحذف' : 'Failed to delete');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  // Play saved audio
+  const playSavedAudio = async (id: string, item: any) => {
+    try {
+      console.log('🔊 playSavedAudio called for item:', item);
+      if (playingId === id) {
+        audioPlayerRef.current?.pause();
+        setPlayingId(null);
+        return;
+      }
+      if (audioPlayerRef.current) {
+        audioPlayerRef.current.pause();
+      }
+      const url = await getSavedTtsPlayableUrl(item);
+      console.log('🔊 Got playable URL:', url);
+      const audio = new Audio(url);
+      audioPlayerRef.current = audio;
+      audio.onended = () => setPlayingId(null);
+      audio.onerror = (e) => {
+        console.error('🔊 Audio playback error:', e);
+        toast.error(language === 'ar' ? 'فشل التشغيل' : 'Playback failed');
+        setPlayingId(null);
+      };
+      await audio.play();
+      setPlayingId(id);
+    } catch (e: any) {
+      console.error('🔊 playSavedAudio error:', e);
+      toast.error(language === 'ar' ? 'فشل التشغيل' : 'Playback failed');
+      setPlayingId(null);
+    }
+  };
+
+  // Load saved TTS when switching to saved tab
+  useEffect(() => {
+    if (activeSubTab === 'saved' && user?.id) {
+      loadSavedTTS();
+    }
+  }, [activeSubTab, user?.id]);
+
+  // Calculate days remaining
+  const getDaysRemaining = (expiresAt: string) => {
+    const now = new Date();
+    const expires = new Date(expiresAt);
+    const diff = Math.ceil((expires.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    return Math.max(0, diff);
+  };
+
   if (loading || isLoadingVoiceQuota) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -242,10 +410,137 @@ export default function VoiceTTS() {
     <div className="max-w-xl mx-auto space-y-6 p-4">
       <div className="text-center">
         <h2 className="text-xl font-semibold mb-2">{language === 'ar' ? 'تحويل النص إلى كلام' : 'Text To Speech'}</h2>
-        {/* Intro paragraph removed per request */}
       </div>
 
-      {/* Character quota (wired to live input and backend quota) */}
+      {/* Mini-tabs: Create | Saved */}
+      <div className="flex gap-2 justify-center">
+        <button
+          onClick={() => setActiveSubTab('create')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+            activeSubTab === 'create'
+              ? 'bg-primary text-primary-foreground shadow-sm'
+              : 'bg-muted text-muted-foreground hover:bg-muted/80'
+          }`}
+        >
+          {language === 'ar' ? 'إنشاء' : 'Create'}
+        </button>
+        <button
+          onClick={() => setActiveSubTab('saved')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${
+            activeSubTab === 'saved'
+              ? 'bg-primary text-primary-foreground shadow-sm'
+              : 'bg-muted text-muted-foreground hover:bg-muted/80'
+          }`}
+        >
+          <Save className="h-3.5 w-3.5" />
+          {language === 'ar' ? 'المحفوظات' : 'Saved'}
+          {savedTTSList.length > 0 && (
+            <span className="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-primary-foreground/20">
+              {savedTTSList.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* SAVED TAB CONTENT */}
+      {activeSubTab === 'saved' && (
+        <div className="space-y-4">
+          {/* Auto-delete notice */}
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+            <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              {language === 'ar' 
+                ? 'يتم حذف الملفات المحفوظة تلقائياً بعد 20 يوماً'
+                : 'Saved items are automatically deleted after 20 days'}
+            </p>
+          </div>
+
+          {loadingSaved ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          ) : savedTTSList.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Save className="h-10 w-10 mx-auto mb-3 opacity-40" />
+              <p className="text-sm">{language === 'ar' ? 'لا توجد ملفات محفوظة بعد' : 'No saved audio yet'}</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {savedTTSList.map((item) => (
+                <Card key={item.id} className="p-4">
+                  <div className="flex justify-between items-start gap-3">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium mb-1 line-clamp-2">{item.text}</p>
+                      <p className="text-xs text-muted-foreground mb-2">{item.voice_name}</p>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Clock className="h-3 w-3" />
+                        <span>
+                          {language === 'ar'
+                            ? `يتبقى ${getDaysRemaining(item.expires_at)} يوم`
+                            : `${getDaysRemaining(item.expires_at)} days remaining`}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-[11px] text-muted-foreground">
+                        {language === 'ar'
+                          ? `ينتهي في: ${formatDate(new Date(item.expires_at), language)}`
+                          : `Expires on: ${formatDate(new Date(item.expires_at), language)}`}
+                      </div>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => playSavedAudio(item.id, item)}
+                      >
+                        <Play className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={async () => {
+                          try {
+                            const url = await getSavedTtsPlayableUrl(item);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = 'saved-audio.mp3';
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                          } catch (e) {
+                            toast.error(language === 'ar' ? 'فشل التنزيل' : 'Download failed');
+                          }
+                        }}
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-red-500 hover:text-red-600"
+                        onClick={() => deleteSavedTTS(item.id)}
+                        disabled={deletingId === item.id}
+                      >
+                        {deletingId === item.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* CREATE TAB CONTENT */}
+      {activeSubTab === 'create' && (
+        <>
+          {/* Character quota (wired to live input and backend quota) */}
       <div className="p-3 bg-muted rounded-lg">
         <div className="flex justify-between items-center">
           <span className="text-sm font-medium">{language === 'ar' ? 'الأحرف المتبقية' : 'Characters Remaining'}</span>
@@ -425,8 +720,14 @@ export default function VoiceTTS() {
           />
           <div className="flex gap-2">
             <Button onClick={downloadAudio} variant="outline" size="sm"><Download className="h-4 w-4 mr-1" />{language === 'ar' ? 'تنزيل' : 'Download'}</Button>
+            <Button onClick={saveCurrentAudio} variant="outline" size="sm" disabled={savingAudio}>
+              {savingAudio ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+              {language === 'ar' ? 'حفظ' : 'Save'}
+            </Button>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

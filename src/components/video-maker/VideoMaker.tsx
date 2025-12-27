@@ -53,6 +53,8 @@ type KenBurnsDirection = 'zoom-in' | 'zoom-out' | 'pan-left' | 'pan-right' | 'pa
 type TextFont = 'system' | 'serif' | 'mono' | 'handwritten' | 'bold';
 type FilterPreset = 'none' | 'vivid' | 'warm' | 'cool' | 'vintage' | 'bw' | 'dramatic' | 'soft';
 
+type SlideMediaType = 'image' | 'video';
+
 interface SlideFilters {
   brightness: number;
   contrast: number;
@@ -63,8 +65,13 @@ interface SlideFilters {
 
 interface Slide {
   id: string;
-  imageUrl: string;
+  mediaType: SlideMediaType;
+  imageUrl?: string;
   imageFile?: File;
+  videoUrl?: string;
+  videoFile?: File;
+  clipMuted: boolean;
+  clipVolume: number; // 0..1
   text: string;
   textPosition: 'top' | 'center' | 'bottom';
   textColor: string;
@@ -513,8 +520,8 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
     }
   };
 
-  // Handle image upload
-  const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle media upload (images + videos)
+  const handleMediaUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
 
@@ -522,13 +529,20 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
     const maxToAdd = MAX_SLIDES - project.slides.length;
 
     Array.from(files).slice(0, maxToAdd).forEach((file) => {
-      if (!file.type.startsWith('image/')) return;
-      
+      const isImage = file.type.startsWith('image/');
+      const isVideo = file.type.startsWith('video/');
+      if (!isImage && !isVideo) return;
+
       const url = URL.createObjectURL(file);
       newSlides.push({
         id: crypto.randomUUID(),
-        imageUrl: url,
-        imageFile: file,
+        mediaType: isVideo ? 'video' : 'image',
+        imageUrl: isImage ? url : undefined,
+        imageFile: isImage ? file : undefined,
+        videoUrl: isVideo ? url : undefined,
+        videoFile: isVideo ? file : undefined,
+        clipMuted: false,
+        clipVolume: 1,
         text: '',
         textPosition: 'bottom',
         textColor: TEMPLATES[project.template].textColor,
@@ -693,12 +707,12 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
           </div>
           <div>
             <p className="font-semibold bg-gradient-primary bg-clip-text text-transparent">
-              {language === 'ar' ? 'اضغط لتحميل الصور' : 'Tap to upload images'}
+              {language === 'ar' ? 'اضغط لتحميل صور أو فيديو' : 'Tap to upload images or videos'}
             </p>
             <p className="text-sm text-muted-foreground">
               {language === 'ar' 
-                ? `${MIN_SLIDES}-${MAX_SLIDES} صور • PNG, JPG, WebP`
-                : `${MIN_SLIDES}-${MAX_SLIDES} images • PNG, JPG, WebP`
+                ? `${MIN_SLIDES}-${MAX_SLIDES} ملفات • صور/فيديو`
+                : `${MIN_SLIDES}-${MAX_SLIDES} files • images/videos`
               }
             </p>
           </div>
@@ -706,10 +720,10 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept="image/*,video/*"
           multiple
           className="hidden"
-          onChange={handleImageUpload}
+          onChange={handleMediaUpload}
         />
       </Card>
 
@@ -738,11 +752,21 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
             {project.slides.map((slide, index) => (
               <div key={slide.id} className="relative group aspect-[9/16] rounded-lg overflow-hidden bg-muted">
-                <img 
-                  src={slide.imageUrl} 
-                  alt={`Slide ${index + 1}`}
-                  className="w-full h-full object-cover"
-                />
+                {slide.mediaType === 'video' ? (
+                  <video
+                    src={slide.videoUrl}
+                    className="w-full h-full object-cover"
+                    muted
+                    playsInline
+                    preload="metadata"
+                  />
+                ) : (
+                  <img 
+                    src={slide.imageUrl} 
+                    alt={`Slide ${index + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+                )}
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                   <Button
                     variant="destructive"
@@ -759,6 +783,11 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
                 <div className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/60 text-white text-xs">
                   {index + 1}
                 </div>
+                {slide.mediaType === 'video' && (
+                  <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-black/60 text-white text-[10px]">
+                    {language === 'ar' ? 'فيديو' : 'VIDEO'}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -847,11 +876,21 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
                   onClick={() => setExpandedSlideId(isExpanded ? null : slide.id)}
                 >
                   <div className="w-14 h-20 rounded-xl overflow-hidden bg-muted shrink-0">
-                    <img
-                      src={slide.imageUrl}
-                      alt={`Slide ${index + 1}`}
-                      className="w-full h-full object-cover"
-                    />
+                    {slide.mediaType === 'video' ? (
+                      <video
+                        src={slide.videoUrl}
+                        className="w-full h-full object-cover"
+                        muted
+                        playsInline
+                        preload="metadata"
+                      />
+                    ) : (
+                      <img
+                        src={slide.imageUrl}
+                        alt={`Slide ${index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    )}
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -1126,6 +1165,47 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
                             ))}
                           </div>
                         </div>
+
+                        {slide.mediaType === 'video' && (
+                          <div className="space-y-2">
+                            <p className="text-sm font-semibold">{language === 'ar' ? 'صوت المقطع' : 'Clip Audio'}</p>
+
+                            <div className="flex items-center justify-between rounded-2xl p-3 border border-white/10 bg-white/5 backdrop-blur-xl dark:bg-black/20">
+                              <span className="text-sm font-medium">
+                                {language === 'ar' ? 'كتم' : 'Mute'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => updateSlide(slide.id, { clipMuted: !slide.clipMuted })}
+                                title={language === 'ar' ? 'تبديل كتم الصوت' : 'Toggle mute'}
+                                aria-label={language === 'ar' ? 'تبديل كتم الصوت' : 'Toggle mute'}
+                                className={`w-12 h-6 rounded-full transition-all ${
+                                  slide.clipMuted ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'
+                                }`}
+                              >
+                                <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                                  slide.clipMuted ? 'translate-x-6' : 'translate-x-0.5'
+                                }`} />
+                              </button>
+                            </div>
+
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-muted-foreground">🔊 {language === 'ar' ? 'مستوى الصوت' : 'Volume'}</span>
+                                <span className="text-xs font-medium">{Math.round((slide.clipVolume ?? 1) * 100)}%</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={Math.round((slide.clipVolume ?? 1) * 100)}
+                                onChange={(e) => updateSlide(slide.id, { clipVolume: Math.max(0, Math.min(1, parseInt(e.target.value) / 100)) })}
+                                className="w-full h-2 rounded-full appearance-none bg-gradient-to-r from-red-400 via-yellow-400 to-green-400 cursor-pointer"
+                                title={language === 'ar' ? 'مستوى صوت المقطع' : 'Clip volume'}
+                              />
+                            </div>
+                          </div>
+                        )}
 
                         {/* Manual Adjustments */}
                         <div className="space-y-2">
@@ -1711,6 +1791,13 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
           >
             {language === 'ar' ? 'إنشاء فيديو جديد' : 'Create New Video'}
           </Button>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => setStep('customize')}
+          >
+            {language === 'ar' ? 'رجوع للتعديل' : 'Back to Customize'}
+          </Button>
         </div>
       )}
     </div>
@@ -1725,20 +1812,29 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
     try {
       // Build slides config for the new hook
       const slidesConfig = project.slides
-        .filter(slide => slide.imageFile)
+        .filter(slide => slide.imageFile || slide.videoFile)
         .map(slide => {
           const config = {
-            imageFile: slide.imageFile as File,
+            mediaType: slide.mediaType,
+            imageFile: slide.imageFile as File | undefined,
+            videoFile: slide.videoFile as File | undefined,
+            clipMuted: !!slide.clipMuted,
+            clipVolume: typeof slide.clipVolume === 'number' ? slide.clipVolume : 1,
             text: slide.text?.trim() || undefined,
             textPosition: slide.textPosition || 'bottom',
             textColor: slide.textColor || TEMPLATES[project.template].textColor,
             textSize: slide.textSize || 'medium',
             textAnimation: slide.textAnimation || 'fade-in',
+            textFont: slide.textFont || 'system',
+            textShadow: slide.textShadow !== false,
             durationSec: slide.durationSec,
             transition: slide.transition || 'fade',
-            filters: slide.filters || { brightness: 100, contrast: 100, saturation: 100 },
+            transitionDuration: slide.transitionDuration || 0.5,
+            filters: slide.filters || { brightness: 100, contrast: 100, saturation: 100, blur: 0, preset: 'none' },
+            kenBurns: slide.kenBurns || 'random',
+            kenBurnsSpeed: slide.kenBurnsSpeed || 1,
           };
-          console.log('[VideoMaker] Slide config:', { text: config.text, textPosition: config.textPosition, transition: config.transition });
+          console.log('[VideoMaker] Slide config:', { mediaType: config.mediaType, text: config.text, textPosition: config.textPosition, transition: config.transition });
           return config;
         });
 

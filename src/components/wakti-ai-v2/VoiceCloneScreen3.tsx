@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Play, Download, Loader2, Volume2, Mic, Info, Languages, Copy, Trash2 } from 'lucide-react';
+import { Play, Download, Loader2, Volume2, Mic, Info, Languages, Copy, Trash2, Save, Clock, AlertCircle } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
@@ -150,6 +151,7 @@ const TRANSLATION_LANGUAGES = [
 
 export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
   const { language } = useTheme();
+  const { user } = useAuth();
   const MAX_INPUT_CHARS = 250;
   const [text, setText] = useState('');
   const [selectedVoiceId, setSelectedVoiceId] = useState('');
@@ -165,6 +167,23 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
   const [translationText, setTranslationText] = useState('');
   const [targetLanguage, setTargetLanguage] = useState('ar');
   const [isTranslating, setIsTranslating] = useState(false);
+
+  const [qtTab, setQtTab] = useState<'translate' | 'saved'>('translate');
+  
+  // Saved audio from database
+  const [savedAudioList, setSavedAudioList] = useState<Array<{
+    id: string;
+    text: string;
+    voice_name: string;
+    audio_url: string | null;
+    storage_path?: string | null;
+    created_at: string;
+    expires_at: string;
+  }>>([]);
+  const [loadingSavedAudio, setLoadingSavedAudio] = useState(false);
+  const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
+  const [deletingAudioId, setDeletingAudioId] = useState<string | null>(null);
+  const audioPlayerRef = React.useRef<HTMLAudioElement | null>(null);
 
   // Default preferences
   const [defaultVoiceId, setDefaultVoiceId] = useState<string>('');
@@ -183,6 +202,123 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
     loadData();
     loadDefaultPreferences();
   }, []);
+
+  // Load saved audio when switching to saved tab
+  useEffect(() => {
+    if (qtTab === 'saved' && user?.id) {
+      loadSavedAudio();
+    }
+  }, [qtTab, user?.id]);
+
+  const loadSavedAudio = async () => {
+    if (!user?.id) return;
+    setLoadingSavedAudio(true);
+    try {
+      const { data, error } = await (supabase as any)
+        .from('saved_tts')
+        .select('id, text, voice_name, audio_url, storage_path, created_at, expires_at')
+        .eq('user_id', user.id)
+        .eq('source', 'translate')
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error) {
+        const msg = String((error as any)?.message || '');
+        const code = String((error as any)?.code || '');
+        const missingSourceColumn =
+          msg.toLowerCase().includes('column') && msg.toLowerCase().includes('source') && msg.toLowerCase().includes('does not exist');
+
+        if (missingSourceColumn || code === '42703') {
+          const { data: fallbackData, error: fallbackError } = await (supabase as any)
+            .from('saved_tts')
+            .select('id, text, voice_name, audio_url, storage_path, created_at, expires_at')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(50);
+          if (fallbackError) throw fallbackError;
+
+          const prefix = `${user.id}/translate/`;
+          const filtered = (fallbackData || []).filter((row: any) =>
+            typeof row?.storage_path === 'string' ? row.storage_path.startsWith(prefix) : false,
+          );
+
+          setSavedAudioList(filtered.slice(0, 20) as any);
+          return;
+        }
+
+        throw error;
+      }
+
+      setSavedAudioList((data || []) as any);
+    } catch (e) {
+      console.error('Failed to load saved audio:', e);
+    } finally {
+      setLoadingSavedAudio(false);
+    }
+  };
+
+  const getSavedAudioPlayableUrl = async (item: { audio_url?: string | null; storage_path?: string | null }) => {
+    if (item.storage_path) {
+      const { data, error } = await supabase.storage.from('saved-tts').download(item.storage_path);
+      if (error) throw error;
+      if (!data) throw new Error('No audio data');
+      return URL.createObjectURL(data);
+    }
+    if (item.audio_url) return item.audio_url;
+    throw new Error('Missing audio URL');
+  };
+
+  const playSavedAudio = async (id: string, item: any) => {
+    try {
+      if (playingAudioId === id) {
+        audioPlayerRef.current?.pause();
+        setPlayingAudioId(null);
+        return;
+      }
+      if (audioPlayerRef.current) {
+        audioPlayerRef.current.pause();
+      }
+      const url = await getSavedAudioPlayableUrl(item);
+      const audio = new Audio(url);
+      audioPlayerRef.current = audio;
+      audio.onended = () => setPlayingAudioId(null);
+      audio.onerror = () => {
+        toast.error(language === 'ar' ? 'فشل التشغيل' : 'Playback failed');
+        setPlayingAudioId(null);
+      };
+      await audio.play();
+      setPlayingAudioId(id);
+    } catch (e) {
+      toast.error(language === 'ar' ? 'فشل التشغيل' : 'Playback failed');
+      setPlayingAudioId(null);
+    }
+  };
+
+  const deleteSavedAudio = async (id: string) => {
+    if (!user?.id) return;
+    setDeletingAudioId(id);
+    try {
+      const item = savedAudioList.find(i => i.id === id);
+      if (item?.storage_path) {
+        await supabase.storage.from('saved-tts').remove([item.storage_path]);
+      }
+      const { error } = await (supabase as any).from('saved_tts').delete().eq('id', id).eq('user_id', user.id);
+      if (error) throw error;
+      setSavedAudioList(prev => prev.filter(item => item.id !== id));
+      toast.success(language === 'ar' ? 'تم الحذف' : 'Deleted');
+    } catch (e) {
+      toast.error(language === 'ar' ? 'فشل الحذف' : 'Failed to delete');
+    } finally {
+      setDeletingAudioId(null);
+    }
+  };
+
+  const getDaysRemaining = (expiresAt: string) => {
+    const now = new Date();
+    const expires = new Date(expiresAt);
+    const diff = Math.ceil((expires.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    return Math.max(0, diff);
+  };
 
   const loadDefaultPreferences = () => {
     const savedDefaultVoice = localStorage.getItem('wakti-default-voice');
@@ -476,6 +612,11 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
     }
   };
 
+  const qtTargetLabel = useMemo(() => {
+    const found = TRANSLATION_LANGUAGES.find((l) => l.code === targetLanguage);
+    return found ? found.name[language] : targetLanguage;
+  }, [language, targetLanguage]);
+
 
   const downloadAudio = () => {
     if (audioUrl) {
@@ -489,6 +630,50 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
     }
   };
 
+  // Save generated audio to cloud storage
+  const [savingAudio, setSavingAudio] = useState(false);
+
+  const saveGeneratedAudio = async () => {
+    if (!user?.id || !audioUrl || !text.trim()) return;
+    setSavingAudio(true);
+    try {
+      const selectedVoice = voices.find(v => v.voice_id === selectedVoiceId);
+      const audioResp = await fetch(audioUrl);
+      if (!audioResp.ok) throw new Error('Failed to read generated audio');
+      const audioBlob = await audioResp.blob();
+      if (!audioBlob || audioBlob.size === 0) throw new Error('Empty audio');
+
+      const safeVoice = (selectedVoice?.voice_name || 'voice').replace(/[^a-z0-9_-]+/gi, '-').slice(0, 40);
+      const storagePath = `${user.id}/translate/${Date.now()}-${safeVoice}.mp3`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('saved-tts')
+        .upload(storagePath, audioBlob, { contentType: 'audio/mpeg', upsert: false });
+      if (uploadError) throw uploadError;
+
+      const { error: insertError } = await (supabase as any).from('saved_tts').insert({
+        user_id: user.id,
+        text: text.trim().substring(0, 500),
+        voice_name: selectedVoice?.voice_name || 'Unknown',
+        voice_id: selectedVoiceId,
+        audio_url: null,
+        storage_path: storagePath,
+        source: 'translate',
+      });
+      if (insertError) throw insertError;
+
+      toast.success(language === 'ar' ? 'تم حفظ الصوت!' : 'Audio saved!');
+      if (qtTab === 'saved') {
+        await loadSavedAudio();
+      }
+    } catch (e: any) {
+      toast.error(language === 'ar' ? 'فشل الحفظ' : 'Failed to save');
+      console.error('Save audio error:', e);
+    } finally {
+      setSavingAudio(false);
+    }
+  };
+
   if (loading || isLoadingVoiceQuota) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -497,10 +682,164 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
     );
   }
 
+  if (qtTab === 'saved') {
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-end">
+          <div className="grid grid-cols-2 gap-1 p-1 rounded-xl border border-blue-200/60 dark:border-blue-800/60 bg-white/60 dark:bg-white/5">
+            <button
+              type="button"
+              onClick={() => setQtTab('translate')}
+              className="h-8 px-3 rounded-lg text-xs font-medium transition-all hover:bg-white/70 dark:hover:bg-white/10 active:scale-95"
+            >
+              {language === 'ar' ? 'ترجمة' : 'Translate'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setQtTab('saved')}
+              className="h-8 px-3 rounded-lg text-xs font-medium transition-all bg-white/90 dark:bg-white/10 shadow border border-blue-200/60 dark:border-blue-800/60 active:scale-95"
+            >
+              {language === 'ar' ? 'محفوظ' : 'Saved'}
+              {savedAudioList.length > 0 ? ` (${savedAudioList.length})` : ''}
+            </button>
+          </div>
+        </div>
+
+        <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border border-blue-200 dark:border-blue-800 rounded-lg space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Languages className="h-5 w-5 text-blue-600" />
+              <h3 className="font-medium text-blue-900 dark:text-blue-100">
+                {language === 'ar' ? 'الصوت المحفوظ' : 'Saved Audio'}
+              </h3>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
+              <AlertCircle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+              <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                {language === 'ar'
+                  ? 'يتم حذف الملفات المحفوظة تلقائياً بعد 20 يوماً'
+                  : 'Saved audio is automatically deleted after 20 days'}
+              </p>
+            </div>
+
+            {loadingSavedAudio ? (
+              <div className="flex justify-center py-4">
+                <Loader2 className="h-5 w-5 animate-spin" />
+              </div>
+            ) : savedAudioList.length === 0 ? (
+              <div className="text-center py-4 text-muted-foreground">
+                <Save className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">{language === 'ar' ? 'لا توجد ملفات صوتية محفوظة' : 'No saved audio yet'}</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {savedAudioList.map((item) => (
+                  <div
+                    key={item.id}
+                    className="rounded-lg border border-blue-200/60 dark:border-blue-800/60 bg-white/70 dark:bg-white/5 p-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium line-clamp-2">{item.text}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{item.voice_name}</p>
+                        <div className="flex items-center gap-1 text-[11px] text-muted-foreground mt-1">
+                          <Clock className="h-3 w-3" />
+                          <span>
+                            {language === 'ar'
+                              ? `يتبقى ${getDaysRemaining(item.expires_at)} يوم`
+                              : `${getDaysRemaining(item.expires_at)} days left`}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => playSavedAudio(item.id, item)}
+                          className="h-8 w-8 p-0"
+                        >
+                          {playingAudioId === item.id ? (
+                            <Volume2 className="h-4 w-4 text-blue-600" />
+                          ) : (
+                            <Play className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              const url = await getSavedAudioPlayableUrl(item);
+                              const link = document.createElement('a');
+                              link.href = url;
+                              link.download = 'saved-audio.mp3';
+                              document.body.appendChild(link);
+                              link.click();
+                              document.body.removeChild(link);
+                            } catch (e) {
+                              toast.error(language === 'ar' ? 'فشل التنزيل' : 'Download failed');
+                            }
+                          }}
+                          className="h-8 w-8 p-0"
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deleteSavedAudio(item.id)}
+                          disabled={deletingAudioId === item.id}
+                          className="h-8 w-8 p-0 text-red-500 hover:text-red-600"
+                        >
+                          {deletingAudioId === item.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Note: We no longer need "No Voices Available" fallback since default voices are always present
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-end">
+        <div className="grid grid-cols-2 gap-1 p-1 rounded-xl border border-blue-200/60 dark:border-blue-800/60 bg-white/60 dark:bg-white/5">
+          <button
+            type="button"
+            onClick={() => setQtTab('translate')}
+            className="h-8 px-3 rounded-lg text-xs font-medium transition-all bg-white/90 dark:bg-white/10 shadow border border-blue-200/60 dark:border-blue-800/60 active:scale-95"
+          >
+            {language === 'ar' ? 'ترجمة' : 'Translate'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setQtTab('saved')}
+            className="h-8 px-3 rounded-lg text-xs font-medium transition-all hover:bg-white/70 dark:hover:bg-white/10 active:scale-95"
+          >
+            {language === 'ar' ? 'محفوظ' : 'Saved'}
+            {savedAudioList.length > 0 ? ` (${savedAudioList.length})` : ''}
+          </button>
+        </div>
+      </div>
+
       {/* Character Usage - Updated to use totalAvailableCharacters consistently */}
       <div className="p-3 bg-muted rounded-lg">
         <div className="flex justify-between items-center">
@@ -596,11 +935,13 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
 
       {/* Quick Translator Section - ABOVE main TTS */}
       <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border border-blue-200 dark:border-blue-800 rounded-lg space-y-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Languages className="h-5 w-5 text-blue-600" />
-          <h3 className="font-medium text-blue-900 dark:text-blue-100">
-            {language === 'ar' ? 'مترجم سريع' : 'Quick Translator'}
-          </h3>
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2">
+            <Languages className="h-5 w-5 text-blue-600" />
+            <h3 className="font-medium text-blue-900 dark:text-blue-100">
+              {language === 'ar' ? 'مترجم سريع' : 'Quick Translator'}
+            </h3>
+          </div>
         </div>
 
         {/* Target Language Selector */}
@@ -810,6 +1151,14 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
             <Button onClick={downloadAudio} variant="outline" size="sm">
               <Download className="h-3 w-3 mr-1" />
               {language === 'ar' ? 'تحميل' : 'Download'}
+            </Button>
+            <Button onClick={saveGeneratedAudio} variant="outline" size="sm" disabled={savingAudio || !user}>
+              {savingAudio ? (
+                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              ) : (
+                <Save className="h-3 w-3 mr-1" />
+              )}
+              {language === 'ar' ? 'حفظ' : 'Save'}
             </Button>
           </div>
         </div>
