@@ -1242,6 +1242,15 @@ class WaktiAIV2ServiceClass {
           throw new Error('No valid images to send (all images filtered out)');
         }
 
+        const visionPrompt = (() => {
+          const n = payloadImages.length;
+          if (n <= 1) return message;
+          const header = language === 'ar'
+            ? `مهم جداً: لديك ${n} صور. يجب تحليل جميع الصور بالترتيب وعدم تجاهل أي صورة. اكتب نتيجتك بهذه الأقسام بالضبط: صورة 1، صورة 2${n >= 3 ? '، صورة 3' : ''}${n >= 4 ? '، صورة 4' : ''}. إذا كانت الصور مستندات، استخرج النص من كل صورة ثم قارن بينها.`
+            : `CRITICAL: You received ${n} images. You MUST analyze ALL images in order and not ignore any. Format your answer with these exact sections: Image 1, Image 2${n >= 3 ? ', Image 3' : ''}${n >= 4 ? ', Image 4' : ''}. If the images are documents, extract text from each image and then compare.`;
+          return `${header}\n\nUser prompt:\n${message}`;
+        })();
+
         // Call Supabase Edge Function with SSE streaming (stream:true). Server may still return JSON if it chooses.
         let resp: Response | null = null;
         for (let attempt = 1; attempt <= 2; attempt++) {
@@ -1249,7 +1258,7 @@ class WaktiAIV2ServiceClass {
             console.log(`🚀 VISION(SSE): Attempt ${attempt}/2 - Calling ${supabaseUrl}/functions/v1/wakti-vision-stream (provider=${primary})`);
             const body = {
               requestId: requestId,
-              prompt: message,
+              prompt: visionPrompt,
               language,
               personalTouch: pt,
               provider: primary,

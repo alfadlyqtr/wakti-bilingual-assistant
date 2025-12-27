@@ -69,7 +69,15 @@ export function SimplifiedFileUpload({
 
   const handleFileSelect = async (files: FileList | null, options?: { suppressAutoSwitch?: boolean }) => {
     if (!files || files.length === 0) return;
-    
+
+    const MAX_VISION_IMAGES = 4;
+    const existingCount = Array.isArray(uploadedFiles) ? uploadedFiles.length : 0;
+    const remainingSlots = Math.max(0, MAX_VISION_IMAGES - existingCount);
+    if (remainingSlots <= 0) {
+      showError(language === 'ar' ? 'الحد الأقصى للصور هو 4' : 'Max images is 4');
+      return;
+    }
+
     console.log('🔄 TRUE CLAUDE WAY: Processing', files.length, 'files as pure base64');
     
     const validFiles: UploadedFile[] = [];
@@ -82,7 +90,12 @@ export function SimplifiedFileUpload({
       return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'bmp', 'tiff', 'svg'].includes(ext);
     };
 
-    for (let i = 0; i < files.length; i++) {
+    const maxToProcess = Math.min(files.length, remainingSlots);
+    if (files.length > maxToProcess) {
+      showError(language === 'ar' ? 'الحد الأقصى للصور هو 4' : 'Max images is 4');
+    }
+
+    for (let i = 0; i < maxToProcess; i++) {
       const file = files[i];
       
       // Validate file type - use helper for iOS compatibility

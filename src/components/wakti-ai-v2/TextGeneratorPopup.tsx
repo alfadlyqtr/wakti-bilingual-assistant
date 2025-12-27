@@ -4,17 +4,18 @@ import { callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
 import DiagramsTab from './DiagramsTab';
 import PresentationTab from './PresentationTab';
+import TextTranslateTab from './TextTranslateTab';
 
 interface TextGeneratorPopupProps {
   isOpen?: boolean;
   onClose: () => void;
   onTextGenerated: (text: string, mode: 'compose' | 'reply') => void;
   renderAsPage?: boolean;
-  initialTab?: 'compose' | 'reply' | 'generated' | 'diagrams' | 'presentation';
+  initialTab?: 'compose' | 'reply' | 'generated' | 'diagrams' | 'presentation' | 'translate';
 }
 
 type Mode = 'compose' | 'reply';
-type Tab = 'compose' | 'reply' | 'generated' | 'diagrams' | 'presentation';
+type Tab = 'compose' | 'reply' | 'generated' | 'diagrams' | 'presentation' | 'translate';
 type Language = 'en' | 'ar';
 type ModelPreference = 'gpt-4o' | 'gpt-4o-mini' | 'auto';
 
@@ -166,6 +167,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   onClose,
   onTextGenerated,
   initialTab = 'compose',
+  renderAsPage = false,
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>((initialTab as Tab) || 'compose');
   const [mode, setMode] = useState<Mode>('compose');
@@ -273,17 +275,14 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     } catch { }
   }, []);
 
-  // Ensure initialTab is respected on first mount
   useEffect(() => {
-    if (initialTab && ['compose','reply','generated','diagrams'].includes(initialTab)) {
+    if (initialTab && ['compose', 'reply', 'generated', 'diagrams', 'presentation', 'translate'].includes(initialTab)) {
       setActiveTab(initialTab as Tab);
       if (initialTab !== 'diagrams') {
         setMode(initialTab === 'reply' ? 'reply' : 'compose');
       }
     }
-    // run only once on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [initialTab]);
 
   // If user opens Generated tab and there's no current text, auto-load newest cached
   useEffect(() => {
@@ -623,56 +622,8 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     setShowExtractedFields(false);
   }, []);
 
-  return (
-    <div className="w-full h-full flex items-start justify-center p-4">
-      <div className="w-full max-w-6xl rounded-xl border bg-background shadow-2xl">
-        {/* Header */}
-        <div className="px-6 py-5 mt-6 border-b flex items-center gap-3">
-          <h1 className="text-lg font-semibold whitespace-nowrap">{title}</h1>
-          <div className="ml-auto" />
-        </div>
-
-        {/* Tabs */}
-        <div className="px-6 pt-4">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
-            <button
-              onClick={() => { setActiveTab('compose'); setMode('compose'); }}
-              className={`px-3 py-2 rounded-md border text-sm ${activeTab === 'compose' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
-            >{language === 'ar' ? 'تأليف' : 'Compose'}</button>
-            <button
-              onClick={() => { setActiveTab('reply'); setMode('reply'); }}
-              className={`px-3 py-2 rounded-md border text-sm ${activeTab === 'reply' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
-            >{language === 'ar' ? 'رد' : 'Reply'}</button>
-            <button
-              disabled={!generatedText && cachedTexts.length === 0}
-              onClick={() => {
-                // Switch to Generated; if empty, preload latest cached
-                if (!generatedText && cachedTexts.length > 0) {
-                  setGeneratedText(cachedTexts[0]);
-                }
-                setActiveTab('generated');
-              }}
-              className={`px-3 py-2 rounded-md border text-sm ${
-                activeTab === 'generated'
-                  ? 'bg-primary text-primary-foreground'
-                  : (generatedText || cachedTexts.length > 0)
-                    ? 'hover:bg-muted'
-                    : 'opacity-60 cursor-not-allowed'
-              }`}
-            >{language === 'ar' ? 'النص المُولد' : 'Generated Text'}</button>
-            <button
-              onClick={() => setActiveTab('diagrams')}
-              className={`px-3 py-2 rounded-md border text-sm ${activeTab === 'diagrams' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
-            >{language === 'ar' ? 'المخططات' : 'Diagrams'}</button>
-            <button
-              onClick={() => setActiveTab('presentation')}
-              className={`px-3 py-2 rounded-md border text-sm bg-gradient-to-r ${activeTab === 'presentation' ? 'from-indigo-600 to-purple-600 text-white' : 'from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 hover:from-indigo-100 hover:to-purple-100 dark:hover:from-indigo-900/40 dark:hover:to-purple-900/40 text-indigo-700 dark:text-indigo-300'}`}
-            >{language === 'ar' ? 'العروض التقديمية' : 'Presentations'}</button>
-          </div>
-        </div>
-
-        {/* Body */}
-        <div className="px-6 md:pb-6 pb-[calc(var(--app-bottom-tabs-h)+16px)]">
+  const body = (
+    <div className="px-6 md:pb-6 pb-[calc(var(--app-bottom-tabs-h)+16px)]">
           {activeTab === 'compose' && (
             <div className="space-y-4">
               <div className="grid gap-2">
@@ -1151,11 +1102,15 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
             <PresentationTab />
           </div>
 
-          {error && activeTab !== 'diagrams' && activeTab !== 'presentation' && (
+          <div className={activeTab === 'translate' ? '' : 'hidden'}>
+            <TextTranslateTab />
+          </div>
+
+          {error && activeTab !== 'diagrams' && activeTab !== 'presentation' && activeTab !== 'translate' && (
             <div className="mt-4 text-sm text-destructive">{error}</div>
           )}
           {/* Inline generate button at end of content (not sticky) - hide for diagrams and presentation */}
-          {activeTab !== 'diagrams' && activeTab !== 'presentation' && (
+          {activeTab !== 'diagrams' && activeTab !== 'presentation' && activeTab !== 'translate' && (
           <div className="mt-6 flex justify-end">
               <button
                 className={`px-5 py-2.5 rounded-full text-sm font-medium shadow-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500 hover:shadow-xl transition-all ${canGenerate ? '' : 'opacity-60 cursor-not-allowed'}`}
@@ -1167,6 +1122,70 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
             </div>
           )}
         </div>
+  );
+
+  if (renderAsPage) {
+    return (
+      <div className="w-full">
+        {body}
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full h-full flex items-start justify-center p-4">
+      <div className="w-full max-w-6xl rounded-xl border bg-background shadow-2xl">
+        {/* Header */}
+        <div className="px-6 py-5 mt-6 border-b flex items-center gap-3">
+          <h1 className="text-lg font-semibold whitespace-nowrap">{title}</h1>
+          <div className="ml-auto" />
+        </div>
+
+        {/* Tabs */}
+        <div className="px-6 pt-4">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-2 mb-4">
+            <button
+              onClick={() => { setActiveTab('compose'); setMode('compose'); }}
+              className={`px-3 py-2 rounded-md border text-sm ${activeTab === 'compose' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+            >{language === 'ar' ? 'تأليف' : 'Compose'}</button>
+            <button
+              onClick={() => { setActiveTab('reply'); setMode('reply'); }}
+              className={`px-3 py-2 rounded-md border text-sm ${activeTab === 'reply' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+            >{language === 'ar' ? 'رد' : 'Reply'}</button>
+            <button
+              disabled={!generatedText && cachedTexts.length === 0}
+              onClick={() => {
+                // Switch to Generated; if empty, preload latest cached
+                if (!generatedText && cachedTexts.length > 0) {
+                  setGeneratedText(cachedTexts[0]);
+                }
+                setActiveTab('generated');
+              }}
+              className={`px-3 py-2 rounded-md border text-sm ${
+                activeTab === 'generated'
+                  ? 'bg-primary text-primary-foreground'
+                  : (generatedText || cachedTexts.length > 0)
+                    ? 'hover:bg-muted'
+                    : 'opacity-60 cursor-not-allowed'
+              }`}
+            >{language === 'ar' ? 'النص المُولد' : 'Generated Text'}</button>
+            <button
+              onClick={() => setActiveTab('diagrams')}
+              className={`px-3 py-2 rounded-md border text-sm ${activeTab === 'diagrams' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+            >{language === 'ar' ? 'المخططات' : 'Diagrams'}</button>
+            <button
+              onClick={() => setActiveTab('presentation')}
+              className={`px-3 py-2 rounded-md border text-sm bg-gradient-to-r ${activeTab === 'presentation' ? 'from-indigo-600 to-purple-600 text-white' : 'from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 hover:from-indigo-100 hover:to-purple-100 dark:hover:from-indigo-900/40 dark:hover:to-purple-900/40 text-indigo-700 dark:text-indigo-300'}`}
+            >{language === 'ar' ? 'العروض التقديمية' : 'Presentations'}</button>
+            <button
+              onClick={() => setActiveTab('translate')}
+              className={`px-3 py-2 rounded-md border text-sm ${activeTab === 'translate' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+            >{language === 'ar' ? 'مترجم النص' : 'Text Translator'}</button>
+          </div>
+        </div>
+
+        {/* Body */}
+        {body}
       </div>
     </div>
   );

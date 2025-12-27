@@ -3,6 +3,16 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useTheme } from '@/providers/ThemeProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,6 +33,10 @@ import {
   ChevronDown,
   ChevronUp,
   Mic,
+  RefreshCw,
+  Video,
+  Eye,
+  EyeOff,
   Clock,
   AlertCircle,
   Loader2,
@@ -162,6 +176,75 @@ const MAX_AUDIO_SIZE_MB = 10;
 
 type VideoMakerTab = 'create' | 'saved';
 
+// Video player component that fetches video as blob to handle content-type issues
+function VideoPlayer({ url, language }: { url: string; language: string }) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const fetchVideo = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const blob = await response.blob();
+        const videoBlob = new Blob([blob], { type: blob.type || 'video/webm' });
+        const objectUrl = URL.createObjectURL(videoBlob);
+        if (mounted) {
+          setBlobUrl(objectUrl);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('Video fetch error:', err);
+        if (mounted) {
+          setError(language === 'ar' ? 'فشل تحميل الفيديو' : 'Failed to load video');
+          setLoading(false);
+        }
+      }
+    };
+    fetchVideo();
+    return () => {
+      mounted = false;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [url]);
+
+  if (loading) {
+    return (
+      <div className="px-3 pb-3">
+        <div className="w-full h-48 bg-black rounded-lg flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-white" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="px-3 pb-3">
+        <div className="w-full h-48 bg-black rounded-lg flex items-center justify-center text-white text-sm">
+          {error}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-3 pb-3">
+      <video 
+        src={blobUrl || url}
+        controls 
+        autoPlay
+        playsInline
+        className="w-full max-h-[60vh] rounded-lg bg-black object-contain"
+      />
+    </div>
+  );
+}
+
 export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab } = {}) {
   const { language } = useTheme();
   const { user } = useAuth();
@@ -170,6 +253,9 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
   const audioInputRef = useRef<HTMLInputElement>(null);
 
   const [activeTab, setActiveTab] = useState<VideoMakerTab>(initialTab || 'create');
+
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [pendingDeleteVideo, setPendingDeleteVideo] = useState<SavedVideo | null>(null);
 
   // Project state
   const [project, setProject] = useState<VideoProject>({
@@ -279,24 +365,37 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
           let signedUrl: string | null = null;
           let thumbnailSignedUrl: string | null = null;
 
+          // Use signed URL for better compatibility (handles content-type properly)
           if (v.storage_path) {
-            const { data: urlData } = await supabase.storage
+            const { data: urlData, error: urlErr } = await supabase.storage
               .from('videos')
               .createSignedUrl(v.storage_path, 3600);
-            signedUrl = urlData?.signedUrl || null;
+            if (urlErr) {
+              console.error('[VideoMaker] Signed URL error:', urlErr);
+              // Fallback to public URL
+              const { data: pubData } = supabase.storage
+                .from('videos')
+                .getPublicUrl(v.storage_path);
+              signedUrl = pubData?.publicUrl || null;
+            } else {
+              signedUrl = urlData?.signedUrl || null;
+            }
+            console.log('[VideoMaker] Video URL:', signedUrl ? 'OK' : 'FAILED', 'path:', v.storage_path);
           }
 
           if ((v as any).thumbnail_url) {
-            const { data: tUrl } = await supabase.storage
+            const { data: tUrl } = supabase.storage
               .from('videos')
-              .createSignedUrl((v as any).thumbnail_url, 3600);
-            thumbnailSignedUrl = tUrl?.signedUrl || null;
+              .getPublicUrl((v as any).thumbnail_url);
+            thumbnailSignedUrl = tUrl?.publicUrl || null;
+            console.log('[VideoMaker] Thumbnail URL:', thumbnailSignedUrl);
           }
 
           return { ...v, signedUrl, thumbnailSignedUrl };
         })
       );
 
+      console.log('[VideoMaker] Loaded videos:', withUrls);
       setSavedVideos(withUrls);
     } catch (e) {
       console.error('Failed to load saved videos:', e);
@@ -319,11 +418,9 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
     return m > 0 ? `${m}:${String(s).padStart(2, '0')}` : `${s}s`;
   };
 
-  const handleDeleteSavedVideo = async (v: SavedVideo) => {
-    if (!user) return;
-    const confirmText = language === 'ar' ? 'هل تريد حذف هذا الفيديو؟' : 'Delete this video?';
-    if (!window.confirm(confirmText)) return;
-
+  const confirmDeleteSavedVideo = async () => {
+    if (!user || !pendingDeleteVideo) return;
+    const v = pendingDeleteVideo;
     try {
       if (v.storage_path) {
         await supabase.storage.from('videos').remove([v.storage_path]);
@@ -343,7 +440,15 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
     } catch (e) {
       console.error('Delete failed:', e);
       toast.error(language === 'ar' ? 'فشل الحذف' : 'Delete failed');
+    } finally {
+      setDeleteDialogOpen(false);
+      setPendingDeleteVideo(null);
     }
+  };
+
+  const handleDeleteSavedVideo = (v: SavedVideo) => {
+    setPendingDeleteVideo(v);
+    setDeleteDialogOpen(true);
   };
 
   const handleShareSavedVideo = async (v: SavedVideo) => {
@@ -547,15 +652,15 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
     <div className="space-y-4">
       {/* Upload area */}
       <Card 
-        className="p-6 border-2 border-dashed border-border hover:border-primary/50 transition-colors cursor-pointer"
+        className="enhanced-card p-6 sm:p-8 border-2 border-dashed border-border/60 hover:border-primary/60 transition-all cursor-pointer hover:shadow-[var(--glow-primary)]"
         onClick={() => fileInputRef.current?.click()}
       >
         <div className="flex flex-col items-center gap-3 text-center">
-          <div className="p-4 rounded-full bg-primary/10">
-            <Upload className="h-8 w-8 text-primary" />
+          <div className="p-4 rounded-2xl bg-gradient-primary shadow-[var(--shadow-soft)]">
+            <Upload className="h-8 w-8 text-white" />
           </div>
           <div>
-            <p className="font-medium">
+            <p className="font-semibold bg-gradient-primary bg-clip-text text-transparent">
               {language === 'ar' ? 'اضغط لتحميل الصور' : 'Tap to upload images'}
             </p>
             <p className="text-sm text-muted-foreground">
@@ -631,10 +736,10 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
       {/* Proceed button */}
       {canProceedToCustomize && (
         <Button 
-          className="w-full"
+          className="w-full btn-enhanced text-white hover:shadow-glow active:scale-95"
           onClick={() => setStep('customize')}
         >
-          {language === 'ar' ? 'التالي: تخصيص' : 'Next: Customize'}
+          {language === 'ar' ? 'التالي' : 'Next'}
         </Button>
       )}
     </div>
@@ -1282,13 +1387,13 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
         .map(slide => ({
           imageFile: slide.imageFile as File,
           text: slide.text || undefined,
-          textPosition: slide.textPosition,
-          textColor: slide.textColor,
-          textSize: slide.textSize,
-          textAnimation: slide.textAnimation,
+          textPosition: slide.textPosition || 'bottom',
+          textColor: slide.textColor || TEMPLATES[project.template].textColor,
+          textSize: slide.textSize || 'medium',
+          textAnimation: slide.textAnimation || 'fade-in',
           durationSec: slide.durationSec,
           transition: slide.transition,
-          filters: slide.filters,
+          filters: slide.filters || { brightness: 100, contrast: 100, saturation: 100 },
         }));
 
       if (slidesConfig.length === 0) {
@@ -1299,6 +1404,8 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
       const videoBlob = await generateVideo({
         slides: slidesConfig,
         audioUrl: project.audio?.url || null,
+        audioTrimStart: project.audio?.trimStart || 0,
+        audioTrimEnd: project.audio?.trimEnd,
         width: 1080,
         height: 1920,
         transitionDuration: 0.5,
@@ -1330,66 +1437,62 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
     setIsSaving(true);
     try {
       let thumbnailPath: string | null = null;
+      
+      // Generate thumbnail from first slide image (more reliable than video extraction)
       try {
-        const thumb = await (async () => {
-          const url = URL.createObjectURL(generatedVideoBlob);
-          try {
-            const video = document.createElement('video');
-            video.muted = true;
-            video.playsInline = true;
-            video.preload = 'auto';
-            video.src = url;
-            await new Promise<void>((resolve, reject) => {
-              const onLoaded = () => resolve();
-              const onError = () => reject(new Error('Video thumbnail load failed'));
-              video.addEventListener('loadeddata', onLoaded, { once: true });
-              video.addEventListener('error', onError, { once: true });
+        const firstSlide = project.slides[0];
+        if (firstSlide?.imageFile) {
+          const img = new Image();
+          const imgUrl = URL.createObjectURL(firstSlide.imageFile);
+          
+          await new Promise<void>((resolve, reject) => {
+            img.onload = () => resolve();
+            img.onerror = () => reject(new Error('Image load failed'));
+            img.src = imgUrl;
+          });
+          
+          const canvas = document.createElement('canvas');
+          const maxSize = 400;
+          const scale = Math.min(maxSize / img.width, maxSize / img.height);
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
+          
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            
+            const thumb = await new Promise<Blob | null>((resolve) => {
+              canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.85);
             });
-            const targetTime = Math.min(0.1, Math.max(0, (video.duration || 0) * 0.01));
-            if (!Number.isNaN(targetTime)) {
-              try {
-                video.currentTime = targetTime;
-                await new Promise<void>((resolve) => {
-                  video.addEventListener('seeked', () => resolve(), { once: true });
+            
+            if (thumb) {
+              const thumbName = `${user.id}/thumbnails/${Date.now()}.jpg`;
+              const { data: tData, error: tErr } = await supabase.storage
+                .from('videos')
+                .upload(thumbName, thumb, {
+                  contentType: 'image/jpeg',
+                  cacheControl: '3600'
                 });
-              } catch (_) {}
+              if (!tErr) thumbnailPath = tData?.path || null;
             }
-            const canvas = document.createElement('canvas');
-            const w = video.videoWidth || 720;
-            const h = video.videoHeight || 1280;
-            canvas.width = w;
-            canvas.height = h;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) return null;
-            ctx.drawImage(video, 0, 0, w, h);
-            return await new Promise<Blob | null>((resolve) => {
-              canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.82);
-            });
-          } finally {
-            URL.revokeObjectURL(url);
           }
-        })();
-
-        if (thumb) {
-          const thumbName = `${user.id}/thumbnails/${Date.now()}.jpg`;
-          const { data: tData, error: tErr } = await supabase.storage
-            .from('videos')
-            .upload(thumbName, thumb, {
-              contentType: 'image/jpeg',
-              cacheControl: '3600'
-            });
-          if (!tErr) thumbnailPath = tData?.path || null;
+          
+          URL.revokeObjectURL(imgUrl);
         }
-      } catch (_) {
+      } catch (thumbErr) {
+        console.warn('Thumbnail generation failed:', thumbErr);
         thumbnailPath = null;
       }
 
-      // Upload video to storage
-      const fileName = `${user.id}/${Date.now()}.mp4`;
+      // Upload video to storage - detect actual format from blob type
+      const isWebm = generatedVideoBlob.type.includes('webm');
+      const ext = isWebm ? 'webm' : 'mp4';
+      const contentType = isWebm ? 'video/webm' : 'video/mp4';
+      const fileName = `${user.id}/${Date.now()}.${ext}`;
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('videos')
         .upload(fileName, generatedVideoBlob, {
-          contentType: 'video/mp4',
+          contentType,
           cacheControl: '3600'
         });
 
@@ -1488,157 +1591,265 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
 
   const renderSavedTab = () => (
     <div className="space-y-4">
-      <div className="flex gap-2">
-        <Button className="flex-1" onClick={() => { setActiveTab('create'); setStep('upload'); }}>
-          {language === 'ar' ? 'إنشاء فيديو جديد' : 'Create New Video'}
-        </Button>
-        <Button variant="outline" onClick={loadSavedVideos} disabled={loadingVideos}>
-          {loadingVideos ? <Loader2 className="h-4 w-4 animate-spin" /> : (language === 'ar' ? 'تحديث' : 'Refresh')}
-        </Button>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">
+          {language === 'ar' ? 'فيديوهاتي' : 'My Videos'}
+          {savedVideos.length > 0 && (
+            <span className="ml-2 text-sm font-normal text-muted-foreground">
+              ({savedVideos.length})
+            </span>
+          )}
+        </h2>
+        <div className="flex gap-2">
+          <Button 
+            size="sm" 
+            variant="outline" 
+            onClick={loadSavedVideos} 
+            disabled={loadingVideos}
+          >
+            {loadingVideos ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          </Button>
+          <Button size="sm" onClick={() => { setActiveTab('create'); setStep('upload'); }}>
+            <Plus className="h-4 w-4 mr-1" />
+            {language === 'ar' ? 'جديد' : 'New'}
+          </Button>
+        </div>
       </div>
 
       {loadingVideos ? (
-        <Card className="p-6">
-          <div className="flex items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : savedVideos.length === 0 ? (
+        <Card className="p-8 text-center border-dashed">
+          <div className="flex flex-col items-center gap-3">
+            <div className="p-4 rounded-full bg-muted">
+              <Video className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <div>
+              <p className="font-medium">
+                {language === 'ar' ? 'لا توجد فيديوهات بعد' : 'No videos yet'}
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                {language === 'ar' ? 'أنشئ أول فيديو لك!' : 'Create your first video!'}
+              </p>
+            </div>
+            <Button onClick={() => { setActiveTab('create'); setStep('upload'); }} className="mt-2">
+              <Plus className="h-4 w-4 mr-2" />
+              {language === 'ar' ? 'إنشاء فيديو' : 'Create Video'}
+            </Button>
           </div>
         </Card>
-      ) : savedVideos.length === 0 ? (
-        <Card className="p-6 text-center">
-          <p className="text-sm text-muted-foreground">
-            {language === 'ar' ? 'لا توجد فيديوهات محفوظة بعد' : 'No saved videos yet'}
-          </p>
-        </Card>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="space-y-3">
           {savedVideos.map((v) => (
             <Card key={v.id} className="overflow-hidden">
-              <button
-                className="w-full aspect-[9/16] bg-muted relative"
-                onClick={() => setActivePreviewId((prev) => (prev === v.id ? null : v.id))}
-              >
-                {v.thumbnailSignedUrl ? (
-                  <img
-                    src={v.thumbnailSignedUrl}
-                    alt={v.title || 'Wakti Video'}
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                  />
-                ) : v.signedUrl ? (
-                  <video
-                    src={v.signedUrl}
-                    className="w-full h-full object-cover"
-                    muted
-                    playsInline
-                    preload="metadata"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">
-                    {language === 'ar' ? 'لا يوجد معاينة' : 'No preview'}
-                  </div>
-                )}
-                <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
-                  <div className="text-xs px-2 py-1 rounded bg-black/60 text-white truncate max-w-[70%]">
-                    {v.title || (language === 'ar' ? 'بدون عنوان' : 'Untitled')}
+              <div className="flex gap-3 p-3">
+                {/* Thumbnail */}
+                <button
+                  className="w-20 h-28 md:w-24 md:h-32 rounded-lg overflow-hidden bg-gradient-to-br from-primary/20 to-primary/5 shrink-0 relative group"
+                  onClick={() => setActivePreviewId((prev) => (prev === v.id ? null : v.id))}
+                >
+                  {v.thumbnailSignedUrl ? (
+                    <img
+                      src={v.thumbnailSignedUrl}
+                      alt={v.title || 'Video'}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Video className="h-6 w-6 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Play className="h-8 w-8 text-white" />
                   </div>
                   {!!v.duration_seconds && (
-                    <div className="text-xs px-2 py-1 rounded bg-black/60 text-white">
+                    <div className="absolute bottom-1 right-1 text-[10px] px-1.5 py-0.5 rounded bg-black/70 text-white font-medium">
                       {formatDuration(v.duration_seconds)}
                     </div>
                   )}
-                </div>
-              </button>
+                </button>
 
-              {activePreviewId === v.id && v.signedUrl && (
-                <div className="p-2">
-                  <video src={v.signedUrl} controls className="w-full rounded" />
-                </div>
-              )}
+                {/* Info */}
+                <div className="flex-1 min-w-0 flex flex-col justify-between py-1">
+                  <div>
+                    <h3 className="font-medium truncate">
+                      {v.title || (language === 'ar' ? 'بدون عنوان' : 'Untitled')}
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {new Date(v.created_at).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                      })}
+                    </p>
+                    <div className="flex items-center gap-1 mt-1">
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        v.is_public 
+                          ? 'bg-green-500/10 text-green-600 dark:text-green-400' 
+                          : 'bg-muted text-muted-foreground'
+                      }`}>
+                        {v.is_public ? (language === 'ar' ? 'عام' : 'Public') : (language === 'ar' ? 'خاص' : 'Private')}
+                      </span>
+                    </div>
+                  </div>
 
-              <div className="p-2 space-y-2">
-                <div className="flex items-center justify-between">
-                  <Button
-                    variant={v.is_public ? 'default' : 'outline'}
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => handleTogglePublic(v)}
-                  >
-                    {v.is_public ? (language === 'ar' ? 'عام' : 'Public') : (language === 'ar' ? 'خاص' : 'Private')}
-                  </Button>
-                                  </div>
-
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" className="flex-1" onClick={() => handleShareSavedVideo(v)}>
-                    <Share2 className="h-4 w-4 mr-2" />
-                    {language === 'ar' ? 'مشاركة' : 'Share'}
-                  </Button>
-                  <Button variant="destructive" size="sm" onClick={() => handleDeleteSavedVideo(v)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 mt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-3"
+                      onClick={() => handleTogglePublic(v)}
+                    >
+                      {v.is_public ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-3"
+                      onClick={() => handleShareSavedVideo(v)}
+                    >
+                      <Share2 className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-3 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                      onClick={() => handleDeleteSavedVideo(v)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
               </div>
+
+              {/* Expanded video player */}
+              {activePreviewId === v.id && v.signedUrl && (
+                <VideoPlayer 
+                  url={v.signedUrl} 
+                  language={language}
+                />
+              )}
             </Card>
           ))}
         </div>
       )}
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={(open) => {
+        setDeleteDialogOpen(open);
+        if (!open) setPendingDeleteVideo(null);
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {language === 'ar' ? 'حذف الفيديو؟' : 'Delete video?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {language === 'ar'
+                ? 'لا يمكن التراجع عن هذا الإجراء.'
+                : "This action can't be undone."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>
+              {language === 'ar' ? 'إلغاء' : 'Cancel'}
+            </AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={confirmDeleteSavedVideo}>
+              {language === 'ar' ? 'حذف' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 
   return (
-    <div className="space-y-4">
-      {/* Tab switcher */}
-      <div className="flex gap-2 border-b border-border pb-2">
-        <Button
-          variant={activeTab === 'create' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setActiveTab('create')}
-        >
-          {language === 'ar' ? 'إنشاء' : 'Create'}
-        </Button>
-        <Button
-          variant={activeTab === 'saved' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setActiveTab('saved')}
-        >
-          {language === 'ar' ? 'المحفوظات' : 'My Videos'}
-        </Button>
-      </div>
+    <div className="w-full max-w-6xl mx-auto p-3 md:p-6 pb-20 md:pb-6">
+      <div className="relative space-y-4">
+        <div className="pointer-events-none absolute -inset-2 rounded-[2rem] opacity-60 blur-2xl bg-[var(--gradient-warm)] dark:opacity-0" />
+        <div className="pointer-events-none absolute -inset-2 rounded-[2rem] opacity-0 blur-2xl bg-[var(--gradient-vibrant)] dark:opacity-25" />
 
-      {activeTab === 'saved' ? (
-        renderSavedTab()
-      ) : (
-        <>
-          {/* Step indicator */}
+        <div className="enhanced-card rounded-[2rem] p-4 md:p-6 shadow-[var(--shadow-vibrant)]">
           <div className="flex items-center justify-between">
-            {steps.map((s, i) => (
-              <React.Fragment key={s.key}>
-                <div className="flex flex-col items-center gap-1">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-                    step === s.key 
-                      ? 'bg-primary text-primary-foreground' 
-                      : steps.findIndex(x => x.key === step) > i
-                      ? 'bg-primary/20 text-primary'
-                      : 'bg-muted text-muted-foreground'
-                  }`}>
-                    <s.icon className="h-5 w-5" />
-                  </div>
-                  <span className="text-xs">{s.label}</span>
-                </div>
-                {i < steps.length - 1 && (
-                  <div className={`flex-1 h-0.5 mx-2 ${
-                    steps.findIndex(x => x.key === step) > i ? 'bg-primary' : 'bg-muted'
-                  }`} />
-                )}
-              </React.Fragment>
-            ))}
+            <h1 className="text-xl md:text-2xl font-bold bg-gradient-primary bg-clip-text text-transparent">
+              {language === 'ar' ? 'صانع الفيديو' : 'Video Maker'}
+            </h1>
+            <div />
           </div>
 
-          {/* Step content */}
-          {step === 'upload' && renderUploadStep()}
-          {step === 'customize' && renderCustomizeStep()}
-          {step === 'generate' && renderGenerateStep()}
-        </>
-      )}
+          {/* Tab switcher */}
+          <div className="mt-4 rounded-2xl p-2 flex gap-2 border border-white/10 bg-white/5 backdrop-blur-xl dark:bg-black/20">
+            <button
+              type="button"
+              onClick={() => setActiveTab('create')}
+              className={`flex-1 h-11 rounded-xl border text-sm font-semibold transition-all active:scale-95 ${
+                activeTab === 'create'
+                  ? 'btn-enhanced text-white border-transparent shadow-[var(--glow-primary)]'
+                  : 'bg-white/10 border-border/60 hover:bg-white/15'
+              }`}
+            >
+              {language === 'ar' ? 'إنشاء' : 'Create'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('saved')}
+              className={`flex-1 h-11 rounded-xl border text-sm font-semibold transition-all active:scale-95 ${
+                activeTab === 'saved'
+                  ? 'btn-enhanced text-white border-transparent shadow-[var(--glow-primary)]'
+                  : 'bg-white/10 border-border/60 hover:bg-white/15'
+              }`}
+            >
+              {language === 'ar' ? 'فيديوهاتي' : 'My Videos'}
+            </button>
+          </div>
+
+          <div className="mt-4">
+            {activeTab === 'saved' ? (
+              renderSavedTab()
+            ) : (
+              <>
+                {/* Step indicator */}
+                <Card className="enhanced-card rounded-2xl p-4 border border-white/10 bg-white/5 backdrop-blur-xl dark:bg-black/20">
+                  <div className="flex items-center justify-between">
+                    {steps.map((s, i) => (
+                      <React.Fragment key={s.key}>
+                        <div className="flex flex-col items-center gap-2 min-w-[72px]">
+                          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all ${
+                            step === s.key
+                              ? 'btn-enhanced text-white shadow-[var(--glow-primary)]'
+                              : steps.findIndex(x => x.key === step) > i
+                              ? 'bg-primary/15 text-primary'
+                              : 'bg-muted/60 text-muted-foreground'
+                          }`}>
+                            <s.icon className="h-5 w-5" />
+                          </div>
+                          <span className="text-xs font-medium text-muted-foreground">{s.label}</span>
+                        </div>
+                        {i < steps.length - 1 && (
+                          <div className={`flex-1 h-1 mx-2 rounded-full ${
+                            steps.findIndex(x => x.key === step) > i ? 'bg-primary/60' : 'bg-muted/60'
+                          }`} />
+                        )}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                </Card>
+
+                {/* Step content */}
+                <div className="mt-4">
+                  {step === 'upload' && renderUploadStep()}
+                  {step === 'customize' && renderCustomizeStep()}
+                  {step === 'generate' && renderGenerateStep()}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

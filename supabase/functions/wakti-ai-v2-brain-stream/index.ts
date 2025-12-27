@@ -442,6 +442,91 @@ interface Gemini3SearchResult {
   };
 }
 
+function buildSearchFollowupContents(
+  rawUserMessage: string,
+  queryText: string,
+  recentMessages: unknown[] | undefined
+): Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> {
+  const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+
+  const msgs = Array.isArray(recentMessages)
+    ? recentMessages
+        .filter((m) => m && typeof m === 'object')
+        .map((m) => m as Record<string, unknown>)
+    : [];
+
+  const convo = msgs
+    .filter((m) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+    .map((m) => ({ role: m.role as 'user' | 'assistant', content: (m.content as string) || '' }))
+    .filter((m) => m.content.trim().length > 0);
+
+  const lastAssistant = [...convo].reverse().find((m) => m.role === 'assistant')?.content || '';
+  const lastUser = [...convo].reverse().find((m) => m.role === 'user')?.content || '';
+
+  const isAffirmativeOnly = (() => {
+    const t = (rawUserMessage || '').trim().toLowerCase();
+    if (!t) return false;
+    // EN
+    if (/^(yes|y|yeah|yep|sure|ok|okay|do it|go ahead|please)\b/.test(t)) return true;
+    // AR
+    if (/^(نعم|اي|أيوه|ايوه|تمام|اوكي|حاضر|تفضل|يلا)\b/.test(t)) return true;
+    return false;
+  })();
+
+  const getLastAssistantQuestion = (text: string): string => {
+    const t = (text || '').trim();
+    if (!t) return '';
+    const lines = t.split('\n').map((l) => l.trim()).filter(Boolean);
+    for (let i = lines.length - 1; i >= 0; i -= 1) {
+      const line = lines[i];
+      if (line.endsWith('?')) return line.slice(0, 500);
+    }
+    const m = t.match(/([^\n\r]{10,500}\?)\s*$/);
+    return m ? m[1].slice(0, 500) : '';
+  };
+
+  const assistantQuestion = getLastAssistantQuestion(lastAssistant);
+
+  const resolvedQueryText = (() => {
+    if (!isAffirmativeOnly) return queryText;
+    if (!assistantQuestion) {
+      return `User replied "${rawUserMessage}" to your previous follow-up. Please proceed with what you asked for.\n\n${queryText}`;
+    }
+    return `User replied "${rawUserMessage}" to your previous follow-up question.\n\nPrevious question: "${assistantQuestion}"\n\nCRITICAL: The user said YES. Execute BOTH options offered in that question (A and B). If the question offered multiple actions, do all of them in a compact way. Then stop and ask one short follow-up question.\n\n${queryText}`;
+  })();
+
+  const lastTurns = convo.slice(-6);
+  const summaryLines: string[] = [];
+  for (let i = 0; i < lastTurns.length; i += 2) {
+    const u = lastTurns[i];
+    const a = lastTurns[i + 1];
+    if (!u || u.role !== 'user') continue;
+    const uText = u.content.replace(/\s+/g, ' ').trim().slice(0, 180);
+    let aText = a && a.role === 'assistant' ? a.content.replace(/\s+/g, ' ').trim() : '';
+    aText = aText.slice(0, 220);
+    if (aText) summaryLines.push(`- User: ${uText}\n  Assistant: ${aText}`);
+    else summaryLines.push(`- User: ${uText}`);
+  }
+
+  const compactSummary = summaryLines.join('\n').slice(0, 1200);
+
+  if (compactSummary || lastUser || lastAssistant) {
+    const ctx =
+      `CONTEXT (last turns, for continuity only):\n` +
+      `${compactSummary ? compactSummary + '\n\n' : ''}` +
+      `${lastUser ? `Last user message: ${lastUser.slice(0, 500)}\n` : ''}` +
+      `${lastAssistant ? `Last assistant answer: ${lastAssistant.slice(0, 900)}\n` : ''}` +
+      `\nNow answer the user's new request using google_search.`;
+    contents.push({ role: 'user', parts: [{ text: ctx }] });
+    if (lastAssistant) {
+      contents.push({ role: 'model', parts: [{ text: lastAssistant.slice(0, 900) }] });
+    }
+  }
+
+  contents.push({ role: 'user', parts: [{ text: resolvedQueryText }] });
+  return contents;
+}
+
 // Chat mode: gemini-2.5-flash with grounding (smooth, fast, conversational)
 async function streamGemini25FlashGrounded(
   query: string,
@@ -554,6 +639,7 @@ async function streamGemini3WithSearch(
   query: string,
   systemInstruction: string,
   generationConfig: Record<string, unknown> | undefined,
+  recentMessages: unknown[] | undefined,
   onToken: (token: string) => void,
   onGroundingMetadata: (meta: Gemini3SearchResult['groundingMetadata']) => void,
   _userLocation?: { latitude: number; longitude: number } | null
@@ -575,7 +661,7 @@ async function streamGemini3WithSearch(
   const latestQuery = `${query} (as of ${todayStr}).${nhlHint}\n\nLATEST-FIRST RULE (CRITICAL): Today is ${todayStr}.${nhlHint} Use the newest available sources/snippets. Prefer results updated today/this hour when present. If sources conflict, choose the most recently updated. If any result refers to an older season (example: \"2023-24\"), treat it as STALE and re-search with a stricter query. Do not use memory for live facts.`;
 
   const body: Record<string, unknown> = {
-    contents: [{ role: 'user', parts: [{ text: latestQuery }] }],
+    contents: buildSearchFollowupContents(query, latestQuery, recentMessages),
     tools: [{ google_search: {} }],
   };
   
@@ -1680,6 +1766,7 @@ If you are running out of space, keep this order and drop the rest:
               message,
               searchSystemPrompt,
               { temperature: 0.3, maxOutputTokens: 4000 },
+              recentMessages,
               (token: string) => {
                 fullResponseText += token;
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`));
@@ -1752,6 +1839,39 @@ If you are running out of space, keep this order and drop the rest:
             // combine with the original intent and run a proper grounded search
             let effectiveMessage = message;
             try {
+              // ─── YES/OK FOLLOW-UP RESOLVER (CHAT) ───
+              // Users often reply with just "yes" to multi-option follow-ups.
+              // In Chat mode, make "yes" mean: do BOTH options offered in the last assistant question.
+              const rawUser = (message || '').trim();
+              const rawUserLower = rawUser.toLowerCase();
+              const isAffirmativeOnly = (() => {
+                if (!rawUserLower) return false;
+                // EN
+                if (/^(yes|y|yeah|yep|sure|ok|okay|do it|go ahead|please)\b/.test(rawUserLower)) return true;
+                // AR
+                if (/^(نعم|اي|أيوه|ايوه|تمام|اوكي|حاضر|تفضل|يلا)\b/.test(rawUserLower)) return true;
+                return false;
+              })();
+
+              if (isAffirmativeOnly && Array.isArray(recentMessages) && recentMessages.length > 0) {
+                const lastAssistantRaw = getLastTextMessage(recentMessages, 'assistant');
+                const getLastAssistantQuestion = (text: string): string => {
+                  const t = (text || '').trim();
+                  if (!t) return '';
+                  const lines = t.split('\n').map((l) => l.trim()).filter(Boolean);
+                  for (let i = lines.length - 1; i >= 0; i -= 1) {
+                    const line = lines[i];
+                    if (line.endsWith('?')) return line.slice(0, 500);
+                  }
+                  const m = t.match(/([^\n\r]{10,500}\?)\s*$/);
+                  return m ? m[1].slice(0, 500) : '';
+                };
+                const lastQ = getLastAssistantQuestion(lastAssistantRaw);
+                if (lastQ) {
+                  effectiveMessage = `User replied "${rawUser}" to your previous follow-up question.\n\nPrevious question: "${lastQ}"\n\nCRITICAL: The user said YES. Execute BOTH options offered in that question (A and B). If the question offered multiple actions, do all of them in a compact way. Then ask one short follow-up question.\n\nNow proceed.`;
+                }
+              }
+
               const lastAssistant = getLastTextMessage(recentMessages, 'assistant').toLowerCase();
               const askedForLocation = /\b(where|location|whereabouts|city|area|region)\b/i.test(lastAssistant) && /\?/.test(lastAssistant);
               

@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { GoogleGenAI } from "npm:@google/genai@1.34.0";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -44,43 +43,12 @@ serve(async (req: Request) => {
       });
     }
 
-    const now = Date.now();
-    const expireTime = new Date(now + 30 * 60 * 1000).toISOString();
-    const newSessionExpireTime = new Date(now + 60 * 1000);
-
-    const client = new GoogleGenAI({ apiKey: GEMINI_API_KEY, httpOptions: { apiVersion: "v1alpha" } });
-
-    const authToken = await client.authTokens.create({
-      config: {
-        uses: 1,
-        expireTime,
-        newSessionExpireTime,
-        liveConnectConstraints: {
-          model: "gemini-2.5-flash-native-audio-preview-12-2025",
-          config: {
-            sessionResumption: {},
-            temperature: 0.7,
-            responseModalities: ["AUDIO"],
-          },
-        },
-        httpOptions: { apiVersion: "v1alpha" },
-      },
-    });
-
-    const ephemeralToken = authToken?.name;
-    if (!ephemeralToken) {
-      return new Response(JSON.stringify({ error: "Failed to mint ephemeral token" }), {
-        status: 502,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
+    // Return the API key directly for WebSocket auth
+    // Note: This is less secure but works with browser WebSocket API
     return new Response(
       JSON.stringify({
         success: true,
-        token: ephemeralToken,
-        expiresAt: expireTime,
-        newSessionExpiresAt: newSessionExpireTime.toISOString(),
+        token: GEMINI_API_KEY,
       }),
       {
         status: 200,

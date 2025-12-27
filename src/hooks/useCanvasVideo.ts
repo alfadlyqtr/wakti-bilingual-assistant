@@ -62,6 +62,8 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
     const {
       slides,
       audioUrl,
+      audioTrimStart = 0,
+      audioTrimEnd,
       width = 1080,
       height = 1920,
       transitionDuration = 0.5,
@@ -117,6 +119,15 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
         try {
           audioElement = new Audio(audioUrl);
           audioElement.crossOrigin = 'anonymous';
+          audioElement.volume = 1;
+          if (typeof audioTrimEnd === 'number' && Number.isFinite(audioTrimEnd)) {
+            audioElement.addEventListener('timeupdate', () => {
+              if (!audioElement) return;
+              if (audioElement.currentTime >= audioTrimEnd) {
+                audioElement.pause();
+              }
+            });
+          }
           await new Promise<void>((resolve, reject) => {
             audioElement!.oncanplaythrough = () => resolve();
             audioElement!.onerror = () => reject();
@@ -124,6 +135,9 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
           });
           
           audioContext = new AudioContext();
+          if (audioContext.state !== 'running') {
+            await audioContext.resume();
+          }
           const source = audioContext.createMediaElementSource(audioElement);
           const destination = audioContext.createMediaStreamDestination();
           source.connect(destination);
@@ -160,12 +174,12 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
         }
       };
 
-      mediaRecorder.start(100);
-
       if (audioElement) {
-        audioElement.currentTime = 0;
+        audioElement.currentTime = audioTrimStart;
         audioElement.play().catch(() => {});
       }
+
+      mediaRecorder.start(100);
 
       const fps = 30;
       const frameDurationMs = 1000 / fps;

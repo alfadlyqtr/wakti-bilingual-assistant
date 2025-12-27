@@ -587,8 +587,17 @@ export function ChatInput({
   const handleChatUploadChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
+      const MAX_VISION_IMAGES = 4;
+      const existingCount = Array.isArray(uploadedFiles) ? uploadedFiles.length : 0;
+      const remainingSlots = Math.max(0, MAX_VISION_IMAGES - existingCount);
+      if (remainingSlots <= 0) {
+        console.warn('❌ ChatInput: max vision images reached:', MAX_VISION_IMAGES);
+        e.target.value = '';
+        return;
+      }
       const validFiles: UploadedFile[] = [];
-      for (let i = 0; i < files.length; i++) {
+      const maxToProcess = Math.min(files.length, remainingSlots);
+      for (let i = 0; i < maxToProcess; i++) {
         const file = files[i];
         console.log('📁 ChatInput processing:', file.name, 'type:', file.type, 'size:', file.size);
         if (!isImageFile(file)) {
@@ -1224,9 +1233,10 @@ export function ChatInput({
                           </>
                         )}
                       </div>
-                    ) : activeTrigger === 'chat' ? (
+                    ) : (activeTrigger === 'chat' || activeTrigger === 'vision') ? (
                       <div className="relative flex items-center gap-2">
                         {/* Chat/Study Submode Dropdown */}
+                        {activeTrigger === 'chat' && (
                         <button
                           ref={chatSubmodeBtnRef}
                           data-dropdown
@@ -1258,6 +1268,7 @@ export function ChatInput({
                           </span>
                           <ChevronDown className="h-3 w-3" />
                         </button>
+                        )}
                         {createPortal(
                           <AnimatePresence>
                             {chatSubmodeMenuPos && (
@@ -1313,7 +1324,7 @@ export function ChatInput({
                         <button
                           type="button"
                           className={`inline-flex items-center justify-center h-8 w-8 rounded-lg shadow-sm ${
-                            chatSubmode === 'study'
+                            activeTrigger === 'chat' && chatSubmode === 'study'
                               ? 'bg-purple-50 dark:bg-purple-950/40 border border-purple-200/70 dark:border-purple-800/60 text-purple-900 dark:text-purple-200'
                               : 'bg-blue-50 dark:bg-blue-950/40 border border-blue-200/70 dark:border-blue-800/60 text-blue-900 dark:text-blue-200'
                           }`}
@@ -1747,7 +1758,7 @@ export function ChatInput({
       ref={chatUploadInputRef}
       onChange={handleChatUploadChange}
       accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff"
-      multiple={false}
+      multiple
       hidden
     />
     {/* Talk Bubble Overlay - rendered via portal to ensure full-screen */}
