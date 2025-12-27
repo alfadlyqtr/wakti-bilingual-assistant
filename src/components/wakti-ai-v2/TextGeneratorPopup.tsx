@@ -1103,7 +1103,9 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
           </div>
 
           <div className={activeTab === 'translate' ? '' : 'hidden'}>
-            <TextTranslateTab />
+            <div className="-mx-6">
+              <TextTranslateTab />
+            </div>
           </div>
 
           {error && activeTab !== 'diagrams' && activeTab !== 'presentation' && activeTab !== 'translate' && (

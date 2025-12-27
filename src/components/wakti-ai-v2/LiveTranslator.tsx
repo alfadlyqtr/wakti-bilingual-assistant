@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Mic, X, Volume2, Languages, Loader2 } from 'lucide-react';
+import { Mic, User, UserRound, X, Volume2, Languages, Loader2 } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -10,7 +10,7 @@ interface LiveTranslatorProps {
   onBack?: () => void;
 }
 
-const MAX_RECORD_SECONDS = 30;
+const MAX_RECORD_SECONDS = 10;
 
 // Complete language list
 const TRANSLATION_LANGUAGES = [
@@ -296,19 +296,20 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
         // OpenAI Realtime voice: male=echo, female=shimmer
         const openaiVoice = currentVoiceGender === 'female' ? 'shimmer' : 'echo';
         
-        // Translation-only system prompt
-        const instructions = `You are a real-time voice translator. Your ONLY job is to translate what the user says into ${targetLangName}.
+        // UN-style professional interpreter prompt - TRANSLATION ONLY
+        const instructions = `You are a United Nations professional interpreter. You provide simultaneous translation into ${targetLangName}.
 
-CRITICAL RULES:
-1. Listen to what the user says
-2. Translate it to ${targetLangName}
-3. Speak ONLY the translation - nothing else
-4. Do NOT add greetings, commentary, or explanations
-5. Do NOT say "Here's the translation" or "You said..."
-6. Do NOT ask questions or make conversation
-7. Keep the same tone and emotion as the original
-8. If the user already speaks ${targetLangName}, just repeat what they said
-9. Be fast and natural - like a professional interpreter`;
+ABSOLUTE RULES - NEVER BREAK THESE:
+- Output ONLY the translation in ${targetLangName}. Nothing else. Ever.
+- NEVER say hello, hi, greetings, or any pleasantries
+- NEVER say "The translation is..." or "You said..." or "Here's..."
+- NEVER add commentary, explanations, or your own thoughts
+- NEVER ask questions or engage in conversation
+- NEVER acknowledge the user or respond to them personally
+- If you hear silence or unclear audio, say nothing
+- If the user speaks ${targetLangName}, repeat their words exactly
+
+You are invisible. You are a voice that converts speech from one language to ${targetLangName}. That is your only function. Speak clearly, professionally, and naturally like a UN interpreter.`;
         
         console.log('[LiveTranslator] Instructions:', instructions);
         console.log('[LiveTranslator] Voice:', openaiVoice, '| Target:', targetLangName);
@@ -317,7 +318,6 @@ CRITICAL RULES:
         dc.send(JSON.stringify({
           type: 'session.update',
           session: {
-            type: 'realtime',
             instructions,
             voice: openaiVoice,
             input_audio_transcription: { model: 'whisper-1' },
@@ -380,8 +380,8 @@ CRITICAL RULES:
       console.log('[LiveTranslator] Calling Edge Function for SDP exchange...');
       console.log('[LiveTranslator] Has access token:', !!accessToken);
       
-      const response = await supabase.functions.invoke('openai-realtime-session', {
-        body: { sdp_offer: offer.sdp, language },
+      const response = await supabase.functions.invoke('openai-realtime-translate-session', {
+        body: { sdp_offer: offer.sdp },
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
       });
 
@@ -571,31 +571,55 @@ CRITICAL RULES:
   const targetLangName = TRANSLATION_LANGUAGES.find(l => l.code === targetLanguage)?.name[language] || targetLanguage;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Hidden audio element for playback */}
       <audio ref={audioRef} autoPlay playsInline className="hidden" />
-      {/* Header */}
-      <div className="text-center">
-        <h2 className="text-xl font-semibold flex items-center justify-center gap-2">
-          <Languages className="w-5 h-5" />
+      {/* Header - compact */}
+      <div className="text-center pb-2">
+        <h2 className="text-lg font-semibold flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-500 bg-clip-text text-transparent">
+          <Languages className="w-5 h-5 text-cyan-500" />
           {t('Live Translator', 'المترجم الفوري')}
         </h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          {t('Speak and hear instant translations', 'تحدث واسمع الترجمة فوراً')}
+        <p className="text-xs text-muted-foreground">
+          {t('Translation only • clean interpreter voice', 'ترجمة فقط • صوت مترجم واضح')}
         </p>
       </div>
 
-      {/* Settings */}
-      <div className="grid grid-cols-2 gap-4">
+      {/* Compact Settings Row */}
+      <div className="flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-purple-500/5 to-blue-500/5 border border-purple-500/10">
         {/* Target Language */}
-        <div className="space-y-2">
-          <Label className="text-sm font-medium">
-            {t('Translate to', 'ترجم إلى')}
+        <div className="flex-1">
+          <Label className="text-xs font-medium text-muted-foreground mb-1 block">
+            {t('To', 'إلى')}
           </Label>
           <Select 
             value={targetLanguage} 
-            onValueChange={setTargetLanguage}
-            disabled={status !== 'idle'}
+            onValueChange={(val) => {
+              setTargetLanguage(val);
+              targetLanguageRef.current = val;
+              if (dcRef.current && dcRef.current.readyState === 'open' && status === 'ready') {
+                const targetLangName = TRANSLATION_LANGUAGES.find(l => l.code === val)?.name.en || val;
+                const openaiVoice = voiceGenderRef.current === 'female' ? 'shimmer' : 'echo';
+                const instructions = `You are a high-precision simultaneous interpreter. You translate speech into ${targetLangName}.
+
+ABSOLUTE RULES - NEVER BREAK THESE:
+- Output ONLY the translation in ${targetLangName}. Nothing else. Ever.
+- NEVER say hello, hi, greetings, or any pleasantries
+- NEVER say "The translation is..." or "You said..." or "Here's..."
+- NEVER add commentary, explanations, or your own thoughts
+- NEVER ask questions or engage in conversation
+- NEVER acknowledge the user or respond to them personally
+- If you hear silence or unclear audio, say nothing
+- If the user speaks ${targetLangName}, repeat their words exactly
+
+You are invisible. You are a voice that converts speech from one language to ${targetLangName}. That is your only function. Speak clearly, professionally, and naturally like an expert interpreter.`;
+                dcRef.current.send(JSON.stringify({
+                  type: 'session.update',
+                  session: { instructions, voice: openaiVoice }
+                }));
+              }
+            }}
+            disabled={status === 'connecting' || status === 'listening' || status === 'processing' || status === 'speaking'}
           >
             <SelectTrigger>
               <SelectValue />
@@ -610,139 +634,168 @@ CRITICAL RULES:
           </Select>
         </div>
 
-        {/* Voice Gender */}
-        <div className="space-y-2">
-          <Label className="text-sm font-medium">
-            {t('Voice', 'الصوت')}
-          </Label>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setVoiceGender('male')}
-              disabled={status !== 'idle'}
-              className={`flex-1 h-10 rounded-lg border text-sm font-medium transition-all ${
-                voiceGender === 'male'
-                  ? 'bg-blue-500 text-white border-blue-500'
-                  : 'bg-white/80 dark:bg-white/5 border-border hover:bg-white dark:hover:bg-white/10'
-              } ${status !== 'idle' ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              {t('Male', 'ذكر')} 👨
-            </button>
-            <button
-              type="button"
-              onClick={() => setVoiceGender('female')}
-              disabled={status !== 'idle'}
-              className={`flex-1 h-10 rounded-lg border text-sm font-medium transition-all ${
-                voiceGender === 'female'
-                  ? 'bg-pink-500 text-white border-pink-500'
-                  : 'bg-white/80 dark:bg-white/5 border-border hover:bg-white dark:hover:bg-white/10'
-              } ${status !== 'idle' ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              {t('Female', 'أنثى')} 👩
-            </button>
-          </div>
+        {/* Voice Gender - icons + labels */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setVoiceGender('male');
+              voiceGenderRef.current = 'male';
+              if (dcRef.current && dcRef.current.readyState === 'open' && status === 'ready') {
+                const targetLangName = TRANSLATION_LANGUAGES.find(l => l.code === targetLanguageRef.current)?.name.en || targetLanguageRef.current;
+                const instructions = `You are a high-precision simultaneous interpreter. You translate speech into ${targetLangName}.
+
+ABSOLUTE RULES - NEVER BREAK THESE:
+- Output ONLY the translation in ${targetLangName}. Nothing else. Ever.
+- NEVER say hello, hi, greetings, or any pleasantries
+- NEVER say "The translation is..." or "You said..." or "Here's..."
+- NEVER add commentary, explanations, or your own thoughts
+- NEVER ask questions or engage in conversation
+- NEVER acknowledge the user or respond to them personally
+- If you hear silence or unclear audio, say nothing
+- If the user speaks ${targetLangName}, repeat their words exactly
+
+You are invisible. You are a voice that converts speech from one language to ${targetLangName}. That is your only function. Speak clearly, professionally, and naturally like an expert interpreter.`;
+                dcRef.current.send(JSON.stringify({
+                  type: 'session.update',
+                  session: { instructions, voice: 'echo' }
+                }));
+              }
+            }}
+            disabled={status === 'connecting' || status === 'listening' || status === 'processing' || status === 'speaking'}
+            className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all border ${
+              voiceGender === 'male'
+                ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white border-transparent'
+                : 'bg-white/50 dark:bg-white/10 border-purple-500/10 hover:bg-white/80 dark:hover:bg-white/20'
+            } ${(status === 'connecting' || status === 'listening' || status === 'processing' || status === 'speaking') ? 'opacity-50' : ''}`}
+          >
+            <User className="w-4 h-4" />
+            {t('Male', 'ذكر')}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setVoiceGender('female');
+              voiceGenderRef.current = 'female';
+              if (dcRef.current && dcRef.current.readyState === 'open' && status === 'ready') {
+                const targetLangName = TRANSLATION_LANGUAGES.find(l => l.code === targetLanguageRef.current)?.name.en || targetLanguageRef.current;
+                const instructions = `You are a high-precision simultaneous interpreter. You translate speech into ${targetLangName}.
+
+ABSOLUTE RULES - NEVER BREAK THESE:
+- Output ONLY the translation in ${targetLangName}. Nothing else. Ever.
+- NEVER say hello, hi, greetings, or any pleasantries
+- NEVER say "The translation is..." or "You said..." or "Here's..."
+- NEVER add commentary, explanations, or your own thoughts
+- NEVER ask questions or engage in conversation
+- NEVER acknowledge the user or respond to them personally
+- If you hear silence or unclear audio, say nothing
+- If the user speaks ${targetLangName}, repeat their words exactly
+
+You are invisible. You are a voice that converts speech from one language to ${targetLangName}. That is your only function. Speak clearly, professionally, and naturally like an expert interpreter.`;
+                dcRef.current.send(JSON.stringify({
+                  type: 'session.update',
+                  session: { instructions, voice: 'shimmer' }
+                }));
+              }
+            }}
+            disabled={status === 'connecting' || status === 'listening' || status === 'processing' || status === 'speaking'}
+            className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all border ${
+              voiceGender === 'female'
+                ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white border-transparent'
+                : 'bg-white/50 dark:bg-white/10 border-purple-500/10 hover:bg-white/80 dark:hover:bg-white/20'
+            } ${(status === 'connecting' || status === 'listening' || status === 'processing' || status === 'speaking') ? 'opacity-50' : ''}`}
+          >
+            <UserRound className="w-4 h-4" />
+            {t('Female', 'أنثى')}
+          </button>
         </div>
       </div>
 
-      {/* Connection Button */}
+      {/* Connection Button - compact */}
       {status === 'idle' ? (
         <Button
           onClick={initializeConnection}
-          className="w-full h-12 text-base"
+          className="w-full h-10 text-sm bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
         >
-          <Volume2 className="w-5 h-5 mr-2" />
-          {t('Connect', 'اتصل')}
+          <Volume2 className="w-4 h-4 mr-2" />
+          {t('Start Interpreter', 'ابدأ الترجمة')}
         </Button>
       ) : (
         <Button
           onClick={handleDisconnect}
           variant="outline"
-          className="w-full h-12 text-base"
+          size="sm"
+          className="w-full"
         >
-          <X className="w-5 h-5 mr-2" />
-          {t('Disconnect', 'قطع الاتصال')}
+          <X className="w-4 h-4 mr-1" />
+          {t('Stop', 'إيقاف')}
         </Button>
       )}
 
-      {/* Voice Orb */}
+      {/* Voice Orb - Clean Professional Design */}
       {status !== 'idle' && (
-        <div className="flex flex-col items-center gap-4 py-6">
-          {/* Orb CSS */}
+        <div className="flex flex-col items-center gap-3 py-4">
+          {/* Orb CSS - cleaner, more professional */}
           <style>{`
             .translator-orb {
               position: relative;
-              width: 160px;
-              height: 160px;
+              width: 120px;
+              height: 120px;
               border-radius: 50%;
-              background: linear-gradient(145deg, 
-                #00d4ff 0%, 
-                #7b2ff7 25%, 
-                #f107a3 50%, 
-                #ff6b6b 75%, 
-                #00d4ff 100%
-              );
-              background-size: 400% 400%;
-              animation: gradientShift 8s ease infinite;
+              background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 50%, #3b82f6 100%);
               display: flex;
               align-items: center;
               justify-content: center;
               cursor: pointer;
               border: none;
               outline: none;
-              box-shadow: inset 0 0 60px rgba(255, 255, 255, 0.1);
+              box-shadow: 0 4px 20px rgba(139, 92, 246, 0.3);
               -webkit-tap-highlight-color: transparent;
               touch-action: none;
               user-select: none;
-              transition: box-shadow 0.3s ease-out, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+              transition: all 0.3s ease;
             }
             
             .translator-orb:disabled {
-              opacity: 0.4;
+              opacity: 0.5;
               cursor: not-allowed;
-              filter: grayscale(0.5);
+            }
+            
+            .translator-orb:not(:disabled):hover {
+              transform: scale(1.05);
+              box-shadow: 0 6px 30px rgba(139, 92, 246, 0.4);
             }
             
             .translator-orb.listening {
               transform: scale(1.1);
-              animation: gradientShift 2s ease infinite, orbPulse 0.5s ease-in-out infinite;
-              box-shadow: 
-                0 0 80px rgba(123, 47, 247, 0.7),
-                0 0 160px rgba(241, 7, 163, 0.5),
-                0 0 240px rgba(0, 212, 255, 0.3),
-                inset 0 0 80px rgba(255, 255, 255, 0.2);
+              animation: pulse 1s ease-in-out infinite;
+              box-shadow: 0 0 40px rgba(139, 92, 246, 0.6), 0 0 80px rgba(99, 102, 241, 0.4);
             }
             
             .translator-orb.speaking {
-              animation: gradientShift 4s ease infinite, speakingBreath 1.5s ease-in-out infinite;
-              box-shadow: 
-                0 0 100px rgba(241, 7, 163, 0.6),
-                0 0 200px rgba(123, 47, 247, 0.4),
-                inset 0 0 60px rgba(255, 255, 255, 0.15);
+              background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%);
+              animation: breathe 2s ease-in-out infinite;
+              box-shadow: 0 0 40px rgba(16, 185, 129, 0.5);
             }
             
             .translator-orb.processing {
-              animation: gradientShift 3s ease infinite, processingGlow 1s ease-in-out infinite;
+              animation: spin 1.5s linear infinite;
             }
             
-            @keyframes gradientShift {
-              0% { background-position: 0% 50%; }
-              50% { background-position: 100% 50%; }
-              100% { background-position: 0% 50%; }
+            @keyframes pulse {
+              0%, 100% { transform: scale(1.1); box-shadow: 0 0 40px rgba(139, 92, 246, 0.6); }
+              50% { transform: scale(1.15); box-shadow: 0 0 60px rgba(139, 92, 246, 0.8); }
             }
             
-            @keyframes orbPulse {
-              0%, 100% { transform: scale(1.1); }
-              50% { transform: scale(1.15); }
-            }
-            
-            @keyframes speakingBreath {
+            @keyframes breathe {
               0%, 100% { transform: scale(1); }
-              50% { transform: scale(1.08); }
+              50% { transform: scale(1.05); }
             }
             
-            @keyframes processingGlow {
-              0%, 100% { opacity: 0.8; filter: brightness(1); }
-              50% { opacity: 1; filter: brightness(1.2); }
+            @keyframes spin {
+              from { transform: rotate(0deg); }
+              to { transform: rotate(360deg); }
             }
           `}</style>
 
@@ -758,52 +811,48 @@ CRITICAL RULES:
             aria-label={statusText[status]}
           >
             {status === 'connecting' ? (
-              <Loader2 className="w-12 h-12 text-white animate-spin" />
+              <Loader2 className="w-10 h-10 text-white animate-spin" />
+            ) : status === 'speaking' ? (
+              <Volume2 className="w-10 h-10 text-white" />
             ) : (
-              <Mic className="w-12 h-12 text-white drop-shadow-lg" />
+              <Mic className="w-10 h-10 text-white" />
             )}
           </button>
 
-          {/* Status */}
-          <div className={`text-lg font-medium ${theme === 'dark' ? 'text-white/90' : 'text-[#060541]/90'}`}>
-            {statusText[status]}
-          </div>
-
-          {/* Countdown when recording */}
-          {isHolding && (
-            <div className={`text-3xl font-bold tabular-nums ${theme === 'dark' ? 'text-white' : 'text-[#060541]'}`}>
-              {countdown}s
+          {/* Status + Countdown inline */}
+          <div className="text-center">
+            <div className={`text-base font-medium ${theme === 'dark' ? 'text-white/90' : 'text-[#060541]/90'}`}>
+              {statusText[status]}
+              {isHolding && <span className="ml-2 text-purple-500 font-bold">{countdown}s</span>}
             </div>
-          )}
-
-          {/* Target language indicator */}
-          <div className={`text-sm ${theme === 'dark' ? 'text-white/60' : 'text-[#060541]/60'}`}>
-            {t('Translating to', 'الترجمة إلى')} <span className="font-medium">{targetLangName}</span>
+            <div className={`text-xs mt-1 ${theme === 'dark' ? 'text-white/50' : 'text-[#060541]/50'}`}>
+              → {targetLangName}
+            </div>
           </div>
         </div>
       )}
 
-      {/* Transcripts */}
+      {/* Transcripts - cleaner cards */}
       {(userTranscript || translatedText) && (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {userTranscript && (
-            <div className={`p-3 rounded-lg ${theme === 'dark' ? 'bg-white/5' : 'bg-black/5'}`}>
-              <div className="text-xs text-muted-foreground mb-1">{t('You said:', 'قلت:')}</div>
+            <div className={`px-3 py-2 rounded-lg border ${theme === 'dark' ? 'bg-white/5 border-white/10' : 'bg-gray-50 border-gray-200'}`}>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">{t('Original', 'الأصل')}</div>
               <div className="text-sm" dir="auto">{userTranscript}</div>
             </div>
           )}
           {translatedText && (
-            <div className={`p-3 rounded-lg ${theme === 'dark' ? 'bg-purple-500/10' : 'bg-purple-500/10'}`}>
-              <div className="text-xs text-muted-foreground mb-1">{t('Translation:', 'الترجمة:')}</div>
+            <div className={`px-3 py-2 rounded-lg border-2 ${theme === 'dark' ? 'bg-purple-500/10 border-purple-500/30' : 'bg-purple-50 border-purple-200'}`}>
+              <div className="text-[10px] uppercase tracking-wider text-purple-500 mb-0.5">{targetLangName}</div>
               <div className="text-sm font-medium" dir="auto">{translatedText}</div>
             </div>
           )}
         </div>
       )}
 
-      {/* Error */}
+      {/* Error - compact */}
       {error && (
-        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-sm text-center">
+        <div className="px-3 py-2 rounded-lg bg-red-500/10 text-red-500 text-xs text-center">
           {error}
         </div>
       )}

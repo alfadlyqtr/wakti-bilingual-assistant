@@ -447,7 +447,6 @@ ${memoryContext ? memoryContext : ''}`
         dc.send(JSON.stringify({
           type: 'session.update',
           session: {
-            type: 'realtime',
             instructions,
             voice: openaiVoice,
             input_audio_transcription: { model: 'whisper-1' },
@@ -718,20 +717,27 @@ ${memoryContext ? memoryContext : ''}`
       const memoryContext = buildMemoryContext(language);
 
       let followUpContext = '';
-      const u = (userUtterance || '').trim();
-      if (u) {
-        const isShort = u.length <= 20;
-        const isAmbiguousFollowup = /^(since when|when\?|since\?|why\?|how\?|what\?|which\?|who\?)$/i.test(u);
-        if (isShort || isAmbiguousFollowup) {
-          const lastAssistant = [...conversationHistoryRef.current].reverse().find(x => x.role === 'assistant')?.text || '';
-          if (lastAssistant) {
-            const clipped = lastAssistant.length > 500 ? `${lastAssistant.slice(0, 500)}...` : lastAssistant;
-            followUpContext = t(
-              `\n\nFollow-up context (important): The user's short follow-up "${u}" refers to the previous assistant message:\n${clipped}`,
-              `\n\nسياق المتابعة (مهم): سؤال المستخدم القصير "${u}" يشير إلى رسالة المساعد السابقة:\n${clipped}`
-            );
-          }
+      const history = conversationHistoryRef.current;
+      if (history.length > 0) {
+        const lastMsg = history[history.length - 1];
+        const lastMsgText = lastMsg.text.length > 300 ? `${lastMsg.text.slice(0, 300)}...` : lastMsg.text;
+        
+        let summaryOfPrevious = '';
+        if (history.length > 1) {
+          const previousMsgs = history.slice(Math.max(0, history.length - 6), history.length - 1);
+          const summaryParts = previousMsgs.map(m => {
+            const snippet = m.text.length > 80 ? `${m.text.slice(0, 80)}...` : m.text;
+            return `${m.role === 'user' ? 'User' : 'Wakti'}: ${snippet}`;
+          });
+          summaryOfPrevious = summaryParts.join(' | ');
         }
+        
+        followUpContext = t(
+          `\n\nCONVERSATION MEMORY (use for context):
+Last message (${lastMsg.role}): "${lastMsgText}"${summaryOfPrevious ? `\nPrevious exchanges summary: ${summaryOfPrevious}` : ''}`,
+          `\n\nذاكرة المحادثة (للسياق):
+آخر رسالة (${lastMsg.role === 'user' ? 'المستخدم' : 'واكتي'}): "${lastMsgText}"${summaryOfPrevious ? `\nملخص المحادثات السابقة: ${summaryOfPrevious}` : ''}`
+        );
       }
 
       const refreshedInstructions = t(
@@ -1311,7 +1317,7 @@ ${memoryContext ? memoryContext : ''}`
         {aiTranscript && status !== 'listening' && (
           <div className={`max-w-sm text-center text-base select-none ${theme === 'dark' ? 'text-purple-300/90' : 'text-purple-600/90'}`}>
             <span className={`text-sm block mb-1 ${theme === 'dark' ? 'text-purple-300/60' : 'text-purple-600/60'}`}>{t('Wakti:', 'واكتي:')}</span>
-            <div className="leading-snug max-h-[2.6em] overflow-y-auto overscroll-contain">
+            <div className="leading-snug max-h-[4.5em] overflow-y-auto overscroll-contain">
               "{aiTranscript}"
             </div>
           </div>

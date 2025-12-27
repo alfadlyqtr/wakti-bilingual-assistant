@@ -184,20 +184,26 @@ function VideoPlayer({ url, language }: { url: string; language: string }) {
 
   useEffect(() => {
     let mounted = true;
+    let objectUrl: string | null = null;
+    const controller = new AbortController();
+
     const fetchVideo = async () => {
       try {
         setLoading(true);
         setError(null);
-        const response = await fetch(url);
+        const response = await fetch(url, { signal: controller.signal });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const blob = await response.blob();
-        const videoBlob = new Blob([blob], { type: blob.type || 'video/webm' });
-        const objectUrl = URL.createObjectURL(videoBlob);
+        const headerType = response.headers.get('content-type') || '';
+        const mime = blob.type || headerType || 'video/mp4';
+        const videoBlob = new Blob([blob], { type: mime });
+        objectUrl = URL.createObjectURL(videoBlob);
         if (mounted) {
           setBlobUrl(objectUrl);
           setLoading(false);
         }
       } catch (err) {
+        if ((err as any)?.name === 'AbortError') return;
         console.error('Video fetch error:', err);
         if (mounted) {
           setError(language === 'ar' ? 'فشل تحميل الفيديو' : 'Failed to load video');
@@ -208,9 +214,10 @@ function VideoPlayer({ url, language }: { url: string; language: string }) {
     fetchVideo();
     return () => {
       mounted = false;
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [url]);
+  }, [language, url]);
 
   if (loading) {
     return (
@@ -256,6 +263,9 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [pendingDeleteVideo, setPendingDeleteVideo] = useState<SavedVideo | null>(null);
+
+  const [expandedSlideId, setExpandedSlideId] = useState<string | null>(null);
+  const [slidePanels, setSlidePanels] = useState<Record<string, 'text' | 'look' | 'motion'>>({});
 
   // Project state
   const [project, setProject] = useState<VideoProject>({
@@ -384,11 +394,18 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
           }
 
           if ((v as any).thumbnail_url) {
-            const { data: tUrl } = supabase.storage
+            const thumbPath = (v as any).thumbnail_url as string;
+            const { data: tSigned, error: tErr } = await supabase.storage
               .from('videos')
-              .getPublicUrl((v as any).thumbnail_url);
-            thumbnailSignedUrl = tUrl?.publicUrl || null;
-            console.log('[VideoMaker] Thumbnail URL:', thumbnailSignedUrl);
+              .createSignedUrl(thumbPath, 3600);
+            if (tErr) {
+              console.error('[VideoMaker] Thumbnail signed URL error:', tErr);
+              const { data: tUrl } = supabase.storage.from('videos').getPublicUrl(thumbPath);
+              thumbnailSignedUrl = tUrl?.publicUrl || null;
+            } else {
+              thumbnailSignedUrl = tSigned?.signedUrl || null;
+            }
+            console.log('[VideoMaker] Thumbnail URL:', thumbnailSignedUrl ? 'OK' : 'FAILED', 'path:', thumbPath);
           }
 
           return { ...v, signedUrl, thumbnailSignedUrl };
@@ -749,14 +766,14 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
   const renderCustomizeStep = () => (
     <div className="space-y-4">
       {/* Duration counter */}
-      <div className="flex items-center justify-between p-3 rounded-lg bg-muted">
+      <div className="enhanced-card rounded-2xl p-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Clock className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm">
+          <span className="text-sm font-medium">
             {language === 'ar' ? 'المدة الإجمالية' : 'Total Duration'}
           </span>
         </div>
-        <div className={`text-sm font-medium ${totalDuration > MAX_DURATION_SEC ? 'text-red-500' : ''}`}>
+        <div className={`text-sm font-semibold ${totalDuration > MAX_DURATION_SEC ? 'text-red-500' : ''}`}>
           {totalDuration}s / {MAX_DURATION_SEC}s
         </div>
       </div>
@@ -766,11 +783,11 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
         <p className="text-sm font-medium">
           {language === 'ar' ? 'اختر القالب' : 'Choose Template'}
         </p>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
           {(Object.entries(TEMPLATES) as [TemplateStyle, typeof TEMPLATES[TemplateStyle]][]).map(([key, template]) => (
             <button
               key={key}
-              className={`relative p-3 rounded-lg border-2 transition-all ${
+              className={`relative min-w-[132px] p-3 rounded-xl border-2 transition-all active:scale-95 ${
                 project.template === key 
                   ? 'border-primary ring-2 ring-primary/20' 
                   : 'border-border hover:border-primary/50'
@@ -778,7 +795,7 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
               onClick={() => setProject(prev => ({ ...prev, template: key }))}
             >
               <div 
-                className="h-16 rounded-md mb-2"
+                className="h-16 rounded-lg mb-2"
                 style={{ background: template.bgGradient }}
               />
               <p className="text-xs font-medium truncate">
@@ -799,203 +816,284 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
         <p className="text-sm font-medium">
           {language === 'ar' ? 'تعديل الشرائح' : 'Edit Slides'}
         </p>
-        <div className="space-y-2">
-          {project.slides.map((slide, index) => (
-            <Card key={slide.id} className="p-3">
-              <div className="flex gap-3">
-                {/* Thumbnail */}
-                <div className="w-16 h-24 rounded overflow-hidden bg-muted shrink-0">
-                  <img 
-                    src={slide.imageUrl} 
-                    alt={`Slide ${index + 1}`}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
+        <div className="space-y-3">
+          {project.slides.map((slide, index) => {
+            const isExpanded = expandedSlideId === slide.id;
+            const panel = slidePanels[slide.id] || 'text';
+            const maxPerSlide = Math.floor(MAX_DURATION_SEC / project.slides.length);
+            const setPanel = (next: 'text' | 'look' | 'motion') => {
+              setSlidePanels((prev) => ({ ...prev, [slide.id]: next }));
+            };
 
-                {/* Controls */}
-                <div className="flex-1 space-y-2">
-                  {/* Duration - max is 60/numSlides */}
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs text-muted-foreground w-16">
-                      {language === 'ar' ? 'المدة' : 'Duration'}
-                    </label>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={Math.floor(MAX_DURATION_SEC / project.slides.length)}
-                      value={slide.durationSec}
-                      onChange={(e) => {
-                        const maxPerSlide = Math.floor(MAX_DURATION_SEC / project.slides.length);
-                        updateSlide(slide.id, { durationSec: Math.min(maxPerSlide, Math.max(1, parseInt(e.target.value) || 1)) });
-                      }}
-                      className="h-8 w-20"
-                    />
-                    <span className="text-xs text-muted-foreground">s (max {Math.floor(MAX_DURATION_SEC / project.slides.length)})</span>
-                  </div>
-
-                  {/* Text */}
-                  <div className="flex items-start gap-2">
-                    <label className="text-xs text-muted-foreground w-16 pt-2">
-                      {language === 'ar' ? 'النص' : 'Text'}
-                    </label>
-                    <Textarea
-                      value={slide.text}
-                      onChange={(e) => updateSlide(slide.id, { text: e.target.value })}
-                      placeholder={language === 'ar' ? 'أضف نص (اختياري)' : 'Add text (optional)'}
-                      className="h-16 text-sm resize-none"
+            return (
+              <Card key={slide.id} className="enhanced-card rounded-2xl p-3">
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-3 text-left"
+                  onClick={() => setExpandedSlideId(isExpanded ? null : slide.id)}
+                >
+                  <div className="w-14 h-20 rounded-xl overflow-hidden bg-muted shrink-0">
+                    <img
+                      src={slide.imageUrl}
+                      alt={`Slide ${index + 1}`}
+                      className="w-full h-full object-cover"
                     />
                   </div>
 
-                  {/* Text position */}
-                  {slide.text && (
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs text-muted-foreground w-16">
-                        {language === 'ar' ? 'الموضع' : 'Position'}
-                      </label>
-                      <div className="flex gap-1">
-                        {(['top', 'center', 'bottom'] as const).map((pos) => (
-                          <Button
-                            key={pos}
-                            variant={slide.textPosition === pos ? 'default' : 'outline'}
-                            size="sm"
-                            className="h-7 px-2 text-xs"
-                            onClick={() => updateSlide(slide.id, { textPosition: pos })}
-                          >
-                            {pos === 'top' ? (language === 'ar' ? 'أعلى' : 'Top') :
-                             pos === 'center' ? (language === 'ar' ? 'وسط' : 'Center') :
-                             (language === 'ar' ? 'أسفل' : 'Bottom')}
-                          </Button>
-                        ))}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold truncate">
+                          {language === 'ar' ? `شريحة ${index + 1}` : `Slide ${index + 1}`}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {slide.text?.trim()
+                            ? slide.text.trim()
+                            : (language === 'ar' ? 'بدون نص' : 'No text')}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs text-muted-foreground">{language === 'ar' ? 'المدة' : 'Dur'}</span>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={maxPerSlide}
+                            value={slide.durationSec}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => {
+                              updateSlide(slide.id, { durationSec: Math.min(maxPerSlide, Math.max(1, parseInt(e.target.value) || 1)) });
+                            }}
+                            className="h-9 w-16 text-center"
+                          />
+                          <span className="text-xs text-muted-foreground">s</span>
+                        </div>
+                        <div className={`h-9 w-9 rounded-xl border flex items-center justify-center ${
+                          isExpanded ? 'bg-white/10 dark:bg-black/20' : 'bg-transparent'
+                        }`}>
+                          {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                        </div>
                       </div>
                     </div>
-                  )}
+                  </div>
+                </button>
 
-                  {/* Text size */}
-                  {slide.text && (
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs text-muted-foreground w-16">
-                        {language === 'ar' ? 'الحجم' : 'Size'}
-                      </label>
-                      <div className="flex gap-1">
-                        {(['small', 'medium', 'large'] as const).map((size) => (
-                          <Button
-                            key={size}
-                            variant={slide.textSize === size ? 'default' : 'outline'}
-                            size="sm"
-                            className="h-7 px-2 text-xs"
-                            onClick={() => updateSlide(slide.id, { textSize: size })}
-                          >
-                            {size === 'small' ? 'S' : size === 'medium' ? 'M' : 'L'}
-                          </Button>
-                        ))}
+                {isExpanded && (
+                  <div className="mt-3 space-y-3">
+                    <div className="rounded-2xl p-2 flex gap-2 border border-white/10 bg-white/5 backdrop-blur-xl dark:bg-black/20">
+                      <button
+                        type="button"
+                        onClick={() => setPanel('text')}
+                        className={`flex-1 h-10 rounded-xl border text-sm font-semibold transition-all active:scale-95 ${
+                          panel === 'text'
+                            ? 'btn-enhanced text-white border-transparent shadow-[var(--glow-primary)]'
+                            : 'bg-white/10 border-border/60 hover:bg-white/15'
+                        }`}
+                      >
+                        {language === 'ar' ? 'نص' : 'Text'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPanel('look')}
+                        className={`flex-1 h-10 rounded-xl border text-sm font-semibold transition-all active:scale-95 ${
+                          panel === 'look'
+                            ? 'btn-enhanced text-white border-transparent shadow-[var(--glow-primary)]'
+                            : 'bg-white/10 border-border/60 hover:bg-white/15'
+                        }`}
+                      >
+                        {language === 'ar' ? 'شكل' : 'Look'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPanel('motion')}
+                        className={`flex-1 h-10 rounded-xl border text-sm font-semibold transition-all active:scale-95 ${
+                          panel === 'motion'
+                            ? 'btn-enhanced text-white border-transparent shadow-[var(--glow-primary)]'
+                            : 'bg-white/10 border-border/60 hover:bg-white/15'
+                        }`}
+                      >
+                        {language === 'ar' ? 'حركة' : 'Motion'}
+                      </button>
+                    </div>
+
+                    {panel === 'text' && (
+                      <div className="space-y-2">
+                        <Textarea
+                          value={slide.text}
+                          onChange={(e) => updateSlide(slide.id, { text: e.target.value })}
+                          placeholder={language === 'ar' ? 'أضف نص (اختياري)' : 'Add text (optional)'}
+                          className="min-h-[88px] text-sm resize-none rounded-2xl"
+                        />
+
+                        {!!slide.text?.trim() && (
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="rounded-2xl p-2 border border-white/10 bg-white/5 backdrop-blur-xl dark:bg-black/20">
+                              <p className="text-xs text-muted-foreground mb-2">
+                                {language === 'ar' ? 'الموضع' : 'Position'}
+                              </p>
+                              <div className="flex gap-2">
+                                {(['top', 'center', 'bottom'] as const).map((pos) => (
+                                  <button
+                                    key={pos}
+                                    type="button"
+                                    onClick={() => updateSlide(slide.id, { textPosition: pos })}
+                                    className={`flex-1 h-9 rounded-xl border text-xs font-semibold transition-all active:scale-95 ${
+                                      (slide.textPosition || 'bottom') === pos
+                                        ? 'btn-enhanced text-white border-transparent'
+                                        : 'bg-white/10 border-border/60'
+                                    }`}
+                                  >
+                                    {pos === 'top' ? (language === 'ar' ? 'أعلى' : 'Top') :
+                                      pos === 'center' ? (language === 'ar' ? 'وسط' : 'Center') :
+                                      (language === 'ar' ? 'أسفل' : 'Bottom')}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl p-2 border border-white/10 bg-white/5 backdrop-blur-xl dark:bg-black/20">
+                              <p className="text-xs text-muted-foreground mb-2">
+                                {language === 'ar' ? 'الحجم' : 'Size'}
+                              </p>
+                              <div className="flex gap-2">
+                                {(['small', 'medium', 'large'] as const).map((size) => (
+                                  <button
+                                    key={size}
+                                    type="button"
+                                    onClick={() => updateSlide(slide.id, { textSize: size })}
+                                    className={`flex-1 h-9 rounded-xl border text-xs font-semibold transition-all active:scale-95 ${
+                                      (slide.textSize || 'medium') === size
+                                        ? 'btn-enhanced text-white border-transparent'
+                                        : 'bg-white/10 border-border/60'
+                                    }`}
+                                  >
+                                    {size === 'small' ? 'S' : size === 'medium' ? 'M' : 'L'}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Transition */}
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs text-muted-foreground w-16">
-                      {language === 'ar' ? 'الانتقال' : 'Transition'}
-                    </label>
-                    <select
-                      value={slide.transition}
-                      onChange={(e) => updateSlide(slide.id, { transition: e.target.value as TransitionType })}
-                      className="h-8 px-2 text-xs rounded-md border border-input bg-background"
-                    >
-                      <option value="fade">{language === 'ar' ? 'تلاشي' : 'Fade'}</option>
-                      <option value="slide-left">{language === 'ar' ? 'انزلاق يسار' : 'Slide Left'}</option>
-                      <option value="slide-right">{language === 'ar' ? 'انزلاق يمين' : 'Slide Right'}</option>
-                      <option value="zoom-in">{language === 'ar' ? 'تكبير' : 'Zoom In'}</option>
-                      <option value="zoom-out">{language === 'ar' ? 'تصغير' : 'Zoom Out'}</option>
-                      <option value="none">{language === 'ar' ? 'بدون' : 'None'}</option>
-                    </select>
+                    {panel === 'look' && (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-semibold">{language === 'ar' ? 'الفلاتر' : 'Filters'}</p>
+                          <button
+                            type="button"
+                            className="text-xs underline text-muted-foreground"
+                            onClick={() => updateSlide(slide.id, { filters: { brightness: 100, contrast: 100, saturation: 100 } })}
+                          >
+                            {language === 'ar' ? 'إعادة ضبط' : 'Reset'}
+                          </button>
+                        </div>
+
+                        <div className="space-y-3">
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-muted-foreground">{language === 'ar' ? 'السطوع' : 'Brightness'}</span>
+                              <span className="text-xs font-medium">{slide.filters.brightness}%</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="50"
+                              max="150"
+                              value={slide.filters.brightness}
+                              onChange={(e) => updateSlide(slide.id, { filters: { ...slide.filters, brightness: parseInt(e.target.value) } })}
+                              className="w-full h-3"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-muted-foreground">{language === 'ar' ? 'التباين' : 'Contrast'}</span>
+                              <span className="text-xs font-medium">{slide.filters.contrast}%</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="50"
+                              max="150"
+                              value={slide.filters.contrast}
+                              onChange={(e) => updateSlide(slide.id, { filters: { ...slide.filters, contrast: parseInt(e.target.value) } })}
+                              className="w-full h-3"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-muted-foreground">{language === 'ar' ? 'التشبع' : 'Saturation'}</span>
+                              <span className="text-xs font-medium">{slide.filters.saturation}%</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="200"
+                              value={slide.filters.saturation}
+                              onChange={(e) => updateSlide(slide.id, { filters: { ...slide.filters, saturation: parseInt(e.target.value) } })}
+                              className="w-full h-3"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {panel === 'motion' && (
+                      <div className="space-y-2">
+                        <label className="text-sm font-semibold">
+                          {language === 'ar' ? 'الانتقال' : 'Transition'}
+                        </label>
+                        <select
+                          value={slide.transition}
+                          onChange={(e) => updateSlide(slide.id, { transition: e.target.value as TransitionType })}
+                          className="h-11 px-3 text-sm rounded-2xl border border-input bg-background w-full"
+                        >
+                          <option value="fade">{language === 'ar' ? 'تلاشي' : 'Fade'}</option>
+                          <option value="slide-left">{language === 'ar' ? 'انزلاق يسار' : 'Slide Left'}</option>
+                          <option value="slide-right">{language === 'ar' ? 'انزلاق يمين' : 'Slide Right'}</option>
+                          <option value="zoom-in">{language === 'ar' ? 'تكبير' : 'Zoom In'}</option>
+                          <option value="zoom-out">{language === 'ar' ? 'تصغير' : 'Zoom Out'}</option>
+                          <option value="none">{language === 'ar' ? 'بدون' : 'None'}</option>
+                        </select>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between pt-1">
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-10 w-10"
+                          disabled={index === 0}
+                          onClick={() => moveSlide(index, index - 1)}
+                        >
+                          <ChevronUp className="h-5 w-5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-10 w-10"
+                          disabled={index === project.slides.length - 1}
+                          onClick={() => moveSlide(index, index + 1)}
+                        >
+                          <ChevronDown className="h-5 w-5" />
+                        </Button>
+                      </div>
+                      <Button
+                        variant="outline"
+                        className="h-10 text-red-500 hover:text-red-600"
+                        onClick={() => removeSlide(slide.id)}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        {language === 'ar' ? 'حذف الشريحة' : 'Delete Slide'}
+                      </Button>
+                    </div>
                   </div>
-
-                  {/* Filters */}
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs text-muted-foreground w-16">
-                        {language === 'ar' ? 'السطوع' : 'Brightness'}
-                      </label>
-                      <input
-                        type="range"
-                        min="50"
-                        max="150"
-                        value={slide.filters.brightness}
-                        onChange={(e) => updateSlide(slide.id, { 
-                          filters: { ...slide.filters, brightness: parseInt(e.target.value) }
-                        })}
-                        className="flex-1 h-2"
-                      />
-                      <span className="text-xs w-8">{slide.filters.brightness}%</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs text-muted-foreground w-16">
-                        {language === 'ar' ? 'التباين' : 'Contrast'}
-                      </label>
-                      <input
-                        type="range"
-                        min="50"
-                        max="150"
-                        value={slide.filters.contrast}
-                        onChange={(e) => updateSlide(slide.id, { 
-                          filters: { ...slide.filters, contrast: parseInt(e.target.value) }
-                        })}
-                        className="flex-1 h-2"
-                      />
-                      <span className="text-xs w-8">{slide.filters.contrast}%</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs text-muted-foreground w-16">
-                        {language === 'ar' ? 'التشبع' : 'Saturation'}
-                      </label>
-                      <input
-                        type="range"
-                        min="0"
-                        max="200"
-                        value={slide.filters.saturation}
-                        onChange={(e) => updateSlide(slide.id, { 
-                          filters: { ...slide.filters, saturation: parseInt(e.target.value) }
-                        })}
-                        className="flex-1 h-2"
-                      />
-                      <span className="text-xs w-8">{slide.filters.saturation}%</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Reorder / Delete */}
-                <div className="flex flex-col gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    disabled={index === 0}
-                    onClick={() => moveSlide(index, index - 1)}
-                  >
-                    <ChevronUp className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    disabled={index === project.slides.length - 1}
-                    onClick={() => moveSlide(index, index + 1)}
-                  >
-                    <ChevronDown className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-red-500 hover:text-red-600"
-                    onClick={() => removeSlide(slide.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          ))}
+                )}
+              </Card>
+            );
+          })}
         </div>
       </div>
 

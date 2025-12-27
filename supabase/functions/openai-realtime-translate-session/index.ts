@@ -20,7 +20,6 @@ serve(async (req: Request) => {
   }
 
   try {
-    // Verify user is authenticated
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Missing authorization header" }), {
@@ -40,9 +39,8 @@ serve(async (req: Request) => {
       });
     }
 
-    // Parse request body
     const body = await req.json();
-    const { sdp_offer, language = "en" } = body;
+    const { sdp_offer } = body;
 
     if (!sdp_offer) {
       return new Response(JSON.stringify({ error: "Missing sdp_offer" }), {
@@ -51,10 +49,6 @@ serve(async (req: Request) => {
       });
     }
 
-    console.log("[openai-realtime-session] Creating session (legacy realtime SDP endpoint)...");
-    console.log("[openai-realtime-session] Model:", MODEL);
-
-    // Call OpenAI Realtime API with SDP offer (legacy endpoint)
     const openaiResponse = await fetch(REALTIME_URL, {
       method: "POST",
       headers: {
@@ -66,18 +60,15 @@ serve(async (req: Request) => {
 
     if (!openaiResponse.ok) {
       const errorText = await openaiResponse.text();
-      console.error("[openai-realtime-session] OpenAI error:", openaiResponse.status, errorText);
+      console.error("[openai-realtime-translate-session] OpenAI error:", openaiResponse.status, errorText);
       return new Response(JSON.stringify({ error: "Failed to create realtime session", details: errorText }), {
         status: openaiResponse.status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // OpenAI returns the SDP answer as plain text
     const sdpAnswer = await openaiResponse.text();
-    console.log("[openai-realtime-session] Got SDP answer, length:", sdpAnswer.length);
 
-    // Return SDP answer to client
     return new Response(JSON.stringify({
       success: true,
       sdp_answer: sdpAnswer,
@@ -86,9 +77,8 @@ serve(async (req: Request) => {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-
   } catch (err) {
-    console.error("[openai-realtime-session] Error:", err);
+    console.error("[openai-realtime-translate-session] Error:", err);
     return new Response(JSON.stringify({ error: "Internal server error", details: String(err) }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
