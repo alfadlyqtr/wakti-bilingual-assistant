@@ -96,6 +96,31 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
   const isHoldingRef = useRef(false);
   const targetLanguageRef = useRef(targetLanguage);
   const voiceGenderRef = useRef(voiceGender);
+  const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const waitForIceGatheringComplete = useCallback((pc: RTCPeerConnection, timeoutMs = 5000) => {
+    return new Promise<void>((resolve) => {
+      if (pc.iceGatheringState === 'complete') {
+        resolve();
+        return;
+      }
+
+      const timeout = window.setTimeout(() => {
+        pc.removeEventListener('icegatheringstatechange', onStateChange);
+        resolve();
+      }, timeoutMs);
+
+      function onStateChange() {
+        if (pc.iceGatheringState === 'complete') {
+          window.clearTimeout(timeout);
+          pc.removeEventListener('icegatheringstatechange', onStateChange);
+          resolve();
+        }
+      }
+
+      pc.addEventListener('icegatheringstatechange', onStateChange);
+    });
+  }, []);
 
   // Keep refs in sync
   useEffect(() => {
@@ -123,6 +148,10 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
   }, []);
 
   const cleanup = useCallback(() => {
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current);
+      connectionTimeoutRef.current = null;
+    }
     if (countdownIntervalRef.current) {
       clearInterval(countdownIntervalRef.current);
       countdownIntervalRef.current = null;
@@ -168,13 +197,17 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
     }
 
     try {
+      console.log('[LiveTranslator] Starting connection...');
+      
       // Get fresh microphone stream
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
       
+      console.log('[LiveTranslator] Requesting microphone access...');
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
+      console.log('[LiveTranslator] Microphone access granted');
 
       // Setup analyser for mic level visualization
       if (audioContextRef.current) {
@@ -182,6 +215,12 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
       }
       const audioCtx = new AudioContext();
       audioContextRef.current = audioCtx;
+      
+      // Resume AudioContext for mobile browsers (required for iOS/Android)
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume();
+      }
+      
       const source = audioCtx.createMediaStreamSource(stream);
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 256;
@@ -189,13 +228,36 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
       analyserRef.current = analyser;
 
       // Create RTCPeerConnection
-      const pc = new RTCPeerConnection();
+      console.log('[LiveTranslator] Creating RTCPeerConnection...');
+      const pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+        ],
+      });
       pcRef.current = pc;
+
+      pc.onconnectionstatechange = () => {
+        console.log('[LiveTranslator] pc.connectionState:', pc.connectionState);
+        if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+          setError(language === 'ar' ? 'انقطع الاتصال' : 'Connection lost');
+          setStatus('idle');
+        }
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        console.log('[LiveTranslator] pc.iceConnectionState:', pc.iceConnectionState);
+      };
+
+      pc.onicegatheringstatechange = () => {
+        console.log('[LiveTranslator] pc.iceGatheringState:', pc.iceGatheringState);
+      };
 
       // Add audio track
       stream.getAudioTracks().forEach(track => {
         pc.addTrack(track, stream);
       });
+      console.log('[LiveTranslator] Audio track added');
 
       // Handle incoming audio from OpenAI
       pc.ontrack = (event) => {
@@ -209,7 +271,22 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
       const dc = pc.createDataChannel('oai-events', { ordered: true });
       dcRef.current = dc;
 
+      // Add connection timeout (15 seconds) - use ref to avoid stale closure
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current);
+      }
+      connectionTimeoutRef.current = setTimeout(() => {
+        console.error('[LiveTranslator] Connection timeout - data channel did not open');
+        setError(language === 'ar' ? 'انتهت مهلة الاتصال' : 'Connection timeout');
+        setStatus('idle');
+        cleanup();
+      }, 15000);
+
       dc.onopen = () => {
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current);
+          connectionTimeoutRef.current = null;
+        }
         console.log('[LiveTranslator] Data channel open - sending session config');
         
         const currentTargetLang = targetLanguageRef.current;
@@ -260,11 +337,20 @@ CRITICAL RULES:
       };
 
       dc.onerror = (err) => {
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current);
+          connectionTimeoutRef.current = null;
+        }
         console.error('[LiveTranslator] Data channel error:', err);
         setError(language === 'ar' ? 'خطأ في الاتصال' : 'Connection error');
+        setStatus('idle');
       };
 
       dc.onclose = () => {
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current);
+          connectionTimeoutRef.current = null;
+        }
         console.log('[LiveTranslator] Data channel closed');
         if (status !== 'idle') {
           setStatus('idle');
@@ -274,6 +360,12 @@ CRITICAL RULES:
 
       // Create offer
       await pc.setLocalDescription();
+
+      // On mobile networks, sending the SDP before ICE gathering completes can cause
+      // sessions that never fully open the data channel.
+      console.log('[LiveTranslator] Waiting for ICE gathering to complete...');
+      await waitForIceGatheringComplete(pc, 5000);
+
       const offer = pc.localDescription;
 
       if (!offer) {
@@ -285,12 +377,17 @@ CRITICAL RULES:
       const accessToken = sessionData?.session?.access_token;
 
       console.log('[LiveTranslator] Calling Edge Function for SDP exchange...');
+      console.log('[LiveTranslator] Has access token:', !!accessToken);
+      
       const response = await supabase.functions.invoke('openai-realtime-session', {
         body: { sdp_offer: offer.sdp, language },
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
       });
 
+      console.log('[LiveTranslator] Edge function response:', response.error ? 'ERROR' : 'OK', response.data ? 'has data' : 'no data');
+      
       if (response.error || !response.data?.sdp_answer) {
+        console.error('[LiveTranslator] Edge function error:', response.error);
         throw new Error(response.error?.message || 'Failed to get SDP answer');
       }
 
@@ -306,8 +403,9 @@ CRITICAL RULES:
       console.error('[LiveTranslator] Failed to initialize connection:', err);
       setError(err.message || (language === 'ar' ? 'فشل الاتصال' : 'Connection failed'));
       setStatus('idle');
+      cleanup();
     }
-  }, [language, status]);
+  }, [language, status, cleanup]);
 
   // Handle realtime events from OpenAI
   const handleRealtimeEvent = useCallback((msg: any) => {
