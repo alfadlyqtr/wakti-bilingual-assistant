@@ -20,7 +20,7 @@ export default function TextGenerator() {
   
   return (
     <div className="w-full h-full">
-      <div className="mx-auto max-w-6xl w-[92vw] md:w-[90vw] lg:w-auto pt-6 md:pt-8 pb-6 px-3 md:px-4">
+      <div className="mx-auto w-full max-w-none pt-6 md:pt-8 pb-6 px-3 md:px-6 lg:px-8">
         <div className="text-center mb-3">
           <h1 className="text-2xl font-semibold">
             {language === 'ar' ? 'مولد النص الذكي' : 'Smart Text Generator'}

@@ -5,8 +5,8 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
-const MODEL = "gpt-realtime-mini-2025-12-15";
-const REALTIME_URL = `https://api.openai.com/v1/realtime?model=${MODEL}`;
+// OpenAI Realtime GA endpoint (unified interface)
+const REALTIME_CALLS_URL = "https://api.openai.com/v1/realtime/calls";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -51,45 +51,60 @@ serve(async (req: Request) => {
       });
     }
 
-    // Build instructions based on language
-    const instructions = language === "ar"
-      ? `أنت مساعد Wakti الصوتي. أجب بإيجاز ووضوح. تحدث بالعربية الفصحى أو اللهجة حسب ما يستخدمه المستخدم. كن ودودًا ومفيدًا.`
-      : `You are Wakti Voice Assistant. Answer concisely and clearly. Be friendly and helpful. Keep responses brief since this is voice conversation.`;
+    // Session configuration for OpenAI Realtime (GA unified interface)
+    // Using gpt-realtime model with voice output
+    const sessionConfig = {
+      type: "realtime",
+      model: "gpt-realtime",
+      audio: {
+        output: {
+          voice: "shimmer",
+        },
+      },
+    };
 
-    // Call OpenAI Realtime API with SDP offer
-    const openaiResponse = await fetch(REALTIME_URL, {
+    console.log("[openai-realtime-session] Creating session with unified interface...");
+    console.log("[openai-realtime-session] Session config:", JSON.stringify(sessionConfig));
+
+    // Build multipart form data as per OpenAI docs
+    const formData = new FormData();
+    formData.set("sdp", sdp_offer);
+    formData.set("session", JSON.stringify(sessionConfig));
+
+    // Call OpenAI Realtime API with multipart form (unified interface)
+    const openaiResponse = await fetch(REALTIME_CALLS_URL, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/sdp",
       },
-      body: sdp_offer,
+      body: formData,
     });
 
     if (!openaiResponse.ok) {
       const errorText = await openaiResponse.text();
-      console.error("OpenAI Realtime error:", openaiResponse.status, errorText);
+      console.error("[openai-realtime-session] OpenAI error:", openaiResponse.status, errorText);
       return new Response(JSON.stringify({ error: "Failed to create realtime session", details: errorText }), {
         status: openaiResponse.status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    // OpenAI returns the SDP answer as plain text
     const sdpAnswer = await openaiResponse.text();
+    console.log("[openai-realtime-session] Got SDP answer, length:", sdpAnswer.length);
 
-    // Return SDP answer and session config to client
+    // Return SDP answer to client
     return new Response(JSON.stringify({
       success: true,
       sdp_answer: sdpAnswer,
-      model: MODEL,
-      instructions,
+      model: "gpt-realtime",
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
   } catch (err) {
-    console.error("openai-realtime-session error:", err);
+    console.error("[openai-realtime-session] Error:", err);
     return new Response(JSON.stringify({ error: "Internal server error", details: String(err) }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

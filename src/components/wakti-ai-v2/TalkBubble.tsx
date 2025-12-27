@@ -447,6 +447,7 @@ ${memoryContext ? memoryContext : ''}`
         dc.send(JSON.stringify({
           type: 'session.update',
           session: {
+            type: 'realtime',
             instructions,
             voice: openaiVoice,
             input_audio_transcription: { model: 'whisper-1' },
