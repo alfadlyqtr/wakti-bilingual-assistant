@@ -128,6 +128,8 @@ export function ProfileImageUpload() {
 
   // State to force avatar re-render
   const [avatarKey, setAvatarKey] = useState(Date.now());
+  // Local override for immediate avatar display before refetch completes
+  const [immediateAvatarUrl, setImmediateAvatarUrl] = useState<string | null | undefined>(undefined);
 
   // Add cache-busting to avatar URL
   const getCacheBustedAvatarUrl = (url: string | null | undefined) => {
@@ -179,15 +181,26 @@ export function ProfileImageUpload() {
 
       console.log('Upload successful:', uploadData);
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
+      // Get signed URL (more reliable than public URL for CORS)
+      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
         .from('avatars')
-        .getPublicUrl(fileName);
+        .createSignedUrl(fileName, 60 * 60 * 24 * 365); // 1 year expiry
 
-      console.log('Public URL generated:', publicUrl);
+      if (signedUrlError) {
+        console.error('Signed URL error:', signedUrlError);
+        // Fallback to public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('avatars')
+          .getPublicUrl(fileName);
+        console.log('Fallback to public URL:', publicUrl);
+        var avatarUrlToSave = publicUrl;
+      } else {
+        console.log('Signed URL generated:', signedUrlData.signedUrl);
+        var avatarUrlToSave = signedUrlData.signedUrl;
+      }
 
       // Update profile with new avatar URL (trim to prevent leading/trailing spaces)
-      const cleanUrl = publicUrl.trim();
+      const cleanUrl = avatarUrlToSave.trim();
       const { error: updateError } = await supabase
         .from('profiles')
         .update({ 
@@ -201,8 +214,10 @@ export function ProfileImageUpload() {
         throw updateError;
       }
 
-      // Force immediate avatar refresh
+      // Force immediate avatar refresh - set local state immediately
+      setImmediateAvatarUrl(cleanUrl);
       setAvatarKey(Date.now());
+      setAvatarError(false); // Reset error state for new image
       
       // Force refresh profile data to get the latest avatar
       await refetch();
@@ -253,7 +268,8 @@ export function ProfileImageUpload() {
         throw updateError;
       }
 
-      // Force immediate avatar refresh
+      // Force immediate avatar refresh - clear local state
+      setImmediateAvatarUrl(null);
       setAvatarKey(Date.now());
       
       // Refresh profile data
@@ -295,8 +311,64 @@ export function ProfileImageUpload() {
       .slice(0, 2);
   };
 
-  // Get avatar URL from profile data with cache-busting
-  const avatarUrl = profile?.avatar_url ? getCacheBustedAvatarUrl(profile.avatar_url) : undefined;
+  // Convert public URL to signed URL to bypass CORS issues
+  const [signedAvatarUrl, setSignedAvatarUrl] = useState<string | undefined>(undefined);
+  
+  // Function to extract file path from avatar URL and get signed URL
+  const getSignedUrlFromPublicUrl = async (publicUrl: string) => {
+    try {
+      // Extract file path from public URL
+      // Format: https://xxx.supabase.co/storage/v1/object/public/avatars/{path}
+      const match = publicUrl.match(/\/avatars\/(.+)$/);
+      if (!match) return publicUrl; // Return original if can't parse
+      
+      const filePath = match[1].split('?')[0]; // Remove any query params
+      
+      const { data, error } = await supabase.storage
+        .from('avatars')
+        .createSignedUrl(filePath, 60 * 60); // 1 hour expiry
+      
+      if (error || !data?.signedUrl) {
+        console.error('Failed to get signed URL:', error);
+        return publicUrl; // Fallback to public URL
+      }
+      
+      return data.signedUrl;
+    } catch (err) {
+      console.error('Error getting signed URL:', err);
+      return publicUrl;
+    }
+  };
+
+  // Get signed URL when avatar URL changes
+  useEffect(() => {
+    const rawUrl = immediateAvatarUrl !== undefined ? immediateAvatarUrl : profile?.avatar_url;
+    
+    if (!rawUrl) {
+      setSignedAvatarUrl(undefined);
+      return;
+    }
+    
+    // If it's already a signed URL, use it directly
+    if (rawUrl.includes('token=')) {
+      setSignedAvatarUrl(getCacheBustedAvatarUrl(rawUrl));
+      return;
+    }
+    
+    // Convert public URL to signed URL
+    getSignedUrlFromPublicUrl(rawUrl).then(signedUrl => {
+      setSignedAvatarUrl(getCacheBustedAvatarUrl(signedUrl));
+    });
+  }, [immediateAvatarUrl, profile?.avatar_url, avatarKey]);
+
+  const avatarUrl = signedAvatarUrl;
+
+  // Clear immediate override once profile is updated with the new URL
+  useEffect(() => {
+    if (immediateAvatarUrl !== undefined && profile?.avatar_url === immediateAvatarUrl) {
+      setImmediateAvatarUrl(undefined);
+    }
+  }, [profile?.avatar_url, immediateAvatarUrl]);
 
   // Reset error when avatar URL changes so new images render after a previous load error
   useEffect(() => {
@@ -325,7 +397,7 @@ export function ProfileImageUpload() {
             alt={language === 'ar' ? 'الصورة الشخصية' : 'Profile picture'}
             onError={handleAvatarError}
           />
-          <AvatarFallback className="text-lg font-semibold">
+          <AvatarFallback className="text-lg font-semibold" delayMs={600}>
             {getInitials()}
           </AvatarFallback>
         </Avatar>

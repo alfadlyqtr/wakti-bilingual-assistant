@@ -61,6 +61,7 @@ import AdminAIUsage from "./pages/AdminAIUsage";
 import VoiceTTS from "./pages/VoiceTTS";
 import VoiceStudio from "./pages/VoiceStudio";
 import TextGenerator from "./pages/TextGenerator";
+import TextTranslationView from "./pages/TextTranslationView";
 import GameMode from "./pages/GameMode";
 import Games from "./pages/Games";
 import FitnessHealth from "./pages/FitnessHealth";
@@ -298,6 +299,11 @@ function App() {
                 <Route path="/tools/text" element={
                   <GiftNotificationProvider>
                     <AppLayout><TextGenerator /></AppLayout>
+                  </GiftNotificationProvider>
+                } />
+                <Route path="/tools/text/translation/:id" element={
+                  <GiftNotificationProvider>
+                    <AppLayout><TextTranslationView /></AppLayout>
                   </GiftNotificationProvider>
                 } />
                 <Route path="/tools/voice-studio" element={

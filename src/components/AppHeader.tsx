@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -32,7 +33,7 @@ interface AppHeaderProps {
 export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
   const { theme, setTheme, language, setLanguage, toggleLanguage } = useTheme();
   const { user, signOut } = useAuth();
-  const { profile, refetch: refetchProfile } = useUserProfile();
+  const { profile, loading: profileLoading, refetch: refetchProfile } = useUserProfile();
   const navigate = useNavigate();
   const location = useLocation();
   const [avatarKey, setAvatarKey] = useState(Date.now());
@@ -81,10 +82,57 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
     }
   }, [profile?.avatar_url, immediateAvatarUrl]);
 
-  // Get avatar URL - prefer immediate override, then profile data with cache-busting
-  const avatarUrl = immediateAvatarUrl !== undefined 
-    ? (immediateAvatarUrl ? getCacheBustedAvatarUrl(immediateAvatarUrl) : undefined)
-    : (profile?.avatar_url ? getCacheBustedAvatarUrl(profile.avatar_url) : undefined);
+  // Convert public URL to signed URL to bypass CORS issues
+  const [signedAvatarUrl, setSignedAvatarUrl] = useState<string | undefined>(undefined);
+  
+  // Function to extract file path from avatar URL and get signed URL
+  const getSignedUrlFromPublicUrl = async (publicUrl: string) => {
+    try {
+      // Extract file path from public URL
+      // Format: https://xxx.supabase.co/storage/v1/object/public/avatars/{path}
+      const match = publicUrl.match(/\/avatars\/(.+)$/);
+      if (!match) return publicUrl; // Return original if can't parse
+      
+      const filePath = match[1].split('?')[0]; // Remove any query params
+      
+      const { data, error } = await supabase.storage
+        .from('avatars')
+        .createSignedUrl(filePath, 60 * 60); // 1 hour expiry
+      
+      if (error || !data?.signedUrl) {
+        console.error('Failed to get signed URL:', error);
+        return publicUrl; // Fallback to public URL
+      }
+      
+      return data.signedUrl;
+    } catch (err) {
+      console.error('Error getting signed URL:', err);
+      return publicUrl;
+    }
+  };
+
+  // Get signed URL when avatar URL changes
+  useEffect(() => {
+    const rawUrl = immediateAvatarUrl !== undefined ? immediateAvatarUrl : profile?.avatar_url;
+    
+    if (!rawUrl) {
+      setSignedAvatarUrl(undefined);
+      return;
+    }
+    
+    // If it's already a signed URL, use it directly
+    if (rawUrl.includes('token=')) {
+      setSignedAvatarUrl(getCacheBustedAvatarUrl(rawUrl));
+      return;
+    }
+    
+    // Convert public URL to signed URL
+    getSignedUrlFromPublicUrl(rawUrl).then(signedUrl => {
+      setSignedAvatarUrl(getCacheBustedAvatarUrl(signedUrl));
+    });
+  }, [immediateAvatarUrl, profile?.avatar_url, avatarKey]);
+
+  const avatarUrl = signedAvatarUrl;
   
   // Define menu items with icons and vibrant colors
   const menuItems = [
@@ -346,7 +394,13 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
                     key={`${profile?.avatar_url || 'no-avatar'}-${avatarKey}`}
                   >
                     <AvatarImage src={avatarUrl} />
-                    <AvatarFallback className="text-xs">{user?.email ? user.email[0].toUpperCase() : '?'}</AvatarFallback>
+                    <AvatarFallback className="text-xs" delayMs={profileLoading ? 0 : 600}>
+                      {profileLoading ? (
+                        <span className="animate-pulse bg-muted-foreground/30 rounded-full w-full h-full" />
+                      ) : (
+                        user?.email ? user.email[0].toUpperCase() : '?'
+                      )}
+                    </AvatarFallback>
                   </Avatar>
                   <UnreadBadge count={unreadTotal} size="sm" className="-right-0.5 -top-0.5" />
                 </span>

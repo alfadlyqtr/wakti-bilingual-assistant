@@ -218,7 +218,7 @@ export default function VoiceStudio() {
                   : 'bg-white/80 dark:bg-white/5 border-border shadow-sm hover:shadow-md hover:bg-white'}
               `}
             >
-              {language === 'ar' ? 'المترجم' : 'Translator'}
+              {language === 'ar' ? 'ترجمة' : 'Translate'}
             </button>
             <button
               type="button"
@@ -231,7 +231,7 @@ export default function VoiceStudio() {
                   : 'bg-white/80 dark:bg-white/5 border-border shadow-sm hover:shadow-md hover:bg-white'}
               `}
             >
-              {language === 'ar' ? 'فوري 🎙️' : 'Live 🎙️'}
+              {language === 'ar' ? 'مترجم فوري 🎙️' : 'Interpreter 🎙️'}
             </button>
           </div>
         </div>

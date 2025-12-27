@@ -9,12 +9,15 @@ import html2canvas from 'html2canvas';
 import { supabase } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 export default function TextTranslateTab() {
   const { language } = useTheme();
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const LANGS = [
     { code: 'en', nameEn: 'English', nameAr: 'الإنجليزية' },
@@ -84,7 +87,6 @@ export default function TextTranslateTab() {
   const [ttMyTranslationsLoading, setTtMyTranslationsLoading] = useState(false);
   const [ttMyTranslationsError, setTtMyTranslationsError] = useState<string>('');
   const [ttSignedUrls, setTtSignedUrls] = useState<Record<string, { pdfUrl?: string; previewUrl?: string }>>({});
-  const [ttTextModalText, setTtTextModalText] = useState<string>('');
 
   const [ttHistory, setTtHistory] = useState<{ target: string; sourceLen: number; preview: string; ts: number }[]>(() => {
     try {
@@ -158,20 +160,10 @@ export default function TextTranslateTab() {
     setTtSignedUrls(updates);
   };
 
-  const openTranslatedTextModalForRow = async (row: { id: string; translated_text?: string | null }) => {
-    if (row.translated_text) {
-      setTtTextModalText(row.translated_text);
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from('user_translations')
-      .select('translated_text')
-      .eq('id', row.id)
-      .maybeSingle();
-
-    if (error) throw error;
-    setTtTextModalText(data?.translated_text || '');
+  const openTranslatedTextPageForRow = (row: { id: string }) => {
+    navigate(`/tools/text/translation/${row.id}`,
+      { state: { from: `${location.pathname}${location.search}`, canGoBack: true } }
+    );
   };
 
   const downloadFromSignedUrl = async (signedUrl: string, filename: string) => {
@@ -194,6 +186,14 @@ export default function TextTranslateTab() {
   useEffect(() => {
     loadMyTranslations();
   }, [user?.id]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search || '');
+    const ttSection = (params.get('ttSection') || '').toLowerCase();
+    if (ttSection === 'my') {
+      setTtSectionTab('my');
+    }
+  }, [location.search]);
 
   useEffect(() => {
     if (ttMyTranslations.length > 0) {
@@ -482,52 +482,6 @@ export default function TextTranslateTab() {
 
   return (
     <div className="enhanced-card rounded-2xl p-5 md:p-6 space-y-4">
-      {ttTextModalText && (
-        <div
-          className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setTtTextModalText('')}
-        >
-          <div
-            className="w-full max-w-4xl h-[80vh] rounded-2xl border border-border overflow-hidden flex flex-col enhanced-card shadow-[var(--shadow-vibrant)]"
-          >
-            <div className="h-12 px-3 flex items-center justify-between border-b border-border bg-[var(--gradient-nav)]">
-              <div className="text-sm font-medium">{language === 'ar' ? 'النص المترجم' : 'Translated Text'}</div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!ttTextModalText) return;
-                    await navigator.clipboard.writeText(ttTextModalText);
-                  }}
-                  className="h-9 px-4 rounded-xl text-sm font-medium btn-secondary-enhanced btn-3d-pop active:scale-95"
-                >
-                  {language === 'ar' ? 'نسخ' : 'Copy'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTtTextModalText('');
-                  }}
-                  className="h-9 w-9 rounded-xl border border-border bg-transparent hover:bg-black/5 dark:hover:bg-white/10 transition active:scale-95"
-                  aria-label={language === 'ar' ? 'إغلاق' : 'Close'}
-                >
-                  X
-                </button>
-              </div>
-            </div>
-            <div className="flex-1 w-full overflow-auto p-4" onClick={(e) => e.stopPropagation()}>
-              <textarea
-                readOnly
-                value={ttTextModalText}
-                dir="auto"
-                aria-label={language === 'ar' ? 'النص المترجم' : 'Translated text'}
-                className="w-full h-full min-h-[60vh] rounded-xl border border-border input-enhanced p-4 text-sm leading-relaxed"
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">{language === 'ar' ? 'ترجمة نصية' : 'Text Translate'}</h2>
         <div className="text-xs text-muted-foreground">{ttText.length} / {TT_MAX}</div>
@@ -837,10 +791,10 @@ export default function TextTranslateTab() {
               </button>
             </div>
 
-            <div className="text-[11px] text-muted-foreground">
+            <div className="text-[11px] text-red-500">
               {language === 'ar'
-                ? 'تنبيه بسيط: يتم حذف الترجمات المحفوظة تلقائيًا بعد 20 يومًا. يرجى تنزيل ملف PDF للاحتفاظ به.'
-                : 'Friendly reminder: saved translations are automatically deleted after 20 days. Please download your PDF to keep it.'}
+                ? 'مهم: الترجمات المحفوظة سيتم حذفها نهائياً بعد 20 يوم. قم بتحميل ملف PDF للاحتفاظ بترجماتك.'
+                : 'Important: Saved translations will be permanently deleted after 20 days. Download your PDF to keep your translations.'}
             </div>
 
             {ttMyTranslationsLoading ? (
@@ -870,11 +824,7 @@ export default function TextTranslateTab() {
                           <button
                             type="button"
                             onClick={async () => {
-                              try {
-                                await openTranslatedTextModalForRow(row);
-                              } catch (e) {
-                                console.error(e);
-                              }
+                              openTranslatedTextPageForRow(row);
                             }}
                             className="h-9 px-3 rounded-xl text-xs font-medium btn-secondary-enhanced btn-3d-pop active:scale-95"
                           >

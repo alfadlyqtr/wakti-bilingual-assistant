@@ -1,12 +1,16 @@
 import { useState, useCallback } from 'react';
 
-type TransitionType = 'fade' | 'slide-left' | 'slide-right' | 'zoom-in' | 'zoom-out' | 'none';
-type TextAnimation = 'none' | 'fade-in' | 'slide-up' | 'typewriter';
+type TransitionType = 'fade' | 'slide-left' | 'slide-right' | 'zoom-in' | 'zoom-out' | 'wipe-left' | 'wipe-right' | 'dissolve' | 'none';
+type TextAnimation = 'none' | 'fade-in' | 'slide-up' | 'slide-down' | 'zoom-in' | 'typewriter' | 'bounce';
+type TextFont = 'system' | 'serif' | 'mono' | 'handwritten' | 'bold';
+type FilterPreset = 'none' | 'vivid' | 'warm' | 'cool' | 'vintage' | 'bw' | 'dramatic' | 'soft';
 
 interface SlideFilters {
   brightness: number;
   contrast: number;
   saturation: number;
+  blur?: number;
+  preset?: FilterPreset;
 }
 
 interface SlideConfig {
@@ -16,9 +20,14 @@ interface SlideConfig {
   textColor?: string;
   textSize?: 'small' | 'medium' | 'large';
   textAnimation?: TextAnimation;
+  textFont?: TextFont;
+  textShadow?: boolean;
   durationSec: number;
   transition?: TransitionType;
+  transitionDuration?: number;
   filters?: SlideFilters;
+  kenBurns?: 'zoom-in' | 'zoom-out' | 'pan-left' | 'pan-right' | 'pan-up' | 'pan-down' | 'random';
+  kenBurnsSpeed?: number;
 }
 
 interface VideoGenerationOptions {
@@ -117,9 +126,21 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
       let audioContext: AudioContext | null = null;
       if (audioUrl) {
         try {
-          audioElement = new Audio(audioUrl);
-          audioElement.crossOrigin = 'anonymous';
+          console.log('[useCanvasVideo] Loading audio from:', audioUrl.substring(0, 100) + '...');
+          setStatus('Loading audio...');
+          
+          // Fetch audio as blob to avoid CORS issues with signed URLs
+          const audioResponse = await fetch(audioUrl);
+          if (!audioResponse.ok) {
+            throw new Error(`Audio fetch failed: ${audioResponse.status}`);
+          }
+          const audioBlob = await audioResponse.blob();
+          const audioBlobUrl = URL.createObjectURL(audioBlob);
+          console.log('[useCanvasVideo] Audio blob created, size:', audioBlob.size);
+          
+          audioElement = new Audio(audioBlobUrl);
           audioElement.volume = 1;
+          
           if (typeof audioTrimEnd === 'number' && Number.isFinite(audioTrimEnd)) {
             audioElement.addEventListener('timeupdate', () => {
               if (!audioElement) return;
@@ -128,9 +149,19 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
               }
             });
           }
+          
           await new Promise<void>((resolve, reject) => {
-            audioElement!.oncanplaythrough = () => resolve();
-            audioElement!.onerror = () => reject();
+            const timeout = setTimeout(() => reject(new Error('Audio load timeout')), 10000);
+            audioElement!.oncanplaythrough = () => {
+              clearTimeout(timeout);
+              console.log('[useCanvasVideo] Audio ready, duration:', audioElement!.duration);
+              resolve();
+            };
+            audioElement!.onerror = (e) => {
+              clearTimeout(timeout);
+              console.error('[useCanvasVideo] Audio error:', e);
+              reject(new Error('Audio element error'));
+            };
             audioElement!.load();
           });
           
@@ -146,8 +177,12 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
           destination.stream.getAudioTracks().forEach(track => {
             stream.addTrack(track);
           });
+          
+          console.log('[useCanvasVideo] Audio connected to stream successfully');
         } catch (audioErr) {
-          console.warn('Audio loading failed, continuing without audio:', audioErr);
+          console.error('[useCanvasVideo] Audio loading failed:', audioErr);
+          setStatus('Audio failed, continuing without sound...');
+          // Continue without audio
         }
       }
 

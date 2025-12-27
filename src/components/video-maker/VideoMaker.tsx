@@ -47,13 +47,18 @@ import { useNavigate } from 'react-router-dom';
 import { useCanvasVideo } from '@/hooks/useCanvasVideo';
 
 // Types
-type TransitionType = 'fade' | 'slide-left' | 'slide-right' | 'zoom-in' | 'zoom-out' | 'none';
-type TextAnimation = 'none' | 'fade-in' | 'slide-up' | 'typewriter';
+type TransitionType = 'fade' | 'slide-left' | 'slide-right' | 'zoom-in' | 'zoom-out' | 'wipe-left' | 'wipe-right' | 'dissolve' | 'none';
+type TextAnimation = 'none' | 'fade-in' | 'slide-up' | 'slide-down' | 'zoom-in' | 'typewriter' | 'bounce';
+type KenBurnsDirection = 'zoom-in' | 'zoom-out' | 'pan-left' | 'pan-right' | 'pan-up' | 'pan-down' | 'random';
+type TextFont = 'system' | 'serif' | 'mono' | 'handwritten' | 'bold';
+type FilterPreset = 'none' | 'vivid' | 'warm' | 'cool' | 'vintage' | 'bw' | 'dramatic' | 'soft';
 
 interface SlideFilters {
   brightness: number;
   contrast: number;
   saturation: number;
+  blur: number;
+  preset: FilterPreset;
 }
 
 interface Slide {
@@ -65,9 +70,14 @@ interface Slide {
   textColor: string;
   textSize: 'small' | 'medium' | 'large';
   textAnimation: TextAnimation;
+  textFont: TextFont;
+  textShadow: boolean;
   durationSec: number;
   transition: TransitionType;
+  transitionDuration: number;
   filters: SlideFilters;
+  kenBurns: KenBurnsDirection;
+  kenBurnsSpeed: number;
 }
 
 interface AudioTrack {
@@ -524,9 +534,14 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
         textColor: TEMPLATES[project.template].textColor,
         textSize: 'medium',
         textAnimation: 'fade-in',
+        textFont: 'system',
+        textShadow: true,
         durationSec: Math.min(3, remainingDuration / (maxToAdd || 1)),
         transition: 'fade',
-        filters: { brightness: 100, contrast: 100, saturation: 100 }
+        transitionDuration: 0.5,
+        filters: { brightness: 100, contrast: 100, saturation: 100, blur: 0, preset: 'none' },
+        kenBurns: 'random',
+        kenBurnsSpeed: 1
       });
     });
 
@@ -765,17 +780,16 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
   // Render customize step
   const renderCustomizeStep = () => (
     <div className="space-y-4">
-      {/* Duration counter */}
-      <div className="enhanced-card rounded-2xl p-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Clock className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-medium">
-            {language === 'ar' ? 'المدة الإجمالية' : 'Total Duration'}
-          </span>
-        </div>
-        <div className={`text-sm font-semibold ${totalDuration > MAX_DURATION_SEC ? 'text-red-500' : ''}`}>
-          {totalDuration}s / {MAX_DURATION_SEC}s
-        </div>
+      {/* Title - moved to top */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium">
+          {language === 'ar' ? 'عنوان الفيديو (اختياري)' : 'Video Title (optional)'}
+        </label>
+        <Input
+          value={project.title}
+          onChange={(e) => setProject(prev => ({ ...prev, title: e.target.value }))}
+          placeholder={language === 'ar' ? 'أدخل عنوان' : 'Enter title'}
+        />
       </div>
 
       {/* Template picker */}
@@ -917,60 +931,151 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
                     </div>
 
                     {panel === 'text' && (
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         <Textarea
                           value={slide.text}
                           onChange={(e) => updateSlide(slide.id, { text: e.target.value })}
                           placeholder={language === 'ar' ? 'أضف نص (اختياري)' : 'Add text (optional)'}
-                          className="min-h-[88px] text-sm resize-none rounded-2xl"
+                          className="min-h-[80px] text-sm resize-none rounded-2xl"
                         />
 
                         {!!slide.text?.trim() && (
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-3">
+                            {/* Position & Size Row */}
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="rounded-2xl p-2 border border-white/10 bg-white/5 backdrop-blur-xl dark:bg-black/20">
+                                <p className="text-xs text-muted-foreground mb-2">
+                                  {language === 'ar' ? 'الموضع' : 'Position'}
+                                </p>
+                                <div className="flex gap-1">
+                                  {(['top', 'center', 'bottom'] as const).map((pos) => (
+                                    <button
+                                      key={pos}
+                                      type="button"
+                                      onClick={() => updateSlide(slide.id, { textPosition: pos })}
+                                      className={`flex-1 h-8 rounded-lg border text-xs font-semibold transition-all active:scale-95 ${
+                                        (slide.textPosition || 'bottom') === pos
+                                          ? 'btn-enhanced text-white border-transparent'
+                                          : 'bg-white/10 border-border/60'
+                                      }`}
+                                    >
+                                      {pos === 'top' ? '⬆️' : pos === 'center' ? '⬅️➡️' : '⬇️'}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="rounded-2xl p-2 border border-white/10 bg-white/5 backdrop-blur-xl dark:bg-black/20">
+                                <p className="text-xs text-muted-foreground mb-2">
+                                  {language === 'ar' ? 'الحجم' : 'Size'}
+                                </p>
+                                <div className="flex gap-1">
+                                  {(['small', 'medium', 'large'] as const).map((size) => (
+                                    <button
+                                      key={size}
+                                      type="button"
+                                      onClick={() => updateSlide(slide.id, { textSize: size })}
+                                      className={`flex-1 h-8 rounded-lg border text-xs font-semibold transition-all active:scale-95 ${
+                                        (slide.textSize || 'medium') === size
+                                          ? 'btn-enhanced text-white border-transparent'
+                                          : 'bg-white/10 border-border/60'
+                                      }`}
+                                    >
+                                      {size === 'small' ? 'S' : size === 'medium' ? 'M' : 'L'}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Text Color */}
                             <div className="rounded-2xl p-2 border border-white/10 bg-white/5 backdrop-blur-xl dark:bg-black/20">
                               <p className="text-xs text-muted-foreground mb-2">
-                                {language === 'ar' ? 'الموضع' : 'Position'}
+                                {language === 'ar' ? 'لون النص' : 'Text Color'}
                               </p>
-                              <div className="flex gap-2">
-                                {(['top', 'center', 'bottom'] as const).map((pos) => (
+                              <div className="flex gap-2 flex-wrap">
+                                {[
+                                  { color: '#ffffff', label: 'White' },
+                                  { color: '#000000', label: 'Black' },
+                                  { color: '#f2f2f2', label: 'Light' },
+                                  { color: '#060541', label: 'Navy' },
+                                  { color: '#ff6b6b', label: 'Red' },
+                                  { color: '#ffd93d', label: 'Yellow' },
+                                  { color: '#6bcb77', label: 'Green' },
+                                  { color: '#4d96ff', label: 'Blue' },
+                                ].map((c) => (
                                   <button
-                                    key={pos}
+                                    key={c.color}
                                     type="button"
-                                    onClick={() => updateSlide(slide.id, { textPosition: pos })}
-                                    className={`flex-1 h-9 rounded-xl border text-xs font-semibold transition-all active:scale-95 ${
-                                      (slide.textPosition || 'bottom') === pos
-                                        ? 'btn-enhanced text-white border-transparent'
-                                        : 'bg-white/10 border-border/60'
+                                    onClick={() => updateSlide(slide.id, { textColor: c.color })}
+                                    className={`w-8 h-8 rounded-full border-2 transition-all active:scale-95 ${
+                                      slide.textColor === c.color ? 'ring-2 ring-primary ring-offset-2' : ''
                                     }`}
-                                  >
-                                    {pos === 'top' ? (language === 'ar' ? 'أعلى' : 'Top') :
-                                      pos === 'center' ? (language === 'ar' ? 'وسط' : 'Center') :
-                                      (language === 'ar' ? 'أسفل' : 'Bottom')}
-                                  </button>
+                                    style={{ backgroundColor: c.color, borderColor: c.color === '#ffffff' ? '#ccc' : c.color }}
+                                    title={c.label}
+                                  />
                                 ))}
                               </div>
                             </div>
 
-                            <div className="rounded-2xl p-2 border border-white/10 bg-white/5 backdrop-blur-xl dark:bg-black/20">
-                              <p className="text-xs text-muted-foreground mb-2">
-                                {language === 'ar' ? 'الحجم' : 'Size'}
-                              </p>
-                              <div className="flex gap-2">
-                                {(['small', 'medium', 'large'] as const).map((size) => (
-                                  <button
-                                    key={size}
-                                    type="button"
-                                    onClick={() => updateSlide(slide.id, { textSize: size })}
-                                    className={`flex-1 h-9 rounded-xl border text-xs font-semibold transition-all active:scale-95 ${
-                                      (slide.textSize || 'medium') === size
-                                        ? 'btn-enhanced text-white border-transparent'
-                                        : 'bg-white/10 border-border/60'
-                                    }`}
-                                  >
-                                    {size === 'small' ? 'S' : size === 'medium' ? 'M' : 'L'}
-                                  </button>
-                                ))}
+                            {/* Font & Animation Row */}
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="rounded-2xl p-2 border border-white/10 bg-white/5 backdrop-blur-xl dark:bg-black/20">
+                                <p className="text-xs text-muted-foreground mb-2">
+                                  {language === 'ar' ? 'الخط' : 'Font'}
+                                </p>
+                                <select
+                                  value={slide.textFont || 'system'}
+                                  onChange={(e) => updateSlide(slide.id, { textFont: e.target.value as TextFont })}
+                                  className="w-full h-8 px-2 text-xs rounded-lg border border-input bg-background"
+                                  title={language === 'ar' ? 'الخط' : 'Font'}
+                                >
+                                  <option value="system">{language === 'ar' ? 'عادي' : 'System'}</option>
+                                  <option value="serif">{language === 'ar' ? 'كلاسيكي' : 'Serif'}</option>
+                                  <option value="mono">{language === 'ar' ? 'ثابت' : 'Mono'}</option>
+                                  <option value="bold">{language === 'ar' ? 'عريض' : 'Bold'}</option>
+                                </select>
                               </div>
+
+                              <div className="rounded-2xl p-2 border border-white/10 bg-white/5 backdrop-blur-xl dark:bg-black/20">
+                                <p className="text-xs text-muted-foreground mb-2">
+                                  {language === 'ar' ? 'الحركة' : 'Animation'}
+                                </p>
+                                <select
+                                  value={slide.textAnimation || 'fade-in'}
+                                  onChange={(e) => updateSlide(slide.id, { textAnimation: e.target.value as TextAnimation })}
+                                  className="w-full h-8 px-2 text-xs rounded-lg border border-input bg-background"
+                                  title={language === 'ar' ? 'الحركة' : 'Animation'}
+                                >
+                                  <option value="none">{language === 'ar' ? 'بدون' : 'None'}</option>
+                                  <option value="fade-in">{language === 'ar' ? 'تلاشي' : 'Fade In'}</option>
+                                  <option value="slide-up">{language === 'ar' ? 'انزلاق للأعلى' : 'Slide Up'}</option>
+                                  <option value="slide-down">{language === 'ar' ? 'انزلاق للأسفل' : 'Slide Down'}</option>
+                                  <option value="zoom-in">{language === 'ar' ? 'تكبير' : 'Zoom In'}</option>
+                                  <option value="typewriter">{language === 'ar' ? 'آلة كاتبة' : 'Typewriter'}</option>
+                                  <option value="bounce">{language === 'ar' ? 'ارتداد' : 'Bounce'}</option>
+                                </select>
+                              </div>
+                            </div>
+
+                            {/* Shadow Toggle */}
+                            <div className="flex items-center justify-between rounded-2xl p-3 border border-white/10 bg-white/5 backdrop-blur-xl dark:bg-black/20">
+                              <span className="text-sm font-medium">
+                                {language === 'ar' ? 'ظل النص' : 'Text Shadow'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => updateSlide(slide.id, { textShadow: !slide.textShadow })}
+                                title={language === 'ar' ? 'تبديل ظل النص' : 'Toggle text shadow'}
+                                aria-label={language === 'ar' ? 'تبديل ظل النص' : 'Toggle text shadow'}
+                                className={`w-12 h-6 rounded-full transition-all ${
+                                  slide.textShadow !== false ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'
+                                }`}
+                              >
+                                <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                                  slide.textShadow !== false ? 'translate-x-6' : 'translate-x-0.5'
+                                }`} />
+                              </button>
                             </div>
                           </div>
                         )}
@@ -978,84 +1083,222 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
                     )}
 
                     {panel === 'look' && (
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-semibold">{language === 'ar' ? 'الفلاتر' : 'Filters'}</p>
-                          <button
-                            type="button"
-                            className="text-xs underline text-muted-foreground"
-                            onClick={() => updateSlide(slide.id, { filters: { brightness: 100, contrast: 100, saturation: 100 } })}
-                          >
-                            {language === 'ar' ? 'إعادة ضبط' : 'Reset'}
-                          </button>
-                        </div>
-
-                        <div className="space-y-3">
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs text-muted-foreground">{language === 'ar' ? 'السطوع' : 'Brightness'}</span>
-                              <span className="text-xs font-medium">{slide.filters.brightness}%</span>
-                            </div>
-                            <input
-                              type="range"
-                              min="50"
-                              max="150"
-                              value={slide.filters.brightness}
-                              onChange={(e) => updateSlide(slide.id, { filters: { ...slide.filters, brightness: parseInt(e.target.value) } })}
-                              className="w-full h-3"
-                            />
-                          </div>
-
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs text-muted-foreground">{language === 'ar' ? 'التباين' : 'Contrast'}</span>
-                              <span className="text-xs font-medium">{slide.filters.contrast}%</span>
-                            </div>
-                            <input
-                              type="range"
-                              min="50"
-                              max="150"
-                              value={slide.filters.contrast}
-                              onChange={(e) => updateSlide(slide.id, { filters: { ...slide.filters, contrast: parseInt(e.target.value) } })}
-                              className="w-full h-3"
-                            />
-                          </div>
-
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs text-muted-foreground">{language === 'ar' ? 'التشبع' : 'Saturation'}</span>
-                              <span className="text-xs font-medium">{slide.filters.saturation}%</span>
-                            </div>
-                            <input
-                              type="range"
-                              min="0"
-                              max="200"
-                              value={slide.filters.saturation}
-                              onChange={(e) => updateSlide(slide.id, { filters: { ...slide.filters, saturation: parseInt(e.target.value) } })}
-                              className="w-full h-3"
-                            />
+                      <div className="space-y-4">
+                        {/* Filter Presets */}
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold">{language === 'ar' ? 'تأثيرات سريعة' : 'Quick Effects'}</p>
+                          <div className="grid grid-cols-4 gap-2">
+                            {([
+                              { key: 'none', label: language === 'ar' ? 'بدون' : 'None', emoji: '⚪' },
+                              { key: 'vivid', label: language === 'ar' ? 'حيوي' : 'Vivid', emoji: '🌈' },
+                              { key: 'warm', label: language === 'ar' ? 'دافئ' : 'Warm', emoji: '🌅' },
+                              { key: 'cool', label: language === 'ar' ? 'بارد' : 'Cool', emoji: '❄️' },
+                              { key: 'vintage', label: language === 'ar' ? 'كلاسيك' : 'Vintage', emoji: '📷' },
+                              { key: 'bw', label: language === 'ar' ? 'أبيض/أسود' : 'B&W', emoji: '⬛' },
+                              { key: 'dramatic', label: language === 'ar' ? 'درامي' : 'Drama', emoji: '🎭' },
+                              { key: 'soft', label: language === 'ar' ? 'ناعم' : 'Soft', emoji: '☁️' },
+                            ] as const).map((preset) => (
+                              <button
+                                key={preset.key}
+                                type="button"
+                                onClick={() => {
+                                  const presetFilters: Record<FilterPreset, SlideFilters> = {
+                                    none: { brightness: 100, contrast: 100, saturation: 100, blur: 0, preset: 'none' },
+                                    vivid: { brightness: 105, contrast: 115, saturation: 140, blur: 0, preset: 'vivid' },
+                                    warm: { brightness: 105, contrast: 100, saturation: 110, blur: 0, preset: 'warm' },
+                                    cool: { brightness: 100, contrast: 105, saturation: 90, blur: 0, preset: 'cool' },
+                                    vintage: { brightness: 95, contrast: 90, saturation: 70, blur: 0, preset: 'vintage' },
+                                    bw: { brightness: 100, contrast: 110, saturation: 0, blur: 0, preset: 'bw' },
+                                    dramatic: { brightness: 90, contrast: 130, saturation: 120, blur: 0, preset: 'dramatic' },
+                                    soft: { brightness: 105, contrast: 85, saturation: 95, blur: 1, preset: 'soft' },
+                                  };
+                                  updateSlide(slide.id, { filters: presetFilters[preset.key] });
+                                }}
+                                className={`flex flex-col items-center p-2 rounded-xl border text-xs transition-all active:scale-95 ${
+                                  slide.filters.preset === preset.key
+                                    ? 'border-primary bg-primary/10 ring-2 ring-primary/20'
+                                    : 'border-border hover:border-primary/50'
+                                }`}
+                              >
+                                <span className="text-lg mb-1">{preset.emoji}</span>
+                                <span className="truncate w-full text-center">{preset.label}</span>
+                              </button>
+                            ))}
                           </div>
                         </div>
+
+                        {/* Manual Adjustments */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-semibold">{language === 'ar' ? 'تعديل يدوي' : 'Manual Adjust'}</p>
+                            <button
+                              type="button"
+                              className="text-xs underline text-muted-foreground"
+                              onClick={() => updateSlide(slide.id, { filters: { brightness: 100, contrast: 100, saturation: 100, blur: 0, preset: 'none' } })}
+                            >
+                              {language === 'ar' ? 'إعادة ضبط' : 'Reset'}
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-muted-foreground">☀️ {language === 'ar' ? 'سطوع' : 'Bright'}</span>
+                                <span className="text-xs font-medium">{slide.filters.brightness}%</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="50"
+                                max="150"
+                                value={slide.filters.brightness}
+                                onChange={(e) => updateSlide(slide.id, { filters: { ...slide.filters, brightness: parseInt(e.target.value), preset: 'none' } })}
+                                className="w-full h-2 rounded-full appearance-none bg-gradient-to-r from-gray-800 to-white cursor-pointer"
+                                title={language === 'ar' ? 'السطوع' : 'Brightness'}
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-muted-foreground">◐ {language === 'ar' ? 'تباين' : 'Contrast'}</span>
+                                <span className="text-xs font-medium">{slide.filters.contrast}%</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="50"
+                                max="150"
+                                value={slide.filters.contrast}
+                                onChange={(e) => updateSlide(slide.id, { filters: { ...slide.filters, contrast: parseInt(e.target.value), preset: 'none' } })}
+                                className="w-full h-2 rounded-full appearance-none bg-gradient-to-r from-gray-400 to-black cursor-pointer"
+                                title={language === 'ar' ? 'التباين' : 'Contrast'}
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-muted-foreground">🎨 {language === 'ar' ? 'تشبع' : 'Saturation'}</span>
+                                <span className="text-xs font-medium">{slide.filters.saturation}%</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="0"
+                                max="200"
+                                value={slide.filters.saturation}
+                                onChange={(e) => updateSlide(slide.id, { filters: { ...slide.filters, saturation: parseInt(e.target.value), preset: 'none' } })}
+                                className="w-full h-2 rounded-full appearance-none bg-gradient-to-r from-gray-400 via-red-400 to-purple-500 cursor-pointer"
+                                title={language === 'ar' ? 'التشبع' : 'Saturation'}
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-muted-foreground">💨 {language === 'ar' ? 'ضبابية' : 'Blur'}</span>
+                                <span className="text-xs font-medium">{slide.filters.blur || 0}px</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="0"
+                                max="10"
+                                value={slide.filters.blur || 0}
+                                onChange={(e) => updateSlide(slide.id, { filters: { ...slide.filters, blur: parseInt(e.target.value), preset: 'none' } })}
+                                className="w-full h-2 rounded-full appearance-none bg-gradient-to-r from-blue-400 to-blue-100 cursor-pointer"
+                                title={language === 'ar' ? 'الضبابية' : 'Blur'}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Apply to All */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            project.slides.forEach(s => updateSlide(s.id, { filters: { ...slide.filters } }));
+                            toast.success(language === 'ar' ? 'تم تطبيق الفلتر على جميع الشرائح' : 'Filter applied to all slides');
+                          }}
+                          className="w-full h-10 rounded-xl border border-primary/30 bg-primary/5 text-sm font-medium text-primary hover:bg-primary/10 transition-all active:scale-95"
+                        >
+                          {language === 'ar' ? 'تطبيق على الكل' : 'Apply to All Slides'}
+                        </button>
                       </div>
                     )}
 
                     {panel === 'motion' && (
-                      <div className="space-y-2">
-                        <label className="text-sm font-semibold">
-                          {language === 'ar' ? 'الانتقال' : 'Transition'}
-                        </label>
-                        <select
-                          value={slide.transition}
-                          onChange={(e) => updateSlide(slide.id, { transition: e.target.value as TransitionType })}
-                          className="h-11 px-3 text-sm rounded-2xl border border-input bg-background w-full"
+                      <div className="space-y-4">
+                        {/* Ken Burns Effect */}
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold">{language === 'ar' ? 'حركة الصورة' : 'Image Motion'}</p>
+                          <div className="grid grid-cols-4 gap-2">
+                            {([
+                              { key: 'random', label: language === 'ar' ? 'عشوائي' : 'Random', emoji: '🎲' },
+                              { key: 'zoom-in', label: language === 'ar' ? 'تكبير' : 'Zoom In', emoji: '🔍' },
+                              { key: 'zoom-out', label: language === 'ar' ? 'تصغير' : 'Zoom Out', emoji: '🔎' },
+                              { key: 'pan-left', label: language === 'ar' ? 'يسار' : 'Pan L', emoji: '⬅️' },
+                              { key: 'pan-right', label: language === 'ar' ? 'يمين' : 'Pan R', emoji: '➡️' },
+                              { key: 'pan-up', label: language === 'ar' ? 'أعلى' : 'Pan Up', emoji: '⬆️' },
+                              { key: 'pan-down', label: language === 'ar' ? 'أسفل' : 'Pan Dn', emoji: '⬇️' },
+                            ] as const).map((kb) => (
+                              <button
+                                key={kb.key}
+                                type="button"
+                                onClick={() => updateSlide(slide.id, { kenBurns: kb.key })}
+                                className={`flex flex-col items-center p-2 rounded-xl border text-xs transition-all active:scale-95 ${
+                                  (slide.kenBurns || 'random') === kb.key
+                                    ? 'border-primary bg-primary/10 ring-2 ring-primary/20'
+                                    : 'border-border hover:border-primary/50'
+                                }`}
+                              >
+                                <span className="text-base">{kb.emoji}</span>
+                                <span className="truncate w-full text-center text-[10px]">{kb.label}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Transition Type */}
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold">{language === 'ar' ? 'الانتقال' : 'Transition'}</p>
+                          <div className="grid grid-cols-3 gap-2">
+                            {([
+                              { key: 'fade', label: language === 'ar' ? 'تلاشي' : 'Fade', emoji: '✨' },
+                              { key: 'dissolve', label: language === 'ar' ? 'ذوبان' : 'Dissolve', emoji: '💫' },
+                              { key: 'slide-left', label: language === 'ar' ? 'يسار' : 'Slide L', emoji: '⬅️' },
+                              { key: 'slide-right', label: language === 'ar' ? 'يمين' : 'Slide R', emoji: '➡️' },
+                              { key: 'zoom-in', label: language === 'ar' ? 'تكبير' : 'Zoom In', emoji: '🔍' },
+                              { key: 'zoom-out', label: language === 'ar' ? 'تصغير' : 'Zoom Out', emoji: '🔎' },
+                              { key: 'wipe-left', label: language === 'ar' ? 'مسح يسار' : 'Wipe L', emoji: '🧹' },
+                              { key: 'wipe-right', label: language === 'ar' ? 'مسح يمين' : 'Wipe R', emoji: '🧽' },
+                              { key: 'none', label: language === 'ar' ? 'بدون' : 'None', emoji: '⚪' },
+                            ] as const).map((tr) => (
+                              <button
+                                key={tr.key}
+                                type="button"
+                                onClick={() => updateSlide(slide.id, { transition: tr.key })}
+                                className={`flex flex-col items-center p-2 rounded-xl border text-xs transition-all active:scale-95 ${
+                                  slide.transition === tr.key
+                                    ? 'border-primary bg-primary/10 ring-2 ring-primary/20'
+                                    : 'border-border hover:border-primary/50'
+                                }`}
+                              >
+                                <span className="text-base">{tr.emoji}</span>
+                                <span className="truncate w-full text-center text-[10px]">{tr.label}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Apply to All */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            project.slides.forEach(s => updateSlide(s.id, { 
+                              transition: slide.transition,
+                              kenBurns: slide.kenBurns 
+                            }));
+                            toast.success(language === 'ar' ? 'تم تطبيق الإعدادات على جميع الشرائح' : 'Settings applied to all slides');
+                          }}
+                          className="w-full h-10 rounded-xl border border-primary/30 bg-primary/5 text-sm font-medium text-primary hover:bg-primary/10 transition-all active:scale-95"
                         >
-                          <option value="fade">{language === 'ar' ? 'تلاشي' : 'Fade'}</option>
-                          <option value="slide-left">{language === 'ar' ? 'انزلاق يسار' : 'Slide Left'}</option>
-                          <option value="slide-right">{language === 'ar' ? 'انزلاق يمين' : 'Slide Right'}</option>
-                          <option value="zoom-in">{language === 'ar' ? 'تكبير' : 'Zoom In'}</option>
-                          <option value="zoom-out">{language === 'ar' ? 'تصغير' : 'Zoom Out'}</option>
-                          <option value="none">{language === 'ar' ? 'بدون' : 'None'}</option>
-                        </select>
+                          {language === 'ar' ? 'تطبيق على الكل' : 'Apply to All Slides'}
+                        </button>
                       </div>
                     )}
 
@@ -1248,16 +1491,17 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
         )}
       </div>
 
-      {/* Title */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium">
-          {language === 'ar' ? 'عنوان الفيديو (اختياري)' : 'Video Title (optional)'}
-        </label>
-        <Input
-          value={project.title}
-          onChange={(e) => setProject(prev => ({ ...prev, title: e.target.value }))}
-          placeholder={language === 'ar' ? 'أدخل عنوان' : 'Enter title'}
-        />
+      {/* Duration counter - moved to bottom */}
+      <div className="enhanced-card rounded-2xl p-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Clock className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">
+            {language === 'ar' ? 'المدة الإجمالية' : 'Total Duration'}
+          </span>
+        </div>
+        <div className={`text-sm font-semibold ${totalDuration > MAX_DURATION_SEC ? 'text-red-500' : ''}`}>
+          {totalDuration}s / {MAX_DURATION_SEC}s
+        </div>
       </div>
 
       {/* Navigation buttons */}
@@ -1482,17 +1726,21 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
       // Build slides config for the new hook
       const slidesConfig = project.slides
         .filter(slide => slide.imageFile)
-        .map(slide => ({
-          imageFile: slide.imageFile as File,
-          text: slide.text || undefined,
-          textPosition: slide.textPosition || 'bottom',
-          textColor: slide.textColor || TEMPLATES[project.template].textColor,
-          textSize: slide.textSize || 'medium',
-          textAnimation: slide.textAnimation || 'fade-in',
-          durationSec: slide.durationSec,
-          transition: slide.transition,
-          filters: slide.filters || { brightness: 100, contrast: 100, saturation: 100 },
-        }));
+        .map(slide => {
+          const config = {
+            imageFile: slide.imageFile as File,
+            text: slide.text?.trim() || undefined,
+            textPosition: slide.textPosition || 'bottom',
+            textColor: slide.textColor || TEMPLATES[project.template].textColor,
+            textSize: slide.textSize || 'medium',
+            textAnimation: slide.textAnimation || 'fade-in',
+            durationSec: slide.durationSec,
+            transition: slide.transition || 'fade',
+            filters: slide.filters || { brightness: 100, contrast: 100, saturation: 100 },
+          };
+          console.log('[VideoMaker] Slide config:', { text: config.text, textPosition: config.textPosition, transition: config.transition });
+          return config;
+        });
 
       if (slidesConfig.length === 0) {
         throw new Error('No images to process');
