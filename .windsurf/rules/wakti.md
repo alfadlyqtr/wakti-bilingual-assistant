@@ -8,6 +8,8 @@ Project Name: Wakti
 App Name: Wakti AI
 Supabase Project ID: hxauxozopvpzpdygoqwf
 Supabase Project URL: https://hxauxozopvpzpdygoqwf.supabase.co
+always when desgining always use the 📋 WAKTI Style Guide & Design System rule
+
 Platform & Wrapping
 Natively is the mobile wrapper and publisher for Wakti.
 Natively wraps the Wakti web app using their SDK.

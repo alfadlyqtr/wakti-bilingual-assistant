@@ -279,7 +279,7 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
 
         console.log('[useCanvasVideo] Audio mixing ready');
       } catch (audioErr) {
-        console.error('[useCanvasVideo] Audio setup failed (continuing without audio):', audioErr);
+        console.error('[useCanvasVideo] Audio setup failed:', audioErr);
         try {
           audioContext?.close();
         } catch (_) {}
@@ -289,18 +289,30 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
         bgGain = null;
         clipGainNodes.length = 0;
         clipSourceNodes.length = 0;
+
+        // If the user selected audio, do NOT silently generate a muted video.
+        if (audioUrl) {
+          throw new Error('AUDIO_MIX_FAILED');
+        }
       }
 
-      let mimeType = 'video/webm;codecs=vp9';
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'video/webm;codecs=vp8';
-      }
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'video/webm';
-      }
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'video/mp4';
-      }
+      // Prefer MP4 on iOS/Safari when supported. Otherwise fall back to WebM.
+      const ua = navigator.userAgent || '';
+      const isIOS = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+      const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
+      const preferMp4 = isIOS || isSafari;
+
+      const preferredMimeTypes = preferMp4
+        ? [
+            'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+            'video/mp4',
+            'video/webm;codecs=vp9',
+            'video/webm;codecs=vp8',
+            'video/webm',
+          ]
+        : ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4'];
+
+      let mimeType = preferredMimeTypes.find((t) => MediaRecorder.isTypeSupported(t)) || 'video/webm';
 
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType,
@@ -717,12 +729,18 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
 
       return videoBlob;
 
-    } catch (err) {
-      console.error('Video generation error:', err);
-      setError('Something went wrong. Please try again.');
-      setStatus('');
-      setIsLoading(false);
+    } catch (e: any) {
+      console.error('[useCanvasVideo] Generation failed:', e);
+      const msg = String(e?.message || 'Video generation failed');
+      if (msg === 'AUDIO_MIX_FAILED') {
+        setError('Audio could not be added to the video. Please try again or choose a different audio file.');
+      } else {
+        setError(msg);
+      }
       return null;
+    } finally {
+      setIsLoading(false);
+      setStatus('');
     }
   }, []);
 

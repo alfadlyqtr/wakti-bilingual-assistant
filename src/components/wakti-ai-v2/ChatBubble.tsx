@@ -11,6 +11,16 @@ import { ImageModal } from './ImageModal';
 import { supabase } from '@/integrations/supabase/client';
 import { getSelectedVoices } from './TalkBackSettings';
 
+// Proxy image URLs through our Edge Function to avoid COEP/CORS blocking
+const SUPABASE_URL = 'https://hxauxozopvpzpdygoqwf.supabase.co';
+function getProxiedImageUrl(originalUrl: string): string {
+  if (!originalUrl) return originalUrl;
+  if (originalUrl.includes('im.runware.ai') || originalUrl.includes('supabase.co/storage')) {
+    return `${SUPABASE_URL}/functions/v1/wakti-image-proxy?url=${encodeURIComponent(originalUrl)}`;
+  }
+  return originalUrl;
+}
+
 interface ChatBubbleProps {
   message: any;
   userProfile?: any;
@@ -295,7 +305,7 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
               {message.imageUrl && (
                 <div className="mt-2">
                   <img 
-                    src={message.imageUrl} 
+                    src={getProxiedImageUrl(message.imageUrl)} 
                     alt="Generated image" 
                     className="max-w-full h-auto rounded-lg border"
                     style={{ maxHeight: '300px' }}

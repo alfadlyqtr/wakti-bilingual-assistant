@@ -644,11 +644,21 @@ You are invisible. You are a voice that converts speech from one language to ${t
 
   return (
     <div
-      className="space-y-4 select-none [-webkit-user-select:none] [-webkit-touch-callout:none]"
+      className="live-translator-nocopy space-y-4 select-none [-webkit-user-select:none] [-webkit-touch-callout:none]"
       onCopy={(e) => e.preventDefault()}
       onCut={(e) => e.preventDefault()}
       onPaste={(e) => e.preventDefault()}
+      onContextMenu={(e) => e.preventDefault()}
     >
+      <style>{`
+        .live-translator-nocopy,
+        .live-translator-nocopy * {
+          -webkit-user-select: none;
+          user-select: none;
+          -webkit-touch-callout: none;
+          -webkit-tap-highlight-color: transparent;
+        }
+      `}</style>
       {/* Hidden audio element for playback */}
       <audio ref={audioRef} autoPlay playsInline className="hidden" />
       {/* Header - compact */}
@@ -663,9 +673,9 @@ You are invisible. You are a voice that converts speech from one language to ${t
       </div>
 
       {/* Compact Settings Row */}
-      <div className="flex items-center gap-3 p-3 rounded-xl border border-white/10 bg-gradient-to-r from-cyan-500/10 via-purple-500/10 to-pink-500/10 shadow-[0_2px_20px_rgba(56,189,248,0.12)]">
+      <div className="grid grid-cols-12 gap-3 p-3 rounded-xl border border-white/10 bg-gradient-to-r from-cyan-500/10 via-purple-500/10 to-pink-500/10 shadow-[0_2px_20px_rgba(56,189,248,0.12)] md:flex md:items-center md:gap-3">
         {/* Spoken Language */}
-        <div className="flex-1">
+        <div className="col-span-5 md:flex-1">
           <Label className="text-xs font-medium text-muted-foreground mb-1 block">
             {t('Spoken', 'المتحدث')}
           </Label>
@@ -699,39 +709,41 @@ You are invisible. You are a voice that converts speech from one language to ${t
           </Select>
         </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            const nextSpoken = targetLanguageRef.current;
-            const nextTarget = spokenLanguageRef.current;
+        <div className="col-span-2 flex items-end justify-center md:col-auto">
+          <button
+            type="button"
+            onClick={() => {
+              const nextSpoken = targetLanguageRef.current;
+              const nextTarget = spokenLanguageRef.current;
 
-            setSpokenLanguageOverride(true);
-            setSpokenLanguage(nextSpoken);
-            setTargetLanguage(nextTarget);
+              setSpokenLanguageOverride(true);
+              setSpokenLanguage(nextSpoken);
+              setTargetLanguage(nextTarget);
 
-            spokenLanguageRef.current = nextSpoken;
-            targetLanguageRef.current = nextTarget;
+              spokenLanguageRef.current = nextSpoken;
+              targetLanguageRef.current = nextTarget;
 
-            if (dcRef.current && dcRef.current.readyState === 'open' && status === 'ready') {
-              const openaiVoice = voiceGenderRef.current === 'female' ? 'shimmer' : 'echo';
-              const instructions = buildInstructions(nextTarget, nextSpoken);
-              dcRef.current.send(JSON.stringify({
-                type: 'session.update',
-                session: { instructions, voice: openaiVoice }
-              }));
-            }
-          }}
-          disabled={status === 'connecting' || status === 'listening' || status === 'processing' || status === 'speaking'}
-          aria-label={t('Swap spoken and target languages', 'تبديل لغة المتحدث ولغة الترجمة')}
-          className={`mt-5 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/60 text-foreground transition-all active:scale-95 dark:bg-white/10 dark:hover:bg-white/15 hover:bg-white/80 ${
-            (status === 'connecting' || status === 'listening' || status === 'processing' || status === 'speaking') ? 'opacity-50' : ''
-          }`}
-        >
-          <ArrowLeftRight className="h-4 w-4" />
-        </button>
+              if (dcRef.current && dcRef.current.readyState === 'open' && status === 'ready') {
+                const openaiVoice = voiceGenderRef.current === 'female' ? 'shimmer' : 'echo';
+                const instructions = buildInstructions(nextTarget, nextSpoken);
+                dcRef.current.send(JSON.stringify({
+                  type: 'session.update',
+                  session: { instructions, voice: openaiVoice }
+                }));
+              }
+            }}
+            disabled={status === 'connecting' || status === 'listening' || status === 'processing' || status === 'speaking'}
+            aria-label={t('Swap spoken and target languages', 'تبديل لغة المتحدث ولغة الترجمة')}
+            className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/60 text-foreground transition-all active:scale-95 dark:bg-white/10 dark:hover:bg-white/15 hover:bg-white/80 ${
+              (status === 'connecting' || status === 'listening' || status === 'processing' || status === 'speaking') ? 'opacity-50' : ''
+            }`}
+          >
+            <ArrowLeftRight className="h-4 w-4" />
+          </button>
+        </div>
 
         {/* Target Language */}
-        <div className="flex-1">
+        <div className="col-span-5 md:flex-1">
           <Label className="text-xs font-medium text-muted-foreground mb-1 block">
             {t('To', 'إلى')}
           </Label>
@@ -765,7 +777,11 @@ You are invisible. You are a voice that converts speech from one language to ${t
         </div>
 
         {/* Voice Gender - icons + labels */}
-        <div className="flex items-center gap-2">
+        <div className="col-span-12 md:col-auto">
+          <div className="text-xs font-medium text-muted-foreground mb-1 text-center md:text-left">
+            {t('Pick voice', 'اختر الصوت')}
+          </div>
+          <div className="flex items-center justify-center gap-2 md:justify-start">
           <button
             type="button"
             onClick={() => {
@@ -813,6 +829,7 @@ You are invisible. You are a voice that converts speech from one language to ${t
             <UserRound className="w-4 h-4" />
             {t('Female', 'أنثى')}
           </button>
+          </div>
         </div>
       </div>
 
@@ -857,7 +874,7 @@ You are invisible. You are a voice that converts speech from one language to ${t
               outline: none;
               box-shadow: 0 0 25px hsla(210, 100%, 65%, 0.35), 0 0 45px hsla(280, 70%, 65%, 0.20);
               -webkit-tap-highlight-color: transparent;
-              touch-action: none;
+              touch-action: manipulation;
               user-select: none;
               -webkit-user-select: none;
               -webkit-touch-callout: none;
@@ -933,7 +950,7 @@ You are invisible. You are a voice that converts speech from one language to ${t
 
           {/* Status + Countdown inline */}
           <div className="text-center select-none [-webkit-user-select:none] [-webkit-touch-callout:none]">
-            <div className={`text-base font-medium ${theme === 'dark' ? 'text-white/90' : 'text-[#060541]/90'}`}>
+            <div className={`text-lg font-semibold ${theme === 'dark' ? 'text-white' : 'text-[#060541]'} drop-shadow-[0_2px_12px_rgba(56,189,248,0.18)]`}>
               {statusText[status]}
               {isHolding && <span className="ml-2 text-purple-500 font-bold">{countdown}s</span>}
             </div>

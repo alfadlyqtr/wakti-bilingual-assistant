@@ -6,7 +6,7 @@ import { Logo3D } from "@/components/Logo3D";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { useTheme } from "@/providers/ThemeProvider";
 import { motion } from "framer-motion";
-import { Check, ArrowRight, Sparkles, Bot, Calendar, Mic, Users, MessageSquare, LogIn, Zap, Star, Music, Globe, Image as ImageIcon, BookOpen, PencilRuler, Workflow, MonitorPlay } from "lucide-react";
+import { Check, ArrowRight, Sparkles, Bot, Calendar, Mic, Users, MessageSquare, LogIn, Zap, Star, Music, Globe, Image as ImageIcon, BookOpen, PencilRuler, Workflow, MonitorPlay, Video, Languages } from "lucide-react";
 import { 
   Card,
   CardContent,
@@ -242,6 +242,26 @@ export default function Index() {
       gradient: "from-cyan-500 via-blue-500 to-indigo-600",
       bgGradient: "from-cyan-50 to-blue-50",
       iconColor: "text-cyan-600"
+    },
+    {
+      icon: Video,
+      title: language === "en" ? "Video Editor" : "محرر الفيديو",
+      description: language === "en"
+        ? "Create short videos from images with templates, text overlays, transitions, and audio — ready to share."
+        : "اصنع فيديوهات قصيرة من الصور مع قوالب ونصوص وانتقالات وصوت — جاهزة للمشاركة.",
+      gradient: "from-purple-500 via-fuchsia-500 to-pink-600",
+      bgGradient: "from-purple-50 to-fuchsia-50",
+      iconColor: "text-fuchsia-600"
+    },
+    {
+      icon: Languages,
+      title: language === "en" ? "Live Translator" : "مترجم مباشر",
+      description: language === "en"
+        ? "Talk and translate in real-time with natural voice playback — perfect for quick conversations."
+        : "تحدث وترجم لحظيًا مع صوت طبيعي — مثالي للمحادثات السريعة.",
+      gradient: "from-teal-500 via-emerald-500 to-green-600",
+      bgGradient: "from-teal-50 to-emerald-50",
+      iconColor: "text-teal-600"
     }
   ];
 

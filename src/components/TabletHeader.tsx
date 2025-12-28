@@ -271,30 +271,55 @@ export function TabletHeader() {
               side="bottom"
               sideOffset={8}
               collisionPadding={16}
-              className="z-[1200] bg-white/95 dark:bg-[#0b0f14]/95 backdrop-blur-xl border border-white/20 dark:border-white/10 rounded-lg shadow-xl"
+              className="z-[1200] min-w-[200px] overflow-hidden rounded-2xl border border-white/30 dark:border-white/10 p-2 backdrop-blur-2xl animate-in fade-in-0 zoom-in-95 slide-in-from-top-2 duration-200"
               style={{
-                boxShadow: '0 20px 40px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.2)'
+                background:
+                  theme === 'dark'
+                    ? 'linear-gradient(135deg, rgba(12,15,20,0.96) 0%, rgba(16,20,28,0.98) 50%, rgba(12,15,20,0.96) 100%)'
+                    : 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.98) 50%, rgba(255,255,255,0.95) 100%)',
+                boxShadow:
+                  theme === 'dark'
+                    ? '0 25px 60px -12px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 10px 40px rgba(99, 102, 241, 0.10)'
+                    : '0 25px 60px -12px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 10px 40px rgba(99, 102, 241, 0.15)'
               }}
             >
-              <DropdownMenuLabel>{language === 'ar' ? 'الحساب' : 'Account'}</DropdownMenuLabel>
-              <DropdownMenuSeparator />
+              {/* Glass sheen overlay */}
+              <div
+                className={cn(
+                  "absolute inset-0 rounded-2xl pointer-events-none",
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-white/10 via-transparent to-white/5'
+                    : 'bg-gradient-to-br from-white/40 via-transparent to-white/20'
+                )}
+              />
+
+              <DropdownMenuLabel className="relative z-10 px-3 py-2 text-sm font-semibold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 bg-clip-text text-transparent">
+                {language === 'ar' ? 'الحساب' : 'Account'}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator className="bg-gradient-to-r from-transparent via-border/50 to-transparent" />
               {menuItems.map((item, index) => (
                 <DropdownMenuItem 
                   key={index} 
                   onClick={item.onClick} 
-                  className={cn(item.onClick ? "cursor-pointer" : "")}
+                  className={cn(
+                    "relative z-10 flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 group",
+                    item.hoverClass,
+                    "focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500/30",
+                    "animate-in fade-in-0 slide-in-from-top-2"
+                  )}
+                  style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'both' }}
                   asChild={!!item.href}
                 >
                   {item.href 
                     ? (
-                      <Link to={item.href} className="flex items-center">
-                        <span className="mr-2 flex items-center">{item.icon}</span>
-                        {item.title}
+                      <Link to={item.href} className="flex items-center gap-3 w-full">
+                        <span className={cn("flex items-center transition-transform duration-200 group-hover:scale-110", item.colorClass)}>{item.icon}</span>
+                        <span className="text-sm font-medium text-foreground/80 group-hover:text-foreground transition-colors">{item.title}</span>
                       </Link>
                     ) : (
-                      <span className="flex items-center">
-                        <span className="mr-2 flex items-center">{item.icon}</span>
-                        {item.title}
+                      <span className="flex items-center gap-3 w-full">
+                        <span className={cn("flex items-center transition-transform duration-200 group-hover:scale-110", item.colorClass)}>{item.icon}</span>
+                        <span className="text-sm font-medium text-foreground/80 group-hover:text-foreground transition-colors">{item.title}</span>
                       </span>
                     )
                   }

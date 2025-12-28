@@ -1716,9 +1716,9 @@ class WaktiAIV2ServiceClass {
         }
 
         if (mode === 'image2image') {
-          // Extract first image base64 (raw) from attachedFiles
+          // Extract first image base64 (raw) from attachedFiles; ImageModeFileUpload uses base64/url/preview
           const firstImg = Array.isArray(attachedFiles) ? attachedFiles.find((f: any) => f?.type?.startsWith('image/')) : undefined;
-          const rawB64 = firstImg?.data || firstImg?.content || '';
+          const rawB64 = firstImg?.data || firstImg?.content || firstImg?.base64 || firstImg?.url || firstImg?.preview || '';
           if (!rawB64) {
             return { response: language === 'ar' ? 'الرجاء إرفاق صورة لاستخدام التحويل صورة-إلى-صورة.' : 'Please attach an image to use image-to-image.', error: true };
           }

@@ -1641,6 +1641,15 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
             </div>
           </div>
         </div>
+        {(includeTags.length>0 || instrumentTags.length>0 || moodTags.length>0 || vocalType!=='auto') && (
+          <Button
+            type="button"
+            className="w-full btn-enhanced h-10"
+            onClick={insertChipsIntoStyle}
+          >
+            {language==='ar' ? 'إدراج في الأسلوب' : 'Insert into Style'}
+          </Button>
+        )}
       </Card>
 
       <Card className="p-4 md:p-5 space-y-3">
@@ -1669,13 +1678,6 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
                   <div className="truncate" title={includedSummary}>
                     <span className="font-medium">{language==='ar' ? 'المضمَّن:' : 'Included:'}</span> {includedSummary}
                   </div>
-                  <button
-                    type="button"
-                    className="px-2 py-0.5 rounded border hover:bg-muted text-foreground"
-                    onClick={insertChipsIntoStyle}
-                  >
-                    {language==='ar' ? 'إدراج في الأسلوب' : 'Insert into Style'}
-                  </button>
                 </div>
               )}
 

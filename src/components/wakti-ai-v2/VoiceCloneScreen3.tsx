@@ -5,7 +5,21 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Play, Download, Loader2, Volume2, Mic, Info, Languages, Copy, Trash2, Save, Clock, AlertCircle } from 'lucide-react';
+import { 
+  Loader2,
+  Trash2,
+  Play,
+  Pause,
+  RotateCcw,
+  Download,
+  Save,
+  Copy,
+  Clock,
+  AlertCircle,
+  Languages,
+  Info,
+  Mic,
+} from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -159,6 +173,13 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
   const [voices, setVoices] = useState<VoiceClone[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+
+  const safeSelectedStyle = useMemo(() => {
+    if (Object.prototype.hasOwnProperty.call(VOICE_STYLES, selectedStyle)) {
+      return selectedStyle as keyof typeof VOICE_STYLES;
+    }
+    return 'neutral' as keyof typeof VOICE_STYLES;
+  }, [selectedStyle]);
   const [loading, setLoading] = useState(true);
   const [showStyleDetails, setShowStyleDetails] = useState(false);
   const [isDeletingVoice, setIsDeletingVoice] = useState<string | null>(null);
@@ -257,6 +278,18 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
     }
   };
 
+  const rewindSavedAudio = async (id: string) => {
+    try {
+      if (playingAudioId !== id) return;
+      const audio = audioPlayerRef.current;
+      if (!audio) return;
+      audio.currentTime = 0;
+      await audio.play();
+    } catch {
+      toast.error(language === 'ar' ? 'فشل التشغيل' : 'Playback failed');
+    }
+  };
+
   const getSavedAudioPlayableUrl = async (item: { audio_url?: string | null; storage_path?: string | null }) => {
     if (item.storage_path) {
       const { data, error } = await supabase.storage.from('saved-tts').download(item.storage_path);
@@ -330,8 +363,14 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
     }
     
     if (savedDefaultStyle) {
-      setDefaultStyle(savedDefaultStyle);
-      setSelectedStyle(savedDefaultStyle);
+      if (Object.prototype.hasOwnProperty.call(VOICE_STYLES, savedDefaultStyle)) {
+        setDefaultStyle(savedDefaultStyle);
+        setSelectedStyle(savedDefaultStyle);
+      } else {
+        localStorage.removeItem('wakti-default-style');
+        setDefaultStyle('neutral');
+        setSelectedStyle('neutral');
+      }
     }
   };
 
@@ -764,11 +803,24 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
                           className="h-8 w-8 p-0"
                         >
                           {playingAudioId === item.id ? (
-                            <Volume2 className="h-4 w-4 text-blue-600" />
+                            <Pause className="h-4 w-4" />
                           ) : (
                             <Play className="h-4 w-4" />
                           )}
                         </Button>
+
+                        {playingAudioId === item.id && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => rewindSavedAudio(item.id)}
+                            className="h-8 w-8 p-0"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </Button>
+                        )}
+
                         <Button
                           type="button"
                           variant="ghost"
@@ -1034,7 +1086,16 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
           </Button>
         </div>
         
-        <Select value={selectedStyle} onValueChange={setSelectedStyle}>
+        <Select
+          value={safeSelectedStyle}
+          onValueChange={(v) => {
+            if (Object.prototype.hasOwnProperty.call(VOICE_STYLES, v)) {
+              setSelectedStyle(v);
+              return;
+            }
+            setSelectedStyle('neutral');
+          }}
+        >
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
@@ -1054,13 +1115,13 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         </Select>
         
         <div className="text-xs text-muted-foreground space-y-1">
-          <p>{VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].description[language]}</p>
+          <p>{VOICE_STYLES[safeSelectedStyle].description[language]}</p>
           {showStyleDetails && (
             <div className="bg-muted/50 p-2 rounded text-xs">
               <p className="font-medium mb-1">{language === 'ar' ? 'الإعدادات التقنية:' : 'Technical Settings:'}</p>
-              <p>{VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].technicalDesc[language]}</p>
+              <p>{VOICE_STYLES[safeSelectedStyle].technicalDesc[language]}</p>
               <div className="mt-1 font-mono text-xs">
-                {JSON.stringify(VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].settings, null, 2)}
+                {JSON.stringify(VOICE_STYLES[safeSelectedStyle].settings, null, 2)}
               </div>
             </div>
           )}
@@ -1119,7 +1180,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         ) : (
           <>
             <Mic className="h-4 w-4 mr-2" />
-            {language === 'ar' ? `تحدث بأسلوب ${VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].name[language]}` : `Speak with ${VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].name[language]} Style`}
+            {language === 'ar' ? `تحدث بأسلوب ${VOICE_STYLES[safeSelectedStyle].name[language]}` : `Speak with ${VOICE_STYLES[safeSelectedStyle].name[language]} Style`}
           </>
         )}
       </Button>
@@ -1132,7 +1193,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
               {language === 'ar' ? 'الصوت المُنشأ' : 'Generated Audio'}
             </h3>
             <div className="text-xs text-muted-foreground">
-              {language === 'ar' ? 'أسلوب:' : 'Style:'} {VOICE_STYLES[selectedStyle as keyof typeof VOICE_STYLES].name[language]}
+              {language === 'ar' ? 'أسلوب:' : 'Style:'} {VOICE_STYLES[safeSelectedStyle].name[language]}
             </div>
           </div>
           

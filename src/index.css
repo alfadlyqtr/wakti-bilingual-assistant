@@ -171,6 +171,41 @@ textarea::placeholder {
   opacity: 1; /* avoid extra dimming on some browsers */
 }
 
+@keyframes wakti-wave-pulse {
+  0% {
+    transform: scaleY(0.35);
+    filter: hue-rotate(0deg) blur(0px);
+    opacity: 0.55;
+  }
+  45% {
+    transform: scaleY(1.05);
+    filter: hue-rotate(120deg) blur(1px);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleY(0.4);
+    filter: hue-rotate(0deg) blur(0px);
+    opacity: 0.65;
+  }
+}
+
+.wakti-wave-bar {
+  transform-origin: center;
+  animation: wakti-wave-pulse 1400ms ease-in-out infinite;
+  animation-delay: calc(var(--i, 0) * 55ms);
+  will-change: transform, filter, opacity;
+}
+
+.dark .wakti-wave-bar {
+  box-shadow: 0 0 10px hsla(210, 100%, 65%, 0.25);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wakti-wave-bar {
+    animation: none;
+  }
+}
+
 /* Autofill in dark mode can force light text; normalize it */
 .dark input:-webkit-autofill,
 .dark textarea:-webkit-autofill,

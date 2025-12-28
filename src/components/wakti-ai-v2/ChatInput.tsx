@@ -1240,7 +1240,7 @@ export function ChatInput({
                         <button
                           ref={chatSubmodeBtnRef}
                           data-dropdown
-                          onPointerDown={(e) => {
+                          onPointerUp={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
                             // @ts-ignore

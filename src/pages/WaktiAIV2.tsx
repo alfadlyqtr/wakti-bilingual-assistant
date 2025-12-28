@@ -40,6 +40,7 @@ const WaktiAIV2 = () => {
   const lastTriggerRef = useRef<string>('chat');
   const safetyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const drawCanvasRef = useRef<DrawAfterBGCanvasRef>(null);
+  const imageProgressIntervalRef = useRef<number | null>(null);
   const { language } = useTheme();
   const { showError } = useToastHelper();
   const { isDesktop } = useIsDesktop();
@@ -285,12 +286,48 @@ const WaktiAIV2 = () => {
       content: '',
       timestamp: new Date(),
       intent: trigger,
-      metadata: { loading: true, ...(trigger === 'search' && isYouTubeQuery ? { youtubeLoading: true } : {}) },
+      metadata: {
+        loading: true,
+        ...(trigger === 'image' ? { loadingStage: 'generating', progress: 0 } : {}),
+        ...(trigger === 'search' && isYouTubeQuery ? { youtubeLoading: true } : {})
+      },
     };
     setSessionMessages([...newMessages, assistantPlaceholder]);
 
     try {
       if (trigger === 'image') {
+        // Simulated progress percentage (Option B) to improve UX while waiting for non-streaming image results
+        const clearImageProgress = () => {
+          if (imageProgressIntervalRef.current) {
+            window.clearInterval(imageProgressIntervalRef.current);
+            imageProgressIntervalRef.current = null;
+          }
+        };
+
+        // Clear any previous image progress timer
+        clearImageProgress();
+
+        let p = 0;
+        const setProgress = (next: number) => {
+          const v = Math.max(0, Math.min(100, Math.round(next)));
+          setSessionMessages(prev => prev.map(m => m.id === assistantMessageId
+            ? { ...m, metadata: { ...(m.metadata || {}), loading: true, loadingStage: 'generating', progress: v } }
+            : m
+          ));
+        };
+
+        setProgress(0);
+        imageProgressIntervalRef.current = window.setInterval(() => {
+          // Fast to ~15%, then slow to ~92%, then final jump to 100% when done.
+          let inc = 0;
+          if (p < 15) inc = 3 + Math.random() * 5;
+          else if (p < 60) inc = 1 + Math.random() * 2.5;
+          else if (p < 85) inc = Math.random() * 1.8;
+          else if (p < 92) inc = Math.random() * 0.8;
+          p = Math.min(92, p + inc);
+          setProgress(p);
+        }, 350);
+
         // Non-streaming image pipeline (text2image / image2image / background-removal)
         const response = await WaktiAIV2Service.sendMessage(
           messageContent,
@@ -308,12 +345,16 @@ const WaktiAIV2 = () => {
           imageQuality
         );
 
+        clearImageProgress();
+
+        const responseAny = response as any;
+        const resolvedImageUrl = responseAny?.imageUrl || responseAny?.url || responseAny?.image_url || responseAny?.imageURL;
         const finalAssistantMessage: AIMessage = {
           ...assistantPlaceholder,
           content: response.response,
           metadata: { loading: false, ...response.metadata },
           intent: trigger,
-          ...(response as any)?.imageUrl ? { imageUrl: (response as any).imageUrl } : {}
+          ...(resolvedImageUrl ? { imageUrl: resolvedImageUrl } : {})
         };
 
         setSessionMessages(prev => {
@@ -461,6 +502,10 @@ const WaktiAIV2 = () => {
         return finalMessages;
       });
     } finally {
+      if (imageProgressIntervalRef.current) {
+        window.clearInterval(imageProgressIntervalRef.current);
+        imageProgressIntervalRef.current = null;
+      }
       setIsLoading(false);
       
       // Clear safety timeout since request completed

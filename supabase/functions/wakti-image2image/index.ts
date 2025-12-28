@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+// createClient no longer needed - returning Runware URLs directly
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
@@ -52,10 +52,11 @@ function detectMimeAndExt(bytes: Uint8Array, mimeHint?: string): { mime: string;
   return { mime: "image/png", ext: "png" };
 }
 
-const supabase = createClient(
-  Deno.env.get("SUPABASE_URL")!,
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-);
+// Supabase client no longer needed - returning Runware URLs directly
+// const supabase = createClient(
+//   Deno.env.get("SUPABASE_URL")!,
+//   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+// );
 
 const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY")!;
 
@@ -103,21 +104,22 @@ async function safeJson(resp: Response): Promise<any> {
 }
 
 async function callRunwareI2I(finalPrompt: string, inputDataUrl: string): Promise<any> {
-  // Optimized for speed: reduced steps from 28 to 20, using faster scheduler
+  // Per Runware docs: taskType is "imageInference" with seedImage for image-to-image
+  // https://runware.ai/docs/en/image-inference/image-to-image
   const payload = {
     taskType: "imageInference",
     taskUUID: genUUID(),
     model: "runware:106@1",
     positivePrompt: finalPrompt,
+    seedImage: inputDataUrl, // Data URI, base64, URL, or UUID
+    strength: 0.55, // Lower strength preserves more of the original seed image
+    width: 1024,
+    height: 1024,
+    steps: 25,
     numberResults: 1,
-    outputType: ["dataURI", "URL"],
-    outputFormat: "jpeg",
-    CFGScale: 2.5,
-    steps: 20,
-    scheduler: "DPM++ 2M Karras",
+    outputType: ["URL"],
+    outputFormat: "WEBP",
     includeCost: true,
-    referenceImages: [inputDataUrl],
-    outputQuality: 80,
   } as any;
 
   const doCreate = async () => {
@@ -198,55 +200,12 @@ serve(async (req: Request) => {
     const rw = await callRunwareI2I(user_prompt, inputDataUrl);
     const node = pickFirstResultNode(rw) || rw;
 
-    let outBytes: Uint8Array | null = null;
-    let outExt = "jpg";
-    let outMime = "image/jpeg";
-    let directUrl: string | null = null;
+    // Extract the Runware URL directly (avoid Supabase storage upload which causes COEP issues)
+    const imageUrl = node?.imageURL || node?.URL || node?.url;
+    
+    console.log("🎨 Runware result:", { keys: Object.keys(node || {}), imageUrl: imageUrl?.slice(0, 80) });
 
-    const imageDataUrl = node?.dataURI || node?.dataUrl || node?.data_uri;
-    const url = node?.imageURL || node?.URL || node?.url;
-
-    if (imageDataUrl) {
-      const { base64: b64Out } = stripDataUrlPrefix(imageDataUrl);
-      outBytes = decodeBase64ToUint8Array(b64Out);
-      outMime = (imageDataUrl.split(";")[0]?.split(":")[1]) || outMime;
-      outExt = outMime.includes("png") ? "png" : outMime.includes("webp") ? "webp" : "jpg";
-    } else if (url) {
-      try {
-        const fr = await fetch(url);
-        const arr = new Uint8Array(await fr.arrayBuffer());
-        outBytes = arr;
-        outMime = fr.headers.get("content-type") || outMime;
-        outExt = outMime.includes("png") ? "png" : outMime.includes("webp") ? "webp" : "jpg";
-      } catch {
-        directUrl = url;
-      }
-    }
-
-    if (outBytes) {
-      const fileName = `image2image/${user_id}-${Date.now()}.${outExt}`;
-      const { error: uploadError } = await supabase.storage
-        .from("wakti-ai-v2")
-        .upload(fileName, outBytes, { contentType: outMime, upsert: true });
-      if (!uploadError) {
-        const { data: publicUrl } = supabase.storage.from("wakti-ai-v2").getPublicUrl(fileName);
-        // Log successful AI usage
-        await logAIFromRequest(req, {
-          functionName: "wakti-image2image",
-          provider: "runware",
-          model: "runware:106@1",
-          inputText: user_prompt,
-          status: "success"
-        });
-
-        return new Response(
-          JSON.stringify({ success: true, url: publicUrl.publicUrl, model: "runware:106@1" }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-    }
-
-    if (directUrl) {
+    if (imageUrl) {
       // Log successful AI usage
       await logAIFromRequest(req, {
         functionName: "wakti-image2image",
@@ -257,7 +216,7 @@ serve(async (req: Request) => {
       });
 
       return new Response(
-        JSON.stringify({ success: true, url: directUrl, model: "runware:106@1" }),
+        JSON.stringify({ success: true, url: imageUrl, model: "runware:106@1" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

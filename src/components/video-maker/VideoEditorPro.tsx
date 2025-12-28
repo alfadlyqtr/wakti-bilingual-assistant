@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { 
   Upload, Image as ImageIcon, Music, Type, Palette, Play, Download, Share2, Trash2, Plus, X, Square,
   ChevronLeft, ChevronRight, Video, Clock, Loader2, Check, Save, Sparkles, Move, Volume2, VolumeX, Smile,
-  RotateCcw, Sun, Contrast, Droplets, Film, Layers, Copy, GripVertical, ZoomIn
+  RotateCcw, Sun, Contrast, Droplets, Film, Layers, Copy, GripVertical, ZoomIn, Wand2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useCanvasVideo } from '@/hooks/useCanvasVideo';
@@ -58,7 +58,7 @@ interface AudioTrack {
 interface VideoProject { slides: Slide[]; audioTracks: AudioTrack[]; title: string; isPublic: boolean; }
 
 const MAX_SLIDES = 20;
-const MAX_DURATION_SEC = 120;
+const MAX_DURATION_SEC = 60;
 
 const DEFAULT_FILTERS: SlideFilters = {
   brightness: 100, contrast: 100, saturation: 100, blur: 0,
@@ -488,6 +488,25 @@ export default function VideoEditorPro() {
     if (isLoading) { setGenProgress(progress); if (status) setGenStatus(status); }
   }, [isLoading, progress, status]);
 
+  const handleAutoDuration = useCallback(() => {
+    setProject(p => {
+      const n = p.slides.length;
+      if (n <= 0) return p;
+
+      const step = 0.1;
+      const totalSteps = Math.round(MAX_DURATION_SEC / step);
+      const base = Math.floor(totalSteps / n);
+      const rem = totalSteps - (base * n);
+
+      const nextSlides = p.slides.map((s, i) => {
+        const steps = base + (i < rem ? 1 : 0);
+        return { ...s, durationSec: Math.max(step, steps * step) };
+      });
+
+      return { ...p, slides: nextSlides };
+    });
+  }, []);
+
   const handleUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files; if (!files) return;
     const newSlides: Slide[] = [];
@@ -498,6 +517,25 @@ export default function VideoEditorPro() {
     if (newSlides.length) {
       setProject(p => ({ ...p, slides: [...p.slides, ...newSlides] }));
       setSelectedIdx(project.slides.length);
+
+      newSlides.forEach(s => {
+        if (s.mediaType !== 'video' || !s.videoUrl) return;
+        const v = document.createElement('video');
+        v.preload = 'metadata';
+        v.src = s.videoUrl;
+        v.onloadedmetadata = () => {
+          const dur = Number.isFinite(v.duration) ? v.duration : 4;
+          const durationSec = Math.max(0.1, Math.round(dur * 10) / 10);
+          setProject(p => ({
+            ...p,
+            slides: p.slides.map(sl => sl.id === s.id ? { ...sl, durationSec } : sl),
+          }));
+          v.src = '';
+        };
+        v.onerror = () => {
+          v.src = '';
+        };
+      });
     }
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, [project.slides.length]);
@@ -920,7 +958,15 @@ export default function VideoEditorPro() {
     } catch (e) { console.error(e); toast.error(language === 'ar' ? 'فشل' : 'Failed'); } finally { setIsSaving(false); }
   };
 
-  const handleDownload = () => { if (!videoUrl) return; const a = document.createElement('a'); a.href = videoUrl; a.download = `${project.title || 'video'}.mp4`; a.click(); };
+  const handleDownload = () => {
+    if (!videoUrl) return;
+    const isWebm = !!videoBlob?.type?.includes('webm');
+    const ext = isWebm ? 'webm' : 'mp4';
+    const a = document.createElement('a');
+    a.href = videoUrl;
+    a.download = `${project.title || 'video'}.${ext}`;
+    a.click();
+  };
   const handleNew = () => { setProject({ slides: [], audioTracks: [], title: '', isPublic: false }); setVideoUrl(null); setVideoBlob(null); setSavedId(null); setSelectedIdx(0); };
 
   // Empty state
@@ -980,11 +1026,29 @@ export default function VideoEditorPro() {
       {/* Top bar - compact */}
       <div className="flex items-center justify-between px-2 py-1.5 border-b bg-card/80 backdrop-blur-sm shrink-0">
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(-1)}><ChevronLeft className="h-4 w-4" /></Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => navigate('/music', { state: { openVideoTab: true }, replace: true })}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
           <Input value={project.title} onChange={e => setProject(p => ({ ...p, title: e.target.value }))} placeholder={language === 'ar' ? 'عنوان' : 'Title'} className="w-24 h-7 text-xs" />
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-[10px] text-muted-foreground">{totalDur}s/{MAX_DURATION_SEC}s</span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-6 px-2 text-[10px]"
+            onClick={handleAutoDuration}
+            disabled={project.slides.length === 0}
+          >
+            <Wand2 className="h-3 w-3 mr-1" />
+            {language === 'ar' ? 'تلقائي' : 'Auto'}
+          </Button>
           <Button size="sm" className="h-7 px-2 text-xs btn-enhanced" disabled={!canGen} onClick={handleGenerate}><Sparkles className="h-3 w-3 mr-1" />{language === 'ar' ? 'إنشاء' : 'Go'}</Button>
         </div>
       </div>
@@ -1067,18 +1131,51 @@ export default function VideoEditorPro() {
         </div>
         
         {/* Tabs - vertical on mobile */}
-        <div className="flex-1 flex flex-wrap content-start gap-1 p-1.5">
-          {([
-            { key: 'filters' as EditorTab, icon: Palette, label: language === 'ar' ? 'فلاتر' : 'Filters' },
-            { key: 'text' as EditorTab, icon: Type, label: language === 'ar' ? 'نص' : 'Text' },
-            { key: 'motion' as EditorTab, icon: Move, label: language === 'ar' ? 'حركة' : 'Motion' },
-            { key: 'audio' as EditorTab, icon: Music, label: language === 'ar' ? 'صوت' : 'Audio' },
-            { key: 'stickers' as EditorTab, icon: Smile, label: language === 'ar' ? 'ملصق' : 'Stickers' },
-          ]).map(tab => (
-            <button key={tab.key} onClick={() => setActiveTab(tab.key)} className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium transition-all ${activeTab === tab.key ? 'bg-primary text-primary-foreground shadow-sm' : 'bg-muted/50 text-muted-foreground hover:bg-muted'}`}>
-              <tab.icon className="h-3.5 w-3.5" /><span>{tab.label}</span>
-            </button>
-          ))}
+        <div className="flex-1 flex flex-col gap-2 p-1.5">
+          {slide && (
+            <div className="w-full rounded-xl border border-border/60 bg-gradient-to-r from-[#060541]/10 to-[#e9ceb0]/25 dark:from-white/5 dark:to-white/0 p-2">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[11px] font-semibold text-[#060541] dark:text-white">
+                  {language === 'ar' ? 'المدة' : 'Duration'}
+                </span>
+                <span className="text-[11px] text-muted-foreground">{slide.durationSec.toFixed(1)}s</span>
+              </div>
+              <input
+                type="range"
+                min={0.1}
+                max={MAX_DURATION_SEC}
+                step={0.1}
+                value={slide.durationSec}
+                onChange={e => updateSlide(slide.id, { durationSec: Math.max(0.1, Math.min(MAX_DURATION_SEC, parseFloat(e.target.value))) })}
+                title={language === 'ar' ? 'المدة' : 'Duration'}
+                aria-label={language === 'ar' ? 'المدة' : 'Duration'}
+                className="w-full h-2 rounded-full appearance-none bg-muted cursor-pointer accent-primary"
+              />
+            </div>
+          )}
+
+          <div className="w-full flex items-center gap-2 overflow-x-auto whitespace-nowrap">
+            {([
+              { key: 'filters' as EditorTab, icon: Palette, label: language === 'ar' ? 'فلاتر' : 'Filters' },
+              { key: 'text' as EditorTab, icon: Type, label: language === 'ar' ? 'نص' : 'Text' },
+              { key: 'motion' as EditorTab, icon: Move, label: language === 'ar' ? 'حركة' : 'Motion' },
+              { key: 'audio' as EditorTab, icon: Music, label: language === 'ar' ? 'صوت' : 'Audio' },
+              { key: 'stickers' as EditorTab, icon: Smile, label: language === 'ar' ? 'ملصق' : 'Stickers' },
+            ]).map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex-none flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold transition-all border active:scale-95
+                  ${activeTab === tab.key
+                    ? 'bg-[#060541] text-white shadow-[0_8px_28px_hsla(210,100%,65%,0.22)] border-transparent'
+                    : 'bg-white/70 dark:bg-white/5 text-[#060541] dark:text-white border-border/60 hover:bg-white/90 dark:hover:bg-white/10'
+                  }`}
+              >
+                <tab.icon className="h-4 w-4" />
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -1242,7 +1339,6 @@ export default function VideoEditorPro() {
 
             {activeTab === 'motion' && slide && (
               <>
-                <div className="space-y-2"><div className="flex justify-between"><p className="text-sm font-semibold">{language === 'ar' ? 'المدة' : 'Duration'}</p><span className="text-sm">{slide.durationSec}s</span></div><input type="range" min={1} max={15} value={slide.durationSec} onChange={e => updateSlide(slide.id, { durationSec: parseInt(e.target.value) })} className="w-full h-2 rounded-full appearance-none bg-muted cursor-pointer accent-primary" /></div>
                 <div className="space-y-2"><p className="text-sm font-semibold">{language === 'ar' ? 'حركة الصورة' : 'Motion'}</p><div className="grid grid-cols-4 gap-1.5">{KEN_BURNS.map(k => <button key={k.key} onClick={() => updateSlide(slide.id, { kenBurns: k.key })} className={`flex flex-col items-center p-1.5 rounded-lg border ${slide.kenBurns === k.key ? 'border-primary bg-primary/10' : 'border-border'}`}><span className="text-lg">{k.icon}</span><span className="text-[9px]">{language === 'ar' ? k.nameAr : k.name}</span></button>)}</div></div>
                 <div className="space-y-2"><p className="text-sm font-semibold">{language === 'ar' ? 'الانتقال' : 'Transition'}</p><div className="grid grid-cols-4 gap-1.5">{TRANSITIONS.map(t => <button key={t.key} onClick={() => updateSlide(slide.id, { transition: t.key })} className={`flex flex-col items-center p-1.5 rounded-lg border ${slide.transition === t.key ? 'border-primary bg-primary/10' : 'border-border'}`}><span className="text-lg">{t.icon}</span><span className="text-[9px]">{language === 'ar' ? t.nameAr : t.name}</span></button>)}</div></div>
                 <Button variant="outline" size="sm" className="w-full" onClick={() => { applyAll('transition'); applyAll('kenBurns'); }}>{language === 'ar' ? 'تطبيق على الكل' : 'Apply to All'}</Button>
@@ -1267,7 +1363,13 @@ export default function VideoEditorPro() {
                     <Music className="h-3.5 w-3.5 mr-1" />{language === 'ar' ? 'مكتبة' : 'Library'}
                   </Button>
                 </div>
-                <input ref={audioInputRef} type="file" accept="audio/*" className="hidden" onChange={handleAudioUpload} />
+                <input
+                  ref={audioInputRef}
+                  type="file"
+                  accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg"
+                  className="sr-only"
+                  onChange={handleAudioUpload}
+                />
               
               {showAudioPicker && (
                 <Card className="p-2 max-h-32 overflow-y-auto">
@@ -1403,8 +1505,8 @@ export default function VideoEditorPro() {
                                   {(waveforms[track.id] || Array.from({ length: 48 }).map(() => 0.25)).map((p, i) => (
                                     <div
                                       key={i}
-                                      className="bg-primary/30 rounded"
-                                      style={{ width: '2px', height: `${Math.max(12, Math.round(p * 100))}%` }}
+                                      className="bg-primary/30 rounded wakti-wave-bar"
+                                      style={{ width: '2px', height: `${Math.max(12, Math.round(p * 100))}%`, ['--i' as any]: i }}
                                     />
                                   ))}
                                 </div>

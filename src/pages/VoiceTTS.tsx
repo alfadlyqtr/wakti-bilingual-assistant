@@ -3,7 +3,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Copy, Download, Check, Save, Trash2, Play, Clock, AlertCircle } from 'lucide-react';
+import { Loader2, Copy, Download, Check, Save, Trash2, Play, Pause, RotateCcw, Clock, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
@@ -203,6 +203,18 @@ export default function VoiceTTS() {
       toast.error(e.message || (language === 'ar' ? 'فشل في إنشاء الصوت' : 'Failed to generate speech'));
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const rewindSavedAudio = async (id: string) => {
+    try {
+      if (playingId !== id) return;
+      const audio = audioPlayerRef.current;
+      if (!audio) return;
+      audio.currentTime = 0;
+      await audio.play();
+    } catch {
+      toast.error(language === 'ar' ? 'فشل التشغيل' : 'Playback failed');
     }
   };
 
@@ -408,45 +420,49 @@ export default function VoiceTTS() {
 
   return (
     <div className="max-w-xl mx-auto space-y-6 p-4">
-      <div className="text-center">
-        <h2 className="text-xl font-semibold mb-2">{language === 'ar' ? 'تحويل النص إلى كلام' : 'Text To Speech'}</h2>
-      </div>
+      <div className="rounded-2xl border border-black/5 dark:border-white/10 bg-gradient-to-br from-white via-white to-slate-50/60 dark:from-[#0c0f14] dark:via-[#0c0f14] dark:to-[#111827] shadow-[0_10px_40px_rgba(0,0,0,0.08)] dark:shadow-[0_12px_50px_rgba(0,0,0,0.55)] p-4">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold mb-1 text-[#060541] dark:text-[#f2f2f2]">{language === 'ar' ? 'تحويل النص إلى كلام' : 'Text To Speech'}</h2>
+          <p className="text-xs text-muted-foreground">{language === 'ar' ? 'أنشئ صوتاً واحفظه للرجوع إليه لاحقاً' : 'Generate audio and save it for later'}</p>
+        </div>
 
       {/* Mini-tabs: Create | Saved */}
-      <div className="flex gap-2 justify-center">
+      <div className="mt-4 flex gap-2 justify-center">
         <button
           onClick={() => setActiveSubTab('create')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+          className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95 ${
             activeSubTab === 'create'
-              ? 'bg-primary text-primary-foreground shadow-sm'
-              : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              ? 'bg-[#060541] text-white shadow-[0_8px_26px_rgba(6,5,65,0.35)]'
+              : 'bg-white/70 text-[#060541] border border-black/5 hover:bg-white dark:bg-white/5 dark:text-[#f2f2f2] dark:border-white/10 dark:hover:bg-white/10'
           }`}
         >
           {language === 'ar' ? 'إنشاء' : 'Create'}
         </button>
         <button
           onClick={() => setActiveSubTab('saved')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${
+          className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-1.5 active:scale-95 ${
             activeSubTab === 'saved'
-              ? 'bg-primary text-primary-foreground shadow-sm'
-              : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              ? 'bg-[#060541] text-white shadow-[0_8px_26px_rgba(6,5,65,0.35)]'
+              : 'bg-white/70 text-[#060541] border border-black/5 hover:bg-white dark:bg-white/5 dark:text-[#f2f2f2] dark:border-white/10 dark:hover:bg-white/10'
           }`}
         >
           <Save className="h-3.5 w-3.5" />
           {language === 'ar' ? 'المحفوظات' : 'Saved'}
           {savedTTSList.length > 0 && (
-            <span className="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-primary-foreground/20">
+            <span className="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-white/20">
               {savedTTSList.length}
             </span>
           )}
         </button>
       </div>
 
+      </div>
+
       {/* SAVED TAB CONTENT */}
       {activeSubTab === 'saved' && (
-        <div className="space-y-4">
+        <div className="space-y-4 mt-5">
           {/* Auto-delete notice */}
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
             <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
             <p className="text-xs text-amber-700 dark:text-amber-400">
               {language === 'ar' 
@@ -467,7 +483,10 @@ export default function VoiceTTS() {
           ) : (
             <div className="space-y-3">
               {savedTTSList.map((item) => (
-                <Card key={item.id} className="p-4">
+                <Card
+                  key={item.id}
+                  className="p-4 rounded-2xl border border-black/5 dark:border-white/10 bg-gradient-to-br from-white via-white to-slate-50/60 dark:from-[#0c0f14] dark:via-[#0c0f14] dark:to-[#111827] shadow-[0_12px_40px_rgba(0,0,0,0.08)] dark:shadow-[0_14px_55px_rgba(0,0,0,0.55)]"
+                >
                   <div className="flex justify-between items-start gap-3">
                     <div className="flex-1">
                       <p className="text-sm font-medium mb-1 line-clamp-2">{item.text}</p>
@@ -490,15 +509,29 @@ export default function VoiceTTS() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8"
+                        className={`h-9 w-9 rounded-xl border border-black/5 dark:border-white/10 bg-white/60 hover:bg-white dark:bg-white/5 dark:hover:bg-white/10 shadow-[0_6px_18px_rgba(0,0,0,0.10)] dark:shadow-[0_10px_26px_rgba(0,0,0,0.55)] transition-all active:scale-95 ${
+                          playingId === item.id ? 'text-blue-600 border-blue-500/30 bg-blue-500/10 dark:bg-blue-500/10' : 'text-[#060541] dark:text-[#f2f2f2]'
+                        }`}
                         onClick={() => playSavedAudio(item.id, item)}
                       >
-                        <Play className="h-4 w-4" />
+                        {playingId === item.id ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                       </Button>
+
+                      {playingId === item.id && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 rounded-xl border border-purple-500/20 bg-purple-500/10 text-purple-700 dark:text-purple-300 dark:border-purple-400/20 dark:bg-purple-500/10 shadow-[0_6px_18px_rgba(147,51,234,0.18)] transition-all active:scale-95"
+                          onClick={() => rewindSavedAudio(item.id)}
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                        </Button>
+                      )}
+
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8"
+                        className="h-9 w-9 rounded-xl border border-black/5 dark:border-white/10 bg-white/60 hover:bg-white dark:bg-white/5 dark:hover:bg-white/10 text-[#060541] dark:text-[#f2f2f2] shadow-[0_6px_18px_rgba(0,0,0,0.10)] dark:shadow-[0_10px_26px_rgba(0,0,0,0.55)] transition-all active:scale-95"
                         onClick={async () => {
                           try {
                             const url = await getSavedTtsPlayableUrl(item);
@@ -518,7 +551,7 @@ export default function VoiceTTS() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-red-500 hover:text-red-600"
+                        className="h-9 w-9 rounded-xl border border-red-500/20 bg-red-500/10 text-red-600 hover:text-red-700 dark:text-red-300 dark:border-red-400/20 dark:bg-red-500/10 shadow-[0_6px_18px_rgba(239,68,68,0.18)] transition-all active:scale-95"
                         onClick={() => deleteSavedTTS(item.id)}
                         disabled={deletingId === item.id}
                       >
@@ -727,6 +760,7 @@ export default function VoiceTTS() {
           </div>
         </div>
       )}
+
         </>
       )}
     </div>

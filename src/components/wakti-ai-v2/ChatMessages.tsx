@@ -20,6 +20,17 @@ import { useNavigate } from 'react-router-dom';
 
 type SearchSource = { url: string; title: string };
 
+// Proxy image URLs through our Edge Function to avoid COEP/CORS blocking
+const SUPABASE_URL = 'https://hxauxozopvpzpdygoqwf.supabase.co';
+function getProxiedImageUrl(originalUrl: string): string {
+  if (!originalUrl) return originalUrl;
+  // Only proxy external image URLs (Runware, etc.)
+  if (originalUrl.includes('im.runware.ai') || originalUrl.includes('supabase.co/storage')) {
+    return `${SUPABASE_URL}/functions/v1/wakti-image-proxy?url=${encodeURIComponent(originalUrl)}`;
+  }
+  return originalUrl;
+}
+
 function normalizeGoogleMapsUrl(href: string, language: string): string {
   try {
     const u = new URL(href);
@@ -1131,9 +1142,12 @@ export function ChatMessages({
     
     // FIXED: Check for generated images (Runware URLs) with modal functionality
     if (message.imageUrl || content.includes('https://im.runware.ai/')) {
-      const imageUrl = message.imageUrl || content.match(/https:\/\/im\.runware\.ai\/[^\s\)]+/)?.[0];
+      const originalImageUrl = message.imageUrl || content.match(/https:\/\/im\.runware\.ai\/[^\s\)]+/)?.[0];
       
-      if (imageUrl) {
+      if (originalImageUrl) {
+        // Proxy the image URL to avoid COEP/CORS blocking
+        const imageUrl = getProxiedImageUrl(originalImageUrl);
+        
         // Extract prompt from content if available
         const promptMatch = content.match(/prompt:\s*(.+?)(?:\n|$)/i);
         const prompt = promptMatch ? promptMatch[1].trim() : undefined;
@@ -1141,9 +1155,9 @@ export function ChatMessages({
         return (
           <div className="space-y-3">
             {/* Show text content if any (excluding the URL) */}
-            {content && !content.includes(imageUrl) && (
+            {content && !content.includes(originalImageUrl) && (
               <div className="whitespace-pre-wrap break-words">
-                {content.replace(imageUrl, '').trim()}
+                {content.replace(originalImageUrl, '').trim()}
               </div>
             )}
             
@@ -1156,7 +1170,7 @@ export function ChatMessages({
                 onLoad={(e) => { try { e.currentTarget.classList.remove('image-reveal-start'); e.currentTarget.classList.add('image-reveal-done'); e.currentTarget.style.filter = 'none'; } catch {} }}
                 onClick={() => setSelectedImage({ url: imageUrl, prompt })}
                 onError={(e) => {
-                  console.error('Image failed to load:', imageUrl);
+                  console.error('Image failed to load:', originalImageUrl);
                   e.currentTarget.style.display = 'none';
                 }}
                 style={{ filter: 'blur(8px) saturate(0.95) brightness(1.02)' }}
@@ -1176,10 +1190,10 @@ export function ChatMessages({
                   (async () => {
                     try {
                       if (navigator.clipboard?.writeText) {
-                        await navigator.clipboard.writeText(imageUrl);
+                        await navigator.clipboard.writeText(originalImageUrl);
                       } else {
                         const ta = document.createElement('textarea');
-                        ta.value = imageUrl;
+                        ta.value = originalImageUrl;
                         ta.style.position = 'fixed';
                         ta.style.opacity = '0';
                         document.body.appendChild(ta);
@@ -1757,6 +1771,8 @@ export function ChatMessages({
                         const isImageLoading = message.role === 'assistant' && message.intent === 'image' && (message as any)?.metadata?.loading;
                         const isVisionLoading = message.role === 'assistant' && message.intent === 'vision' && (message as any)?.metadata?.loading;
                         const stage = (message as any)?.metadata?.loadingStage as 'uploading'|'generating'|'saving'|undefined;
+                        const progress = (message as any)?.metadata?.progress;
+                        const pct = typeof progress === 'number' && Number.isFinite(progress) ? ` ${Math.max(0, Math.min(100, Math.round(progress)))}%` : '';
                         const hasImageUrl = !!(message as any)?.imageUrl;
                         if (isImageLoading) {
                           // Stage-specific rendering: uploading -> generating (skeleton), saving -> preview with blur+wipe
@@ -1765,6 +1781,7 @@ export function ChatMessages({
                             : stage === 'saving'
                               ? (language === 'ar' ? 'جارٍ حفظ الصورة...' : 'Saving image...')
                               : (language === 'ar' ? 'جارٍ توليد الصورة...' : 'Generating image...');
+                          const labelWithPct = stage === 'generating' || !stage ? `${label}${pct}` : label;
 
                           if (stage === 'saving' && hasImageUrl) {
                             // Blur-to-sharp with grain reveal (300ms), no artificial delay
@@ -1794,7 +1811,7 @@ export function ChatMessages({
                                 </div>
                                 <div className="mt-2 text-xs text-muted-foreground">
                                   <span className="brush-inline mr-1" aria-hidden>🖌️</span>
-                                  <span>{label}</span>
+                                  <span>{labelWithPct}</span>
                                 </div>
                               </div>
                             );
@@ -1812,7 +1829,7 @@ export function ChatMessages({
                                 </div>
                               </div>
                               <div className="mt-2 text-xs text-muted-foreground">
-                                <span>{label}</span>
+                                <span>{labelWithPct}</span>
                               </div>
                             </div>
                           );
