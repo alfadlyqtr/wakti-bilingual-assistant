@@ -43,6 +43,7 @@ interface TextOverlay {
 interface Slide {
   id: string; mediaType: 'image' | 'video';
   imageUrl?: string; imageFile?: File; videoUrl?: string; videoFile?: File;
+  mediaDurationSec?: number;
   clipMuted: boolean; clipVolume: number;
   textOverlays: TextOverlay[]; stickers: { id: string; kind: 'emoji' | 'svg'; value: string; x: number; y: number; size: number }[];
   durationSec: number; transition: TransitionType; transitionDuration: number;
@@ -428,6 +429,7 @@ const createSlide = (file: File, isVideo: boolean): Slide => ({
   imageFile: isVideo ? undefined : file,
   videoUrl: isVideo ? URL.createObjectURL(file) : undefined,
   videoFile: isVideo ? file : undefined,
+  mediaDurationSec: undefined,
   clipMuted: false, clipVolume: 1,
   textOverlays: [], stickers: [],
   durationSec: 4, transition: 'fade', transitionDuration: 0.5,
@@ -500,7 +502,11 @@ export default function VideoEditorPro() {
 
       const nextSlides = p.slides.map((s, i) => {
         const steps = base + (i < rem ? 1 : 0);
-        return { ...s, durationSec: Math.max(step, steps * step) };
+        const autoSec = Math.max(step, steps * step);
+        if (s.mediaType === 'video' && typeof s.mediaDurationSec === 'number' && Number.isFinite(s.mediaDurationSec)) {
+          return { ...s, durationSec: Math.min(autoSec, Math.max(step, s.mediaDurationSec)) };
+        }
+        return { ...s, durationSec: autoSec };
       });
 
       return { ...p, slides: nextSlides };
@@ -528,7 +534,7 @@ export default function VideoEditorPro() {
           const durationSec = Math.max(0.1, Math.round(dur * 10) / 10);
           setProject(p => ({
             ...p,
-            slides: p.slides.map(sl => sl.id === s.id ? { ...sl, durationSec } : sl),
+            slides: p.slides.map(sl => sl.id === s.id ? { ...sl, mediaDurationSec: durationSec, durationSec } : sl),
           }));
           v.src = '';
         };

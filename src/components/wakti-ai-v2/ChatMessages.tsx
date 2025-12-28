@@ -320,6 +320,7 @@ export function ChatMessages({
   const { language } = useTheme();
   const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
   // No longer need keyboard detection in ChatMessages
   const [inputHeight, setInputHeight] = useState<number>(80);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
@@ -642,6 +643,73 @@ export function ChatMessages({
     }
   };
 
+  // Option C (faster perceived TTS): chunk long text and play the first chunk ASAP,
+  // while queueing the remaining chunks for sequential playback.
+  const ttsRunIdRef = useRef(0);
+  const ttsQueueRef = useRef<{
+    runId: number;
+    messageId: string;
+    chunks: string[];
+    index: number;
+    objectUrls: string[];
+  } | null>(null);
+
+  const splitTtsText = (text: string, maxChars: number = 240): string[] => {
+    try {
+      const cleaned = String(text || '').replace(/\s+/g, ' ').trim();
+      if (!cleaned) return [];
+      if (cleaned.length <= maxChars) return [cleaned];
+
+      // Prefer sentence boundaries, then hard-wrap.
+      const sentenceParts = cleaned
+        .split(/(?<=[.!?\u061f])\s+/)
+        .map(s => s.trim())
+        .filter(Boolean);
+
+      const out: string[] = [];
+      let buf = '';
+      const pushBuf = () => {
+        const v = buf.trim();
+        if (v) out.push(v);
+        buf = '';
+      };
+
+      for (const part of sentenceParts.length ? sentenceParts : [cleaned]) {
+        if (part.length > maxChars) {
+          // Flush current buffer first.
+          pushBuf();
+          for (let i = 0; i < part.length; i += maxChars) {
+            out.push(part.slice(i, i + maxChars).trim());
+          }
+          continue;
+        }
+
+        if (!buf) {
+          buf = part;
+        } else if ((buf.length + 1 + part.length) <= maxChars) {
+          buf = `${buf} ${part}`;
+        } else {
+          pushBuf();
+          buf = part;
+        }
+      }
+      pushBuf();
+      return out.length ? out : [cleaned.slice(0, maxChars)];
+    } catch {
+      return [String(text || '').slice(0, maxChars)];
+    }
+  };
+
+  const cleanupTtsQueue = () => {
+    const q = ttsQueueRef.current;
+    if (q?.objectUrls?.length) {
+      for (const u of q.objectUrls) {
+        try { URL.revokeObjectURL(u); } catch {}
+      }
+    }
+    ttsQueueRef.current = null;
+  };
+
   // Initialize or get AudioContext (lazy init for mobile unlock)
   const getAudioContext = (): AudioContext => {
     if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
@@ -652,6 +720,8 @@ export function ChatMessages({
 
   const handleSpeak = async (text: string, messageId: string) => {
     // Stop any other message that is currently playing
+    ttsRunIdRef.current += 1;
+    cleanupTtsQueue();
     stopCurrentAudio();
 
     let cleanText = sanitizeForTTS(text);
@@ -675,6 +745,10 @@ export function ChatMessages({
     }
 
     const spokenText = cleanText;
+
+    // Prepare chunks early so we can play quickly.
+    // Keep chunks reasonably short so the first audio returns fast.
+    const chunks = splitTtsText(spokenText, 240);
 
     // --- Mobile Unlock (AudioContext) ---
     if (!audioUnlockedRef.current) {
@@ -812,14 +886,55 @@ export function ChatMessages({
                      voice_id.toLowerCase().includes('vindemiatrix') ||
                      voice_id.toLowerCase().includes('female') ? 'female' : 'male';
 
-      const cacheKey = await computeTtsCacheKey({
-        text: spokenText,
-        voice_id,
-        gender,
-        language,
-      });
+      const runId = ttsRunIdRef.current;
 
-      const cached = await idbGetClip(cacheKey);
+      // Helper: fetch bytes for a single chunk (with caching), without blocking the whole message.
+      const fetchChunkBytes = async (chunkText: string) => {
+        const cacheKey = await computeTtsCacheKey({
+          text: chunkText,
+          voice_id,
+          gender,
+          language,
+        });
+
+        const cached = await idbGetClip(cacheKey);
+        if (cached?.data?.byteLength) {
+          return { mime: cached.mime || 'audio/mpeg', buf: cached.data };
+        }
+
+        const resp = await fetch(`${supabaseUrl}/functions/v1/voice-tts`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'audio/wav, audio/mpeg, audio/*',
+            ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
+          },
+          body: JSON.stringify({ text: chunkText, voice_id, gender, user_name }),
+        });
+
+        if (!resp.ok) {
+          const errorText = await resp.text();
+          throw new Error(`TTS service failed: ${resp.status} ${errorText}`);
+        }
+
+        const mime = resp.headers.get('content-type') || 'audio/mpeg';
+        const ab = await resp.arrayBuffer();
+        if (mime && /^audio\//i.test(mime) && ab?.byteLength) {
+          await idbPutClip(cacheKey, mime, ab);
+        }
+        return { mime, buf: ab };
+      };
+
+      // If it's a single chunk, keep the existing logic (WebAudio fast path + HTML5 fallback)
+      if (chunks.length <= 1) {
+        const cacheKey = await computeTtsCacheKey({
+          text: spokenText,
+          voice_id,
+          gender,
+          language,
+        });
+
+        const cached = await idbGetClip(cacheKey);
       if (cached?.data?.byteLength) {
         const mime = cached.mime || 'audio/mpeg';
         const cachedBuf = cached.data;
@@ -839,25 +954,25 @@ export function ChatMessages({
         return;
       }
 
-      const response = await fetch(`${supabaseUrl}/functions/v1/voice-tts`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'audio/wav, audio/mpeg, audio/*',
-          ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
-        },
-        body: JSON.stringify({ text: spokenText, voice_id, gender, user_name }),
-      });
+        const response = await fetch(`${supabaseUrl}/functions/v1/voice-tts`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'audio/wav, audio/mpeg, audio/*',
+            ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
+          },
+          body: JSON.stringify({ text: spokenText, voice_id, gender, user_name }),
+        });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`TTS service failed: ${response.status} ${errorText}`);
-      }
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`TTS service failed: ${response.status} ${errorText}`);
+        }
 
-      const contentType = response.headers.get('content-type') || 'audio/wav';
-      console.debug('[TTS] Response received', { contentType });
+        const contentType = response.headers.get('content-type') || 'audio/wav';
+        console.debug('[TTS] Response received', { contentType });
 
-      const arrayBuffer = await response.arrayBuffer();
+        const arrayBuffer = await response.arrayBuffer();
       if (!arrayBuffer || arrayBuffer.byteLength === 0) {
         console.error('[TTS] Empty audio received. Aborting playback.');
         setSpeakingMessageId(null);
@@ -870,16 +985,90 @@ export function ChatMessages({
         await idbPutClip(cacheKey, contentType, arrayBuffer);
       }
 
-      if (contentType && /^audio\//i.test(contentType) && canUseHtmlAudioForMime(contentType)) {
-        const blob = new Blob([arrayBuffer], { type: contentType });
-        await playWithHTML5(blob, contentType);
-      } else {
-        const webAudioSuccess = await playWithWebAudio(arrayBuffer, contentType);
-        if (!webAudioSuccess) {
+        if (contentType && /^audio\//i.test(contentType) && canUseHtmlAudioForMime(contentType)) {
           const blob = new Blob([arrayBuffer], { type: contentType });
           await playWithHTML5(blob, contentType);
+        } else {
+          const webAudioSuccess = await playWithWebAudio(arrayBuffer, contentType);
+          if (!webAudioSuccess) {
+            const blob = new Blob([arrayBuffer], { type: contentType });
+            await playWithHTML5(blob, contentType);
+          }
         }
+
+        return;
       }
+
+      // Multi-chunk flow: start first chunk ASAP then queue the rest.
+      setSpeakingMessageId(messageId);
+      setIsPaused(false);
+
+      const queue = {
+        runId,
+        messageId,
+        chunks,
+        index: 0,
+        objectUrls: [] as string[],
+      };
+      ttsQueueRef.current = queue;
+
+      const audioEl = audioRef.current;
+      if (!audioEl) {
+        throw new Error('No HTML5 audio element available');
+      }
+
+      // Prefetch remaining chunks in the background (do not await).
+      const chunkPromises: Array<Promise<{ mime: string; buf: ArrayBuffer }>> = chunks.map((c) => fetchChunkBytes(c));
+
+      const playChunkAt = async (idx: number) => {
+        const q = ttsQueueRef.current;
+        if (!q || q.runId !== runId || q.messageId !== messageId) return;
+        if (idx >= q.chunks.length) {
+          setSpeakingMessageId(null);
+          setIsPaused(false);
+          triggerFadeOut(messageId);
+          cleanupTtsQueue();
+          return;
+        }
+
+        q.index = idx;
+
+        const { mime, buf } = await chunkPromises[idx];
+        const blob = new Blob([buf], { type: mime || 'audio/mpeg' });
+        const url = URL.createObjectURL(blob);
+        q.objectUrls.push(url);
+
+        audioEl.onended = () => {
+          // Continue sequence unless a new run started.
+          const cur = ttsQueueRef.current;
+          if (!cur || cur.runId !== runId || cur.messageId !== messageId) return;
+          playChunkAt(idx + 1).catch((e) => {
+            console.error('[TTS] Chunk playback failed:', e);
+            setSpeakingMessageId(null);
+            setIsPaused(false);
+            cleanupTtsQueue();
+          });
+        };
+        audioEl.onerror = () => {
+          setSpeakingMessageId(null);
+          setIsPaused(false);
+          cleanupTtsQueue();
+        };
+
+        audioEl.src = url;
+        try { audioEl.load(); } catch {}
+        try {
+          await audioEl.play();
+        } catch (e) {
+          console.error('[TTS] HTML5 play() rejected:', e);
+          setSpeakingMessageId(null);
+          setIsPaused(false);
+          cleanupTtsQueue();
+        }
+      };
+
+      // Play first chunk immediately.
+      await playChunkAt(0);
 
     } catch (err) {
       console.error('[TTS] Failed to fetch or play audio:', err);

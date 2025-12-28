@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Loader2, Play, Download, Share2, ArrowLeft, Eye, Calendar, Clock } from 'lucide-react';
+import { Loader2, Play, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface VideoData {
@@ -29,6 +29,14 @@ export default function VideoShare() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (videoUrl?.startsWith('blob:')) {
+        URL.revokeObjectURL(videoUrl);
+      }
+    };
+  }, [videoUrl]);
 
   useEffect(() => {
     const fetchVideo = async () => {
@@ -56,13 +64,24 @@ export default function VideoShare() {
         setVideo(data as VideoData);
 
         // Get video URL from storage
+        // Important: app runs with COEP/COI (for FFmpeg/SharedArrayBuffer), which blocks
+        // direct cross-origin media loading. Fetch as blob and use a local object URL.
         if (data.storage_path) {
           const { data: urlData } = await supabase.storage
             .from('videos')
             .createSignedUrl(data.storage_path, 3600); // 1 hour expiry
-          
+
           if (urlData?.signedUrl) {
-            setVideoUrl(urlData.signedUrl);
+            try {
+              const resp = await fetch(urlData.signedUrl);
+              if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+              const blob = await resp.blob();
+              const objUrl = URL.createObjectURL(blob);
+              setVideoUrl(objUrl);
+            } catch (e) {
+              console.error('Video fetch error:', e);
+              setVideoUrl(urlData.signedUrl);
+            }
           }
         } else if (data.video_url) {
           setVideoUrl(data.video_url);
@@ -85,60 +104,7 @@ export default function VideoShare() {
     fetchVideo();
   }, [id, language]);
 
-  const handleDownload = async () => {
-    if (!videoUrl) return;
-
-    try {
-      const response = await fetch(videoUrl);
-      const blob = await response.blob();
-      
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${video?.title || 'wakti-video'}.mp4`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      toast.error(language === 'ar' ? 'فشل التنزيل' : 'Download failed');
-    }
-  };
-
-  const handleShare = async () => {
-    const shareUrl = window.location.href;
-    
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: video?.title || 'Wakti Video',
-          text: video?.description || (language === 'ar' ? 'شاهد هذا الفيديو' : 'Check out this video'),
-          url: shareUrl
-        });
-      } catch (e) {
-        // User cancelled
-      }
-    } else {
-      await navigator.clipboard.writeText(shareUrl);
-      toast.success(language === 'ar' ? 'تم نسخ الرابط' : 'Link copied');
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-
-  const formatDuration = (seconds: number | null) => {
-    if (!seconds) return '0:00';
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
+  // (Public share page intentionally has no back/share/download/stats controls)
 
   // Loading state
   if (loading) {
@@ -181,20 +147,6 @@ export default function VideoShare() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-lg border-b border-border">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Link to="/home" className="flex items-center gap-2 text-primary hover:opacity-80 transition-opacity">
-            <ArrowLeft className="h-5 w-5" />
-            <span className="font-medium">Wakti</span>
-          </Link>
-          <Button variant="outline" size="sm" onClick={handleShare}>
-            <Share2 className="h-4 w-4 mr-2" />
-            {language === 'ar' ? 'مشاركة' : 'Share'}
-          </Button>
-        </div>
-      </header>
-
       {/* Main content */}
       <main className="max-w-4xl mx-auto px-4 py-6 space-y-6">
         {/* Video player */}
@@ -217,62 +169,28 @@ export default function VideoShare() {
           )}
         </div>
 
-        {/* Video info */}
-        <div className="space-y-4">
-          {video.title && (
-            <h1 className="text-2xl font-bold">{video.title}</h1>
-          )}
-
-          {/* Stats */}
-          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-1">
-              <Eye className="h-4 w-4" />
-              <span>
-                {video.view_count} {language === 'ar' ? 'مشاهدة' : 'views'}
-              </span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Calendar className="h-4 w-4" />
-              <span>{formatDate(video.created_at)}</span>
-            </div>
-            {video.duration_seconds && (
-              <div className="flex items-center gap-1">
-                <Clock className="h-4 w-4" />
-                <span>{formatDuration(video.duration_seconds)}</span>
-              </div>
-            )}
-          </div>
-
-          {video.description && (
-            <p className="text-muted-foreground">{video.description}</p>
-          )}
-
-          {/* Actions */}
-          <div className="flex gap-3">
-            <Button onClick={handleDownload} className="flex-1">
-              <Download className="h-4 w-4 mr-2" />
-              {language === 'ar' ? 'تنزيل' : 'Download'}
-            </Button>
-            <Button variant="outline" onClick={handleShare} className="flex-1">
-              <Share2 className="h-4 w-4 mr-2" />
-              {language === 'ar' ? 'مشاركة' : 'Share'}
-            </Button>
-          </div>
-        </div>
-
         {/* Wakti branding */}
-        <Card className="p-4 bg-gradient-to-r from-primary/10 to-purple-500/10 border-primary/20">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium">
+        <Card className="p-4 enhanced-card">
+          <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+            <div className="flex items-center gap-3">
+              <img
+                src="/assets/wakti-eye-soft.svg"
+                alt="Wakti"
+                className="h-10 w-10 shrink-0"
+              />
+              <div className="space-y-1">
+              <p className="font-semibold">
                 {language === 'ar' ? 'أُنشئ بواسطة Wakti' : 'Created with Wakti'}
               </p>
               <p className="text-sm text-muted-foreground">
-                {language === 'ar' ? 'أنشئ فيديوهاتك الخاصة' : 'Create your own videos'}
+                {language === 'ar'
+                  ? 'جرب Wakti AI لصناعة فيديوهاتك ومحتواك في دقائق'
+                  : 'Try Wakti AI to create your own videos and content in minutes'}
               </p>
+              </div>
             </div>
-            <Link to="/signup">
-              <Button size="sm">
+            <Link to="/home" className="shrink-0">
+              <Button className="btn-enhanced w-full md:w-auto">
                 {language === 'ar' ? 'ابدأ الآن' : 'Get Started'}
               </Button>
             </Link>

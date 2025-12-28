@@ -66,6 +66,50 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
 
   // Google Cloud TTS via Edge Function (align with ChatMessages)
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const ttsRunIdRef = useRef(0);
+  const ttsQueueRef = useRef<{ runId: number; urls: string[]; index: number; chunks: string[] } | null>(null);
+  const cleanupQueue = () => {
+    const q = ttsQueueRef.current;
+    if (q?.urls?.length) {
+      for (const u of q.urls) {
+        try { URL.revokeObjectURL(u); } catch {}
+      }
+    }
+    ttsQueueRef.current = null;
+  };
+  const splitTtsText = (input: string, maxChars: number = 240): string[] => {
+    try {
+      const cleaned = String(input || '').replace(/\s+/g, ' ').trim();
+      if (!cleaned) return [];
+      if (cleaned.length <= maxChars) return [cleaned];
+      const parts = cleaned
+        .split(/(?<=[.!?\u061f])\s+/)
+        .map(s => s.trim())
+        .filter(Boolean);
+      const out: string[] = [];
+      let buf = '';
+      const flush = () => {
+        const v = buf.trim();
+        if (v) out.push(v);
+        buf = '';
+      };
+      for (const p of (parts.length ? parts : [cleaned])) {
+        if (p.length > maxChars) {
+          flush();
+          for (let i = 0; i < p.length; i += maxChars) out.push(p.slice(i, i + maxChars).trim());
+          continue;
+        }
+        if (!buf) buf = p;
+        else if ((buf.length + 1 + p.length) <= maxChars) buf = `${buf} ${p}`;
+        else { flush(); buf = p; }
+      }
+      flush();
+      return out.length ? out : [cleaned.slice(0, maxChars)];
+    } catch {
+      return [String(input || '').slice(0, maxChars)];
+    }
+  };
+
   const handleSpeak = async () => {
     try {
       const text = String(message.content || '').trim();
@@ -83,6 +127,8 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
       }
 
       // Stop any current playback
+      ttsRunIdRef.current += 1;
+      cleanupQueue();
       if (audioRef.current) {
         try { audioRef.current.pause(); } catch {}
         try { audioRef.current.currentTime = 0; } catch {}
@@ -100,37 +146,61 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
       const accessToken = sessionData.session?.access_token;
       const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
 
-      const resp = await fetch(`${supabaseUrl}/functions/v1/voice-tts`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'audio/mpeg',
-          ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
-        },
-        body: JSON.stringify({ text, voice_id, style: 'neutral' })
-      });
+      const runId = ttsRunIdRef.current;
+      const chunks = splitTtsText(text, 240);
+      const urls: string[] = [];
+      ttsQueueRef.current = { runId, urls, index: 0, chunks };
 
-      if (!resp.ok) {
-        setIsSpeaking(false);
-        toast.error(language === 'ar' ? 'خطأ' : 'Error', {
-          description: language === 'ar' ? 'فشل في توليد الصوت' : 'Failed to generate audio',
+      const fetchChunk = async (chunkText: string) => {
+        const resp = await fetch(`${supabaseUrl}/functions/v1/voice-tts`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'audio/mpeg, audio/*',
+            ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
+          },
+          body: JSON.stringify({ text: chunkText, voice_id, style: 'neutral' })
         });
-        return;
-      }
+        if (!resp.ok) {
+          const errText = await resp.text().catch(() => '');
+          throw new Error(`TTS failed: ${resp.status} ${errText}`);
+        }
+        const blob = await resp.blob();
+        return blob;
+      };
 
-      const blob = await resp.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      const audio = new Audio(objectUrl);
+      const audio = new Audio();
       audioRef.current = audio;
-      audio.onended = () => { setIsSpeaking(false); setIsPaused(false); try { URL.revokeObjectURL(objectUrl); } catch {} };
-      audio.onerror = () => { setIsSpeaking(false); setIsPaused(false); try { URL.revokeObjectURL(objectUrl); } catch {} };
       audio.onpause = () => setIsPaused(true);
       audio.onplay = () => setIsPaused(false);
-      await audio.play();
+      audio.onerror = () => { setIsSpeaking(false); setIsPaused(false); cleanupQueue(); };
+
+      const promises = chunks.map((c) => fetchChunk(c));
+      const playAt = async (idx: number) => {
+        const q = ttsQueueRef.current;
+        if (!q || q.runId !== runId) return;
+        if (idx >= q.chunks.length) {
+          setIsSpeaking(false);
+          setIsPaused(false);
+          cleanupQueue();
+          return;
+        }
+        q.index = idx;
+        const blob = await promises[idx];
+        const url = URL.createObjectURL(blob);
+        q.urls.push(url);
+        audio.src = url;
+        try { audio.load(); } catch {}
+        audio.onended = () => { playAt(idx + 1).catch(() => { setIsSpeaking(false); setIsPaused(false); cleanupQueue(); }); };
+        await audio.play();
+      };
+
+      await playAt(0);
     } catch (error) {
       console.error('Failed to play TTS:', error);
       setIsSpeaking(false);
       setIsPaused(false);
+      cleanupQueue();
     }
   };
 
