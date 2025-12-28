@@ -41,6 +41,12 @@ function isInNativeApp(): boolean {
   } catch (err) {
     console.log('[AppStoreBanner] NativelyInfo check failed:', err);
   }
+
+  // Fallback: the Natively wrapper typically injects these SDK globals only inside the native app
+  if ((window as any).NativelyPurchases || (window as any).NativelyNotifications) {
+    console.log('[AppStoreBanner] Detected Natively native app via native SDK globals');
+    return true;
+  }
   
   // Check for standalone PWA mode (home screen app)
   if (window.matchMedia('(display-mode: standalone)').matches) return true;

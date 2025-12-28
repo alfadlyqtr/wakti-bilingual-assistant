@@ -82,57 +82,8 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
     }
   }, [profile?.avatar_url, immediateAvatarUrl]);
 
-  // Convert public URL to signed URL to bypass CORS issues
-  const [signedAvatarUrl, setSignedAvatarUrl] = useState<string | undefined>(undefined);
-  
-  // Function to extract file path from avatar URL and get signed URL
-  const getSignedUrlFromPublicUrl = async (publicUrl: string) => {
-    try {
-      // Extract file path from public URL
-      // Format: https://xxx.supabase.co/storage/v1/object/public/avatars/{path}
-      const match = publicUrl.match(/\/avatars\/(.+)$/);
-      if (!match) return publicUrl; // Return original if can't parse
-      
-      const filePath = match[1].split('?')[0]; // Remove any query params
-      
-      const { data, error } = await supabase.storage
-        .from('avatars')
-        .createSignedUrl(filePath, 60 * 60); // 1 hour expiry
-      
-      if (error || !data?.signedUrl) {
-        console.error('Failed to get signed URL:', error);
-        return publicUrl; // Fallback to public URL
-      }
-      
-      return data.signedUrl;
-    } catch (err) {
-      console.error('Error getting signed URL:', err);
-      return publicUrl;
-    }
-  };
-
-  // Get signed URL when avatar URL changes
-  useEffect(() => {
-    const rawUrl = immediateAvatarUrl !== undefined ? immediateAvatarUrl : profile?.avatar_url;
-    
-    if (!rawUrl) {
-      setSignedAvatarUrl(undefined);
-      return;
-    }
-    
-    // If it's already a signed URL, use it directly
-    if (rawUrl.includes('token=')) {
-      setSignedAvatarUrl(getCacheBustedAvatarUrl(rawUrl));
-      return;
-    }
-    
-    // Convert public URL to signed URL
-    getSignedUrlFromPublicUrl(rawUrl).then(signedUrl => {
-      setSignedAvatarUrl(getCacheBustedAvatarUrl(signedUrl));
-    });
-  }, [immediateAvatarUrl, profile?.avatar_url, avatarKey]);
-
-  const avatarUrl = signedAvatarUrl;
+  const rawAvatarUrl = (immediateAvatarUrl !== undefined ? immediateAvatarUrl : profile?.avatar_url) || undefined;
+  const avatarUrl = getCacheBustedAvatarUrl(rawAvatarUrl?.trim());
   
   // Define menu items with icons and vibrant colors
   const menuItems = [

@@ -75,8 +75,8 @@ export function DesktopHeader() {
 
   // Get avatar URL - prefer immediate override, then profile data with cache-busting
   const avatarUrl = immediateAvatarUrl !== undefined 
-    ? (immediateAvatarUrl ? getCacheBustedAvatarUrl(immediateAvatarUrl) : undefined)
-    : (profile?.avatar_url ? getCacheBustedAvatarUrl(profile.avatar_url) : undefined);
+    ? (immediateAvatarUrl ? getCacheBustedAvatarUrl(immediateAvatarUrl.trim()) : undefined)
+    : (profile?.avatar_url ? getCacheBustedAvatarUrl(profile.avatar_url.trim()) : undefined);
   
   // Determine current page info
   const getPageTitleWithIcon = () => {

@@ -139,6 +139,25 @@ export function ProfileImageUpload() {
     return `${url}${separator}t=${timestamp}`;
   };
 
+  const extractAvatarStoragePath = (urlOrPath: string): string | null => {
+    const raw = (urlOrPath || '').trim();
+    if (!raw) return null;
+
+    const publicPrefix = '/storage/v1/object/public/avatars/';
+    const signedPrefix = '/storage/v1/object/sign/avatars/';
+    const idxPublic = raw.indexOf(publicPrefix);
+    if (idxPublic !== -1) {
+      return raw.slice(idxPublic + publicPrefix.length).split('?')[0] || null;
+    }
+    const idxSigned = raw.indexOf(signedPrefix);
+    if (idxSigned !== -1) {
+      return raw.slice(idxSigned + signedPrefix.length).split('?')[0] || null;
+    }
+
+    if (raw.includes('://')) return null;
+    return raw.split('?')[0] || null;
+  };
+
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !user) return;
@@ -181,26 +200,9 @@ export function ProfileImageUpload() {
 
       console.log('Upload successful:', uploadData);
 
-      // Get signed URL (more reliable than public URL for CORS)
-      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-        .from('avatars')
-        .createSignedUrl(fileName, 60 * 60 * 24 * 365); // 1 year expiry
-
-      if (signedUrlError) {
-        console.error('Signed URL error:', signedUrlError);
-        // Fallback to public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('avatars')
-          .getPublicUrl(fileName);
-        console.log('Fallback to public URL:', publicUrl);
-        var avatarUrlToSave = publicUrl;
-      } else {
-        console.log('Signed URL generated:', signedUrlData.signedUrl);
-        var avatarUrlToSave = signedUrlData.signedUrl;
-      }
-
-      // Update profile with new avatar URL (trim to prevent leading/trailing spaces)
-      const cleanUrl = avatarUrlToSave.trim();
+      // Store a stable public URL in DB (bucket is public)
+      const { data: publicData } = supabase.storage.from('avatars').getPublicUrl(fileName);
+      const cleanUrl = (publicData?.publicUrl || '').trim();
       const { error: updateError } = await supabase
         .from('profiles')
         .update({ 
@@ -253,6 +255,17 @@ export function ProfileImageUpload() {
     try {
       // Ensure profile exists
       await ensureProfileExists();
+
+      const currentUrl = (immediateAvatarUrl !== undefined ? immediateAvatarUrl : profile?.avatar_url) || '';
+      const currentPath = extractAvatarStoragePath(currentUrl);
+
+      if (currentPath) {
+        try {
+          await supabase.storage.from('avatars').remove([currentPath]);
+        } catch (e) {
+          console.error('Avatar storage delete error:', e);
+        }
+      }
 
       // Update profile to remove avatar URL
       const { error: updateError } = await supabase
@@ -311,57 +324,8 @@ export function ProfileImageUpload() {
       .slice(0, 2);
   };
 
-  // Convert public URL to signed URL to bypass CORS issues
-  const [signedAvatarUrl, setSignedAvatarUrl] = useState<string | undefined>(undefined);
-  
-  // Function to extract file path from avatar URL and get signed URL
-  const getSignedUrlFromPublicUrl = async (publicUrl: string) => {
-    try {
-      // Extract file path from public URL
-      // Format: https://xxx.supabase.co/storage/v1/object/public/avatars/{path}
-      const match = publicUrl.match(/\/avatars\/(.+)$/);
-      if (!match) return publicUrl; // Return original if can't parse
-      
-      const filePath = match[1].split('?')[0]; // Remove any query params
-      
-      const { data, error } = await supabase.storage
-        .from('avatars')
-        .createSignedUrl(filePath, 60 * 60); // 1 hour expiry
-      
-      if (error || !data?.signedUrl) {
-        console.error('Failed to get signed URL:', error);
-        return publicUrl; // Fallback to public URL
-      }
-      
-      return data.signedUrl;
-    } catch (err) {
-      console.error('Error getting signed URL:', err);
-      return publicUrl;
-    }
-  };
-
-  // Get signed URL when avatar URL changes
-  useEffect(() => {
-    const rawUrl = immediateAvatarUrl !== undefined ? immediateAvatarUrl : profile?.avatar_url;
-    
-    if (!rawUrl) {
-      setSignedAvatarUrl(undefined);
-      return;
-    }
-    
-    // If it's already a signed URL, use it directly
-    if (rawUrl.includes('token=')) {
-      setSignedAvatarUrl(getCacheBustedAvatarUrl(rawUrl));
-      return;
-    }
-    
-    // Convert public URL to signed URL
-    getSignedUrlFromPublicUrl(rawUrl).then(signedUrl => {
-      setSignedAvatarUrl(getCacheBustedAvatarUrl(signedUrl));
-    });
-  }, [immediateAvatarUrl, profile?.avatar_url, avatarKey]);
-
-  const avatarUrl = signedAvatarUrl;
+  const rawAvatarUrl = (immediateAvatarUrl !== undefined ? immediateAvatarUrl : profile?.avatar_url) || undefined;
+  const avatarUrl = getCacheBustedAvatarUrl(rawAvatarUrl?.trim());
 
   // Clear immediate override once profile is updated with the new URL
   useEffect(() => {
@@ -461,6 +425,8 @@ export function ProfileImageUpload() {
         capture="environment"
         onChange={handleImageUpload}
         className="hidden"
+        aria-label={language === 'ar' ? 'التقاط صورة للملف الشخصي' : 'Take profile picture'}
+        title={language === 'ar' ? 'التقاط صورة للملف الشخصي' : 'Take profile picture'}
         disabled={isUploading}
       />
 
@@ -470,6 +436,8 @@ export function ProfileImageUpload() {
         accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff"
         onChange={handleImageUpload}
         className="hidden"
+        aria-label={language === 'ar' ? 'رفع صورة للملف الشخصي' : 'Upload profile picture'}
+        title={language === 'ar' ? 'رفع صورة للملف الشخصي' : 'Upload profile picture'}
         disabled={isUploading}
       />
 

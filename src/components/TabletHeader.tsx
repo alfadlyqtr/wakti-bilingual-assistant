@@ -76,35 +76,45 @@ export function TabletHeader() {
 
   // Get avatar URL - prefer immediate override, then profile data with cache-busting
   const avatarUrl = immediateAvatarUrl !== undefined 
-    ? (immediateAvatarUrl ? getCacheBustedAvatarUrl(immediateAvatarUrl) : undefined)
-    : (profile?.avatar_url ? getCacheBustedAvatarUrl(profile.avatar_url) : undefined);
+    ? (immediateAvatarUrl ? getCacheBustedAvatarUrl(immediateAvatarUrl.trim()) : undefined)
+    : (profile?.avatar_url ? getCacheBustedAvatarUrl(profile.avatar_url.trim()) : undefined);
   
   // Define menu items with icons
   const menuItems = [
     { 
       title: language === 'ar' ? 'الإعدادات' : 'Settings', 
       href: '/settings',
-      icon: <Settings className="w-4 h-4 mr-2 text-muted-foreground" />
+      icon: <Settings className="w-4 h-4" />,
+      colorClass: 'text-blue-500',
+      hoverClass: 'hover:bg-blue-500/10'
     },
     { 
       title: language === 'ar' ? 'الحساب' : 'Account', 
       href: '/account',
-      icon: <Account className="w-4 h-4 mr-2 text-muted-foreground" />
+      icon: <Account className="w-4 h-4" />,
+      colorClass: 'text-purple-500',
+      hoverClass: 'hover:bg-purple-500/10'
     },
     { 
       title: t("help", language), 
       href: '/help',
-      icon: <Help className="w-4 h-4 mr-2 text-muted-foreground" />
+      icon: <Help className="w-4 h-4" />,
+      colorClass: 'text-green-500',
+      hoverClass: 'hover:bg-green-500/10'
     },
     { 
       title: language === 'ar' ? 'جهات الاتصال' : 'Contacts', 
       href: '/contacts',
-      icon: <Contacts className="w-4 h-4 mr-2 text-muted-foreground" />
+      icon: <Contacts className="w-4 h-4" />,
+      colorClass: 'text-cyan-500',
+      hoverClass: 'hover:bg-cyan-500/10'
     },
     { 
       title: language === 'ar' ? 'تسجيل الخروج' : 'Logout', 
       onClick: handleLogout,
-      icon: <LogOut className="w-4 h-4 mr-2 text-muted-foreground" />
+      icon: <LogOut className="w-4 h-4" />,
+      colorClass: 'text-red-500',
+      hoverClass: 'hover:bg-red-500/10'
     }
   ];
 
