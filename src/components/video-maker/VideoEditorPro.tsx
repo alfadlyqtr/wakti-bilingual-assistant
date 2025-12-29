@@ -1059,10 +1059,12 @@ export default function VideoEditorPro() {
         </div>
       </div>
 
-      {/* Preview + Tabs row on mobile */}
-      <div className="flex shrink-0 border-b bg-black/5 dark:bg-black/20">
-        {/* Small preview - draggable stickers & text */}
-        <div className="w-[100px] h-[140px] p-1.5 flex items-center justify-center shrink-0">
+      {/* Preview + Tabs - stacked vertically on mobile */}
+      <div className="flex flex-col shrink-0 border-b bg-black/5 dark:bg-black/20">
+        {/* Preview row */}
+        <div className="flex items-start gap-2 p-2">
+          {/* Small preview - draggable stickers & text */}
+          <div className="w-[90px] h-[120px] flex items-center justify-center shrink-0">
           {slide && (
             <div 
               className="relative w-full h-full rounded-lg overflow-hidden shadow-lg bg-black select-none" 
@@ -1127,20 +1129,14 @@ export default function VideoEditorPro() {
                 </div>
               ))}
               <div className="absolute top-1 left-1 px-1 py-0.5 rounded bg-black/60 text-white text-[8px] pointer-events-none">{selectedIdx + 1}/{project.slides.length}</div>
-              {(slide.stickers.length > 0 || slide.textOverlays.length > 0) && (
-                <div className="absolute bottom-1 inset-x-1 text-center">
-                  <span className="text-[7px] bg-black/60 text-white px-1 rounded">{language === 'ar' ? 'اسحب للتحريك' : 'Drag to move'}</span>
-                </div>
-              )}
             </div>
           )}
-        </div>
-        
-        {/* Tabs - vertical on mobile */}
-        <div className="flex-1 flex flex-col gap-2 p-1.5">
+          </div>
+          
+          {/* Duration slider next to preview */}
           {slide && (
-            <div className="w-full rounded-xl border border-border/60 bg-gradient-to-r from-[#060541]/10 to-[#e9ceb0]/25 dark:from-white/5 dark:to-white/0 p-2">
-              <div className="flex items-center justify-between mb-1">
+            <div className="flex-1 flex flex-col justify-center gap-1 min-w-0">
+              <div className="flex items-center justify-between">
                 <span className="text-[11px] font-semibold text-[#060541] dark:text-white">
                   {language === 'ar' ? 'المدة' : 'Duration'}
                 </span>
@@ -1149,7 +1145,7 @@ export default function VideoEditorPro() {
               <input
                 type="range"
                 min={0.1}
-                max={MAX_DURATION_SEC}
+                max={slide.mediaDurationSec && slide.mediaType === 'video' ? Math.min(MAX_DURATION_SEC, slide.mediaDurationSec) : MAX_DURATION_SEC}
                 step={0.1}
                 value={slide.durationSec}
                 onChange={e => updateSlide(slide.id, { durationSec: Math.max(0.1, Math.min(MAX_DURATION_SEC, parseFloat(e.target.value))) })}
@@ -1159,29 +1155,30 @@ export default function VideoEditorPro() {
               />
             </div>
           )}
-
-          <div className="w-full flex items-center gap-2 overflow-x-auto whitespace-nowrap">
+        </div>
+        
+        {/* Tabs row - horizontal scroll */}
+        <div className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap px-2 pb-2">
             {([
               { key: 'filters' as EditorTab, icon: Palette, label: language === 'ar' ? 'فلاتر' : 'Filters' },
               { key: 'text' as EditorTab, icon: Type, label: language === 'ar' ? 'نص' : 'Text' },
               { key: 'motion' as EditorTab, icon: Move, label: language === 'ar' ? 'حركة' : 'Motion' },
               { key: 'audio' as EditorTab, icon: Music, label: language === 'ar' ? 'صوت' : 'Audio' },
               { key: 'stickers' as EditorTab, icon: Smile, label: language === 'ar' ? 'ملصق' : 'Stickers' },
-            ]).map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`flex-none flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold transition-all border active:scale-95
-                  ${activeTab === tab.key
-                    ? 'bg-[#060541] text-white shadow-[0_8px_28px_hsla(210,100%,65%,0.22)] border-transparent'
-                    : 'bg-white/70 dark:bg-white/5 text-[#060541] dark:text-white border-border/60 hover:bg-white/90 dark:hover:bg-white/10'
-                  }`}
-              >
-                <tab.icon className="h-4 w-4" />
-                <span>{tab.label}</span>
-              </button>
-            ))}
-          </div>
+          ]).map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex-none flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold transition-all border active:scale-95
+                ${activeTab === tab.key
+                  ? 'bg-[#060541] text-white shadow-[0_8px_28px_hsla(210,100%,65%,0.22)] border-transparent'
+                  : 'bg-white/70 dark:bg-white/5 text-[#060541] dark:text-white border-border/60 hover:bg-white/90 dark:hover:bg-white/10'
+                }`}
+            >
+              <tab.icon className="h-4 w-4" />
+              <span>{tab.label}</span>
+            </button>
+          ))}
         </div>
       </div>
 

@@ -171,41 +171,40 @@ const GEMINI_VOICES = {
 };
 
 // System prompt for the "Wakti Elite" Vocal Engine (used in Gemini TTS prompt field)
-const WAKTI_VOCAL_PROMPT = `Role: You are the 'Wakti Elite' Vocal Engine. You are a professional Neural Actor.
-Objective: Deliver speech with regional prestige, natural prosody, and emotional intelligence.
+const WAKTI_VOCAL_PROMPT = `Role: You are the 'Wakti' Voice Engine. You are a professional, natural-sounding speaker.
+Objective: Deliver speech that is clear, friendly, and natural.
 
-1. ENGLISH (CANADIAN ELITE):
-   - Persona: A smart, professional technical lead from Toronto.
-   - Tone: Friendly, crisp, and neutral North American.
-   - Rules: Avoid exaggerated US accents. Keep vowels polite and rounded. Pace: 1.05x.
+1. ENGLISH (NEUTRAL NORTH AMERICAN):
+   - Tone: Friendly, crisp, natural, and easy to understand.
+   - Accent: Neutral North American (not exaggerated, not regional).
+   - Pace: Natural. Do not rush.
 
-2. ARABIC (GCC / QATARI MAJLIS):
-   - Persona: A high-status cultural attaché from Doha.
-   - Dialect: 100% White Khaliji (Qatari).
-   - Rules: ABSOLUTELY NO Formal MSA (Fusha). Soften 'Qaf' (ق) into a hard 'G'. 
-   - Suffixes: Use natural Gulf 'K' breaths. 
-   - Rhythm: Warm, rhythmic, and elite.
+2. ARABIC (NEUTRAL MODERN STANDARD ARABIC - فصحى مبسطة):
+   - Tone: Friendly, clear, and natural.
+   - Accent: Neutral Arabic (avoid strong regional dialect markers).
+   - Style: Modern Standard Arabic / simplified Fusha. Avoid slang.
 
-3. ADAPTIVE LOGIC:
-   - Greeting: Do not add any greeting. Read the provided text exactly as-is.
-   - Data: If reading sports/stocks, speak with precision and clarity.`;
+3. STRICT RULES:
+   - Do not add any greeting.
+   - Read the provided text exactly as-is.
+   - If reading numbers/dates, pronounce them clearly.`;
 
 // Build the style prompt for Gemini TTS based on language
 const getStylePrompt = (isArabic: boolean): string => {
   if (isArabic) {
     return `${WAKTI_VOCAL_PROMPT}
 
-For this text, use the ARABIC (GCC / QATARI MAJLIS) persona.
+For this text, use NEUTRAL MODERN STANDARD ARABIC (فصحى مبسطة).
 Hard requirements:
-- Pure Gulf / Khaliji / Qatari. NOT Egyptian. NOT Levantine. NOT MSA/Fusha.
-- Soften the Qaf (ق) into a hard G sound (گ) in pronunciation.
-- Warm, rhythmic majlis delivery with elite Doha vibe.
-- Avoid Egyptian markers/pronunciation (for example: إزايك / قوي / أوي).
+- No Egyptian dialect markers.
+- No Gulf dialect markers.
+- No Levantine dialect markers.
+- Keep it friendly and natural, but clearly MSA.
 Read the text exactly as provided (no added greetings).`;
   }
   return `${WAKTI_VOCAL_PROMPT}
 
-For this text, use the ENGLISH (CANADIAN ELITE) persona. Speak with friendly, crisp, neutral North American tone.`;
+For this text, use NEUTRAL NORTH AMERICAN ENGLISH. Friendly, crisp, natural.`;
 };
 
 // Phonetic anchors to force the AI into the correct accent mode
@@ -222,7 +221,7 @@ const isArabicText = (text: string): boolean => {
 
 // Get language code for Gemini TTS
 const getLanguageCode = (isArabic: boolean): string => {
-  return isArabic ? 'ar-EG' : 'en-US';
+  return isArabic ? 'ar-SA' : 'en-US';
 };
 
 // --- Helpers for robust long-text TTS ---

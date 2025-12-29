@@ -1,4 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { fetchFile } from '@ffmpeg/util';
 
 type TransitionType = 'fade' | 'slide-left' | 'slide-right' | 'zoom-in' | 'zoom-out' | 'wipe-left' | 'wipe-right' | 'dissolve' | 'none';
 type TextAnimation = 'none' | 'fade-in' | 'slide-up' | 'slide-down' | 'zoom-in' | 'typewriter' | 'bounce';
@@ -65,11 +67,75 @@ function easeOutQuad(t: number): number {
   return 1 - (1 - t) * (1 - t);
 }
 
+const FFMPEG_CORE_URL = '/ffmpeg';
+
 export function useCanvasVideo(): UseCanvasVideoReturn {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const ffmpegRef = useRef<FFmpeg | null>(null);
+  const ffmpegLoadedRef = useRef(false);
+
+  const convertWebmToMp4 = useCallback(async (webmBlob: Blob): Promise<Blob> => {
+    try {
+      if (!ffmpegRef.current) {
+        ffmpegRef.current = new FFmpeg();
+      }
+      const ffmpeg = ffmpegRef.current;
+
+      if (!ffmpegLoadedRef.current) {
+        setStatus('Loading video converter...');
+        const coreURL = `${FFMPEG_CORE_URL}/ffmpeg-core.js`;
+        const wasmURL = `${FFMPEG_CORE_URL}/ffmpeg-core.wasm`;
+        
+        const [coreBlob, wasmBlob] = await Promise.all([
+          fetch(coreURL).then(r => r.blob()),
+          fetch(wasmURL).then(r => r.blob()),
+        ]);
+        
+        await ffmpeg.load({
+          coreURL: URL.createObjectURL(coreBlob),
+          wasmURL: URL.createObjectURL(wasmBlob),
+        });
+        ffmpegLoadedRef.current = true;
+      }
+
+      setStatus('Converting to MP4 for iOS...');
+      
+      const inputData = await fetchFile(webmBlob);
+      await ffmpeg.writeFile('input.webm', inputData);
+      
+      await ffmpeg.exec([
+        '-i', 'input.webm',
+        '-c:v', 'libx264',
+        '-preset', 'fast',
+        '-crf', '23',
+        '-c:a', 'aac',
+        '-b:a', '128k',
+        '-movflags', '+faststart',
+        '-pix_fmt', 'yuv420p',
+        '-y',
+        'output.mp4'
+      ]);
+      
+      const outputData = await ffmpeg.readFile('output.mp4');
+      await ffmpeg.deleteFile('input.webm').catch(() => {});
+      await ffmpeg.deleteFile('output.mp4').catch(() => {});
+      
+      let blobPart: BlobPart;
+      if (outputData instanceof Uint8Array) {
+        blobPart = new Uint8Array(outputData);
+      } else {
+        blobPart = new Uint8Array(outputData as unknown as ArrayBuffer);
+      }
+      
+      return new Blob([blobPart], { type: 'video/mp4' });
+    } catch (e) {
+      console.error('[useCanvasVideo] FFmpeg conversion failed:', e);
+      return webmBlob;
+    }
+  }, []);
 
   const generateVideo = useCallback(async (options: VideoGenerationOptions): Promise<Blob | null> => {
     const {
@@ -713,7 +779,7 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
         mediaRecorder.stop();
       });
 
-      const videoBlob = new Blob(chunks, { type: mimeType });
+      let videoBlob = new Blob(chunks, { type: mimeType });
       
       mediaObjectUrls.forEach((u) => {
         try { URL.revokeObjectURL(u); } catch (_) {}
@@ -721,6 +787,18 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
       stream.getTracks().forEach(track => track.stop());
       if (audioContext) {
         try { audioContext.close(); } catch (_) {}
+      }
+
+      // Convert WebM to MP4 for iOS/Safari compatibility
+      const userAgent = navigator.userAgent || '';
+      const isIOSDevice = /iPad|iPhone|iPod/.test(userAgent) && !(window as any).MSStream;
+      const isSafariBrowser = /^((?!chrome|android).)*safari/i.test(userAgent);
+      const needsConversion = (isIOSDevice || isSafariBrowser) && mimeType.includes('webm');
+      
+      if (needsConversion) {
+        setProgress(85);
+        setStatus('Converting for iOS compatibility...');
+        videoBlob = await convertWebmToMp4(videoBlob);
       }
 
       setProgress(100);
@@ -742,7 +820,7 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
       setIsLoading(false);
       setStatus('');
     }
-  }, []);
+  }, [convertWebmToMp4]);
 
   return {
     generateVideo,
