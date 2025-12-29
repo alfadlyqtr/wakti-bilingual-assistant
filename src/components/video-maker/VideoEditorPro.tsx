@@ -955,13 +955,52 @@ export default function VideoEditorPro() {
   };
 
   const handleSave = async () => {
-    if (!user || !videoBlob) return; setIsSaving(true);
+    if (!user || !videoBlob) return; 
+    setIsSaving(true);
     try {
-      const ext = videoBlob.type.includes('webm') ? 'webm' : 'mp4';
-      const { data: up } = await supabase.storage.from('videos').upload(`${user.id}/${Date.now()}.${ext}`, videoBlob, { contentType: videoBlob.type });
-      const { data: db } = await (supabase as any).from('user_videos').insert({ user_id: user.id, title: project.title || null, storage_path: up?.path, duration_seconds: totalDur, is_public: project.isPublic }).select('id').single();
-      setSavedId((db as any).id); toast.success(language === 'ar' ? 'تم الحفظ!' : 'Saved!');
-    } catch (e) { console.error(e); toast.error(language === 'ar' ? 'فشل' : 'Failed'); } finally { setIsSaving(false); }
+      const isWebm = videoBlob.type.includes('webm');
+      const ext = isWebm ? 'webm' : 'mp4';
+      const fileName = `${user.id}/${Date.now()}.${ext}`;
+      
+      // Upload the video
+      const { data: up, error: uploadErr } = await supabase.storage.from('videos').upload(fileName, videoBlob, { contentType: videoBlob.type });
+      if (uploadErr) throw uploadErr;
+      
+      let finalPath = up?.path || fileName;
+      
+      // If WebM on iOS, trigger server-side conversion
+      const ua = navigator.userAgent || '';
+      const isIOS = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+      if (isWebm && isIOS && finalPath) {
+        try {
+          toast.info(language === 'ar' ? 'جاري تحويل الفيديو...' : 'Converting video for iOS...');
+          const { data: convData, error: convErr } = await supabase.functions.invoke('convert-webm-to-mp4', {
+            body: { storagePath: finalPath, bucket: 'videos' }
+          });
+          if (!convErr && convData?.storagePath) {
+            finalPath = convData.storagePath;
+          }
+        } catch (convE) {
+          console.warn('[VideoEditorPro] Server conversion failed, using WebM:', convE);
+        }
+      }
+      
+      const { data: db } = await (supabase as any).from('user_videos').insert({ 
+        user_id: user.id, 
+        title: project.title || null, 
+        storage_path: finalPath, 
+        duration_seconds: totalDur, 
+        is_public: project.isPublic 
+      }).select('id').single();
+      
+      setSavedId((db as any).id); 
+      toast.success(language === 'ar' ? 'تم الحفظ!' : 'Saved!');
+    } catch (e) { 
+      console.error(e); 
+      toast.error(language === 'ar' ? 'فشل' : 'Failed'); 
+    } finally { 
+      setIsSaving(false); 
+    }
   };
 
   const handleDownload = () => {

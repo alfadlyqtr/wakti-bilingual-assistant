@@ -1146,10 +1146,31 @@ function isWaktiInvolved(q: string) {
     if (!s) return false;
     const hasWakti = /\bwakti\b/i.test(s) || /وقتي/.test(s);
     if (!hasWakti) return false;
+    
     // Exclude dev/meta messages about building/debugging Wakti itself
     const devTerms = /\b(brain|prompt|supabase|model|edge function|deploy|debug|code|api|backend|frontend|gemini|openai|claude|anthropic)\b/i;
     if (devTerms.test(s)) return false;
-    return true;
+    
+    // If message is long (>150 chars), likely content that just mentions Wakti, not a help request
+    if (s.length > 150) return false;
+    
+    // Require question/help intent patterns near Wakti mention
+    // English question patterns
+    const enQuestionPatterns = /\b(what is|what's|how (do|can|to)|tell me about|explain|help( me)?( with)?|show me|where is|can you|could you|is there|does wakti|can wakti|will wakti|wakti (can|does|is|has|help|support|do|work))\b/i;
+    // Arabic question patterns
+    const arQuestionPatterns = /(ما هو|ماهو|وش هو|وشهو|شو هو|ايش|كيف|ليش|وين|فين|هل|ممكن|ساعدني|عرفني|قولي|اشرح|وضح|علمني|عطني|ابي اعرف|ودي اعرف|يقدر|تقدر|فيه|عنده)/;
+    // Short standalone mentions (just "wakti" or "wakti?" or "وقتي؟")
+    const shortStandalone = /^(wakti|وقتي)\s*[?؟]?\s*$/i;
+    // Direct help-seeking phrases
+    const helpPhrases = /\b(not working|doesn't work|broken|issue|problem|bug|error|stuck|confused|lost|مشكلة|ما يشتغل|خربان|مو شغال|ضايع|محتار)\b/i;
+    
+    if (enQuestionPatterns.test(s)) return true;
+    if (arQuestionPatterns.test(s)) return true;
+    if (shortStandalone.test(s)) return true;
+    if (helpPhrases.test(s)) return true;
+    
+    // No question/help intent detected - user just mentioned Wakti in content
+    return false;
   } catch {
     return false;
   }

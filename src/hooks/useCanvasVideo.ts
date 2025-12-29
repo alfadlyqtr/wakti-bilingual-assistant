@@ -77,7 +77,46 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
   const ffmpegRef = useRef<FFmpeg | null>(null);
   const ffmpegLoadedRef = useRef(false);
 
+  // Check if FFmpeg/SharedArrayBuffer is available on this device
+  const canUseFFmpeg = useCallback((): boolean => {
+    try {
+      // SharedArrayBuffer is required for FFmpeg.wasm
+      if (typeof SharedArrayBuffer === 'undefined') {
+        console.log('[useCanvasVideo] SharedArrayBuffer not available');
+        return false;
+      }
+      // iOS Safari has issues with FFmpeg even with SAB
+      const ua = navigator.userAgent || '';
+      const isIOS = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+      if (isIOS) {
+        console.log('[useCanvasVideo] Skipping FFmpeg on iOS - not reliable');
+        return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  // Check if we're on iOS
+  const isIOSDevice = useCallback((): boolean => {
+    const ua = navigator.userAgent || '';
+    return /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+  }, []);
+
   const convertWebmToMp4 = useCallback(async (webmBlob: Blob): Promise<Blob> => {
+    // On iOS, skip conversion entirely - we'll handle playback differently
+    if (isIOSDevice()) {
+      console.log('[useCanvasVideo] iOS device - skipping conversion, WebM will be handled by UI');
+      return webmBlob;
+    }
+
+    // Skip conversion if FFmpeg won't work reliably
+    if (!canUseFFmpeg()) {
+      console.log('[useCanvasVideo] FFmpeg not available, returning WebM');
+      return webmBlob;
+    }
+
     try {
       if (!ffmpegRef.current) {
         ffmpegRef.current = new FFmpeg();
@@ -101,7 +140,7 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
         ffmpegLoadedRef.current = true;
       }
 
-      setStatus('Converting to MP4 for iOS...');
+      setStatus('Converting to MP4...');
       
       const inputData = await fetchFile(webmBlob);
       await ffmpeg.writeFile('input.webm', inputData);
@@ -135,7 +174,7 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
       console.error('[useCanvasVideo] FFmpeg conversion failed:', e);
       return webmBlob;
     }
-  }, []);
+  }, [canUseFFmpeg, isIOSDevice]);
 
   const generateVideo = useCallback(async (options: VideoGenerationOptions): Promise<Blob | null> => {
     const {
@@ -789,15 +828,16 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
         try { audioContext.close(); } catch (_) {}
       }
 
-      // Convert WebM to MP4 for iOS/Safari compatibility
+      // Convert WebM to MP4 for Safari compatibility (desktop Safari only - iOS FFmpeg doesn't work)
       const userAgent = navigator.userAgent || '';
       const isIOSDevice = /iPad|iPhone|iPod/.test(userAgent) && !(window as any).MSStream;
       const isSafariBrowser = /^((?!chrome|android).)*safari/i.test(userAgent);
-      const needsConversion = (isIOSDevice || isSafariBrowser) && mimeType.includes('webm');
+      const isWebM = mimeType.includes('webm');
       
-      if (needsConversion) {
+      // Only attempt conversion on desktop Safari, not iOS
+      if (isSafariBrowser && !isIOSDevice && isWebM) {
         setProgress(85);
-        setStatus('Converting for iOS compatibility...');
+        setStatus('Converting to MP4...');
         videoBlob = await convertWebmToMp4(videoBlob);
       }
 
