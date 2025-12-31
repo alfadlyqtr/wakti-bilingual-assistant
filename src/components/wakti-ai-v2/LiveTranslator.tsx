@@ -106,6 +106,7 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
   const spokenLanguageRef = useRef(spokenLanguage);
   const voiceGenderRef = useRef(voiceGender);
   const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isProcessingResponseRef = useRef(false);
 
   const waitForIceGatheringComplete = useCallback((pc: RTCPeerConnection, timeoutMs = 5000) => {
     return new Promise<void>((resolve) => {
@@ -360,14 +361,19 @@ You are invisible. You are a voice that converts speech from one language to ${t
         console.log('[LiveTranslator] Instructions:', instructions);
         console.log('[LiveTranslator] Voice:', openaiVoice, '| Target:', targetLangName);
         
-        // Use manual turn detection - we control when to commit with hold-to-talk
+        // Use server VAD - OpenAI detects when user stops speaking and auto-responds ONCE
         dc.send(JSON.stringify({
           type: 'session.update',
           session: {
             instructions,
             voice: openaiVoice,
             input_audio_transcription: { model: 'whisper-1' },
-            turn_detection: null, // Manual - we control when user finishes speaking
+            turn_detection: {
+              type: 'server_vad',
+              threshold: 0.5,
+              prefix_padding_ms: 300,
+              silence_duration_ms: 800
+            }
           }
         }));
         
@@ -510,13 +516,21 @@ You are invisible. You are a voice that converts speech from one language to ${t
         
         if (transcript.length > 0) {
           console.log('[LiveTranslator] User said:', transcript);
-          // Trigger response
-          sendResponseCreate();
+          // Server VAD auto-triggers response - no need to call sendResponseCreate()
+          setStatus('processing');
         } else {
           console.log('[LiveTranslator] Empty transcript - user did not speak');
           setError(t('No speech detected. Try speaking louder/closer.', 'لم يتم التقاط صوت. حاول التحدث بصوت أعلى أو أقرب.'));
           setStatus('ready');
         }
+        break;
+      case 'response.created':
+        if (isProcessingResponseRef.current) {
+          console.log('[LiveTranslator] Already processing response, ignoring duplicate');
+          return;
+        }
+        isProcessingResponseRef.current = true;
+        console.log('[LiveTranslator] Response started');
         break;
       case 'response.audio_transcript.delta':
         // AI speaking - partial transcript
@@ -533,6 +547,7 @@ You are invisible. You are a voice that converts speech from one language to ${t
         break;
       case 'response.done':
         console.log('[LiveTranslator] Response complete');
+        isProcessingResponseRef.current = false;
         setStatus('ready');
         setError(null);
         break;
@@ -611,12 +626,9 @@ You are invisible. You are a voice that converts speech from one language to ${t
     }
 
     setIsHolding(false);
+    // With server VAD, OpenAI auto-detects silence and triggers response
+    // Just update UI - no need to commit buffer or create response
     setStatus('processing');
-
-    // Commit the audio buffer to trigger transcription
-    if (dcRef.current && dcRef.current.readyState === 'open') {
-      dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
-    }
 
     setTimeout(() => { isStoppingRef.current = false; }, 1000);
   }, []);

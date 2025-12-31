@@ -432,6 +432,60 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_logs: {
+        Row: {
+          cost_credits: number | null
+          created_at: string
+          duration_ms: number | null
+          error_message: string | null
+          function_name: string
+          id: string
+          input_tokens: number | null
+          metadata: Json | null
+          model: string | null
+          output_tokens: number | null
+          prompt: string | null
+          response: string | null
+          status: string
+          total_tokens: number | null
+          user_id: string | null
+        }
+        Insert: {
+          cost_credits?: number | null
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          function_name: string
+          id?: string
+          input_tokens?: number | null
+          metadata?: Json | null
+          model?: string | null
+          output_tokens?: number | null
+          prompt?: string | null
+          response?: string | null
+          status?: string
+          total_tokens?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          cost_credits?: number | null
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          function_name?: string
+          id?: string
+          input_tokens?: number | null
+          metadata?: Json | null
+          model?: string | null
+          output_tokens?: number | null
+          prompt?: string | null
+          response?: string | null
+          status?: string
+          total_tokens?: number | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       ai_quota_management: {
         Row: {
           chat_characters_used: number
@@ -934,6 +988,108 @@ export type Database = {
           text_color?: string | null
           title?: string
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      generated_files: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          download_url: string | null
+          error_message: string | null
+          expires_at: string | null
+          file_name: string
+          file_path: string
+          file_size_bytes: number | null
+          id: string
+          input_file_name: string | null
+          input_file_size_bytes: number | null
+          input_type: string
+          output_language: string
+          output_size: number
+          output_type: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          download_url?: string | null
+          error_message?: string | null
+          expires_at?: string | null
+          file_name: string
+          file_path: string
+          file_size_bytes?: number | null
+          id?: string
+          input_file_name?: string | null
+          input_file_size_bytes?: number | null
+          input_type: string
+          output_language: string
+          output_size: number
+          output_type: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          download_url?: string | null
+          error_message?: string | null
+          expires_at?: string | null
+          file_name?: string
+          file_path?: string
+          file_size_bytes?: number | null
+          id?: string
+          input_file_name?: string | null
+          input_file_size_bytes?: number | null
+          input_type?: string
+          output_language?: string
+          output_size?: number
+          output_type?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      help_manual: {
+        Row: {
+          chip_label_ar: string | null
+          chip_label_en: string | null
+          content_ar: string
+          content_en: string
+          created_at: string | null
+          id: string
+          route: string | null
+          section: string
+          tags: string[] | null
+          title_ar: string
+          title_en: string
+        }
+        Insert: {
+          chip_label_ar?: string | null
+          chip_label_en?: string | null
+          content_ar: string
+          content_en: string
+          created_at?: string | null
+          id?: string
+          route?: string | null
+          section: string
+          tags?: string[] | null
+          title_ar: string
+          title_en: string
+        }
+        Update: {
+          chip_label_ar?: string | null
+          chip_label_en?: string | null
+          content_ar?: string
+          content_en?: string
+          created_at?: string | null
+          id?: string
+          route?: string | null
+          section?: string
+          tags?: string[] | null
+          title_ar?: string
+          title_en?: string
         }
         Relationships: []
       }
@@ -1604,38 +1760,41 @@ export type Database = {
       notification_history: {
         Row: {
           body: string
+          created_at: string | null
           data: Json | null
           deep_link: string | null
-          delivery_status: string
           id: string
-          notification_type: string
-          progressier_response: Json | null
-          sent_at: string
+          is_read: boolean | null
+          push_sent: boolean | null
+          push_sent_at: string | null
           title: string
+          type: string
           user_id: string
         }
         Insert: {
           body: string
+          created_at?: string | null
           data?: Json | null
           deep_link?: string | null
-          delivery_status?: string
           id?: string
-          notification_type: string
-          progressier_response?: Json | null
-          sent_at?: string
+          is_read?: boolean | null
+          push_sent?: boolean | null
+          push_sent_at?: string | null
           title: string
+          type: string
           user_id: string
         }
         Update: {
           body?: string
+          created_at?: string | null
           data?: Json | null
           deep_link?: string | null
-          delivery_status?: string
           id?: string
-          notification_type?: string
-          progressier_response?: Json | null
-          sent_at?: string
+          is_read?: boolean | null
+          push_sent?: boolean | null
+          push_sent_at?: string | null
           title?: string
+          type?: string
           user_id?: string
         }
         Relationships: []
@@ -1762,6 +1921,45 @@ export type Database = {
           },
         ]
       }
+      presentation_slide_audio: {
+        Row: {
+          created_at: string | null
+          duration_ms: number | null
+          id: string
+          language: string
+          presentation_id: string
+          slide_index: number
+          storage_path: string
+          text_hash: string
+          user_id: string
+          voice_gender: string
+        }
+        Insert: {
+          created_at?: string | null
+          duration_ms?: number | null
+          id?: string
+          language: string
+          presentation_id: string
+          slide_index: number
+          storage_path: string
+          text_hash: string
+          user_id: string
+          voice_gender: string
+        }
+        Update: {
+          created_at?: string | null
+          duration_ms?: number | null
+          id?: string
+          language?: string
+          presentation_id?: string
+          slide_index?: number
+          storage_path?: string
+          text_hash?: string
+          user_id?: string
+          voice_gender?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           auto_approve_contacts: boolean | null
@@ -1782,6 +1980,7 @@ export type Database = {
           is_logged_in: boolean | null
           is_subscribed: boolean | null
           is_suspended: boolean | null
+          language: string | null
           last_name: string | null
           last_seen: string | null
           next_billing_date: string | null
@@ -1793,6 +1992,7 @@ export type Database = {
           subscription_status: string | null
           suspended_at: string | null
           suspended_by: string | null
+          suspended_until: string | null
           suspension_reason: string | null
           trial_popup_shown: boolean | null
           updated_at: string | null
@@ -1817,6 +2017,7 @@ export type Database = {
           is_logged_in?: boolean | null
           is_subscribed?: boolean | null
           is_suspended?: boolean | null
+          language?: string | null
           last_name?: string | null
           last_seen?: string | null
           next_billing_date?: string | null
@@ -1828,6 +2029,7 @@ export type Database = {
           subscription_status?: string | null
           suspended_at?: string | null
           suspended_by?: string | null
+          suspended_until?: string | null
           suspension_reason?: string | null
           trial_popup_shown?: boolean | null
           updated_at?: string | null
@@ -1852,6 +2054,7 @@ export type Database = {
           is_logged_in?: boolean | null
           is_subscribed?: boolean | null
           is_suspended?: boolean | null
+          language?: string | null
           last_name?: string | null
           last_seen?: string | null
           next_billing_date?: string | null
@@ -1863,6 +2066,7 @@ export type Database = {
           subscription_status?: string | null
           suspended_at?: string | null
           suspended_by?: string | null
+          suspended_until?: string | null
           suspension_reason?: string | null
           trial_popup_shown?: boolean | null
           updated_at?: string | null
@@ -1906,6 +2110,48 @@ export type Database = {
           message_id?: string
           saved_at?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      saved_tts: {
+        Row: {
+          audio_url: string | null
+          created_at: string | null
+          duration_seconds: number | null
+          expires_at: string | null
+          id: string
+          source: string
+          storage_path: string | null
+          text: string
+          user_id: string
+          voice_id: string | null
+          voice_name: string
+        }
+        Insert: {
+          audio_url?: string | null
+          created_at?: string | null
+          duration_seconds?: number | null
+          expires_at?: string | null
+          id?: string
+          source?: string
+          storage_path?: string | null
+          text: string
+          user_id: string
+          voice_id?: string | null
+          voice_name: string
+        }
+        Update: {
+          audio_url?: string | null
+          created_at?: string | null
+          duration_seconds?: number | null
+          expires_at?: string | null
+          id?: string
+          source?: string
+          storage_path?: string | null
+          text?: string
+          user_id?: string
+          voice_id?: string | null
+          voice_name?: string
         }
         Relationships: []
       }
@@ -1988,8 +2234,8 @@ export type Database = {
       }
       subscriptions: {
         Row: {
-          billing_amount: number
-          billing_currency: string
+          billing_amount: number | null
+          billing_currency: string | null
           billing_cycle: string
           created_at: string | null
           fawran_payment_id: string | null
@@ -1997,7 +2243,7 @@ export type Database = {
           gift_given_by: string | null
           id: string
           is_gift: boolean | null
-          next_billing_date: string
+          next_billing_date: string | null
           payment_method: string | null
           plan_name: string
           start_date: string
@@ -2006,8 +2252,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          billing_amount: number
-          billing_currency?: string
+          billing_amount?: number | null
+          billing_currency?: string | null
           billing_cycle?: string
           created_at?: string | null
           fawran_payment_id?: string | null
@@ -2015,7 +2261,7 @@ export type Database = {
           gift_given_by?: string | null
           id?: string
           is_gift?: boolean | null
-          next_billing_date: string
+          next_billing_date?: string | null
           payment_method?: string | null
           plan_name: string
           start_date: string
@@ -2024,8 +2270,8 @@ export type Database = {
           user_id: string
         }
         Update: {
-          billing_amount?: number
-          billing_currency?: string
+          billing_amount?: number | null
+          billing_currency?: string | null
           billing_cycle?: string
           created_at?: string | null
           fawran_payment_id?: string | null
@@ -2033,7 +2279,7 @@ export type Database = {
           gift_given_by?: string | null
           id?: string
           is_gift?: boolean | null
-          next_billing_date?: string
+          next_billing_date?: string | null
           payment_method?: string | null
           plan_name?: string
           start_date?: string
@@ -2177,6 +2423,8 @@ export type Database = {
           due_date: string | null
           due_time: string | null
           id: string
+          notified_at: string | null
+          snoozed_until: string | null
           title: string
           updated_at: string
           user_id: string
@@ -2187,6 +2435,8 @@ export type Database = {
           due_date?: string | null
           due_time?: string | null
           id?: string
+          notified_at?: string | null
+          snoozed_until?: string | null
           title: string
           updated_at?: string
           user_id: string
@@ -2197,6 +2447,8 @@ export type Database = {
           due_date?: string | null
           due_time?: string | null
           id?: string
+          notified_at?: string | null
+          snoozed_until?: string | null
           title?: string
           updated_at?: string
           user_id?: string
@@ -2371,6 +2623,7 @@ export type Database = {
           due_time: string | null
           id: string
           is_shared: boolean
+          notified_at: string | null
           priority: string
           share_link: string | null
           snoozed_until: string | null
@@ -2388,6 +2641,7 @@ export type Database = {
           due_time?: string | null
           id?: string
           is_shared?: boolean
+          notified_at?: string | null
           priority?: string
           share_link?: string | null
           snoozed_until?: string | null
@@ -2405,6 +2659,7 @@ export type Database = {
           due_time?: string | null
           id?: string
           is_shared?: boolean
+          notified_at?: string | null
           priority?: string
           share_link?: string | null
           snoozed_until?: string | null
@@ -2733,6 +2988,48 @@ export type Database = {
         }
         Relationships: []
       }
+      user_presentations: {
+        Row: {
+          created_at: string
+          id: string
+          language: string
+          share_token: string | null
+          share_url: string | null
+          slides_data: Json
+          theme: string
+          thumbnail_url: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          language?: string
+          share_token?: string | null
+          share_url?: string | null
+          slides_data?: Json
+          theme?: string
+          thumbnail_url?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          language?: string
+          share_token?: string | null
+          share_url?: string | null
+          slides_data?: Json
+          theme?: string
+          thumbnail_url?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_push_subscriptions: {
         Row: {
           created_at: string
@@ -2856,6 +3153,117 @@ export type Database = {
         }
         Relationships: []
       }
+      user_translations: {
+        Row: {
+          created_at: string
+          id: string
+          preview_image_storage_path: string | null
+          source_filename: string | null
+          source_mime_type: string | null
+          source_storage_path: string | null
+          source_text_length: number | null
+          target_language: string
+          translated_pdf_storage_path: string
+          translated_text: string | null
+          translated_text_length: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          preview_image_storage_path?: string | null
+          source_filename?: string | null
+          source_mime_type?: string | null
+          source_storage_path?: string | null
+          source_text_length?: number | null
+          target_language: string
+          translated_pdf_storage_path: string
+          translated_text?: string | null
+          translated_text_length?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          preview_image_storage_path?: string | null
+          source_filename?: string | null
+          source_mime_type?: string | null
+          source_storage_path?: string | null
+          source_text_length?: number | null
+          target_language?: string
+          translated_pdf_storage_path?: string
+          translated_text?: string | null
+          translated_text_length?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_videos: {
+        Row: {
+          aspect_ratio: string | null
+          audio_source: string | null
+          audio_storage_path: string | null
+          audio_track_id: string | null
+          created_at: string | null
+          description: string | null
+          duration_seconds: number | null
+          id: string
+          is_public: boolean | null
+          slides: Json | null
+          storage_path: string | null
+          style_template: string | null
+          thumbnail_url: string | null
+          title: string | null
+          updated_at: string | null
+          user_id: string
+          video_url: string | null
+          view_count: number | null
+        }
+        Insert: {
+          aspect_ratio?: string | null
+          audio_source?: string | null
+          audio_storage_path?: string | null
+          audio_track_id?: string | null
+          created_at?: string | null
+          description?: string | null
+          duration_seconds?: number | null
+          id?: string
+          is_public?: boolean | null
+          slides?: Json | null
+          storage_path?: string | null
+          style_template?: string | null
+          thumbnail_url?: string | null
+          title?: string | null
+          updated_at?: string | null
+          user_id: string
+          video_url?: string | null
+          view_count?: number | null
+        }
+        Update: {
+          aspect_ratio?: string | null
+          audio_source?: string | null
+          audio_storage_path?: string | null
+          audio_track_id?: string | null
+          created_at?: string | null
+          description?: string | null
+          duration_seconds?: number | null
+          id?: string
+          is_public?: boolean | null
+          slides?: Json | null
+          storage_path?: string | null
+          style_template?: string | null
+          thumbnail_url?: string | null
+          title?: string | null
+          updated_at?: string | null
+          user_id?: string
+          video_url?: string | null
+          view_count?: number | null
+        }
+        Relationships: []
+      }
       user_voice_characters_quotas: {
         Row: {
           extra_characters: number
@@ -2916,54 +3324,6 @@ export type Database = {
           voice_description?: string | null
           voice_id?: string
           voice_name?: string
-        }
-        Relationships: []
-      }
-      user_translations: {
-        Row: {
-          created_at: string
-          id: string
-          preview_image_storage_path: string | null
-          source_filename: string | null
-          source_mime_type: string | null
-          source_storage_path: string | null
-          source_text_length: number | null
-          target_language: string
-          translated_pdf_storage_path: string
-          translated_text: string | null
-          translated_text_length: number | null
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          preview_image_storage_path?: string | null
-          source_filename?: string | null
-          source_mime_type?: string | null
-          source_storage_path?: string | null
-          source_text_length?: number | null
-          target_language: string
-          translated_pdf_storage_path: string
-          translated_text?: string | null
-          translated_text_length?: number | null
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          preview_image_storage_path?: string | null
-          source_filename?: string | null
-          source_mime_type?: string | null
-          source_storage_path?: string | null
-          source_text_length?: number | null
-          target_language?: string
-          translated_pdf_storage_path?: string
-          translated_text?: string | null
-          translated_text_length?: number | null
-          updated_at?: string
-          user_id?: string
         }
         Relationships: []
       }
@@ -3046,6 +3406,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_voice_usage_monthly: {
+        Row: {
+          characters_used: number
+          monthly_date: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          characters_used?: number
+          monthly_date: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          characters_used?: number
+          monthly_date?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       user_whoop_tokens: {
         Row: {
@@ -3443,6 +3824,18 @@ export type Database = {
       admin_activate_subscription:
         | {
             Args: {
+              p_billing_amount?: number
+              p_billing_currency?: string
+              p_fawran_payment_id?: string
+              p_payment_method?: string
+              p_paypal_subscription_id?: string
+              p_plan_name: string
+              p_user_id: string
+            }
+            Returns: boolean
+          }
+        | {
+            Args: {
               p_billing_amount: number
               p_billing_currency?: string
               p_fawran_payment_id?: string
@@ -3454,18 +3847,6 @@ export type Database = {
               p_user_id: string
             }
             Returns: Json
-          }
-        | {
-            Args: {
-              p_billing_amount?: number
-              p_billing_currency?: string
-              p_fawran_payment_id?: string
-              p_payment_method?: string
-              p_paypal_subscription_id?: string
-              p_plan_name: string
-              p_user_id: string
-            }
-            Returns: boolean
           }
       admin_adjust_feature_quota: {
         Args: {
@@ -3521,6 +3902,61 @@ export type Database = {
           user_id: string
         }[]
       }
+      admin_get_ai_function_names: {
+        Args: never
+        Returns: {
+          function_name: string
+        }[]
+      }
+      admin_get_ai_logs: {
+        Args: {
+          p_from?: string
+          p_function_name?: string
+          p_limit?: number
+          p_model?: string
+          p_page?: number
+          p_status?: string
+          p_to?: string
+          p_user_id?: string
+        }
+        Returns: {
+          cost_credits: number
+          created_at: string
+          duration_ms: number
+          error_message: string
+          function_name: string
+          id: string
+          input_tokens: number
+          metadata: Json
+          model: string
+          output_tokens: number
+          prompt: string
+          response: string
+          status: string
+          total_tokens: number
+          user_display_name: string
+          user_email: string
+          user_id: string
+        }[]
+      }
+      admin_get_ai_logs_stats: {
+        Args: { p_from?: string; p_to?: string }
+        Returns: {
+          error_calls: number
+          success_calls: number
+          success_rate: number
+          total_calls: number
+          total_cost: number
+          total_tokens: number
+          unique_users: number
+        }[]
+      }
+      admin_get_ai_models: {
+        Args: never
+        Returns: {
+          model: string
+        }[]
+      }
       admin_get_music_generations_monthly: {
         Args: { p_month: string; p_user_id: string }
         Returns: Json
@@ -3540,46 +3976,15 @@ export type Database = {
         Args: { p_month?: string; p_user_id: string }
         Returns: Json
       }
-      admin_get_user_full_profile:
-        | {
-            Args: {
-              p_from?: string
-              p_plan_name?: string
-              p_to?: string
-              p_user_id: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_from?: string
-              p_plan_type?: string
-              p_to?: string
-              p_user_id: string
-            }
-            Returns: {
-              billing_amount: number
-              billing_currency: string
-              billing_cycle: string
-              characters_limit: number
-              characters_used: number
-              display_name: string
-              email: string
-              extra_characters: number
-              gift_duration: string
-              gift_given_by: string
-              is_gift: boolean
-              is_subscribed: boolean
-              next_billing_date: string
-              profile_id: string
-              profile_plan_name: string
-              start_date: string
-              subscription_id: string
-              subscription_plan_name: string
-              subscription_status: string
-              subscription_status_detail: string
-            }[]
-          }
+      admin_get_user_full_profile: {
+        Args: {
+          p_from?: string
+          p_plan_name?: string
+          p_to?: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       admin_get_user_usage: {
         Args: { p_month?: string; p_scope?: string; p_user_id: string }
         Returns: Json
@@ -3658,13 +4063,27 @@ export type Database = {
       check_browsing_quota: { Args: { p_user_id: string }; Returns: number }
       cleanup_expired_ai_data: { Args: never; Returns: undefined }
       cleanup_expired_chat_history: { Args: never; Returns: undefined }
+      cleanup_expired_generated_files: { Args: never; Returns: undefined }
       cleanup_expired_maw3d_events: { Args: never; Returns: undefined }
       cleanup_expired_summaries: { Args: never; Returns: undefined }
       cleanup_expired_voice_clones: { Args: never; Returns: undefined }
       cleanup_old_conversation_summaries: { Args: never; Returns: undefined }
       cleanup_old_conversations: { Args: never; Returns: undefined }
       cleanup_old_messages: { Args: never; Returns: undefined }
+      cleanup_user_translations_after_20_days: { Args: never; Returns: number }
+      create_notification: {
+        Args: {
+          p_body: string
+          p_data?: Json
+          p_deep_link?: string
+          p_title: string
+          p_type: string
+          p_user_id: string
+        }
+        Returns: string
+      }
       deactivate_expired_gift_subscriptions: { Args: never; Returns: undefined }
+      delete_user_account: { Args: never; Returns: Json }
       ensure_user_feature_quota: {
         Args: { p_feature: string; p_user_id: string }
         Returns: {
@@ -3860,6 +4279,10 @@ export type Database = {
           translation_count: number
         }[]
       }
+      increment_voice_usage_monthly: {
+        Args: { p_characters: number; p_user_id: string }
+        Returns: undefined
+      }
       is_admin: { Args: never; Returns: boolean }
       is_letters_host: { Args: { gid: string }; Returns: boolean }
       is_letters_member: { Args: { gid: string }; Returns: boolean }
@@ -3901,21 +4324,42 @@ export type Database = {
           term_norm: string
         }[]
       }
-      log_ai_usage: {
-        Args: {
-          p_has_browsing?: boolean
-          p_model_used: string
-          p_tokens_used?: number
-          p_user_id: string
-        }
-        Returns: undefined
-      }
+      log_ai_usage:
+        | {
+            Args: {
+              p_cost_credits?: number
+              p_duration_ms?: number
+              p_error_message?: string
+              p_function_name: string
+              p_input_tokens?: number
+              p_metadata?: Json
+              p_model?: string
+              p_output_tokens?: number
+              p_prompt?: string
+              p_response?: string
+              p_status?: string
+              p_user_id: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_has_browsing?: boolean
+              p_model_used: string
+              p_tokens_used?: number
+              p_user_id: string
+            }
+            Returns: undefined
+          }
       maintain_conversation_limit: { Args: never; Returns: undefined }
       mark_messages_as_read: {
         Args: { other_user_id: string }
         Returns: undefined
       }
+      master_delete_user: { Args: { p_user_id: string }; Returns: Json }
+      process_due_notifications: { Args: never; Returns: number }
       process_expired_subscriptions: { Args: never; Returns: Json }
+      process_pending_push_notifications: { Args: never; Returns: number }
       process_stuck_fawran_payments: { Args: never; Returns: Json }
       process_translation_credits_purchase: {
         Args: { p_amount: number; p_transaction_id: string; p_user_id: string }
@@ -3972,9 +4416,9 @@ export type Database = {
           p_body: string
           p_data?: Json
           p_deep_link?: string
-          p_notification_type: string
           p_scheduled_for?: string
           p_title: string
+          p_type: string
           p_user_id: string
         }
         Returns: string
@@ -4006,16 +4450,27 @@ export type Database = {
         Returns: string
       }
       setup_notification_cron_job: { Args: never; Returns: Json }
+      setup_saved_tts_cleanup_cron_job: { Args: never; Returns: Json }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       soft_delete_user: {
         Args: { p_admin_id: string; p_user_id: string }
         Returns: boolean
       }
-      suspend_user: {
-        Args: { p_admin_id: string; p_reason?: string; p_user_id: string }
-        Returns: boolean
-      }
+      suspend_user:
+        | {
+            Args: { p_admin_id: string; p_reason?: string; p_user_id: string }
+            Returns: boolean
+          }
+        | {
+            Args: {
+              p_admin_id: string
+              p_reason?: string
+              p_until?: string
+              p_user_id: string
+            }
+            Returns: boolean
+          }
       test_user_voice_quota_access: {
         Args: { p_user_id: string }
         Returns: Json
