@@ -2258,19 +2258,17 @@ const PresentationTab: React.FC = () => {
         if (updateError) throw updateError;
         if (!silent) toast.success(language === 'ar' ? 'تم حفظ العرض' : 'Presentation saved');
       } else {
-        const insertPayload: Record<string, unknown> = {
-          user_id: user.id,
-          title,
-          theme: selectedTheme,
-          language,
-          slides_data: slidesData,
-          share_url: generatedShareUrl,
-        };
-        if (thumbnailUrl) insertPayload.thumbnail_url = thumbnailUrl;
-        
         const { data: newPres, error: insertError } = await supabase
           .from('user_presentations')
-          .insert(insertPayload)
+          .insert({
+            user_id: user.id,
+            title,
+            theme: selectedTheme,
+            language,
+            slides_data: slidesData as unknown as import('@/integrations/supabase/types').Json,
+            share_url: generatedShareUrl,
+            thumbnail_url: thumbnailUrl || null,
+          })
           .select('id')
           .single();
 
@@ -2382,7 +2380,7 @@ const PresentationTab: React.FC = () => {
             title,
             theme,
             language: lang,
-            slides_data: slidesData,
+            slides_data: slidesData as unknown as import('@/integrations/supabase/types').Json,
             share_url: shareUrl,
           });
 
@@ -2419,7 +2417,8 @@ const PresentationTab: React.FC = () => {
       setCurrentPresentationId(data.id);
       setSelectedTheme(data.theme as ThemeKey);
       setGeneratedShareUrl(data.share_url);
-      setSlides(data.slides_data as Slide[]);
+      const loadedSlides = Array.isArray(data.slides_data) ? (data.slides_data as unknown as Slide[]) : [];
+      setSlides(loadedSlides);
       setCurrentStep('slides');
       setActiveTab('create');
       
