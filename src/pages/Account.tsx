@@ -121,10 +121,13 @@ const TrialCountdown = ({ startAt, language, onSubscribeClick }: { startAt: stri
 
 // Helper function to open native subscription management
 const openManageSubscriptions = () => {
+  // iPad with iPadOS 13+ reports as Macintosh, so we need to check for touch support too
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isIPadOS = navigator.userAgent.includes('Macintosh') && 'ontouchend' in document;
+  const isAppleDevice = isIOS || isIPadOS;
   
-  if (isIOS) {
-    // Use the App Store deep link scheme for iOS
+  if (isAppleDevice) {
+    // Use the App Store deep link scheme for iOS/iPadOS
     // This opens the native subscription management screen
     window.location.href = 'itms-apps://apps.apple.com/account/subscriptions';
   } else {
