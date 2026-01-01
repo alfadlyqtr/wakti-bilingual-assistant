@@ -361,19 +361,14 @@ You are invisible. You are a voice that converts speech from one language to ${t
         console.log('[LiveTranslator] Instructions:', instructions);
         console.log('[LiveTranslator] Voice:', openaiVoice, '| Target:', targetLangName);
         
-        // Use server VAD - OpenAI detects when user stops speaking and auto-responds ONCE
+        // Manual turn detection - user controls when to commit audio (no VAD)
         dc.send(JSON.stringify({
           type: 'session.update',
           session: {
             instructions,
             voice: openaiVoice,
             input_audio_transcription: { model: 'whisper-1' },
-            turn_detection: {
-              type: 'server_vad',
-              threshold: 0.5,
-              prefix_padding_ms: 300,
-              silence_duration_ms: 800
-            }
+            turn_detection: null
           }
         }));
         
@@ -516,7 +511,10 @@ You are invisible. You are a voice that converts speech from one language to ${t
         
         if (transcript.length > 0) {
           console.log('[LiveTranslator] User said:', transcript);
-          // Server VAD auto-triggers response - no need to call sendResponseCreate()
+          // Manual mode: trigger response once transcription is complete
+          if (!isProcessingResponseRef.current) {
+            sendResponseCreate();
+          }
           setStatus('processing');
         } else {
           console.log('[LiveTranslator] Empty transcript - user did not speak');
@@ -584,12 +582,17 @@ You are invisible. You are a voice that converts speech from one language to ${t
 
     isStoppingRef.current = false;
     isHoldingRef.current = true;
+    isProcessingResponseRef.current = false; // Reset response guard
     setError(null);
     setStatus('listening');
     setUserTranscript('');
     setTranslatedText('');
     setCountdown(MAX_RECORD_SECONDS);
     holdStartRef.current = Date.now();
+
+    // Clear any leftover audio in buffer before listening
+    dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
+    console.log('[LiveTranslator] Audio buffer cleared, listening started');
 
     // Start countdown
     countdownIntervalRef.current = setInterval(() => {
@@ -626,9 +629,13 @@ You are invisible. You are a voice that converts speech from one language to ${t
     }
 
     setIsHolding(false);
-    // With server VAD, OpenAI auto-detects silence and triggers response
-    // Just update UI - no need to commit buffer or create response
     setStatus('processing');
+    
+    // Manual mode: commit the audio buffer to signal end of user speech
+    if (dcRef.current && dcRef.current.readyState === 'open') {
+      dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+      console.log('[LiveTranslator] Audio buffer committed on release');
+    }
 
     setTimeout(() => { isStoppingRef.current = false; }, 1000);
   }, []);
