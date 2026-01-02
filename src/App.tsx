@@ -76,6 +76,7 @@ import LettersJoin from "./pages/LettersJoin";
 import LettersPlay from "./pages/LettersPlay";
 import LettersResults from "./pages/LettersResults";
 import PresentationSharePlayer from "./pages/PresentationSharePlayer";
+import MyWarranty from "./pages/MyWarranty";
 
 import "./App.css";
 
@@ -319,6 +320,11 @@ function App() {
                 <Route path="/tools/game" element={
                   <GiftNotificationProvider>
                     <AppLayout><GameMode /></AppLayout>
+                  </GiftNotificationProvider>
+                } />
+                <Route path="/my-warranty" element={
+                  <GiftNotificationProvider>
+                    <AppLayout><MyWarranty /></AppLayout>
                   </GiftNotificationProvider>
                 } />
                 

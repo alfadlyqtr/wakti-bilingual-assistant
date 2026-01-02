@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { cn } from "@/lib/utils";
-import { Calendar, CalendarClock, Mic, Sparkles, ListTodo, LayoutDashboard, PenTool, Gamepad2, HeartPulse, NotebookPen, Music, AudioLines } from "lucide-react";
+import { Calendar, CalendarClock, Mic, Sparkles, ListTodo, LayoutDashboard, PenTool, Gamepad2, HeartPulse, NotebookPen, Music, AudioLines, Shield } from "lucide-react";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { waktiBadges } from "@/services/waktiBadges";
 import { motion } from "framer-motion";
@@ -127,6 +127,12 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
       path: '/tasjeel', 
       icon: 'audio-lines',
       colorClass: 'text-cyan-500',
+    },
+    {
+      name: language === 'ar' ? 'ضماناتي' : 'My Warranty',
+      path: '/my-warranty',
+      icon: 'shield',
+      colorClass: 'text-emerald-500',
     }
   ];
 
@@ -165,6 +171,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
     'notebook-pen': NotebookPen,
     music: Music,
     'audio-lines': AudioLines,
+    'shield': Shield,
   };
 
   const handleNavigation = (path: string, badgeType?: string) => {
@@ -301,6 +308,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                     isActive && item.path === '/wakti-ai' && "from-orange-500/20 to-orange-600/20 shadow-orange-500/50 border border-orange-500/30",
                     isActive && item.path === '/journal' && "from-pink-500/20 to-pink-600/20 shadow-pink-500/50 border border-pink-500/30",
                     isActive && item.path === '/tasjeel' && "from-cyan-500/20 to-cyan-600/20 shadow-cyan-500/50 border border-cyan-500/30",
+                    isActive && item.path === '/my-warranty' && "from-emerald-500/20 to-emerald-600/20 shadow-emerald-500/50 border border-emerald-500/30",
                     // Initial off-screen state until icons stage
                     animationStage === 'icons' ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-3 scale-[0.98]"
                   )}
@@ -331,7 +339,8 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                             item.path === '/tr' ? 'hsl(var(--accent-green))' :
                             item.path === '/wakti-ai' ? 'hsl(var(--accent-orange))' :
                             item.path === '/music' ? '#d946ef' :
-                            item.path === '/tasjeel' ? '#06b6d4' : '#3b82f6',
+                            item.path === '/tasjeel' ? '#06b6d4' :
+                            item.path === '/my-warranty' ? '#10b981' : '#3b82f6',
                           boxShadow: `0 0 28px ${
                             item.path === '/dashboard' ? '#3b82f6' :
                             item.path === '/calendar' ? 'hsl(var(--accent-blue))' :
@@ -357,6 +366,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                   <span className={cn(
                     "text-sm font-medium drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]",
                     item.path === '/tasjeel' ? "text-cyan-500" : "",
+                    item.path === '/my-warranty' ? "whitespace-nowrap text-xs" : "",
                     isActive ? "text-foreground font-semibold" : "text-muted-foreground",
                     // Add glow to active text
                     isActive && "drop-shadow-[0_0_8px_currentColor]"

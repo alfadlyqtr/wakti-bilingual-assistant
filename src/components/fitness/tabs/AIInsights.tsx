@@ -679,17 +679,18 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
     setQaLastQuestion(q); // display user's input above answer
     setQaQuestion(""); // clear textarea immediately
     const context = buildQAContext();
-    // Immediate local draft to ensure user sees feedback instantly
-    const localDraft = buildLocalFallbackAnswer(q, topic, context);
-    setQaAnswer(localDraft);
+    
     try {
       console.log('[QA] asking:', { q, topic, context });
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-      // Ensure fresh WHOOP data
-      try { await triggerUserSync(); } catch (syncErr) { console.warn('WHOOP sync skipped', syncErr); }
-      const dataFull = await buildInsightsAggregate();
+      
+      // OPTIMIZATION: Don't block on sync/aggregate if we already have metrics
+      // This saves ~10-15 seconds of latency
+      const dataFull = aiData || await buildInsightsAggregate();
+      
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
+      
       const call = supabase.functions.invoke('whoop-ai-qa', {
         body: {
           mode: 'qa',
@@ -704,19 +705,13 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
           'x-supabase-authorization': `Bearer ${accessToken}`
         }
       });
+      
       const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('qa_timeout')), 25000));
       const { data: resp, error }: any = await Promise.race([call, timeout]);
       if (error) throw error;
+      
       console.log('[QA] response:', resp);
-      let answer: any = '';
-      if (resp) {
-        // Try common fields
-        answer = resp.answer ?? resp.message ?? resp.text ?? resp.content ?? '';
-        // If nested
-        if (!answer && resp.data) {
-          answer = resp.data.answer ?? resp.data.message ?? '';
-        }
-      }
+      
       // Normalize to a clean string without JSON braces
       const normalizeAnswer = (input: any): string => {
         try {
@@ -733,7 +728,6 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
             return s;
           }
           if (typeof input === 'object') {
-            // If object has WHY/Today/Tonight keys, format lines
             const obj = input as Record<string, any>;
             if (obj.WHY || obj.Today || obj.Tonight) {
               const parts: string[] = [];
@@ -742,32 +736,41 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
               if (obj.Tonight) parts.push(String(obj.Tonight).replace(/\bTonight\s*:\s*/i, '').trim());
               return parts.join(' ');
             }
-            // If object has 'answer' that is string or object
             if (obj.answer) return normalizeAnswer(obj.answer);
-            // Fallback: join values that are short strings
             const vals = Object.values(obj).filter(v => typeof v === 'string' && (v as string).length < 500) as string[];
             if (vals.length) return vals.join(' ');
             return '';
           }
           return String(input);
-        } catch {
-          return '';
-        }
+        } catch { return ''; }
       };
 
-      const answerStr = normalizeAnswer(answer);
-      const follow = resp?.clarifying_question || resp?.data?.clarifying_question || undefined;
-      setQaAnswer(answerStr || localDraft);
-      setQaFollowup(follow);
-    } catch (e: any) {
-      console.error('[QA] error:', e?.message || e, e);
-      // Local fallback to ensure user sees something helpful
-      try {
-        setQaAnswer(localDraft);
-        setQaError(null);
-      } catch {
-        setQaError(language === 'ar' ? 'تعذر الحصول على إجابة الآن' : 'Could not get an answer right now');
+      let answer: any = '';
+      let followup: string | undefined = undefined;
+      
+      if (resp) {
+        answer = resp.answer ?? resp.message ?? resp.text ?? resp.content ?? '';
+        followup = resp.clarifying_question ?? resp.followup ?? undefined;
+        
+        if (!answer && resp.data) {
+          answer = resp.data.answer ?? resp.data.message ?? '';
+          followup = followup ?? resp.data.clarifying_question ?? resp.data.followup;
+        }
       }
+
+      const answerStr = normalizeAnswer(answer);
+      if (!answerStr) {
+        const localDraft = buildLocalFallbackAnswer(q, topic, context);
+        setQaAnswer(localDraft);
+      } else {
+        setQaAnswer(answerStr);
+        setQaFollowup(followup);
+      }
+    } catch (error) {
+      console.error('QA error:', error);
+      const localDraft = buildLocalFallbackAnswer(q, topic, context);
+      setQaAnswer(localDraft);
+      toast.error(language === 'ar' ? 'فشل الاتصال بالذكاء الاصطناعي. تم استخدام رد محلي.' : 'AI connection failed. Using local response.');
     } finally {
       setQaLoading(false);
     }

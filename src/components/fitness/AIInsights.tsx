@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/providers/ThemeProvider";
-import { buildInsightsAggregate, generateAiInsights, pingAiInsights } from "@/services/whoopService";
+import { buildInsightsAggregate, generateAiInsights, getSavedInsight, pingAiInsights } from "@/services/whoopService";
 import { Copy, Download, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 // Charts for insights have been moved to the Overview tab. Keep recharts imports out of this file to avoid bundle weight.
@@ -25,6 +25,24 @@ export function AIInsights() {
       try {
         const data = await buildInsightsAggregate();
         setAgg(data);
+        
+        // AUTO-LOAD CACHED INSIGHTS for ALL windows on mount
+        const windows: ('morning' | 'midday' | 'evening')[] = ['morning', 'midday', 'evening'];
+        const currentHour = new Date().getHours();
+        let autoWindow: 'morning' | 'midday' | 'evening' = 'evening';
+        if (currentHour >= 4 && currentHour < 12) autoWindow = 'morning';
+        else if (currentHour >= 12 && currentHour < 20) autoWindow = 'midday';
+
+        for (const win of windows) {
+          const cached = await getSavedInsight(win);
+          if (cached) {
+            // If it's the active window and no AI data yet, set it
+            if (win === autoWindow) {
+              setAi(cached);
+              setPhase('ready');
+            }
+          }
+        }
       } catch (e) {
         console.error("aggregate error", e);
         toast.error(language === 'ar' ? 'تعذر تحميل البيانات' : 'Failed to load data');
@@ -38,7 +56,41 @@ export function AIInsights() {
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [language]);
 
-  // Charts moved to Overview; no local chart data here.
+  const activeWindow = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour >= 4 && hour < 12) return 'morning';
+    if (hour >= 12 && hour < 20) return 'midday';
+    return 'evening';
+  }, [lastSyncTime]);
+
+  // Handle time window switching with cache support
+    useEffect(() => {
+        if (selectedTimeOfDay !== 'auto') {
+            (async () => {
+                const cached = await getSavedInsight(selectedTimeOfDay);
+                if (cached) {
+                    setAi(cached);
+                    setPhase('ready');
+                } else {
+                    setAi({});
+                    setPhase('idle');
+                }
+            })();
+        } else {
+            // Auto mode: check cache for the active window
+            (async () => {
+                const win = activeWindow;
+                const cached = await getSavedInsight(win);
+                if (cached) {
+                    setAi(cached);
+                    setPhase('ready');
+                } else {
+                    setAi({});
+                    setPhase('idle');
+                }
+            })();
+        }
+    }, [selectedTimeOfDay, activeWindow]);
 
   const onGenerate = async () => {
     try {
@@ -72,12 +124,14 @@ export function AIInsights() {
       let timeOfDay: string;
       if (selectedTimeOfDay === 'auto') {
         const hour = new Date().getHours();
-        // Morning: 5:00 AM - 11:50 AM (5-11)
-        // Midday: 12:00 PM - 5:50 PM (12-17)
-        // Evening: 6:00 PM - 12:00 AM (18-23, 0-4)
-        if (hour >= 5 && hour < 12) {
+        
+        // Refined Logic (Matching UI labels in Vitality Dashboard):
+        // Morning: 4:00 AM - 11:59 AM (Focus: Sleep analysis & Daily prep)
+        // Midday: 12:00 PM - 7:59 PM (Focus: Activity & Mid-day flow)
+        // Evening: 8:00 PM - 3:59 AM (Focus: Wind-down & Next-day prep)
+        if (hour >= 4 && hour < 12) {
           timeOfDay = 'morning';
-        } else if (hour >= 12 && hour < 18) {
+        } else if (hour >= 12 && hour < 20) {
           timeOfDay = 'midday';
         } else {
           timeOfDay = 'evening';
@@ -100,7 +154,8 @@ export function AIInsights() {
       const resp = await generateAiInsights(language as 'en'|'ar', {
         data: freshData,
         time_of_day: timeOfDay,
-        user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        force_refresh: true // Always force refresh when user clicks "Generate"
       });
       
       console.log('=== AI RESPONSE RECEIVED ===');
@@ -177,46 +232,56 @@ export function AIInsights() {
         <div className="flex gap-2 mb-3">
           <button
             onClick={() => { setSelectedTimeOfDay('auto'); setTimeout(() => onGenerate(), 100); }}
-            className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+            className={`px-3 py-1.5 text-xs rounded-lg transition-colors flex items-center gap-1.5 ${
               selectedTimeOfDay === 'auto' 
-                ? 'bg-purple-500 text-white' 
+                ? 'bg-purple-500 text-white shadow-[0_0_15px_rgba(168,85,247,0.5)]' 
                 : 'bg-white/10 text-gray-300 hover:bg-white/20'
             }`}
           >
             {language === 'ar' ? 'تلقائي' : 'Auto'}
+            {selectedTimeOfDay === 'auto' && <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
           </button>
           <button
             onClick={() => { setSelectedTimeOfDay('morning'); setTimeout(() => onGenerate(), 100); }}
-            className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
-              selectedTimeOfDay === 'morning' 
-                ? 'bg-amber-500 text-white' 
+            className={`px-3 py-1.5 text-xs rounded-lg transition-colors relative ${
+              (selectedTimeOfDay === 'morning' || (selectedTimeOfDay === 'auto' && activeWindow === 'morning'))
+                ? 'bg-amber-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.5)]' 
                 : 'bg-white/10 text-gray-300 hover:bg-white/20'
             }`}
           >
             🌅 {language === 'ar' ? 'صباح' : 'Morning'}
-            <span className="ml-1 text-[10px] opacity-70">5-11:50 AM</span>
+            <span className="ml-1 text-[10px] opacity-70">4-12 PM</span>
+            {(selectedTimeOfDay === 'auto' && activeWindow === 'morning') && (
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0c0f14] z-10" />
+            )}
           </button>
           <button
             onClick={() => { setSelectedTimeOfDay('midday'); setTimeout(() => onGenerate(), 100); }}
-            className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
-              selectedTimeOfDay === 'midday' 
-                ? 'bg-orange-500 text-white' 
+            className={`px-3 py-1.5 text-xs rounded-lg transition-colors relative ${
+              (selectedTimeOfDay === 'midday' || (selectedTimeOfDay === 'auto' && activeWindow === 'midday'))
+                ? 'bg-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.5)]' 
                 : 'bg-white/10 text-gray-300 hover:bg-white/20'
             }`}
           >
             ☀️ {language === 'ar' ? 'ظهر' : 'Midday'}
-            <span className="ml-1 text-[10px] opacity-70">12-5:50 PM</span>
+            <span className="ml-1 text-[10px] opacity-70">12-8 PM</span>
+            {(selectedTimeOfDay === 'auto' && activeWindow === 'midday') && (
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0c0f14] z-10" />
+            )}
           </button>
           <button
             onClick={() => { setSelectedTimeOfDay('evening'); setTimeout(() => onGenerate(), 100); }}
-            className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
-              selectedTimeOfDay === 'evening' 
-                ? 'bg-indigo-500 text-white' 
+            className={`px-3 py-1.5 text-xs rounded-lg transition-colors relative ${
+              (selectedTimeOfDay === 'evening' || (selectedTimeOfDay === 'auto' && activeWindow === 'evening'))
+                ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]' 
                 : 'bg-white/10 text-gray-300 hover:bg-white/20'
             }`}
           >
             🌙 {language === 'ar' ? 'مساء' : 'Evening'}
-            <span className="ml-1 text-[10px] opacity-70">6 PM-12 AM</span>
+            <span className="ml-1 text-[10px] opacity-70">8 PM-4 AM</span>
+            {(selectedTimeOfDay === 'auto' && activeWindow === 'evening') && (
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0c0f14] z-10" />
+            )}
           </button>
         </div>
         

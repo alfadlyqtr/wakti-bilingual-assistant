@@ -14,7 +14,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Gamepad2,
-  Music
+  Music,
+  Shield
 } from "lucide-react";
 import { t } from "@/utils/translations";
 import { Logo3D } from "@/components/Logo3D";
@@ -43,6 +44,7 @@ export function TabletSidebar() {
     { icon: Music, label: "music", path: "/music" },
     { icon: Gamepad2, label: "games", path: "/games" },
     { icon: Mic, label: "tasjeel", path: "/tasjeel" },
+    { icon: Shield, label: "my_warranty", path: "/my-warranty" },
   ];
 
   const bottomNavItems: NavItemProps[] = [];  // Remove settings and knowledge
@@ -131,7 +133,7 @@ export function TabletSidebar() {
         </div>
 
         {/* Main Navigation */}
-        <div className="flex-1">
+        <div className="flex-1 overflow-y-auto scrollbar-hide">
           <nav className="space-y-1">
             {navItems.map((item) => {
               const isActive = location.pathname === item.path || 
@@ -149,6 +151,7 @@ export function TabletSidebar() {
                   case '/music': return 'text-fuchsia-500';
                   case '/games': return 'text-indigo-500';
                   case '/tasjeel': return 'text-cyan-500';
+                  case '/my-warranty': return 'text-emerald-500';
                   default: return '';
                 }
               };

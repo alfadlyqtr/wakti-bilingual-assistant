@@ -28,7 +28,11 @@ async function refreshToken(refresh_token: string, client_id: string, client_sec
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: body.toString(),
   });
-  if (!res.ok) throw new Error(`refresh failed ${res.status}`);
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("whoop-sync: refresh failed", res.status, text);
+    throw new Error(`refresh failed ${res.status} ${text}`);
+  }
   return res.json();
 }
 
@@ -123,8 +127,10 @@ serve(async (req: Request) => {
     let users: { user_id: string; access_token: string; refresh_token: string; expires_at: string; last_synced_at: string | null }[] = [];
 
     if (mode === "user") {
-      const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: {} } });
-      const { data: userData } = await userClient.auth.getUser(bareToken);
+      // Pass the token directly to getUser() - it validates the JWT and returns user info
+      const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      const { data: userData, error: userErr } = await userClient.auth.getUser(bareToken);
+      console.log("whoop-sync user mode:", { hasToken: !!bareToken, tokenLen: bareToken?.length, uid: userData?.user?.id, userErr: userErr?.message });
       const uid = userData?.user?.id;
       if (!uid) {
         console.warn("whoop-sync: no uid from auth.getUser()", {
@@ -241,9 +247,12 @@ serve(async (req: Request) => {
           // Fetch user profile and body measurements (no date params needed)
           withRetry401(async () => {
             const r = await fetch(USER_PROFILE_URL, { headers: { Authorization: `Bearer ${accessToken}` } });
-            console.log('USER_PROFILE_URL response status:', r.status);
+            const text = await r.text();
+            console.log('USER_PROFILE_URL response:', r.status, text);
+            
             if (r.status === 401) { const err: any = new Error('401 profile'); err.status = 401; throw err; }
-            if (!r.ok) return null; return await r.json();
+            if (!r.ok) return null; 
+            try { return JSON.parse(text); } catch { return null; }
           }),
           withRetry401(async () => {
             const r = await fetch(USER_BODY_URL, { headers: { Authorization: `Bearer ${accessToken}` } });

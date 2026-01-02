@@ -88,4 +88,7 @@ export const ar = {
   // Wakti Presentations
   waktiPresentationsTitle: "عروض وقتي",
   waktiPresentationsDesc: "أنشئ شرائح وملخصات ومخططات احترافية فوراً بالذكاء الاصطناعي",
+  
+  // My Warranty
+  my_warranty: "ضماناتي",
 };

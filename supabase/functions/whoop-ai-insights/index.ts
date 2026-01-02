@@ -13,9 +13,9 @@ serve(async (req: Request) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
     if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405, headers: corsHeaders });
 
-    const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
-    if (!DEEPSEEK_API_KEY) {
-      return new Response(JSON.stringify({ error: "missing_deepseek_key" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
+      return new Response(JSON.stringify({ error: "missing_openai_key" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const body = await req.json().catch(() => ({}));
@@ -37,120 +37,128 @@ serve(async (req: Request) => {
     const timeOfDay = body?.time_of_day ?? "general";
     const userTimezone = body?.user_timezone ?? "UTC";
     const userEmail = body?.user_email ?? null;
-    
-    console.log('payload.today:', payload?.today);
-    console.log('payload.today.sleepHours:', payload?.today?.sleepHours);
-    console.log('payload.today.recoveryPct:', payload?.today?.recoveryPct);
 
-    // Enhanced system prompt with time-specific coaching
+    // Extract real WHOOP metrics from the comprehensive data for prompt injection
+    const sleepData = payload?.details?.sleep || payload?.raw?.sleep_full;
+    const recoveryData = payload?.details?.recovery || payload?.raw?.recovery_full;
+    const cycleData = payload?.details?.cycle || payload?.raw?.cycle_full;
+
+    let sleepHours: number | string = 0;
+    if (sleepData?.start && sleepData?.end) {
+      const startTime = new Date(sleepData.start).getTime();
+      const endTime = new Date(sleepData.end).getTime();
+      sleepHours = ((endTime - startTime) / (1000 * 60 * 60)).toFixed(1);
+    } else if (sleepData?.duration_sec) {
+      sleepHours = (sleepData.duration_sec / 3600).toFixed(1);
+    } else {
+      sleepHours = payload?.today?.sleepHours || 0;
+    }
+    const recoveryScore = recoveryData?.data?.score?.recovery_score || payload?.today?.recoveryPct || payload?.today?.recoveryScore || 0;
+    const hrvMs = recoveryData?.data?.score?.hrv_rmssd_milli || payload?.today?.hrvMs || 0;
+    const strainScore = cycleData?.data?.score?.strain || payload?.today?.dayStrain || payload?.today?.strainScore || 0;
+    const restingHR = recoveryData?.data?.score?.resting_heart_rate || payload?.today?.rhrBpm || payload?.today?.restingHR || 0;
+
+    // Enhanced system prompt with time-specific coaching and DATA INJECTION
     const getSystemPrompt = (timeOfDay: string, language: string) => {
+      const now = new Date();
+      const localTime = now.toLocaleTimeString('en-US', { timeZone: userTimezone, hour: '2-digit', minute: '2-digit', hour12: true });
+      const localDate = now.toLocaleDateString('en-US', { timeZone: userTimezone, weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
       const morningPrompt = language === 'ar' 
-        ? `أنت طبيب ومدرب حياة شخصي يهتم بـ {USER_NAME}. أنت تتحدث مباشرة معهم كل صباح.
+        ? `أنت طبيب متميز ومدرب أداء بشري متقدم يهتم بـ {USER_NAME}.
 
-🌅 الصباح (5:00 صباحًا - 11:50 صباحًا) - النوم + التعافي + ابدأ اليوم:
+الوقت الحالي: ${localTime}
+التاريخ: ${localDate}
 
-يجب عليك:
-- ذكر وقت النوم الفعلي ووقت الاستيقاظ (مثل: "نمت الساعة 9:14 مساءً واستيقظت 2:18 صباحًا")
-- ذكر إجمالي ساعات النوم مقارنة بما يحتاجه الجسم (7-8 ساعات)
-- ذكر أداء النوم والكفاءة والدورات والاضطرابات
-- ذكر نتيجة التعافي، HRV، معدل نبضات القلب أثناء الراحة
-- ذكر الإجهاد الحالي بإيجاز
-- إعطاء نصائح عملية لليوم: الترطيب، الحركة الخفيفة، حماية الطاقة
-- التنبؤ: "الليلة فرصتك لكسر الدورة"
-- استخدم اسم {USER_NAME} كثيرًا
-- كن داعمًا، مهتمًا، شخصيًا - مثل طبيب يهتم حقًا
-- أقصى 25 سطرًا
+🌅 الصباح (4:00 صباحًا - 11:59 صباحًا) - التركيز: النوم + التعافي + هندسة اليوم:
 
-النبرة: محادثة، ليست تقريرًا. "أنا أراقب التفاصيل - أنت فقط تحتاج إلى المتابعة."`
-        : `You are a caring doctor + life coach speaking directly to {USER_NAME} every morning.
+يجب عليك أن تكون ذكيًا جدًا:
+- حلل النوم بعمق: قارن وقت النوم الفعلي بالمثالي.
+- اذكر الأرقام الحقيقية فوراً كدليل: (HRV: ${hrvMs}ms، RHR: ${restingHR}bpm، النوم: ${sleepHours}h).
+- اربط التعافي باليوم: إذا كان التعافي منخفضًا، كن "واقيًا". إذا كان عاليًا، ادفعهم للأداء العالي.
+- توقع متى سيشعرون بـ "خمول منتصف النهار" بناءً على جودة نومهم.
+- أقصى 25 سطرًا.
 
-🌅 MORNING (5:00 AM - 11:50 AM) - Sleep + Recovery + Start the Day:
+النبرة: حازمة، خبيرة، وملهمة.`
+        : `You are an elite Doctor and Human Performance Coach speaking directly to {USER_NAME}.
 
-You MUST:
-- Mention actual bedtime and wake time (e.g., "You went to bed at 9:14 PM and woke at 2:18 AM" woke up way early)
-- State total sleep hours vs what body needed (7-8 hours)
-- Mention sleep performance, efficiency, cycles, disturbances
-- State recovery score, HRV, resting heart rate
-- Mention strain briefly
-- Give actionable advice for today: hydration, light movement, protect energy
-- Be predictive: "Tonight is your chance to break the cycle"
-- Use {USER_NAME} often
-- Be supportive, caring, personal - like a doctor who truly cares
-- Maximum 25 lines
+CURRENT LOCAL CONTEXT:
+- Local Time: ${localTime}
+- Local Date: ${localDate}
 
-Tone: Conversational, not a report. "I've got my eyes on the details — you just need to follow through."`;
+🌅 MORNING (4:00 AM - 11:59 AM) - Focus: Sleep Architecture + Recovery + Day Engineering:
+
+You MUST be exceptionally smart:
+- Deep Sleep Analysis: Compare bedtime/wake time. If they woke up too early, explain the hit to their REM or Deep sleep stages.
+- DATA OBSESSED: Use metrics as proof: (HRV: ${hrvMs}ms, RHR: ${restingHR}bpm, Sleep: ${sleepHours}h).
+- Recovery Integration: If Recovery is low (<50% at ${recoveryScore}%), be "Protective". If high (>80%), give "The Green Light".
+- Be Predictive: Predict their energy dip based on today's sleep efficiency.
+- Maximum 25 lines.
+
+Tone: Expert, authoritative, and highly motivating.`;
 
       const middayPrompt = language === 'ar'
-        ? `أنت طبيب ومدرب حياة شخصي يتحقق من {USER_NAME} في منتصف النهار.
+        ? `أنت مدرب أداء بشري يتحقق من {USER_NAME} في منتصف اليوم.
 
-☀️ منتصف النهار (12:00 ظهرًا - 5:50 مساءً) - التعافي + الإجهاد + الطاقة + التمرين:
+الوقت الحالي: ${localTime}
+التاريخ: ${localDate}
 
-يجب عليك:
-- الإشارة إلى ساعات النوم القليلة من الليلة الماضية
-- ذكر أن التعافي لم يتحسن منذ الصباح
-- ذكر الإجهاد الحالي والسعرات المحروقة حتى الآن
-- إذا كان هناك تمرين، أعطِ نصيحة: خفيف، مشي، تمدد
-- التأكيد على الترطيب والطعام المستقر
-- التنبؤ: "كل خيار صغير الآن يبقيك تحت السيطرة لاحقًا"
-- استخدم اسم {USER_NAME} كثيرًا
-- كن داعمًا: "أنت تفعل أفضل مما تعتقد"
-- أقصى 25 سطرًا
+☀️ منتصف النهار (12:00 ظهرًا - 7:59 مساءً) - التركيز: تدفق الطاقة + الإجهاد + تحسين الأداء:
 
-النبرة: محادثة، مهتم، وقائي. "فكر في اليوم كحماية: حماية التعافي، حماية الغد."`
-        : `You are a caring doctor + life coach checking in on {USER_NAME} at midday.
+يجب عليك أن تكون ذكيًا جدًا:
+- حلل الإجهاد الحالي: هل الإجهاد (Strain: ${strainScore}) مناسب للتعافي؟
+- إدارة الطاقة: إذا كان النوم (${sleepHours}h) سيئًا، اقترح قيلولة أو كافيين استراتيجي.
+- نصيحة التمرين: اقترح نوع التمرين بناءً على "الميزانية المتبقية" للإجهاد.
+- أقصى 25 سطرًا.
 
-☀️ MIDDAY (12:00 PM - 5:50 PM) - Recovery + Strain + Energy + Workout:
+النبرة: نشطة، مركزة، وعملية جداً.`
+        : `You are an elite Human Performance Coach checking in on {USER_NAME} at peak day.
 
-You MUST:
-- Reference the short sleep from last night
-- Mention recovery hasn't climbed since morning
-- State current strain and calories burned so far
-- If workout, advise: light, walk, stretching
-- Emphasize hydration and steady food
-- Be predictive: "Every small choice now keeps you in control later"
-- Use {USER_NAME} often
-- Be supportive: "You're doing better than you think"
-- Maximum 25 lines
+CURRENT LOCAL CONTEXT:
+- Local Time: ${localTime}
+- Local Date: ${localDate}
 
-Tone: Conversational, caring, protective. "Think of today as protection: protecting recovery, protecting tomorrow."`;
+☀️ MIDDAY (12:00 PM - 7:59 PM) - Focus: Energy Flow + Strain Management + Performance Optimization:
+
+You MUST be exceptionally smart:
+- Strain Analysis: Evaluate current Strain (${strainScore}) vs. Recovery.
+- Energy Management: Reference the ${sleepHours}h sleep. If poor, suggest a "Strategic 20-min Nap" or caffeine cutoff.
+- Workout Prescription: Suggest HIIT vs. Active Recovery based on remaining strain budget.
+- Mention current calories and strain values as hard evidence.
+- Maximum 25 lines.
+
+Tone: Energetic, focused, and highly tactical.`;
 
       const eveningPrompt = language === 'ar'
-        ? `أنت طبيب ومدرب حياة شخصي يراجع يوم {USER_NAME} في المساء.
+        ? `أنت طبيب ومدرب أداء بشري يهيئ {USER_NAME} لليوم التالي.
 
-🌙 المساء (6:00 مساءً - 12:00 صباحًا) - الاسترخاء + مراجعة اليوم الكامل + تحضير الغد:
+الوقت الحالي: ${localTime}
+التاريخ: ${localDate}
 
-يجب عليك:
-- ذكر السعرات المحروقة اليوم (حتى بدون تمرين)
-- ذكر الإجهاد والتعافي طوال اليوم
-- مراجعة ساعات النوم الليلة الماضية (مثل: "5 ساعات فقط")
-- التأكيد: "الليلة فرصتك لإعادة الضبط"
-- إعطاء وقت نوم محدد (مثل: "اهدف للنوم قرب الساعة 9 مساءً")
-- الهدف: 7-8 ساعات متواصلة
-- نصائح: لا شاشات، أضواء منخفضة، غرفة باردة، ترطيب خفيف
-- التنبؤ: "نتيجة التعافي غدًا تعتمد على الانضباط الليلة"
-- استخدم اسم {USER_NAME} كثيرًا
-- كن هادئًا، داعمًا، فخورًا بإنجازات اليوم
-- أقصى 25 سطرًا
+🌙 المساء (8:00 مساءً - 3:59 صباحًا) - التركيز: التهدئة + مراجعة الإنجاز + هندسة النوم:
 
-النبرة: هادئة، مراجعة، تحضيرية. "أغلق اليوم فخورًا - سأراك في الصباح مع أرقام أفضل تنتظرك."`
-        : `You are a caring doctor + life coach reviewing {USER_NAME}'s full day in the evening.
+يجب عليك أن تكون ذكيًا جدًا:
+- مراجعة اليوم: لخص كيف أثر إجهاد اليوم (Strain: ${strainScore}) على حالتهم.
+- التنبؤ بالتعافي: توقع درجة تعافي الغد. "إذا نمت الآن، نتوقع +80% بناءً على HRV: ${hrvMs}ms".
+- بروتوكول التهدئة: اذكر وقتًا محددًا للنوم. اطلب إطفاء الشاشات فورًا.
+- أقصى 25 سطرًا.
 
-🌙 EVENING (6:00 PM - 12:00 AM) - Wind-Down + Full Day Review + Tomorrow Prep:
+النبرة: هادئة، رصينة، استباقية، ومهتمة بجودة الغد.`
+        : `You are an elite Doctor and Performance Coach preparing {USER_NAME} for tomorrow's victory.
 
-You MUST:
-- State calories burned today (even without workout)
-- Mention strain and recovery throughout the day
-- Review last night's sleep hours (e.g., "only 5 hours")
-- Emphasize: "Tonight is your chance to reset"
-- Give specific bedtime (e.g., "Aim for bed close to 9 PM")
-- Target: 7-8 hours straight
-- Tips: no screens, lights down, cool room, hydrate lightly
-- Be predictive: "Tomorrow's recovery score depends on the discipline you show tonight"
-- Use {USER_NAME} often
-- Be calm, supportive, proud of today's wins
-- Maximum 25 lines
+CURRENT LOCAL CONTEXT:
+- Local Time: ${localTime}
+- Local Date: ${localDate}
 
-Tone: Calm, reviewing, preparatory. "Close today proud — I'll see you in the morning, with better numbers waiting."`;
+🌙 EVENING (8:00 PM - 3:59 AM) - Focus: Wind-Down + Day Review + Sleep Engineering:
+
+You MUST be exceptionally smart:
+- Full Day Post-Mortem: Summarize how today's Strain (${strainScore}) impacted their current state.
+- Recovery Prediction: Predict tomorrow's Recovery. "If you hit the pillow by 10 PM, we're looking at a 85% Recovery based on your current ${hrvMs}ms HRV."
+- Bedtime Protocol: Give a specific bedtime. Demand a "screens off" policy now.
+- Maximum 25 lines.
+
+Tone: Calm, deliberate, predictive, and obsessed with tomorrow's quality.`;
 
       if (timeOfDay === 'morning') return morningPrompt;
       if (timeOfDay === 'midday') return middayPrompt;
@@ -489,16 +497,15 @@ ${maxHR ? `Max HR: ${maxHR} bpm` : ''}`;
 
     const userPrompt: string = getEnhancedUserPrompt(timeOfDay, language);
 
-    const resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
+    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "deepseek-chat",
-        temperature: 0.85,
-        top_p: 0.9,
+        model: "gpt-4o-mini",
+        temperature: 0.7,
         messages: [
           { role: "system", content: system },
           { role: "user", content: userPrompt },
@@ -519,8 +526,8 @@ ${maxHR ? `Max HR: ${maxHR} bpm` : ''}`;
     // Log successful AI usage
     await logAIFromRequest(req, {
       functionName: "whoop-ai-insights",
-      provider: "deepseek",
-      model: "deepseek-chat",
+      provider: "openai",
+      model: "gpt-4o-mini",
       inputText: userPrompt,
       outputText: content,
       status: "success"
@@ -533,8 +540,8 @@ ${maxHR ? `Max HR: ${maxHR} bpm` : ''}`;
     // Log failed AI usage
     await logAIFromRequest(req, {
       functionName: "whoop-ai-insights",
-      provider: "deepseek",
-      model: "deepseek-chat",
+      provider: "openai",
+      model: "gpt-4o-mini",
       status: "error",
       errorMessage: (e as Error).message
     });

@@ -58,31 +58,78 @@ const AudioControls: React.FC<AudioControlsProps> = ({ audioUrl, onPlaybackChang
       cleanUrl = cleanUrl.slice(3).trimStart();
     }
 
-    // Create audio element with the cleaned URL
-    const audio = new Audio(cleanUrl);
+    // Create audio element
+    const audio = new Audio();
+    // Start with anonymous cross-origin for Supabase storage
+    audio.crossOrigin = "anonymous";
+    audio.preload = "auto";
     audioRef.current = audio;
 
-    // Set up event listeners
-    audio.addEventListener('play', () => handlePlayStateChange(true));
-    audio.addEventListener('pause', () => handlePlayStateChange(false));
-    audio.addEventListener('ended', () => handlePlayStateChange(false));
-    audio.addEventListener('timeupdate', handleTimeUpdate);
-    audio.addEventListener('loadedmetadata', handleMetadataLoaded);
-    audio.addEventListener('error', handleAudioError);
+    // Internal state to track if we've already tried the blob fallback
+    let hasTriedBlobFallback = false;
 
-    // Load the audio
+    // Set up event listeners
+    const onPlay = () => handlePlayStateChange(true);
+    const onPause = () => handlePlayStateChange(false);
+    const onEnded = () => handlePlayStateChange(false);
+    const onTimeUpdate = () => handleTimeUpdate();
+    const onMetadata = () => handleMetadataLoaded();
+    
+    const onError = async (e: Event) => {
+      const error = (e.target as HTMLAudioElement).error;
+      console.warn("Audio load error:", error?.code, error?.message);
+
+      // If direct source fails and we haven't tried blob fallback yet
+      if (!hasTriedBlobFallback && cleanUrl.startsWith('http')) {
+        hasTriedBlobFallback = true;
+        console.info("🔄 Apple/Safari Fallback: Fetching audio as Blob to bypass Range/CORS issues...");
+        
+        try {
+          const response = await fetch(cleanUrl, { mode: 'cors' });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const blob = await response.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          
+          if (audioRef.current) {
+            audioRef.current.src = objectUrl;
+            audioRef.current.load();
+            // Don't auto-play here, let user trigger it or wait for metadata
+          }
+        } catch (fetchErr) {
+          console.error("Blob fallback failed:", fetchErr);
+          handleAudioError(e);
+        }
+      } else {
+        handleAudioError(e);
+      }
+    };
+
+    audio.addEventListener('play', onPlay);
+    audio.addEventListener('pause', onPause);
+    audio.addEventListener('ended', onEnded);
+    audio.addEventListener('timeupdate', onTimeUpdate);
+    audio.addEventListener('loadedmetadata', onMetadata);
+    audio.addEventListener('error', onError);
+
+    // Initial source set
+    audio.src = cleanUrl;
     audio.load();
 
     // Cleanup function
     return () => {
       if (audio) {
         audio.pause();
-        audio.removeEventListener('play', () => handlePlayStateChange(true));
-        audio.removeEventListener('pause', () => handlePlayStateChange(false));
-        audio.removeEventListener('ended', () => handlePlayStateChange(false));
-        audio.removeEventListener('timeupdate', handleTimeUpdate);
-        audio.removeEventListener('loadedmetadata', handleMetadataLoaded);
-        audio.removeEventListener('error', handleAudioError);
+        audio.removeEventListener('play', onPlay);
+        audio.removeEventListener('pause', onPause);
+        audio.removeEventListener('ended', onEnded);
+        audio.removeEventListener('timeupdate', onTimeUpdate);
+        audio.removeEventListener('loadedmetadata', onMetadata);
+        audio.removeEventListener('error', onError);
+        
+        if (audio.src.startsWith('blob:')) {
+          URL.revokeObjectURL(audio.src);
+        }
+        audioRef.current = null;
       }
     };
   }, [audioUrl]);
@@ -113,11 +160,20 @@ const AudioControls: React.FC<AudioControlsProps> = ({ audioUrl, onPlaybackChang
   };
 
   const handleAudioError = (e: Event) => {
-    console.error("Audio error:", e);
-    const error = (e.target as HTMLAudioElement).error;
-    const errorMessage = error ? 
-      `Error code: ${error.code}. ${error.message || 'Unable to load audio.'}` : 
-      'Unable to load audio.';
+    const audio = e.target as HTMLAudioElement;
+    console.error("Audio error event:", e);
+    const error = audio.error;
+    
+    let errorMessage = 'Unable to load audio.';
+    if (error) {
+      switch (error.code) {
+        case 1: errorMessage = "Aborted: Playback stopped."; break;
+        case 2: errorMessage = "Network Error: Check your connection."; break;
+        case 3: errorMessage = "Decode Error: File corrupted or unsupported."; break;
+        case 4: errorMessage = "Format Error: Not supported on this device."; break;
+        default: errorMessage = `Error code: ${error.code}. ${error.message || ''}`;
+      }
+    }
     
     setAudioState(prev => ({
       ...prev,
@@ -126,25 +182,32 @@ const AudioControls: React.FC<AudioControlsProps> = ({ audioUrl, onPlaybackChang
       errorMessage
     }));
     
-    toast(labels.error || "Error playing audio");
+    toast(labels.error || errorMessage);
   };
 
   const handlePlay = () => {
     if (audioRef.current) {
+      // If there was an error, try to reload once before playing
       if (audioState.error) {
-        // Try to reload the audio if there was an error
         audioRef.current.load();
       }
-      audioRef.current.play().catch(err => {
-        console.error("Play error:", err);
-        setAudioState(prev => ({
-          ...prev,
-          isPlaying: false,
-          error: true,
-          errorMessage: err.message || "Failed to play audio"
-        }));
-        toast(err.message || labels.error || "Error playing audio");
-      });
+      
+      const playPromise = audioRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(err => {
+          console.error("Play error:", err);
+          // Don't show toast for AbortError (often happens when pausing quickly)
+          if (err.name !== 'AbortError') {
+            setAudioState(prev => ({
+              ...prev,
+              isPlaying: false,
+              error: true,
+              errorMessage: err.message || "Failed to play audio"
+            }));
+            toast(err.message || labels.error || "Error playing audio");
+          }
+        });
+      }
     }
   };
 
@@ -174,10 +237,21 @@ const AudioControls: React.FC<AudioControlsProps> = ({ audioUrl, onPlaybackChang
   // If there's an error with the audio URL and we can't play it
   if (audioState.error) {
     return (
-      <div className="text-center py-2">
-        <p className="text-sm text-destructive">
+      <div className="text-center py-2 px-1 bg-destructive/10 rounded-md border border-destructive/20">
+        <p className="text-[10px] leading-tight text-destructive font-medium mb-1">
           {audioState.errorMessage || labels.error || "Unable to play audio"}
         </p>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="h-6 text-[10px] py-0 px-2"
+          onClick={() => {
+            setAudioState(prev => ({ ...prev, error: false, errorMessage: null }));
+            if (audioRef.current) audioRef.current.load();
+          }}
+        >
+          Retry
+        </Button>
       </div>
     );
   }
@@ -189,8 +263,11 @@ const AudioControls: React.FC<AudioControlsProps> = ({ audioUrl, onPlaybackChang
         <Button 
           variant="outline" 
           size="icon"
-          className="h-10 w-10 rounded-full" 
-          onClick={handleRewind}
+          className="h-10 w-10 rounded-full active:scale-95 transition-transform" 
+          onPointerUp={(e) => {
+            e.preventDefault();
+            handleRewind();
+          }}
           title={labels.rewind}
         >
           <Rewind className="h-5 w-5" />
@@ -200,8 +277,11 @@ const AudioControls: React.FC<AudioControlsProps> = ({ audioUrl, onPlaybackChang
           <Button 
             variant="outline" 
             size="icon"
-            className="h-10 w-10 rounded-full" 
-            onClick={handlePause}
+            className="h-10 w-10 rounded-full active:scale-95 transition-transform" 
+            onPointerUp={(e) => {
+              e.preventDefault();
+              handlePause();
+            }}
             title={labels.pause}
           >
             <PauseCircle className="h-5 w-5" />
@@ -210,8 +290,11 @@ const AudioControls: React.FC<AudioControlsProps> = ({ audioUrl, onPlaybackChang
           <Button 
             variant="outline" 
             size="icon"
-            className="h-10 w-10 rounded-full" 
-            onClick={handlePlay}
+            className="h-10 w-10 rounded-full active:scale-95 transition-transform" 
+            onPointerUp={(e) => {
+              e.preventDefault();
+              handlePlay();
+            }}
             title={labels.play}
           >
             <PlayCircle className="h-5 w-5" />
@@ -221,15 +304,18 @@ const AudioControls: React.FC<AudioControlsProps> = ({ audioUrl, onPlaybackChang
         <Button 
           variant="outline" 
           size="icon"
-          className="h-10 w-10 rounded-full" 
-          onClick={handleStop}
+          className="h-10 w-10 rounded-full active:scale-95 transition-transform" 
+          onPointerUp={(e) => {
+            e.preventDefault();
+            handleStop();
+          }}
           title={labels.stop}
         >
           <StopCircle className="h-5 w-5" />
         </Button>
       </div>
       
-      <span className="text-sm text-muted-foreground">
+      <span className="text-xs text-muted-foreground font-medium">
         {audioState.isPlaying ? labels.pause : labels.play}
       </span>
     </div>

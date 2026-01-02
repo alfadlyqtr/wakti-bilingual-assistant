@@ -99,15 +99,19 @@ const CompactRecordingCard: React.FC<CompactRecordingCardProps> = ({
     }
   };
 
-  // Handle play status changes
-  const handlePlayOriginal = (isPlaying: boolean) => {
+  // Handle play status changes with Super Fallback for Apple/Native
+  const handlePlayOriginal = async (isPlaying: boolean) => {
     setIsPlayingOriginal(isPlaying);
     if (isPlaying && isPlayingSummary) {
       setIsPlayingSummary(false);
     }
+    
+    // If it's starting to play and it's an Apple device/Native environment, 
+    // we want to ensure the audio source is robust.
+    // This is handled inside AudioControls.tsx via the fetch fallback we added.
   };
 
-  const handlePlaySummary = (isPlaying: boolean) => {
+  const handlePlaySummary = async (isPlaying: boolean) => {
     setIsPlayingSummary(isPlaying);
     if (isPlaying && isPlayingOriginal) {
       setIsPlayingOriginal(false);

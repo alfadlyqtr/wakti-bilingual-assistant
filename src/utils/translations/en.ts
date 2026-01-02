@@ -88,4 +88,7 @@ export const en = {
   // Wakti Presentations
   waktiPresentationsTitle: "Wakti Presentations",
   waktiPresentationsDesc: "Create professional slides, briefs, and outlines instantly with AI",
+  
+  // My Warranty
+  my_warranty: "My Warranty",
 };

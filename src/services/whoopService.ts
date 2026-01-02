@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 const STATE_KEY = "whoop_oauth_state";
 const REDIRECT_URI_KEY = "whoop_redirect_uri";
+const AUTH_BACKUP_KEY = "whoop_auth_backup";
 
 type TimeRange = '1d' | '1w' | '2w' | '1m' | '3m' | '6m';
 
@@ -165,15 +166,66 @@ export async function buildInsightsAggregate() {
   };
 }
 
+export async function getSavedInsight(timeWindow: 'morning' | 'midday' | 'evening'): Promise<any | null> {
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+
+  const { data, error } = await supabase
+    .from('user_whoop_insights')
+    .select('content')
+    .eq('user_id', userId)
+    .eq('date', new Date().toISOString().split('T')[0])
+    .eq('time_window', timeWindow)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data.content;
+}
+
+export async function saveInsight(timeWindow: 'morning' | 'midday' | 'evening', content: any): Promise<void> {
+  const userId = await getCurrentUserId();
+  if (!userId) return;
+
+  const date = new Date().toISOString().split('T')[0];
+
+  const { error } = await supabase
+    .from('user_whoop_insights')
+    .upsert({
+      user_id: userId,
+      date,
+      time_window: timeWindow,
+      content,
+      updated_at: new Date().toISOString()
+    }, {
+      onConflict: 'user_id,date,time_window'
+    });
+
+  if (error) {
+    console.error('Error saving insight:', error);
+  }
+}
+
 export async function generateAiInsights(
   language: 'en'|'ar' = 'en', 
   options?: {
     time_of_day?: string;
     user_timezone?: string;
     data?: any;
+    force_refresh?: boolean;
   },
   timeoutMs = 30000
 ) {
+  const timeWindow = (options?.time_of_day || 'morning') as 'morning' | 'midday' | 'evening';
+  
+  // Check cache unless force_refresh is true
+  if (!options?.force_refresh) {
+    const cached = await getSavedInsight(timeWindow);
+    if (cached) {
+      console.log('Using cached insight for', timeWindow);
+      return cached;
+    }
+  }
+
   const dataFull = options?.data || await buildInsightsAggregate();
   // Send FULL comprehensive payload to AI - include ALL WHOOP data
   const data = {
@@ -217,6 +269,12 @@ export async function generateAiInsights(
     console.error('Edge Function error:', error);
     throw error;
   }
+
+  // Save to cache after successful generation
+  if (resp && !resp.error) {
+    await saveInsight(timeWindow, resp);
+  }
+
   return resp;
 }
 
@@ -264,7 +322,9 @@ export async function startWhoopAuth(): Promise<void> {
 
   const redirectUri = getRedirectUri();
   localStorage.setItem(REDIRECT_URI_KEY, redirectUri);
-  console.log('Starting WHOOP auth:', { redirectUri, hasToken: !!accessToken });
+  // CRITICAL: Backup auth token before leaving app for OAuth - session may be lost on return
+  try { localStorage.setItem(AUTH_BACKUP_KEY, accessToken); } catch (_) {}
+  console.log('Starting WHOOP auth:', { redirectUri, hasToken: !!accessToken, backupSaved: true });
 
   const { data, error } = await supabase.functions.invoke("whoop-auth-start", {
     body: { redirect_uri: redirectUri },
@@ -278,15 +338,13 @@ export async function startWhoopAuth(): Promise<void> {
   if (!authorize_url) throw new Error("Missing authorize_url");
   if (state) try { localStorage.setItem(STATE_KEY, state); } catch (_) {}
   console.log('Redirecting to WHOOP authorization...');
-  const popup = window.open(authorize_url, '_blank', 'noopener,noreferrer');
-  if (!popup) {
-    window.location.href = authorize_url;
-  }
+  window.location.href = authorize_url;
 }
 
 export async function completeWhoopCallback(code: string, state: string | null) {
   const savedState = localStorage.getItem(STATE_KEY);
   const savedRedirectUri = localStorage.getItem(REDIRECT_URI_KEY);
+  const backupToken = localStorage.getItem(AUTH_BACKUP_KEY);
   const redirectUri = savedRedirectUri || getRedirectUri();
 
   console.log('Completing callback:', {
@@ -294,13 +352,27 @@ export async function completeWhoopCallback(code: string, state: string | null) 
     state,
     savedState,
     redirectUri,
-    stateMatch: state === savedState
+    stateMatch: state === savedState,
+    hasBackupToken: !!backupToken
   });
 
   try {
+    // Try to get session normally first
     const { data: sessionData } = await supabase.auth.getSession();
-    const accessToken = sessionData?.session?.access_token;
-    if (!accessToken) throw new Error("No auth token - please log in again");
+    let accessToken = sessionData?.session?.access_token;
+    
+    // If session lost, use backup token saved before OAuth redirect
+    if (!accessToken && backupToken) {
+      console.log('Session lost after OAuth redirect, using backup token');
+      accessToken = backupToken;
+    }
+    
+    if (!accessToken) {
+      // Mark that we need to resume after login
+      try { localStorage.setItem('whoop_pending_code', code); } catch (_) {}
+      if (state) try { localStorage.setItem('whoop_pending_state', state); } catch (_) {}
+      throw new Error("Session expired - please log in to complete WHOOP connection");
+    }
 
     const { data, error } = await supabase.functions.invoke('whoop-callback', {
       body: { code, state: state || savedState, redirect_uri: redirectUri },
@@ -318,6 +390,8 @@ export async function completeWhoopCallback(code: string, state: string | null) 
   } finally {
     localStorage.removeItem(STATE_KEY);
     localStorage.removeItem(REDIRECT_URI_KEY);
+    // Clean up backup token after successful use
+    try { localStorage.removeItem(AUTH_BACKUP_KEY); } catch (_) {}
   }
 }
 

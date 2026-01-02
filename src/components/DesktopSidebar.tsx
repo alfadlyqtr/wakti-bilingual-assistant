@@ -18,7 +18,8 @@ import {
   Home,
   LucideIcon,
   Gamepad2,
-  Music
+  Music,
+  Shield
 } from "lucide-react";
 
 type IconComponent = React.ComponentType<{ 
@@ -55,6 +56,7 @@ export function DesktopSidebar() {
     { icon: Sparkles, label: "wakti_ai", path: "/wakti-ai" },
     { icon: HeartPulse, label: "vitality", path: "/fitness" },
     { icon: AudioLines as unknown as IconComponent, label: "tasjeel", path: "/tasjeel" },
+    { icon: Shield as unknown as IconComponent, label: "my_warranty", path: "/my-warranty" },
     { icon: Music as unknown as IconComponent, label: "music", path: "/music" },
     { icon: Gamepad2 as unknown as IconComponent, label: "games", path: "/games" },
   ];
@@ -201,7 +203,7 @@ export function DesktopSidebar() {
         </div>
 
         {/* Main Navigation (scrollable to prevent clipping on small heights) */}
-        <div className="flex-1 overflow-y-auto pr-1 pb-4">
+        <div className="flex-1 overflow-y-auto scrollbar-hide pb-4">
           <motion.nav className="space-y-2" variants={navVariants} initial="hidden" animate="show">
             {navItems.filter(i => i.path !== '/games').map((item) => {
               const isActive = location.pathname === item.path || 
@@ -220,6 +222,7 @@ export function DesktopSidebar() {
                   case '/music': return 'text-fuchsia-500';
                   case '/games': return 'text-indigo-500';
                   case '/tasjeel': return 'text-cyan-500';
+                  case '/my-warranty': return 'text-emerald-500';
                   default: return 'text-gray-500';
                 }
               };
@@ -234,6 +237,7 @@ export function DesktopSidebar() {
                   case '/music': return 'shadow-[0_0_15px_rgba(217,70,239,0.7)]';
                   case '/games': return 'shadow-[0_0_15px_rgba(99,102,241,0.7)]';
                   case '/tasjeel': return 'shadow-[0_0_15px_rgba(6,182,212,0.7)]';
+                  case '/my-warranty': return 'shadow-[0_0_15px_rgba(16,185,129,0.7)]';
                   default: return 'shadow-[0_0_15px_rgba(156,163,175,0.7)]';
                 }
               };
@@ -248,6 +252,7 @@ export function DesktopSidebar() {
                   case '/music': return 'border-fuchsia-500/40';
                   case '/games': return 'border-indigo-500/40';
                   case '/tasjeel': return 'border-cyan-500/40';
+                  case '/my-warranty': return 'border-emerald-500/40';
                   default: return 'border-gray-400/30';
                 }
               };

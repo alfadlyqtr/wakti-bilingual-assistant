@@ -347,13 +347,17 @@ const Tasjeel: React.FC = () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       
-      // Try mobile-friendly formats first (mp4/AAC works on iOS + desktop)
+      // Preferred codecs for universal compatibility (iOS, Android, Desktop)
+      // MP4/AAC is the gold standard for Apple devices
       const codecOptions = [
+        { mimeType: 'audio/mp4;codecs=mp4a.40.2', audioBitsPerSecond: 128000 },
         { mimeType: 'audio/mp4', audioBitsPerSecond: 128000 },
-        { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: 128000 }
+        { mimeType: 'audio/mpeg', audioBitsPerSecond: 128000 },
+        { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: 128000 },
+        { mimeType: 'audio/webm', audioBitsPerSecond: 128000 }
       ];
       
-      let mediaRecorder;
+      let mediaRecorder: MediaRecorder | null = null;
       let selectedMimeType = '';
       
       // Try each codec in order of preference
@@ -362,7 +366,7 @@ const Tasjeel: React.FC = () => {
           try {
             mediaRecorder = new MediaRecorder(stream, options);
             selectedMimeType = options.mimeType;
-            console.log(`✅ Using mobile-friendly codec: ${options.mimeType}`);
+            console.log(`✅ Using preferred codec: ${options.mimeType}`);
             break;
           } catch (e) {
             console.warn(`Failed to use ${options.mimeType}, trying next...`);
@@ -389,7 +393,7 @@ const Tasjeel: React.FC = () => {
       
       mediaRecorder.onstop = handleRecordingStopped;
       
-      mediaRecorder.start();
+      mediaRecorder.start(1000); // Collect data in 1-second chunks for better reliability
       setIsRecording(true);
       setRecordingStatus("recording");
       setRecordingTime(0);
@@ -452,7 +456,7 @@ const Tasjeel: React.FC = () => {
       console.log("Recording stopped, processing chunks...");
       
       // Get actual MIME type from the recorder if available
-      const actualMimeType = mediaRecorderRef.current?.mimeType || "audio/webm";
+      const actualMimeType = mediaRecorderRef.current?.mimeType || "audio/mp4";
       console.log("Recorder MIME type:", actualMimeType);
       
       // Create blob with explicit MIME type
@@ -463,16 +467,18 @@ const Tasjeel: React.FC = () => {
       });
       
       // Determine file extension and content type based on actual MIME type
-      let fileExtension = 'webm';
-      let contentType = 'audio/webm';
+      // Ensuring Apple compatibility (mp4/m4a/mp3)
+      let fileExtension = 'm4a';
+      let contentType = 'audio/mp4';
       
-      if (actualMimeType.includes('audio/mp4') || actualMimeType.includes('audio/m4a')) {
+      if (actualMimeType.includes('audio/mp4') || actualMimeType.includes('audio/x-m4a')) {
         fileExtension = 'm4a';
         contentType = 'audio/mp4';
       } else if (actualMimeType.includes('audio/mpeg') || actualMimeType.includes('audio/mp3')) {
         fileExtension = 'mp3';
         contentType = 'audio/mpeg';
       } else if (actualMimeType.includes('audio/webm')) {
+        // Fallback for browsers that only support webm
         fileExtension = 'webm';
         contentType = 'audio/webm';
       }
