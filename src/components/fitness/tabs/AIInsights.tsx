@@ -47,10 +47,13 @@ interface InsightData {
 }
 
 const TIME_WINDOWS = {
-  // Equal 8-hour splits starting at 4:00 AM local time
-  morning: { start: '4:00 AM', end: '12:00 PM', label: 'Morning Summary', icon: Sun },
-  midday: { start: '12:00 PM', end: '8:00 PM', label: 'Midday Summary', icon: Clock },
-  evening: { start: '8:00 PM', end: '4:00 AM', label: 'Evening Summary', icon: Moon },
+  // Updated splits based on user request:
+  // Morning: 5 AM - 11 AM
+  // Midday: 12 PM - 5 PM
+  // Evening: 5 PM - 11 PM
+  morning: { start: '5:00 AM', end: '11:00 AM', label: 'Morning Summary', icon: Sun },
+  midday: { start: '12:00 PM', end: '5:00 PM', label: 'Midday Summary', icon: Clock },
+  evening: { start: '5:00 PM', end: '11:00 PM', label: 'Evening Summary', icon: Moon },
 };
 
 export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AIInsightsProps) {
@@ -160,13 +163,13 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
     }
   };
 
-  // Check if current time is within a time window (equal 8-hour buckets starting 4 AM)
+  // Check if current time is within a time window
   const getCurrentTimeWindow = (): TimeWindow | null => {
     const currentHour = new Date().getHours();
-    if (currentHour >= 4 && currentHour < 12) return 'morning';
-    if (currentHour >= 12 && currentHour < 20) return 'midday';
-    // 8 PM - 4 AM wraps past midnight
-    return 'evening';
+    if (currentHour >= 5 && currentHour < 11) return 'morning';
+    if (currentHour >= 12 && currentHour < 17) return 'midday';
+    if (currentHour >= 17 && currentHour < 23) return 'evening';
+    return null;
   };
 
   const isWindowActive = (window: TimeWindow): boolean => {
@@ -181,16 +184,15 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
     const now = new Date();
     const currentHour = now.getHours();
     const next = new Date(now);
-    if (currentHour < 4) {
-      next.setHours(4, 0, 0, 0); // next is morning 4 AM
+    if (currentHour < 5) {
+      next.setHours(5, 0, 0, 0); 
     } else if (currentHour < 12) {
-      next.setHours(12, 0, 0, 0); // next is midday 12 PM
-    } else if (currentHour < 20) {
-      next.setHours(20, 0, 0, 0); // next is evening 8 PM
+      next.setHours(12, 0, 0, 0); 
+    } else if (currentHour < 17) {
+      next.setHours(17, 0, 0, 0); 
     } else {
-      // after 8 PM → next is tomorrow 4 AM
       next.setDate(next.getDate() + 1);
-      next.setHours(4, 0, 0, 0);
+      next.setHours(5, 0, 0, 0);
     }
     return next.getTime() - now.getTime();
   };

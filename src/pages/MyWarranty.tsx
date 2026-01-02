@@ -1020,6 +1020,14 @@ const MyWarranty: React.FC = () => {
           {/* Details Grid */}
           <div className="grid grid-cols-2 gap-4 mb-6">
             <div>
+              <p className="text-xs text-muted-foreground mb-1">{t.provider}</p>
+              <p className="font-medium truncate">{selectedItem.provider || '-'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">{t.refNumber}</p>
+              <p className="font-medium truncate">{selectedItem.ref_number || '-'}</p>
+            </div>
+            <div>
               <p className="text-xs text-muted-foreground mb-1">{t.purchaseDate}</p>
               <p className="font-medium">{selectedItem.purchase_date ? format(parseISO(selectedItem.purchase_date), 'MM/dd/yy') : '-'}</p>
             </div>
@@ -1030,6 +1038,10 @@ const MyWarranty: React.FC = () => {
             <div>
               <p className="text-xs text-muted-foreground mb-1">{t.warrantyMonths}</p>
               <p className="font-medium">{selectedItem.warranty_months || '-'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">{t.supportContact}</p>
+              <p className="font-medium truncate">{selectedItem.support_contact || '-'}</p>
             </div>
           </div>
 

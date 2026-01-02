@@ -30,8 +30,9 @@ export function AIInsights() {
         const windows: ('morning' | 'midday' | 'evening')[] = ['morning', 'midday', 'evening'];
         const currentHour = new Date().getHours();
         let autoWindow: 'morning' | 'midday' | 'evening' = 'evening';
-        if (currentHour >= 4 && currentHour < 12) autoWindow = 'morning';
-        else if (currentHour >= 12 && currentHour < 20) autoWindow = 'midday';
+        if (currentHour >= 5 && currentHour < 11) autoWindow = 'morning';
+        else if (currentHour >= 12 && currentHour < 17) autoWindow = 'midday';
+        else if (currentHour >= 17 && currentHour < 23) autoWindow = 'evening';
 
         for (const win of windows) {
           const cached = await getSavedInsight(win);
@@ -58,9 +59,10 @@ export function AIInsights() {
 
   const activeWindow = useMemo(() => {
     const hour = new Date().getHours();
-    if (hour >= 4 && hour < 12) return 'morning';
-    if (hour >= 12 && hour < 20) return 'midday';
-    return 'evening';
+    if (hour >= 5 && hour < 11) return 'morning';
+    if (hour >= 12 && hour < 17) return 'midday';
+    if (hour >= 17 && hour < 23) return 'evening';
+    return 'evening'; // default
   }, [lastSyncTime]);
 
   // Handle time window switching with cache support
@@ -129,9 +131,9 @@ export function AIInsights() {
         // Morning: 4:00 AM - 11:59 AM (Focus: Sleep analysis & Daily prep)
         // Midday: 12:00 PM - 7:59 PM (Focus: Activity & Mid-day flow)
         // Evening: 8:00 PM - 3:59 AM (Focus: Wind-down & Next-day prep)
-        if (hour >= 4 && hour < 12) {
+        if (hour >= 5 && hour < 11) {
           timeOfDay = 'morning';
-        } else if (hour >= 12 && hour < 20) {
+        } else if (hour >= 12 && hour < 17) {
           timeOfDay = 'midday';
         } else {
           timeOfDay = 'evening';
@@ -250,7 +252,7 @@ export function AIInsights() {
             }`}
           >
             🌅 {language === 'ar' ? 'صباح' : 'Morning'}
-            <span className="ml-1 text-[10px] opacity-70">4-12 PM</span>
+            <span className="ml-1 text-[10px] opacity-70">5-11 AM</span>
             {(selectedTimeOfDay === 'auto' && activeWindow === 'morning') && (
               <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0c0f14] z-10" />
             )}
@@ -264,7 +266,7 @@ export function AIInsights() {
             }`}
           >
             ☀️ {language === 'ar' ? 'ظهر' : 'Midday'}
-            <span className="ml-1 text-[10px] opacity-70">12-8 PM</span>
+            <span className="ml-1 text-[10px] opacity-70">12-5 PM</span>
             {(selectedTimeOfDay === 'auto' && activeWindow === 'midday') && (
               <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0c0f14] z-10" />
             )}
@@ -278,7 +280,7 @@ export function AIInsights() {
             }`}
           >
             🌙 {language === 'ar' ? 'مساء' : 'Evening'}
-            <span className="ml-1 text-[10px] opacity-70">8 PM-4 AM</span>
+            <span className="ml-1 text-[10px] opacity-70">5-11 PM</span>
             {(selectedTimeOfDay === 'auto' && activeWindow === 'evening') && (
               <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0c0f14] z-10" />
             )}

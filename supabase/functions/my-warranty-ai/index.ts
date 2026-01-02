@@ -97,6 +97,8 @@ serve(async (req) => {
     const body: ExtractRequest = await req.json();
     const { mode, imageBase64, pdfBase64, mimeType, question, warrantyContext } = body;
 
+    console.log(`[my-warranty-ai] Mode: ${mode}, mimeType: ${mimeType}`);
+
     let requestBody: {
       contents: Array<{
         parts: Array<{ text?: string; inline_data?: { mime_type: string; data: string } }>;
@@ -105,13 +107,15 @@ serve(async (req) => {
     };
 
     if (mode === "extract") {
-      // Extraction mode - analyze image/PDF
       if (!imageBase64 && !pdfBase64) {
+        console.error("[my-warranty-ai] No document provided for extraction");
         throw new Error("No document provided for extraction");
       }
 
       const documentData = imageBase64 || pdfBase64 || '';
       const documentMimeType = mimeType || (pdfBase64 ? "application/pdf" : "image/jpeg");
+
+      console.log(`[my-warranty-ai] Preparing Gemini request for extraction. Mime: ${documentMimeType}`);
 
       requestBody = {
         contents: [
@@ -133,8 +137,8 @@ serve(async (req) => {
         },
       };
     } else if (mode === "qa") {
-      // Q&A mode - answer questions about warranty
       if (!question) {
+        console.error("[my-warranty-ai] No question provided for QA");
         throw new Error("No question provided");
       }
 
@@ -154,10 +158,13 @@ serve(async (req) => {
         },
       };
     } else {
+      console.error(`[my-warranty-ai] Invalid mode: ${mode}`);
       throw new Error("Invalid mode. Use 'extract' or 'qa'");
     }
 
-    // Call Gemini API
+    console.log(`[my-warranty-ai] Calling Gemini API...`);
+    console.log(`[my-warranty-ai] API Key present: ${!!GEMINI_API_KEY}, length: ${GEMINI_API_KEY?.length}`);
+    
     const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
       method: "POST",
       headers: {
@@ -166,23 +173,27 @@ serve(async (req) => {
       body: JSON.stringify(requestBody),
     });
 
+    console.log(`[my-warranty-ai] Gemini response status: ${response.status}`);
+
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Gemini API error:", errorText);
-      throw new Error(`Gemini API error: ${response.status}`);
+      console.error("[my-warranty-ai] Gemini API error status:", response.status);
+      console.error("[my-warranty-ai] Gemini API error body:", errorText);
+      throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
     }
 
     const result = await response.json();
+    console.log(`[my-warranty-ai] Gemini API success`);
     const textContent = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!textContent) {
+      console.error("[my-warranty-ai] No text content in Gemini response:", JSON.stringify(result));
       throw new Error("No response from Gemini");
     }
 
     if (mode === "extract") {
-      // Parse JSON response for extraction
       try {
-        // Clean up potential markdown formatting
+        console.log(`[my-warranty-ai] Parsing extracted text...`);
         let cleanJson = textContent.trim();
         if (cleanJson.startsWith("```json")) {
           cleanJson = cleanJson.slice(7);
@@ -196,6 +207,7 @@ serve(async (req) => {
         cleanJson = cleanJson.trim();
 
         const extracted: ExtractedWarranty = JSON.parse(cleanJson);
+        console.log(`[my-warranty-ai] Extraction complete: ${extracted.title}`);
 
         return new Response(
           JSON.stringify({
@@ -208,7 +220,7 @@ serve(async (req) => {
           }
         );
       } catch (parseError) {
-        console.error("JSON parse error:", parseError, "Raw:", textContent);
+        console.error("[my-warranty-ai] JSON parse error:", parseError, "Raw text:", textContent);
         return new Response(
           JSON.stringify({
             success: true,
@@ -231,7 +243,7 @@ serve(async (req) => {
         );
       }
     } else {
-      // Return Q&A answer
+      console.log(`[my-warranty-ai] QA answer ready`);
       return new Response(
         JSON.stringify({
           success: true,
@@ -244,7 +256,7 @@ serve(async (req) => {
       );
     }
   } catch (error) {
-    console.error("Error:", error);
+    console.error("[my-warranty-ai] Final Catch error:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return new Response(
       JSON.stringify({

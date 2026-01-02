@@ -70,7 +70,7 @@ serve(async (req: Request) => {
 الوقت الحالي: ${localTime}
 التاريخ: ${localDate}
 
-🌅 الصباح (4:00 صباحًا - 11:59 صباحًا) - التركيز: النوم + التعافي + هندسة اليوم:
+🌅 الصباح (5:00 صباحًا - 11:00 صباحًا) - التركيز: النوم + التعافي + هندسة اليوم:
 
 يجب عليك أن تكون ذكيًا جدًا:
 - حلل النوم بعمق: قارن وقت النوم الفعلي بالمثالي.
@@ -86,7 +86,7 @@ CURRENT LOCAL CONTEXT:
 - Local Time: ${localTime}
 - Local Date: ${localDate}
 
-🌅 MORNING (4:00 AM - 11:59 AM) - Focus: Sleep Architecture + Recovery + Day Engineering:
+🌅 MORNING (5:00 AM - 11:00 AM) - Focus: Sleep Architecture + Recovery + Day Engineering:
 
 You MUST be exceptionally smart:
 - Deep Sleep Analysis: Compare bedtime/wake time. If they woke up too early, explain the hit to their REM or Deep sleep stages.
@@ -103,7 +103,7 @@ Tone: Expert, authoritative, and highly motivating.`;
 الوقت الحالي: ${localTime}
 التاريخ: ${localDate}
 
-☀️ منتصف النهار (12:00 ظهرًا - 7:59 مساءً) - التركيز: تدفق الطاقة + الإجهاد + تحسين الأداء:
+☀️ منتصف النهار (12:00 ظهرًا - 5:00 مساءً) - التركيز: تدفق الطاقة + الإجهاد + تحسين الأداء:
 
 يجب عليك أن تكون ذكيًا جدًا:
 - حلل الإجهاد الحالي: هل الإجهاد (Strain: ${strainScore}) مناسب للتعافي؟
@@ -118,7 +118,7 @@ CURRENT LOCAL CONTEXT:
 - Local Time: ${localTime}
 - Local Date: ${localDate}
 
-☀️ MIDDAY (12:00 PM - 7:59 PM) - Focus: Energy Flow + Strain Management + Performance Optimization:
+☀️ MIDDAY (12:00 PM - 5:00 PM) - Focus: Energy Flow + Strain Management + Performance Optimization:
 
 You MUST be exceptionally smart:
 - Strain Analysis: Evaluate current Strain (${strainScore}) vs. Recovery.
@@ -135,7 +135,7 @@ Tone: Energetic, focused, and highly tactical.`;
 الوقت الحالي: ${localTime}
 التاريخ: ${localDate}
 
-🌙 المساء (8:00 مساءً - 3:59 صباحًا) - التركيز: التهدئة + مراجعة الإنجاز + هندسة النوم:
+🌙 المساء (5:00 مساءً - 11:00 مساءً) - التركيز: التهدئة + مراجعة الإنجاز + هندسة النوم:
 
 يجب عليك أن تكون ذكيًا جدًا:
 - مراجعة اليوم: لخص كيف أثر إجهاد اليوم (Strain: ${strainScore}) على حالتهم.
@@ -150,7 +150,7 @@ CURRENT LOCAL CONTEXT:
 - Local Time: ${localTime}
 - Local Date: ${localDate}
 
-🌙 EVENING (8:00 PM - 3:59 AM) - Focus: Wind-Down + Day Review + Sleep Engineering:
+🌙 EVENING (5:00 PM - 11:00 PM) - Focus: Wind-Down + Day Review + Sleep Engineering:
 
 You MUST be exceptionally smart:
 - Full Day Post-Mortem: Summarize how today's Strain (${strainScore}) impacted their current state.
