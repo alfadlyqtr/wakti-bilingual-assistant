@@ -319,7 +319,8 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
   }, [user?.id, !!insights.morning, !!insights.midday, !!insights.evening]);
 
   const generateInsights = async (window: TimeWindow, forceGenerate = false) => {
-    console.log('Generating insights for window:', window);
+    console.log('=== GENERATE INSIGHTS CALLED ===');
+    console.log('Window:', window, 'Force:', forceGenerate);
     
     // Check time restrictions unless forced
     if (!forceGenerate) {
@@ -360,14 +361,33 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
     const now = Date.now();
     // Remove generation limits for testing
     
-    // COMPLETELY REMOVE ALL CACHING - ALWAYS GENERATE FRESH
-    // Clear any existing cache for this window
+    // FORCE FRESH GENERATION - Clear ALL caches
+    console.log('[Regenerate] Clearing all caches for window:', window);
+    
+    // Clear localStorage cache
+    try {
+      const cached = JSON.parse(localStorage.getItem('wakti-ai-insights') || '{}');
+      cached[window] = null;
+      localStorage.setItem('wakti-ai-insights', JSON.stringify(cached));
+    } catch {}
+    
+    // Clear state cache
     setInsights(prev => ({ ...prev, [window]: null }));
     setLastGenerated(prev => ({ ...prev, [window]: 0 }));
     
+    // Delete from database cache so it doesn't reload
+    if (user?.id) {
+      supabase
+        .from('user_whoop_ai_insights' as any)
+        .delete()
+        .eq('user_id', user.id)
+        .eq('time_window', window)
+        .then(() => console.log('[Regenerate] DB cache cleared'));
+    }
+    
     try {
       setLoading(window);
-      console.log('Starting AI insights generation for window:', window);
+      console.log('[Regenerate] Starting FRESH AI call for window:', window);
       
       // Get user's real name
       const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || "Champion";
