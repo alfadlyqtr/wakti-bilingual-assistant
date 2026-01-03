@@ -203,9 +203,9 @@ export const JournalService = {
     return (data || []) as { date: string; mood_value: number | null }[];
   },
 
-  async ask(question: string, language: "en" | "ar", user_timezone: string) {
+  async ask(question: string, language: "en" | "ar", user_timezone: string, messages: { role: string; content: string }[] = []) {
     const { data, error } = await supabase.functions.invoke("journal-qa", {
-      body: { question, language, user_timezone }
+      body: { question, language, user_timezone, messages }
     });
     if (error) throw error;
     return data;

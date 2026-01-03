@@ -3,214 +3,213 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { JournalService } from "@/services/journalService";
+import { useNavigate } from "react-router-dom";
+import { NotebookPen, Sparkles, SendHorizontal } from "lucide-react";
 
 const STORAGE_KEY = "asktab:last";
 
 export const AskTab: React.FC = () => {
   const { language } = useTheme();
+  const navigate = useNavigate();
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<any | null>(null);
+  const [messages, setMessages] = useState<{ role: "user" | "assistant"; content: string; stats?: any; tips?: string; isOffTopic?: boolean }[]>([]);
 
-  // Persona formatter: required openers, banned phrases, icon mapping, 60–80 words
-  const formatJournalAnswer = (raw: string, opts?: { tags?: string[]; mood?: string }): string => {
-    if (!raw) return "";
-    let txt = String(raw).trim();
-
-    // Map moods/tags to icons
-    const tagIcon: Record<string, string> = {
-      family: "👨‍👩‍👧", friends: "👥", care: "❤️", exercise: "🏋️", sport: "🏆", relax: "😌",
-      movies: "📽️", gaming: "🎮", reading: "📚", cleaning: "✨", sleep: "🌙", eat_healthy: "🥗",
-      shopping: "🛒", study: "📊", work: "💼", music: "🎵", meditation: "🧘", nature: "🌲",
-      travel: "✈️", cooking: "🍳", walk: "🚶", socialize: "💬", coffee: "☕", love: "❤️",
-      romance: "💕", spouse: "💑", prayer: "🙏", writing: "✍️", horse_riding: "🐴",
-      fishing: "🎣", wife: "👰"
-    };
-    const moodIcon: Record<string, string> = { awful: "😤", bad: "😟", meh: "😐", good: "😊", rad: "😄" };
-    // Replace standalone tag/mood words with icons
-    Object.entries(tagIcon).forEach(([k, v]) => {
-      const re = new RegExp(`(?<=\b)${k.replace('_','[_ ]?')}(?=\b)`, 'gi');
-      txt = txt.replace(re as any, `${v}`);
-    });
-    Object.entries(moodIcon).forEach(([k, v]) => {
-      const re = new RegExp(`(?<=\b)${k}(?=\b)`, 'gi');
-      txt = txt.replace(re as any, `${v}`);
-    });
-
-    // Banned phrases removal/rephrase
-    const banned = [
-      "It appears that", "This suggests", "Consider ", "I would recommend",
-      "Your data shows", "Based on your patterns", " level "
-    ];
-    banned.forEach(b => { txt = txt.replace(new RegExp(b, 'gi'), '').trim(); });
-
-    // Ensure one of the required openers
-    const openers = ["I notice", "Look at this", "You don't just", "Every time", "Wait, look"];
-    const hasOpener = openers.some(o => txt.startsWith(o));
-    if (!hasOpener) txt = `${openers[0]} ${txt.charAt(0).toLowerCase()}${txt.slice(1)}`;
-
-    // Enforce 60–80 words, trim at sentence boundary when possible
-    const words = txt.split(/\s+/);
-    if (words.length > 80) {
-      const slice = words.slice(0, 85).join(' ');
-      // Try to cut at last period within range 60–80
-      const match = slice.match(/([\s\S]{0,}\.)/);
-      if (match) {
-        const cutWords = match[0].trim().split(/\s+/);
-        if (cutWords.length >= 60 && cutWords.length <= 80) txt = match[0].trim();
-        else txt = words.slice(0, 80).join(' ');
-      } else {
-        txt = words.slice(0, 80).join(' ');
-      }
-    }
-    if (txt.split(/\s+/).length < 60) {
-      // If too short, keep as-is; we won't pad
-    }
-    return txt.trim();
-  };
-
-  // Restore last session
+  // Restore session
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const data = JSON.parse(raw);
-      if (data.q) setQ(data.q);
-      if (data.result) setResult(data.result);
+      if (raw) {
+        const data = JSON.parse(raw);
+        if (Array.isArray(data.messages)) {
+          setMessages(data.messages);
+        }
+      }
     } catch {}
   }, []);
 
-  // Auto-detect intent from question
-  const detectedIntent = useMemo(() => {
-    const t = q.toLowerCase();
-    if (/tag|وسم|activity|نشاط/.test(t)) return "top_tags";
-    if (/morning|صباح/.test(t)) return "mornings";
-    if (/evening|night|مساء|ليل/.test(t)) return "evenings";
-    if (/note|ملاحظة/.test(t)) return "notes";
-    if (/streak|سلسلة/.test(t)) return "streak";
-    if (/trend|اتجاه/.test(t)) return "trend";
-    if (/count|عدد/.test(t)) return "count";
-    if (/mood|مزاج/.test(t)) return "moods";
-    return "summary";
-  }, [q]);
+  // Save session
+  useEffect(() => {
+    if (messages.length > 0) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ messages }));
+    }
+  }, [messages]);
 
   const ask = async () => {
-    if (!q.trim() || loading) return;
+    const trimmed = q.trim();
+    if (!trimmed || loading) return;
+
+    setLoading(true);
+    const userMsg = { role: "user" as const, content: trimmed };
+    const newMessages = [...messages, userMsg].slice(-10); // Keep last 10
+    setMessages(newMessages);
+    setQ("");
+
     try {
-      setLoading(true);
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-      const data = await JournalService.ask(q.trim(), language as any, tz);
-      const formattedSummary = formatJournalAnswer(data.summary || "", { tags: data?.stats?.most_common_tags });
-      setResult({ ...data, formattedSummary });
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ q, result: data }));
+      // Pass the conversation history (newMessages) to the service
+      const data = await JournalService.ask(trimmed, language as any, tz, newMessages);
+      
+      const assistantMsg = { 
+        role: "assistant" as const, 
+        content: data.summary || "",
+        stats: data.stats,
+        tips: data.tips,
+        isOffTopic: data.summary?.toLowerCase().includes("wakti ai") || data.summary?.includes("وقطي AI")
+      };
+      
+      setMessages(prev => [...prev, assistantMsg].slice(-10));
+    } catch (err) {
+      console.error("Ask failed", err);
     } finally {
       setLoading(false);
     }
   };
 
+  const clearChat = () => {
+    setMessages([]);
+    localStorage.removeItem(STORAGE_KEY);
+  };
+
+
   return (
-    <div className="space-y-3">
-      {/* Pure Q&A input */}
-      <div className="rounded-2xl border border-border/60 bg-gradient-to-b from-card to-background p-3 shadow-md">
-        <div className="flex gap-2">
-          <Input className="flex-1 input-enhanced" value={q} onChange={e => setQ(e.target.value)} placeholder={language === 'ar' ? 'اسأل دفترك...' : 'Ask your journal...'} onKeyDown={e => { if (e.key === 'Enter') ask(); }} />
-          <Button
-            onClick={ask}
-            disabled={loading}
-            aria-busy={loading ? true : undefined}
-            aria-live="polite"
-            className={`btn-shine ${loading ? 'animate-pulse cursor-wait shadow-glow' : ''}`}
-            data-saving={loading ? 'true' : 'false'}
-          >
-            {loading ? (
-              <span className="inline-flex items-center gap-2">
-                <svg className="h-4 w-4 animate-spin text-primary-foreground" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                </svg>
-                {language === 'ar' ? 'جارٍ...' : 'Asking...'}
-              </span>
-            ) : (
-              <span>{language === 'ar' ? 'اسأل' : 'Ask'}</span>
+    <div className="flex flex-col h-[500px] max-h-[70vh]">
+      {/* Responses area - scrollable, takes remaining space */}
+      <div className="flex-1 overflow-y-auto space-y-4 pb-4 px-1 scrollbar-hide min-h-0">
+        {messages.length === 0 && (
+          <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-6 animate-in fade-in zoom-in duration-500">
+            <div className="relative">
+              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-pink-500/20 to-purple-500/20 flex items-center justify-center text-pink-400 shadow-xl ring-1 ring-pink-500/30">
+                <NotebookPen className="h-10 w-10" />
+              </div>
+              <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-primary flex items-center justify-center shadow-lg animate-bounce">
+                <Sparkles className="h-3 w-3 text-primary-foreground" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">
+                {language === 'ar' ? 'دردش مع يومياتك' : 'Chat with your Journal'}
+              </h3>
+              <p className="text-sm text-muted-foreground max-w-[260px] leading-relaxed">
+                {language === 'ar' 
+                  ? 'أنا خبير في حياتك. اسألني عن أنماطك، مشاعرك، أو أي ذكرى سجلتها.' 
+                  : "I'm an expert on your life. Ask me about your patterns, moods, or any memory you've logged."}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {messages.map((msg, idx) => (
+          <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+            {/* Message Bubble */}
+            <div className={`max-w-[85%] rounded-2xl p-3 shadow-sm ${
+              msg.role === 'user' 
+                ? 'bg-primary text-primary-foreground rounded-br-none' 
+                : 'bg-gradient-to-br from-card to-muted/40 border border-border/50 text-foreground rounded-bl-none'
+            }`}>
+              <div className="text-sm leading-relaxed whitespace-pre-wrap">
+                {msg.role === 'assistant' && <span className="inline-block mr-1.5">🤖</span>}
+                {msg.content}
+              </div>
+
+              {/* Stats/Chips (Assistant Only) */}
+              {msg.role === 'assistant' && (msg.stats || msg.isOffTopic) && (
+                <div className="mt-2 pt-2 border-t border-border/20 flex flex-wrap gap-1.5">
+                  {msg.isOffTopic && (
+                    <Button 
+                      variant="default" 
+                      size="sm" 
+                      onClick={() => navigate('/wakti-ai')}
+                      className="h-8 px-4 py-0 text-xs rounded-full bg-gradient-vibrant hover:shadow-vibrant-glow text-white border-none shadow-vibrant flex items-center gap-2 transition-all active:scale-95"
+                    >
+                      <Sparkles className="h-3.5 w-3.5 fill-white" />
+                      <span className="font-bold tracking-wide">
+                        {language === 'ar' ? 'دردش مع Wakti AI' : 'Chat with Wakti AI'}
+                      </span>
+                    </Button>
+                  )}
+                  
+                  {msg.stats && (() => {
+                    const stats = msg.stats;
+                    const intent = stats.resolved_intent;
+                    
+                    if (intent === 'top_tags' && Array.isArray(stats.most_common_tags)) {
+                      return stats.most_common_tags.slice(0, 3).map((t: any) => (
+                        <span key={t.tag} className="px-2 py-0.5 text-[10px] rounded-full border border-primary/30 bg-primary/5 text-primary">
+                          {t.tag} ×{t.count}
+                        </span>
+                      ));
+                    }
+                    
+                    if (stats.top_mood) {
+                      return (
+                        <span className="px-2 py-0.5 text-[10px] rounded-full border border-primary/30 bg-primary/5 text-primary">
+                          {stats.top_mood.icon} {stats.top_mood.name || ''}
+                        </span>
+                      );
+                    }
+                    return null;
+                  })()}
+                </div>
+              )}
+            </div>
+
+            {/* Tips (Assistant Only) */}
+            {msg.role === 'assistant' && msg.tips && (
+              <div className="mt-1 ml-2 text-[11px] text-muted-foreground italic flex items-center gap-1">
+                <span className="text-xs">💡</span> {msg.tips}
+              </div>
             )}
-          </Button>
+          </div>
+        ))}
+        
+        {loading && (
+          <div className="flex justify-start animate-in fade-in duration-300">
+            <div className="bg-muted/40 border border-border/30 rounded-2xl rounded-bl-none p-3 flex gap-1 items-center">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Input area - fixed at bottom */}
+      <div className="mt-auto pt-2">
+        <div className="flex justify-between items-center mb-2 px-1">
+          {messages.length > 0 && (
+            <button 
+              onClick={clearChat}
+              className="text-[10px] text-muted-foreground hover:text-destructive transition-colors flex items-center gap-1"
+            >
+              <span className="text-xs">🗑️</span> {language === 'ar' ? 'مسح الدردشة' : 'Clear Chat'}
+            </button>
+          )}
+        </div>
+        <div className="flex-shrink-0 rounded-2xl border border-border/60 bg-gradient-to-b from-card to-background p-3 shadow-md">
+          <div className="flex gap-2">
+            <Input 
+              className="flex-1 input-enhanced" 
+              value={q} 
+              onChange={e => setQ(e.target.value)} 
+              placeholder={language === 'ar' ? 'دردش مع دفترك...' : 'Chat with your journal...'} 
+              onKeyDown={e => { if (e.key === 'Enter') ask(); }} 
+            />
+            <Button
+              onClick={ask}
+              disabled={loading || !q.trim()}
+              className={`btn-shine rounded-xl h-10 w-10 p-0 shadow-lg transition-all active:scale-90 ${loading ? 'animate-pulse' : ''}`}
+            >
+              {loading ? (
+                <div className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+              ) : (
+                <SendHorizontal className={`h-5 w-5 ${language === 'ar' ? 'rotate-180' : ''}`} />
+              )}
+            </Button>
+          </div>
         </div>
       </div>
 
-      {result && (
-        <div className="space-y-3">
-          {/* User Question Bubble */}
-          {result.question && (
-            <div className="flex justify-end">
-              <div className="max-w-[85%] rounded-2xl rounded-br-md px-4 py-2.5 bg-primary text-primary-foreground shadow-md">
-                <span className="text-sm">{result.question}</span>
-              </div>
-            </div>
-          )}
-          
-          {/* AI Response Bubble */}
-          <div className="flex justify-start">
-            <div className="max-w-[90%] rounded-2xl rounded-bl-md border border-border/50 bg-gradient-to-br from-card to-muted/30 p-4 shadow-lg">
-              {/* Stats chips */}
-              {result.stats && (
-                <div className="text-sm mb-3">
-              {(() => {
-                const moodNames = language === 'ar'
-                  ? {1: 'سيئ جداً', 2: 'سيئ', 3: 'عادي', 4: 'جيد', 5: 'ممتاز'}
-                  : {1: 'awful', 2: 'bad', 3: 'meh', 4: 'good', 5: 'rad'};
-                const intentKey = result.resolved_intent || detectedIntent;
-                // Tags only
-                if (intentKey === 'top_tags' && Array.isArray(result.stats.most_common_tags) && result.stats.most_common_tags.length > 0) {
-                  return (
-                <div className="flex flex-wrap gap-2">
-                  {result.stats.most_common_tags.map((t: any) => (
-                    <span key={t.tag} className="px-2 py-0.5 text-xs rounded-md border border-[#4736f1] bg-[#17133b] text-[#bfbdf8] dark:border-[#4736f1] dark:bg-[#17133b] dark:text-[#bfbdf8]">{t.tag} ×{t.count}</span>
-                  ))}
-                </div>
-                  );
-                }
-                // Gratitude only
-                if (intentKey === 'gratitude' && Array.isArray(result.stats.gratitude_items) && result.stats.gratitude_items.length > 0) {
-                  return (
-                    <ul className="list-disc pl-5 text-xs text-foreground/85 space-y-1">
-                      {result.stats.gratitude_items.map((g: any, idx: number) => (
-                        <li key={`${g.date}-${idx}`}>{g.text}</li>
-                      ))}
-                    </ul>
-                  );
-                }
-                // Moods/count: show only the single most frequent mood (smart highlight), not full breakdown
-                if ((intentKey === 'moods' || intentKey === 'count' || intentKey === 'trend' || intentKey === 'summary') && result.stats.mood_counts) {
-                  const mc = result.stats.mood_counts as Record<number, number>;
-                  let bestK: 1|2|3|4|5 = 3; let bestV = -1;
-                  ([5,4,3,2,1] as (1|2|3|4|5)[]).forEach(k => { const v = (mc as any)[k] || 0; if (v > bestV) { bestV = v; bestK = k; } });
-                  if (bestV <= 0) return null;
-                  return (
-                    <div className="inline-flex items-center gap-2 text-xs">
-                      <span className="px-2 py-0.5 rounded-md border border-[#4736f1] bg-[#17133b] text-[#e7e6ff] dark:border-[#4736f1] dark:bg-[#17133b] dark:text-[#e7e6ff]">
-                        Top mood: {moodNames[bestK]} ({bestV})
-                      </span>
-                    </div>
-                  );
-                }
-                return null;
-              })()}
-            </div>
-          )}
-              {/* Summary & Tip */}
-              {(result.formattedSummary || result.summary) && (
-                <div className="text-sm text-foreground/90 leading-relaxed">
-                  <span className="inline-block mr-1.5">🤖</span>
-                  {result.formattedSummary || result.summary}
-                </div>
-              )}
-              {result.tips && (
-                <div className="mt-3 pt-2 border-t border-border/30 text-[13px] text-muted-foreground">💡 {result.tips}</div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

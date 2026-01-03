@@ -121,24 +121,41 @@ serve(async (req)=>{
     const today = todayLocalYYYYMMDD(user_timezone);
     const since7 = daysAgoYYYYMMDD(7, user_timezone);
     const since30 = daysAgoYYYYMMDD(30, user_timezone);
+    const since90 = daysAgoYYYYMMDD(90, user_timezone);
     const since = daysAgoYYYYMMDD(windowDays, user_timezone);
 
-    // Load days and checkins for 30d window
+    // Load days and checkins for 90d window (expanded to catch older entries)
     const { data: daysRows } = await supabase
       .from('journal_days')
       .select('date, mood_value, tags, note, morning_reflection, evening_reflection, gratitude_1, gratitude_2, gratitude_3')
       .eq('user_id', user.id)
-      .gte('date', since30)
+      .gte('date', since90)
       .lte('date', today)
       .order('date', { ascending: false });
+
+    // Also fetch the absolute LAST entry regardless of date window
+    const { data: lastEntryRows } = await supabase
+      .from('journal_days')
+      .select('date, mood_value, tags, note, morning_reflection, evening_reflection')
+      .eq('user_id', user.id)
+      .order('date', { ascending: false })
+      .limit(1);
 
     const { data: checksRows } = await supabase
       .from('journal_checkins')
       .select('id, date, occurred_at, mood_value, tags, note')
       .eq('user_id', user.id)
-      .gte('date', since30)
+      .gte('date', since90)
       .lte('date', today)
       .order('occurred_at', { ascending: true });
+
+    // Also fetch the absolute LAST checkin regardless of date window
+    const { data: lastCheckinRows } = await supabase
+      .from('journal_checkins')
+      .select('id, date, occurred_at, mood_value, tags, note')
+      .eq('user_id', user.id)
+      .order('occurred_at', { ascending: false })
+      .limit(1);
 
     const uniqueChecksMap = new Map<string, any>();
     for (const c of (checksRows||[])) { if (!uniqueChecksMap.has(c.id)) uniqueChecksMap.set(c.id, c); }
@@ -148,6 +165,10 @@ serve(async (req)=>{
     const inWindowChecks = uniqueChecks.filter(c=>c.date>=since && c.date<=today);
     const entries = inWindowDays.map(d => ({ mood_value: d.mood_value, tags: (d as any).tags || [] }))
       .concat(inWindowChecks.map(c => ({ mood_value: c.mood_value, tags: (c as any).tags || [] })));
+
+    // Check if user has any journal data at all
+    const totalEntries = (daysRows||[]).length + uniqueChecks.length;
+    const hasNoData = totalEntries === 0;
 
     const agg = aggregate(entries);
 
@@ -191,8 +212,49 @@ serve(async (req)=>{
       }
     }
 
+    // Build LAST ENTRY context - always include this so AI can reference it
+    const moodNameMap: Record<number, string> = { 1: 'awful', 2: 'bad', 3: 'meh', 4: 'good', 5: 'rad' };
+    const lastDay = (lastEntryRows && lastEntryRows.length > 0) ? lastEntryRows[0] : null;
+    const lastCheckin = (lastCheckinRows && lastCheckinRows.length > 0) ? lastCheckinRows[0] : null;
+    // Determine which is more recent
+    let lastEntry: { date: string; mood: string; mood_value: number; note: string | null; tags: string[]; type: 'day' | 'checkin'; days_ago: number } | null = null;
+    if (lastDay || lastCheckin) {
+      const dayDate = lastDay ? new Date(lastDay.date + 'T12:00:00Z') : null;
+      const checkinDate = lastCheckin ? new Date(lastCheckin.occurred_at || lastCheckin.date + 'T12:00:00Z') : null;
+      const todayDate = new Date(today + 'T12:00:00Z');
+      
+      if (lastDay && dayDate && (!checkinDate || dayDate >= checkinDate)) {
+        const daysAgo = Math.floor((todayDate.getTime() - dayDate.getTime()) / (1000 * 60 * 60 * 24));
+        lastEntry = {
+          date: monthFmt.format(dayDate),
+          mood: moodNameMap[lastDay.mood_value] || 'unknown',
+          mood_value: lastDay.mood_value,
+          note: lastDay.note || lastDay.evening_reflection || lastDay.morning_reflection || null,
+          tags: lastDay.tags || [],
+          type: 'day',
+          days_ago: daysAgo
+        };
+      } else if (lastCheckin && checkinDate) {
+        const daysAgo = Math.floor((todayDate.getTime() - checkinDate.getTime()) / (1000 * 60 * 60 * 24));
+        lastEntry = {
+          date: monthFmt.format(checkinDate),
+          mood: moodNameMap[lastCheckin.mood_value] || 'unknown',
+          mood_value: lastCheckin.mood_value,
+          note: lastCheckin.note || null,
+          tags: lastCheckin.tags || [],
+          type: 'checkin',
+          days_ago: daysAgo
+        };
+      }
+    }
+
     // Build stats for resolved_intent
-    const baseStats: any = { timeframe_days: windowDays, mood_icons: MOOD_ICON, tag_icons: TAG_ICON };
+    const baseStats: Record<string, unknown> = { 
+      timeframe_days: windowDays, 
+      mood_icons: MOOD_ICON, 
+      tag_icons: TAG_ICON,
+      last_entry: lastEntry 
+    };
     if (resolved_intent === 'top_tags') {
       baseStats.most_common_tags = agg.mostCommonTags;
     } else if (resolved_intent === 'moods' || resolved_intent === 'count' || resolved_intent === 'trend' || resolved_intent === 'summary') {
@@ -251,8 +313,27 @@ serve(async (req)=>{
     tipsText = (tips===false) ? undefined : tipsLines.join(' ');
 
     // Persona prompts (EN/AR) + voice rules - optimized for GPT-4o-mini speed
-    const system_en = `You are a trusted best friend who gives quick, warm insights about someone's journal. Write 40–60 words max. Use inline icons. Start with "I notice...", "Look at this...", or "Every time...". Be specific with dates/times. BANNED: It appears that, This suggests, Consider, I would recommend, Your data shows, Based on your patterns, level. No corporate/therapy jargon.`;
-    const system_ar = `أنت صديق مقرّب يعطي رؤى سريعة ودافئة عن يوميات شخص. اكتب 40–60 كلمة كحد أقصى. استخدم الرموز. ابدأ بـ "ألاحظ..." أو "انظر لهذا...". كن محددًا بالتواريخ. الممنوع: يبدو أن، يوحي ذلك، فكّر في، أوصي بـ، تُظهر بياناتك.`;
+    // Include data availability context so AI doesn't hallucinate
+    let dataContext = '';
+    if (hasNoData) {
+      dataContext = lang==='ar' 
+        ? 'المستخدم ليس لديه أي إدخالات في اليوميات. أجب بصدق أنه لا توجد بيانات للتحليل.' 
+        : 'User has NO journal entries at all. Be honest that there is no data to analyze.';
+    } else if (lastEntry) {
+      // Always tell AI about the last entry
+      const lastEntryContext = lang==='ar'
+        ? `آخر إدخال للمستخدم كان في ${lastEntry.date} (قبل ${lastEntry.days_ago} يوم). المزاج: ${MOOD_ICON[lastEntry.mood] || lastEntry.mood}. ${lastEntry.note ? 'الملاحظة: "' + lastEntry.note + '"' : ''} ${lastEntry.tags.length ? 'الوسوم: ' + lastEntry.tags.map(iconizeTag).join(', ') : ''}`
+        : `User's LAST entry was on ${lastEntry.date} (${lastEntry.days_ago} days ago). Mood: ${MOOD_ICON[lastEntry.mood] || lastEntry.mood}. ${lastEntry.note ? 'Note: "' + lastEntry.note + '"' : ''} ${lastEntry.tags.length ? 'Tags: ' + lastEntry.tags.map(iconizeTag).join(', ') : ''}`;
+      dataContext = lastEntryContext;
+      if (entries.length === 0) {
+        dataContext += lang==='ar' 
+          ? ` لكن لا توجد إدخالات في آخر ${windowDays} يوم.`
+          : ` However, no entries in the last ${windowDays} days.`;
+      }
+    }
+    
+    const system_en = `You are a trusted best friend who gives quick, warm insights about someone's journal. Write 40–60 words max. Use inline icons. Start with "I notice...", "Look at this...", or "Every time...". Be specific with dates/times. BANNED: It appears that, This suggests, Consider, I would recommend, Your data shows, Based on your patterns, level. No corporate/therapy jargon. CRITICAL: If there is no data, say so honestly - never make up or assume information.${dataContext ? ' ' + dataContext : ''}`;
+    const system_ar = `أنت صديق مقرّب يعطي رؤى سريعة ودافئة عن يوميات شخص. اكتب 40–60 كلمة كحد أقصى. استخدم الرموز. ابدأ بـ "ألاحظ..." أو "انظر لهذا...". كن محددًا بالتواريخ. الممنوع: يبدو أن، يوحي ذلك، فكّر في، أوصي بـ، تُظهر بياناتك. مهم جداً: إذا لم تكن هناك بيانات، قل ذلك بصدق - لا تختلق معلومات.${dataContext ? ' ' + dataContext : ''}`;
 
     // LLM - GPT-4o-mini for speed
     let summary: string | undefined;

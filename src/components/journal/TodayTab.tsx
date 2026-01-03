@@ -471,7 +471,7 @@ export const TodayTab: React.FC = () => {
       // Smart icon matching for custom tags
       const getIcon = (tagId: string): string => {
         if (tagEmoji[tagId]) return tagEmoji[tagId]!;
-        const lower = tagId.toLowerCase();
+        const lower = tagId.toLowerCase().replace(/_/g, ' ');
         if (lower.includes("wife")) return "👰";
         if (lower.includes("husband")) return "🤵";
         if (lower.includes("partner")) return "💑";
@@ -485,7 +485,7 @@ export const TodayTab: React.FC = () => {
         if (lower.includes("yoga")) return "🧘";
         if (lower.includes("car") || lower.includes("drive")) return "🚗";
         if (lower.includes("food") || lower.includes("eat")) return "🍽️";
-        if (lower.includes("code") || lower.includes("program")) return "💻";
+        if (lower.includes("code") || lower.includes("program") || lower.includes("coding")) return "💻";
         if (lower.includes("write")) return "✍️";
         return "🏷️";
       };
@@ -894,7 +894,7 @@ export const TodayTab: React.FC = () => {
       // Smart icon matching for custom tags
       const getIcon = (tagId: string): string => {
         if (tagEmoji[tagId]) return tagEmoji[tagId]!;
-        const lower = tagId.toLowerCase();
+        const lower = tagId.toLowerCase().replace(/_/g, ' ');
         if (lower.includes("wife")) return "👰";
         if (lower.includes("husband")) return "🤵";
         if (lower.includes("partner")) return "💑";
@@ -908,7 +908,7 @@ export const TodayTab: React.FC = () => {
         if (lower.includes("yoga")) return "🧘";
         if (lower.includes("car") || lower.includes("drive")) return "🚗";
         if (lower.includes("food") || lower.includes("eat")) return "🍽️";
-        if (lower.includes("code") || lower.includes("program")) return "💻";
+        if (lower.includes("code") || lower.includes("program") || lower.includes("coding")) return "💻";
         if (lower.includes("write")) return "✍️";
         return "🏷️";
       };
