@@ -19,6 +19,7 @@ import {
 } from "@/services/whoopService";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { TopPageSection } from "@/components/fitness/TopPageSection";
@@ -112,15 +113,28 @@ export default function FitnessHealth() {
 
     (async () => {
       try {
+        // 1. Try to load from Database Cache FIRST for instant UI
+        const { data: dbCache, error: cacheErr } = await supabase
+          .from('user_whoop_metrics_cache')
+          .select('*')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (dbCache && !cacheErr) {
+          console.log('[Cache] Loading from DB cache');
+          if (dbCache.metrics) setMetrics(dbCache.metrics);
+          if (dbCache.status) setStatus(dbCache.status);
+          if (dbCache.history) {
+            if (dbCache.history.hr) setAllHrHistory(dbCache.history.hr);
+            if (dbCache.history.sleep) setAllSleepHist(dbCache.history.sleep);
+            if (dbCache.history.cycle) setAllCycleHist(dbCache.history.cycle);
+            if (dbCache.history.workouts) setAllWorkoutsHist(dbCache.history.workouts);
+          }
+        }
+
         const st = await getWhoopStatus();
         setStatus(st);
         setConnected(st.connected);
-        console.log('[Auth Debug] WHOOP status check', {
-          connected: st.connected,
-          lastSyncedAt: st.lastSyncedAt,
-          userId: user?.id,
-          timestamp: new Date().toISOString()
-        });
         
         if (st.connected) {
           // FIX: Fetch ALL data (6 months) once, filter locally
@@ -131,9 +145,10 @@ export default function FitnessHealth() {
             fetchCycleHistory(180, true),     // 6 months
             fetchWorkoutsHistory(180, true),  // 6 months
           ]);
+          
           setMetrics(m);
           setAllHrHistory(rec);
-          setAllSleepHist(sl.map((x:any)=>{
+          const processedSleep = sl.map((x:any)=>{
             const deep = x.total_deep_sleep_ms ?? x.data?.score?.stage_summary?.total_slow_wave_sleep_time_milli ?? 0;
             const rem = x.total_rem_sleep_ms ?? x.data?.score?.stage_summary?.total_rem_sleep_time_milli ?? 0;
             const light = x.total_light_sleep_ms ?? x.data?.score?.stage_summary?.total_light_sleep_time_milli ?? 0;
@@ -148,15 +163,83 @@ export default function FitnessHealth() {
               if (delta > 0) hours = Math.round((delta / 3600000) * 10) / 10; // ms → hours
             }
             return { start: x.start, end: x.end, hours, stages: { deep, rem, light, awake } };
-          }));
+          });
+          setAllSleepHist(processedSleep);
           setAllCycleHist(cyc);
-          setAllWorkoutsHist(wks.map((w:any)=>({ start: w.start, strain: w.strain ?? null, kcal: w.kcal ?? null })));
+          const processedWorkouts = wks.map((w:any)=>({ start: w.start, strain: w.strain ?? null, kcal: w.kcal ?? null }));
+          setAllWorkoutsHist(processedWorkouts);
+
+          // Persist to Database Cache
+          supabase.rpc('upsert_whoop_cache' as any, {
+            p_user_id: user.id,
+            p_metrics: m,
+            p_status: st,
+            p_history: {
+              hr: rec,
+              sleep: processedSleep,
+              cycle: cyc,
+              workouts: processedWorkouts
+            }
+          }).then(({ error }) => {
+            if (error) console.error('[Cache] DB persist failed:', error);
+          });
+
           if (st.lastSyncedAt && autoSync) {
             const ageMs = Date.now() - new Date(st.lastSyncedAt).getTime();
             if (ageMs > 3600_000) {
               try {
                 setSyncing(true);
                 const res = await triggerUserSync();
+                
+                // FIX: Add 2-second delay to allow database commits to complete
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                // FIX: Force fresh queries with cache busting and retry logic
+                let retryCount = 0;
+                let m, rec, sl, cyc, wks;
+                
+                while (retryCount < 2) {
+                  [m, rec, sl, cyc, wks] = await Promise.all([
+                    fetchCompactMetrics(true), 
+                    fetchRecoveryHistory(timeRangeToDays(timeRange), true),
+                    fetchSleepHistory(timeRangeToDays(timeRange), true),
+                    fetchCycleHistory(timeRangeToDays(timeRange), true),
+                    fetchWorkoutsHistory(timeRangeToDays(timeRange), true)
+                  ]);
+                  
+                  // Validate data freshness - check if we got actual data
+                  if (m && (m.sleep || m.recovery || m.cycle)) {
+                    break; // Data looks good
+                  }
+                  
+                  // No data yet, retry after another delay
+                  retryCount++;
+                  if (retryCount < 2) {
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+                  }
+                }
+                
+                setMetrics(m);
+                setAllHrHistory(rec);
+                setAllSleepHist(sl.map((x:any)=>{
+                  const deep = x.total_deep_sleep_ms ?? x.data?.score?.stage_summary?.total_slow_wave_sleep_time_milli ?? 0;
+                  const rem = x.total_rem_sleep_ms ?? x.data?.score?.stage_summary?.total_rem_sleep_time_milli ?? 0;
+                  const light = x.total_light_sleep_ms ?? x.data?.score?.stage_summary?.total_light_sleep_time_milli ?? 0;
+                  const awake = x.total_awake_ms ?? x.data?.score?.stage_summary?.total_awake_time_milli ?? 0;
+                  const durationSec = typeof x.duration_sec === 'number' ? x.duration_sec : (typeof x.data?.score?.sleep_duration_milli === 'number' ? x.data.score.sleep_duration_milli/1000 : undefined);
+                  let hours: number | null = null;
+                  // Convert to hours with 0.1 precision
+                  if (typeof durationSec === 'number' && durationSec > 0) hours = Math.round((durationSec / 3600) * 10) / 10; // sec → hours
+                  else if (deep+rem+light+awake > 0) hours = Math.round(((deep+rem+light+awake) / 3600000) * 10) / 10; // ms → hours
+                  else if (x.start && x.end) {
+                    const delta = new Date(x.end).getTime() - new Date(x.start).getTime();
+                    if (delta > 0) hours = Math.round((delta / 3600000) * 10) / 10; // ms → hours
+                  }
+                  return { start: x.start, end: x.end, hours, stages: { deep, rem, light, awake } };
+                }));
+                setAllCycleHist(cyc);
+                setAllWorkoutsHist(wks.map((w:any)=>({ start: w.start, strain: w.strain ?? null, kcal: w.kcal ?? null })));
+                setStatus({ connected: true, lastSyncedAt: new Date().toISOString() });
                 const counts = res?.counts || {};
                 const totalSynced =
                   (counts.cycles || 0) +
@@ -195,11 +278,12 @@ export default function FitnessHealth() {
                   const awake = x.total_awake_ms ?? x.data?.score?.stage_summary?.total_awake_time_milli ?? 0;
                   const durationSec = typeof x.duration_sec === 'number' ? x.duration_sec : (typeof x.data?.score?.sleep_duration_milli === 'number' ? x.data.score.sleep_duration_milli/1000 : undefined);
                   let hours: number | null = null;
-                  if (typeof durationSec === 'number' && durationSec > 0) hours = Math.round((durationSec/360))*0.1;
-                  else if (deep+rem+light+awake > 0) hours = Math.round(((deep+rem+light+awake)/360000))*0.1;
+                  // Convert to hours with 0.1 precision
+                  if (typeof durationSec === 'number' && durationSec > 0) hours = Math.round((durationSec / 3600) * 10) / 10; // sec → hours
+                  else if (deep+rem+light+awake > 0) hours = Math.round(((deep+rem+light+awake) / 3600000) * 10) / 10; // ms → hours
                   else if (x.start && x.end) {
                     const delta = new Date(x.end).getTime() - new Date(x.start).getTime();
-                    if (delta > 0) hours = Math.round((delta/360000))*0.1;
+                    if (delta > 0) hours = Math.round((delta / 3600000) * 10) / 10; // ms → hours
                   }
                   return { start: x.start, end: x.end, hours, stages: { deep, rem, light, awake } };
                 }));
@@ -217,8 +301,8 @@ export default function FitnessHealth() {
                 } catch {}
                 if (e?.message?.includes('refresh failed') || e?.message?.includes('400')) {
                   toast.info(
-                    language === 'ar' 
-                      ? 'يرجى إعادة الاتصال بـ WHOOP لمواصلة المزامنة التلقائية' 
+                    language === 'ar'
+                      ? 'يرجى إعادة الاتصال بـ WHOOP لمواصلة المزامنة التلقائية'
                       : 'Please reconnect to WHOOP to continue auto-sync',
                     { duration: 5000 }
                   );
@@ -309,10 +393,10 @@ export default function FitnessHealth() {
       while (retryCount < 2) {
         [m, rec, sl, cyc, wks] = await Promise.all([
           fetchCompactMetrics(true), 
-          fetchRecoveryHistory(timeRangeToDays(timeRange), true),
-          fetchSleepHistory(timeRangeToDays(timeRange), true),
-          fetchCycleHistory(timeRangeToDays(timeRange), true),
-          fetchWorkoutsHistory(timeRangeToDays(timeRange), true)
+          fetchRecoveryHistory(180, true), // Fetch 6 months to match initial load
+          fetchSleepHistory(180, true),
+          fetchCycleHistory(180, true),
+          fetchWorkoutsHistory(180, true)
         ]);
         
         // Validate data freshness - check if we got actual data
@@ -329,9 +413,34 @@ export default function FitnessHealth() {
       
       setMetrics(m);
       setAllHrHistory(rec);
-      setAllSleepHist(sl.map((x:any)=>({ start: x.start, end: x.end, hours: x.hours, stages: x.stages })));
+      const processedSleep = sl.map((x:any)=>({ 
+        start: x.start, 
+        end: x.end, 
+        hours: x.hours, 
+        stages: x.stages 
+      }));
+      setAllSleepHist(processedSleep);
       setAllCycleHist(cyc);
-      setAllWorkoutsHist(wks.map((w:any)=>({ start: w.start, strain: w.strain ?? null, kcal: w.kcal ?? null })));
+      const processedWorkouts = wks.map((w:any)=>({ start: w.start, strain: w.strain ?? null, kcal: w.kcal ?? null }));
+      setAllWorkoutsHist(processedWorkouts);
+
+      // Update persistent cache after manual sync
+      if (user?.id) {
+        supabase.rpc('upsert_whoop_cache' as any, {
+          p_user_id: user.id,
+          p_metrics: m,
+          p_status: { connected: true, lastSyncedAt: new Date().toISOString() },
+          p_history: {
+            hr: rec,
+            sleep: processedSleep,
+            cycle: cyc,
+            workouts: processedWorkouts
+          }
+        }).then(({ error }) => {
+          if (error) console.error('[Cache] Manual sync DB persist failed:', error);
+        });
+      }
+
       setStatus({ connected: true, lastSyncedAt: new Date().toISOString() });
       const countsManual = res?.counts || {};
       const totalManual =

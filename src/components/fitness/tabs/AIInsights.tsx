@@ -206,9 +206,49 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
     if (currentWindow && persistedInsights[currentWindow]) {
       return currentWindow;
     }
-    return null;
+    return currentWindow; // Default to current time window even if no insight yet
   });
+
+  // Load from Database Cache on mount
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    (async () => {
+      try {
+        const { data, error } = await (supabase
+          .from('user_whoop_ai_insights' as any)
+          .select('time_window, insight, created_at')
+          .eq('user_id', user.id) as any);
+          
+        if (data && !error) {
+          const newInsights: Record<TimeWindow, any> = { ...insights };
+          let latestWindow: TimeWindow | null = activeWindow;
+          let latestTime = 0;
+
+          data.forEach((row: any) => {
+            // Only use cache if it's from today (local time)
+            const created = new Date(row.created_at);
+            const isToday = created.toDateString() === new Date().toDateString();
+            
+            if (isToday) {
+              newInsights[row.time_window as TimeWindow] = row.insight;
+              if (created.getTime() > latestTime) {
+                latestTime = created.getTime();
+                latestWindow = row.time_window as TimeWindow;
+              }
+            }
+          });
+          
+          setInsights(newInsights);
+          if (latestWindow) setActiveWindow(latestWindow);
+        }
+      } catch (e) {
+        console.error('[Cache] Load failed:', e);
+      }
+    })();
+  }, [user?.id]);
   const [lastGenerated, setLastGenerated] = useState<Record<TimeWindow, number>>(loadPersistedTimes());
+  const autoTriggeredRef = useRef<Record<string, boolean>>({});
   
   // Audio playback state with caching
   const [isPlaying, setIsPlaying] = useState(false);
@@ -260,11 +300,23 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
     localStorage.setItem('wakti-ai-insights-times', JSON.stringify(lastGenerated));
   }, [lastGenerated]);
 
-  // SIMPLE: Auto-generate insights on load
+  // Auto-generate current window's insights on load if missing
   useEffect(() => {
-    if (!activeWindow && !loading) {
+    if (!user?.id || loading) return;
+    
+    const win = getCurrentTimeWindow();
+    if (!win) return;
+
+    // Only auto-trigger if:
+    // 1. It's a valid time window
+    // 2. We haven't generated it yet for this session (ref check)
+    // 3. There's no existing insight in the state/cache
+    if (!insights[win] && !autoTriggeredRef.current[win]) {
+      console.log(`[Auto-Trigger] First time detection for ${win}, generating...`);
+      autoTriggeredRef.current[win] = true;
+      generateInsights(win);
     }
-  }, []);
+  }, [user?.id, !!insights.morning, !!insights.midday, !!insights.evening]);
 
   const generateInsights = async (window: TimeWindow, forceGenerate = false) => {
     console.log('Generating insights for window:', window);
@@ -317,123 +369,47 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
       setLoading(window);
       console.log('Starting AI insights generation for window:', window);
       
-      // Show loading immediately, then fetch data asynchronously
-      setTimeout(async () => {
-        try {
-          // Get user's real name
-          const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || "Champion";
-          
-          // Use the SAME metrics data that WhoopDetails uses - this is the real WHOOP data!
-          console.log('Using direct metrics data:', metrics);
-          console.log('Sleep performance:', metrics?.sleep?.performance_pct);
-          console.log('Recovery score:', metrics?.recovery?.score);
-          console.log('HRV ms:', metrics?.recovery?.hrv_ms);
-          console.log('Day strain:', metrics?.cycle?.day_strain);
-          
-          // Ensure we have WHOOP data: if missing, auto-sync, rebuild, and re-check
-          let haveMetrics = !!(metrics && (metrics.sleep || metrics.recovery || metrics.cycle));
-          if (!haveMetrics) {
-            try { await triggerUserSync(); } catch {}
-            const rebuilt: any = await buildInsightsAggregate();
-            haveMetrics = !!(rebuilt && ((rebuilt as any).sleep || (rebuilt as any).recovery || (rebuilt as any).cycle));
-            if (!haveMetrics) {
-              toast.error(language === 'ar' 
-                ? 'لا توجد بيانات بعد. قم بالمزامنة أولاً ثم أعد المحاولة.' 
-                : 'No data yet. Please sync first and try again.'
-              );
-              return;
-            }
-          }
-          
-          // Extract sleep hours from duration_sec or stage_summary
-          const sleepHours = (() => {
-            if (metrics?.sleep?.duration_sec) {
-              return Math.round((metrics.sleep.duration_sec / 3600) * 10) / 10;
-            }
-            const stages = metrics?.sleep?.data?.score?.stage_summary;
-            if (stages) {
-              const totalMs = (stages.deep_sleep_milli || 0) + (stages.rem_sleep_milli || 0) + (stages.light_sleep_milli || 0);
-              return totalMs ? Math.round((totalMs / 3600000) * 10) / 10 : null;
-            }
-            return null;
-          })();
-          
-          // Create enhanced data using the REAL metrics (same as WhoopDetails)
-          const enhancedData = {
-            user_name: userName,
-            current_time: new Date().toISOString(),
-            time_window: window,
-            // Use the EXACT same data structure that WhoopDetails displays
-            key_metrics: {
-              sleep_hours: sleepHours,
-              sleep_performance: metrics?.sleep?.performance_pct,
-              recovery_score: metrics?.recovery?.score,
-              hrv_ms: metrics?.recovery?.hrv_ms,
-              resting_hr: metrics?.recovery?.rhr_bpm,
-              day_strain: metrics?.cycle?.day_strain,
-              avg_heart_rate: metrics?.cycle?.avg_hr_bpm,
-              workout_sport: metrics?.workout?.sport_name,
-              workout_strain: metrics?.workout?.strain,
-              workout_duration: metrics?.workout?.end && metrics?.workout?.start 
-                ? Math.round((new Date(metrics.workout.end).getTime() - new Date(metrics.workout.start).getTime()) / 60000)
-                : null
-            },
-            // Include raw metrics for AI to analyze
-            raw_metrics: metrics,
-            // Add rich context for AI
-            insights_context: {
-              time_of_day: window,
-              user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-              current_hour: new Date().getHours(),
-              is_weekend: [0, 6].includes(new Date().getDay())
-            }
-          };
-          
-          console.log('Enhanced data for AI:', enhancedData);
-          console.log('=== DEBUG AI DATA PAYLOAD ===');
-          console.log('User:', user);
-          console.log('Metrics:', metrics);
-          console.log('Time Window:', window);
-          console.log('Language:', language);
-          
-          const dataFull = await buildInsightsAggregate();
-          const response = await generateAiInsights(language as 'en' | 'ar', {
-            time_of_day: window,
-            user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            data: dataFull
-          });
-          
-          console.log('=== AI RESPONSE ===');
-          console.log('Response:', response);
-          
-          console.log('AI insights response:', response);
-          
-          setInsights(prev => ({
-            ...prev,
-            [window]: response
-          }));
-          
-          setLastGenerated(prev => ({
-            ...prev,
-            [window]: now
-          }));
-          
-          // Generation count tracking removed for testing
-          
-          setActiveWindow(window);
-          toast.success(language === 'ar' ? 'تم إنشاء الرؤى' : 'Insights generated');
-          
-        } catch (error) {
-          console.error('AI insights error:', error);
-          toast.error(language === 'ar' ? 'فشل في الاتصال بالخدمة' : 'Service connection failed');
-        } finally {
-          setLoading(null);
-        }
-      }, 100); // Allow UI to update first
+      // Get user's real name
+      const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || "Champion";
+      
+      // OPTIMIZATION: Don't block on aggregate rebuild if we already have metrics
+      // This saves ~10-15 seconds of latency
+      const dataFull = aiData || await buildInsightsAggregate();
+      
+      const response = await generateAiInsights(language as 'en' | 'ar', {
+        time_of_day: window,
+        user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        data: dataFull
+      });
+      
+      setInsights(prev => ({
+        ...prev,
+        [window]: response
+      }));
+      
+      // Persist to Database Cache
+      if (user?.id) {
+        supabase.rpc('upsert_whoop_ai_insight' as any, {
+          p_user_id: user.id,
+          p_time_window: window,
+          p_insight: response
+        }).then(({ error }) => {
+          if (error) console.error('[Cache] DB persist failed:', error);
+        });
+      }
+      
+      setLastGenerated(prev => ({
+        ...prev,
+        [window]: now
+      }));
+      
+      setActiveWindow(window);
+      toast.success(language === 'ar' ? 'تم إنشاء الرؤى' : 'Insights generated');
       
     } catch (error) {
-      console.error('Critical error:', error);
-      toast.error(language === 'ar' ? 'فشل في إنشاء الرؤى' : 'Failed to generate insights');
+      console.error('AI insights error:', error);
+      toast.error(language === 'ar' ? 'فشل في الاتصال بالخدمة' : 'Service connection failed');
+    } finally {
       setLoading(null);
     }
   };
@@ -584,18 +560,28 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
   };
 
   const buildQAContext = () => {
-    const sleepDurationH = metrics?.sleep?.duration_sec ? Math.round((metrics.sleep.duration_sec / 360) ) / 10 : (aiData?.today?.sleepHours ?? null);
-    return {
+    // FIX: Calculate sleep hours accurately from metrics
+    const sleepDurationH = metrics?.sleep?.duration_sec 
+      ? Math.round((metrics.sleep.duration_sec / 3600) * 10) / 10 
+      : (aiData?.today?.sleepHours ?? null);
+
+    // CRITICAL: Get bedtime/waketime from multiple possible sources
+    const rawBedtime = metrics?.sleep?.start || aiData?.details?.sleep?.start || aiData?.raw?.sleep_full?.start || null;
+    const rawWaketime = metrics?.sleep?.end || aiData?.details?.sleep?.end || aiData?.raw?.sleep_full?.end || null;
+    
+    console.log('[QA Context] Raw sleep times:', { rawBedtime, rawWaketime, metricsStart: metrics?.sleep?.start, metricsEnd: metrics?.sleep?.end });
+
+    const context = {
       sleep: {
-        duration_hours: sleepDurationH ?? null,
-        performance_pct: metrics?.sleep?.performance_pct ?? null,
+        duration_hours: sleepDurationH,
+        performance_pct: metrics?.sleep?.performance_pct ?? metrics?.sleep?.data?.score?.sleep_performance_percentage ?? null,
         efficiency_pct: metrics?.sleep?.data?.score?.sleep_efficiency_percentage ?? metrics?.sleep?.sleep_efficiency_pct ?? null,
         respiratory_rate: metrics?.sleep?.data?.score?.respiratory_rate ?? metrics?.sleep?.respiratory_rate ?? null,
         consistency_pct: metrics?.sleep?.data?.score?.sleep_consistency_percentage ?? metrics?.sleep?.sleep_consistency_pct ?? null,
         cycles: metrics?.sleep?.data?.score?.stage_summary?.sleep_cycle_count ?? metrics?.sleep?.sleep_cycle_count ?? null,
         disturbances: metrics?.sleep?.data?.score?.stage_summary?.disturbance_count ?? metrics?.sleep?.disturbance_count ?? null,
-        bedtime: formatTimeShort(metrics?.sleep?.start ?? null),
-        waketime: formatTimeShort(metrics?.sleep?.end ?? null),
+        bedtime: formatTimeShort(rawBedtime),
+        waketime: formatTimeShort(rawWaketime),
       },
       recovery: {
         score_pct: metrics?.recovery?.score ?? metrics?.recovery?.data?.score?.recovery_score ?? null,
@@ -621,6 +607,9 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
         distance_km: metrics.workout.data?.score?.distance_meter ? +(metrics.workout.data.score.distance_meter/1000).toFixed(2) : null,
       } : null,
     };
+
+    console.log('[QA Context Builder] Final Context:', context);
+    return context;
   };
 
   const classifyTopic = (q: string): 'sleep'|'recovery'|'strain'|'general' => {
@@ -929,16 +918,6 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
           </div>
         </div>
 
-        {/* AI Coach Availability */}
-        <div className="bg-gray-100 dark:bg-black/20 rounded-lg p-3 mb-4">
-          <p className="text-xs text-gray-700 dark:text-gray-300 mb-2 font-medium">{language === 'ar' ? 'المدرب الذكي متاح خلال:' : 'AI Coach available during:'}</p>
-          <div className="flex flex-wrap gap-2 text-xs font-semibold">
-            <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400">🌅 {language === 'ar' ? 'الصباح: 4:00 ص - 12:00 م' : 'Morning: 4:00 AM - 12:00 PM'}</span>
-            <span className="flex items-center gap-1 text-orange-700 dark:text-orange-400">☀️ {language === 'ar' ? 'منتصف النهار: 12:00 م - 8:00 م' : 'Midday: 12:00 PM - 8:00 PM'}</span>
-            <span className="flex items-center gap-1 text-purple-700 dark:text-purple-400">🌙 {language === 'ar' ? 'المساء: 8:00 م - 4:00 ص' : 'Evening: 8:00 PM - 4:00 AM'}</span>
-          </div>
-        </div>
-
         {/* Time Window Generation Buttons */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
           {(Object.entries(TIME_WINDOWS) as [TimeWindow, typeof TIME_WINDOWS[TimeWindow]][]).map(([window, config]) => {
@@ -1025,6 +1004,17 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
                 {language === 'ar' ? 'الملخص اليومي' : 'Daily Summary'}
               </h3>
               <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  type="button"
+                  onClick={() => generateInsights(activeWindow as TimeWindow, true)}
+                  disabled={loading === activeWindow}
+                  className="h-8 px-2 text-xs"
+                >
+                  <RefreshCw className={`h-3 w-3 mr-1 ${loading === activeWindow ? 'animate-spin' : ''}`} />
+                  {language === 'ar' ? 'إعادة إنشاء' : 'Regenerate'}
+                </Button>
                 {isPlaying && (
                   <Button 
                     variant="outline" 
@@ -1260,14 +1250,6 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
               : 'Select the appropriate time window and click "Generate Insights" for personalized AI analysis'
             }
           </p>
-          <div className="text-sm text-muted-foreground">
-            {language === 'ar' ? 'المدرب الذكي متاح في:' : 'AI Coach available during:'}
-            <div className="mt-2 space-y-1">
-              <div>🌅 {language === 'ar' ? 'الصباح' : 'Morning'}: 5:00 AM - 11:00 AM</div>
-              <div>☀️ {language === 'ar' ? 'منتصف النهار' : 'Midday'}: 12:00 PM - 6:00 PM</div>
-              <div>🌙 {language === 'ar' ? 'المساء' : 'Evening'}: 5:00 PM - 11:00 PM</div>
-            </div>
-          </div>
         </Card>
       )}
     </div>

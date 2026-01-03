@@ -205,6 +205,22 @@ export async function saveInsight(timeWindow: 'morning' | 'midday' | 'evening', 
   }
 }
 
+export async function sendPushNotification(title: string, message: string, userId: string) {
+  try {
+    const { data, error } = await supabase.functions.invoke('wakti-send-push', {
+      body: { title, message, user_id: userId },
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (error) {
+      console.error('Error sending push notification:', error);
+    } else {
+      console.log('Push notification sent:', data);
+    }
+  } catch (e) {
+    console.error('Exception sending push notification:', e);
+  }
+}
+
 export async function generateAiInsights(
   language: 'en'|'ar' = 'en', 
   options?: {

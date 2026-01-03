@@ -182,6 +182,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, [handleNativelyReady]);
 
+  // Sync timezone to profile for localized notifications (runs for ALL users, web + native)
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (tz) {
+        supabase.rpc('update_user_timezone' as any, { 
+          p_user_id: user.id, 
+          p_timezone: tz 
+        }).then(({ error }) => {
+          if (error) console.warn('[AuthContext] Timezone sync failed:', error);
+        });
+      }
+    } catch (tzErr) {
+      console.warn('[AuthContext] Failed to get client timezone:', tzErr);
+    }
+  }, [user?.id]);
+
   // Identify logged-in user in RevenueCat (via Natively SDK). No-op on web.
   // Also check subscription status via RevenueCat REST API
   useEffect(() => {

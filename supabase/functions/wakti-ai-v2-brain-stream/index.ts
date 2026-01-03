@@ -741,6 +741,7 @@ async function streamGemini3WithSearch(
 function buildSystemPrompt(
   language: string,
   currentDate: string,
+  localTime: string,
   personalTouch: Record<string, unknown> | null | undefined,
   activeTrigger: string,
   chatSubmode = 'chat'
@@ -775,6 +776,11 @@ CRITICAL OUTPUT FORMAT
 - Bulleted list: for steps, checklists, 1–2 results.
 - Paragraph: for conversational replies.
 - Use Markdown links ONLY when a real URL is provided.
+
+TIME CAPABILITY (IMPORTANT)
+- You DO have the user's current local date/time provided below.
+- If the user asks "what time is it" or anything about current time/date, answer using the provided "Current local time".
+- Do NOT say you can't access real-time time/date.
 
 ${activeTrigger === 'chat' && chatSubmode === 'chat' ? `
 CHAT FRESHNESS PROTOCOL (CHAT MODE ONLY)
@@ -860,7 +866,10 @@ Greetings, abdullah — wakto here. Friday, December 26, 2025 — 3:05 PM (Doha 
 - Mobile World Congress 2025 launched in Doha, showcasing 32 edge digital projects from 17 governments.
 - The 12th World Innovation Summit for Education opened, focusing on AI's role in transforming learning.
 ` : ''}
-You are ${aiNick || 'WAKTI AI'} — date: ${currentDate}.`;
+CURRENT TIME CONTEXT
+- Current local time: ${localTime}
+
+You are ${aiNick || 'WAKTI AI'} — date: ${currentDate} — time: ${localTime}.`;
 }
 
 type ChatMessage = { role: string; content: string };
@@ -1409,9 +1418,52 @@ serve(async (req) => {
         const ipGeo = (!location || (!location?.city && !location?.country && !location?.latitude && !location?.longitude))
           ? await lookupIpGeo(clientIp)
           : null;
+
+        const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+        const getProfileTimezone = async (uid?: string): Promise<string | null> => {
+          try {
+            if (!uid) return null;
+            // Try common column names defensively.
+            try {
+              const { data, error } = await supabaseAdmin
+                .from('profiles')
+                .select('timezone')
+                .eq('id', uid)
+                .maybeSingle();
+              if (!error) {
+                const tz = (data as { timezone?: unknown } | null)?.timezone;
+                const v = typeof tz === 'string' ? tz.trim() : '';
+                if (v) return v;
+              }
+            } catch {}
+
+            try {
+              const { data, error } = await supabaseAdmin
+                .from('profiles')
+                .select('time_zone')
+                .eq('id', uid)
+                .maybeSingle();
+              if (!error) {
+                const tz = (data as { time_zone?: unknown } | null)?.time_zone;
+                const v = typeof tz === 'string' ? tz.trim() : '';
+                if (v) return v;
+              }
+            } catch {}
+
+            return null;
+          } catch {
+            return null;
+          }
+        };
+
+        const profileTimezone = (!clientTimezone || clientTimezone === 'UTC')
+          ? await getProfileTimezone(userId)
+          : null;
+
         const effectiveTimezone = (clientTimezone && clientTimezone !== 'UTC')
           ? clientTimezone
-          : (ipGeo?.timezone || clientTimezone || 'UTC');
+          : (profileTimezone || ipGeo?.timezone || clientTimezone || 'UTC');
 
         const ipLocationLine = (() => {
           if (!ipGeo) return '';
@@ -1458,10 +1510,22 @@ serve(async (req) => {
           weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: effectiveTimezone
         });
 
+        const localTime = new Date().toLocaleString('en-US', {
+          timeZone: effectiveTimezone,
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
+
         // Build enhanced system prompt (pass chatSubmode for Study mode tutor instructions)
         const systemPromptBase = buildSystemPrompt(
           language,
           currentDate,
+          localTime,
           personalTouch as Record<string, unknown> | null | undefined,
           activeTrigger,
           chatSubmode
@@ -2157,8 +2221,7 @@ If you are running out of space, keep this order and drop the rest:
         if (!streamReader) throw new Error('No stream reader available');
 
         if (aiProvider === 'openai') {
-          const sr = streamReader;
-          if (!sr) throw new Error('No stream reader available');
+          const sr = streamReader as ReadableStreamDefaultReader<Uint8Array>;
           const decoder = new TextDecoder();
           let buffer = '';
           while (true) {

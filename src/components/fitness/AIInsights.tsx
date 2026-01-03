@@ -2,14 +2,17 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/providers/ThemeProvider";
-import { buildInsightsAggregate, generateAiInsights, getSavedInsight, pingAiInsights } from "@/services/whoopService";
+import { useAuth } from "@/contexts/AuthContext";
+import { buildInsightsAggregate, generateAiInsights, getSavedInsight, pingAiInsights, sendPushNotification } from "@/services/whoopService";
 import { Copy, Download, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
-// Charts for insights have been moved to the Overview tab. Keep recharts imports out of this file to avoid bundle weight.
 import { generatePDF } from "@/utils/pdfUtils";
+import { supabase } from "@/integrations/supabase/client";
 
 export function AIInsights() {
   const { language } = useTheme();
+  const { user } = useAuth();
+
   const [loading, setLoading] = useState(true);
   const [aiLoading, setAiLoading] = useState(false);
   const [agg, setAgg] = useState<any>(null);
@@ -29,6 +32,11 @@ export function AIInsights() {
         // AUTO-LOAD CACHED INSIGHTS for ALL windows on mount
         const windows: ('morning' | 'midday' | 'evening')[] = ['morning', 'midday', 'evening'];
         const currentHour = new Date().getHours();
+        
+        // Determine current window based on the new schedule:
+        // Morning: 5 AM - 11 AM
+        // Midday: 12 PM - 5 PM
+        // Evening: 5 PM - 11 PM
         let autoWindow: 'morning' | 'midday' | 'evening' = 'evening';
         if (currentHour >= 5 && currentHour < 11) autoWindow = 'morning';
         else if (currentHour >= 12 && currentHour < 17) autoWindow = 'midday';
@@ -42,6 +50,10 @@ export function AIInsights() {
               setAi(cached);
               setPhase('ready');
             }
+          } else if (win === 'morning' && autoWindow === 'morning') {
+            // AUTO-SYNC MORNING: If it's morning and no cache exists, generate it
+            console.log('Auto-syncing Morning insights...');
+            onGenerate('morning');
           }
         }
       } catch (e) {
@@ -94,7 +106,7 @@ export function AIInsights() {
         }
     }, [selectedTimeOfDay, activeWindow]);
 
-  const onGenerate = async () => {
+  const onGenerate = async (forcedWindow?: 'morning' | 'midday' | 'evening') => {
     try {
       setAiLoading(true);
       setPhase('checking');
@@ -124,13 +136,15 @@ export function AIInsights() {
       
       // Determine time of day based on selection or auto
       let timeOfDay: string;
-      if (selectedTimeOfDay === 'auto') {
+      if (forcedWindow) {
+        timeOfDay = forcedWindow;
+      } else if (selectedTimeOfDay === 'auto') {
         const hour = new Date().getHours();
         
         // Refined Logic (Matching UI labels in Vitality Dashboard):
-        // Morning: 4:00 AM - 11:59 AM (Focus: Sleep analysis & Daily prep)
-        // Midday: 12:00 PM - 7:59 PM (Focus: Activity & Mid-day flow)
-        // Evening: 8:00 PM - 3:59 AM (Focus: Wind-down & Next-day prep)
+        // Morning: 5:00 AM - 11:00 AM
+        // Midday: 12:00 PM - 5:00 PM
+        // Evening: 5:00 PM - 11:00 PM
         if (hour >= 5 && hour < 11) {
           timeOfDay = 'morning';
         } else if (hour >= 12 && hour < 17) {
@@ -151,7 +165,6 @@ export function AIInsights() {
       // SHOW USER EXACTLY WHAT'S BEING SENT
       const dataPreview = `Sleep: ${freshData?.today?.sleepHours}h | Recovery: ${freshData?.today?.recoveryPct}% | HRV: ${freshData?.today?.hrvMs}ms | Strain: ${freshData?.today?.dayStrain} | RHR: ${freshData?.today?.rhrBpm}bpm`;
       console.log('SENDING TO AI:', dataPreview);
-      toast.info(`Sending: ${dataPreview}`, { duration: 5000 });
       
       const resp = await generateAiInsights(language as 'en'|'ar', {
         data: freshData,
@@ -166,6 +179,18 @@ export function AIInsights() {
       setAi(resp || {});
       setPhase('ready');
       toast.success(language === 'ar' ? 'تم إنشاء الرؤى' : 'Insights generated');
+
+      // PUSH NOTIFICATION
+      const userId = (await supabase.auth.getUser()).data.user?.id;
+      if (userId) {
+        const winLabel = timeOfDay === 'morning' ? (language === 'ar' ? 'صباحي' : 'Morning') : 
+                         timeOfDay === 'midday' ? (language === 'ar' ? 'منتصف النهار' : 'Midday') : 
+                         (language === 'ar' ? 'مسائي' : 'Evening');
+        const title = language === 'ar' ? `رؤى WAKTI الذكية (${winLabel})` : `WAKTI Smart Insights (${winLabel})`;
+        const msg = language === 'ar' ? 'رؤيتك الصحية الجديدة جاهزة للتحليل!' : 'Your new health insight is ready for review!';
+        await sendPushNotification(title, msg, userId);
+      }
+
     } catch (e:any) {
       console.error("ai error", e);
       if (e?.message?.includes('missing_openai_key')) {
@@ -225,7 +250,7 @@ export function AIInsights() {
       <Card className="rounded-2xl p-4 shadow-sm bg-white/5">
         <div className="flex items-center justify-between mb-3">
           <div className="text-sm font-medium">{language === 'ar' ? 'رؤى WAKTI AI' : 'WAKTI AI Insights'}</div>
-          <Button onClick={onGenerate} disabled={aiLoading || loading} size="sm" className="h-8 px-3 text-xs">
+          <Button onClick={() => onGenerate()} disabled={aiLoading || loading} size="sm" className="h-8 px-3 text-xs">
             <RefreshCcw className={aiLoading ? 'mr-2 h-4 w-4 animate-spin':'mr-2 h-4 w-4'} /> {aiLoading ? (language==='ar'?'جاري الإنشاء...':'Generating...') : (language==='ar'?'إنشاء الرؤى':'Generate Insights')}
           </Button>
         </div>
@@ -244,7 +269,7 @@ export function AIInsights() {
             {selectedTimeOfDay === 'auto' && <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
           </button>
           <button
-            onClick={() => { setSelectedTimeOfDay('morning'); setTimeout(() => onGenerate(), 100); }}
+            onClick={() => { setSelectedTimeOfDay('morning'); setTimeout(() => onGenerate('morning'), 100); }}
             className={`px-3 py-1.5 text-xs rounded-lg transition-colors relative ${
               (selectedTimeOfDay === 'morning' || (selectedTimeOfDay === 'auto' && activeWindow === 'morning'))
                 ? 'bg-amber-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.5)]' 
@@ -258,7 +283,7 @@ export function AIInsights() {
             )}
           </button>
           <button
-            onClick={() => { setSelectedTimeOfDay('midday'); setTimeout(() => onGenerate(), 100); }}
+            onClick={() => { setSelectedTimeOfDay('midday'); setTimeout(() => onGenerate('midday'), 100); }}
             className={`px-3 py-1.5 text-xs rounded-lg transition-colors relative ${
               (selectedTimeOfDay === 'midday' || (selectedTimeOfDay === 'auto' && activeWindow === 'midday'))
                 ? 'bg-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.5)]' 
@@ -272,7 +297,7 @@ export function AIInsights() {
             )}
           </button>
           <button
-            onClick={() => { setSelectedTimeOfDay('evening'); setTimeout(() => onGenerate(), 100); }}
+            onClick={() => { setSelectedTimeOfDay('evening'); setTimeout(() => onGenerate('evening'), 100); }}
             className={`px-3 py-1.5 text-xs rounded-lg transition-colors relative ${
               (selectedTimeOfDay === 'evening' || (selectedTimeOfDay === 'auto' && activeWindow === 'evening'))
                 ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]' 
@@ -285,18 +310,6 @@ export function AIInsights() {
               <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0c0f14] z-10" />
             )}
           </button>
-        </div>
-        
-        <div className="text-xs text-muted-foreground mt-1">
-          {language==='ar' ? 'مدعوم من WAKTI AI — نستخدم بيانات موجزة ومجهولة لإنتاج ملخصات ونصائح داعمة.' : 'Powered by WAKTI AI — we use a compact, anonymized dataset to generate supportive summaries and tips.'}
-        </div>
-        <div className="text-[11px] text-muted-foreground mt-1">
-          {phase === 'idle' && (language==='ar' ? 'جاهز.' : 'Ready.')}
-          {phase === 'checking' && (language==='ar' ? 'التحقق من الخدمة...' : 'Checking service...')}
-          {phase === 'contacting' && (language==='ar' ? 'جار الاتصال بـ WAKTI AI...' : 'Contacting WAKTI AI...')}
-          {phase === 'analyzing' && (language==='ar' ? 'جاري التحليل...' : 'Analyzing...')}
-          {phase === 'ready' && (language==='ar' ? 'تم التحضير.' : 'Prepared.')}
-          {phase === 'error' && (language==='ar' ? 'حدث خطأ. حاول مرة أخرى.' : 'Error occurred. Try again.')}
         </div>
       </Card>
 
