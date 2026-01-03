@@ -138,11 +138,22 @@ export const AskTab: React.FC = () => {
       </div>
 
       {result && (
-        <div className="rounded-2xl border border-[#3b2bbd] bg-[radial-gradient(1200px_400px_at_10%_-20%,hsl(var(--card))_0%,hsl(var(--background))_55%)] p-5 shadow-[0_0_0_1px_#3b2bbd,0_10px_40px_rgba(0,0,0,0.35)]">
-          {result.question && <div className="text-sm mb-2 text-foreground/90">❓ {result.question}</div>}
-          {/* Requested info */}
-          {result.stats && (
-            <div className="text-sm mb-3">
+        <div className="space-y-3">
+          {/* User Question Bubble */}
+          {result.question && (
+            <div className="flex justify-end">
+              <div className="max-w-[85%] rounded-2xl rounded-br-md px-4 py-2.5 bg-primary text-primary-foreground shadow-md">
+                <span className="text-sm">{result.question}</span>
+              </div>
+            </div>
+          )}
+          
+          {/* AI Response Bubble */}
+          <div className="flex justify-start">
+            <div className="max-w-[90%] rounded-2xl rounded-bl-md border border-border/50 bg-gradient-to-br from-card to-muted/30 p-4 shadow-lg">
+              {/* Stats chips */}
+              {result.stats && (
+                <div className="text-sm mb-3">
               {(() => {
                 const moodNames = language === 'ar'
                   ? {1: 'سيئ جداً', 2: 'سيئ', 3: 'عادي', 4: 'جيد', 5: 'ممتاز'}
@@ -186,13 +197,18 @@ export const AskTab: React.FC = () => {
               })()}
             </div>
           )}
-          {/* Summary & Tip */}
-          {(result.formattedSummary || result.summary) && (
-            <div className="text-sm text-foreground/90">📝 {result.formattedSummary || result.summary}</div>
-          )}
-          {result.tips && (
-            <div className="mt-2 text-[13px] text-muted-foreground">💡 {result.tips}</div>
-          )}
+              {/* Summary & Tip */}
+              {(result.formattedSummary || result.summary) && (
+                <div className="text-sm text-foreground/90 leading-relaxed">
+                  <span className="inline-block mr-1.5">🤖</span>
+                  {result.formattedSummary || result.summary}
+                </div>
+              )}
+              {result.tips && (
+                <div className="mt-3 pt-2 border-t border-border/30 text-[13px] text-muted-foreground">💡 {result.tips}</div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

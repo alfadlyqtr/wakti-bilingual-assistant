@@ -202,13 +202,9 @@ export const TodayTab: React.FC = () => {
         const markerRe = /__FREE__(.*?)__END__/;
         const match = afterBar.match(markerRe);
         const currentFree = match ? match[1] : '';
-        // Remove marker and __UNSAVED__ from line to get clean tokens
-        const cleanAfter = afterBar.replace(markerRe, '').replace(/__UNSAVED__/g, '').trim();
-        const parts = cleanAfter.split('|').map(s => s.trim()).filter(Boolean);
-        const tokens = parts.filter(t => t !== '🕒' && t !== '__UNSAVED__');
         const newFree = transform(currentFree);
-        const tokensJoined = tokens.length > 0 ? tokens.join(' | ') : '';
-        const rebuilt = `${before}| ${tokensJoined}${tokensJoined ? ' | ' : ''}__FREE__${newFree}__END__ | `;
+        // Replace ONLY the marker content to preserve other chips
+        const rebuilt = before + afterBar.replace(markerRe, `__FREE__${newFree}__END__`);
         lines[i] = rebuilt;
       }
       const next = lines.join('\n');
@@ -216,6 +212,61 @@ export const TodayTab: React.FC = () => {
       return next;
     });
   }, [language, setNote]);
+
+  // Helper: finalize the current free-text into a chip (Add chip button action)
+
+  const finalizeCurrentPill = useCallback(() => {
+    setNote(prev => {
+      if (!prev) return prev;
+      const lines = prev.split('\n');
+      let i = lines.length - 1;
+      while (i >= 0 && !/^\[[^\]]+\]/.test(lines[i])) i--;
+      if (i < 0) return prev;
+
+      let line = lines[i];
+      const markerRe = /__FREE__(.*?)__END__/;
+      const match = line.match(markerRe);
+      const freeText = match ? match[1].trim() : '';
+
+      if (!freeText) return prev;
+
+      // Convert freeText to a token and append it to the chip list
+      // We strip the free-text marker and add the text as a permanent chip
+      let updated = line.replace(markerRe, '').trim();
+      updated = updated.replace(/\s*\|\s*$/, '').trimEnd();
+      
+      // Ensure the line has the correct structure [time] | chip1 | chip2 | __UNSAVED__
+      if (!updated.includes('|')) {
+        updated += ' |';
+      }
+      
+      updated += ` | ${freeText} | __UNSAVED__`;
+      
+      // Add a fresh empty free-text pill at the end for the next entry
+      updated = updated.replace(/\s*__UNSAVED__\s*/g, '');
+      updated = updated.replace(/\s*\|\s*$/, '').trimEnd() + ' | __FREE____END__ | __UNSAVED__';
+      
+      lines[i] = updated;
+      const next = lines.join('\n');
+      try { noteCERef.current && (noteCERef.current.innerHTML = renderNoteHtml(next)); } catch {}
+      return next;
+    });
+    
+    // Maintain focus in the new empty pill
+    setTimeout(() => {
+      const el = noteCERef.current;
+      if (!el) return;
+      const pills = el.querySelectorAll('span[data-free-pill="1"]');
+      const target = pills.length ? pills[pills.length - 1] : el;
+      const range = document.createRange();
+      range.selectNodeContents(target);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    }, 50);
+  }, [language, setNote]);
+
   
 
   const defaultTagSet = useMemo(() => new Set(DEFAULT_TAGS), []);
@@ -353,9 +404,14 @@ export const TodayTab: React.FC = () => {
           chips += `<span class="sr-only"> | </span><span contenteditable="false" class="pointer-events-none select-none inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white text-slate-800 px-2 py-0.5 shadow">${safe}</span> `;
         });
       });
+      const placeholder = language === 'ar' ? 'اكتب هنا...' : 'Type here...';
+      const hasChips = tokens.length > 0;
       const free = noteFreeText
-        ? `<span class="sr-only"> | </span><span data-free-pill="1" contenteditable="true" class="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white text-slate-800 px-2 py-0.5 shadow">${esc(noteFreeText)}</span> `
-        : '';
+        ? `<span class="sr-only"> | </span><span data-free-pill="1" contenteditable="true" class="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/5 text-slate-800 px-3 py-1 shadow-sm ring-1 ring-primary/20">${esc(noteFreeText)}</span> `
+        : (hasChips 
+            ? `<span class="sr-only"> | </span><span data-free-pill="1" contenteditable="true" class="inline-flex items-center gap-1 rounded-full border border-dashed border-primary/40 bg-primary/5 text-primary/60 px-3 py-1 shadow-sm opacity-50"></span> `
+            : `<span class="sr-only"> | </span><span data-free-pill="1" contenteditable="true" class="inline-flex items-center gap-1 rounded-full border border-dashed border-primary/40 bg-primary/5 text-primary/60 px-3 py-1 shadow-sm italic">${placeholder}</span> `
+          );
       const innerContent = `${before}${chips}${free}`;
       // ALWAYS wrap timestamp lines in outer pill (whether saved or unsaved)
       const hasTimestamp = /^\[/.test(rawLine.trim());
@@ -1273,6 +1329,15 @@ export const TodayTab: React.FC = () => {
                   {formatTime(new Date(dayUpdatedAt), language as any, { hour: '2-digit', minute: '2-digit' })}
                 </span>
               )}
+              {isNoteEditing && (
+                <button
+                  type="button"
+                  onClick={finalizeCurrentPill}
+                  className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border border-primary/30 bg-primary/10 text-primary font-medium shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-inner transition-all focus-visible:outline-none"
+                >
+                  <Plus className="h-3.5 w-3.5" /> {language === 'ar' ? 'أضف كشريحة' : 'Add chip'}
+                </button>
+              )}
               {!isNoteEditing ? (
                 <button
                   type="button"
@@ -1305,11 +1370,7 @@ export const TodayTab: React.FC = () => {
                 >
                   <Plus className="h-3.5 w-3.5" /> {language === 'ar' ? 'أضف ملاحظة' : 'Add note'}
                 </button>
-              ) : (
-                <span className="text-[11px] text-primary font-medium">
-                  {language === 'ar' ? '✍️ اكتب هنا...' : '✍️ Type here...'}
-                </span>
-              )}
+              ) : null}
               {hasUnsaved && (
                 <button
                   type="button"

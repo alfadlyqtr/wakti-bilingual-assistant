@@ -639,68 +639,50 @@ export default function Account() {
                     {t("dateOfBirth", language)}
                   </Label>
                   
-                  {/* Direct Date Input */}
                   <div className="space-y-3">
-                    <Input
-                      id="dob"
-                      type="date"
-                      value={dobInputValue}
-                      onChange={handleDobInputChange}
-                      disabled={isUpdatingDob}
-                      max={new Date().toISOString().split('T')[0]}
-                      min="1900-01-01"
-                      className="w-full text-base"
-                      placeholder={language === 'ar' ? 'اختر التاريخ' : 'Select date'}
-                    />
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-start text-left font-normal py-6 text-base shadow-sm",
+                            !dateOfBirth && "text-muted-foreground",
+                            language === 'ar' && "text-right"
+                          )}
+                          disabled={isUpdatingDob}
+                        >
+                          <CalendarIcon className={cn("h-5 w-5", language === 'ar' ? "ml-2" : "mr-2")} />
+                          {dateOfBirth ? (
+                            format(dateOfBirth, language === 'ar' ? "dd/MM/yyyy" : "MMM dd, yyyy")
+                          ) : (
+                            t("pickDate", language)
+                          )}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0 max-w-[calc(100vw-2rem)]" align="center">
+                        <Calendar
+                          mode="single"
+                          selected={dateOfBirth}
+                          onSelect={handleCalendarDateSelect}
+                          disabled={(date) =>
+                            date > new Date() || date < new Date("1900-01-01")
+                          }
+                          initialFocus
+                          className="p-3 pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
                     
-                    {/* Alternative Calendar Picker */}
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <span>{t("useCalendarPicker", language)}</span>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className={cn(
-                              "justify-start text-left font-normal min-w-[200px]",
-                              !dateOfBirth && "text-muted-foreground",
-                              language === 'ar' && "text-right"
-                            )}
-                            disabled={isUpdatingDob}
-                          >
-                            <CalendarIcon className={cn("h-4 w-4", language === 'ar' ? "ml-2" : "mr-2")} />
-                            {dateOfBirth ? (
-                              format(dateOfBirth, language === 'ar' ? "dd/MM/yyyy" : "MMM dd, yyyy")
-                            ) : (
-                              t("pickDate", language)
-                            )}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={dateOfBirth}
-                            onSelect={handleCalendarDateSelect}
-                            disabled={(date) =>
-                              date > new Date() || date < new Date("1900-01-01")
-                            }
-                            initialFocus
-                            className="p-3 pointer-events-auto"
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {t("dobHelpText", language)}
+                    </p>
                   </div>
                   
-                  <p className="text-xs text-muted-foreground">
-                    {t("dobHelpText", language)}
-                  </p>
                   <div className="mt-2">
                     <Button 
                       onClick={handleUpdateDateOfBirth}
                       disabled={isUpdatingDob || !dateOfBirth}
-                      size="sm"
-                      className="w-full sm:w-auto"
+                      className="w-full bg-primary/80 hover:bg-primary text-white font-semibold py-6"
                     >
                       {isUpdatingDob
                         ? t("updating", language)

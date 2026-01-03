@@ -6,11 +6,12 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Bell, BellOff, CheckCircle, AlertCircle, MessageCircle, Users, CheckSquare, Calendar, Volume2, Info } from 'lucide-react';
+import { Bell, BellOff, CheckCircle, AlertCircle, MessageCircle, Users, CheckSquare, Calendar, Volume2, Info, Smartphone } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { requestNotificationPermission as requestNativePermission } from '@/integrations/natively/notificationsBridge';
 
 interface NotificationPreferences {
   messages: boolean;
@@ -36,11 +37,19 @@ export default function NotificationSettings() {
   });
   const [permissionStatus, setPermissionStatus] = useState<NotificationPermission>('default');
   const [isLoading, setIsLoading] = useState(false);
+  const [isNative, setIsNative] = useState(false);
 
   useEffect(() => {
     checkNotificationPermission();
     loadPreferences();
+    checkIfNative();
   }, []);
+
+  const checkIfNative = () => {
+    if (typeof window !== 'undefined' && (window as any).NativelyNotifications) {
+      setIsNative(true);
+    }
+  };
 
   const checkNotificationPermission = async () => {
     if (!('Notification' in window)) {
@@ -117,6 +126,15 @@ export default function NotificationSettings() {
     }
   };
 
+  const handleNativePermissionRequest = () => {
+    try {
+      requestNativePermission(true);
+      toast.info(language === 'ar' ? 'تم إرسال طلب الإذن' : 'Permission request sent');
+    } catch (error) {
+      console.error('Native permission request failed:', error);
+    }
+  };
+
   const getPermissionStatusInfo = () => {
     switch (permissionStatus) {
       case 'granted':
@@ -144,72 +162,94 @@ export default function NotificationSettings() {
 
   return (
     <div className="space-y-6">
-      {/* System Status */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Bell className="h-5 w-5" />
-            {language === 'ar' ? 'حالة النظام' : 'System Status'}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-950/20 rounded-md">
-            <CheckCircle className="h-4 w-4 text-green-500" />
-            <div className="text-sm text-green-700 dark:text-green-300">
-              {language === 'ar' 
-                ? 'النظام الموحد للإشعارات يعمل في الوقت الفعلي'
-                : 'Unified notification system is running in real-time'}
+      {/* Browser Permission Status - Hidden for Native App */}
+      {!isNative && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5" />
+              {language === 'ar' ? 'إذن إشعارات المتصفح' : 'Browser Notification Permission'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-4 rounded-md border">
+              <div className="flex items-center gap-3">
+                {permissionInfo.icon}
+                <div>
+                  <p className="font-medium">
+                    {language === 'ar' ? 'حالة الإذن' : 'Permission Status'}
+                  </p>
+                  <p className={`text-sm ${permissionInfo.color}`}>
+                    {permissionInfo.text}
+                  </p>
+                </div>
+              </div>
+              {permissionStatus !== 'granted' && (
+                <Button 
+                  onClick={requestPermission}
+                  disabled={isLoading || permissionStatus === 'denied'}
+                  variant="outline"
+                >
+                  {isLoading ? 
+                    (language === 'ar' ? 'جاري الطلب...' : 'Requesting...') :
+                    (language === 'ar' ? 'طلب الإذن' : 'Request Permission')
+                  }
+                </Button>
+              )}
             </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Browser Permission Status */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Bell className="h-5 w-5" />
-            {language === 'ar' ? 'إذن إشعارات المتصفح' : 'Browser Notification Permission'}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between p-4 rounded-md border">
-            <div className="flex items-center gap-3">
-              {permissionInfo.icon}
-              <div>
-                <p className="font-medium">
-                  {language === 'ar' ? 'حالة الإذن' : 'Permission Status'}
-                </p>
-                <p className={`text-sm ${permissionInfo.color}`}>
-                  {permissionInfo.text}
+            
+            {permissionStatus === 'denied' && (
+              <div className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-md border border-orange-200 dark:border-orange-800">
+                <p className="text-sm text-orange-800 dark:text-orange-200">
+                  {language === 'ar' 
+                    ? 'تم حظر الإشعارات. يرجى تمكينها من إعدادات المتصفح.'
+                    : 'Notifications are blocked. Please enable them in your browser settings.'}
                 </p>
               </div>
-            </div>
-            {permissionStatus !== 'granted' && (
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Native App Permission Info */}
+      {isNative && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Smartphone className="h-5 w-5" />
+              {language === 'ar' ? 'إشعارات التطبيق' : 'App Notifications'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-4 rounded-md border">
+              <div className="flex items-center gap-3">
+                <CheckCircle className="h-5 w-5 text-green-500" />
+                <div>
+                  <p className="font-medium">
+                    {language === 'ar' ? 'حالة إشعارات الهاتف' : 'Mobile Notification Status'}
+                  </p>
+                  <p className="text-sm text-green-600 dark:text-green-400">
+                    {language === 'ar' ? 'مدعوم عبر النظام' : 'Managed by System'}
+                  </p>
+                </div>
+              </div>
               <Button 
-                onClick={requestPermission}
-                disabled={isLoading || permissionStatus === 'denied'}
+                onClick={handleNativePermissionRequest}
                 variant="outline"
               >
-                {isLoading ? 
-                  (language === 'ar' ? 'جاري الطلب...' : 'Requesting...') :
-                  (language === 'ar' ? 'طلب الإذن' : 'Request Permission')
-                }
+                {language === 'ar' ? 'تحديث الإعدادات' : 'Update Settings'}
               </Button>
-            )}
-          </div>
-          
-          {permissionStatus === 'denied' && (
-            <div className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-md border border-orange-200 dark:border-orange-800">
-              <p className="text-sm text-orange-800 dark:text-orange-200">
+            </div>
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
+              <p className="text-sm text-blue-800 dark:text-blue-200">
                 {language === 'ar' 
-                  ? 'تم حظر الإشعارات. يرجى تمكينها من إعدادات المتصفح.'
-                  : 'Notifications are blocked. Please enable them in your browser settings.'}
+                  ? 'يتم إدارة إشعارات التطبيق مباشرة عبر إعدادات هاتفك للحصول على أفضل أداء.'
+                  : 'App notifications are managed directly via your phone settings for the best reliability.'}
               </p>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Notification Types */}
       <Card>

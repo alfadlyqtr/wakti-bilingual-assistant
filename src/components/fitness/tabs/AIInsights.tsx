@@ -399,7 +399,8 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
       const response = await generateAiInsights(language as 'en' | 'ar', {
         time_of_day: window,
         user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        data: dataFull
+        data: dataFull,
+        force_refresh: true  // ALWAYS force fresh AI call, bypass whoopService cache
       });
       
       setInsights(prev => ({

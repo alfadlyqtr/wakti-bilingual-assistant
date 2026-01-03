@@ -297,6 +297,9 @@ const MyWarranty: React.FC = () => {
           expiry_date: extracted.expiry_date || '',
           warranty_months: extracted.warranty_period ? extracted.warranty_period.toString() : '',
           notes: extracted.notes || '',
+          provider: extracted.provider || '',
+          ref_number: extracted.ref_number || '',
+          support_contact: extracted.support_contact || '',
           image_url: isPdf ? '' : urlData.publicUrl,
           receipt_url: urlData.publicUrl,
           file_type: isPdf ? 'pdf' : 'image',
@@ -813,18 +816,25 @@ const MyWarranty: React.FC = () => {
             />
 
             {/* Preview */}
-            {newItem.image_url && (
+            {(newItem.image_url || newItem.receipt_url) && (
               <div className="mb-6 relative">
-                <img 
-                  src={newItem.image_url} 
-                  alt="Receipt" 
-                  className="w-full h-48 object-cover rounded-xl"
-                />
+                {newItem.file_type === 'pdf' ? (
+                  <div className="w-full h-48 rounded-xl bg-gradient-to-br from-red-500/20 to-orange-500/20 border border-white/10 flex flex-col items-center justify-center gap-3">
+                    <FileText className="w-16 h-16 text-red-400" />
+                    <span className="text-sm text-muted-foreground">PDF Document</span>
+                  </div>
+                ) : (
+                  <img 
+                    src={newItem.image_url || newItem.receipt_url} 
+                    alt="Receipt" 
+                    className="w-full h-48 object-cover rounded-xl"
+                  />
+                )}
                 <Button
                   variant="destructive"
                   size="icon"
                   className="absolute top-2 right-2"
-                  onClick={() => setNewItem(prev => ({ ...prev, image_url: '', receipt_url: '' }))}
+                  onClick={() => setNewItem(prev => ({ ...prev, image_url: '', receipt_url: '', file_type: '' }))}
                 >
                   <X className="w-4 h-4" />
                 </Button>

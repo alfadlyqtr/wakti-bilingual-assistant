@@ -112,24 +112,24 @@ export function TopPageSection({
         </div>
 
         {/* Action Buttons - Full width on mobile */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {connected ? (
             <>
               <Button
                 size="sm"
                 onClick={onSync}
                 disabled={syncing}
-                className="flex-1 md:flex-none text-xs md:text-sm rounded-full bg-gradient-to-br from-indigo-500 to-blue-500 text-white border-2 border-indigo-300 shadow-[0_6px_20px_rgba(59,130,246,0.35)] hover:from-indigo-600 hover:to-blue-600 active:scale-95 transition-all"
+                className="flex-1 min-w-[100px] md:flex-none text-[11px] md:text-sm rounded-full bg-gradient-to-br from-indigo-500 to-blue-500 text-white border-2 border-indigo-300 shadow-[0_6px_20px_rgba(59,130,246,0.35)] hover:from-indigo-600 hover:to-blue-600 active:scale-95 transition-all"
               >
-                <RefreshCw className={`h-3 w-3 md:h-4 md:w-4 mr-1.5 ${syncing ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`h-3 w-3 md:h-4 md:w-4 mr-1 ${syncing ? 'animate-spin' : ''}`} />
                 {syncing ? (language === 'ar' ? 'جار المزامنة...' : 'Syncing...') : (language === 'ar' ? 'مزامنة الآن' : 'Sync Now')}
               </Button>
               <Button
                 size="sm"
                 onClick={onDisconnect}
-                className="flex-1 md:flex-none text-xs md:text-sm rounded-full bg-gradient-to-br from-rose-100 to-red-200 dark:from-red-500/20 dark:to-red-500/10 text-rose-700 dark:text-red-300 border-2 border-rose-300 dark:border-red-500/30 shadow-[0_6px_20px_rgba(244,63,94,0.25)] hover:from-rose-200 hover:to-red-300 active:scale-95 transition-all"
+                className="flex-1 min-w-[100px] md:flex-none text-[11px] md:text-sm rounded-full bg-gradient-to-br from-rose-100 to-red-200 dark:from-red-500/20 dark:to-red-500/10 text-rose-700 dark:text-red-300 border-2 border-rose-300 dark:border-red-500/30 shadow-[0_6px_20px_rgba(244,63,94,0.25)] hover:from-rose-200 hover:to-red-300 active:scale-95 transition-all"
               >
-                <Power className="h-3 w-3 md:h-4 md:w-4 mr-1.5" />
+                <Power className="h-3 w-3 md:h-4 md:w-4 mr-1" />
                 {language === 'ar' ? 'قطع الاتصال' : 'Disconnect'}
               </Button>
               <Button
@@ -142,7 +142,7 @@ export function TopPageSection({
                   window.dispatchEvent(new Event('wakti:clear-insights'));
                   toast.success(language === 'ar' ? 'تم مسح الذاكرة' : 'Cache cleared');
                 }}
-                className="flex-1 md:flex-none text-xs md:text-sm rounded-full bg-gradient-to-br from-amber-100 to-yellow-200 dark:from-amber-500/20 dark:to-amber-500/10 text-amber-700 dark:text-amber-300 border-2 border-amber-300 dark:border-amber-500/30 shadow-[0_6px_20px_rgba(245,158,11,0.25)] hover:from-amber-200 hover:to-yellow-300 active:scale-95 transition-all"
+                className="flex-1 min-w-[100px] md:flex-none text-[11px] md:text-sm rounded-full bg-gradient-to-br from-amber-100 to-yellow-200 dark:from-amber-500/20 dark:to-amber-500/10 text-amber-700 dark:text-amber-300 border-2 border-amber-300 dark:border-amber-500/30 shadow-[0_6px_20px_rgba(245,158,11,0.25)] hover:from-amber-200 hover:to-yellow-300 active:scale-95 transition-all"
               >
                 {language === 'ar' ? 'مسح الذاكرة' : 'Clear Cache'}
               </Button>

@@ -281,7 +281,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
           }}
         />
         <div className="p-4 text-foreground">
-          <div className="flex flex-col space-y-3">
+          <div className="grid grid-cols-2 gap-3">
             {navItems.map((item, index) => {
               const IconComponent = iconMap[item.icon] || Calendar;
               const isActive = pathname === item.path || 
@@ -293,33 +293,35 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                   key={item.path}
                   onClick={() => handleNavigation(item.path, item.badgeType)}
                   className={cn(
-                    // Staggered slide-down + pop-in per item
-                    "flex items-center gap-3 p-3 rounded-lg transition-all duration-300 ease-out relative group w-full text-left text-foreground",
+                    // Staggered pop-in per item
+                    "flex flex-col items-center justify-center gap-2 p-3 rounded-xl transition-all duration-300 ease-out relative group w-full text-center aspect-square",
                     // Base readable background and hover for contrast on glass
-                    "bg-white/5 dark:bg-black/10 hover:bg-white/10 dark:hover:bg-white/5 active:opacity-95",
+                    "bg-white/5 dark:bg-black/10 hover:bg-white/10 dark:hover:bg-white/5 active:scale-95",
                     isActive 
-                      ? "bg-gradient-to-r shadow-2xl" 
+                      ? "bg-gradient-to-br shadow-xl" 
                       : "",
                     // Add specific glow colors for active buttons
-                    isActive && item.path === '/dashboard' && "from-blue-500/20 to-blue-600/20 shadow-blue-500/50 border border-blue-500/30",
-                    isActive && item.path === '/calendar' && "from-blue-400/20 to-blue-500/20 shadow-blue-400/50 border border-blue-400/30",
-                    isActive && item.path === '/maw3d' && "from-purple-500/20 to-purple-600/20 shadow-purple-500/50 border border-purple-500/30",
-                    isActive && item.path === '/tr' && "from-green-500/20 to-green-600/20 shadow-green-500/50 border border-green-500/30",
-                    isActive && item.path === '/wakti-ai' && "from-orange-500/20 to-orange-600/20 shadow-orange-500/50 border border-orange-500/30",
-                    isActive && item.path === '/journal' && "from-pink-500/20 to-pink-600/20 shadow-pink-500/50 border border-pink-500/30",
-                    isActive && item.path === '/tasjeel' && "from-cyan-500/20 to-cyan-600/20 shadow-cyan-500/50 border border-cyan-500/30",
-                    isActive && item.path === '/my-warranty' && "from-emerald-500/20 to-emerald-600/20 shadow-emerald-500/50 border border-emerald-500/30",
+                    isActive && item.path === '/dashboard' && "from-blue-500/20 to-blue-600/20 shadow-blue-500/40 border border-blue-500/30",
+                    isActive && item.path === '/calendar' && "from-blue-400/20 to-blue-500/20 shadow-blue-400/40 border border-blue-400/30",
+                    isActive && item.path === '/maw3d' && "from-purple-500/20 to-purple-600/20 shadow-purple-500/40 border border-purple-500/30",
+                    isActive && item.path === '/tr' && "from-green-500/20 to-green-600/20 shadow-green-500/40 border border-green-500/30",
+                    isActive && item.path === '/wakti-ai' && "from-orange-500/20 to-orange-600/20 shadow-orange-500/40 border border-orange-500/30",
+                    isActive && item.path === '/journal' && "from-pink-500/20 to-pink-600/20 shadow-pink-500/40 border border-pink-500/30",
+                    isActive && item.path === '/tasjeel' && "from-cyan-500/20 to-cyan-600/20 shadow-cyan-500/40 border border-cyan-500/30",
+                    isActive && item.path === '/my-warranty' && "from-emerald-500/20 to-emerald-600/20 shadow-emerald-500/40 border border-emerald-500/30",
+                    isActive && item.path === '/music' && "from-fuchsia-500/20 to-fuchsia-600/20 shadow-fuchsia-500/40 border border-fuchsia-500/30",
+                    isActive && item.path === '/fitness' && "from-rose-500/20 to-rose-600/20 shadow-rose-500/40 border border-rose-500/30",
                     // Initial off-screen state until icons stage
                     animationStage === 'icons' ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-3 scale-[0.98]"
                   )}
                   style={{
-                    transitionDelay: animationStage === 'icons' ? `${index * 70}ms` : '0ms'
+                    transitionDelay: animationStage === 'icons' ? `${index * 50}ms` : '0ms'
                   }}
                 >
                   <div className="relative">
                     <IconComponent 
                       className={cn(
-                        "h-5 w-5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]",
+                        "h-6 w-6 drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]",
                         item.colorClass,
                         isActive ? "scale-110 brightness-125" : ""
                       )} 
@@ -329,8 +331,8 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                       <div 
                         className="absolute inset-0 rounded-full animate-pulse"
                         style={{
-                          filter: 'blur(14px)',
-                          opacity: 0.9,
+                          filter: 'blur(12px)',
+                          opacity: 0.8,
                           zIndex: -1,
                           backgroundColor: 
                             item.path === '/dashboard' ? '#3b82f6' :
@@ -340,23 +342,16 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                             item.path === '/wakti-ai' ? 'hsl(var(--accent-orange))' :
                             item.path === '/music' ? '#d946ef' :
                             item.path === '/tasjeel' ? '#06b6d4' :
+                            item.path === '/fitness' ? '#f43f5e' :
+                            item.path === '/journal' ? '#ec4899' :
                             item.path === '/my-warranty' ? '#10b981' : '#3b82f6',
-                          boxShadow: `0 0 28px ${
-                            item.path === '/dashboard' ? '#3b82f6' :
-                            item.path === '/calendar' ? 'hsl(var(--accent-blue))' :
-                            item.path === '/maw3d' ? 'hsl(var(--accent-purple))' :
-                            item.path === '/tr' ? 'hsl(var(--accent-green))' :
-                            item.path === '/wakti-ai' ? 'hsl(var(--accent-orange))' :
-                            item.path === '/music' ? '#d946ef' :
-                            item.path === '/tasjeel' ? '#06b6d4' : '#3b82f6'
-                          }`
                         }}
                       />
                     )}
                     {/* Badge System */}
                     {item.badgeType && badgeStates[item.badgeType]?.show && (
                       <div className={cn(
-                        "absolute -top-2 -right-2 min-w-4 h-4 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center px-1 border border-background z-10",
+                        "absolute -top-2 -right-2 min-w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 border border-background z-10",
                         badgeStates[item.badgeType].priority === 'high' && "animate-pulse bg-orange-500"
                       )}>
                         {badgeStates[item.badgeType].count}
@@ -364,10 +359,8 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                     )}
                   </div>
                   <span className={cn(
-                    "text-sm font-medium drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]",
-                    item.path === '/tasjeel' ? "text-cyan-500" : "",
-                    item.path === '/my-warranty' ? "whitespace-nowrap text-xs" : "",
-                    isActive ? "text-foreground font-semibold" : "text-muted-foreground",
+                    "text-[11px] font-medium leading-tight",
+                    isActive ? "text-foreground font-bold" : "text-muted-foreground",
                     // Add glow to active text
                     isActive && "drop-shadow-[0_0_8px_currentColor]"
                   )}>
@@ -386,28 +379,28 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                   key={item.path}
                   onClick={() => handleNavigation(item.path)}
                   className={cn(
-                    "flex items-center gap-3 p-3 rounded-lg transition-all duration-300 ease-out relative group w-full text-left",
-                    "bg-white/5 dark:bg-black/10 hover:bg-white/10 dark:hover:bg-white/5 active:opacity-95",
-                    isActive ? "bg-gradient-to-r shadow-2xl" : "",
+                    "flex flex-col items-center justify-center gap-2 p-3 rounded-xl transition-all duration-300 ease-out relative group w-full text-center aspect-square",
+                    "bg-white/5 dark:bg-black/10 hover:bg-white/10 dark:hover:bg-white/5 active:scale-95",
+                    isActive ? "bg-gradient-to-br shadow-xl" : "",
                     isActive && item.path === '/tools/text' && "from-purple-500/15 to-purple-600/15 shadow-purple-500/40 border border-purple-500/20",
                     isActive && item.path === '/tools/voice-studio' && "from-pink-500/15 to-pink-600/15 shadow-pink-500/40 border border-pink-500/20",
                     isActive && item.path === '/tools/game' && "from-red-500/15 to-red-600/15 shadow-red-500/40 border border-red-500/20",
                     animationStage === 'icons' ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-3 scale-[0.98]"
                   )}
-                  style={{ transitionDelay: animationStage === 'icons' ? `${(navItems.length + qIndex) * 70}ms` : '0ms' }}
+                  style={{ transitionDelay: animationStage === 'icons' ? `${(navItems.length + qIndex) * 50}ms` : '0ms' }}
                 >
                   <div className="relative">
                     <IconComponent 
                       className={cn(
-                        "h-5 w-5",
+                        "h-6 w-6",
                         item.colorClass,
                         isActive ? "scale-110 brightness-125" : ""
                       )}
                     />
                   </div>
                   <span className={cn(
-                    "text-sm font-medium drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]",
-                    isActive ? "text-foreground font-semibold" : "text-muted-foreground"
+                    "text-[11px] font-medium leading-tight",
+                    isActive ? "text-foreground font-bold" : "text-muted-foreground"
                   )}>
                     {item.name}
                   </span>
