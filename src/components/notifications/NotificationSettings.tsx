@@ -184,17 +184,21 @@ export default function NotificationSettings() {
                 {language === 'ar' ? 'إشعارات الهاتف' : 'Mobile Push Notifications'}
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between gap-4">
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  {language === 'ar' 
-                    ? 'لتفعيل التنبيهات على هاتفك، تأكد من السماح بالإشعارات في إعدادات النظام.'
-                    : 'To receive real-time alerts on your device, please ensure push notifications are enabled in your phone\'s system settings.'}
-                </p>
+            <CardContent>
+              <div className="flex flex-col gap-6 py-2">
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {language === 'ar' 
+                      ? 'لتفعيل التنبيهات على هاتفك، تأكد من السماح بالإشعارات في إعدادات النظام.'
+                      : 'To receive real-time alerts on your device, please ensure push notifications are enabled in your phone\'s system settings.'}
+                  </p>
+                </div>
+                
                 <Button 
                   onClick={handleOpenPhoneSettings}
-                  className="shrink-0 bg-accent-blue hover:bg-accent-blue/90 text-white shadow-lg shadow-accent-blue/20"
+                  className="w-full h-12 bg-accent-blue hover:bg-accent-blue/90 text-white shadow-lg shadow-accent-blue/20 rounded-xl font-medium transition-all active:scale-[0.98]"
                 >
+                  <Smartphone className="mr-2 h-4 w-4" />
                   {language === 'ar' ? 'إعدادات الهاتف' : 'Open Phone Settings'}
                 </Button>
               </div>
@@ -208,80 +212,86 @@ export default function NotificationSettings() {
                 {language === 'ar' ? 'تخصيص التنبيهات' : 'Notification Preferences'}
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-8">
               {/* Messages */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-full bg-blue-500/10">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-blue-500/10 shrink-0">
                     <MessageCircle className="h-5 w-5 text-blue-500" />
                   </div>
                   <div>
-                    <div className="font-medium">{language === 'ar' ? 'الرسائل' : 'Messages'}</div>
-                    <div className="text-xs text-muted-foreground">{language === 'ar' ? 'رسائل مباشرة من جهات الاتصال' : 'Direct messages from contacts'}</div>
+                    <div className="font-semibold text-base">{language === 'ar' ? 'الرسائل' : 'Messages'}</div>
+                    <div className="text-xs text-muted-foreground leading-tight mt-0.5">{language === 'ar' ? 'رسائل مباشرة من جهات الاتصال' : 'Direct messages from contacts'}</div>
                   </div>
                 </div>
                 <Switch checked={preferences.messages} onCheckedChange={(checked) => updatePreference('messages', checked)} />
               </div>
 
               {/* Contact Requests */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-full bg-green-500/10">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-green-500/10 shrink-0">
                     <Users className="h-5 w-5 text-green-500" />
                   </div>
                   <div>
-                    <div className="font-medium">{language === 'ar' ? 'طلبات الاتصال' : 'Contact Requests'}</div>
-                    <div className="text-xs text-muted-foreground">{language === 'ar' ? 'طلبات جديدة من مستخدمين آخرين' : 'New requests from other users'}</div>
+                    <div className="font-semibold text-base">{language === 'ar' ? 'طلبات الاتصال' : 'Contact Requests'}</div>
+                    <div className="text-xs text-muted-foreground leading-tight mt-0.5">{language === 'ar' ? 'طلبات جديدة من مستخدمين آخرين' : 'New requests from other users'}</div>
                   </div>
                 </div>
                 <Switch checked={preferences.contact_requests} onCheckedChange={(checked) => updatePreference('contact_requests', checked)} />
               </div>
 
               {/* Task Updates */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-full bg-purple-500/10">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-purple-500/10 shrink-0">
                     <CheckSquare className="h-5 w-5 text-purple-500" />
                   </div>
                   <div>
-                    <div className="font-medium">{language === 'ar' ? 'المهام' : 'Tasks'}</div>
-                    <div className="text-xs text-muted-foreground">{language === 'ar' ? 'تحديثات على مهامك وتذكيراتك' : 'Updates on your tasks and reminders'}</div>
+                    <div className="font-semibold text-base">{language === 'ar' ? 'المهام' : 'Tasks'}</div>
+                    <div className="text-xs text-muted-foreground leading-tight mt-0.5">{language === 'ar' ? 'تحديثات على مهامك وتذكيراتك' : 'Updates on your tasks and reminders'}</div>
                   </div>
                 </div>
                 <Switch checked={preferences.task_updates} onCheckedChange={(checked) => updatePreference('task_updates', checked)} />
               </div>
 
               {/* Event RSVPs */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-full bg-orange-500/10">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-orange-500/10 shrink-0">
                     <Calendar className="h-5 w-5 text-orange-500" />
                   </div>
                   <div>
-                    <div className="font-medium">{language === 'ar' ? 'المواعيد' : 'Events'}</div>
-                    <div className="text-xs text-muted-foreground">{language === 'ar' ? 'ردود على دعوات الأحداث' : 'Responses to event invitations'}</div>
+                    <div className="font-semibold text-base">{language === 'ar' ? 'المواعيد' : 'Events'}</div>
+                    <div className="text-xs text-muted-foreground leading-tight mt-0.5">{language === 'ar' ? 'ردود على دعوات الأحداث' : 'Responses to event invitations'}</div>
                   </div>
                 </div>
                 <Switch checked={preferences.event_rsvps} onCheckedChange={(checked) => updatePreference('event_rsvps', checked)} />
               </div>
 
-              <Separator />
+              <Separator className="opacity-50" />
 
               {/* Sounds & Toasts */}
-              <div className="grid grid-cols-2 gap-4 pt-2">
-                <div className="flex flex-col gap-2 p-3 rounded-lg border bg-accent/5">
-                  <div className="flex items-center gap-2 mb-1">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-3 p-4 rounded-2xl border border-accent-blue/10 bg-accent-blue/5">
+                  <div className="flex items-center gap-2">
                     <Volume2 className="h-4 w-4 text-indigo-500" />
-                    <span className="text-xs font-semibold">{language === 'ar' ? 'الأصوات' : 'Sounds'}</span>
+                    <span className="text-xs font-bold uppercase tracking-wider opacity-70">{language === 'ar' ? 'الأصوات' : 'Sounds'}</span>
                   </div>
-                  <Switch checked={preferences.enableSounds} onCheckedChange={(checked) => updatePreference('enableSounds', checked)} />
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-muted-foreground leading-tight max-w-[60%]">{language === 'ar' ? 'تنبيهات صوتية' : 'Audio alerts'}</span>
+                    <Switch checked={preferences.enableSounds} onCheckedChange={(checked) => updatePreference('enableSounds', checked)} />
+                  </div>
                 </div>
-                <div className="flex flex-col gap-2 p-3 rounded-lg border bg-accent/5">
-                  <div className="flex items-center gap-2 mb-1">
+                <div className="flex flex-col gap-3 p-4 rounded-2xl border border-cyan-500/10 bg-cyan-500/5">
+                  <div className="flex items-center gap-2">
                     <Info className="h-4 w-4 text-cyan-500" />
-                    <span className="text-xs font-semibold">{language === 'ar' ? 'تنبيهات' : 'Toasts'}</span>
+                    <span className="text-xs font-bold uppercase tracking-wider opacity-70">{language === 'ar' ? 'تنبيهات' : 'Toasts'}</span>
                   </div>
-                  <Switch checked={preferences.enableToasts} onCheckedChange={(checked) => updatePreference('enableToasts', checked)} />
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-muted-foreground leading-tight max-w-[60%]">{language === 'ar' ? 'تنبيهات منبثقة' : 'Popup toasts'}</span>
+                    <Switch checked={preferences.enableToasts} onCheckedChange={(checked) => updatePreference('enableToasts', checked)} />
+                  </div>
                 </div>
               </div>
             </CardContent>
