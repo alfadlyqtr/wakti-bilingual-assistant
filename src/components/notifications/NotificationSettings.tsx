@@ -130,12 +130,20 @@ export default function NotificationSettings() {
     }
   };
 
-  const handleNativePermissionRequest = () => {
+  const handleOpenPhoneSettings = () => {
     try {
-      requestNativePermission(true);
-      toast.info(language === 'ar' ? 'تم إرسال طلب الإذن' : 'Permission request sent');
+      // Use Natively SDK to open the app's settings page in iOS/Android
+      const natively = (window as any).natively;
+      if (natively && typeof natively.openAppSettings === 'function') {
+        natively.openAppSettings();
+      } else {
+        // Fallback: request permission which may show system prompt
+        requestNativePermission(true);
+        toast.info(language === 'ar' ? 'تم إرسال طلب الإذن' : 'Permission request sent');
+      }
     } catch (error) {
-      console.error('Native permission request failed:', error);
+      console.error('Failed to open phone settings:', error);
+      toast.error(language === 'ar' ? 'فشل في فتح الإعدادات' : 'Failed to open settings');
     }
   };
 
@@ -184,7 +192,7 @@ export default function NotificationSettings() {
                     : 'To receive real-time alerts on your device, please ensure push notifications are enabled in your phone\'s system settings.'}
                 </p>
                 <Button 
-                  onClick={handleNativePermissionRequest}
+                  onClick={handleOpenPhoneSettings}
                   className="shrink-0 bg-accent-blue hover:bg-accent-blue/90 text-white shadow-lg shadow-accent-blue/20"
                 >
                   {language === 'ar' ? 'إعدادات الهاتف' : 'Open Phone Settings'}
