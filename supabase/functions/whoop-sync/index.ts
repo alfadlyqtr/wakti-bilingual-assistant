@@ -114,6 +114,7 @@ serve(async (req: Request) => {
     });
 
     const body = await req.json().catch(() => ({} as any));
+    const userTimezone = body?.user_timezone || "UTC";
     const bodyToken: string | undefined = (body as any)?.user_token;
     if (bodyToken && bodyToken.length > 0) {
       userAuthHeader = `Bearer ${bodyToken}`;
@@ -225,7 +226,8 @@ serve(async (req: Request) => {
 
         // Always fetch last 6 months to support time range filtering in UI
         const start = startParam || isoDaysAgo(180);
-        const end = endParam || new Date().toISOString();
+        const userNow = new Date(new Date().toLocaleString("en-US", { timeZone: userTimezone }));
+        const end = endParam || userNow.toISOString();
         const commonParams = { start, end } as Record<string, string>;
         console.log("whoop-sync: fetch ranges", {
           userId: u.user_id,

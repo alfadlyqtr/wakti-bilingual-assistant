@@ -107,9 +107,11 @@ export const AskTab: React.FC = () => {
                 ? 'bg-primary text-primary-foreground rounded-br-none' 
                 : 'bg-gradient-to-br from-card to-muted/40 border border-border/50 text-foreground rounded-bl-none'
             }`}>
-              <div className="text-sm leading-relaxed whitespace-pre-wrap">
-                {msg.role === 'assistant' && <span className="inline-block mr-1.5">🤖</span>}
-                {msg.content}
+              <div className="text-sm leading-relaxed whitespace-pre-wrap flex items-start gap-1.5">
+                {msg.role === 'assistant' && (
+                  <NotebookPen className="h-4 w-4 mt-0.5 flex-shrink-0 text-primary" />
+                )}
+                <span>{msg.content}</span>
               </div>
 
               {/* Stats/Chips (Assistant Only) */}
@@ -123,7 +125,7 @@ export const AskTab: React.FC = () => {
                       className="h-8 px-4 py-0 text-xs rounded-full bg-gradient-vibrant hover:shadow-vibrant-glow text-white border-none shadow-vibrant flex items-center gap-2 transition-all active:scale-95"
                     >
                       <Sparkles className="h-3.5 w-3.5 fill-white" />
-                      <span className="font-bold tracking-wide">
+                      <span className="font-bold tracking-wide shadow-text">
                         {language === 'ar' ? 'دردش مع Wakti AI' : 'Chat with Wakti AI'}
                       </span>
                     </Button>

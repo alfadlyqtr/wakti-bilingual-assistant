@@ -46,7 +46,11 @@ export default function NotificationSettings() {
   }, []);
 
   const checkIfNative = () => {
-    if (typeof window !== 'undefined' && (window as any).NativelyNotifications) {
+    if (typeof window === 'undefined') return;
+    // Check if we're truly inside the Natively native app shell
+    // The SDK is loaded globally, but isNativeApp is only true inside the actual iOS/Android wrapper
+    const natively = (window as any).natively;
+    if (natively && (natively.isNativeApp === true || natively.isIOSApp === true || natively.isAndroidApp === true)) {
       setIsNative(true);
     }
   };
@@ -162,221 +166,243 @@ export default function NotificationSettings() {
 
   return (
     <div className="space-y-6">
-      {/* Browser Permission Status - Hidden for Native App */}
-      {!isNative && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Bell className="h-5 w-5" />
-              {language === 'ar' ? 'إذن إشعارات المتصفح' : 'Browser Notification Permission'}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between p-4 rounded-md border">
-              <div className="flex items-center gap-3">
-                {permissionInfo.icon}
-                <div>
-                  <p className="font-medium">
-                    {language === 'ar' ? 'حالة الإذن' : 'Permission Status'}
-                  </p>
-                  <p className={`text-sm ${permissionInfo.color}`}>
-                    {permissionInfo.text}
-                  </p>
-                </div>
-              </div>
-              {permissionStatus !== 'granted' && (
-                <Button 
-                  onClick={requestPermission}
-                  disabled={isLoading || permissionStatus === 'denied'}
-                  variant="outline"
-                >
-                  {isLoading ? 
-                    (language === 'ar' ? 'جاري الطلب...' : 'Requesting...') :
-                    (language === 'ar' ? 'طلب الإذن' : 'Request Permission')
-                  }
-                </Button>
-              )}
-            </div>
-            
-            {permissionStatus === 'denied' && (
-              <div className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-md border border-orange-200 dark:border-orange-800">
-                <p className="text-sm text-orange-800 dark:text-orange-200">
+      {/* Native App View: ONLY Show Settings & Types */}
+      {isNative ? (
+        <div className="space-y-6">
+          <Card className="border-accent-blue/20 bg-accent-blue/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Smartphone className="h-5 w-5 text-accent-blue" />
+                {language === 'ar' ? 'إشعارات الهاتف' : 'Mobile Push Notifications'}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-sm text-muted-foreground leading-relaxed">
                   {language === 'ar' 
-                    ? 'تم حظر الإشعارات. يرجى تمكينها من إعدادات المتصفح.'
-                    : 'Notifications are blocked. Please enable them in your browser settings.'}
+                    ? 'لتفعيل التنبيهات على هاتفك، تأكد من السماح بالإشعارات في إعدادات النظام.'
+                    : 'To receive real-time alerts on your device, please ensure push notifications are enabled in your phone\'s system settings.'}
                 </p>
+                <Button 
+                  onClick={handleNativePermissionRequest}
+                  className="shrink-0 bg-accent-blue hover:bg-accent-blue/90 text-white shadow-lg shadow-accent-blue/20"
+                >
+                  {language === 'ar' ? 'إعدادات الهاتف' : 'Open Phone Settings'}
+                </Button>
               </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+            </CardContent>
+          </Card>
 
-      {/* Native App Permission Info */}
-      {isNative && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Smartphone className="h-5 w-5" />
-              {language === 'ar' ? 'إشعارات التطبيق' : 'App Notifications'}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between p-4 rounded-md border">
-              <div className="flex items-center gap-3">
-                <CheckCircle className="h-5 w-5 text-green-500" />
-                <div>
-                  <p className="font-medium">
-                    {language === 'ar' ? 'حالة إشعارات الهاتف' : 'Mobile Notification Status'}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bell className="h-5 w-5 text-accent-orange" />
+                {language === 'ar' ? 'تخصيص التنبيهات' : 'Notification Preferences'}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Messages */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-full bg-blue-500/10">
+                    <MessageCircle className="h-5 w-5 text-blue-500" />
+                  </div>
+                  <div>
+                    <div className="font-medium">{language === 'ar' ? 'الرسائل' : 'Messages'}</div>
+                    <div className="text-xs text-muted-foreground">{language === 'ar' ? 'رسائل مباشرة من جهات الاتصال' : 'Direct messages from contacts'}</div>
+                  </div>
+                </div>
+                <Switch checked={preferences.messages} onCheckedChange={(checked) => updatePreference('messages', checked)} />
+              </div>
+
+              {/* Contact Requests */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-full bg-green-500/10">
+                    <Users className="h-5 w-5 text-green-500" />
+                  </div>
+                  <div>
+                    <div className="font-medium">{language === 'ar' ? 'طلبات الاتصال' : 'Contact Requests'}</div>
+                    <div className="text-xs text-muted-foreground">{language === 'ar' ? 'طلبات جديدة من مستخدمين آخرين' : 'New requests from other users'}</div>
+                  </div>
+                </div>
+                <Switch checked={preferences.contact_requests} onCheckedChange={(checked) => updatePreference('contact_requests', checked)} />
+              </div>
+
+              {/* Task Updates */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-full bg-purple-500/10">
+                    <CheckSquare className="h-5 w-5 text-purple-500" />
+                  </div>
+                  <div>
+                    <div className="font-medium">{language === 'ar' ? 'المهام' : 'Tasks'}</div>
+                    <div className="text-xs text-muted-foreground">{language === 'ar' ? 'تحديثات على مهامك وتذكيراتك' : 'Updates on your tasks and reminders'}</div>
+                  </div>
+                </div>
+                <Switch checked={preferences.task_updates} onCheckedChange={(checked) => updatePreference('task_updates', checked)} />
+              </div>
+
+              {/* Event RSVPs */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-full bg-orange-500/10">
+                    <Calendar className="h-5 w-5 text-orange-500" />
+                  </div>
+                  <div>
+                    <div className="font-medium">{language === 'ar' ? 'المواعيد' : 'Events'}</div>
+                    <div className="text-xs text-muted-foreground">{language === 'ar' ? 'ردود على دعوات الأحداث' : 'Responses to event invitations'}</div>
+                  </div>
+                </div>
+                <Switch checked={preferences.event_rsvps} onCheckedChange={(checked) => updatePreference('event_rsvps', checked)} />
+              </div>
+
+              <Separator />
+
+              {/* Sounds & Toasts */}
+              <div className="grid grid-cols-2 gap-4 pt-2">
+                <div className="flex flex-col gap-2 p-3 rounded-lg border bg-accent/5">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Volume2 className="h-4 w-4 text-indigo-500" />
+                    <span className="text-xs font-semibold">{language === 'ar' ? 'الأصوات' : 'Sounds'}</span>
+                  </div>
+                  <Switch checked={preferences.enableSounds} onCheckedChange={(checked) => updatePreference('enableSounds', checked)} />
+                </div>
+                <div className="flex flex-col gap-2 p-3 rounded-lg border bg-accent/5">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Info className="h-4 w-4 text-cyan-500" />
+                    <span className="text-xs font-semibold">{language === 'ar' ? 'تنبيهات' : 'Toasts'}</span>
+                  </div>
+                  <Switch checked={preferences.enableToasts} onCheckedChange={(checked) => updatePreference('enableToasts', checked)} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        /* Browser View: Standard Notification UI */
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bell className="h-5 w-5" />
+                {language === 'ar' ? 'إذن إشعارات المتصفح' : 'Browser Notification Permission'}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between p-4 rounded-md border">
+                <div className="flex items-center gap-3">
+                  {permissionInfo.icon}
+                  <div>
+                    <p className="font-medium">{language === 'ar' ? 'حالة الإذن' : 'Permission Status'}</p>
+                    <p className={`text-sm ${permissionInfo.color}`}>{permissionInfo.text}</p>
+                  </div>
+                </div>
+                {permissionStatus !== 'granted' && (
+                  <Button 
+                    onClick={requestPermission}
+                    disabled={isLoading || permissionStatus === 'denied'}
+                    variant="outline"
+                  >
+                    {isLoading ? (language === 'ar' ? 'جاري الطلب...' : 'Requesting...') : (language === 'ar' ? 'طلب الإذن' : 'Request Permission')}
+                  </Button>
+                )}
+              </div>
+              {permissionStatus === 'denied' && (
+                <div className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-md border border-orange-200 dark:border-orange-800">
+                  <p className="text-sm text-orange-800 dark:text-orange-200">
+                    {language === 'ar' ? 'تم حظر الإشعارات من المتصفح.' : 'Notifications are blocked in your browser.'}
                   </p>
-                  <p className="text-sm text-green-600 dark:text-green-400">
-                    {language === 'ar' ? 'مدعوم عبر النظام' : 'Managed by System'}
-                  </p>
                 </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bell className="h-5 w-5" />
+                {language === 'ar' ? 'أنواع الإشعارات' : 'Notification Types'}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Messages */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <MessageCircle className="h-5 w-5 text-blue-500" />
+                  <div>
+                    <div className="font-medium">{language === 'ar' ? 'الرسائل' : 'Messages'}</div>
+                    <div className="text-sm text-muted-foreground">{language === 'ar' ? 'رسائل جديدة من جهات الاتصال' : 'New direct messages from contacts'}</div>
+                  </div>
+                </div>
+                <Switch checked={preferences.messages} onCheckedChange={(checked) => updatePreference('messages', checked)} />
               </div>
-              <Button 
-                onClick={handleNativePermissionRequest}
-                variant="outline"
-              >
-                {language === 'ar' ? 'تحديث الإعدادات' : 'Update Settings'}
-              </Button>
-            </div>
-            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
-              <p className="text-sm text-blue-800 dark:text-blue-200">
-                {language === 'ar' 
-                  ? 'يتم إدارة إشعارات التطبيق مباشرة عبر إعدادات هاتفك للحصول على أفضل أداء.'
-                  : 'App notifications are managed directly via your phone settings for the best reliability.'}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+
+              {/* Contact Requests */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Users className="h-5 w-5 text-green-500" />
+                  <div>
+                    <div className="font-medium">{language === 'ar' ? 'طلبات الاتصال' : 'Contact Requests'}</div>
+                    <div className="text-sm text-muted-foreground">{language === 'ar' ? 'طلبات جديدة من مستخدمين آخرين' : 'New requests from other users'}</div>
+                  </div>
+                </div>
+                <Switch checked={preferences.contact_requests} onCheckedChange={(checked) => updatePreference('contact_requests', checked)} />
+              </div>
+
+              {/* Task Updates */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <CheckSquare className="h-5 w-5 text-purple-500" />
+                  <div>
+                    <div className="font-medium">{language === 'ar' ? 'المهام' : 'Tasks'}</div>
+                    <div className="text-sm text-muted-foreground">{language === 'ar' ? 'تحديثات على مهامك وتذكيراتك' : 'Updates on your tasks and reminders'}</div>
+                  </div>
+                </div>
+                <Switch checked={preferences.task_updates} onCheckedChange={(checked) => updatePreference('task_updates', checked)} />
+              </div>
+
+              {/* Event RSVPs */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Calendar className="h-5 w-5 text-orange-500" />
+                  <div>
+                    <div className="font-medium">{language === 'ar' ? 'المواعيد' : 'Events'}</div>
+                    <div className="text-sm text-muted-foreground">{language === 'ar' ? 'ردود على دعوات الأحداث' : 'Responses to event invitations'}</div>
+                  </div>
+                </div>
+                <Switch checked={preferences.event_rsvps} onCheckedChange={(checked) => updatePreference('event_rsvps', checked)} />
+              </div>
+
+              <Separator />
+
+              {/* Sound Settings */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Volume2 className="h-5 w-5 text-indigo-500" />
+                  <div>
+                    <div className="font-medium">{language === 'ar' ? 'أصوات الإشعارات' : 'Notification Sounds'}</div>
+                    <div className="text-sm text-muted-foreground">{language === 'ar' ? 'تشغيل الأصوات مع الإشعارات' : 'Play sounds with notifications'}</div>
+                  </div>
+                </div>
+                <Switch checked={preferences.enableSounds} onCheckedChange={(checked) => updatePreference('enableSounds', checked)} />
+              </div>
+
+              {/* Toast Settings */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Bell className="h-5 w-5 text-cyan-500" />
+                  <div>
+                    <div className="font-medium">{language === 'ar' ? 'إشعارات على الشاشة' : 'Toast Notifications'}</div>
+                    <div className="text-sm text-muted-foreground">{language === 'ar' ? 'عرض الإشعارات على الشاشة' : 'Show on-screen notification messages'}</div>
+                  </div>
+                </div>
+                <Switch checked={preferences.enableToasts} onCheckedChange={(checked) => updatePreference('enableToasts', checked)} />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
-
-      {/* Notification Types */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Bell className="h-5 w-5" />
-            {language === 'ar' ? 'أنواع الإشعارات' : 'Notification Types'}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Messages */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <MessageCircle className="h-5 w-5 text-blue-500" />
-              <div>
-                <div className="font-medium">
-                  {language === 'ar' ? 'الرسائل' : 'Messages'}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  {language === 'ar' ? 'رسائل جديدة من جهات الاتصال' : 'New direct messages from contacts'}
-                </div>
-              </div>
-            </div>
-            <Switch
-              checked={preferences.messages}
-              onCheckedChange={(checked) => updatePreference('messages', checked)}
-            />
-          </div>
-
-          {/* Contact Requests */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Users className="h-5 w-5 text-green-500" />
-              <div>
-                <div className="font-medium">
-                  {language === 'ar' ? 'طلبات الاتصال' : 'Contact Requests'}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  {language === 'ar' ? 'طلبات اتصال جديدة من مستخدمين آخرين' : 'New contact requests from other users'}
-                </div>
-              </div>
-            </div>
-            <Switch
-              checked={preferences.contact_requests}
-              onCheckedChange={(checked) => updatePreference('contact_requests', checked)}
-            />
-          </div>
-
-          {/* Task Updates */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <CheckSquare className="h-5 w-5 text-purple-500" />
-              <div>
-                <div className="font-medium">
-                  {language === 'ar' ? 'تحديثات المهام' : 'Task Updates'}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  {language === 'ar' ? 'تحديثات على مهامك وتذكيراتك' : 'Updates on your tasks and reminders'}
-                </div>
-              </div>
-            </div>
-            <Switch
-              checked={preferences.task_updates}
-              onCheckedChange={(checked) => updatePreference('task_updates', checked)}
-            />
-          </div>
-
-          {/* Event RSVPs */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Calendar className="h-5 w-5 text-orange-500" />
-              <div>
-                <div className="font-medium">
-                  {language === 'ar' ? 'ردود الأحداث' : 'Event RSVPs'}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  {language === 'ar' ? 'ردود على دعوات الأحداث' : 'Responses to event invitations'}
-                </div>
-              </div>
-            </div>
-            <Switch
-              checked={preferences.event_rsvps}
-              onCheckedChange={(checked) => updatePreference('event_rsvps', checked)}
-            />
-          </div>
-
-          <Separator />
-
-          {/* Sound Settings */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Volume2 className="h-5 w-5 text-indigo-500" />
-              <div>
-                <div className="font-medium">
-                  {language === 'ar' ? 'أصوات الإشعارات' : 'Notification Sounds'}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  {language === 'ar' ? 'تشغيل الأصوات مع الإشعارات' : 'Play sounds with notifications'}
-                </div>
-              </div>
-            </div>
-            <Switch
-              checked={preferences.enableSounds}
-              onCheckedChange={(checked) => updatePreference('enableSounds', checked)}
-            />
-          </div>
-
-          {/* Toast Settings */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Bell className="h-5 w-5 text-cyan-500" />
-              <div>
-                <div className="font-medium">
-                  {language === 'ar' ? 'إشعارات على الشاشة' : 'Toast Notifications'}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  {language === 'ar' ? 'عرض الإشعارات على الشاشة' : 'Show on-screen notification messages'}
-                </div>
-              </div>
-            </div>
-            <Switch
-              checked={preferences.enableToasts}
-              onCheckedChange={(checked) => updatePreference('enableToasts', checked)}
-            />
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

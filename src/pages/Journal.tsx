@@ -110,7 +110,7 @@ export default function Journal() {
     <div className="container mx-auto p-3 max-w-3xl">
       <div className="glass-hero px-5 py-4 mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl flex items-center justify-center bg-gradient-to-br from-pink-500/30 to-purple-500/30 text-pink-400 shadow-md">
+          <div className="h-9 w-9 rounded-xl flex items-center justify-center bg-gradient-to-br from-pink-500/30 to-purple-500/30 text-pink-500 shadow-md">
             <NotebookPen className="h-5 w-5" />
           </div>
           <h1 className="text-xl font-semibold tracking-tight">{language === 'ar' ? 'دفتر اليوميات' : 'WAKTI Journal'}</h1>

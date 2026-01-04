@@ -113,12 +113,14 @@ serve(async (req)=>{
     const user = auth?.user; if(!user) return new Response(JSON.stringify({ error:'unauthorized' }), { status:401, headers:{...corsHeaders,'Content-Type':'application/json'} });
 
     const qLower = String(question).toLowerCase();
-    const inferredDays = /(today|اليوم)/i.test(qLower) ? 1 : /(yesterday|الأمس)/i.test(qLower) ? 2 : /(week|7\s*days|أسبوع)/i.test(qLower) ? 7 : /(month|30\s*days|شهر)/i.test(qLower) ? 30 : 7;
+    const isYesterday = /(yesterday|الأمس|أمس)/i.test(qLower);
+    const inferredDays = /(today|اليوم)/i.test(qLower) ? 1 : isYesterday ? 2 : /(week|7\s*days|أسبوع)/i.test(qLower) ? 7 : /(month|30\s*days|شهر)/i.test(qLower) ? 30 : 7;
     const windowDays = Number(timeframe) || inferredDays;
     const resolved_intent = String(intent || inferIntent(question));
     const resolved_mood_set = (Array.isArray(mood_set) && mood_set.length) ? mood_set : (inferMoodSetFromQuestion(question) || []);
 
     const today = todayLocalYYYYMMDD(user_timezone);
+    const yesterday = daysAgoYYYYMMDD(1, user_timezone);
     const since7 = daysAgoYYYYMMDD(7, user_timezone);
     const since30 = daysAgoYYYYMMDD(30, user_timezone);
     const since90 = daysAgoYYYYMMDD(90, user_timezone);
@@ -163,6 +165,13 @@ serve(async (req)=>{
 
     const inWindowDays = (daysRows||[]).filter(d=>d.date>=since && d.date<=today);
     const inWindowChecks = uniqueChecks.filter(c=>c.date>=since && c.date<=today);
+
+    // Specific logic for 'yesterday' to ensure we describe that day correctly if it exists
+    let yesterdayData: any = null;
+    if (isYesterday) {
+      yesterdayData = (daysRows || []).find(d => d.date === yesterday) || null;
+    }
+
     const entries = inWindowDays.map(d => ({ mood_value: d.mood_value, tags: (d as any).tags || [] }))
       .concat(inWindowChecks.map(c => ({ mood_value: c.mood_value, tags: (c as any).tags || [] })));
 
@@ -319,21 +328,40 @@ serve(async (req)=>{
       dataContext = lang==='ar' 
         ? 'المستخدم ليس لديه أي إدخالات في اليوميات. أجب بصدق أنه لا توجد بيانات للتحليل.' 
         : 'User has NO journal entries at all. Be honest that there is no data to analyze.';
-    } else if (lastEntry) {
-      // Always tell AI about the last entry
-      const lastEntryContext = lang==='ar'
-        ? `آخر إدخال للمستخدم كان في ${lastEntry.date} (قبل ${lastEntry.days_ago} يوم). المزاج: ${MOOD_ICON[lastEntry.mood] || lastEntry.mood}. ${lastEntry.note ? 'الملاحظة: "' + lastEntry.note + '"' : ''} ${lastEntry.tags.length ? 'الوسوم: ' + lastEntry.tags.map(iconizeTag).join(', ') : ''}`
-        : `User's LAST entry was on ${lastEntry.date} (${lastEntry.days_ago} days ago). Mood: ${MOOD_ICON[lastEntry.mood] || lastEntry.mood}. ${lastEntry.note ? 'Note: "' + lastEntry.note + '"' : ''} ${lastEntry.tags.length ? 'Tags: ' + lastEntry.tags.map(iconizeTag).join(', ') : ''}`;
-      dataContext = lastEntryContext;
-      if (entries.length === 0) {
+    } else {
+      let contextParts = [];
+
+      if (lastEntry) {
+        contextParts.push(lang==='ar'
+          ? `آخر إدخال للمستخدم كان في ${lastEntry.date} (قبل ${lastEntry.days_ago} يوم). المزاج: ${MOOD_ICON[lastEntry.mood] || lastEntry.mood}. ${lastEntry.note ? 'الملاحظة: "' + lastEntry.note + '"' : ''} ${lastEntry.tags.length ? 'الوسوم: ' + lastEntry.tags.map(iconizeTag).join(', ') : ''}`
+          : `User's LAST entry was on ${lastEntry.date} (${lastEntry.days_ago} days ago). Mood: ${MOOD_ICON[lastEntry.mood] || lastEntry.mood}. ${lastEntry.note ? 'Note: "' + lastEntry.note + '"' : ''} ${lastEntry.tags.length ? 'Tags: ' + lastEntry.tags.map(iconizeTag).join(', ') : ''}`);
+      }
+
+      if (isYesterday) {
+        if (yesterdayData) {
+          const yMoodValue = yesterdayData.mood_value;
+          const yMoodName = moodNameMap[yMoodValue] || 'unknown';
+          contextParts.push(lang==='ar'
+            ? `بالنسبة لأمس (${yesterday}): المزاج كان ${MOOD_ICON[yMoodName] || yMoodName}. الوسوم: ${(yesterdayData.tags || []).map(iconizeTag).join(', ')}. الملاحظة: "${yesterdayData.note || yesterdayData.evening_reflection || yesterdayData.morning_reflection || ''}"`
+            : `For YESTERDAY (${yesterday}): Mood was ${MOOD_ICON[yMoodName] || yMoodName}. Tags: ${(yesterdayData.tags || []).map(iconizeTag).join(', ')}. Note: "${yesterdayData.note || yesterdayData.evening_reflection || yesterdayData.morning_reflection || ''}"`);
+        } else {
+          contextParts.push(lang==='ar'
+            ? `لم يسجل المستخدم أي إدخال يوم أمس (${yesterday}).`
+            : `User did NOT log anything yesterday (${yesterday}).`);
+        }
+      }
+
+      dataContext = contextParts.join(' ');
+
+      if (entries.length === 0 && !isYesterday) {
         dataContext += lang==='ar' 
           ? ` لكن لا توجد إدخالات في آخر ${windowDays} يوم.`
           : ` However, no entries in the last ${windowDays} days.`;
       }
     }
     
-    const system_en = `You are a trusted best friend who gives quick, warm insights about someone's journal. Write 40–60 words max. Use inline icons. Start with "I notice...", "Look at this...", or "Every time...". Be specific with dates/times. BANNED: It appears that, This suggests, Consider, I would recommend, Your data shows, Based on your patterns, level. No corporate/therapy jargon. CRITICAL: If there is no data, say so honestly - never make up or assume information.${dataContext ? ' ' + dataContext : ''}`;
-    const system_ar = `أنت صديق مقرّب يعطي رؤى سريعة ودافئة عن يوميات شخص. اكتب 40–60 كلمة كحد أقصى. استخدم الرموز. ابدأ بـ "ألاحظ..." أو "انظر لهذا...". كن محددًا بالتواريخ. الممنوع: يبدو أن، يوحي ذلك، فكّر في، أوصي بـ، تُظهر بياناتك. مهم جداً: إذا لم تكن هناك بيانات، قل ذلك بصدق - لا تختلق معلومات.${dataContext ? ' ' + dataContext : ''}`;
+    const system_en = `You are a trusted best friend who gives quick, warm insights about someone's journal. Write 40–60 words max. Use inline icons. Start with "I notice...", "Look at this...", or "Every time...". Be specific with dates/times. MANDATORY: If the user asks about world topics, you MUST say "If you want to chat about other topics, use Wakti AI." but ONLY for off-topic questions. BANNED: It appears that, This suggests, Consider, I would recommend, Your data shows, Based on your patterns, level. No corporate/therapy jargon. CRITICAL: If there is no data, say so honestly - never make up or assume information.${dataContext ? ' ' + dataContext : ''}`;
+    const system_ar = `أنت صديق مقرّب يعطي رؤى سريعة ودافئة عن يوميات شخص. اكتب 40–60 كلمة كحد أقصى. استخدم الرموز. ابدأ بـ "ألاحظ..." أو "انظر لهذا...". كن محددًا بالتواريخ. إلزامي: إذا سأل المستخدم عن مواضيع عامة، يجب أن تقول "إذا كنت تريد الدردشة في مواضيع أخرى، استخدم وقطي AI." فقط للأسئلة خارج نطاق اليوميات. الممنوع: يبدو أن، يوحي ذلك، فكّر في، أوصي بـ، تُظهر بياناتك. مهم جداً: إذا لم تكن هناك بيانات، قل ذلك بصدق - لا تختلق معلومات.${dataContext ? ' ' + dataContext : ''}`;
 
     // LLM - GPT-4o-mini for speed
     let summary: string | undefined;

@@ -415,9 +415,16 @@ export async function triggerUserSync() {
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData?.session?.access_token;
   if (!accessToken) throw new Error("You must be logged in to sync WHOOP data");
-  console.log('Triggering WHOOP sync...');
+  
+  const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  
+  console.log('Triggering WHOOP sync with timezone:', userTimezone);
   const { data, error } = await supabase.functions.invoke("whoop-sync", {
-    body: { mode: "user", user_token: accessToken },
+    body: { 
+      mode: "user", 
+      user_token: accessToken,
+      user_timezone: userTimezone
+    },
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'x-supabase-authorization': `Bearer ${accessToken}`,

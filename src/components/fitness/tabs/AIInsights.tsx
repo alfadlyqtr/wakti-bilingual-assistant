@@ -1018,20 +1018,20 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
           {/* Daily Summary + Tips/Motivations wrapper for export */}
           <div id="ai-daily" className="space-y-6">
           {/* Daily Summary */}
-          <Card className="rounded-2xl p-6 bg-gradient-to-br from-emerald-50 to-blue-50 dark:from-white/5 dark:to-white/5 border-emerald-200 dark:border-white/10 shadow-lg">
-            <div className="flex items-center justify-between mb-4">
+          <Card className="rounded-2xl p-4 sm:p-6 bg-gradient-to-br from-emerald-50 to-blue-50 dark:from-white/5 dark:to-white/5 border-emerald-200 dark:border-white/10 shadow-lg">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
               <h3 className="font-semibold text-lg flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-emerald-400" />
                 {language === 'ar' ? 'الملخص اليومي' : 'Daily Summary'}
               </h3>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button 
                   variant="outline" 
                   size="sm" 
                   type="button"
                   onClick={() => generateInsights(activeWindow as TimeWindow, true)}
                   disabled={loading === activeWindow}
-                  className="h-8 px-2 text-xs"
+                  className="h-8 px-2 text-[10px] sm:text-xs min-w-[80px]"
                 >
                   <RefreshCw className={`h-3 w-3 mr-1 ${loading === activeWindow ? 'animate-spin' : ''}`} />
                   {language === 'ar' ? 'إعادة إنشاء' : 'Regenerate'}
@@ -1052,7 +1052,7 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
                   type="button"
                   onClick={speakText}
                   disabled={isTtsLoading}
-                  className={`h-8 px-2 text-xs transition-all ${
+                  className={`h-8 px-2 text-[10px] sm:text-xs transition-all ${
                     isPlaying
                       ? "bg-emerald-500/20 border-emerald-500 ring-2 ring-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.45)] animate-pulse"
                       : isTtsLoading
@@ -1063,25 +1063,25 @@ export function AIInsights({ timeRange, onTimeRangeChange, metrics, aiData }: AI
                   {isTtsLoading ? (
                     <>
                       <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
-                      <span className="hidden sm:inline">{language === 'ar' ? 'جاري التحويل' : 'Converting'}</span>
+                      <span>{language === 'ar' ? 'جاري' : 'Conv.'}</span>
                     </>
                   ) : isPlaying ? (
                     <>
                       <Pause className="h-3 w-3 mr-1 text-emerald-400" />
-                      <span className="hidden sm:inline">{language === 'ar' ? 'إيقاف' : 'Pause'}</span>
+                      <span>{language === 'ar' ? 'إيقاف' : 'Pause'}</span>
                     </>
                   ) : (
                     <>
                       <Volume2 className="h-3 w-3 mr-1" />
-                      <span className="hidden sm:inline">{language === 'ar' ? 'استماع' : 'Speak'}</span>
+                      <span>{language === 'ar' ? 'استماع' : 'Speak'}</span>
                     </>
                   )}
                 </Button>
-                <Button variant="outline" size="sm" type="button" className="h-8 px-2 text-xs" onClick={copyToClipboard}>
+                <Button variant="outline" size="sm" type="button" className="h-8 px-2 text-[10px] sm:text-xs" onClick={copyToClipboard}>
                   <Copy className="h-3 w-3 mr-1" />
                   {language === 'ar' ? 'نسخ' : 'Copy'}
                 </Button>
-                <Button variant="outline" size="sm" type="button" className="h-8 px-2 text-xs" onClick={exportPDF}>
+                <Button variant="outline" size="sm" type="button" className="h-8 px-2 text-[10px] sm:text-xs" onClick={exportPDF}>
                   <FileText className="h-3 w-3 mr-1" />
                   {language === 'ar' ? 'PDF' : 'PDF'}
                 </Button>
