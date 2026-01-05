@@ -927,7 +927,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
   }
 
   return (
-    <div className={cn("flex flex-col h-[calc(100vh-64px)] bg-background", isRTL && "rtl")}>
+    <div className={cn("flex flex-col min-h-screen h-[100svh] bg-background overflow-hidden", isRTL && "rtl")}>
       {/* Enhanced Top Header Bar */}
       <div className="flex items-center justify-between px-3 md:px-4 py-2 border-b border-border/50 bg-gradient-to-r from-background via-background to-indigo-500/5 dark:to-indigo-500/10 backdrop-blur-xl shrink-0 z-20">
         <div className="flex items-center gap-2 md:gap-4 min-w-0">
@@ -1020,7 +1020,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       </div>
 
       {/* Modern Mobile Navigation Segmented Toggle */}
-      <div className="md:hidden px-4 py-3 bg-background/50 backdrop-blur-sm border-b border-border/40 shrink-0">
+      <div className="md:hidden px-4 py-2 bg-background/50 backdrop-blur-sm border-b border-border/40 shrink-0">
         <div className="relative flex p-1 bg-muted/30 dark:bg-white/5 rounded-2xl border border-border/50">
           {/* Animated sliding background pill */}
           <div 
@@ -1033,7 +1033,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
           <button
             onClick={() => setMobileTab('chat')}
             className={cn(
-              "flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-bold transition-all relative z-10",
+              "flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold transition-all relative z-10",
               mobileTab === 'chat' 
                 ? "text-indigo-600 dark:text-indigo-400" 
                 : "text-muted-foreground hover:text-foreground"
@@ -1046,7 +1046,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
           <button
             onClick={() => setMobileTab('preview')}
             className={cn(
-              "flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-bold transition-all relative z-10",
+              "flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold transition-all relative z-10",
               mobileTab === 'preview' 
                 ? "text-indigo-600 dark:text-indigo-400" 
                 : "text-muted-foreground hover:text-foreground"
@@ -1059,13 +1059,13 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       </div>
 
       {/* Main Studio Content */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden h-full relative">
         {/* Left Panel - Cascade-style Control Center */}
         <div className={cn(
           "flex flex-col border-r transition-all duration-300",
           "bg-background dark:bg-[#0c0f14]",
           "md:w-[420px] lg:w-[480px] shrink-0 overflow-hidden",
-          mobileTab === 'preview' ? "hidden md:flex" : "flex w-full"
+          mobileTab === 'preview' ? "hidden md:flex" : "flex w-full h-full"
         )}>
           {/* Mode Toggle: Chat / Code - Like Cascade */}
           <div className="flex items-center justify-between border-b border-border/50 dark:border-white/10 px-3 py-2 shrink-0">
