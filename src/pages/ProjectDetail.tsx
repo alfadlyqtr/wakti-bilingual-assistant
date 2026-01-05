@@ -1672,6 +1672,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                       files={Object.keys(generatedFiles).length > 0 ? generatedFiles : { "/App.js": codeContent || "" }}
                       onRuntimeError={handleRuntimeCrash}
                       elementSelectMode={elementSelectMode}
+                      isLoading={isGenerating || aiEditing}
                       onElementSelect={(ref, elementInfo) => {
                         if (elementInfo) setSelectedElementInfo(elementInfo);
                         setChatInput(prev => prev + (prev ? ' ' : '') + ref + ' ');

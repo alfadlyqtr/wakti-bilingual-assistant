@@ -73,11 +73,18 @@ interface SandpackStudioProps {
   onRuntimeError?: (error: string) => void;
   elementSelectMode?: boolean;
   onElementSelect?: (elementRef: string, elementInfo?: SelectedElementInfo) => void;
+  isLoading?: boolean; // Show loading overlay while AI is generating
 }
 
-export default function SandpackStudio({ files, onRuntimeError, elementSelectMode, onElementSelect }: SandpackStudioProps) {
+export default function SandpackStudio({ files, onRuntimeError, elementSelectMode, onElementSelect, isLoading }: SandpackStudioProps) {
   const [viewMode, setViewMode] = useState<'preview' | 'code'>('preview');
   const [selectedElement, setSelectedElement] = useState<SelectedElementInfo | null>(null);
+  
+  // Check if we have valid files (not just empty or placeholder)
+  const hasValidFiles = Object.keys(files).length > 0 && 
+    files["/App.js"] && 
+    files["/App.js"].length > 50 && 
+    !files["/App.js"].includes("<!DOCTYPE");
 
   // Listen for element selection messages from the iframe
   useEffect(() => {
@@ -238,13 +245,36 @@ root.render(<App />);`;
                 <style dangerouslySetInnerHTML={{ __html: `
                   .sp-stack .sp-preview-actions, 
                   .sp-stack .sp-error-message,
-                  .sp-stack .sp-error-list {
+                  .sp-stack .sp-error-list,
+                  .sp-preview-container .sp-bridge-frame,
+                  .cm-diagnostic-error {
                     display: none !important;
                   }
                   .sp-preview-container iframe {
                     background-color: transparent !important;
                   }
                 `}} />
+
+                {/* LOADING OVERLAY - Covers Sandpack while AI is generating */}
+                {(isLoading || !hasValidFiles) && (
+                  <div className="absolute inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center">
+                    <div className="relative">
+                      {/* Animated rings */}
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-24 h-24 rounded-full border-2 border-indigo-500/30 animate-ping" />
+                      </div>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-16 h-16 rounded-full border-2 border-purple-500/50 animate-pulse" />
+                      </div>
+                      {/* Center icon */}
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                        <Code2 className="w-6 h-6 text-white animate-pulse" />
+                      </div>
+                    </div>
+                    <p className="mt-6 text-sm text-gray-400 animate-pulse">Building your project...</p>
+                    <p className="mt-2 text-xs text-gray-600">This may take 15-30 seconds</p>
+                  </div>
+                )}
 
                 <SandpackPreview 
                   showNavigator={false} 
