@@ -36,87 +36,16 @@ interface Project {
 
 const MAX_PROJECTS = 2;
 
-// Project Preview Thumbnail Component - renders a static HTML preview
+// Project Preview Thumbnail Component - simple image thumbnail
 const ProjectPreviewThumbnail = ({ project }: { project: Project }) => {
-  // Debug: log files
-  console.log('[ProjectPreview]', project.name, 'files:', project.files ? Object.keys(project.files) : 'none');
-  
-  // If project has files, extract content and render as static HTML preview
-  const files = project.files;
-  const appCode = files?.["/App.js"] || files?.["App.js"] || files?.["/App.tsx"] || "";
-  
-  if (appCode && appCode.length > 50) {
-    // Extract text content from the React code
-    const textMatches = appCode.match(/["'`]([^"'`\n]{4,60})["'`]/g) || [];
-    const texts = textMatches
-      .map((t: string) => t.slice(1, -1))
-      .filter((t: string) => 
-        !t.includes('className') && 
-        !t.includes('http') && 
-        !t.includes('import') &&
-        !t.includes('export') &&
-        !t.includes('function') &&
-        !t.startsWith('/') &&
-        !t.startsWith('.') &&
-        t.length > 4
-      )
-      .slice(0, 6);
-    
-    // Check for common patterns
-    const hasButton = /button|Button|btn/i.test(appCode);
-    const hasNav = /nav|Nav|header|Header|menu|Menu/i.test(appCode);
-    
-    // Build preview HTML
-    const previewHTML = `<!DOCTYPE html>
-<html>
-<head>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; overflow: hidden; }
-    .container { 
-      min-height: 100vh; 
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-      padding: 16px;
-      color: white;
-    }
-    .header { 
-      font-size: 20px; 
-      font-weight: 700; 
-      margin-bottom: 8px;
-      background: linear-gradient(90deg, #f97316, #ec4899);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .text { font-size: 11px; opacity: 0.7; margin-bottom: 6px; line-height: 1.4; }
-    .btn { 
-      display: inline-block;
-      padding: 8px 16px; 
-      background: linear-gradient(90deg, #f97316, #ef4444);
-      border-radius: 999px; 
-      font-size: 11px;
-      font-weight: 600;
-      margin-top: 12px;
-    }
-    .nav { display: flex; gap: 12px; font-size: 10px; opacity: 0.6; margin-bottom: 12px; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    ${hasNav ? '<div class="nav"><span>Home</span><span>Menu</span><span>About</span></div>' : ''}
-    <div class="header">${texts[0] || project.name}</div>
-    ${texts.slice(1, 4).map((t: string) => `<div class="text">${t}</div>`).join('')}
-    ${hasButton && texts[4] ? `<div class="btn">${texts[4]}</div>` : hasButton ? '<div class="btn">Get Started</div>' : ''}
-  </div>
-</body>
-</html>`;
-    
+  // If project has a thumbnail, show it
+  if (project.thumbnail_url) {
     return (
       <div className="aspect-video relative overflow-hidden bg-zinc-900">
-        <iframe
-          srcDoc={previewHTML}
-          className="absolute inset-0 w-full h-full border-0 pointer-events-none"
-          title={`Preview of ${project.name}`}
-          sandbox="allow-scripts"
+        <img 
+          src={project.thumbnail_url} 
+          alt={project.name}
+          className="w-full h-full object-cover object-top"
         />
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
           <Eye className="h-8 w-8 text-white drop-shadow-lg" />
@@ -238,16 +167,29 @@ export default function Projects() {
             .select('path, content')
             .eq('project_id', project.id) as any);
           
-          console.log('[Projects] Files for', project.name, ':', filesData?.length || 0, 'files', filesError);
-          
           if (filesData && filesData.length > 0) {
-            const files: Record<string, string> = {};
+            let files: Record<string, string> = {};
+            
             filesData.forEach((f: { path: string; content: string }) => {
-              const path = f.path.startsWith('/') ? f.path : `/${f.path}`;
-              files[path] = f.content;
-              console.log('[Projects] File:', path, 'length:', f.content?.length || 0);
+              // Check if content is JSON (contains all files as JSON object)
+              if (f.content && f.content.startsWith('{"/')) {
+                try {
+                  const parsed = JSON.parse(f.content);
+                  files = { ...files, ...parsed };
+                } catch (e) {
+                  // Not JSON, treat as regular file
+                  const path = f.path.startsWith('/') ? f.path : `/${f.path}`;
+                  files[path] = f.content;
+                }
+              } else {
+                const path = f.path.startsWith('/') ? f.path : `/${f.path}`;
+                files[path] = f.content;
+              }
             });
-            return { ...project, files };
+            
+            if (Object.keys(files).length > 0) {
+              return { ...project, files };
+            }
           }
         } catch (e) {
           console.error('[Projects] Error fetching files for project:', project.id, e);
@@ -255,7 +197,6 @@ export default function Projects() {
         return project;
       }));
       
-      console.log('[Projects] Loaded', projectsWithFiles.length, 'projects with files');
       setProjects(projectsWithFiles);
     } catch (err) {
       console.error('Error fetching projects:', err);

@@ -8,34 +8,36 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { 
   ArrowLeft, 
-  Code2, 
-  MessageSquare, 
-  Upload, 
+  Download, 
+  ExternalLink, 
   Loader2, 
+  Monitor, 
+  Smartphone, 
+  Tablet, 
+  Upload, 
+  Save, 
+  MessageSquare, 
+  Code2, 
+  Check, 
+  ChevronUp, 
+  RefreshCw, 
+  Sparkles, 
+  Brain, 
+  FileCode, 
+  Zap, 
+  Plus, 
+  SendHorizontal, 
+  ArrowDown, 
   Send, 
-  Download,
-  ExternalLink,
-  RefreshCw,
-  Save,
-  Sparkles,
-  Monitor,
-  Tablet,
-  Smartphone,
-  ChevronDown,
-  FileCode,
-  Check,
-  AlertTriangle,
-  Wand2,
-  ArrowDown,
-  ChevronUp,
-  Brain,
+  AlertTriangle, 
+  Wand2, 
+  MousePointer2, 
   X,
-  Plus,
-  Zap,
-  MousePointer2
+  Camera
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import html2canvas from 'html2canvas';
 
 // Lazy load Sandpack Studio for full control over layout
 const SandpackStudio = lazy(() => import('@/components/projects/SandpackStudio'));
@@ -100,8 +102,13 @@ export default function ProjectDetail() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationSteps, setGenerationSteps] = useState<{ label: string, status: 'pending' | 'loading' | 'completed' | 'error' }[]>([]);
   
-  // Preview state
-  const [deviceView, setDeviceView] = useState<DeviceView>('desktop');
+  // Preview state - default to mobile if on mobile device
+  const [deviceView, setDeviceView] = useState<DeviceView>(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      return 'mobile';
+    }
+    return 'desktop';
+  });
   const [showDeviceMenu, setShowDeviceMenu] = useState(false);
   const [rightPanelMode, setRightPanelMode] = useState<'preview' | 'code' | 'both'>('preview');
   
@@ -618,6 +625,70 @@ export default function ProjectDetail() {
     toast.success(isRTL ? 'تم التحميل!' : 'Downloaded!');
   };
 
+  // Capture screenshot of the preview and save as thumbnail
+  const captureScreenshot = async () => {
+    if (!project) return;
+    
+    try {
+      // Find the Sandpack preview iframe
+      const previewContainer = document.querySelector('.sandpack-preview-container');
+      if (!previewContainer) {
+        toast.error(isRTL ? 'لا يوجد معاينة للتصوير' : 'No preview to capture');
+        return;
+      }
+
+      toast.loading(isRTL ? 'جاري التقاط الصورة...' : 'Capturing screenshot...');
+      
+      // Use html2canvas to capture
+      const canvas = await html2canvas(previewContainer as HTMLElement, {
+        useCORS: true,
+        allowTaint: true,
+        scale: 0.5, // Lower scale for smaller file size
+        backgroundColor: '#0c0f14',
+      });
+      
+      // Convert to blob
+      const blob = await new Promise<Blob>((resolve) => {
+        canvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.8);
+      });
+      
+      // Upload to Supabase storage
+      const fileName = `${project.id}-${Date.now()}.jpg`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('project-thumbnails')
+        .upload(fileName, blob, {
+          contentType: 'image/jpeg',
+          upsert: true,
+        });
+      
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        // If bucket doesn't exist, just save locally for now
+        toast.dismiss();
+        toast.error(isRTL ? 'فشل في رفع الصورة' : 'Failed to upload screenshot');
+        return;
+      }
+      
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('project-thumbnails')
+        .getPublicUrl(fileName);
+      
+      // Update project with thumbnail URL
+      await (supabase
+        .from('projects' as any)
+        .update({ thumbnail_url: publicUrl })
+        .eq('id', project.id) as any);
+      
+      toast.dismiss();
+      toast.success(isRTL ? 'تم حفظ الصورة المصغرة!' : 'Thumbnail saved!');
+    } catch (err) {
+      console.error('Screenshot error:', err);
+      toast.dismiss();
+      toast.error(isRTL ? 'فشل في التقاط الصورة' : 'Failed to capture screenshot');
+    }
+  };
+
   // Helper for delays
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -927,9 +998,9 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
   }
 
   return (
-    <div className={cn("flex flex-col min-h-screen h-[100svh] bg-background overflow-hidden", isRTL && "rtl")}>
+    <div className={cn("flex flex-col h-[calc(100vh-64px)] bg-background overflow-hidden", isRTL && "rtl")}>
       {/* Enhanced Top Header Bar */}
-      <div className="flex items-center justify-between px-3 md:px-4 py-2 border-b border-border/50 bg-gradient-to-r from-background via-background to-indigo-500/5 dark:to-indigo-500/10 backdrop-blur-xl shrink-0 z-20">
+      <div className="flex items-center justify-between px-3 md:px-4 py-2 border-b border-border/50 bg-gradient-to-r from-background via-background to-indigo-500/5 dark:to-indigo-500/10 backdrop-blur-xl shrink-0 z-20 pt-[env(safe-area-inset-top)]">
         <div className="flex items-center gap-2 md:gap-4 min-w-0">
           {/* Back button and Status Badge stacked */}
           <div className="flex flex-col items-center gap-0.5 shrink-0">
@@ -961,25 +1032,6 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         </div>
         
         <div className="flex items-center gap-1.5 md:gap-2 shrink-0 ml-1">
-          {/* Device switcher - hidden on small mobile */}
-          <div className="hidden lg:flex items-center bg-muted/30 dark:bg-white/5 rounded-xl p-1 border border-border/50">
-            {deviceOptions.map((option) => (
-              <button
-                key={option.id}
-                onClick={() => setDeviceView(option.id)}
-                className={cn(
-                  "p-2 rounded-lg transition-all",
-                  deviceView === option.id 
-                    ? "bg-indigo-500 text-white shadow-md shadow-indigo-500/30" 
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                )}
-                title={option.label}
-              >
-                <option.icon className="h-4 w-4" />
-              </button>
-            ))}
-          </div>
-
           {/* Action buttons - icon only on mobile for better fit */}
           <div className="flex items-center gap-1 md:gap-1.5">
             {displayProject.published_url && (
@@ -1059,13 +1111,14 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       </div>
 
       {/* Main Studio Content */}
-      <div className="flex-1 flex overflow-hidden h-full relative">
+      <div className="flex-1 min-h-0 flex overflow-hidden relative">
         {/* Left Panel - Cascade-style Control Center */}
         <div className={cn(
           "flex flex-col border-r transition-all duration-300",
           "bg-background dark:bg-[#0c0f14]",
-          "md:w-[420px] lg:w-[480px] shrink-0 overflow-hidden",
-          mobileTab === 'preview' ? "hidden md:flex" : "flex w-full h-full"
+          "md:w-[420px] lg:w-[480px] shrink-0",
+          mobileTab === 'preview' ? "hidden md:flex" : "flex w-full",
+          "max-h-full"
         )}>
           {/* Mode Toggle: Chat / Code - Like Cascade */}
           <div className="flex items-center justify-between border-b border-border/50 dark:border-white/10 px-3 py-2 shrink-0">
@@ -1155,7 +1208,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
           {(leftPanelMode === 'chat' || leftPanelMode === 'code') && (
             <>
               {/* Chat Messages Area - Clean bubbles, no avatars */}
-              <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin">
+              <div ref={chatContainerRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3 scrollbar-thin">
                 {/* Show More Button - at top if there are hidden messages */}
                 {chatMessages.length > visibleMessagesCount && (
                   <button
@@ -1337,7 +1390,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                 )}
 
                 {/* Chat Input Area - Clean with inline suggestions */}
-                <div className="p-4 border-t border-border/30 dark:border-white/10 shrink-0 space-y-3 bg-background/50 backdrop-blur-sm">
+                <div className="p-2 border-t border-border/30 dark:border-white/10 shrink-0 space-y-1.5 bg-background/50 backdrop-blur-sm">
                   {/* Inline Suggestions + Jump to Bottom Button */}
                   <div className="flex items-center gap-2 px-1">
                     <div className="flex flex-wrap gap-1.5 flex-1">
@@ -1492,113 +1545,91 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
             )}
           </div>
 
-        {/* Right Panel - Google Style with Preview/Code tabs */}
+        {/* Right Panel - Studio Canvas */}
         <div className={cn(
-          "flex-1 flex flex-col bg-zinc-950 overflow-hidden",
-          mobileTab === 'chat' ? "hidden md:flex" : "flex"
+          "flex-1 flex flex-col bg-[#0c0f14] relative h-full",
+          mobileTab === 'chat' ? "hidden md:flex" : "flex w-full h-full"
         )}>
-          {/* Google-style Header with Preview/Code/Fullscreen tabs */}
-          <div className="flex items-center justify-between px-2 py-1.5 border-b border-zinc-800 bg-zinc-900 shrink-0">
+          {/* Preview Header - Compact */}
+          <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-900 border-b border-white/5 shrink-0">
             <div className="flex items-center gap-2">
-              {/* Send Element button */}
-              <button
-                onClick={() => {
-                  setElementSelectMode(!elementSelectMode);
-                  if (!elementSelectMode) {
-                    toast.info(isRTL ? 'انقر على أي عنصر في المعاينة لتحديده' : 'Click any element in the preview to select it');
-                  }
-                }}
-                className={cn(
-                  "px-2 py-1 text-xs flex items-center gap-1.5 rounded-md transition-all",
-                  elementSelectMode 
-                    ? "bg-indigo-500 text-white" 
-                    : "text-zinc-400 hover:text-white hover:bg-zinc-800"
-                )}
-              >
-                <MousePointer2 className="h-3 w-3" />
-                {isRTL ? 'تحديد عنصر' : 'Send element'}
-              </button>
-              
-              {/* Fullscreen button */}
-              <button
-                onClick={() => {
-                  const el = document.querySelector('.sandpack-preview-container');
-                  if (el) el.requestFullscreen?.();
-                }}
-                className="px-2 py-1 text-xs text-zinc-400 hover:text-white flex items-center gap-1"
-              >
-                <ExternalLink className="h-3 w-3" />
-                {isRTL ? 'ملء الشاشة' : 'Fullscreen'}
-              </button>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              {/* Device selector */}
-              <div className="hidden lg:flex items-center bg-zinc-800 rounded-lg p-0.5">
-                {[
-                  { id: 'desktop' as DeviceView, icon: Monitor, label: 'Desktop' },
-                  { id: 'tablet' as DeviceView, icon: Tablet, label: 'Tablet' },
-                  { id: 'mobile' as DeviceView, icon: Smartphone, label: 'Mobile' },
-                ].map((device) => (
+              {/* Device Switcher - visible on all screens */}
+              <div className="flex items-center bg-zinc-800/50 rounded-lg p-0.5 border border-white/5">
+                {deviceOptions.map((option) => (
                   <button
-                    key={device.id}
-                    onClick={() => setDeviceView(device.id)}
-                    title={device.label}
+                    key={option.id}
+                    onClick={() => setDeviceView(option.id)}
                     className={cn(
                       "p-1.5 rounded-md transition-all",
-                      deviceView === device.id 
-                        ? "bg-zinc-700 text-white" 
-                        : "text-zinc-500 hover:text-white"
+                      deviceView === option.id 
+                        ? "bg-indigo-500 text-white shadow-md shadow-indigo-500/30" 
+                        : "text-zinc-400 hover:text-white hover:bg-zinc-700/50"
                     )}
+                    title={option.label}
                   >
-                    <device.icon className="h-3.5 w-3.5" />
+                    <option.icon className="h-3.5 w-3.5" />
                   </button>
                 ))}
               </div>
               
+              <div className="h-4 w-px bg-white/10 hidden xs:block" />
+              
+              <button 
+                onClick={() => {
+                  const el = document.querySelector('.sandpack-preview-container');
+                  if (el) el.requestFullscreen?.();
+                }}
+                className="p-1.5 text-zinc-400 hover:text-white flex items-center gap-1 transition-colors"
+                title={isRTL ? 'ملء الشاشة' : 'Fullscreen'}
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                <span className="text-[10px] uppercase font-bold hidden sm:inline">{isRTL ? 'كامل الشاشة' : 'Fullscreen'}</span>
+              </button>
+              
+              <button 
+                onClick={captureScreenshot}
+                className="p-1.5 text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors border border-indigo-500/20 rounded-md bg-indigo-500/5"
+                title={isRTL ? 'لقطة شاشة' : 'Screenshot'}
+              >
+                <Camera className="h-3.5 w-3.5" />
+                <span className="text-[10px] uppercase font-bold hidden sm:inline">{isRTL ? 'لقطة' : 'Screenshot'}</span>
+              </button>
+            </div>
+            
+            <div className="flex items-center gap-2">
               <button 
                 onClick={refreshPreview}
                 className="p-1.5 hover:bg-zinc-800 rounded-lg transition-colors text-zinc-400 hover:text-white"
                 title="Refresh"
               >
-                <RefreshCw className="h-4 w-4" />
+                <RefreshCw className="h-3.5 w-3.5" />
               </button>
             </div>
           </div>
 
-          {/* Preview/Code Content - Full Height with relative positioning for absolute child */}
-          <div className="flex-1 sandpack-preview-container relative" style={{ minHeight: 0 }}>
+          {/* Preview/Code Content - Full Height */}
+          <div className="flex-1 sandpack-preview-container relative min-h-0">
             <Suspense fallback={
               <div className="w-full h-full flex items-center justify-center bg-zinc-950 text-white">
-                <div className="text-center space-y-4">
-                  <div className="w-10 h-10 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                  <p className="text-[10px] uppercase tracking-[0.2em] font-medium text-zinc-500">Loading</p>
-                </div>
+                <Loader2 className="w-10 h-10 animate-spin text-indigo-500" />
               </div>
             }>
               {(codeContent || Object.keys(generatedFiles).length > 0) ? (
-                <div className="w-full h-full flex items-center justify-center p-3 relative">
-                  {/* Matrix Loading Overlay - Shows during Code mode edits */}
+                <div className="w-full h-full flex items-center justify-center relative">
                   <MatrixOverlay isVisible={aiEditing && leftPanelMode === 'code'} />
-                  
-                  <div
-                    className={cn(
-                      "h-full max-h-full w-full transition-all",
-                      deviceView === 'desktop' && "max-w-full",
-                      deviceView === 'tablet' && "max-w-[768px]",
-                      deviceView === 'mobile' && "max-w-[390px]"
-                    )}
-                  >
+                  <div className={cn(
+                    "h-full w-full transition-all flex flex-col",
+                    deviceView === 'desktop' && "max-w-full",
+                    deviceView === 'tablet' && "max-w-[768px]",
+                    deviceView === 'mobile' && "max-w-[390px]"
+                  )}>
                     <SandpackStudio 
                       key={`sandpack-studio-${sandpackKey}`}
                       files={Object.keys(generatedFiles).length > 0 ? generatedFiles : { "/App.js": codeContent || "" }}
                       onRuntimeError={handleRuntimeCrash}
                       elementSelectMode={elementSelectMode}
                       onElementSelect={(ref, elementInfo) => {
-                        // Store element info for context-aware AI prompts
-                        if (elementInfo) {
-                          setSelectedElementInfo(elementInfo);
-                        }
+                        if (elementInfo) setSelectedElementInfo(elementInfo);
                         setChatInput(prev => prev + (prev ? ' ' : '') + ref + ' ');
                         setElementSelectMode(false);
                         toast.success(isRTL ? 'تم تحديد العنصر!' : 'Element selected!');
@@ -1627,7 +1658,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                     <span className="text-zinc-400 text-xs">selected</span>
                   </div>
                   <p className="text-white text-sm truncate mt-1">
-                    "{selectedElementInfo.innerText.substring(0, 40)}{selectedElementInfo.innerText.length > 40 ? '...' : ''}"
+                    "{selectedElementInfo.innerText.substring(0, 40)}..."
                   </p>
                 </div>
                 <button 
@@ -1650,7 +1681,6 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
           instructionsDrawerOpen ? "visible" : "invisible"
         )}
       >
-        {/* Backdrop */}
         <div 
           className={cn(
             "absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300",
@@ -1659,14 +1689,12 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
           onClick={() => setInstructionsDrawerOpen(false)}
         />
         
-        {/* Drawer Panel */}
         <div 
           className={cn(
             "absolute top-0 left-0 h-full w-full max-w-xl bg-background dark:bg-[#0c0f14] border-r border-border/50 shadow-2xl transition-transform duration-300 ease-out flex flex-col",
             instructionsDrawerOpen ? "translate-x-0" : "-translate-x-full"
           )}
         >
-          {/* Drawer Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-border/50 dark:border-white/10 shrink-0">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500/20 via-pink-500/20 to-orange-500/20 border border-purple-500/30">
@@ -1690,44 +1718,17 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
             </button>
           </div>
 
-          {/* Drawer Content */}
           <div className="flex-1 overflow-y-auto p-5 space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
-                {isRTL ? 'تعليماتك المخصصة' : 'Your Custom Instructions'}
-              </label>
-              <p className="text-xs text-muted-foreground">
-                {isRTL 
-                  ? 'اكتب تعليماتك هنا. سيتبعها الذكاء الاصطناعي عند إنشاء أو تعديل الكود.'
-                  : 'Write your instructions here. The AI will follow them when generating or editing code.'}
-              </p>
-            </div>
-
             <Textarea
               value={tempInstructions}
               onChange={(e) => setTempInstructions(e.target.value)}
-              placeholder={isRTL 
-                ? `// مثال على التعليمات:\n\n* استخدم ألوان علامتي التجارية: #xxx\n* استخدم الوضع الداكن دائماً\n* تجنب استخدام التدرجات\n* استخدم الرموز التعبيرية بدلاً من الأيقونات`
-                : `// Example instructions:\n\n* Use my brand colors: #xxx\n* Always use dark theme\n* Avoid using gradients\n* Use emojis instead of icons`}
+              placeholder={isRTL ? 'أضف تعليمات هنا...' : 'Add instructions here...'}
               className="min-h-[300px] bg-muted/30 dark:bg-white/5 border-border/50 dark:border-white/10 text-sm font-mono resize-none focus-visible:ring-purple-500/50"
             />
-
-            <div className="p-3 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
-              <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">
-                {isRTL 
-                  ? '💡 نصيحة: وقتي AI يفضل التعليمات الواضحة والمختصرة لتحقيق أفضل النتائج في مشروعك.'
-                  : '💡 Tip: Wakti AI loves clear, concise instructions. Be specific about the styles or features you want to see!'}
-              </p>
-            </div>
           </div>
 
-          {/* Drawer Footer */}
           <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-border/50 dark:border-white/10 shrink-0 bg-muted/20 dark:bg-white/5">
-            <Button
-              variant="ghost"
-              onClick={() => setInstructionsDrawerOpen(false)}
-              className="text-muted-foreground"
-            >
+            <Button variant="ghost" onClick={() => setInstructionsDrawerOpen(false)} className="text-muted-foreground">
               {isRTL ? 'إلغاء' : 'Cancel'}
             </Button>
             <Button
@@ -1736,9 +1737,9 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                 setInstructionsDrawerOpen(false);
                 toast.success(isRTL ? 'تم حفظ التعليمات!' : 'Instructions saved!');
               }}
-              className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white border-0"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white"
             >
-              {isRTL ? 'حفظ التغييرات' : 'Save changes'}
+              {isRTL ? 'حفظ التعليمات' : 'Save Instructions'}
             </Button>
           </div>
         </div>
