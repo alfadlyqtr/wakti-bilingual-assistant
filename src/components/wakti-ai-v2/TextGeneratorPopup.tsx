@@ -763,6 +763,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 />
               </div>
 
+              {/* Row 1: Who is this message for? | Name (optional) */}
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <label className="text-sm font-medium" htmlFor="replyAudienceSelect">{language === 'ar' ? 'لمن هذه الرسالة؟' : 'Who is this message for?'} </label>
@@ -791,161 +792,24 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 </div>
               </div>
 
-              <div className="grid gap-2">
-                <div className="flex items-center justify-between gap-2">
-                  <label className="text-sm font-medium">{language === 'ar' ? 'الرسالة الأصلية' : 'Original Message'}</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      ref={replyFileInputRef}
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      aria-label={language === 'ar' ? 'رفع صور' : 'Upload screenshots'}
-                      className="hidden"
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files || []);
-                        if (files.length) handleScreenshotUpload(files, 'reply');
-                        e.target.value = '';
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => replyFileInputRef.current?.click()}
-                      disabled={isExtractingReply}
-                      className={`text-xs px-2 py-1 rounded-md border hover:bg-muted flex items-center gap-1 ${isExtractingReply ? 'bg-purple-100 dark:bg-purple-900/30 border-purple-400 animate-pulse' : ''}`}
-                      aria-label={language === 'ar' ? 'رفع صورة' : 'Upload screenshot'}
-                      title={language === 'ar' ? 'رفع صورة لاستخراج النص' : 'Upload screenshot to extract text'}
-                    >
-                      {isExtractingReply
-                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        : <ImagePlus className="w-3.5 h-3.5" />}
-                      {isExtractingReply
-                        ? (extractProgressReply
-                          ? `${extractProgressReply.current}/${extractProgressReply.total}`
-                          : (language === 'ar' ? 'جارٍ...' : '...'))
-                        : ''}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setOriginalMessage('')}
-                      className="text-xs px-2 py-1 rounded-md border hover:bg-muted"
-                      aria-label={language === 'ar' ? 'مسح النص' : 'Clear text'}
-                    >
-                      {language === 'ar' ? 'مسح' : 'Clear'}
-                    </button>
-                  </div>
-                </div>
-                <textarea
-                  className={`w-full border rounded p-3 min-h-[140px] ${fieldAccent} ${placeholderMuted}`}
-                  placeholder={language === 'ar' ? 'الرسالة التي تريد الرد عليها...' : 'Original message you want to reply to...'}
-                  value={originalMessage}
-                  onChange={(e) => setOriginalMessage(e.target.value)}
-                />
-              </div>
-
-              {/* Extracted Form Panel - shows when a form is detected from screenshot */}
-              {extractedForm && (
-                <div className="rounded-xl border-2 border-purple-500/30 bg-purple-50/50 dark:bg-purple-950/20 p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-semibold text-purple-700 dark:text-purple-300">
-                        {language === 'ar' ? '📋 تم استخراج حقول من الصورة' : '📋 Extracted fields from screenshot'}
-                      </h3>
-                      <button
-                        type="button"
-                        onClick={() => setShowExtractedFields((v) => !v)}
-                        className="text-xs px-2 py-1 rounded-md border border-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900"
-                      >
-                        {showExtractedFields
-                          ? (language === 'ar' ? 'إخفاء' : 'Hide')
-                          : (language === 'ar' ? 'تعديل الحقول' : 'Edit extracted fields')}
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={clearExtractedForm}
-                      className="text-xs px-2 py-1 rounded-md border border-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900"
-                    >
-                      {language === 'ar' ? 'إغلاق' : 'Close'}
-                    </button>
-                  </div>
-
-                  {showExtractedFields && (
-                    <div className="space-y-4">
-                      <div className="text-xs text-purple-700/80 dark:text-purple-300/80">
-                        {language === 'ar'
-                          ? 'عدّل الحقول هنا. سنولّد لك في الرد: SUBJECT + MESSAGE جاهزة للصق في النموذج.'
-                          : 'Edit these fields. In Reply, Generate Text will output SUBJECT + MESSAGE ready to paste into the form.'}
-                      </div>
-
-                      {/* Subject */}
-                      <div className="grid gap-1">
-                        <label className="text-xs font-medium text-purple-600 dark:text-purple-400">
-                          {language === 'ar' ? 'الموضوع' : 'Subject'}
-                        </label>
-                        <input
-                          type="text"
-                          className={`w-full border rounded px-3 py-2 text-sm ${fieldAccent} ${placeholderMuted}`}
-                          placeholder={language === 'ar' ? 'أدخل الموضوع...' : 'Enter subject...'}
-                          value={formSubject}
-                          onChange={(e) => setFormSubject(e.target.value)}
-                        />
-                      </div>
-
-                      {/* Service Affected */}
-                      <div className="grid gap-1">
-                        <label className="text-xs font-medium text-purple-600 dark:text-purple-400">
-                          {language === 'ar' ? 'الخدمة المتأثرة' : 'Which services are affected?'}
-                        </label>
-                        <input
-                          type="text"
-                          className={`w-full border rounded px-3 py-2 text-sm ${fieldAccent} ${placeholderMuted}`}
-                          placeholder={language === 'ar' ? 'أدخل الخدمة...' : 'Enter service...'}
-                          value={formServiceAffected}
-                          onChange={(e) => setFormServiceAffected(e.target.value)}
-                        />
-                      </div>
-
-                      {/* Severity (if detected) */}
-                      {formSeverity && (
-                        <div className="grid gap-1">
-                          <label className="text-xs font-medium text-purple-600 dark:text-purple-400">
-                            {language === 'ar' ? 'الأولوية' : 'Severity'}
-                          </label>
-                          <input
-                            type="text"
-                            className={`w-full border rounded px-3 py-2 text-sm ${fieldAccent}`}
-                            value={formSeverity}
-                            onChange={(e) => setFormSeverity(e.target.value)}
-                          />
-                        </div>
-                      )}
-
-                      {/* Message */}
-                      <div className="grid gap-1">
-                        <label className="text-xs font-medium text-purple-600 dark:text-purple-400">
-                          {language === 'ar' ? 'الرسالة' : 'Message'}
-                        </label>
-                        <textarea
-                          className={`w-full border rounded px-3 py-2 text-sm min-h-[100px] ${fieldAccent} ${placeholderMuted}`}
-                          placeholder={language === 'ar' ? 'أدخل رسالتك...' : 'Enter your message...'}
-                          value={formMessage}
-                          onChange={(e) => setFormMessage(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Row 1: Tone | Reply Length */}
+              {/* Row 2: Content Type | Tone */}
               <div className="grid md:grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium">{language === 'ar' ? 'نوع المحتوى' : 'Content Type'}</label>
+                  <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={contentType} onChange={(e) => setContentType(e.target.value as ContentTypeKey)}>
+                    {CONTENT_TYPE_KEYS.map((k) => (<option key={k} value={k}>{ctLabel(k, language)}</option>))}
+                  </select>
+                </div>
                 <div className="grid gap-2">
                   <label className="text-sm font-medium">{language === 'ar' ? 'النبرة' : 'Tone'}</label>
                   <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={tone} onChange={(e) => setTone(e.target.value as ToneKey)}>
                     {TONE_KEYS.map((k) => (<option key={k} value={k}>{toneLabel(k, language)}</option>))}
                   </select>
                 </div>
+              </div>
+
+              {/* Row 3: Length | Register */}
+              <div className="grid md:grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <label className="text-sm font-medium">{language === 'ar' ? 'الطول' : 'Length'}</label>
                   <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={replyLength} onChange={(e) => setReplyLength(e.target.value as any)}>
@@ -957,10 +821,16 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                     <option value="very_long">{language === 'ar' ? 'طويل جدًا' : 'Very long'}</option>
                   </select>
                 </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium">{language === 'ar' ? 'السجل اللغوي' : 'Register'}</label>
+                  <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={register} onChange={(e) => setRegister(e.target.value as RegisterKey)}>
+                    {REGISTER_KEYS.map((k) => (<option key={k} value={k}>{registerLabel(k, language)}</option>))}
+                  </select>
+                </div>
               </div>
 
-              {/* Row 2: Language Variant | Emojis */}
-              <div className="grid md:grid-cols-2 gap-6">
+              {/* Row 4: Language Variant | Emojis */}
+              <div className="grid md:grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <label className="text-sm font-medium">{language === 'ar' ? 'متغير اللغة' : 'Language Variant'}</label>
                   <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={languageVariant} onChange={(e) => setLanguageVariant(e.target.value as LanguageVariantKey)}>
@@ -975,17 +845,6 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                     {EMOJIS_KEYS.map((k) => (<option key={k} value={k}>{emojisLabel(k, language)}</option>))}
                   </select>
                 </div>
-              </div>
-
-              {/* Row 3: Register */}
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <label className="text-sm font-medium">{language === 'ar' ? 'السجل اللغوي' : 'Register'}</label>
-                  <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={register} onChange={(e) => setRegister(e.target.value as RegisterKey)}>
-                    {REGISTER_KEYS.map((k) => (<option key={k} value={k}>{registerLabel(k, language)}</option>))}
-                  </select>
-                </div>
-                <div></div>
               </div>
             </div>
           )}

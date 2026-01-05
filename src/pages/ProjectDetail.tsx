@@ -27,7 +27,8 @@ import {
   Zap, 
   Plus, 
   SendHorizontal, 
-  ArrowDown, 
+  ArrowDown,
+  Palette, 
   Send, 
   AlertTriangle, 
   Wand2, 
@@ -157,6 +158,7 @@ export default function ProjectDetail() {
       const prompt = searchParams.get('prompt');
       const theme = searchParams.get('theme');
       const assetsParam = searchParams.get('assets');
+      const themeInstructionsParam = searchParams.get('themeInstructions');
       
       fetchProject(); // Always fetch project files
       fetchChatHistory(); // Always fetch chat history
@@ -175,8 +177,20 @@ export default function ProjectDetail() {
           console.error('Failed to parse assets:', e);
         }
         
+        // Decode custom theme instructions if provided
+        let customInstructions = '';
+        if (themeInstructionsParam) {
+          try {
+            customInstructions = decodeURIComponent(themeInstructionsParam);
+            // Also save to userInstructions state so it persists
+            setUserInstructions(customInstructions);
+          } catch (e) {
+            console.error('Failed to parse theme instructions:', e);
+          }
+        }
+        
         setSearchParams({}, { replace: true });
-        runGeneration(prompt, theme || 'wakti-dark', assets);
+        runGeneration(prompt, theme || 'wakti-dark', assets, customInstructions);
       }
     }
   }, [user, id]);
@@ -290,9 +304,9 @@ export default function ProjectDetail() {
 
   const thinkingBoxRef = useRef<HTMLDivElement>(null);
 
-  const runGeneration = async (prompt: string, theme: string, assets: string[] = []) => {
+  const runGeneration = async (prompt: string, theme: string, assets: string[] = [], customThemeInstructions: string = '') => {
     setIsGenerating(true);
-    setLeftPanelMode('chat');
+    setLeftPanelMode('code'); // Start in Code mode so user sees the preview building
     
     // Reset steps
     const steps: { label: string, status: 'pending' | 'loading' | 'completed' | 'error' }[] = [
@@ -333,7 +347,11 @@ export default function ProjectDetail() {
       };
       
       const colors = themeColors[theme] || themeColors['wakti-dark'];
-      const fullPrompt = `${prompt}. Style: Use these colors: ${colors.join(', ')}.`;
+      // Include custom theme instructions if provided
+      const styleInstructions = customThemeInstructions || `Style: Use these colors: ${colors.join(', ')}.`;
+      const fullPrompt = customThemeInstructions 
+        ? `${prompt}\n\n${customThemeInstructions}`
+        : `${prompt}. ${styleInstructions}`;
       
       // Step 3: Generating
       setGenerationSteps(prev => prev.map((s, i) => i === 1 ? { ...s, status: 'completed' } : i === 2 ? { ...s, status: 'loading' } : s));
@@ -344,16 +362,42 @@ export default function ProjectDetail() {
           prompt: fullPrompt,
           theme: theme,
           assets: assets,
+          userInstructions: customThemeInstructions, // Pass to edge function too
         },
       });
       
-      if (generateResponse.error || !generateResponse.data?.ok) {
-        throw new Error(generateResponse.data?.error || 'Failed to generate');
+      // Check for errors - including HTML error pages from Supabase
+      if (generateResponse.error) {
+        console.error('[Generation] Supabase error:', generateResponse.error);
+        throw new Error(generateResponse.error.message || 'Failed to generate');
+      }
+      
+      // Check if response is valid JSON (not HTML error page)
+      if (!generateResponse.data || typeof generateResponse.data !== 'object') {
+        console.error('[Generation] Invalid response - not an object:', typeof generateResponse.data);
+        throw new Error('Server returned invalid response');
+      }
+      
+      // Check for HTML in response (indicates server error page)
+      const dataStr = JSON.stringify(generateResponse.data);
+      if (dataStr.includes('<!DOCTYPE') || dataStr.includes('<html')) {
+        console.error('[Generation] Server returned HTML error page');
+        throw new Error('Server error - please try again');
+      }
+      
+      if (!generateResponse.data.ok) {
+        throw new Error(generateResponse.data.error || 'Failed to generate');
       }
       
       // Multi-file mode - Lovable-style generation
       const generatedFilesData = generateResponse.data.files || {};
       const generatedCode = generateResponse.data.code || generatedFilesData["/App.js"] || "";
+      
+      // SAFETY CHECK: Ensure no HTML in generated code
+      if (generatedCode.includes('<!DOCTYPE') || generatedCode.includes('<html>')) {
+        console.error('[Generation] Generated code contains HTML - rejecting');
+        throw new Error('AI returned HTML instead of React code - please try again');
+      }
       
       // Step 4: Finalizing
       setGenerationSteps(prev => prev.map((s, i) => i === 2 ? { ...s, status: 'completed' } : i === 3 ? { ...s, status: 'loading' } : s));
@@ -1674,7 +1718,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         </div>
       </div>
 
-      {/* Instructions Drawer - Slides from Left */}
+      {/* Instructions Drawer - Full Screen on Mobile */}
       <div 
         className={cn(
           "fixed inset-0 z-[1000] transition-all duration-300",
@@ -1683,7 +1727,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       >
         <div 
           className={cn(
-            "absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300",
+            "absolute inset-0 bg-black/60 backdrop-blur-md transition-opacity duration-300",
             instructionsDrawerOpen ? "opacity-100" : "opacity-0"
           )}
           onClick={() => setInstructionsDrawerOpen(false)}
@@ -1691,44 +1735,87 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         
         <div 
           className={cn(
-            "absolute top-0 left-0 h-full w-full max-w-xl bg-background dark:bg-[#0c0f14] border-r border-border/50 shadow-2xl transition-transform duration-300 ease-out flex flex-col",
-            instructionsDrawerOpen ? "translate-x-0" : "-translate-x-full"
+            "absolute inset-x-0 bottom-0 top-auto h-[85vh] md:inset-0 md:top-0 md:left-0 md:right-auto md:bottom-auto md:h-full md:w-full md:max-w-md",
+            "bg-background dark:bg-[#0c0f14] shadow-2xl transition-transform duration-300 ease-out flex flex-col rounded-t-3xl md:rounded-none",
+            "pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]",
+            instructionsDrawerOpen ? "translate-y-0 md:translate-x-0" : "translate-y-full md:translate-y-0 md:-translate-x-full"
           )}
         >
-          <div className="flex items-center justify-between px-5 py-4 border-b border-border/50 dark:border-white/10 shrink-0">
+          {/* Mobile drag handle */}
+          <div className="md:hidden flex justify-center py-2 shrink-0">
+            <div className="w-12 h-1.5 bg-muted-foreground/30 rounded-full" />
+          </div>
+
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 dark:border-white/10 shrink-0">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500/20 via-pink-500/20 to-orange-500/20 border border-purple-500/30">
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-purple-500/20 via-pink-500/20 to-orange-500/20 border border-purple-500/30">
                 <Brain className="h-5 w-5 text-purple-500" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-foreground">
+                <h2 className="text-base font-bold text-foreground">
                   {isRTL ? 'التعليمات' : 'Instructions'}
                 </h2>
-                <p className="text-xs text-muted-foreground">
-                  {isRTL ? 'أضف تعليمات مخصصة لمشروعك' : 'Add custom instructions for your project'}
+                <p className="text-[11px] text-muted-foreground">
+                  {isRTL ? 'أضف تعليمات مخصصة للذكاء الاصطناعي' : 'Custom instructions for AI'}
                 </p>
               </div>
             </div>
             <button
               onClick={() => setInstructionsDrawerOpen(false)}
-              className="p-2 rounded-lg hover:bg-muted/50 transition-colors"
+              className="p-2.5 rounded-xl bg-muted/50 dark:bg-white/10 hover:bg-muted dark:hover:bg-white/20 transition-colors"
               title={isRTL ? 'إغلاق' : 'Close'}
             >
               <X className="h-5 w-5 text-muted-foreground" />
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          {/* Theme Instructions Badge - shows if theme instructions are loaded */}
+          {tempInstructions && tempInstructions.includes('CUSTOM THEME INSTRUCTIONS:') && (
+            <div className="mx-4 mt-4 p-3 bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-orange-500/10 border border-purple-500/20 rounded-xl">
+              <div className="flex items-center gap-2">
+                <Palette className="h-4 w-4 text-purple-500" />
+                <p className="text-xs text-purple-600 dark:text-purple-400 font-semibold">
+                  {isRTL ? '🎨 تم تحميل إعدادات الثيم' : '🎨 Theme settings loaded'}
+                </p>
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                {isRTL 
+                  ? 'تعليمات الثيم المخصصة ستُطبق على جميع التعديلات.'
+                  : 'Custom theme instructions will be applied to all edits.'}
+              </p>
+            </div>
+          )}
+
+          {/* Tip Box */}
+          <div className="mx-4 mt-4 p-3 bg-indigo-500/10 dark:bg-indigo-500/5 border border-indigo-500/20 rounded-xl">
+            <p className="text-xs text-indigo-600 dark:text-indigo-400">
+              <span className="font-bold">💡 {isRTL ? 'نصيحة:' : 'Tip:'}</span>{' '}
+              {isRTL 
+                ? 'أضف تعليمات مثل "استخدم ألوان داكنة" أو "اجعل التصميم بسيط" لتوجيه الذكاء الاصطناعي.'
+                : 'Add instructions like "Use dark colors" or "Keep the design minimal" to guide the AI.'}
+            </p>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-4 min-h-0">
             <Textarea
               value={tempInstructions}
               onChange={(e) => setTempInstructions(e.target.value)}
-              placeholder={isRTL ? 'أضف تعليمات هنا...' : 'Add instructions here...'}
-              className="min-h-[300px] bg-muted/30 dark:bg-white/5 border-border/50 dark:border-white/10 text-sm font-mono resize-none focus-visible:ring-purple-500/50"
+              placeholder={isRTL 
+                ? 'مثال:\n- استخدم ألوان زاهية\n- اجعل الأزرار كبيرة\n- أضف رسوم متحركة...' 
+                : 'Example:\n- Use vibrant colors\n- Make buttons large\n- Add smooth animations...'}
+              className="min-h-[180px] w-full bg-muted/30 dark:bg-white/5 border-border/50 dark:border-white/10 text-sm resize-none focus-visible:ring-purple-500/50 rounded-xl placeholder:text-muted-foreground/50"
             />
           </div>
 
-          <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-border/50 dark:border-white/10 shrink-0 bg-muted/20 dark:bg-white/5">
-            <Button variant="ghost" onClick={() => setInstructionsDrawerOpen(false)} className="text-muted-foreground">
+          {/* Footer */}
+          <div className="flex items-center justify-center gap-3 px-4 py-4 border-t border-border/50 dark:border-white/10 shrink-0 bg-muted/20 dark:bg-white/5">
+            <Button 
+              variant="outline" 
+              onClick={() => setInstructionsDrawerOpen(false)} 
+              className="flex-1 h-12 text-muted-foreground border-border/50 dark:border-white/10 rounded-xl font-medium"
+            >
               {isRTL ? 'إلغاء' : 'Cancel'}
             </Button>
             <Button
@@ -1737,7 +1824,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                 setInstructionsDrawerOpen(false);
                 toast.success(isRTL ? 'تم حفظ التعليمات!' : 'Instructions saved!');
               }}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+              className="flex-1 h-12 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl"
             >
               {isRTL ? 'حفظ التعليمات' : 'Save Instructions'}
             </Button>

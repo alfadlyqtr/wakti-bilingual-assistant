@@ -202,10 +202,11 @@ root.render(<App />);`;
           }}
           customSetup={{
             dependencies: {
-              "lucide-react": "latest",
-              "framer-motion": "latest",
-              "clsx": "latest",
-              "tailwind-merge": "latest"
+              "lucide-react": "0.294.0",
+              "framer-motion": "10.16.4",
+              "@emotion/is-prop-valid": "^1.2.1",
+              "clsx": "2.0.0",
+              "tailwind-merge": "2.0.0"
             }
           }}
           style={{ height: '100%', width: '100%' }}
@@ -232,12 +233,25 @@ root.render(<App />);`;
 
             {/* RIGHT: PREVIEW */}
             {(viewMode === 'preview') && (
-              <div className="flex-1 h-full min-w-0 relative bg-black overflow-hidden">
+              <div className="flex-1 h-full min-w-0 relative bg-black overflow-hidden group">
+                {/* CSS to hide the default Sandpack error screen (the "pink" screen) */}
+                <style dangerouslySetInnerHTML={{ __html: `
+                  .sp-stack .sp-preview-actions, 
+                  .sp-stack .sp-error-message,
+                  .sp-stack .sp-error-list {
+                    display: none !important;
+                  }
+                  .sp-preview-container iframe {
+                    background-color: transparent !important;
+                  }
+                `}} />
+
                 <SandpackPreview 
                   showNavigator={false} 
                   showOpenInCodeSandbox={false} 
                   style={{ height: '100%' }} 
                 />
+                
                 {/* Visual Mode Indicator */}
                 {elementSelectMode && (
                   <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-4 py-2 rounded-full text-[10px] md:text-xs font-medium shadow-lg flex items-center gap-2 animate-pulse z-50 whitespace-nowrap">

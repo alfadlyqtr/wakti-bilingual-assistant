@@ -15,7 +15,16 @@ import {
   Image as ImageIcon,
   ChevronDown,
   Sparkles,
-  Eye
+  Eye,
+  Plus,
+  X,
+  Palette,
+  Type,
+  Layers,
+  Square,
+  Sun,
+  Moon,
+  Settings2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -68,12 +77,48 @@ const ProjectPreviewThumbnail = ({ project }: { project: Project }) => {
   );
 };
 
-// Wakti brand color themes
-const THEMES = [
-  { id: 'wakti-dark', name: 'Wakti Dark', nameAr: 'وقتي داكن', colors: ['#0c0f14', '#060541', '#858384'] },
-  { id: 'wakti-light', name: 'Wakti Light', nameAr: 'وقتي فاتح', colors: ['#fcfefd', '#060541', '#e9ceb0'] },
-  { id: 'vibrant', name: 'Vibrant', nameAr: 'حيوي', colors: ['hsl(210,100%,65%)', 'hsl(280,70%,65%)', 'hsl(25,95%,60%)'] },
-  { id: 'emerald', name: 'Emerald', nameAr: 'زمردي', colors: ['hsl(160,80%,55%)', 'hsl(142,76%,55%)', '#0c0f14'] },
+// Theme settings type
+type ThemeSettings = {
+  fontStyle: 'modern' | 'classic' | 'playful' | 'minimal' | 'bold';
+  shadowStyle: 'none' | 'soft' | 'hard' | 'glow' | 'neon';
+  borderRadius: 'none' | 'subtle' | 'rounded' | 'pill';
+  layoutStyle: 'cards' | 'minimal' | 'bento' | 'magazine';
+  mood: 'professional' | 'playful' | 'elegant' | 'bold' | 'calm';
+};
+
+// Expanded theme collection with full settings (Lovable-style)
+const THEMES: Array<{
+  id: string;
+  name: string;
+  nameAr: string;
+  colors: string[];
+  settings?: ThemeSettings;
+}> = [
+  // Default - let AI decide
+  { id: 'none', name: 'Default', nameAr: 'افتراضي', colors: ['#6b7280', '#d1d5db'], settings: { fontStyle: 'modern', shadowStyle: 'soft', borderRadius: 'rounded', layoutStyle: 'cards', mood: 'professional' } },
+  // Cool tones
+  { id: 'glacier', name: 'Glacier', nameAr: 'جليدي', colors: ['#60a5fa', '#a5b4fc', '#c4b5fd', '#e0e7ff'], settings: { fontStyle: 'minimal', shadowStyle: 'soft', borderRadius: 'rounded', layoutStyle: 'minimal', mood: 'calm' } },
+  { id: 'ocean', name: 'Ocean', nameAr: 'محيطي', colors: ['#0ea5e9', '#38bdf8', '#7dd3fc', '#bae6fd'], settings: { fontStyle: 'modern', shadowStyle: 'soft', borderRadius: 'rounded', layoutStyle: 'cards', mood: 'professional' } },
+  { id: 'lavender', name: 'Lavender', nameAr: 'لافندر', colors: ['#a78bfa', '#c4b5fd', '#ddd6fe', '#ede9fe'], settings: { fontStyle: 'classic', shadowStyle: 'soft', borderRadius: 'rounded', layoutStyle: 'cards', mood: 'elegant' } },
+  // Warm tones
+  { id: 'harvest', name: 'Harvest', nameAr: 'حصاد', colors: ['#f59e0b', '#fbbf24', '#fcd34d', '#fde68a'], settings: { fontStyle: 'bold', shadowStyle: 'hard', borderRadius: 'subtle', layoutStyle: 'magazine', mood: 'bold' } },
+  { id: 'sunset', name: 'Sunset', nameAr: 'غروب', colors: ['#f97316', '#fb923c', '#fdba74', '#fed7aa'], settings: { fontStyle: 'modern', shadowStyle: 'glow', borderRadius: 'rounded', layoutStyle: 'cards', mood: 'playful' } },
+  { id: 'orchid', name: 'Orchid', nameAr: 'أوركيد', colors: ['#ec4899', '#f472b6', '#f9a8d4', '#fbcfe8'], settings: { fontStyle: 'playful', shadowStyle: 'soft', borderRadius: 'pill', layoutStyle: 'cards', mood: 'playful' } },
+  { id: 'coral', name: 'Coral', nameAr: 'مرجاني', colors: ['#f43f5e', '#fb7185', '#fda4af', '#fecdd3'], settings: { fontStyle: 'bold', shadowStyle: 'hard', borderRadius: 'rounded', layoutStyle: 'bento', mood: 'bold' } },
+  // Nature
+  { id: 'emerald', name: 'Emerald', nameAr: 'زمردي', colors: ['#10b981', '#34d399', '#6ee7b7', '#a7f3d0'], settings: { fontStyle: 'modern', shadowStyle: 'soft', borderRadius: 'rounded', layoutStyle: 'cards', mood: 'calm' } },
+  { id: 'forest', name: 'Forest', nameAr: 'غابة', colors: ['#22c55e', '#4ade80', '#86efac', '#bbf7d0'], settings: { fontStyle: 'classic', shadowStyle: 'soft', borderRadius: 'subtle', layoutStyle: 'minimal', mood: 'calm' } },
+  { id: 'solar', name: 'Solar', nameAr: 'شمسي', colors: ['#eab308', '#facc15', '#fde047', '#fef08a'], settings: { fontStyle: 'bold', shadowStyle: 'glow', borderRadius: 'rounded', layoutStyle: 'bento', mood: 'bold' } },
+  // Dark & Bold
+  { id: 'obsidian', name: 'Obsidian', nameAr: 'أوبسيديان', colors: ['#1e293b', '#334155', '#475569', '#64748b'], settings: { fontStyle: 'minimal', shadowStyle: 'none', borderRadius: 'subtle', layoutStyle: 'minimal', mood: 'professional' } },
+  { id: 'brutalist', name: 'Brutalist', nameAr: 'بروتالي', colors: ['#6366f1', '#a855f7', '#ec4899', '#f43f5e'], settings: { fontStyle: 'bold', shadowStyle: 'neon', borderRadius: 'none', layoutStyle: 'bento', mood: 'bold' } },
+  { id: 'midnight', name: 'Midnight', nameAr: 'منتصف الليل', colors: ['#1e1b4b', '#312e81', '#4338ca', '#6366f1'], settings: { fontStyle: 'modern', shadowStyle: 'glow', borderRadius: 'rounded', layoutStyle: 'cards', mood: 'elegant' } },
+  // Wakti brand
+  { id: 'wakti-dark', name: 'Wakti Dark', nameAr: 'وقتي داكن', colors: ['#0c0f14', '#060541', '#858384', '#f2f2f2'], settings: { fontStyle: 'modern', shadowStyle: 'glow', borderRadius: 'rounded', layoutStyle: 'cards', mood: 'elegant' } },
+  { id: 'wakti-light', name: 'Wakti Light', nameAr: 'وقتي فاتح', colors: ['#fcfefd', '#060541', '#e9ceb0', '#f2f2f2'], settings: { fontStyle: 'classic', shadowStyle: 'soft', borderRadius: 'rounded', layoutStyle: 'cards', mood: 'elegant' } },
+  // Vibrant
+  { id: 'vibrant', name: 'Vibrant', nameAr: 'حيوي', colors: ['#3b82f6', '#8b5cf6', '#f97316', '#ec4899'], settings: { fontStyle: 'bold', shadowStyle: 'glow', borderRadius: 'rounded', layoutStyle: 'bento', mood: 'playful' } },
+  { id: 'neon', name: 'Neon', nameAr: 'نيون', colors: ['#22d3ee', '#a3e635', '#facc15', '#f472b6'], settings: { fontStyle: 'bold', shadowStyle: 'neon', borderRadius: 'pill', layoutStyle: 'bento', mood: 'bold' } },
 ];
 
 // Animated placeholder examples
@@ -98,8 +143,27 @@ export default function Projects() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
   const [generating, setGenerating] = useState(false);
-  const [selectedTheme, setSelectedTheme] = useState('wakti-dark');
+  const [selectedTheme, setSelectedTheme] = useState('none');
   const [showThemes, setShowThemes] = useState(false);
+  const [themeSearch, setThemeSearch] = useState('');
+  
+  // Custom theme creator state
+  const [showThemeCreator, setShowThemeCreator] = useState(false);
+  const [customThemes, setCustomThemes] = useState<typeof THEMES>(() => {
+    try {
+      const saved = localStorage.getItem('wakti_custom_themes');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+  const [newTheme, setNewTheme] = useState({
+    name: '',
+    colors: ['#3b82f6', '#8b5cf6', '#f97316', '#ec4899'],
+    fontStyle: 'modern' as 'modern' | 'classic' | 'playful' | 'minimal' | 'bold',
+    shadowStyle: 'soft' as 'none' | 'soft' | 'hard' | 'glow' | 'neon',
+    borderRadius: 'rounded' as 'none' | 'subtle' | 'rounded' | 'pill',
+    layoutStyle: 'cards' as 'cards' | 'minimal' | 'bento' | 'magazine',
+    mood: 'professional' as 'professional' | 'playful' | 'elegant' | 'bold' | 'calm',
+  });
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [displayedPlaceholder, setDisplayedPlaceholder] = useState('');
   const [isTyping, setIsTyping] = useState(true);
@@ -219,6 +283,147 @@ export default function Projects() {
 
   const removeAttachment = (index: number) => {
     setAttachedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Generate AI instructions from custom theme settings
+  const generateThemeInstructions = (theme: typeof newTheme): string => {
+    const fontDescriptions = {
+      modern: 'Use modern sans-serif fonts like Inter, SF Pro, or system-ui. Clean, geometric letterforms.',
+      classic: 'Use elegant serif fonts like Playfair Display, Georgia, or Times. Traditional, refined typography.',
+      playful: 'Use rounded, friendly fonts like Nunito, Quicksand, or Comic Neue. Fun, approachable feel.',
+      minimal: 'Use thin, light-weight fonts like Roboto Light, Helvetica Neue Thin. Minimalist, airy typography.',
+      bold: 'Use heavy, impactful fonts like Montserrat Black, Oswald, or Impact. Strong, attention-grabbing headlines.',
+    };
+    
+    const shadowDescriptions = {
+      none: 'No shadows. Flat design with clean edges.',
+      soft: 'Soft, diffused shadows (shadow-lg, shadow-xl). Subtle depth and elevation.',
+      hard: 'Hard, defined shadows with clear edges. Bold, graphic look.',
+      glow: 'Glowing shadows using the theme colors. Futuristic, premium feel.',
+      neon: 'Neon glow effects with bright, vibrant shadows. Electric, cyberpunk aesthetic.',
+    };
+    
+    const radiusDescriptions = {
+      none: 'Sharp corners (rounded-none). Angular, brutalist design.',
+      subtle: 'Subtle rounding (rounded-md). Professional, clean edges.',
+      rounded: 'Rounded corners (rounded-xl, rounded-2xl). Friendly, modern feel.',
+      pill: 'Fully rounded pill shapes (rounded-full). Playful, soft design.',
+    };
+    
+    const layoutDescriptions = {
+      cards: 'Card-based layout with distinct sections. Each element in its own container.',
+      minimal: 'Minimal layout with lots of whitespace. Content-focused, clean.',
+      bento: 'Bento box grid layout with varying card sizes. Modern, Apple-style.',
+      magazine: 'Magazine-style layout with mixed content sizes. Editorial, dynamic.',
+    };
+    
+    const moodDescriptions = {
+      professional: 'Professional, corporate feel. Trust-building, serious.',
+      playful: 'Playful, fun atmosphere. Energetic, youthful.',
+      elegant: 'Elegant, luxurious feel. Premium, sophisticated.',
+      bold: 'Bold, impactful design. Attention-grabbing, confident.',
+      calm: 'Calm, peaceful atmosphere. Relaxing, zen-like.',
+    };
+
+    return `CUSTOM THEME INSTRUCTIONS:
+- Primary Color: ${theme.colors[0]} (use for buttons, links, accents)
+- Secondary Color: ${theme.colors[1]} (use for highlights, secondary elements)
+- Accent Color: ${theme.colors[2]} (use for hover states, decorations)
+- Background Accent: ${theme.colors[3]} (use for subtle backgrounds, cards)
+
+TYPOGRAPHY: ${fontDescriptions[theme.fontStyle]}
+
+SHADOWS: ${shadowDescriptions[theme.shadowStyle]}
+
+BORDER RADIUS: ${radiusDescriptions[theme.borderRadius]}
+
+LAYOUT: ${layoutDescriptions[theme.layoutStyle]}
+
+MOOD: ${moodDescriptions[theme.mood]}
+
+Apply these styles consistently throughout the entire design.`;
+  };
+
+  // Save custom theme
+  const saveCustomTheme = () => {
+    if (!newTheme.name.trim()) {
+      toast.error(isRTL ? 'أدخل اسم الثيم' : 'Enter a theme name');
+      return;
+    }
+    
+    const themeId = `custom-${Date.now()}`;
+    const customTheme = {
+      id: themeId,
+      name: newTheme.name,
+      nameAr: newTheme.name, // User can name it in any language
+      colors: newTheme.colors,
+      // Store full settings for instructions generation
+      settings: {
+        fontStyle: newTheme.fontStyle,
+        shadowStyle: newTheme.shadowStyle,
+        borderRadius: newTheme.borderRadius,
+        layoutStyle: newTheme.layoutStyle,
+        mood: newTheme.mood,
+      },
+      instructions: generateThemeInstructions(newTheme),
+    };
+    
+    const updatedThemes = [...customThemes, customTheme];
+    setCustomThemes(updatedThemes);
+    localStorage.setItem('wakti_custom_themes', JSON.stringify(updatedThemes));
+    
+    // Auto-select the new theme
+    setSelectedTheme(themeId);
+    setShowThemeCreator(false);
+    setShowThemes(false);
+    
+    // Reset form
+    setNewTheme({
+      name: '',
+      colors: ['#3b82f6', '#8b5cf6', '#f97316', '#ec4899'],
+      fontStyle: 'modern',
+      shadowStyle: 'soft',
+      borderRadius: 'rounded',
+      layoutStyle: 'cards',
+      mood: 'professional',
+    });
+    
+    toast.success(isRTL ? 'تم حفظ الثيم!' : 'Theme saved!');
+  };
+
+  // Delete custom theme
+  const deleteCustomTheme = (themeId: string) => {
+    const updatedThemes = customThemes.filter((t: any) => t.id !== themeId);
+    setCustomThemes(updatedThemes);
+    localStorage.setItem('wakti_custom_themes', JSON.stringify(updatedThemes));
+    if (selectedTheme === themeId) {
+      setSelectedTheme('none');
+    }
+    toast.success(isRTL ? 'تم حذف الثيم' : 'Theme deleted');
+  };
+
+  // Get theme instructions for selected theme (works for both custom and preset themes)
+  const getSelectedThemeInstructions = (): string => {
+    // First check custom themes
+    const customTheme = customThemes.find((t: any) => t.id === selectedTheme);
+    if (customTheme && (customTheme as any).instructions) {
+      return (customTheme as any).instructions;
+    }
+    
+    // Then check preset themes with settings
+    const presetTheme = THEMES.find(t => t.id === selectedTheme);
+    if (presetTheme && presetTheme.settings && selectedTheme !== 'none') {
+      // Generate instructions from preset theme settings
+      return generateThemeInstructions({
+        name: presetTheme.name,
+        colors: presetTheme.colors.length >= 4 
+          ? presetTheme.colors.slice(0, 4) as [string, string, string, string]
+          : [...presetTheme.colors, ...Array(4 - presetTheme.colors.length).fill(presetTheme.colors[0])] as [string, string, string, string],
+        ...presetTheme.settings
+      });
+    }
+    
+    return '';
   };
 
   // EMP - Enhance My Prompt using GPT-4o-mini
@@ -405,7 +610,9 @@ export default function Projects() {
 
       // Step 3: Navigate to editor immediately
       const assetParams = assetUrls.length > 0 ? `&assets=${encodeURIComponent(JSON.stringify(assetUrls))}` : '';
-      navigate(`/projects/${projectData.id}?generating=true&prompt=${encodeURIComponent(prompt)}&theme=${selectedTheme}${assetParams}`);
+      const themeInstructions = getSelectedThemeInstructions();
+      const instructionsParam = themeInstructions ? `&themeInstructions=${encodeURIComponent(themeInstructions)}` : '';
+      navigate(`/projects/${projectData.id}?generating=true&prompt=${encodeURIComponent(prompt)}&theme=${selectedTheme}${assetParams}${instructionsParam}`);
 
     } catch (err: any) {
       console.error('Error:', err);
@@ -466,11 +673,51 @@ export default function Projects() {
                   }
                 }}
                 placeholder={`${isRTL ? 'اطلب من Wakti إنشاء ' : 'Ask Wakti to create '}${displayedPlaceholder}`}
-                className="w-full bg-transparent text-base outline-none placeholder:text-muted-foreground/50 resize-none min-h-[60px] max-h-[150px] overflow-y-auto"
+                className="w-full bg-transparent text-base outline-none placeholder:text-muted-foreground/50 resize-none min-h-[120px] max-h-[300px] overflow-y-auto"
                 disabled={generating}
-                rows={2}
+                rows={4}
               />
             </div>
+
+            {/* Selected Theme Style Preview */}
+            {selectedTheme && selectedTheme !== 'none' && (() => {
+              const theme = THEMES.find(t => t.id === selectedTheme);
+              const customTheme = customThemes.find((t: any) => t.id === selectedTheme);
+              const settings = theme?.settings || (customTheme as any)?.settings;
+              if (!settings && !customTheme) return null;
+              
+              return (
+                <div className="px-4 pb-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+                      {isRTL ? 'نمط الثيم:' : 'Theme Style:'}
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {settings ? (
+                        <>
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-medium">
+                            {settings.fontStyle}
+                          </span>
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-medium">
+                            {settings.shadowStyle}
+                          </span>
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-medium">
+                            {settings.layoutStyle}
+                          </span>
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-medium">
+                            {settings.mood}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-medium">
+                          {(customTheme as any)?.name || selectedTheme}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Attached Files Preview */}
             {attachedFiles.length > 0 && (
@@ -527,7 +774,7 @@ export default function Projects() {
                   <span className="text-xs hidden sm:inline">{isRTL ? 'تحسين' : 'EMP'}</span>
                 </Button>
 
-                {/* Theme Selector with Color Previews */}
+                {/* Theme Selector - Lovable Style */}
                 <div className="relative">
                   <Button 
                     variant="ghost" 
@@ -537,11 +784,11 @@ export default function Projects() {
                     disabled={generating}
                   >
                     {/* Color preview dots */}
-                    <div className="flex -space-x-1">
-                      {THEMES.find(t => t.id === selectedTheme)?.colors.slice(0, 3).map((color, i) => (
+                    <div className="flex -space-x-0.5">
+                      {THEMES.find(t => t.id === selectedTheme)?.colors.slice(0, 4).map((color, i) => (
                         <div 
                           key={i} 
-                          className="w-3 h-3 rounded-full border border-white/50"
+                          className="w-2.5 h-2.5 rounded-full first:rounded-l-full last:rounded-r-full"
                           style={{ backgroundColor: color }}
                         />
                       ))}
@@ -551,9 +798,9 @@ export default function Projects() {
                   </Button>
                   
                   {showThemes && (
-                    <div className="fixed inset-0 z-[9999]" onClick={() => setShowThemes(false)}>
+                    <div className="fixed inset-0 z-[9999]" onClick={() => { setShowThemes(false); setThemeSearch(''); }}>
                       <div 
-                        className="absolute bg-white dark:bg-[#0c0f14] rounded-xl shadow-2xl border p-2 min-w-[180px]"
+                        className="absolute bg-white dark:bg-[#0c0f14] rounded-2xl shadow-2xl border border-border/50 overflow-hidden w-[280px]"
                         style={{ 
                           top: '50%',
                           left: '50%',
@@ -561,34 +808,157 @@ export default function Projects() {
                         }}
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <p className="text-xs text-muted-foreground px-3 py-2 border-b mb-2">
-                          {isRTL ? 'اختر ثيم' : 'Choose Theme'}
-                        </p>
-                        {THEMES.map((t) => (
-                          <button
-                            key={t.id}
-                            onClick={() => {
-                              setSelectedTheme(t.id);
-                              setShowThemes(false);
-                            }}
-                            className={cn(
-                              "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm hover:bg-muted transition-colors",
-                              selectedTheme === t.id && "bg-muted"
-                            )}
-                          >
-                            {/* Color preview */}
-                            <div className="flex -space-x-1">
-                              {t.colors.map((color, i) => (
-                                <div 
-                                  key={i} 
-                                  className="w-4 h-4 rounded-full border-2 border-white dark:border-[#0c0f14]"
-                                  style={{ backgroundColor: color }}
-                                />
+                        {/* Search Input */}
+                        <div className="p-3 border-b border-border/50">
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={themeSearch}
+                              onChange={(e) => setThemeSearch(e.target.value)}
+                              placeholder={isRTL ? 'بحث عن ثيم...' : 'Search themes...'}
+                              className="w-full bg-muted/50 dark:bg-white/5 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/50 placeholder:text-muted-foreground/50"
+                              autoFocus
+                            />
+                          </div>
+                        </div>
+                        
+                        {/* Theme List - Scrollable */}
+                        <div className="max-h-[280px] overflow-y-auto p-2">
+                          {/* Custom Themes Section */}
+                          {customThemes.length > 0 && (
+                            <>
+                              <p className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 py-1.5 font-semibold">
+                                {isRTL ? 'ثيماتي' : 'My themes'}
+                              </p>
+                              {customThemes
+                                .filter((t: any) => {
+                                  if (!themeSearch) return true;
+                                  const search = themeSearch.toLowerCase();
+                                  return t.name.toLowerCase().includes(search);
+                                })
+                                .map((t: any) => (
+                                <div key={t.id} className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => {
+                                      setSelectedTheme(t.id);
+                                      setShowThemes(false);
+                                      setThemeSearch('');
+                                    }}
+                                    className={cn(
+                                      "flex-1 flex items-center justify-between px-2 py-2 rounded-lg text-sm hover:bg-muted/80 transition-colors",
+                                      selectedTheme === t.id && "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
+                                    )}
+                                  >
+                                    <span className="font-medium">{t.name}</span>
+                                    <div className="flex -space-x-0.5">
+                                      {t.colors.map((color: string, i: number) => (
+                                        <div 
+                                          key={i} 
+                                          className="w-3 h-3 rounded-full"
+                                          style={{ backgroundColor: color }}
+                                        />
+                                      ))}
+                                    </div>
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      deleteCustomTheme(t.id);
+                                    }}
+                                    className="p-1 text-red-500 hover:bg-red-500/10 rounded"
+                                    title={isRTL ? 'حذف' : 'Delete'}
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </button>
+                                </div>
                               ))}
+                              <div className="h-px bg-border/50 my-2" />
+                            </>
+                          )}
+                          
+                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 py-1.5 font-semibold">
+                            {isRTL ? 'الثيمات' : 'Default themes'}
+                          </p>
+                          {THEMES
+                            .filter(t => {
+                              if (!themeSearch) return true;
+                              const search = themeSearch.toLowerCase();
+                              return t.name.toLowerCase().includes(search) || t.nameAr.includes(themeSearch);
+                            })
+                            .map((t) => (
+                            <div
+                              key={t.id}
+                              onClick={() => {
+                                setSelectedTheme(t.id);
+                                setShowThemes(false);
+                                setThemeSearch('');
+                              }}
+                              className={cn(
+                                "w-full px-2 py-2 rounded-lg text-sm hover:bg-muted/80 transition-colors cursor-pointer",
+                                selectedTheme === t.id && "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
+                              )}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-medium">{isRTL ? t.nameAr : t.name}</span>
+                                {/* Color pills - Lovable style */}
+                                <div className="flex -space-x-0.5">
+                                  {t.colors.map((color, i) => (
+                                    <div 
+                                      key={i} 
+                                      className="w-3 h-3 rounded-full"
+                                      style={{ backgroundColor: color }}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                              {/* Style preview - shows font, shadow, layout, mood */}
+                              {t.settings && t.id !== 'none' && (
+                                <div className="flex flex-wrap gap-1 mt-1.5">
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted/80 text-muted-foreground">
+                                    {t.settings.fontStyle}
+                                  </span>
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted/80 text-muted-foreground">
+                                    {t.settings.shadowStyle}
+                                  </span>
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted/80 text-muted-foreground">
+                                    {t.settings.layoutStyle}
+                                  </span>
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted/80 text-muted-foreground">
+                                    {t.settings.mood}
+                                  </span>
+                                </div>
+                              )}
                             </div>
-                            <span>{isRTL ? t.nameAr : t.name}</span>
+                          ))}
+                          
+                          {/* No results */}
+                          {THEMES.filter(t => {
+                            if (!themeSearch) return true;
+                            const search = themeSearch.toLowerCase();
+                            return t.name.toLowerCase().includes(search) || t.nameAr.includes(themeSearch);
+                          }).length === 0 && customThemes.filter((t: any) => {
+                            if (!themeSearch) return true;
+                            return t.name.toLowerCase().includes(themeSearch.toLowerCase());
+                          }).length === 0 && (
+                            <p className="text-sm text-muted-foreground text-center py-4">
+                              {isRTL ? 'لا توجد نتائج' : 'No themes found'}
+                            </p>
+                          )}
+                        </div>
+                        
+                        {/* Create New Button - Footer */}
+                        <div className="p-2 border-t border-border/50">
+                          <button
+                            onClick={() => {
+                              setShowThemes(false);
+                              setShowThemeCreator(true);
+                            }}
+                            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
+                          >
+                            <Plus className="h-4 w-4" />
+                            {isRTL ? 'إنشاء ثيم جديد' : 'Create new'}
                           </button>
-                        ))}
+                        </div>
                       </div>
                     </div>
                   )}
@@ -727,6 +1097,263 @@ export default function Projects() {
           )}
         </div>
       </div>
+
+      {/* Custom Theme Creator Modal - Mobile Optimized */}
+      {showThemeCreator && (
+        <div className="fixed inset-0 z-[10000] flex items-end md:items-center justify-center" onClick={() => setShowThemeCreator(false)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div 
+            className="relative bg-white dark:bg-[#0c0f14] rounded-t-3xl md:rounded-2xl shadow-2xl border border-border/50 w-full md:max-w-lg max-h-[85vh] md:max-h-[90vh] overflow-hidden flex flex-col md:m-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Mobile drag handle */}
+            <div className="md:hidden flex justify-center py-2 shrink-0">
+              <div className="w-12 h-1.5 bg-muted-foreground/30 rounded-full" />
+            </div>
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 md:px-5 py-3 md:py-4 border-b border-border/50 shrink-0">
+              <div className="flex items-center gap-2 md:gap-3">
+                <div className="p-2 md:p-2.5 rounded-xl bg-gradient-to-br from-indigo-500/20 via-purple-500/20 to-pink-500/20 border border-indigo-500/30">
+                  <Palette className="h-4 w-4 md:h-5 md:w-5 text-indigo-500" />
+                </div>
+                <div>
+                  <h2 className="text-sm md:text-base font-bold">{isRTL ? 'إنشاء ثيم جديد' : 'Create New Theme'}</h2>
+                  <p className="text-[10px] md:text-[11px] text-muted-foreground">{isRTL ? 'خصص ألوانك وأنماطك' : 'Customize colors & styles'}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowThemeCreator(false)}
+                className="p-2 rounded-xl bg-muted/50 hover:bg-muted transition-colors"
+                title={isRTL ? 'إغلاق' : 'Close'}
+              >
+                <X className="h-5 w-5 text-muted-foreground" />
+              </button>
+            </div>
+
+            {/* Content - Scrollable */}
+            <div className="flex-1 overflow-y-auto p-4 md:p-5 space-y-4 md:space-y-5">
+              {/* Theme Name */}
+              <div>
+                <label className="text-[10px] md:text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 md:mb-2 block">
+                  {isRTL ? 'اسم الثيم' : 'Theme Name'}
+                </label>
+                <input
+                  type="text"
+                  value={newTheme.name}
+                  onChange={(e) => setNewTheme(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder={isRTL ? 'مثال: ثيمي المميز' : 'e.g., My Awesome Theme'}
+                  className="w-full bg-muted/50 dark:bg-white/5 rounded-xl px-3 md:px-4 py-2.5 md:py-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500/50 border border-border/50"
+                />
+              </div>
+
+              {/* Colors */}
+              <div>
+                <label className="text-[10px] md:text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 md:mb-2 flex items-center gap-2">
+                  <Palette className="h-3 w-3 md:h-3.5 md:w-3.5" />
+                  {isRTL ? 'الألوان (4)' : 'Colors (4)'}
+                </label>
+                <div className="grid grid-cols-4 gap-2 md:gap-3">
+                  {newTheme.colors.map((color, i) => (
+                    <div key={i} className="relative">
+                      <input
+                        type="color"
+                        value={color}
+                        onChange={(e) => {
+                          const newColors = [...newTheme.colors];
+                          newColors[i] = e.target.value;
+                          setNewTheme(prev => ({ ...prev, colors: newColors }));
+                        }}
+                        className="w-full h-10 md:h-12 rounded-lg md:rounded-xl cursor-pointer border-2 border-white dark:border-zinc-800 shadow-md"
+                        title={i === 0 ? 'Primary' : i === 1 ? 'Secondary' : i === 2 ? 'Accent' : 'Background'}
+                      />
+                      <span className="absolute -bottom-4 md:-bottom-5 left-0 right-0 text-[8px] md:text-[9px] text-center text-muted-foreground">
+                        {i === 0 ? (isRTL ? 'رئيسي' : 'Primary') : 
+                         i === 1 ? (isRTL ? 'ثانوي' : 'Secondary') :
+                         i === 2 ? (isRTL ? 'تمييز' : 'Accent') : (isRTL ? 'خلفية' : 'BG')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Font Style */}
+              <div className="mt-5 md:mt-6">
+                <label className="text-[10px] md:text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 md:mb-2 flex items-center gap-2">
+                  <Type className="h-3 w-3 md:h-3.5 md:w-3.5" />
+                  {isRTL ? 'نمط الخط' : 'Font Style'}
+                </label>
+                <div className="grid grid-cols-5 gap-1.5 md:gap-2">
+                  {(['modern', 'classic', 'playful', 'minimal', 'bold'] as const).map((style) => (
+                    <button
+                      key={style}
+                      onClick={() => setNewTheme(prev => ({ ...prev, fontStyle: style }))}
+                      className={cn(
+                        "px-2 py-2 rounded-lg text-[11px] font-medium border transition-all",
+                        newTheme.fontStyle === style 
+                          ? "bg-indigo-500 text-white border-indigo-500" 
+                          : "bg-muted/50 border-border/50 hover:border-indigo-500/50"
+                      )}
+                    >
+                      {style === 'modern' ? (isRTL ? 'عصري' : 'Modern') :
+                       style === 'classic' ? (isRTL ? 'كلاسيك' : 'Classic') :
+                       style === 'playful' ? (isRTL ? 'مرح' : 'Playful') :
+                       style === 'minimal' ? (isRTL ? 'بسيط' : 'Minimal') : (isRTL ? 'جريء' : 'Bold')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Shadow Style */}
+              <div>
+                <label className="text-[10px] md:text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 md:mb-2 flex items-center gap-2">
+                  <Layers className="h-3 w-3 md:h-3.5 md:w-3.5" />
+                  {isRTL ? 'نمط الظل' : 'Shadow Style'}
+                </label>
+                <div className="grid grid-cols-5 gap-1.5 md:gap-2">
+                  {(['none', 'soft', 'hard', 'glow', 'neon'] as const).map((style) => (
+                    <button
+                      key={style}
+                      onClick={() => setNewTheme(prev => ({ ...prev, shadowStyle: style }))}
+                      className={cn(
+                        "px-1.5 md:px-2 py-1.5 md:py-2 rounded-lg text-[10px] md:text-[11px] font-medium border transition-all",
+                        newTheme.shadowStyle === style 
+                          ? "bg-indigo-500 text-white border-indigo-500" 
+                          : "bg-muted/50 border-border/50 hover:border-indigo-500/50"
+                      )}
+                    >
+                      {style === 'none' ? (isRTL ? 'بدون' : 'None') :
+                       style === 'soft' ? (isRTL ? 'ناعم' : 'Soft') :
+                       style === 'hard' ? (isRTL ? 'حاد' : 'Hard') :
+                       style === 'glow' ? (isRTL ? 'توهج' : 'Glow') : (isRTL ? 'نيون' : 'Neon')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Border Radius */}
+              <div>
+                <label className="text-[10px] md:text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 md:mb-2 flex items-center gap-2">
+                  <Square className="h-3 w-3 md:h-3.5 md:w-3.5" />
+                  {isRTL ? 'الحواف' : 'Border Radius'}
+                </label>
+                <div className="grid grid-cols-4 gap-1.5 md:gap-2">
+                  {(['none', 'subtle', 'rounded', 'pill'] as const).map((style) => (
+                    <button
+                      key={style}
+                      onClick={() => setNewTheme(prev => ({ ...prev, borderRadius: style }))}
+                      className={cn(
+                        "px-2 md:px-3 py-1.5 md:py-2 rounded-lg text-[10px] md:text-[11px] font-medium border transition-all",
+                        newTheme.borderRadius === style 
+                          ? "bg-indigo-500 text-white border-indigo-500" 
+                          : "bg-muted/50 border-border/50 hover:border-indigo-500/50"
+                      )}
+                    >
+                      {style === 'none' ? (isRTL ? 'حاد' : 'Sharp') :
+                       style === 'subtle' ? (isRTL ? 'خفيف' : 'Subtle') :
+                       style === 'rounded' ? (isRTL ? 'دائري' : 'Rounded') : (isRTL ? 'كبسولة' : 'Pill')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Layout Style */}
+              <div>
+                <label className="text-[10px] md:text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 md:mb-2 flex items-center gap-2">
+                  <Settings2 className="h-3 w-3 md:h-3.5 md:w-3.5" />
+                  {isRTL ? 'نمط التخطيط' : 'Layout Style'}
+                </label>
+                <div className="grid grid-cols-4 gap-1.5 md:gap-2">
+                  {(['cards', 'minimal', 'bento', 'magazine'] as const).map((style) => (
+                    <button
+                      key={style}
+                      onClick={() => setNewTheme(prev => ({ ...prev, layoutStyle: style }))}
+                      className={cn(
+                        "px-2 md:px-3 py-1.5 md:py-2 rounded-lg text-[10px] md:text-[11px] font-medium border transition-all",
+                        newTheme.layoutStyle === style 
+                          ? "bg-indigo-500 text-white border-indigo-500" 
+                          : "bg-muted/50 border-border/50 hover:border-indigo-500/50"
+                      )}
+                    >
+                      {style === 'cards' ? (isRTL ? 'بطاقات' : 'Cards') :
+                       style === 'minimal' ? (isRTL ? 'بسيط' : 'Minimal') :
+                       style === 'bento' ? (isRTL ? 'بينتو' : 'Bento') : (isRTL ? 'مجلة' : 'Magazine')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Mood */}
+              <div>
+                <label className="text-[10px] md:text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 md:mb-2 flex items-center gap-2">
+                  <Sun className="h-3 w-3 md:h-3.5 md:w-3.5" />
+                  {isRTL ? 'المزاج العام' : 'Overall Mood'}
+                </label>
+                <div className="grid grid-cols-5 gap-1.5 md:gap-2">
+                  {(['professional', 'playful', 'elegant', 'bold', 'calm'] as const).map((style) => (
+                    <button
+                      key={style}
+                      onClick={() => setNewTheme(prev => ({ ...prev, mood: style }))}
+                      className={cn(
+                        "px-1.5 md:px-2 py-1.5 md:py-2 rounded-lg text-[10px] md:text-[11px] font-medium border transition-all",
+                        newTheme.mood === style 
+                          ? "bg-indigo-500 text-white border-indigo-500" 
+                          : "bg-muted/50 border-border/50 hover:border-indigo-500/50"
+                      )}
+                    >
+                      {style === 'professional' ? (isRTL ? 'مهني' : 'Pro') :
+                       style === 'playful' ? (isRTL ? 'مرح' : 'Fun') :
+                       style === 'elegant' ? (isRTL ? 'أنيق' : 'Elegant') :
+                       style === 'bold' ? (isRTL ? 'جريء' : 'Bold') : (isRTL ? 'هادئ' : 'Calm')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Preview */}
+              <div className="mt-3 md:mt-4 p-3 md:p-4 rounded-xl border border-border/50 bg-muted/30">
+                <p className="text-[9px] md:text-[10px] uppercase tracking-wider text-muted-foreground mb-2 md:mb-3 font-semibold">
+                  {isRTL ? 'معاينة' : 'Preview'}
+                </p>
+                <div className="flex items-center gap-2 md:gap-3">
+                  <div className="flex -space-x-1">
+                    {newTheme.colors.map((color, i) => (
+                      <div 
+                        key={i}
+                        className="w-6 h-6 md:w-8 md:h-8 rounded-full border-2 border-white dark:border-zinc-800"
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-xs md:text-sm truncate">{newTheme.name || (isRTL ? 'ثيم جديد' : 'New Theme')}</p>
+                    <p className="text-[9px] md:text-[10px] text-muted-foreground truncate">
+                      {newTheme.fontStyle} • {newTheme.shadowStyle} • {newTheme.layoutStyle}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center gap-2 md:gap-3 px-4 md:px-5 py-3 md:py-4 border-t border-border/50 shrink-0 bg-muted/20">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowThemeCreator(false)}
+                className="flex-1 h-10 md:h-11 rounded-xl text-sm"
+              >
+                {isRTL ? 'إلغاء' : 'Cancel'}
+              </Button>
+              <Button 
+                onClick={saveCustomTheme}
+                className="flex-1 h-10 md:h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm"
+              >
+                {isRTL ? 'حفظ الثيم' : 'Save Theme'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
