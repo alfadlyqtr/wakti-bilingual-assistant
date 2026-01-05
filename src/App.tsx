@@ -77,6 +77,8 @@ import LettersPlay from "./pages/LettersPlay";
 import LettersResults from "./pages/LettersResults";
 import PresentationSharePlayer from "./pages/PresentationSharePlayer";
 import MyWarranty from "./pages/MyWarranty";
+import Projects from "./pages/Projects";
+import ProjectDetail from "./pages/ProjectDetail";
 
 import "./App.css";
 
@@ -325,6 +327,16 @@ function App() {
                 <Route path="/my-warranty" element={
                   <GiftNotificationProvider>
                     <AppLayout><MyWarranty /></AppLayout>
+                  </GiftNotificationProvider>
+                } />
+                <Route path="/projects" element={
+                  <GiftNotificationProvider>
+                    <AppLayout><Projects /></AppLayout>
+                  </GiftNotificationProvider>
+                } />
+                <Route path="/projects/:id" element={
+                  <GiftNotificationProvider>
+                    <AppLayout><ProjectDetail /></AppLayout>
                   </GiftNotificationProvider>
                 } />
                 

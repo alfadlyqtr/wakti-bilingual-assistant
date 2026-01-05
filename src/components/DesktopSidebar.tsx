@@ -19,7 +19,8 @@ import {
   LucideIcon,
   Gamepad2,
   Music,
-  Shield
+  Shield,
+  Code2
 } from "lucide-react";
 
 type IconComponent = React.ComponentType<{ 
@@ -58,6 +59,7 @@ export function DesktopSidebar() {
     { icon: AudioLines as unknown as IconComponent, label: "tasjeel", path: "/tasjeel" },
     { icon: Shield as unknown as IconComponent, label: "my_warranty", path: "/my-warranty" },
     { icon: Music as unknown as IconComponent, label: "music", path: "/music" },
+    { icon: Code2 as unknown as IconComponent, label: "projects", path: "/projects" },
     { icon: Gamepad2 as unknown as IconComponent, label: "games", path: "/games" },
   ];
 
@@ -223,6 +225,7 @@ export function DesktopSidebar() {
                   case '/games': return 'text-indigo-500';
                   case '/tasjeel': return 'text-cyan-500';
                   case '/my-warranty': return 'text-emerald-500';
+                  case '/projects': return 'text-indigo-500';
                   default: return 'text-gray-500';
                 }
               };
@@ -238,6 +241,7 @@ export function DesktopSidebar() {
                   case '/games': return 'shadow-[0_0_15px_rgba(99,102,241,0.7)]';
                   case '/tasjeel': return 'shadow-[0_0_15px_rgba(6,182,212,0.7)]';
                   case '/my-warranty': return 'shadow-[0_0_15px_rgba(16,185,129,0.7)]';
+                  case '/projects': return 'shadow-[0_0_15px_rgba(99,102,241,0.7)]';
                   default: return 'shadow-[0_0_15px_rgba(156,163,175,0.7)]';
                 }
               };
@@ -253,6 +257,7 @@ export function DesktopSidebar() {
                   case '/games': return 'border-indigo-500/40';
                   case '/tasjeel': return 'border-cyan-500/40';
                   case '/my-warranty': return 'border-emerald-500/40';
+                  case '/projects': return 'border-indigo-500/40';
                   default: return 'border-gray-400/30';
                 }
               };

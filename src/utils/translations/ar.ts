@@ -91,4 +91,7 @@ export const ar = {
   
   // My Warranty
   my_warranty: "ضماناتي",
+  
+  // Projects
+  projects: "مشاريع",
 };

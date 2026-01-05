@@ -91,4 +91,7 @@ export const en = {
   
   // My Warranty
   my_warranty: "My Warranty",
+  
+  // Projects
+  projects: "Projects",
 };

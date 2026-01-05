@@ -9,11 +9,12 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
     strictPort: true, // Always use 8080, fail if busy
     open: true,
-    // Required for FFmpeg.wasm to work (enables SharedArrayBuffer)
-    headers: {
-      'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Embedder-Policy': 'require-corp',
-    },
+    // NOTE: COOP/COEP headers removed - they break Sandpack's bundler
+    // FFmpeg.wasm may not work without these, but Sandpack requires their removal
+    // headers: {
+    //   'Cross-Origin-Opener-Policy': 'same-origin',
+    //   'Cross-Origin-Embedder-Policy': 'require-corp',
+    // },
   },
   plugins: [
     react(),

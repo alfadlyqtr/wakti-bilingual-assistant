@@ -2047,3 +2047,62 @@ body.keyboard-visible {
     border-color: rgba(255, 255, 255, 0.3);
   }
 }
+
+/* FORCE SANDPACK HEIGHT - Global overrides */
+.sp-wrapper {
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column;
+}
+
+.sp-layout {
+  height: 100% !important;
+  display: flex !important;
+  flex: 1 !important;
+  background-color: transparent !important;
+}
+
+.sp-stack {
+  height: 100% !important;
+}
+
+.sp-preview-container, 
+.sp-preview-iframe {
+  height: 100% !important;
+  min-height: 100% !important;
+}
+
+.cm-editor {
+  height: 100% !important;
+}
+
+.sp-file-explorer {
+  height: 100% !important;
+}
+
+.sp-code-editor {
+  height: 100% !important;
+}
+
+/* Custom Scrollbar for Sandpack Studio */
+.sp-wrapper ::-webkit-scrollbar,
+.sandpack-preview-container ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.sp-wrapper ::-webkit-scrollbar-track,
+.sandpack-preview-container ::-webkit-scrollbar-track {
+  background: #0c0f14; 
+}
+
+.sp-wrapper ::-webkit-scrollbar-thumb,
+.sandpack-preview-container ::-webkit-scrollbar-thumb {
+  background: #334155; 
+  border-radius: 3px;
+}
+
+.sp-wrapper ::-webkit-scrollbar-thumb:hover,
+.sandpack-preview-container ::-webkit-scrollbar-thumb:hover {
+  background: #475569; 
+}

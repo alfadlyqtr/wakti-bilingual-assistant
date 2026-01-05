@@ -150,6 +150,7 @@ export default {
         "shimmer": "shimmer 2s linear infinite",
         "pulse-color": "pulse-color 2s ease-in-out infinite",
         "bounce-subtle": "bounce-subtle 1s ease-in-out infinite",
+        "spin-slow": "spin 2s linear infinite",
       },
     },
   },

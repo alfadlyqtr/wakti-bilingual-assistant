@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { cn } from "@/lib/utils";
-import { Calendar, CalendarClock, Mic, Sparkles, ListTodo, LayoutDashboard, PenTool, Gamepad2, HeartPulse, NotebookPen, Music, AudioLines, Shield } from "lucide-react";
+import { Calendar, CalendarClock, Mic, Sparkles, ListTodo, LayoutDashboard, PenTool, Gamepad2, HeartPulse, NotebookPen, Music, AudioLines, Shield, Code2 } from "lucide-react";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { waktiBadges } from "@/services/waktiBadges";
 import { motion } from "framer-motion";
@@ -133,6 +133,12 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
       path: '/my-warranty',
       icon: 'shield',
       colorClass: 'text-emerald-500',
+    },
+    {
+      name: language === 'ar' ? 'مشاريع' : 'Projects',
+      path: '/projects',
+      icon: 'code2',
+      colorClass: 'text-indigo-500',
     }
   ];
 
@@ -172,6 +178,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
     music: Music,
     'audio-lines': AudioLines,
     'shield': Shield,
+    'code2': Code2,
   };
 
   const handleNavigation = (path: string, badgeType?: string) => {
@@ -311,6 +318,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                     isActive && item.path === '/my-warranty' && "from-emerald-500/20 to-emerald-600/20 shadow-emerald-500/40 border border-emerald-500/30",
                     isActive && item.path === '/music' && "from-fuchsia-500/20 to-fuchsia-600/20 shadow-fuchsia-500/40 border border-fuchsia-500/30",
                     isActive && item.path === '/fitness' && "from-rose-500/20 to-rose-600/20 shadow-rose-500/40 border border-rose-500/30",
+                    isActive && item.path === '/projects' && "from-indigo-500/20 to-indigo-600/20 shadow-indigo-500/40 border border-indigo-500/30",
                     // Initial off-screen state until icons stage
                     animationStage === 'icons' ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-3 scale-[0.98]"
                   )}
@@ -344,7 +352,8 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                             item.path === '/tasjeel' ? '#06b6d4' :
                             item.path === '/fitness' ? '#f43f5e' :
                             item.path === '/journal' ? '#ec4899' :
-                            item.path === '/my-warranty' ? '#10b981' : '#3b82f6',
+                            item.path === '/my-warranty' ? '#10b981' :
+                            item.path === '/projects' ? '#6366f1' : '#3b82f6',
                         }}
                       />
                     )}
