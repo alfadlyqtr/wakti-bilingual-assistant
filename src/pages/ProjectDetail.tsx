@@ -65,6 +65,19 @@ interface ProjectFile {
   content: string;
 }
 
+type GenerationJobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
+
+type GenerationJob = {
+  id: string;
+  project_id: string;
+  status: GenerationJobStatus;
+  mode: 'create' | 'edit';
+  error: string | null;
+  result_summary: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -356,67 +369,40 @@ export default function ProjectDetail() {
       // Step 3: Generating
       setGenerationSteps(prev => prev.map((s, i) => i === 1 ? { ...s, status: 'completed' } : i === 2 ? { ...s, status: 'loading' } : s));
 
-      const generateResponse = await supabase.functions.invoke('projects-generate', {
+      // Option A: start job then poll
+      const startRes = await supabase.functions.invoke('projects-generate', {
         body: {
+          action: 'start',
+          projectId: id,
           mode: 'create',
           prompt: fullPrompt,
-          theme: theme,
-          assets: assets,
-          userInstructions: customThemeInstructions, // Pass to edge function too
+          theme,
+          assets,
+          userInstructions: customThemeInstructions,
         },
       });
-      
-      // Check for errors - including HTML error pages from Supabase
-      if (generateResponse.error) {
-        console.error('[Generation] Supabase error:', generateResponse.error);
-        throw new Error(generateResponse.error.message || 'Failed to generate');
+
+      if (startRes.error) {
+        throw new Error(startRes.error.message || 'Failed to start generation');
       }
-      
-      // Check if response is valid JSON (not HTML error page)
-      if (!generateResponse.data || typeof generateResponse.data !== 'object') {
-        console.error('[Generation] Invalid response - not an object:', typeof generateResponse.data);
-        throw new Error('Server returned invalid response');
-      }
-      
-      // Check for HTML in response (indicates server error page)
-      const dataStr = JSON.stringify(generateResponse.data);
-      if (dataStr.includes('<!DOCTYPE') || dataStr.includes('<html')) {
-        console.error('[Generation] Server returned HTML error page');
-        throw new Error('Server error - please try again');
-      }
-      
-      if (!generateResponse.data.ok) {
-        throw new Error(generateResponse.data.error || 'Failed to generate');
-      }
-      
-      // Multi-file mode - Lovable-style generation
-      const generatedFilesData = generateResponse.data.files || {};
-      const generatedCode = generateResponse.data.code || generatedFilesData["/App.js"] || "";
-      
-      // SAFETY CHECK: Ensure no HTML in generated code
-      if (generatedCode.includes('<!DOCTYPE') || generatedCode.includes('<html>')) {
-        console.error('[Generation] Generated code contains HTML - rejecting');
-        throw new Error('AI returned HTML instead of React code - please try again');
-      }
-      
+
+      const jobId = startRes.data?.jobId as string | undefined;
+      if (!jobId) throw new Error('Missing jobId');
+
+      await pollJobUntilDone(jobId);
+
       // Step 4: Finalizing
       setGenerationSteps(prev => prev.map((s, i) => i === 2 ? { ...s, status: 'completed' } : i === 3 ? { ...s, status: 'loading' } : s));
 
-      if (!generatedCode && Object.keys(generatedFilesData).length === 0) {
+      const generatedFilesData = await loadFilesFromDb(id as string);
+      const generatedCode = generatedFilesData["/App.js"] || Object.values(generatedFilesData)[0] || "";
+
+      if (!generatedCode || Object.keys(generatedFilesData).length === 0) {
         throw new Error('No code returned from AI');
       }
-      
-      // Set files for SandpackStudio
+
       setGeneratedFiles(generatedFilesData);
       setCodeContent(generatedCode);
-      
-      // Update file in database
-      const filesJson = JSON.stringify(generatedFilesData);
-      await (supabase
-        .from('project_files' as any)
-        .update({ content: filesJson })
-        .eq('project_id', id)
-        .eq('path', 'index.html') as any);
       
       // Save assistant message to DB with snapshot
       const assistantMsg = isRTL ? 'لقد انتهيت من بناء مشروعك! ألقِ نظرة على المعاينة.' : "I've finished building your project! Take a look at the preview.";
@@ -550,24 +536,33 @@ export default function ProjectDetail() {
 
       if (filesError) throw filesError;
       setFiles(filesData || []);
-      
-      const indexFile = filesData?.find((f: ProjectFile) => f.path === 'index.html');
-      if (indexFile) {
-        // Try to parse as JSON (multi-file format) or use as single file
-        try {
-          const parsed = JSON.parse(indexFile.content);
-          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-            // Multi-file format
-            setGeneratedFiles(parsed);
-            setCodeContent(parsed["/App.js"] || Object.values(parsed)[0] || "");
-          } else {
-            // Single file format
-            setCodeContent(indexFile.content);
+
+      // Preferred (Option A): one row per file
+      const mapFromRows: Record<string, string> = {};
+      for (const row of (filesData || []) as ProjectFile[]) {
+        const p = row.path?.startsWith('/') ? row.path : `/${row.path}`;
+        mapFromRows[p] = row.content;
+      }
+
+      // Legacy support: projects used to store a JSON blob inside path='index.html'
+      if (Object.keys(mapFromRows).length === 0) {
+        const legacyIndexFile = (filesData || []).find((f: ProjectFile) => f.path === 'index.html');
+        if (legacyIndexFile?.content) {
+          try {
+            const parsed = JSON.parse(legacyIndexFile.content);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+              setGeneratedFiles(parsed);
+              setCodeContent(parsed["/App.js"] || Object.values(parsed)[0] || "");
+            } else {
+              setCodeContent(legacyIndexFile.content);
+            }
+          } catch {
+            setCodeContent(legacyIndexFile.content);
           }
-        } catch {
-          // Not JSON, use as single file
-          setCodeContent(indexFile.content);
         }
+      } else {
+        setGeneratedFiles(mapFromRows);
+        setCodeContent(mapFromRows["/App.js"] || Object.values(mapFromRows)[0] || "");
       }
     } catch (err) {
       console.error('Error fetching project:', err);
@@ -579,21 +574,40 @@ export default function ProjectDetail() {
   };
 
   const saveCode = async () => {
-    const file = files.find(f => f.path === 'index.html');
-    if (!file) return;
-
     try {
       setSaving(true);
+
+      const filesToSave: Record<string, string> =
+        Object.keys(generatedFiles).length > 0
+          ? { ...generatedFiles }
+          : { "/App.js": codeContent };
+
+      // Ensure /App.js reflects editor text
+      filesToSave["/App.js"] = codeContent;
+
+      const rows = Object.entries(filesToSave).map(([path, content]) => ({
+        project_id: id,
+        path,
+        content,
+      }));
+
       const { error } = await (supabase
         .from('project_files' as any)
-        .update({ content: codeContent })
-        .eq('id', file.id) as any);
+        .upsert(rows, { onConflict: 'project_id,path' }) as any);
 
       if (error) throw error;
 
-      setFiles(prev => prev.map(f => 
-        f.id === file.id ? { ...f, content: codeContent } : f
-      ));
+      // Refresh local rows list
+      setFiles(prev => {
+        const byPath = new Map<string, ProjectFile>();
+        for (const f of prev) byPath.set(f.path, f);
+        for (const [path, content] of Object.entries(filesToSave)) {
+          const existing = byPath.get(path);
+          if (existing) byPath.set(path, { ...existing, content });
+          else byPath.set(path, { id: `local-${Date.now()}-${path}`, project_id: id as string, path, content });
+        }
+        return Array.from(byPath.values());
+      });
       
       toast.success(isRTL ? 'تم الحفظ!' : 'Saved!');
       refreshPreview();
@@ -603,6 +617,38 @@ export default function ProjectDetail() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const pollJobUntilDone = async (jobId: string, timeoutMs: number = 180000): Promise<GenerationJob> => {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const res = await supabase.functions.invoke('projects-generate', {
+        body: { action: 'status', jobId }
+      });
+
+      if (res.error) {
+        throw new Error(res.error.message || 'Failed to check job status');
+      }
+
+      const job = (res.data?.job || null) as GenerationJob | null;
+      if (!job) throw new Error('Job not found');
+
+      if (job.status === 'succeeded') return job;
+      if (job.status === 'failed') throw new Error(job.error || 'Generation failed');
+
+      await delay(900);
+    }
+
+    throw new Error('Generation timed out');
+  };
+
+  const loadFilesFromDb = async (projectId: string): Promise<Record<string, string>> => {
+    const res = await supabase.functions.invoke('projects-generate', {
+      body: { action: 'get_files', projectId }
+    });
+    if (res.error) throw new Error(res.error.message || 'Failed to load files');
+    const filesMap = (res.data?.files || {}) as Record<string, string>;
+    return filesMap;
   };
 
   const refreshPreview = () => {
@@ -818,78 +864,79 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         i === 1 ? { ...s, status: 'loading' } : s
       ));
 
-      // Route based on leftPanelMode: 'chat' = Q&A (read-only), 'code' = edit files
-      const requestMode = leftPanelMode === 'chat' ? 'chat' : 'edit';
-      
-      // Build conversation history for context (last 15 messages)
-      const recentHistory = chatMessages.slice(-15).map(msg => ({
-        role: msg.role,
-        content: msg.content
-      }));
-      
-      const response = await supabase.functions.invoke('projects-generate', {
-        body: {
-          mode: requestMode,
-          prompt: userMessage,
-          currentFiles: generatedFiles,
-          currentCode: codeContent,
-          history: recentHistory, // Pass conversation history for context
-          userInstructions: userInstructions, // Custom user instructions (appended to system prompt)
-        },
-      });
-      
-      if (response.error || !response.data?.ok) {
-        throw new Error(response.data?.error || (leftPanelMode === 'chat' ? 'Failed to get answer' : 'Failed to edit project'));
-      }
-
-      // Step 2 complete, Step 3 loading
-      setGenerationSteps(prev => prev.map((s, i) => 
-        i === 0 ? { ...s, status: 'completed' } : 
-        i === 1 ? { ...s, status: 'completed' } : 
-        i === 2 ? { ...s, status: 'loading' } : s
-      ));
-      await delay(400);
-      
       let assistantMsg: string;
       let snapshotToSave: any = null;
-      
+
       // IMPORTANT: Save snapshot of CURRENT state BEFORE applying changes (for revert)
       const beforeSnapshot = Object.keys(generatedFiles).length > 0 ? { ...generatedFiles } : null;
-      
+
       if (leftPanelMode === 'chat') {
-        // Chat mode: AI returns a message (no file changes)
+        // Chat mode (read-only): call chat mode directly (no job)
+        const response = await supabase.functions.invoke('projects-generate', {
+          body: {
+            mode: 'chat',
+            prompt: userMessage,
+            currentFiles: generatedFiles,
+          },
+        });
+
+        if (response.error || !response.data?.ok) {
+          throw new Error(response.data?.error || 'Failed to get answer');
+        }
+
+        // Step 2 complete, Step 3 loading
+        setGenerationSteps(prev => prev.map((s, i) => 
+          i === 0 ? { ...s, status: 'completed' } : 
+          i === 1 ? { ...s, status: 'completed' } : 
+          i === 2 ? { ...s, status: 'loading' } : s
+        ));
+        await delay(250);
+
         assistantMsg = response.data.message || (isRTL ? 'لم أتمكن من الإجابة.' : 'I could not generate an answer.');
-        // Complete all steps for chat mode
         setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
-        await delay(300);
+        await delay(250);
       } else {
-        // Code mode: AI returns updated files AND a summary of what changed
-        const newFiles = response.data.files || {};
-        const newCode = response.data.code || newFiles["/App.js"] || "";
-        
-        // Save the BEFORE state as snapshot (so user can revert to it)
+        // Code mode: Option A job flow (start -> poll -> get_files)
+        if (!id) throw new Error('Missing projectId');
+
+        const startRes = await supabase.functions.invoke('projects-generate', {
+          body: {
+            action: 'start',
+            projectId: id,
+            mode: 'edit',
+            prompt: userMessage,
+            userInstructions: userInstructions,
+          },
+        });
+
+        if (startRes.error) {
+          throw new Error(startRes.error.message || 'Failed to start edit');
+        }
+
+        const jobId = startRes.data?.jobId as string | undefined;
+        if (!jobId) throw new Error('Missing jobId');
+
+        // Step 2 complete, Step 3 loading
+        setGenerationSteps(prev => prev.map((s, i) => 
+          i === 0 ? { ...s, status: 'completed' } : 
+          i === 1 ? { ...s, status: 'completed' } : 
+          i === 2 ? { ...s, status: 'loading' } : s
+        ));
+        await delay(250);
+
+        const job = await pollJobUntilDone(jobId);
+        const newFiles = await loadFilesFromDb(id);
+        const newCode = newFiles["/App.js"] || Object.values(newFiles)[0] || "";
+
         snapshotToSave = beforeSnapshot;
-        
-        // Update state with NEW files
         setGeneratedFiles(newFiles);
         setCodeContent(newCode);
-        
-        // Save to database
-        const filesJson = JSON.stringify(newFiles);
-        await (supabase
-          .from('project_files' as any)
-          .update({ content: filesJson })
-          .eq('project_id', id)
-          .eq('path', 'index.html') as any);
-        
-        // Use the AI's summary of what changed (like Cascade does)
-        assistantMsg = response.data.message || (isRTL ? 'تم تطبيق التعديلات! ✓' : 'Changes applied! ✓');
-        
-        // All steps complete
+
+        assistantMsg = job.result_summary || (isRTL ? 'تم تطبيق التعديلات! ✓' : 'Changes applied! ✓');
         setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
-        await delay(300);
+        await delay(250);
       }
-      
+
       // Save assistant message to DB with snapshot
       const { data: assistantMsgData, error: assistError } = await supabase
         .from('project_chat_messages' as any)
@@ -985,6 +1032,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       console.error('AI error:', err);
       const errorMsg = isRTL ? 'عذرًا، حدث خطأ. حاول مرة أخرى.' : 'Sorry, an error occurred. Please try again.';
       setChatMessages(prev => [...prev, { 
+        id: `error-${Date.now()}`,
         role: 'assistant', 
         content: errorMsg 
       }]);
@@ -1672,7 +1720,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                       files={Object.keys(generatedFiles).length > 0 ? generatedFiles : { "/App.js": codeContent || "" }}
                       onRuntimeError={handleRuntimeCrash}
                       elementSelectMode={elementSelectMode}
-                      isLoading={isGenerating || aiEditing}
+                      isLoading={isGenerating}
                       onElementSelect={(ref, elementInfo) => {
                         if (elementInfo) setSelectedElementInfo(elementInfo);
                         setChatInput(prev => prev + (prev ? ' ' : '') + ref + ' ');

@@ -81,10 +81,19 @@ export default function SandpackStudio({ files, onRuntimeError, elementSelectMod
   const [selectedElement, setSelectedElement] = useState<SelectedElementInfo | null>(null);
   
   // Check if we have valid files (not just empty or placeholder)
-  const hasValidFiles = Object.keys(files).length > 0 && 
-    files["/App.js"] && 
-    files["/App.js"].length > 50 && 
-    !files["/App.js"].includes("<!DOCTYPE");
+  // Enhanced validation to catch HTML error pages and malformed responses
+  const hasValidFiles = useMemo(() => {
+    if (Object.keys(files).length === 0) return false;
+    const appJs = files["/App.js"];
+    if (!appJs || appJs.length < 50) return false;
+    // Reject HTML error pages
+    if (appJs.includes("<!DOCTYPE") || appJs.includes("<html")) return false;
+    // Reject obvious non-React content
+    if (appJs.startsWith("{") && appJs.includes('"error"')) return false;
+    // Must have React-like content
+    if (!appJs.includes("import") && !appJs.includes("export") && !appJs.includes("function")) return false;
+    return true;
+  }, [files]);
 
   // Listen for element selection messages from the iframe
   useEffect(() => {
@@ -258,21 +267,45 @@ root.render(<App />);`;
                 {/* LOADING OVERLAY - Covers Sandpack while AI is generating */}
                 {(isLoading || !hasValidFiles) && (
                   <div className="absolute inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center">
-                    <div className="relative">
-                      {/* Animated rings */}
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-24 h-24 rounded-full border-2 border-indigo-500/30 animate-ping" />
-                      </div>
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-16 h-16 rounded-full border-2 border-purple-500/50 animate-pulse" />
-                      </div>
-                      {/* Center icon */}
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-                        <Code2 className="w-6 h-6 text-white animate-pulse" />
-                      </div>
-                    </div>
-                    <p className="mt-6 text-sm text-gray-400 animate-pulse">Building your project...</p>
-                    <p className="mt-2 text-xs text-gray-600">This may take 15-30 seconds</p>
+                    {isLoading ? (
+                      <>
+                        <div className="relative">
+                          {/* Animated rings */}
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="w-24 h-24 rounded-full border-2 border-indigo-500/30 animate-ping" />
+                          </div>
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="w-16 h-16 rounded-full border-2 border-purple-500/50 animate-pulse" />
+                          </div>
+                          {/* Center icon */}
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                            <Code2 className="w-6 h-6 text-white animate-pulse" />
+                          </div>
+                        </div>
+                        <p className="mt-6 text-sm text-gray-400 animate-pulse">Building your project...</p>
+                        <p className="mt-2 text-xs text-gray-600">This may take 60-90 seconds</p>
+                      </>
+                    ) : !hasValidFiles && Object.keys(files).length > 0 ? (
+                      <>
+                        {/* Error state - invalid files received */}
+                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-red-600 to-orange-600 flex items-center justify-center shadow-lg shadow-red-500/30 mb-4">
+                          <Code2 className="w-8 h-8 text-white" />
+                        </div>
+                        <p className="text-sm text-red-400 font-medium">Generation Error</p>
+                        <p className="mt-2 text-xs text-gray-500 text-center max-w-xs px-4">
+                          The AI returned invalid code. Please try again with a different prompt.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="relative">
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                            <Code2 className="w-6 h-6 text-white animate-pulse" />
+                          </div>
+                        </div>
+                        <p className="mt-6 text-sm text-gray-400 animate-pulse">Waiting for code...</p>
+                      </>
+                    )}
                   </div>
                 )}
 

@@ -654,29 +654,28 @@ Apply these styles consistently throughout the entire design.`;
         
         {/* Content */}
         <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 py-16">
-          {/* Greeting with username */}
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white text-center mb-10 drop-shadow-lg">
             {isRTL ? `جاهز للبناء، ${userName}؟` : `Ready to build, ${userName}?`}
           </h1>
 
-          {/* Main Input Card */}
           <div className="w-full max-w-2xl bg-white dark:bg-[#0c0f14] rounded-2xl shadow-2xl border border-white/20">
-            {/* Input Area - Scrollable Textarea */}
             <div className="p-4">
-              <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey && !generating) {
-                    e.preventDefault();
-                    createProject();
-                  }
-                }}
-                placeholder={`${isRTL ? 'اطلب من Wakti إنشاء ' : 'Ask Wakti to create '}${displayedPlaceholder}`}
-                className="w-full bg-transparent text-base outline-none placeholder:text-muted-foreground/50 resize-none min-h-[120px] max-h-[300px] overflow-y-auto"
-                disabled={generating}
-                rows={4}
-              />
+                <textarea
+                  id="projectPrompt"
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey && !generating) {
+                      e.preventDefault();
+                      createProject();
+                    }
+                  }}
+                  placeholder={`${isRTL ? 'اطلب من Wakti إنشاء ' : 'Ask Wakti to create '}${displayedPlaceholder}`}
+                  className="w-full bg-transparent text-base outline-none placeholder:text-muted-foreground/50 resize-none min-h-[120px] max-h-[300px] overflow-y-auto"
+                  disabled={generating}
+                  rows={4}
+                  title={isRTL ? 'صف ما تريد بناءه' : 'Describe what you want to build'}
+                />
             </div>
 
             {/* Selected Theme Style Preview */}
@@ -737,12 +736,14 @@ Apply these styles consistently throughout the entire design.`;
               <div className="flex items-center gap-1">
                 {/* Hidden file input */}
                 <input
+                  id="projectAssetUpload"
                   ref={fileInputRef}
                   type="file"
                   accept="image/*"
                   multiple
                   onChange={handleFileChange}
                   className="hidden"
+                  title={isRTL ? 'رفع ملفات المشروع' : 'Upload project assets'}
                 />
                 
                 {/* Attach Button */}

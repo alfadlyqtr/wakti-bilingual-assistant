@@ -671,24 +671,38 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                   </div>
                 </div>
                 <textarea
+                  id="composeTopicArea"
                   className={`w-full border rounded p-3 min-h-[120px] ${fieldAccent} ${placeholderMuted}`}
                   placeholder={language === 'ar' ? 'أدخل الموضوع أو الفكرة...' : 'Topic or idea you want to write about...'}
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
+                  title={language === 'ar' ? 'أدخل الموضوع أو الفكرة' : 'Enter the topic or idea'}
                 />
               </div>
 
               {/* Row 1: Content Type | Tone */}
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <label className="text-sm font-medium">{language === 'ar' ? 'نوع المحتوى' : 'Content Type'}</label>
-                  <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={contentType} onChange={(e) => setContentType(e.target.value as ContentTypeKey)}>
+                  <label htmlFor="composeContentType" className="text-sm font-medium">{language === 'ar' ? 'نوع المحتوى' : 'Content Type'}</label>
+                  <select 
+                    id="composeContentType"
+                    className={`border rounded px-3 py-2 ${fieldAccent}`} 
+                    value={contentType} 
+                    onChange={(e) => setContentType(e.target.value as ContentTypeKey)}
+                    title={language === 'ar' ? 'اختر نوع المحتوى' : 'Select content type'}
+                  >
                     {CONTENT_TYPE_KEYS.map((k) => (<option key={k} value={k}>{ctLabel(k, language)}</option>))}
                   </select>
                 </div>
                 <div className="grid gap-2">
-                  <label className="text-sm font-medium">{language === 'ar' ? 'النبرة' : 'Tone'}</label>
-                  <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={tone} onChange={(e) => setTone(e.target.value as ToneKey)}>
+                  <label htmlFor="composeTone" className="text-sm font-medium">{language === 'ar' ? 'النبرة' : 'Tone'}</label>
+                  <select 
+                    id="composeTone"
+                    className={`border rounded px-3 py-2 ${fieldAccent}`} 
+                    value={tone} 
+                    onChange={(e) => setTone(e.target.value as ToneKey)}
+                    title={language === 'ar' ? 'اختر النبرة' : 'Select tone'}
+                  >
                     {TONE_KEYS.map((k) => (<option key={k} value={k}>{toneLabel(k, language)}</option>))}
                   </select>
                 </div>
@@ -697,8 +711,14 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
               {/* Row 2: Length | Register (requested side-by-side) */}
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <label className="text-sm font-medium">{language === 'ar' ? 'الطول' : 'Length'}</label>
-                  <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={length} onChange={(e) => setLength(e.target.value as any)}>
+                  <label htmlFor="composeLength" className="text-sm font-medium">{language === 'ar' ? 'الطول' : 'Length'}</label>
+                  <select 
+                    id="composeLength"
+                    className={`border rounded px-3 py-2 ${fieldAccent}`} 
+                    value={length} 
+                    onChange={(e) => setLength(e.target.value as any)}
+                    title={language === 'ar' ? 'اختر الطول' : 'Select length'}
+                  >
                     <option value="auto">{language === 'ar' ? 'تلقائي' : 'Auto'}</option>
                     <option value="very_short">{language === 'ar' ? 'قصير جدًا' : 'Very short'}</option>
                     <option value="short">{language === 'ar' ? 'قصير' : 'Short'}</option>
@@ -708,8 +728,14 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                   </select>
                 </div>
                 <div className="grid gap-2">
-                  <label className="text-sm font-medium">{language === 'ar' ? 'السجل اللغوي' : 'Register'}</label>
-                  <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={register} onChange={(e) => setRegister(e.target.value as RegisterKey)}>
+                  <label htmlFor="composeRegister" className="text-sm font-medium">{language === 'ar' ? 'السجل اللغوي' : 'Register'}</label>
+                  <select 
+                    id="composeRegister"
+                    className={`border rounded px-3 py-2 ${fieldAccent}`} 
+                    value={register} 
+                    onChange={(e) => setRegister(e.target.value as RegisterKey)}
+                    title={language === 'ar' ? 'اختر السجل اللغوي' : 'Select register'}
+                  >
                     {REGISTER_KEYS.map((k) => (<option key={k} value={k}>{registerLabel(k, language)}</option>))}
                   </select>
                 </div>
@@ -718,16 +744,28 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
               {/* Row 2: Language Variant | Emojis */}
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="grid gap-2">
-                  <label className="text-sm font-medium">{language === 'ar' ? 'متغير اللغة' : 'Language Variant'}</label>
-                  <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={languageVariant} onChange={(e) => setLanguageVariant(e.target.value as LanguageVariantKey)}>
+                  <label htmlFor="composeLangVariant" className="text-sm font-medium">{language === 'ar' ? 'متغير اللغة' : 'Language Variant'}</label>
+                  <select 
+                    id="composeLangVariant"
+                    className={`border rounded px-3 py-2 ${fieldAccent}`} 
+                    value={languageVariant} 
+                    onChange={(e) => setLanguageVariant(e.target.value as LanguageVariantKey)}
+                    title={language === 'ar' ? 'اختر متغير اللغة' : 'Select language variant'}
+                  >
                     {(language === 'ar' ? LANGUAGE_VARIANT_KEYS_AR : LANGUAGE_VARIANT_KEYS_EN).map((k) => (
                       <option key={k} value={k}>{langVariantLabel(k, language)}</option>
                     ))}
                   </select>
                 </div>
                 <div className="grid gap-2">
-                  <label className="text-sm font-medium">Emojis</label>
-                  <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={emojis} onChange={(e) => setEmojis(e.target.value as EmojisKey)}>
+                  <label htmlFor="composeEmojis" className="text-sm font-medium">Emojis</label>
+                  <select 
+                    id="composeEmojis"
+                    className={`border rounded px-3 py-2 ${fieldAccent}`} 
+                    value={emojis} 
+                    onChange={(e) => setEmojis(e.target.value as EmojisKey)}
+                    title={language === 'ar' ? 'اختر تفضيلات الإيموجي' : 'Select emoji preferences'}
+                  >
                     {EMOJIS_KEYS.map((k) => (<option key={k} value={k}>{emojisLabel(k, language)}</option>))}
                   </select>
                 </div>
@@ -752,6 +790,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                   </button>
                 </div>
                 <textarea
+                  id="replyKeyPoints"
                   className={`w-full border rounded px-3 py-2 min-h-[96px] ${fieldAccent} ${placeholderMuted}`}
                   placeholder={
                     language === 'ar'
@@ -760,6 +799,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                   }
                   value={keyPoints}
                   onChange={(e) => setKeyPoints(e.target.value)}
+                  title={language === 'ar' ? 'نقاط أساسية وكلمات مفتاحية' : 'Key points and keywords'}
                 />
               </div>
 
@@ -772,6 +812,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                     className={`border rounded px-3 py-2 ${fieldAccent}`}
                     value={replyAudience}
                     onChange={(e) => setReplyAudience(e.target.value as 'sender' | 'someone_else')}
+                    title={language === 'ar' ? 'اختر الجمهور المستهدف' : 'Select target audience'}
                   >
                     <option value="sender">{language === 'ar' ? 'الرد على المرسل الأصلي' : 'Reply to original sender'}</option>
                     <option value="someone_else">{language === 'ar' ? 'رسالة لشخص آخر (صديق/زميل)' : 'Message someone else (friend)'}</option>
@@ -788,21 +829,88 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                     value={replyRecipientName}
                     onChange={(e) => setReplyRecipientName(e.target.value)}
                     disabled={replyAudience !== 'someone_else'}
+                    title={language === 'ar' ? 'أدخل اسم الشخص' : 'Enter recipient name'}
                   />
                 </div>
+              </div>
+
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <label htmlFor="replyOriginalMessage" className="text-sm font-medium">{language === 'ar' ? 'الرسالة الأصلية' : 'Original Message'}</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      ref={replyFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      aria-label={language === 'ar' ? 'رفع صور' : 'Upload screenshots'}
+                      className="hidden"
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        if (files.length) handleScreenshotUpload(files, 'reply');
+                        e.target.value = '';
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => replyFileInputRef.current?.click()}
+                      disabled={isExtractingReply}
+                      className={`text-xs px-2 py-1 rounded-md border hover:bg-muted flex items-center gap-1 ${isExtractingReply ? 'bg-purple-100 dark:bg-purple-900/30 border-purple-400 animate-pulse' : ''}`}
+                      aria-label={language === 'ar' ? 'رفع صورة' : 'Upload screenshot'}
+                      title={language === 'ar' ? 'رفع صورة لاستخراج النص' : 'Upload screenshot to extract text'}
+                    >
+                      {isExtractingReply
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : <ImagePlus className="w-3.5 h-3.5" />}
+                      {isExtractingReply
+                        ? (extractProgressReply
+                          ? `${extractProgressReply.current}/${extractProgressReply.total}`
+                          : (language === 'ar' ? 'جارٍ...' : '...'))
+                        : ''}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOriginalMessage('')}
+                      className="text-xs px-2 py-1 rounded-md border hover:bg-muted"
+                      aria-label={language === 'ar' ? 'مسح النص' : 'Clear text'}
+                    >
+                      {language === 'ar' ? 'مسح' : 'Clear'}
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  id="replyOriginalMessage"
+                  className={`w-full border rounded p-3 min-h-[140px] ${fieldAccent} ${placeholderMuted}`}
+                  placeholder={language === 'ar' ? 'الرسالة التي تريد الرد عليها...' : 'Original message you want to reply to...'}
+                  value={originalMessage}
+                  onChange={(e) => setOriginalMessage(e.target.value)}
+                  title={language === 'ar' ? 'أدخل الرسالة الأصلية' : 'Enter original message'}
+                />
               </div>
 
               {/* Row 2: Content Type | Tone */}
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <label className="text-sm font-medium">{language === 'ar' ? 'نوع المحتوى' : 'Content Type'}</label>
-                  <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={contentType} onChange={(e) => setContentType(e.target.value as ContentTypeKey)}>
+                  <label htmlFor="replyContentType" className="text-sm font-medium">{language === 'ar' ? 'نوع المحتوى' : 'Content Type'}</label>
+                  <select 
+                    id="replyContentType"
+                    className={`border rounded px-3 py-2 ${fieldAccent}`} 
+                    value={contentType} 
+                    onChange={(e) => setContentType(e.target.value as ContentTypeKey)}
+                    title={language === 'ar' ? 'اختر نوع المحتوى' : 'Select content type'}
+                  >
                     {CONTENT_TYPE_KEYS.map((k) => (<option key={k} value={k}>{ctLabel(k, language)}</option>))}
                   </select>
                 </div>
                 <div className="grid gap-2">
-                  <label className="text-sm font-medium">{language === 'ar' ? 'النبرة' : 'Tone'}</label>
-                  <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={tone} onChange={(e) => setTone(e.target.value as ToneKey)}>
+                  <label htmlFor="replyTone" className="text-sm font-medium">{language === 'ar' ? 'النبرة' : 'Tone'}</label>
+                  <select 
+                    id="replyTone"
+                    className={`border rounded px-3 py-2 ${fieldAccent}`} 
+                    value={tone} 
+                    onChange={(e) => setTone(e.target.value as ToneKey)}
+                    title={language === 'ar' ? 'اختر النبرة' : 'Select tone'}
+                  >
                     {TONE_KEYS.map((k) => (<option key={k} value={k}>{toneLabel(k, language)}</option>))}
                   </select>
                 </div>
@@ -811,8 +919,14 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
               {/* Row 3: Length | Register */}
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <label className="text-sm font-medium">{language === 'ar' ? 'الطول' : 'Length'}</label>
-                  <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={replyLength} onChange={(e) => setReplyLength(e.target.value as any)}>
+                  <label htmlFor="replyLength" className="text-sm font-medium">{language === 'ar' ? 'الطول' : 'Length'}</label>
+                  <select 
+                    id="replyLength"
+                    className={`border rounded px-3 py-2 ${fieldAccent}`} 
+                    value={replyLength} 
+                    onChange={(e) => setReplyLength(e.target.value as any)}
+                    title={language === 'ar' ? 'اختر الطول' : 'Select length'}
+                  >
                     <option value="auto">{language === 'ar' ? 'تلقائي' : 'Auto'}</option>
                     <option value="very_short">{language === 'ar' ? 'قصير جدًا' : 'Very short'}</option>
                     <option value="short">{language === 'ar' ? 'قصير' : 'Short'}</option>
@@ -822,8 +936,14 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                   </select>
                 </div>
                 <div className="grid gap-2">
-                  <label className="text-sm font-medium">{language === 'ar' ? 'السجل اللغوي' : 'Register'}</label>
-                  <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={register} onChange={(e) => setRegister(e.target.value as RegisterKey)}>
+                  <label htmlFor="replyRegister" className="text-sm font-medium">{language === 'ar' ? 'السجل اللغوي' : 'Register'}</label>
+                  <select 
+                    id="replyRegister"
+                    className={`border rounded px-3 py-2 ${fieldAccent}`} 
+                    value={register} 
+                    onChange={(e) => setRegister(e.target.value as RegisterKey)}
+                    title={language === 'ar' ? 'اختر السجل اللغوي' : 'Select register'}
+                  >
                     {REGISTER_KEYS.map((k) => (<option key={k} value={k}>{registerLabel(k, language)}</option>))}
                   </select>
                 </div>
@@ -832,16 +952,28 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
               {/* Row 4: Language Variant | Emojis */}
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <label className="text-sm font-medium">{language === 'ar' ? 'متغير اللغة' : 'Language Variant'}</label>
-                  <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={languageVariant} onChange={(e) => setLanguageVariant(e.target.value as LanguageVariantKey)}>
+                  <label htmlFor="replyLangVariant" className="text-sm font-medium">{language === 'ar' ? 'متغير اللغة' : 'Language Variant'}</label>
+                  <select 
+                    id="replyLangVariant"
+                    className={`border rounded px-3 py-2 ${fieldAccent}`} 
+                    value={languageVariant} 
+                    onChange={(e) => setLanguageVariant(e.target.value as LanguageVariantKey)}
+                    title={language === 'ar' ? 'اختر متغير اللغة' : 'Select language variant'}
+                  >
                     {(language === 'ar' ? LANGUAGE_VARIANT_KEYS_AR : LANGUAGE_VARIANT_KEYS_EN).map((k) => (
                       <option key={k} value={k}>{langVariantLabel(k, language)}</option>
                     ))}
                   </select>
                 </div>
                 <div className="grid gap-2">
-                  <label className="text-sm font-medium">Emojis</label>
-                  <select className={`border rounded px-3 py-2 ${fieldAccent}`} value={emojis} onChange={(e) => setEmojis(e.target.value as EmojisKey)}>
+                  <label htmlFor="replyEmojis" className="text-sm font-medium">Emojis</label>
+                  <select 
+                    id="replyEmojis"
+                    className={`border rounded px-3 py-2 ${fieldAccent}`} 
+                    value={emojis} 
+                    onChange={(e) => setEmojis(e.target.value as EmojisKey)}
+                    title={language === 'ar' ? 'اختر تفضيلات الإيموجي' : 'Select emoji preferences'}
+                  >
                     {EMOJIS_KEYS.map((k) => (<option key={k} value={k}>{emojisLabel(k, language)}</option>))}
                   </select>
                 </div>
@@ -852,8 +984,14 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
           {activeTab === 'generated' && (
             <div className="space-y-3">
               <div className="grid gap-2">
-                <label className="text-sm font-medium">{language === 'ar' ? 'النص المُولد' : 'Generated Text'}</label>
-                <textarea className={`w-full border rounded p-3 min-h-[220px] ${fieldAccent}`} readOnly value={generatedText} />
+                <label htmlFor="generatedTextArea" className="text-sm font-medium">{language === 'ar' ? 'النص المُولد' : 'Generated Text'}</label>
+                <textarea 
+                  id="generatedTextArea"
+                  className={`w-full border rounded p-3 min-h-[220px] ${fieldAccent}`} 
+                  readOnly 
+                  value={generatedText} 
+                  title={language === 'ar' ? 'النص المُولد' : 'Generated text'}
+                />
               </div>
               {/* Cached texts: show up to 3 previous results */}
               {cachedTexts.length > 0 && (
@@ -891,7 +1029,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                     onClick={() => setCopyMenuOpen((v) => !v)}
                     disabled={!generatedText.trim()}
                     aria-haspopup="menu"
-                    aria-expanded={copyMenuOpen ? 'true' : 'false'}
+                    aria-expanded={copyMenuOpen ? "true" : "false"}
                   >
                     {copied ? (language === 'ar' ? 'تم النسخ!' : 'Copied!') : (language === 'ar' ? 'نسخ' : 'Copy')}
                   </button>

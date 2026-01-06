@@ -35,6 +35,8 @@ function inferMoodSetFromQuestion(q: string): number[] | undefined { const t=(q|
 
 function inferIntent(q: string): string {
   const t=(q||'').toLowerCase();
+  // Detect "show me exactly" / "what I wrote" / "verbatim" / "raw" requests
+  if(/exact(ly)?|verbatim|raw|as.?is|what.*(i|I).*(wrote|written|said|typed)|show.*(me)?.*(entry|note)|اعرض.*كتبت|بالضبط|حرفيا/.test(t)) return 'show_exact';
   if(/gratitude|grateful|thank|thanks|thankful|امتنان|شكر|شكرا/.test(t)) return 'gratitude';
   if(/tag|وسم|activity|نشاط/.test(t)) return 'top_tags';
   if(/morning|صباح/.test(t)) return 'mornings';
@@ -221,40 +223,55 @@ serve(async (req)=>{
       }
     }
 
-    // Build LAST ENTRY context - always include this so AI can reference it
+    // Build LAST ENTRY context - aggregate ALL data for the most recent active date
     const moodNameMap: Record<number, string> = { 1: 'awful', 2: 'bad', 3: 'meh', 4: 'good', 5: 'rad' };
-    const lastDay = (lastEntryRows && lastEntryRows.length > 0) ? lastEntryRows[0] : null;
-    const lastCheckin = (lastCheckinRows && lastCheckinRows.length > 0) ? lastCheckinRows[0] : null;
-    // Determine which is more recent
-    let lastEntry: { date: string; mood: string; mood_value: number; note: string | null; tags: string[]; type: 'day' | 'checkin'; days_ago: number } | null = null;
-    if (lastDay || lastCheckin) {
-      const dayDate = lastDay ? new Date(lastDay.date + 'T12:00:00Z') : null;
-      const checkinDate = lastCheckin ? new Date(lastCheckin.occurred_at || lastCheckin.date + 'T12:00:00Z') : null;
+    
+    // Find the latest date that has any activity
+    const allDates = [
+      ...(daysRows || []).map(d => d.date),
+      ...(uniqueChecks || []).map(c => c.date)
+    ].sort().reverse();
+    
+    const latestDate = allDates[0];
+    let lastEntry: { 
+      date: string; 
+      mood: string; 
+      mood_value: number; 
+      note: string | null; 
+      checkin_notes: string[];
+      tags: string[]; 
+      gratitude: string[];
+      days_ago: number 
+    } | null = null;
+
+    if (latestDate) {
+      const dayData = (daysRows || []).find(d => d.date === latestDate);
+      const dayChecks = (uniqueChecks || []).filter(c => c.date === latestDate);
       const todayDate = new Date(today + 'T12:00:00Z');
+      const targetDate = new Date(latestDate + 'T12:00:00Z');
+      const daysAgo = Math.floor((todayDate.getTime() - targetDate.getTime()) / (1000 * 60 * 60 * 24));
+
+      // Aggregate tags and notes
+      const allTags = new Set<string>();
+      if (dayData?.tags) dayData.tags.forEach((t: string) => allTags.add(t));
+      dayChecks.forEach(c => { if (c.tags) c.tags.forEach((t: string) => allTags.add(t)); });
+
+      const checkinNotes = dayChecks.map(c => c.note).filter(Boolean) as string[];
+      const gratitude = [dayData?.gratitude_1, dayData?.gratitude_2, dayData?.gratitude_3].map(x => String(x || '').trim()).filter(Boolean);
       
-      if (lastDay && dayDate && (!checkinDate || dayDate >= checkinDate)) {
-        const daysAgo = Math.floor((todayDate.getTime() - dayDate.getTime()) / (1000 * 60 * 60 * 24));
-        lastEntry = {
-          date: monthFmt.format(dayDate),
-          mood: moodNameMap[lastDay.mood_value] || 'unknown',
-          mood_value: lastDay.mood_value,
-          note: lastDay.note || lastDay.evening_reflection || lastDay.morning_reflection || null,
-          tags: lastDay.tags || [],
-          type: 'day',
-          days_ago: daysAgo
-        };
-      } else if (lastCheckin && checkinDate) {
-        const daysAgo = Math.floor((todayDate.getTime() - checkinDate.getTime()) / (1000 * 60 * 60 * 24));
-        lastEntry = {
-          date: monthFmt.format(checkinDate),
-          mood: moodNameMap[lastCheckin.mood_value] || 'unknown',
-          mood_value: lastCheckin.mood_value,
-          note: lastCheckin.note || null,
-          tags: lastCheckin.tags || [],
-          type: 'checkin',
-          days_ago: daysAgo
-        };
-      }
+      // Determine primary mood (favor day mood, fallback to latest checkin)
+      const primaryMoodValue = dayData?.mood_value || dayChecks[dayChecks.length - 1]?.mood_value || 3;
+
+      lastEntry = {
+        date: monthFmt.format(targetDate),
+        mood: moodNameMap[primaryMoodValue] || 'unknown',
+        mood_value: primaryMoodValue,
+        note: dayData?.note || dayData?.evening_reflection || dayData?.morning_reflection || null,
+        checkin_notes: checkinNotes,
+        tags: Array.from(allTags),
+        gratitude: gratitude,
+        days_ago: daysAgo
+      };
     }
 
     // Build stats for resolved_intent
@@ -360,8 +377,21 @@ serve(async (req)=>{
       }
     }
     
-    const system_en = `You are a trusted best friend who gives quick, warm insights about someone's journal. Write 40–60 words max. Use inline icons. Start with "I notice...", "Look at this...", or "Every time...". Be specific with dates/times. MANDATORY: If the user asks about world topics, you MUST say "If you want to chat about other topics, use Wakti AI." but ONLY for off-topic questions. BANNED: It appears that, This suggests, Consider, I would recommend, Your data shows, Based on your patterns, level. No corporate/therapy jargon. CRITICAL: If there is no data, say so honestly - never make up or assume information.${dataContext ? ' ' + dataContext : ''}`;
-    const system_ar = `أنت صديق مقرّب يعطي رؤى سريعة ودافئة عن يوميات شخص. اكتب 40–60 كلمة كحد أقصى. استخدم الرموز. ابدأ بـ "ألاحظ..." أو "انظر لهذا...". كن محددًا بالتواريخ. إلزامي: إذا سأل المستخدم عن مواضيع عامة، يجب أن تقول "إذا كنت تريد الدردشة في مواضيع أخرى، استخدم وقطي AI." فقط للأسئلة خارج نطاق اليوميات. الممنوع: يبدو أن، يوحي ذلك، فكّر في، أوصي بـ، تُظهر بياناتك. مهم جداً: إذا لم تكن هناك بيانات، قل ذلك بصدق - لا تختلق معلومات.${dataContext ? ' ' + dataContext : ''}`;
+    // Special handling for "show_exact" intent - return verbatim note
+    const isShowExact = resolved_intent === 'show_exact';
+    let exactNoteContext = '';
+    if (isShowExact && lastEntry) {
+      exactNoteContext = lang === 'ar'
+        ? `المستخدم يريد رؤية ما كتبه بالضبط. آخر إدخال (${lastEntry.date}): المزاج ${MOOD_ICON[lastEntry.mood] || lastEntry.mood}، الوسوم: ${lastEntry.tags.map(iconizeTag).join(', ') || 'لا يوجد'}. الامتنان: ${lastEntry.gratitude.join('، ') || 'لا يوجد'}. ملاحظات الفحص: ${lastEntry.checkin_notes.map(n => `"${n}"`).join(' و ') || 'لا يوجد'}. الملاحظة الرئيسية: "${lastEntry.note || 'لم يكتب ملاحظة'}". اعرض كل هذا حرفياً دون تلخيص.`
+        : `User wants to see EXACTLY what they wrote. Last entry (${lastEntry.date}): Mood ${MOOD_ICON[lastEntry.mood] || lastEntry.mood}, Tags: ${lastEntry.tags.map(iconizeTag).join(', ') || 'none'}. Gratitude: ${lastEntry.gratitude.join(', ') || 'none'}. Check-in notes: ${lastEntry.checkin_notes.map(n => `"${n}"`).join(' and ') || 'none'}. Main note: "${lastEntry.note || 'No note written'}". Show ALL this verbatim, especially gratitude and ALL specific notes. Do NOT summarize.`;
+    }
+
+    const system_en = isShowExact
+      ? `You show the user their exact journal entry data. Do NOT summarize or interpret. Present the raw data clearly: Date, Mood Icon, Tags with icons, Gratitude list, and ALL verbatim notes (including check-in notes) in quotes. Keep it factual and complete.${exactNoteContext ? ' ' + exactNoteContext : ''}`
+      : `You are a trusted best friend who gives quick, warm insights about someone's journal. Write 40–60 words max. Use inline icons. Start with "I notice...", "Look at this...", or "Every time...". Be specific with dates/times. MANDATORY: If the user asks about world topics, you MUST say "If you want to chat about other topics, use Wakti AI." but ONLY for off-topic questions. BANNED: It appears that, This suggests, Consider, I would recommend, Your data shows, Based on your patterns, level. No corporate/therapy jargon. CRITICAL: If there is no data, say so honestly - never make up or assume information.${dataContext ? ' ' + dataContext : ''}`;
+    const system_ar = isShowExact
+      ? `اعرض للمستخدم إدخاله بالضبط. لا تلخص أو تفسر. فقط اعرض البيانات الخام: التاريخ، رمز المزاج، الوسوم مع الرموز، ونص الملاحظة الحرفي بين علامات اقتباس. كن واقعياً وحرفياً.${exactNoteContext ? ' ' + exactNoteContext : ''}`
+      : `أنت صديق مقرّب يعطي رؤى سريعة ودافئة عن يوميات شخص. اكتب 40–60 كلمة كحد أقصى. استخدم الرموز. ابدأ بـ "ألاحظ..." أو "انظر لهذا...". كن محددًا بالتواريخ. إلزامي: إذا سأل المستخدم عن مواضيع عامة، يجب أن تقول "إذا كنت تريد الدردشة في مواضيع أخرى، استخدم وقطي AI." فقط للأسئلة خارج نطاق اليوميات. الممنوع: يبدو أن، يوحي ذلك، فكّر في، أوصي بـ، تُظهر بياناتك. مهم جداً: إذا لم تكن هناك بيانات، قل ذلك بصدق - لا تختلق معلومات.${dataContext ? ' ' + dataContext : ''}`;
 
     // LLM - GPT-4o-mini for speed
     let summary: string | undefined;
