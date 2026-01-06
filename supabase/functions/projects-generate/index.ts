@@ -619,23 +619,75 @@ async function callGPT4oMini(systemPrompt: string, userPrompt: string): Promise<
   return data.choices?.[0]?.message?.content || "";
 }
 
-async function callGPT41MiniEdit(
+// Diff-based editing with Gemini 1.5 Flash (1M context window)
+// Returns patches that we apply programmatically - never truncates
+interface EditPatch {
+  file: string;
+  action: "replace" | "insert_after" | "insert_before" | "delete";
+  find: string;      // The exact string to find (for replace/insert_after/insert_before/delete)
+  content?: string;  // The new content (for replace/insert_after/insert_before)
+}
+
+function applyPatches(
+  currentFiles: Record<string, string>,
+  patches: EditPatch[]
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  
+  for (const patch of patches) {
+    const filePath = normalizeFilePath(patch.file);
+    // Get current content (from result if already modified, else from original)
+    let content = result[filePath] ?? currentFiles[filePath] ?? "";
+    
+    if (patch.action === "replace") {
+      if (content.includes(patch.find)) {
+        content = content.replace(patch.find, patch.content || "");
+      } else {
+        console.warn(`[applyPatches] Could not find string to replace in ${filePath}`);
+      }
+    } else if (patch.action === "insert_after") {
+      if (content.includes(patch.find)) {
+        content = content.replace(patch.find, patch.find + (patch.content || ""));
+      } else {
+        console.warn(`[applyPatches] Could not find anchor for insert_after in ${filePath}`);
+      }
+    } else if (patch.action === "insert_before") {
+      if (content.includes(patch.find)) {
+        content = content.replace(patch.find, (patch.content || "") + patch.find);
+      } else {
+        console.warn(`[applyPatches] Could not find anchor for insert_before in ${filePath}`);
+      }
+    } else if (patch.action === "delete") {
+      if (content.includes(patch.find)) {
+        content = content.replace(patch.find, "");
+      } else {
+        console.warn(`[applyPatches] Could not find string to delete in ${filePath}`);
+      }
+    }
+    
+    result[filePath] = content;
+  }
+  
+  return result;
+}
+
+async function callGeminiDiffEdit(
   _systemPrompt: string, 
   userPrompt: string,
   currentFiles: Record<string, string>
 ): Promise<{ files: Record<string, string>; summary: string }> {
-  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-  if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY missing");
+  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
+  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
 
-  // GPT-4.1-mini has large context, so we can send more files
-  const MAX_FILE_CHARS = 6000;
-  const MAX_TOTAL_CHARS = 50000;
+  // Smart context: prioritize relevant files, limit total size
+  const MAX_FILE_CHARS = 8000;
+  const MAX_TOTAL_CHARS = 60000;
   const promptLower = userPrompt.toLowerCase();
   
   const prioritizedFiles: Record<string, string> = {};
   let totalChars = 0;
   
-  // Always include App.js first
+  // Always include App.js first (main file)
   if (currentFiles["/App.js"]) {
     const content = currentFiles["/App.js"].slice(0, MAX_FILE_CHARS);
     prioritizedFiles["/App.js"] = content;
@@ -655,20 +707,19 @@ async function callGPT41MiniEdit(
     }
   }
   
-  // Add remaining files until we hit the limit (components first)
-  const componentFiles = Object.entries(currentFiles)
-    .filter(([p]) => p.includes('/components/') && !prioritizedFiles[p])
-    .sort((a, b) => a[0].localeCompare(b[0]));
-  
-  for (const [path, content] of componentFiles) {
-    const truncated = content.slice(0, MAX_FILE_CHARS);
-    if (totalChars + truncated.length < MAX_TOTAL_CHARS) {
-      prioritizedFiles[path] = truncated;
-      totalChars += truncated.length;
+  // Add component files
+  for (const [path, content] of Object.entries(currentFiles)) {
+    if (prioritizedFiles[path]) continue;
+    if (path.includes('/components/')) {
+      const truncated = content.slice(0, MAX_FILE_CHARS);
+      if (totalChars + truncated.length < MAX_TOTAL_CHARS) {
+        prioritizedFiles[path] = truncated;
+        totalChars += truncated.length;
+      }
     }
   }
-
-  // Add any remaining files
+  
+  // Add remaining files if space
   for (const [path, content] of Object.entries(currentFiles)) {
     if (prioritizedFiles[path]) continue;
     const truncated = content.slice(0, MAX_FILE_CHARS);
@@ -678,56 +729,87 @@ async function callGPT41MiniEdit(
     }
   }
   
-  const includedPaths = Object.keys(prioritizedFiles);
-  const omittedPaths = Object.keys(currentFiles).filter(p => !includedPaths.includes(p));
+  const filesStr = Object.entries(prioritizedFiles)
+    .map(([path, content]) => `=== FILE: ${path} ===\n${content}`)
+    .join('\n\n');
   
-  const filesStr = Object.entries(prioritizedFiles).map(([k, v]) => `FILE: ${k}\n${v}`).join('\n\n');
-  const omittedNote = omittedPaths.length > 0 
-    ? `\n\n(Other files in project: ${omittedPaths.join(', ')} - not shown but exist)` 
-    : '';
-  
-  const editSystemPrompt = `You are an expert React code editor. Make precise, surgical changes.
+  console.log(`[Gemini] Diff edit: ${Object.keys(prioritizedFiles).length}/${Object.keys(currentFiles).length} files, ${totalChars} chars`);
+
+  const systemPrompt = `You are a SURGICAL code editor. You make MINIMAL changes using PATCHES.
+
+CRITICAL: Return ONLY the specific changes needed as JSON patches. DO NOT return full files.
+
+PATCH FORMAT:
+{
+  "patches": [
+    {
+      "file": "/App.js",
+      "action": "replace",
+      "find": "className=\\"text-blue-500\\"",
+      "content": "className=\\"text-orange-500 text-xl\\""
+    },
+    {
+      "file": "/App.js",
+      "action": "insert_after",
+      "find": "</About>",
+      "content": "\\n      <NewSection />"
+    }
+  ],
+  "summary": "Changed text color to orange and increased size"
+}
+
+ACTIONS:
+- "replace": Find exact string and replace with content
+- "insert_after": Insert content immediately after the find string
+- "insert_before": Insert content immediately before the find string  
+- "delete": Remove the find string entirely
 
 RULES:
-1. Return ONLY files that need changes - do not return unchanged files.
-2. Return valid JSON object. No markdown fences, no explanation text.
-3. Include a brief "summary" field describing what you changed.
-4. Be minimal - change only what's needed for the edit request.
-5. ONLY use lucide-react for icons. Never use react-icons or heroicons.
+1. The "find" string must be EXACT - copy it character-for-character from the original
+2. Keep patches MINIMAL - only change what's requested
+3. For styling changes, only change the specific className or style
+4. For adding sections, use insert_after with a nearby anchor
+5. NEVER modify code that wasn't mentioned in the request
+6. Return valid JSON only - no markdown, no explanation
 
-OUTPUT FORMAT (strict JSON):
-{
-  "files": { "/App.js": "full updated file content..." },
-  "summary": "Added Skills section with 5 skill cards"
-}`;
+ONLY use lucide-react for icons. Never use react-icons or heroicons.`;
 
-  console.log(`[GPT-4.1-mini] Edit request: ${includedPaths.length} files, ${totalChars} chars`);
+  const userMessage = `CURRENT CODEBASE:
+${filesStr}
 
-  const response = await withTimeout(fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { 
-      "Content-Type": "application/json", 
-      "Authorization": `Bearer ${OPENAI_API_KEY}` 
-    },
-    body: JSON.stringify({
-      model: "gpt-4.1-mini",
-      max_tokens: 8192,
-      temperature: 0.2,
-      messages: [
-        { role: "system", content: editSystemPrompt }, 
-        { role: "user", content: `ORIGINAL CODE:\n${filesStr}${omittedNote}\n\nEDIT INSTRUCTIONS:\n${userPrompt}\n\nReturn only the updated code as JSON.` }
-      ],
-    }),
-  }), 60000, 'GPT41_EDIT');
+USER REQUEST:
+${userPrompt}
+
+Return ONLY the JSON patches needed. Be surgical - change only what's requested.`;
+
+  const response = await withTimeout(fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": GEMINI_API_KEY,
+      },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: userMessage }] }],
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 8192,
+          responseMimeType: "application/json",
+        },
+      }),
+    }
+  ), 60000, 'GEMINI_EDIT');
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error("[GPT-4.1-mini] API Error:", response.status, errorText);
-    throw new Error(`OpenAI API error: ${response.status}`);
+    console.error("[Gemini] API Error:", response.status, errorText);
+    throw new Error(`Gemini API error: ${response.status}`);
   }
 
   const data = await response.json();
-  let content = data.choices?.[0]?.message?.content || "";
+  let content = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
   
   // Clean up response
   content = content.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
@@ -738,13 +820,21 @@ OUTPUT FORMAT (strict JSON):
 
   try {
     const parsed = JSON.parse(content);
-    return {
-      files: parsed.files || parsed,
-      summary: parsed.summary || "Changes applied."
-    };
+    const patches: EditPatch[] = parsed.patches || [];
+    const summary = parsed.summary || "Changes applied.";
+    
+    if (patches.length === 0) {
+      console.warn("[Gemini] No patches returned");
+      return { files: {}, summary: "No changes needed." };
+    }
+    
+    console.log(`[Gemini] Applying ${patches.length} patches`);
+    const changedFiles = applyPatches(currentFiles, patches);
+    
+    return { files: changedFiles, summary };
   } catch (e) {
-    console.error("[GPT-4.1-mini] Parse error:", e);
-    throw new Error("GPT-4.1-mini returned invalid JSON");
+    console.error("[Gemini] Parse error:", e, "Content:", content.substring(0, 500));
+    throw new Error("Gemini returned invalid JSON");
   }
 }
 
@@ -918,7 +1008,7 @@ serve(async (req: Request) => {
       }
 
       const userPrompt = `${prompt}\n\n${userInstructions || ""}`;
-      const result = await callGPT41MiniEdit(finalSystemPrompt, userPrompt, existingFiles);
+      const result = await callGeminiDiffEdit(finalSystemPrompt, userPrompt, existingFiles);
       const changedFiles = result.files || {};
       if (changedFiles["/App.js"]) assertNoHtml(changedFiles["/App.js"]);
 

@@ -262,13 +262,25 @@ export default function ProjectDetail() {
       setCodeContent(snapshot["/App.js"] || Object.values(snapshot)[0] || "");
       setSandpackKey(prev => prev + 1); // Force Sandpack to re-mount with new files
 
-      // Save to database
-      const filesJson = JSON.stringify(snapshot);
+      // Save to database - delete old files and insert new ones from snapshot
+      // First delete all existing files for this project
       await (supabase
         .from('project_files' as any)
-        .update({ content: filesJson })
-        .eq('project_id', id)
-        .eq('path', 'index.html') as any);
+        .delete()
+        .eq('project_id', id) as any);
+      
+      // Then insert all files from the snapshot
+      const fileRows = Object.entries(snapshot).map(([path, content]) => ({
+        project_id: id,
+        path: path.startsWith('/') ? path : `/${path}`,
+        content: content as string,
+      }));
+      
+      if (fileRows.length > 0) {
+        await (supabase
+          .from('project_files' as any)
+          .insert(fileRows) as any);
+      }
 
       // Add a system message about the revert (WITHOUT copying the snapshot - it's the restored state now)
       const revertMsg = isRTL 
