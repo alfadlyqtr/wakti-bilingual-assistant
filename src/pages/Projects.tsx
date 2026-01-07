@@ -45,33 +45,35 @@ interface Project {
 
 const MAX_PROJECTS = 2;
 
-// Project Preview Thumbnail Component - simple image thumbnail
-const ProjectPreviewThumbnail = ({ project }: { project: Project }) => {
-  // If project has a thumbnail, show it
-  if (project.thumbnail_url) {
-    return (
-      <div className="aspect-video relative overflow-hidden bg-zinc-900">
-        <img 
-          src={project.thumbnail_url} 
+// Project Preview Thumbnail Component - premium fallback card
+const ProjectPreviewThumbnail = ({ project, isRTL }: { project: Project; isRTL: boolean }) => {
+  return (
+    <div className="aspect-video relative overflow-hidden bg-[#0c0f14]">
+      {project.thumbnail_url ? (
+        <img
+          src={project.thumbnail_url}
           alt={project.name}
-          className="w-full h-full object-cover object-top"
+          className="absolute inset-0 w-full h-full object-cover object-top opacity-85"
         />
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-          <Eye className="h-8 w-8 text-white drop-shadow-lg" />
+      ) : null}
+
+      <div className="absolute inset-0 bg-[linear-gradient(135deg,hsl(210_100%_60%)_0%,hsl(280_70%_65%)_50%,hsl(25_95%_60%)_100%)] opacity-35" />
+      <div className="absolute -inset-10 bg-[radial-gradient(closest-side,hsla(210,100%,65%,0.35),transparent)]" />
+      <div className="absolute inset-0 bg-black/35" />
+
+      <div className="absolute top-3 left-3 flex items-center gap-2 rounded-full bg-white/10 border border-white/15 backdrop-blur px-2 py-1">
+        <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center">
+          <Code2 className="h-3.5 w-3.5 text-white/80" />
+        </div>
+        <div className="text-[11px] font-semibold text-white/90">
+          {isRTL ? 'وقتي' : 'Wakti'}
         </div>
       </div>
-    );
-  }
-  
-  // Fallback: show project name in a styled card
-  return (
-    <div className="aspect-video relative overflow-hidden bg-gradient-to-br from-indigo-600/30 via-purple-600/30 to-pink-600/30">
-      <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
-        <Code2 className="h-8 w-8 text-white/40 mb-2" />
-        <span className="text-white/60 text-xs font-medium truncate max-w-full">{project.name}</span>
-      </div>
-      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-        <Eye className="h-6 w-6 text-white drop-shadow-lg" />
+
+      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="w-11 h-11 rounded-full bg-white/10 border border-white/15 backdrop-blur flex items-center justify-center">
+          <Eye className="h-6 w-6 text-white drop-shadow" />
+        </div>
       </div>
     </div>
   );
@@ -462,6 +464,45 @@ Apply these styles consistently throughout the entire design.`;
     }
   };
 
+  const generateProjectTitle = (rawPrompt: string) => {
+    const p = (rawPrompt || '').replace(/\s+/g, ' ').trim();
+    if (!p) return isRTL ? 'مشروعي' : 'My Project';
+
+    const lower = p.toLowerCase();
+    const leadingPatterns: RegExp[] = [
+      /^build\s+(a|an|the)?\s*/i,
+      /^create\s+(a|an|the)?\s*/i,
+      /^make\s+(a|an|the)?\s*/i,
+      /^generate\s+(a|an|the)?\s*/i,
+      /^design\s+(a|an|the)?\s*/i,
+      /^develop\s+(a|an|the)?\s*/i,
+      /^i\s+want\s+(a|an|the)?\s*/i,
+      /^i\s+need\s+(a|an|the)?\s*/i,
+      /^please\s+(build|create|make|generate|design|develop)\s+(a|an|the)?\s*/i,
+    ];
+
+    let cleaned = p;
+    for (const re of leadingPatterns) {
+      if (re.test(cleaned)) {
+        cleaned = cleaned.replace(re, '').trim();
+        break;
+      }
+    }
+
+    cleaned = cleaned
+      .replace(/[\s\-–—:;,.]+$/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!cleaned) return isRTL ? 'مشروعي' : 'My Project';
+
+    const words = cleaned.split(' ').filter(Boolean);
+    const maxWords = 7;
+    const short = words.slice(0, maxWords).join(' ');
+
+    return short.length > 48 ? `${short.slice(0, 48).trim()}…` : short;
+  };
+
   const createProject = async () => {
     if (!prompt.trim()) {
       toast.error(isRTL ? 'صف ما تريد بناءه' : 'Describe what you want to build');
@@ -521,7 +562,7 @@ Apply these styles consistently throughout the entire design.`;
       }
 
       // Step 1: Create project immediately with placeholder
-      const projectName = prompt.slice(0, 30).trim() || 'My Project';
+      const projectName = generateProjectTitle(prompt);
       const slug = projectName
         .toLowerCase()
         .replace(/[^a-z0-9\s-]/g, '')
@@ -1039,7 +1080,7 @@ Apply these styles consistently throughout the entire design.`;
                   className="group relative bg-card rounded-2xl overflow-hidden cursor-pointer border hover:border-[#060541] dark:hover:border-blue-500 transition-all hover:shadow-lg"
                 >
                   {/* Project Preview Thumbnail */}
-                  <ProjectPreviewThumbnail project={project} />
+                  <ProjectPreviewThumbnail project={project} isRTL={isRTL} />
                   
                   {/* Info */}
                   <div className="p-4">
@@ -1065,14 +1106,14 @@ Apply these styles consistently throughout the entire design.`;
 
                   {/* Actions - Always visible for mobile-friendliness */}
                   <div className="absolute top-3 right-3 flex gap-2 z-10">
-                    {project.published_url && (
+                    {project.status === 'published' && project.slug && (
                       <Button
                         size="icon"
                         variant="secondary"
                         className="h-8 w-8 rounded-full bg-white/80 dark:bg-zinc-800/80 backdrop-blur-sm shadow-sm"
                         onClick={(e) => {
                           e.stopPropagation();
-                          window.open(project.published_url!, '_blank');
+                          window.open(`${window.location.origin}/${project.slug}`, '_blank');
                         }}
                       >
                         <ExternalLink className="h-4 w-4" />

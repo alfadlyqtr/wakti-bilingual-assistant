@@ -2,7 +2,14 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// Add missing types for Deno
+// ============================================================================
+// WAKTI PROJECTS-GENERATE V2 - FULL REWRITE ENGINE
+// ============================================================================
+// NO PATCHES. NO DIFFS. FULL FILE REWRITES ONLY.
+// Model: Gemini 2.5 Pro for both planning and execution
+// Modes: plan (propose changes) | execute (write code) | create | chat
+// ============================================================================
+
 declare const Deno: {
   env: {
     get(key: string): string | undefined;
@@ -33,8 +40,8 @@ const getCorsHeaders = (origin: string | null) => {
 };
 
 interface ImageAttachment {
-  type: string; // e.g., "image/png", "image/jpeg"
-  data: string; // base64 encoded
+  type: string;
+  data: string;
   name?: string;
 }
 
@@ -42,14 +49,14 @@ interface RequestBody {
   action?: 'start' | 'status' | 'get_files';
   jobId?: string;
   projectId?: string;
-  mode?: 'create' | 'edit' | 'chat';
+  mode?: 'create' | 'edit' | 'plan' | 'execute' | 'chat';
   prompt?: string;
   currentFiles?: Record<string, string>;
   assets?: string[];
   theme?: string;
   userInstructions?: string;
   images?: ImageAttachment[];
-  history?: Array<{ role: string; content: string }>;
+  planToExecute?: string;
 }
 
 type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
@@ -121,6 +128,230 @@ function assertNoHtml(value: string): void {
   if (v.includes("<!doctype") || v.includes("<html")) {
     throw new Error("AI_RETURNED_HTML");
   }
+}
+
+// ============================================================================
+// GEMINI 2.5 PRO - FULL REWRITE ENGINE (NO PATCHES)
+// ============================================================================
+
+async function callGemini25Pro(
+  systemPrompt: string,
+  userPrompt: string,
+  jsonMode: boolean = true
+): Promise<string> {
+  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
+  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
+
+  // Use stable Gemini 2.0 Flash for reliability (2.5 Pro preview may be unavailable)
+  const model = "gemini-2.0-flash";
+  
+  console.log(`[Gemini 2.5 Pro] Calling model: ${model}`);
+
+  const response = await withTimeout(
+    fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": GEMINI_API_KEY,
+        },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 65536,
+            ...(jsonMode ? { responseMimeType: "application/json" } : {}),
+          },
+        }),
+      }
+    ),
+    180000,
+    'GEMINI_25_PRO'
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`[Gemini 2.5 Pro] HTTP ${response.status}: ${errorText}`);
+    throw new Error(`Gemini API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  let text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  
+  if (jsonMode) {
+    text = normalizeGeminiResponseText(text);
+  }
+  
+  return text;
+}
+
+// PLAN MODE: AI proposes changes, returns a structured plan (Lovable-style)
+async function callGeminiPlanMode(
+  userPrompt: string,
+  currentFiles: Record<string, string>
+): Promise<string> {
+  const fileContext = Object.entries(currentFiles || {})
+    .map(([path, content]) => `=== FILE: ${path} ===\n${content}`)
+    .join("\n\n");
+
+  const systemPrompt = `You are a code analysis engine. Output ONLY structured JSON. No explanations. No tutorials. No conversational text.
+
+OUTPUT FORMAT (STRICT JSON):
+{
+  "title": "Action Title (e.g., Change Title Color to Pink)",
+  "file": "/App.js",
+  "line": 45,
+  "steps": [
+    {
+      "title": "Step name with line reference (line 45-50)",
+      "current": "text-[#60a5fa]",
+      "changeTo": "text-pink-500"
+    }
+  ],
+  "codeChanges": [
+    {
+      "file": "/App.js",
+      "line": 45,
+      "code": "<motion.div className=\\"text-pink-500 font-thin\\">..."
+    }
+  ]
+}
+
+EXAMPLE for "make title pink":
+{
+  "title": "Change Site Title Color to Pink",
+  "file": "/App.js",
+  "line": 23,
+  "steps": [
+    {
+      "title": "Update title className (line 23)",
+      "current": "text-[#60a5fa]",
+      "changeTo": "text-pink-500"
+    }
+  ],
+  "codeChanges": [
+    {
+      "file": "/App.js", 
+      "line": 23,
+      "code": "<motion.div whileHover={{ scale: 1.05 }} className=\\"text-2xl font-thin tracking-wider text-pink-500\\">\\n  موزة العلي\\n</motion.div>"
+    }
+  ]
+}
+
+RULES:
+- NO explanations, NO tutorials, NO "Here's how to..."
+- NO conversational text like "To change..." or "You need to..."
+- ONLY return the JSON object
+- Include specific line numbers from the code
+- Show exact current value and exact new value
+- Code snippets must be actual code, not descriptions`;
+
+  const userMessage = `CODEBASE:
+${fileContext}
+
+REQUEST: ${userPrompt}
+
+Return JSON only.`;
+
+  return await callGemini25Pro(systemPrompt, userMessage, true);
+}
+
+// EXECUTE MODE: AI writes full file rewrites based on a plan
+async function callGeminiExecuteMode(
+  planToExecute: string,
+  currentFiles: Record<string, string>,
+  userInstructions: string = ""
+): Promise<{ files: Record<string, string>; summary: string }> {
+  const fileContext = Object.entries(currentFiles || {})
+    .map(([path, content]) => `=== FILE: ${path} ===\n${content}`)
+    .join("\n\n");
+
+  const systemPrompt = GEMINI_EXECUTE_SYSTEM_PROMPT;
+
+  const userMessage = `CURRENT CODEBASE:
+${fileContext}
+
+PLAN TO EXECUTE:
+${planToExecute}
+
+${userInstructions ? `ADDITIONAL INSTRUCTIONS:\n${userInstructions}\n\n` : ""}
+Execute this plan. Return the FULL content of every file that needs to be modified or created.
+Return ONLY a valid JSON object with the structure shown in the system prompt.`;
+
+  const text = await callGemini25Pro(systemPrompt, userMessage, true);
+  
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (parseErr) {
+    console.error("[Gemini Execute] JSON parse failed, attempting recovery...");
+    const recovered = recoverBrokenJson(text);
+    if (!recovered) {
+      throw parseErr;
+    }
+    parsed = recovered;
+  }
+  
+  const { files, summary } = coerceFilesMap(parsed);
+
+  for (const [p, c] of Object.entries(files)) {
+    if (typeof c !== "string" || c.trim().length === 0) {
+      throw new Error(`AI_RETURNED_EMPTY_FILE: ${p}`);
+    }
+    assertNoHtml(c);
+  }
+
+  return { files, summary: summary || "Changes applied." };
+}
+
+// EDIT MODE (Legacy compatibility): Direct edit without plan step
+async function callGeminiFullRewriteEdit(
+  userPrompt: string,
+  currentFiles: Record<string, string>,
+  userInstructions: string = ""
+): Promise<{ files: Record<string, string>; summary: string }> {
+  const fileContext = Object.entries(currentFiles || {})
+    .map(([path, content]) => `=== FILE: ${path} ===\n${content}`)
+    .join("\n\n");
+
+  const systemPrompt = GEMINI_EXECUTE_SYSTEM_PROMPT;
+
+  const userMessage = `CURRENT CODEBASE:
+${fileContext}
+
+USER REQUEST:
+${userPrompt}
+
+${userInstructions ? `ADDITIONAL INSTRUCTIONS:\n${userInstructions}\n\n` : ""}
+Implement this request. Return the FULL content of every file that needs to be modified or created.
+Return ONLY a valid JSON object with the structure shown in the system prompt.`;
+
+  const text = await callGemini25Pro(systemPrompt, userMessage, true);
+  
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (parseErr) {
+    console.error("[Gemini Edit] JSON parse failed, attempting recovery...");
+    const recovered = recoverBrokenJson(text);
+    if (!recovered) {
+      throw parseErr;
+    }
+    parsed = recovered;
+  }
+  
+  const { files, summary } = coerceFilesMap(parsed);
+
+  for (const [p, c] of Object.entries(files)) {
+    if (typeof c !== "string" || c.trim().length === 0) {
+      throw new Error(`AI_RETURNED_EMPTY_FILE: ${p}`);
+    }
+    assertNoHtml(c);
+  }
+
+  return { files, summary: summary || "Updated." };
 }
 
 async function callGPT41MiniMissingFiles(
@@ -229,6 +460,101 @@ function extractJsonObject(text: string): string {
   const jsonEnd = cleaned.lastIndexOf("}");
   if (jsonStart === -1 || jsonEnd === -1 || jsonEnd <= jsonStart) return cleaned;
   return cleaned.substring(jsonStart, jsonEnd + 1);
+}
+
+function normalizeGeminiResponseText(text: string): string {
+  let content = (text || "").trim();
+  content = extractJsonObject(content);
+  content = fixUnescapedNewlines(content);
+  return content;
+}
+
+/**
+ * Attempt to recover a broken JSON object (e.g., unterminated strings).
+ * Returns parsed object if recovery succeeds, null otherwise.
+ */
+function recoverBrokenJson(text: string): Record<string, unknown> | null {
+  const json = (text || "").trim();
+  
+  // Try progressively more aggressive fixes
+  const attempts: string[] = [json];
+  
+  // Attempt 1: Close any unclosed string at the end
+  if (!json.endsWith("}")) {
+    // Find last valid closing brace position
+    let braceCount = 0;
+    let lastValidEnd = -1;
+    let inString = false;
+    let escaped = false;
+    
+    for (let i = 0; i < json.length; i++) {
+      const c = json[i];
+      if (escaped) { escaped = false; continue; }
+      if (c === '\\') { escaped = true; continue; }
+      if (c === '"') { inString = !inString; continue; }
+      if (!inString) {
+        if (c === '{') braceCount++;
+        if (c === '}') {
+          braceCount--;
+          if (braceCount === 0) lastValidEnd = i;
+        }
+      }
+    }
+    
+    if (lastValidEnd > 0) {
+      attempts.push(json.substring(0, lastValidEnd + 1));
+    }
+  }
+  
+  // Attempt 2: Truncate at last complete key-value pair and close
+  const filesMatch = json.match(/"files"\s*:\s*\{/);
+  if (filesMatch) {
+    // Find the last complete file entry (ends with ")
+    const lastCompleteFile = json.lastIndexOf('"}');
+    if (lastCompleteFile > 0) {
+      // Check if we need to close the files object and root object
+      const truncated = json.substring(0, lastCompleteFile + 2);
+      attempts.push(truncated + '}, "summary": "Partial update"}');
+      attempts.push(truncated + '}}');
+    }
+  }
+  
+  // Attempt 3: Just try to close unclosed braces
+  let openBraces = 0;
+  let inStr = false;
+  let esc = false;
+  for (const c of json) {
+    if (esc) { esc = false; continue; }
+    if (c === '\\') { esc = true; continue; }
+    if (c === '"') { inStr = !inStr; continue; }
+    if (!inStr) {
+      if (c === '{') openBraces++;
+      if (c === '}') openBraces--;
+    }
+  }
+  if (openBraces > 0) {
+    // If we're in a string, close it first
+    let fixed = json;
+    if (inStr) fixed += '"';
+    for (let i = 0; i < openBraces; i++) fixed += '}';
+    attempts.push(fixed);
+  }
+  
+  // Try each attempt
+  for (const attempt of attempts) {
+    try {
+      const parsed = JSON.parse(attempt);
+      if (parsed && typeof parsed === 'object') {
+        console.log('[recoverBrokenJson] Recovery succeeded');
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      // Continue to next attempt
+    }
+  }
+  
+  console.error('[recoverBrokenJson] All recovery attempts failed');
+  return null;
 }
 
 function coerceFilesMap(raw: unknown): { files: Record<string, string>; summary: string } {
@@ -387,11 +713,37 @@ You may ONLY import from these packages (they are pre-installed):
 - recharts
 - @tanstack/react-query
 - clsx, tailwind-merge
+- i18next, react-i18next (for internationalization)
 
 DO NOT use react-icons, heroicons, or any other icon library. ONLY use lucide-react.
 Example: import { Mail, Phone, Linkedin, Instagram, ChevronDown, Menu, X } from 'lucide-react';
 
-### PART 4: IMAGE IDS
+### PART 4: i18n SETUP (MANDATORY)
+ALWAYS include a basic i18n setup in every new project:
+
+1. Create /i18n.js:
+import i18n from 'i18next';
+import { initReactI18next } from 'react-i18next';
+
+i18n.use(initReactI18next).init({
+  resources: {
+    en: { translation: { /* English strings */ } },
+    ar: { translation: { /* Arabic strings */ } }
+  },
+  lng: 'en',
+  fallbackLng: 'en',
+  interpolation: { escapeValue: false }
+});
+
+export default i18n;
+
+2. Import i18n.js at the TOP of App.js (before other imports):
+import './i18n';
+
+3. Use useTranslation hook for text:
+const { t, i18n } = useTranslation();
+
+### PART 5: IMAGE IDS
 ONLY use these Unsplash IDs:
 - Luxury: 1523170335258-f5ed11844a49, 1515562141207-7a88fb7ce338, 1617038220319-276d3cf663c6
 - Tech: 1519389950473-47ba0277781c, 1551288049-bebda4e38f71, 1531297422935-40280f32a347
@@ -402,6 +754,7 @@ Return ONLY a valid JSON object. No markdown fences. No explanation.
 Structure:
 {
   "/App.js": "...",
+  "/i18n.js": "...",
   "/components/Navbar.jsx": "...",
   "/utils/mockData.js": "..."
 }
@@ -412,7 +765,119 @@ CRITICAL RULES:
 3. NEWLINES MUST BE ESCAPED AS \\n inside JSON strings. NO ACTUAL NEWLINES.
 4. Output must be a single parseable JSON object.
 5. ONLY use lucide-react for icons. NEVER use react-icons or heroicons.
+6. ALWAYS include /i18n.js in new projects.
 `;
+
+// ============================================================================
+// SYSTEM PROMPTS
+// ============================================================================
+
+const GEMINI_EXECUTE_SYSTEM_PROMPT = `You are a Senior React Maintenance Engineer.
+Your job is to implement changes into an existing React codebase.
+
+CRITICAL RULE: You must return the FULL CONTENT of every file you modify or create.
+NO PATCHES. NO DIFFS. FULL FILE REWRITES ONLY.
+
+### AVAILABLE PACKAGES (PRE-INSTALLED)
+You may ONLY import from these packages:
+- react, react-dom
+- framer-motion
+- lucide-react (for ALL icons - NEVER use react-icons or heroicons)
+- date-fns
+- recharts
+- @tanstack/react-query
+- clsx, tailwind-merge
+- i18next, react-i18next (for internationalization)
+
+### i18n SETUP (IMPORTANT)
+When implementing language/translation features:
+1. Create /i18n.js with proper i18next initialization
+2. Import i18n.js at the TOP of App.js (before other imports)
+3. Use the useTranslation hook: const { t, i18n } = useTranslation();
+4. Wrap text in t('key') function calls
+
+Example /i18n.js:
+import i18n from 'i18next';
+import { initReactI18next } from 'react-i18next';
+
+i18n.use(initReactI18next).init({
+  resources: {
+    en: { translation: { greeting: 'Hello' } },
+    ar: { translation: { greeting: 'مرحبا' } }
+  },
+  lng: 'en',
+  fallbackLng: 'en',
+  interpolation: { escapeValue: false }
+});
+
+export default i18n;
+
+### SAFETY RULES
+- DO NOT break existing imports
+- DO NOT delete export default function App
+- Maintain existing visual style unless asked to change
+- Keep mockData.js pattern for data
+
+### JSON OUTPUT FORMAT (CRITICAL)
+Return ONLY a valid JSON object:
+{
+  "files": {
+    "/App.js": "import React from 'react';\\n...",
+    "/i18n.js": "import i18n from 'i18next';\\n..."
+  },
+  "summary": "Brief description of changes"
+}
+
+ESCAPING RULES:
+- Newlines: \\n
+- Quotes: \\"
+- Backslashes: \\\\
+- Tabs: \\t
+
+ONLY return files that were modified or created. Do NOT return unchanged files.`;
+
+const _GEMINI_EDIT_FULL_REWRITE_PROMPT = `You are a Senior React Architect and Maintenance Engineer.
+Your job is to implement user changes into an existing React codebase running in a Sandpack environment.
+
+### THE CONTEXT
+You have received the COMPLETE source code of the project.
+You must analyze the architecture, imports, and styling (Tailwind CSS) before making changes.
+
+### YOUR INSTRUCTIONS
+1. Analyze: Read the user's request and the current file structure.
+2. Execute: Rewrite the ENTIRE content of any file that needs modification.
+3. MINIMAL INTERVENTION POLICY (CRITICAL):
+   - Only change exactly what the user asked for.
+   - Do NOT refactor unrelated code.
+   - Do NOT clean up or optimize unless explicitly asked.
+
+### SAFETY RULES
+- DO NOT break existing imports.
+- DO NOT delete export default function App or main entry points.
+- Maintain the existing visual style (Tailwind classes) unless asked to change them.
+- Keep the mockData.js pattern for data.
+
+### JSON OUTPUT RULES (CRITICAL - READ CAREFULLY)
+1. Return ONLY a valid JSON object. No markdown, no explanation, no HTML.
+2. Keys are file paths (e.g., "/App.js", "/components/Header.jsx").
+3. Values are the FULL code for that file AS A SINGLE JSON STRING.
+4. **ESCAPE ALL SPECIAL CHARACTERS INSIDE STRING VALUES:**
+   - Newlines must be \\n (backslash-n)
+   - Quotes inside strings must be \\"
+   - Backslashes must be \\\\
+   - Tabs must be \\t
+5. Do NOT return files that did not change.
+6. Do NOT return diffs or patches - only full file contents.
+
+### RESPONSE FORMAT (EXACT)
+{
+  "files": {
+    "/App.js": "import React from 'react';\\n\\nexport default function App() {\\n  return <div>Hello</div>;\\n}"
+  },
+  "summary": "Brief description of changes"
+}
+
+ONLY use lucide-react for icons. Never use react-icons or heroicons.`;
 
 function getUserIdFromRequest(req: Request): string | null {
   try {
@@ -619,224 +1084,8 @@ async function callGPT4oMini(systemPrompt: string, userPrompt: string): Promise<
   return data.choices?.[0]?.message?.content || "";
 }
 
-// Diff-based editing with Gemini 1.5 Flash (1M context window)
-// Returns patches that we apply programmatically - never truncates
-interface EditPatch {
-  file: string;
-  action: "replace" | "insert_after" | "insert_before" | "delete";
-  find: string;      // The exact string to find (for replace/insert_after/insert_before/delete)
-  content?: string;  // The new content (for replace/insert_after/insert_before)
-}
-
-function applyPatches(
-  currentFiles: Record<string, string>,
-  patches: EditPatch[]
-): Record<string, string> {
-  const result: Record<string, string> = {};
-  
-  for (const patch of patches) {
-    const filePath = normalizeFilePath(patch.file);
-    // Get current content (from result if already modified, else from original)
-    let content = result[filePath] ?? currentFiles[filePath] ?? "";
-    
-    if (patch.action === "replace") {
-      if (content.includes(patch.find)) {
-        content = content.replace(patch.find, patch.content || "");
-      } else {
-        console.warn(`[applyPatches] Could not find string to replace in ${filePath}`);
-      }
-    } else if (patch.action === "insert_after") {
-      if (content.includes(patch.find)) {
-        content = content.replace(patch.find, patch.find + (patch.content || ""));
-      } else {
-        console.warn(`[applyPatches] Could not find anchor for insert_after in ${filePath}`);
-      }
-    } else if (patch.action === "insert_before") {
-      if (content.includes(patch.find)) {
-        content = content.replace(patch.find, (patch.content || "") + patch.find);
-      } else {
-        console.warn(`[applyPatches] Could not find anchor for insert_before in ${filePath}`);
-      }
-    } else if (patch.action === "delete") {
-      if (content.includes(patch.find)) {
-        content = content.replace(patch.find, "");
-      } else {
-        console.warn(`[applyPatches] Could not find string to delete in ${filePath}`);
-      }
-    }
-    
-    result[filePath] = content;
-  }
-  
-  return result;
-}
-
-async function callGeminiDiffEdit(
-  _systemPrompt: string, 
-  userPrompt: string,
-  currentFiles: Record<string, string>
-): Promise<{ files: Record<string, string>; summary: string }> {
-  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
-  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
-
-  // Smart context: prioritize relevant files, limit total size
-  const MAX_FILE_CHARS = 8000;
-  const MAX_TOTAL_CHARS = 60000;
-  const promptLower = userPrompt.toLowerCase();
-  
-  const prioritizedFiles: Record<string, string> = {};
-  let totalChars = 0;
-  
-  // Always include App.js first (main file)
-  if (currentFiles["/App.js"]) {
-    const content = currentFiles["/App.js"].slice(0, MAX_FILE_CHARS);
-    prioritizedFiles["/App.js"] = content;
-    totalChars += content.length;
-  }
-  
-  // Add files mentioned in the prompt
-  for (const [path, content] of Object.entries(currentFiles)) {
-    if (path === "/App.js") continue;
-    const fileName = path.split('/').pop()?.toLowerCase() || '';
-    if (promptLower.includes(fileName) || promptLower.includes(path.toLowerCase())) {
-      const truncated = content.slice(0, MAX_FILE_CHARS);
-      if (totalChars + truncated.length < MAX_TOTAL_CHARS) {
-        prioritizedFiles[path] = truncated;
-        totalChars += truncated.length;
-      }
-    }
-  }
-  
-  // Add component files
-  for (const [path, content] of Object.entries(currentFiles)) {
-    if (prioritizedFiles[path]) continue;
-    if (path.includes('/components/')) {
-      const truncated = content.slice(0, MAX_FILE_CHARS);
-      if (totalChars + truncated.length < MAX_TOTAL_CHARS) {
-        prioritizedFiles[path] = truncated;
-        totalChars += truncated.length;
-      }
-    }
-  }
-  
-  // Add remaining files if space
-  for (const [path, content] of Object.entries(currentFiles)) {
-    if (prioritizedFiles[path]) continue;
-    const truncated = content.slice(0, MAX_FILE_CHARS);
-    if (totalChars + truncated.length < MAX_TOTAL_CHARS) {
-      prioritizedFiles[path] = truncated;
-      totalChars += truncated.length;
-    }
-  }
-  
-  const filesStr = Object.entries(prioritizedFiles)
-    .map(([path, content]) => `=== FILE: ${path} ===\n${content}`)
-    .join('\n\n');
-  
-  console.log(`[Gemini] Diff edit: ${Object.keys(prioritizedFiles).length}/${Object.keys(currentFiles).length} files, ${totalChars} chars`);
-
-  const systemPrompt = `You are a SURGICAL code editor. You make MINIMAL changes using PATCHES.
-
-CRITICAL: Return ONLY the specific changes needed as JSON patches. DO NOT return full files.
-
-PATCH FORMAT:
-{
-  "patches": [
-    {
-      "file": "/App.js",
-      "action": "replace",
-      "find": "className=\\"text-blue-500\\"",
-      "content": "className=\\"text-orange-500 text-xl\\""
-    },
-    {
-      "file": "/App.js",
-      "action": "insert_after",
-      "find": "</About>",
-      "content": "\\n      <NewSection />"
-    }
-  ],
-  "summary": "Changed text color to orange and increased size"
-}
-
-ACTIONS:
-- "replace": Find exact string and replace with content
-- "insert_after": Insert content immediately after the find string
-- "insert_before": Insert content immediately before the find string  
-- "delete": Remove the find string entirely
-
-RULES:
-1. The "find" string must be EXACT - copy it character-for-character from the original
-2. Keep patches MINIMAL - only change what's requested
-3. For styling changes, only change the specific className or style
-4. For adding sections, use insert_after with a nearby anchor
-5. NEVER modify code that wasn't mentioned in the request
-6. Return valid JSON only - no markdown, no explanation
-
-ONLY use lucide-react for icons. Never use react-icons or heroicons.`;
-
-  const userMessage = `CURRENT CODEBASE:
-${filesStr}
-
-USER REQUEST:
-${userPrompt}
-
-Return ONLY the JSON patches needed. Be surgical - change only what's requested.`;
-
-  const response = await withTimeout(fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": GEMINI_API_KEY,
-      },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: userMessage }] }],
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 8192,
-          responseMimeType: "application/json",
-        },
-      }),
-    }
-  ), 60000, 'GEMINI_EDIT');
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("[Gemini] API Error:", response.status, errorText);
-    throw new Error(`Gemini API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  let content = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  
-  // Clean up response
-  content = content.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
-  const jsonStart = content.indexOf('{');
-  const jsonEnd = content.lastIndexOf('}');
-  if (jsonStart !== -1 && jsonEnd !== -1) content = content.substring(jsonStart, jsonEnd + 1);
-  content = fixUnescapedNewlines(content);
-
-  try {
-    const parsed = JSON.parse(content);
-    const patches: EditPatch[] = parsed.patches || [];
-    const summary = parsed.summary || "Changes applied.";
-    
-    if (patches.length === 0) {
-      console.warn("[Gemini] No patches returned");
-      return { files: {}, summary: "No changes needed." };
-    }
-    
-    console.log(`[Gemini] Applying ${patches.length} patches`);
-    const changedFiles = applyPatches(currentFiles, patches);
-    
-    return { files: changedFiles, summary };
-  } catch (e) {
-    console.error("[Gemini] Parse error:", e, "Content:", content.substring(0, 500));
-    throw new Error("Gemini returned invalid JSON");
-  }
-}
+// REMOVED: Old patch-based editing system
+// The new system uses FULL FILE REWRITES only via callGeminiFullRewriteEdit
 
 async function callClaudeNonStreaming(systemPrompt: string, userPrompt: string, images: ImageAttachment[] | undefined): Promise<string> {
   const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
@@ -943,14 +1192,18 @@ serve(async (req: Request) => {
       return new Response(JSON.stringify({ ok: true, files }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Default: start (create/edit/chat)
-    const mode: 'create' | 'edit' | 'chat' = body.mode === 'edit' || body.mode === 'chat' ? body.mode : 'create';
+    // ========================================================================
+    // MODE HANDLING: create | edit | plan | execute | chat
+    // ========================================================================
+    const mode = body.mode || 'create';
     const prompt = (body.prompt || '').toString();
     const theme = (body.theme || 'none').toString();
     const assets = Array.isArray(body.assets) ? body.assets : [];
     const userInstructions = (body.userInstructions || '').toString();
     const images = body.images;
+    const planToExecute = (body.planToExecute || '').toString();
 
+    // CHAT MODE: Q&A about the codebase (no changes)
     if (mode === 'chat') {
       const currentFiles = body.currentFiles || {};
       const filesStr = Object.entries(currentFiles || {}).map(([k, v]) => `FILE: ${k}\n${v}`).join('\n\n');
@@ -958,6 +1211,92 @@ serve(async (req: Request) => {
       return new Response(JSON.stringify({ ok: true, message: answer }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // PLAN MODE: Propose changes without executing (Lovable-style)
+    if (mode === 'plan') {
+      if (!projectId) {
+        return new Response(JSON.stringify({ ok: false, error: 'Missing projectId' }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      
+      try {
+        await assertProjectOwnership(supabase, projectId, userId);
+        
+        // Get current files
+        const { data: existingRows, error: existingErr } = await supabase
+          .from('project_files')
+          .select('path, content')
+          .eq('project_id', projectId);
+        if (existingErr) throw new Error(`DB_FILES_SELECT_FAILED: ${existingErr.message}`);
+        const existingFiles: Record<string, string> = {};
+        for (const row of existingRows || []) {
+          existingFiles[normalizeFilePath(row.path)] = row.content;
+        }
+        
+        console.log(`[Plan Mode] Generating plan for: ${prompt.substring(0, 50)}...`);
+        console.log(`[Plan Mode] Files count: ${Object.keys(existingFiles).length}`);
+        
+        const plan = await callGeminiPlanMode(prompt, existingFiles);
+        
+        console.log(`[Plan Mode] Plan generated, length: ${plan.length}`);
+        
+        return new Response(JSON.stringify({ ok: true, plan, mode: 'plan' }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      } catch (planError: any) {
+        console.error(`[Plan Mode] Error: ${planError.message}`);
+        return new Response(JSON.stringify({ ok: false, error: planError.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
+
+    // EXECUTE MODE: Execute a previously approved plan (Lovable-style)
+    if (mode === 'execute') {
+      if (!projectId) {
+        return new Response(JSON.stringify({ ok: false, error: 'Missing projectId' }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      if (!planToExecute) {
+        return new Response(JSON.stringify({ ok: false, error: 'Missing planToExecute' }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      await assertProjectOwnership(supabase, projectId, userId);
+      
+      const job = await createJob(supabase, { projectId, userId, mode: 'edit', prompt: planToExecute });
+      
+      try {
+        // Get current files
+        const { data: existingRows, error: existingErr } = await supabase
+          .from('project_files')
+          .select('path, content')
+          .eq('project_id', projectId);
+        if (existingErr) throw new Error(`DB_FILES_SELECT_FAILED: ${existingErr.message}`);
+        const existingFiles: Record<string, string> = {};
+        for (const row of existingRows || []) {
+          existingFiles[normalizeFilePath(row.path)] = row.content;
+        }
+        
+        console.log(`[Execute Mode] Executing plan...`);
+        const result = await callGeminiExecuteMode(planToExecute, existingFiles, userInstructions);
+        const changedFiles = result.files || {};
+        
+        if (changedFiles["/App.js"]) assertNoHtml(changedFiles["/App.js"]);
+        
+        // Check for missing referenced files
+        const missing = findMissingReferencedFiles({ changedFiles, existingFiles });
+        let finalFilesToUpsert: Record<string, string> = { ...changedFiles };
+        
+        if (missing.length > 0) {
+          console.log(`[Execute] Missing files detected: ${missing.join(', ')}`);
+          const generatedMissing = await callGPT41MiniMissingFiles(missing, changedFiles, existingFiles, planToExecute);
+          finalFilesToUpsert = { ...finalFilesToUpsert, ...generatedMissing };
+        }
+        
+        await upsertProjectFiles(supabase, projectId, finalFilesToUpsert);
+        await updateJob(supabase, job.id, { status: 'succeeded', result_summary: result.summary || 'Plan executed.', error: null });
+        return new Response(JSON.stringify({ ok: true, jobId: job.id, status: 'succeeded' }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        
+      } catch (innerErr) {
+        const innerMsg = innerErr instanceof Error ? innerErr.message : String(innerErr);
+        await updateJob(supabase, job.id, { status: 'failed', error: innerMsg, result_summary: null });
+        return new Response(JSON.stringify({ ok: false, jobId: job.id, error: innerMsg }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
+
+    // CREATE and EDIT modes require projectId and prompt
     if (!projectId) {
       return new Response(JSON.stringify({ ok: false, error: 'Missing projectId' }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
@@ -974,6 +1313,7 @@ serve(async (req: Request) => {
       const selectedThemeDesc = THEME_PRESETS[theme || 'none'] || THEME_PRESETS['none'];
       const finalSystemPrompt = BASE_SYSTEM_PROMPT.replace("{{THEME_INSTRUCTIONS}}", selectedThemeDesc);
 
+      // CREATE MODE: Generate new project from scratch
       if (safeMode === 'create') {
         let textPrompt = `CREATE NEW PROJECT.\n\nREQUEST: ${prompt}\n\n${userInstructions || ""}`;
         if (assets && assets.length > 0) textPrompt += `\n\nUSE THESE ASSETS: ${assets.join(", ")}`;
@@ -996,7 +1336,7 @@ serve(async (req: Request) => {
         return new Response(JSON.stringify({ ok: true, jobId: job.id, status: 'succeeded' }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
-      // EDIT mode
+      // EDIT MODE: Full file rewrite (NO PATCHES)
       const { data: existingRows, error: existingErr } = await supabase
         .from('project_files')
         .select('path, content')
@@ -1007,8 +1347,11 @@ serve(async (req: Request) => {
         existingFiles[normalizeFilePath(row.path)] = row.content;
       }
 
+      console.log(`[Edit Mode] Full rewrite for: ${prompt.substring(0, 50)}...`);
       const userPrompt = `${prompt}\n\n${userInstructions || ""}`;
-      const result = await callGeminiDiffEdit(finalSystemPrompt, userPrompt, existingFiles);
+      
+      // USE FULL REWRITE - NO PATCHES
+      const result = await callGeminiFullRewriteEdit(userPrompt, existingFiles, userInstructions);
       const changedFiles = result.files || {};
       if (changedFiles["/App.js"]) assertNoHtml(changedFiles["/App.js"]);
 

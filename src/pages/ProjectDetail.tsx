@@ -34,7 +34,8 @@ import {
   Wand2, 
   MousePointer2, 
   X,
-  Camera
+  Camera,
+  Copy
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -54,6 +55,7 @@ interface Project {
   status: string;
   published_url: string | null;
   deployment_id: string | null;
+  thumbnail_url?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -77,6 +79,7 @@ type GenerationJob = {
   created_at: string;
   updated_at: string;
 };
+
 
 interface ChatMessage {
   id: string;
@@ -113,8 +116,19 @@ export default function ProjectDetail() {
   const [chatInput, setChatInput] = useState('');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [aiEditing, setAiEditing] = useState(false);
+
+  const autoCaptureTimeoutRef = useRef<number | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationSteps, setGenerationSteps] = useState<{ label: string, status: 'pending' | 'loading' | 'completed' | 'error' }[]>([]);
+
+  useEffect(() => {
+    return () => {
+      if (autoCaptureTimeoutRef.current) {
+        window.clearTimeout(autoCaptureTimeoutRef.current);
+        autoCaptureTimeoutRef.current = null;
+      }
+    };
+  }, []);
   
   // Preview state - default to mobile if on mobile device
   const [deviceView, setDeviceView] = useState<DeviceView>(() => {
@@ -415,9 +429,11 @@ export default function ProjectDetail() {
 
       setGeneratedFiles(generatedFilesData);
       setCodeContent(generatedCode);
-      
-      // Save assistant message to DB with snapshot
-      const assistantMsg = isRTL ? 'لقد انتهيت من بناء مشروعك! ألقِ نظرة على المعاينة.' : "I've finished building your project! Take a look at the preview.";
+
+      // Save assistant message to DB with snapshot (remind user to save thumbnail)
+      const assistantMsg = isRTL 
+        ? 'لقد انتهيت من بناء مشروعك! ألقِ نظرة على المعاينة. 📸 اضغط على زر "حفظ صورة" لحفظ صورة مصغرة.' 
+        : "I've finished building your project! Take a look at the preview. 📸 Click 'Save Thumbnail' to save a thumbnail.";
       const { data: assistantMsgData, error: assistError } = await supabase
         .from('project_chat_messages' as any)
         .insert({ 
@@ -676,15 +692,57 @@ export default function ProjectDetail() {
     try {
       setPublishing(true);
       
+      // Build the files to publish from generatedFiles (multi-file project)
+      const projectFiles: Record<string, string> = 
+        Object.keys(generatedFiles).length > 0 
+          ? { ...generatedFiles } 
+          : { "/App.js": codeContent };
+      
+      // Ensure /App.js has latest editor content
+      if (codeContent) {
+        projectFiles["/App.js"] = codeContent;
+      }
+
+      // Generate a proper index.html that loads React from CDN and runs the app
+      const indexHtml = generatePublishableIndexHtml(projectFiles, project.name);
+      
+      // Build the files array for Vercel deployment
+      const filesToPublish: { path: string; content: string }[] = [
+        { path: 'index.html', content: indexHtml },
+      ];
+
+      // Add all JS/CSS files (strip leading slash for Vercel)
+      for (const [filePath, content] of Object.entries(projectFiles)) {
+        const cleanPath = filePath.startsWith('/') ? filePath.slice(1) : filePath;
+        // Skip if it's already index.html
+        if (cleanPath === 'index.html') continue;
+        filesToPublish.push({ path: cleanPath, content });
+      }
+
       const response = await supabase.functions.invoke('projects-publish', {
         body: {
           projectName: project.name,
           projectSlug: project.slug,
-          files: [{ path: 'index.html', content: codeContent }],
+          files: filesToPublish,
         },
       });
 
-      if (response.error) throw response.error;
+      if (response.error) {
+        // Check for specific error codes
+        const errorCode = response.error?.message || response.data?.code || '';
+        if (errorCode.includes('MISSING_VERCEL_TOKEN')) {
+          throw new Error(isRTL ? 'خدمة النشر غير مهيأة' : 'Publishing service not configured');
+        }
+        throw response.error;
+      }
+
+      if (response.data?.ok === false) {
+        const errorMsg = response.data?.error || 'Unknown error';
+        if (errorMsg.includes('MISSING_VERCEL_TOKEN')) {
+          throw new Error(isRTL ? 'خدمة النشر غير مهيأة' : 'Publishing service not configured');
+        }
+        throw new Error(errorMsg);
+      }
 
       const { url, deploymentId } = response.data;
 
@@ -708,10 +766,240 @@ export default function ProjectDetail() {
       toast.success(isRTL ? 'تم النشر بنجاح!' : 'Published successfully!');
     } catch (err: any) {
       console.error('Error publishing:', err);
-      toast.error(isRTL ? 'فشل في النشر' : 'Failed to publish');
+      const errorMessage = err?.message || (isRTL ? 'فشل في النشر' : 'Failed to publish');
+      toast.error(errorMessage);
     } finally {
       setPublishing(false);
     }
+  };
+
+  // Generate a proper index.html that loads React from CDN and runs the multi-file project
+  const generatePublishableIndexHtml = (files: Record<string, string>, projectName: string): string => {
+    // Collect all component/file paths (excluding App.js which we handle specially)
+    const jsFiles = Object.keys(files).filter(f => f.endsWith('.js') && f !== '/App.js');
+    const cssFiles = Object.keys(files).filter(f => f.endsWith('.css'));
+    
+    // Build inline CSS
+    const inlineCss = cssFiles.map(f => files[f]).join('\n');
+    
+    // Sort JS files: data/utils/mock files first (they define data used by components)
+    const sortedJsFiles = [...jsFiles].sort((a, b) => {
+      const aIsData = a.includes('data') || a.includes('utils') || a.includes('mock') || a.includes('config') || a.includes('constants');
+      const bIsData = b.includes('data') || b.includes('utils') || b.includes('mock') || b.includes('config') || b.includes('constants');
+      if (aIsData && !bIsData) return -1;
+      if (!aIsData && bIsData) return 1;
+      return 0;
+    });
+    
+    // Build component definitions - convert ES module syntax to browser-compatible
+    const componentScripts = sortedJsFiles.map(filePath => {
+      const content = files[filePath];
+      const componentName = filePath.replace(/^\//, '').replace(/\.js$/, '').split('/').pop() || 'Component';
+      // Wrap each component file content
+      return `
+// --- ${filePath} ---
+${convertToGlobalComponent(content, componentName)}
+`;
+    }).join('\n');
+
+    // Get App.js content and convert it
+    const appJsContent = files['/App.js'] || '';
+    const appComponent = convertToGlobalComponent(appJsContent, 'App');
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(projectName)}</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Inter', 'Tajawal', system-ui, sans-serif; }
+    body { margin: 0; padding: 0; min-height: 100vh; background: #fff; }
+    #root { min-height: 100vh; }
+    ${inlineCss}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel" data-presets="react">
+    const { useState, useEffect, useRef, useCallback, useMemo, createContext, useContext, Fragment } = React;
+    
+    // Framer Motion shim - renders as regular HTML elements (motion.div -> div, etc.)
+    const motion = new Proxy({}, {
+      get: (_, tag) => (props) => {
+        const { initial, animate, exit, transition, whileHover, whileTap, whileInView, variants, ...rest } = props;
+        return React.createElement(tag, rest);
+      }
+    });
+    const AnimatePresence = ({ children }) => children;
+    
+    // Lucide icons as simple SVG components with default size
+    // Using dangerouslySetInnerHTML to avoid JSX fragment issues with Babel standalone
+    const createIcon = (pathsHtml) => (props = {}) => {
+      const { size = 24, className = '', ...rest } = props;
+      return React.createElement('svg', {
+        width: size,
+        height: size,
+        className: className,
+        viewBox: '0 0 24 24',
+        fill: 'none',
+        stroke: 'currentColor',
+        strokeWidth: '2',
+        strokeLinecap: 'round',
+        strokeLinejoin: 'round',
+        dangerouslySetInnerHTML: { __html: pathsHtml },
+        ...rest
+      });
+    };
+    const LucideIcons = {
+      Menu: createIcon('<line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>'),
+      X: createIcon('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>'),
+      ChevronRight: createIcon('<polyline points="9,18 15,12 9,6"/>'),
+      ChevronLeft: createIcon('<polyline points="15,18 9,12 15,6"/>'),
+      ChevronDown: createIcon('<polyline points="6,9 12,15 18,9"/>'),
+      Check: createIcon('<polyline points="20,6 9,17 4,12"/>'),
+      Star: createIcon('<polygon points="12,2 15,8.5 22,9.3 17,14 18.2,21 12,17.8 5.8,21 7,14 2,9.3 9,8.5"/>'),
+      Heart: createIcon('<path d="M20.84,4.61a5.5,5.5,0,0,0-7.78,0L12,5.67l-1.06-1.06a5.5,5.5,0,0,0-7.78,7.78L12,21.23l8.84-8.84a5.5,5.5,0,0,0,0-7.78Z"/>'),
+      Search: createIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'),
+      User: createIcon('<path d="M20,21v-2a4,4,0,0,0-4-4H8a4,4,0,0,0-4,4v2"/><circle cx="12" cy="7" r="4"/>'),
+      Mail: createIcon('<path d="M4,4H20a2,2,0,0,1,2,2V18a2,2,0,0,1-2,2H4a2,2,0,0,1-2-2V6A2,2,0,0,1,4,4Z"/><polyline points="22,6 12,13 2,6"/>'),
+      Phone: createIcon('<path d="M22,16.92v3a2,2,0,0,1-2.18,2,19.79,19.79,0,0,1-8.63-3.07,19.5,19.5,0,0,1-6-6,19.79,19.79,0,0,1-3.07-8.67A2,2,0,0,1,4.11,2h3a2,2,0,0,1,2,1.72,12.84,12.84,0,0,0,.7,2.81,2,2,0,0,1-.45,2.11L8.09,9.91a16,16,0,0,0,6,6l1.27-1.27a2,2,0,0,1,2.11-.45,12.84,12.84,0,0,0,2.81.7A2,2,0,0,1,22,16.92Z"/>'),
+      MapPin: createIcon('<path d="M21,10c0,7-9,13-9,13s-9-6-9-13a9,9,0,0,1,18,0Z"/><circle cx="12" cy="10" r="3"/>'),
+      Calendar: createIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>'),
+      Clock: createIcon('<circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/>'),
+      Settings: createIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4,15a1.65,1.65,0,0,0,.33,1.82l.06.06a2,2,0,0,1,0,2.83,2,2,0,0,1-2.83,0l-.06-.06a1.65,1.65,0,0,0-1.82-.33,1.65,1.65,0,0,0-1,1.51V21a2,2,0,0,1-4,0v-.09A1.65,1.65,0,0,0,9,19.4a1.65,1.65,0,0,0-1.82.33l-.06.06a2,2,0,0,1-2.83,0,2,2,0,0,1,0-2.83l.06-.06a1.65,1.65,0,0,0,.33-1.82,1.65,1.65,0,0,0-1.51-1H3a2,2,0,0,1,0-4h.09A1.65,1.65,0,0,0,4.6,9a1.65,1.65,0,0,0-.33-1.82l-.06-.06a2,2,0,0,1,0-2.83,2,2,0,0,1,2.83,0l.06.06a1.65,1.65,0,0,0,1.82.33H9a1.65,1.65,0,0,0,1-1.51V3a2,2,0,0,1,4,0v.09a1.65,1.65,0,0,0,1,1.51,1.65,1.65,0,0,0,1.82-.33l.06-.06a2,2,0,0,1,2.83,0,2,2,0,0,1,0,2.83l-.06.06a1.65,1.65,0,0,0-.33,1.82V9a1.65,1.65,0,0,0,1.51,1H21a2,2,0,0,1,0,4h-.09A1.65,1.65,0,0,0,19.4,15Z"/>'),
+      Home: createIcon('<path d="M3,9l9-7,9,7v11a2,2,0,0,1-2,2H5a2,2,0,0,1-2-2Z"/><polyline points="9,22 9,12 15,12 15,22"/>'),
+      ShoppingCart: createIcon('<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1,1H5l2.68,13.39a2,2,0,0,0,2,1.61H19.4a2,2,0,0,0,2-1.61L23,6H6"/>'),
+      Plus: createIcon('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>'),
+      Minus: createIcon('<line x1="5" y1="12" x2="19" y2="12"/>'),
+      Trash: createIcon('<polyline points="3,6 5,6 21,6"/><path d="M19,6V20a2,2,0,0,1-2,2H7a2,2,0,0,1-2-2V6M8,6V4a2,2,0,0,1,2-2h4a2,2,0,0,1,2,2V6"/>'),
+      Edit: createIcon('<path d="M11,4H4A2,2,0,0,0,2,6V20a2,2,0,0,0,2,2H18a2,2,0,0,0,2-2V13"/><path d="M18.5,2.5a2.121,2.121,0,0,1,3,3L12,15,8,16l1-4Z"/>'),
+      ExternalLink: createIcon('<path d="M18,13v6a2,2,0,0,1-2,2H5a2,2,0,0,1-2-2V8A2,2,0,0,1,5,6h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/>'),
+      ArrowRight: createIcon('<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12,5 19,12 12,19"/>'),
+      ArrowLeft: createIcon('<line x1="19" y1="12" x2="5" y2="12"/><polyline points="12,19 5,12 12,5"/>'),
+      Send: createIcon('<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/>'),
+      Image: createIcon('<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21,15 16,10 5,21"/>'),
+      Play: createIcon('<polygon points="5,3 19,12 5,21"/>'),
+      Pause: createIcon('<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>'),
+      Volume2: createIcon('<polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><path d="M19.07,4.93a10,10,0,0,1,0,14.14M15.54,8.46a5,5,0,0,1,0,7.07"/>'),
+      Globe: createIcon('<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12,2a15.3,15.3,0,0,1,4,10,15.3,15.3,0,0,1-4,10,15.3,15.3,0,0,1-4-10A15.3,15.3,0,0,1,12,2Z"/>'),
+      Facebook: createIcon('<path d="M18,2H15a5,5,0,0,0-5,5v3H7v4h3v8h4V14h3l1-4H14V7a1,1,0,0,1,1-1h3Z"/>'),
+      Twitter: createIcon('<path d="M23,3a10.9,10.9,0,0,1-3.14,1.53,4.48,4.48,0,0,0-7.86,3v1A10.66,10.66,0,0,1,3,4s-4,9,5,13a11.64,11.64,0,0,1-7,2c9,5,20,0,20-11.5a4.5,4.5,0,0,0-.08-.83A7.72,7.72,0,0,0,23,3Z"/>'),
+      Instagram: createIcon('<rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16,11.37A4,4,0,1,1,12.63,8,4,4,0,0,1,16,11.37Z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>'),
+      Linkedin: createIcon('<path d="M16,8a6,6,0,0,1,6,6v7H18V14a2,2,0,0,0-4,0v7H10V14a6,6,0,0,1,6-6Z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/>'),
+      Youtube: createIcon('<path d="M22.54,6.42a2.78,2.78,0,0,0-1.94-2C18.88,4,12,4,12,4s-6.88,0-8.6.46a2.78,2.78,0,0,0-1.94,2A29,29,0,0,0,1,11.75a29,29,0,0,0,.46,5.33A2.78,2.78,0,0,0,3.4,19c1.72.46,8.6.46,8.6.46s6.88,0,8.6-.46a2.78,2.78,0,0,0,1.94-2,29,29,0,0,0,.46-5.25A29,29,0,0,0,22.54,6.42Z"/><polygon points="9.75,15.02 15.5,11.75 9.75,8.48"/>'),
+      Award: createIcon('<circle cx="12" cy="8" r="7"/><polyline points="8.21,13.89 7,23 12,20 17,23 15.79,13.88"/>'),
+      Briefcase: createIcon('<rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16,21V5a2,2,0,0,0-2-2H10A2,2,0,0,0,8,5V21"/>'),
+      GraduationCap: createIcon('<path d="M22,10v6M2,10l10-5,10,5-10,5Z"/><path d="M6,12v5c3,3,9,3,12,0V12"/>'),
+      Camera: createIcon('<path d="M23,19a2,2,0,0,1-2,2H3a2,2,0,0,1-2-2V8A2,2,0,0,1,3,6H7l2-3h6l2,3h4a2,2,0,0,1,2,2Z"/><circle cx="12" cy="13" r="4"/>'),
+      Book: createIcon('<path d="M4,19.5A2.5,2.5,0,0,1,6.5,17H20"/><path d="M6.5,2H20V22H6.5A2.5,2.5,0,0,1,4,19.5v-15A2.5,2.5,0,0,1,6.5,2Z"/>'),
+      Plane: createIcon('<path d="M17.8,19.2,16,11l3.5-3.5C21,6,21.5,4,21,3c-1-.5-3,0-4.5,1.5L13,8,4.8,6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1,1,.3,1.3L9,12l-2,3H4l-1,1,3,2,2,3,1-1V17l3-2,3.5,5.3c.3.4.8.5,1.3.3l.5-.2C18.7,20,18.9,19.6,17.8,19.2Z"/>'),
+      Users: createIcon('<path d="M17,21v-2a4,4,0,0,0-4-4H5a4,4,0,0,0-4,4v2"/><circle cx="9" cy="7" r="4"/><path d="M23,21v-2a4,4,0,0,0-3-3.87"/><path d="M16,3.13a4,4,0,0,1,0,7.75"/>'),
+      Download: createIcon('<path d="M21,15v4a2,2,0,0,1-2,2H5a2,2,0,0,1-2-2V15"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/>'),
+      Upload: createIcon('<path d="M21,15v4a2,2,0,0,1-2,2H5a2,2,0,0,1-2-2V15"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/>'),
+      File: createIcon('<path d="M13,2H6A2,2,0,0,0,4,4V20a2,2,0,0,0,2,2H18a2,2,0,0,0,2-2V9Z"/><polyline points="13,2 13,9 20,9"/>'),
+      Folder: createIcon('<path d="M22,19a2,2,0,0,1-2,2H4a2,2,0,0,1-2-2V5A2,2,0,0,1,4,3H9l2,3h9a2,2,0,0,1,2,2Z"/>'),
+      Lock: createIcon('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7,11V7a5,5,0,0,1,10,0v4"/>'),
+      Eye: createIcon('<path d="M1,12s4-8,11-8,11,8,11,8-4,8-11,8S1,12,1,12Z"/><circle cx="12" cy="12" r="3"/>'),
+      Bell: createIcon('<path d="M18,8A6,6,0,0,0,6,8c0,7-3,9-3,9H21s-3-2-3-9"/><path d="M13.73,21a2,2,0,0,1-3.46,0"/>'),
+      Info: createIcon('<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>'),
+      Zap: createIcon('<polygon points="13,2 3,14 12,14 11,22 21,10 12,10 13,2"/>'),
+      Target: createIcon('<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>'),
+      Gift: createIcon('<polyline points="20,12 20,22 4,22 4,12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12,7H7.5a2.5,2.5,0,0,1,0-5C11,2,12,7,12,7Z"/><path d="M12,7h4.5a2.5,2.5,0,0,0,0-5C13,2,12,7,12,7Z"/>'),
+      Code: createIcon('<polyline points="16,18 22,12 16,6"/><polyline points="8,6 2,12 8,18"/>'),
+      Terminal: createIcon('<polyline points="4,17 10,11 4,5"/><line x1="12" y1="19" x2="20" y2="19"/>'),
+      Database: createIcon('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21,12c0,1.66-4,3-9,3s-9-1.34-9-3"/><path d="M3,5V19c0,1.66,4,3,9,3s9-1.34,9-3V5"/>'),
+      Server: createIcon('<rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>'),
+      Shield: createIcon('<path d="M12,22s8-4,8-10V5l-8-3-8,3v7C4,18,12,22,12,22Z"/>'),
+      Activity: createIcon('<polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/>'),
+      BarChart: createIcon('<line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/>'),
+      TrendingUp: createIcon('<polyline points="23,6 13.5,15.5 8.5,10.5 1,18"/><polyline points="17,6 23,6 23,12"/>'),
+      MessageCircle: createIcon('<path d="M21,11.5a8.38,8.38,0,0,1-.9,3.8,8.5,8.5,0,0,1-7.6,4.7,8.38,8.38,0,0,1-3.8-.9L3,21l1.9-5.7a8.38,8.38,0,0,1-.9-3.8,8.5,8.5,0,0,1,4.7-7.6,8.38,8.38,0,0,1,3.8-.9h.5a8.48,8.48,0,0,1,8,8Z"/>'),
+      Share2: createIcon('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>'),
+      Bookmark: createIcon('<path d="M19,21l-7-5-7,5V5a2,2,0,0,1,2-2H17a2,2,0,0,1,2,2Z"/>'),
+      Tag: createIcon('<path d="M20.59,13.41l-7.17,7.17a2,2,0,0,1-2.83,0L2,12V2H12l8.59,8.59A2,2,0,0,1,20.59,13.41Z"/><line x1="7" y1="7" x2="7.01" y2="7"/>'),
+      Filter: createIcon('<polygon points="22,3 2,3 10,12.46 10,19 14,21 14,12.46 22,3"/>'),
+      Layers: createIcon('<polygon points="12,2 2,7 12,12 22,7 12,2"/><polyline points="2,17 12,22 22,17"/><polyline points="2,12 12,17 22,12"/>'),
+      Layout: createIcon('<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>'),
+      Grid: createIcon('<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>'),
+      List: createIcon('<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>'),
+      Link: createIcon('<path d="M10,13a5,5,0,0,0,7.54.54l3-3a5,5,0,0,0-7.07-7.07l-1.72,1.71"/><path d="M14,11a5,5,0,0,0-7.54-.54l-3,3a5,5,0,0,0,7.07,7.07l1.71-1.71"/>'),
+      Sun: createIcon('<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>'),
+      Moon: createIcon('<path d="M21,12.79A9,9,0,1,1,11.21,3,7,7,0,0,0,21,12.79Z"/>'),
+      Cloud: createIcon('<path d="M18,10h-1.26A8,8,0,1,0,9,20h9a5,5,0,0,0,0-10Z"/>'),
+      Compass: createIcon('<circle cx="12" cy="12" r="10"/><polygon points="16.24,7.76 14.12,14.12 7.76,16.24 9.88,9.88 16.24,7.76"/>'),
+      Map: createIcon('<polygon points="1,6 1,22 8,18 16,22 23,18 23,2 16,6 8,2 1,6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>'),
+      Navigation: createIcon('<polygon points="3,11 22,2 13,21 11,13 3,11"/>'),
+      Copy: createIcon('<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5,15H4a2,2,0,0,1-2-2V4A2,2,0,0,1,4,2H13a2,2,0,0,1,2,2V5"/>'),
+      Save: createIcon('<path d="M19,21H5a2,2,0,0,1-2-2V5A2,2,0,0,1,5,3H16l5,5V19A2,2,0,0,1,19,21Z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/>'),
+      LogIn: createIcon('<path d="M15,3h4a2,2,0,0,1,2,2V19a2,2,0,0,1-2,2H15"/><polyline points="10,17 15,12 10,7"/><line x1="15" y1="12" x2="3" y2="12"/>'),
+      LogOut: createIcon('<path d="M9,21H5a2,2,0,0,1-2-2V5A2,2,0,0,1,5,3H9"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/>'),
+      Power: createIcon('<path d="M18.36,6.64a9,9,0,1,1-12.73,0"/><line x1="12" y1="2" x2="12" y2="12"/>'),
+      RefreshCw: createIcon('<polyline points="23,4 23,10 17,10"/><polyline points="1,20 1,14 7,14"/><path d="M3.51,9a9,9,0,0,1,14.85-3.36L23,10M1,14l4.64,4.36A9,9,0,0,0,20.49,15"/>'),
+      RotateCw: createIcon('<polyline points="23,4 23,10 17,10"/><path d="M20.49,15a9,9,0,1,1-2.12-9.36L23,10"/>'),
+      ChevronUp: createIcon('<polyline points="18,15 12,9 6,15"/>'),
+      AlertCircle: createIcon('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>'),
+      CheckCircle: createIcon('<path d="M22,11.08V12a10,10,0,1,1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/>'),
+      XCircle: createIcon('<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>'),
+    };
+    
+    // Make icons available globally
+    Object.assign(window, LucideIcons);
+    const { Menu, X, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Check, Star, Heart, Search, User, Users, Mail, Phone, MapPin, Calendar, Clock, Settings, Home, ShoppingCart, Plus, Minus, Trash, Edit, ExternalLink, ArrowRight, ArrowLeft, Send, Image, Play, Pause, Volume2, Globe, Facebook, Twitter, Instagram, Linkedin, Youtube, Award, Briefcase, GraduationCap, Camera, Book, Plane, Download, Upload, File, Folder, Lock, Eye, Bell, Info, Zap, Target, Gift, Code, Terminal, Database, Server, Shield, Activity, BarChart, TrendingUp, MessageCircle, Share2, Bookmark, Tag, Filter, Layers, Layout, Grid, List, Link, Sun, Moon, Cloud, Compass, Map, Navigation, Copy, Save, LogIn, LogOut, Power, RefreshCw, RotateCw, AlertCircle, CheckCircle, XCircle } = LucideIcons;
+
+    // Component definitions
+    ${componentScripts}
+
+    // Main App component
+    ${appComponent}
+
+    // Render the app
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>`;
+  };
+
+  // Convert ES module component to global browser-compatible code
+  const convertToGlobalComponent = (code: string, defaultName: string): string => {
+    let result = code;
+    
+    // Remove import statements (React is loaded globally, local imports become globals)
+    result = result.replace(/^import\s+.*?from\s+['"].*?['"];?\s*$/gm, '');
+    result = result.replace(/^import\s+['"].*?['"];?\s*$/gm, '');
+    
+    // Convert "export const X = ..." to "const X = ..." (will be global in script scope)
+    result = result.replace(/export\s+const\s+/g, 'const ');
+    result = result.replace(/export\s+let\s+/g, 'let ');
+    result = result.replace(/export\s+var\s+/g, 'var ');
+    result = result.replace(/export\s+function\s+/g, 'function ');
+    result = result.replace(/export\s+class\s+/g, 'class ');
+    
+    // Remove export default and capture component
+    result = result.replace(/export\s+default\s+function\s+(\w+)/g, 'function $1');
+    result = result.replace(/export\s+default\s+(\w+);?\s*$/gm, '');
+    result = result.replace(/export\s+default\s+/g, `const ${defaultName} = `);
+    
+    // Remove named export statements like "export { X, Y };"
+    result = result.replace(/export\s+\{[^}]*\};?\s*$/gm, '');
+    
+    return result.trim();
+  };
+
+  // Escape HTML for safe insertion
+  const escapeHtml = (str: string): string => {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   };
 
   const downloadProject = () => {
@@ -728,67 +1016,80 @@ export default function ProjectDetail() {
   };
 
   // Capture screenshot of the preview and save as thumbnail
-  const captureScreenshot = async () => {
+  const captureScreenshotInternal = async ({ silent }: { silent: boolean }) => {
     if (!project) return;
-    
+
     try {
-      // Find the Sandpack preview iframe
-      const previewContainer = document.querySelector('.sandpack-preview-container');
+      // Sandpack preview is rendered inside an iframe. We capture the container that holds it.
+      const previewContainer =
+        document.querySelector('.sp-preview-container') ||
+        document.querySelector('.sandpack-preview-container') ||
+        (document.querySelector('.sp-preview-iframe') as HTMLIFrameElement | null)?.parentElement;
+
       if (!previewContainer) {
-        toast.error(isRTL ? 'لا يوجد معاينة للتصوير' : 'No preview to capture');
+        if (!silent) toast.error(isRTL ? 'لا يوجد معاينة للتصوير' : 'No preview to capture');
         return;
       }
 
-      toast.loading(isRTL ? 'جاري التقاط الصورة...' : 'Capturing screenshot...');
-      
-      // Use html2canvas to capture
+      if (!silent) toast.loading(isRTL ? 'جاري التقاط الصورة...' : 'Capturing screenshot...');
+
       const canvas = await html2canvas(previewContainer as HTMLElement, {
         useCORS: true,
         allowTaint: true,
-        scale: 0.5, // Lower scale for smaller file size
+        scale: 0.5,
         backgroundColor: '#0c0f14',
       });
-      
-      // Convert to blob
-      const blob = await new Promise<Blob>((resolve) => {
-        canvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.8);
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((b) => {
+          if (!b) return reject(new Error('Failed to create screenshot blob'));
+          resolve(b);
+        }, 'image/jpeg', 0.8);
       });
-      
-      // Upload to Supabase storage
+
       const fileName = `${project.id}-${Date.now()}.jpg`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('project-thumbnails')
         .upload(fileName, blob, {
           contentType: 'image/jpeg',
           upsert: true,
         });
-      
+
       if (uploadError) {
         console.error('Upload error:', uploadError);
-        // If bucket doesn't exist, just save locally for now
-        toast.dismiss();
-        toast.error(isRTL ? 'فشل في رفع الصورة' : 'Failed to upload screenshot');
+        if (!silent) {
+          toast.dismiss();
+          toast.error(isRTL ? 'فشل في رفع الصورة' : 'Failed to upload screenshot');
+        }
         return;
       }
-      
-      // Get public URL
+
       const { data: { publicUrl } } = supabase.storage
         .from('project-thumbnails')
         .getPublicUrl(fileName);
-      
-      // Update project with thumbnail URL
+
       await (supabase
         .from('projects' as any)
         .update({ thumbnail_url: publicUrl })
         .eq('id', project.id) as any);
-      
-      toast.dismiss();
-      toast.success(isRTL ? 'تم حفظ الصورة المصغرة!' : 'Thumbnail saved!');
+
+      setProject(prev => prev ? { ...prev, thumbnail_url: publicUrl } : prev);
+
+      if (!silent) {
+        toast.dismiss();
+        toast.success(isRTL ? 'تم حفظ الصورة المصغرة!' : 'Thumbnail saved!');
+      }
     } catch (err) {
       console.error('Screenshot error:', err);
-      toast.dismiss();
-      toast.error(isRTL ? 'فشل في التقاط الصورة' : 'Failed to capture screenshot');
+      if (!silent) {
+        toast.dismiss();
+        toast.error(isRTL ? 'فشل في التقاط الصورة' : 'Failed to capture screenshot');
+      }
     }
+  };
+
+  const captureScreenshot = async () => {
+    await captureScreenshotInternal({ silent: false });
   };
 
   // Helper for delays
@@ -883,17 +1184,17 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       const beforeSnapshot = Object.keys(generatedFiles).length > 0 ? { ...generatedFiles } : null;
 
       if (leftPanelMode === 'chat') {
-        // Chat mode (read-only): call chat mode directly (no job)
+        // Chat mode: Use PLAN mode to get a structured plan (Lovable-style)
         const response = await supabase.functions.invoke('projects-generate', {
           body: {
-            mode: 'chat',
+            mode: 'plan',
+            projectId: id,
             prompt: userMessage,
-            currentFiles: generatedFiles,
           },
         });
 
         if (response.error || !response.data?.ok) {
-          throw new Error(response.data?.error || 'Failed to get answer');
+          throw new Error(response.data?.error || 'Failed to get plan');
         }
 
         // Step 2 complete, Step 3 loading
@@ -904,7 +1205,8 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         ));
         await delay(250);
 
-        assistantMsg = response.data.message || (isRTL ? 'لم أتمكن من الإجابة.' : 'I could not generate an answer.');
+        // The plan is returned as JSON string - store it directly so Plan Card can parse it
+        assistantMsg = response.data.plan || (isRTL ? 'لم أتمكن من إنشاء خطة.' : 'Could not generate a plan.');
         setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
         await delay(250);
       } else {
@@ -1140,7 +1442,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
           <div className="flex items-center gap-1 md:gap-1.5">
             {displayProject.published_url && (
               <button 
-                onClick={() => window.open(displayProject.published_url!, '_blank')}
+                onClick={() => window.open(`${window.location.origin}/${displayProject.slug}`, '_blank')}
                 className="p-1.5 md:p-2 rounded-xl bg-muted/30 dark:bg-white/5 border border-border/50 text-muted-foreground hover:text-foreground hover:border-indigo-500/30 transition-all active:scale-95"
                 title={isRTL ? 'عرض' : 'View Live'}
               >
@@ -1326,19 +1628,205 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                 
                 {/* Only show the last N messages (paginated from the end) */}
                 {chatMessages.slice(-visibleMessagesCount).map((msg, i) => {
-                  // Check if this is an AI message with an actionable plan (more flexible detection)
-                  const suggestsSwitchToCode = msg.role === 'assistant' && leftPanelMode === 'chat' &&
-                    (msg.content.includes('Ready to implement') || 
-                     msg.content.includes('Switch to Code mode') ||
-                     msg.content.includes('switch to Code mode') ||
-                     msg.content.includes('Proposed Plan') ||
-                     msg.content.includes('### Proposed') ||
-                     msg.content.includes('steps to') ||
-                     msg.content.includes('Here\'s how') ||
-                     msg.content.includes('To apply') ||
-                     msg.content.includes('Ready to apply') ||
-                     msg.content.includes('Ready to discuss how to apply'));
+                  // PLAN DETECTION: Try to parse as structured JSON plan
+                  let parsedPlan: { 
+                    title?: string; 
+                    file?: string;
+                    line?: number;
+                    steps?: Array<{ title: string; current?: string; changeTo?: string }>;
+                    codeChanges?: Array<{ file: string; line?: number; code: string }>;
+                  } | null = null;
+                  let isPlanCard = false;
                   
+                  if (msg.role === 'assistant') {
+                    try {
+                      const parsed = JSON.parse(msg.content);
+                      if (parsed.title && (parsed.steps || parsed.codeChanges)) {
+                        parsedPlan = parsed;
+                        isPlanCard = true;
+                      }
+                    } catch {
+                      // Not valid JSON - show as regular message
+                    }
+                  }
+                  
+                  // PLAN CARD UI (Lovable-style - clean, minimal, professional)
+                  if (isPlanCard && parsedPlan) {
+                    return (
+                      <div key={i} className="flex flex-col items-start w-full">
+                        <div className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg overflow-hidden">
+                          {/* Plan Header */}
+                          <div className="px-4 py-2.5 border-b border-[#2a2a2a]">
+                            <span className="text-[13px] text-zinc-500">Plan</span>
+                          </div>
+                          
+                          {/* Plan Content */}
+                          <div className="px-4 py-4 space-y-4">
+                            {/* Title */}
+                            <h3 className="text-[15px] font-semibold text-white">
+                              Plan: {parsedPlan.title}
+                            </h3>
+                            
+                            {/* File Reference */}
+                            {parsedPlan.file && (
+                              <p className="text-[13px] text-zinc-400">
+                                <span className="font-medium text-zinc-300">Changes to</span>{' '}
+                                <code className="text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded font-mono text-xs">
+                                  {parsedPlan.file}
+                                </code>
+                                {parsedPlan.line && <span className="text-zinc-500"> :</span>}
+                              </p>
+                            )}
+                            
+                            {/* Steps */}
+                            {parsedPlan.steps && parsedPlan.steps.length > 0 && (
+                              <div className="space-y-3">
+                                {parsedPlan.steps.map((step, stepIdx) => (
+                                  <div key={stepIdx}>
+                                    {/* Step Title */}
+                                    <h4 className="text-[13px] font-semibold text-white mb-1.5">
+                                      {stepIdx + 1}. {step.title}
+                                    </h4>
+                                    
+                                    {/* Current / Change To */}
+                                    <ul className="space-y-1 ml-3">
+                                      {step.current && (
+                                        <li className="text-[13px] text-zinc-400 flex items-center gap-2">
+                                          <span className="text-zinc-600">•</span>
+                                          <span>Current:</span>
+                                          <code className="text-zinc-300 bg-zinc-800 px-1.5 py-0.5 rounded font-mono text-xs">
+                                            {step.current}
+                                          </code>
+                                        </li>
+                                      )}
+                                      {step.changeTo && (
+                                        <li className="text-[13px] text-zinc-400 flex items-center gap-2">
+                                          <span className="text-zinc-600">•</span>
+                                          <span>Change to:</span>
+                                          <code className="text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded font-mono text-xs">
+                                            {step.changeTo}
+                                          </code>
+                                        </li>
+                                      )}
+                                    </ul>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            
+                            {/* Code Changes */}
+                            {parsedPlan.codeChanges && parsedPlan.codeChanges.length > 0 && (
+                              <div className="space-y-2">
+                                <h4 className="text-[13px] font-semibold text-white">Code Changes:</h4>
+                                {parsedPlan.codeChanges.map((change, changeIdx) => (
+                                  <div key={changeIdx} className="bg-[#0d0d0d] border border-[#252525] rounded-lg overflow-hidden">
+                                    {/* File header */}
+                                    <div className="px-3 py-1.5 bg-[#151515] border-b border-[#252525] flex items-center justify-between">
+                                      <span className="text-[11px] text-zinc-500 font-mono">
+                                        // {change.file}{change.line ? ` (line ${change.line})` : ''}
+                                      </span>
+                                      <button 
+                                        onClick={() => navigator.clipboard.writeText(change.code)}
+                                        className="text-zinc-600 hover:text-zinc-400 transition-colors"
+                                        title="Copy code"
+                                        aria-label="Copy code"
+                                      >
+                                        <Copy className="h-3 w-3" />
+                                      </button>
+                                    </div>
+                                    {/* Code */}
+                                    <pre className="px-3 py-2.5 text-[12px] font-mono text-emerald-400 overflow-x-auto whitespace-pre-wrap">
+                                      {change.code}
+                                    </pre>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Action Button */}
+                          <div className="px-4 py-3 border-t border-[#2a2a2a]">
+                            <button
+                              onClick={async () => {
+                                // Switch to Code mode immediately
+                                setLeftPanelMode('code');
+                                
+                                setAiEditing(true);
+                                setGenerationSteps([
+                                  { label: isRTL ? 'تنفيذ الخطة...' : 'Applying changes...', status: 'loading' },
+                                  { label: isRTL ? 'كتابة الكود...' : 'Writing code...', status: 'pending' },
+                                  { label: isRTL ? 'حفظ الملفات...' : 'Saving files...', status: 'pending' },
+                                ]);
+                                
+                                try {
+                                  const response = await supabase.functions.invoke('projects-generate', {
+                                    body: {
+                                      action: 'start',
+                                      projectId: id,
+                                      mode: 'execute',
+                                      planToExecute: msg.content,
+                                      userInstructions: userInstructions,
+                                    },
+                                  });
+                                  
+                                  if (response.error) throw new Error(response.error.message);
+                                  
+                                  const jobId = response.data?.jobId;
+                                  if (jobId) {
+                                    setGenerationSteps(prev => prev.map((s, idx) => 
+                                      idx === 0 ? { ...s, status: 'completed' } : 
+                                      idx === 1 ? { ...s, status: 'loading' } : s
+                                    ));
+                                    
+                                    const job = await pollJobUntilDone(jobId);
+                                    const newFiles = await loadFilesFromDb(id!);
+                                    
+                                    setGenerationSteps(prev => prev.map((s, idx) => 
+                                      idx <= 1 ? { ...s, status: 'completed' } : 
+                                      idx === 2 ? { ...s, status: 'loading' } : s
+                                    ));
+                                    
+                                    setGeneratedFiles(newFiles);
+                                    setCodeContent(newFiles["/App.js"] || Object.values(newFiles)[0] || "");
+                                    
+                                    const successMsg = isRTL ? 'تم تنفيذ الخطة بنجاح! ✓' : 'Changes applied! ✓';
+                                    const { data: msgData } = await supabase
+                                      .from('project_chat_messages' as any)
+                                      .insert({ 
+                                        project_id: id, 
+                                        role: 'assistant', 
+                                        content: successMsg,
+                                        snapshot: newFiles 
+                                      } as any)
+                                      .select()
+                                      .single();
+                                    
+                                    if (msgData) setChatMessages(prev => [...prev, msgData as any]);
+                                    toast.success(successMsg);
+                                  }
+                                  
+                                  setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
+                                } catch (err: any) {
+                                  console.error('Execute plan error:', err);
+                                  toast.error(isRTL ? 'فشل في تنفيذ الخطة' : 'Failed to apply changes');
+                                  setGenerationSteps([]);
+                                } finally {
+                                  setAiEditing(false);
+                                }
+                              }}
+                              disabled={aiEditing}
+                              className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-zinc-100 text-black text-[13px] font-medium rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              <Sparkles className="h-3.5 w-3.5" />
+                              {isRTL ? 'تنفيذ الخطة' : 'Implement Plan'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+                  
+                  // Regular message bubble
                   return (
                     <div key={i} className={cn(
                       "flex flex-col group",
@@ -1365,29 +1853,6 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                         </button>
                       )}
                       
-                      {/* Show "Implement Plan" chip if AI suggests it - clicking executes the plan */}
-                      {suggestsSwitchToCode && leftPanelMode === 'chat' && (
-                        <button
-                          onClick={() => {
-                            // Switch to Code mode and auto-send "Proceed" to implement the plan
-                            setLeftPanelMode('code');
-                            // Small delay to let mode switch, then trigger implementation
-                            setTimeout(() => {
-                              const proceedMessage = isRTL ? 'نفذ الخطة' : 'Proceed with the plan';
-                              setChatInput(proceedMessage);
-                              // Trigger submit after setting input
-                              setTimeout(() => {
-                                const form = document.querySelector('form');
-                                if (form) form.requestSubmit();
-                              }, 100);
-                            }, 200);
-                          }}
-                          className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 hover:border-emerald-500/50 transition-all active:scale-95"
-                        >
-                          <Sparkles className="h-3 w-3" />
-                          {isRTL ? 'تنفيذ الخطة' : 'Implement Plan'}
-                        </button>
-                      )}
                     </div>
                   );
                 })}
@@ -1692,11 +2157,11 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
               
               <button 
                 onClick={captureScreenshot}
-                className="p-1.5 text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors border border-indigo-500/20 rounded-md bg-indigo-500/5"
-                title={isRTL ? 'لقطة شاشة' : 'Screenshot'}
+                className="p-1.5 text-amber-400 hover:text-amber-300 flex items-center gap-1.5 transition-colors border border-amber-500/30 rounded-md bg-amber-500/10 hover:bg-amber-500/20"
+                title={isRTL ? 'حفظ صورة مصغرة' : 'Save Thumbnail'}
               >
                 <Camera className="h-3.5 w-3.5" />
-                <span className="text-[10px] uppercase font-bold hidden sm:inline">{isRTL ? 'لقطة' : 'Screenshot'}</span>
+                <span className="text-[10px] uppercase font-bold">{isRTL ? 'حفظ صورة' : 'Save Thumbnail'}</span>
               </button>
             </div>
             

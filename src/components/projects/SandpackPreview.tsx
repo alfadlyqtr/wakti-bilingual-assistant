@@ -103,7 +103,12 @@ export default function SandpackPreview({ code, viewMode = 'preview' }: Sandpack
             "lucide-react": "latest",
             "framer-motion": "latest",
             "clsx": "latest",
-            "tailwind-merge": "latest"
+            "tailwind-merge": "latest",
+            "i18next": "^23.7.6",
+            "react-i18next": "^13.5.0",
+            "date-fns": "^2.30.0",
+            "recharts": "^2.10.3",
+            "@tanstack/react-query": "^5.17.0"
           },
         }}
       >

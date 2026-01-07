@@ -79,6 +79,7 @@ import PresentationSharePlayer from "./pages/PresentationSharePlayer";
 import MyWarranty from "./pages/MyWarranty";
 import Projects from "./pages/Projects";
 import ProjectDetail from "./pages/ProjectDetail";
+import ProjectSlugRedirect from "./pages/ProjectSlugRedirect";
 
 import "./App.css";
 
@@ -339,6 +340,8 @@ function App() {
                     <AppLayout><ProjectDetail /></AppLayout>
                   </GiftNotificationProvider>
                 } />
+                
+                <Route path="/:slug" element={<ProjectSlugRedirect />} />
                 
                 {/* 404 catch-all */}
                 <Route path="*" element={<NotFound />} />

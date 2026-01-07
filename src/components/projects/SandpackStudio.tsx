@@ -222,7 +222,12 @@ root.render(<App />);`;
               "framer-motion": "10.16.4",
               "@emotion/is-prop-valid": "^1.2.1",
               "clsx": "2.0.0",
-              "tailwind-merge": "2.0.0"
+              "tailwind-merge": "2.0.0",
+              "i18next": "^23.7.6",
+              "react-i18next": "^13.5.0",
+              "date-fns": "^2.30.0",
+              "recharts": "^2.10.3",
+              "@tanstack/react-query": "^5.17.0"
             }
           }}
           style={{ height: '100%', width: '100%' }}
