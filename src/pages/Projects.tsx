@@ -712,52 +712,40 @@ Apply these styles consistently throughout the entire design.`;
                     }
                   }}
                   placeholder={`${isRTL ? 'اطلب من Wakti إنشاء ' : 'Ask Wakti to create '}${displayedPlaceholder}`}
-                  className="w-full bg-transparent text-base outline-none placeholder:text-muted-foreground/50 resize-none min-h-[120px] max-h-[300px] overflow-y-auto"
+                  className="w-full bg-transparent text-base outline-none placeholder:text-muted-foreground/50 resize-none min-h-[100px] max-h-[300px] overflow-y-auto"
                   disabled={generating}
                   rows={4}
                   title={isRTL ? 'صف ما تريد بناءه' : 'Describe what you want to build'}
                 />
-            </div>
-
-            {/* Selected Theme Style Preview */}
-            {selectedTheme && selectedTheme !== 'none' && (() => {
-              const theme = THEMES.find(t => t.id === selectedTheme);
-              const customTheme = customThemes.find((t: any) => t.id === selectedTheme);
-              const settings = theme?.settings || (customTheme as any)?.settings;
-              if (!settings && !customTheme) return null;
-              
-              return (
-                <div className="px-4 pb-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
-                      {isRTL ? 'نمط الثيم:' : 'Theme Style:'}
-                    </span>
-                    <div className="flex flex-wrap gap-1">
-                      {settings ? (
-                        <>
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-medium">
-                            {settings.fontStyle}
-                          </span>
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-medium">
-                            {settings.shadowStyle}
-                          </span>
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-medium">
-                            {settings.layoutStyle}
-                          </span>
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-medium">
-                            {settings.mood}
-                          </span>
-                        </>
-                      ) : (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-medium">
-                          {(customTheme as any)?.name || selectedTheme}
+                
+                {/* Theme Injection Preview - INSIDE the prompt area */}
+                {selectedTheme && selectedTheme !== 'none' && (() => {
+                  const theme = THEMES.find(t => t.id === selectedTheme);
+                  const customTheme = customThemes.find((t: any) => t.id === selectedTheme);
+                  const themeInstructions = getSelectedThemeInstructions();
+                  const themeName = theme ? (isRTL ? theme.nameAr : theme.name) : (customTheme as any)?.name || selectedTheme;
+                  
+                  return (
+                    <div className="mt-3 pt-3 border-t border-border/30">
+                      <div className="flex items-start gap-2">
+                        <span className="text-[11px] text-muted-foreground font-medium shrink-0">
+                          {isRTL ? '🎨 الثيم:' : '🎨 Theme:'}
                         </span>
-                      )}
+                        <div className="flex-1">
+                          <span className="text-[12px] font-semibold text-indigo-600 dark:text-indigo-400">
+                            {themeName}
+                          </span>
+                          {themeInstructions && (
+                            <p className="text-[10px] text-muted-foreground mt-1 leading-relaxed line-clamp-2">
+                              {themeInstructions.slice(0, 150)}{themeInstructions.length > 150 ? '...' : ''}
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              );
-            })()}
+                  );
+                })()}
+            </div>
 
             {/* Attached Files Preview */}
             {attachedFiles.length > 0 && (

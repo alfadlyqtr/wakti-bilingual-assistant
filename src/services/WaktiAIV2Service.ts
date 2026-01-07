@@ -18,6 +18,7 @@ export interface AIMessage {
   isTextGenerated?: boolean;
   metadata?: any;
   chatSubmode?: 'chat' | 'study';
+  replyTo?: string; // ID of the message being replied to
 }
 
 export interface AIConversation {

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import { MessageSquare, Bot, User, Calendar, Clock, CheckCircle, Loader2, Volume2, Copy, VolumeX, ExternalLink, Play, Pause, RotateCcw, Globe } from 'lucide-react';
+import { MessageSquare, Bot, User, Calendar, Clock, CheckCircle, Loader2, Volume2, Copy, VolumeX, ExternalLink, Play, Pause, RotateCcw, Globe, Reply } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { AIMessage } from '@/services/WaktiAIV2Service';
 import { TaskConfirmationCard } from './TaskConfirmationCard';
@@ -297,6 +297,7 @@ interface ChatMessagesProps {
   conversationId: string | null;
   isNewConversation: boolean;
   onUpdateMessage?: (messageId: string, content: string) => void;
+  onReplyToMessage?: (messageId: string, content: string) => void;
 }
 
 export function ChatMessages({
@@ -315,7 +316,8 @@ export function ChatMessages({
   onCancelTaskConfirmation,
   conversationId,
   isNewConversation,
-  onUpdateMessage
+  onUpdateMessage,
+  onReplyToMessage
 }: ChatMessagesProps) {
   const { language } = useTheme();
   const navigate = useNavigate();
@@ -2136,6 +2138,17 @@ export function ChatMessages({
                             >
                               <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground" />
                             </button>
+                            
+                            {/* Reply Button (assistant only) */}
+                            {message.role === 'assistant' && onReplyToMessage && (
+                              <button
+                                onClick={() => onReplyToMessage(message.id, message.content)}
+                                className="p-2 rounded-md hover:bg-background/80 transition-colors"
+                                title={language === 'ar' ? 'رد على هذه الرسالة' : 'Reply to this message'}
+                              >
+                                <Reply className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                              </button>
+                            )}
                             
                             {/* TTS Button with Stop Functionality (assistant only) */}
                             {message.role === 'assistant' && (

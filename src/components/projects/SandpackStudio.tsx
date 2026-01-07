@@ -288,7 +288,7 @@ root.render(<App />);`;
                           </div>
                         </div>
                         <p className="mt-6 text-sm text-gray-400 animate-pulse">Building your project...</p>
-                        <p className="mt-2 text-xs text-gray-600">This may take 60-90 seconds</p>
+                        <p className="mt-2 text-xs text-gray-600">This may take up to 3 minutes</p>
                       </>
                     ) : !hasValidFiles && Object.keys(files).length > 0 ? (
                       <>

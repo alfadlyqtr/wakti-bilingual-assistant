@@ -6,6 +6,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { 
   ArrowLeft, 
   Download, 
@@ -157,6 +159,13 @@ export default function ProjectDetail() {
   const [instructionsDrawerOpen, setInstructionsDrawerOpen] = useState(false);
   const [userInstructions, setUserInstructions] = useState('');
   const [tempInstructions, setTempInstructions] = useState('');
+
+  const [creationPromptInfo, setCreationPromptInfo] = useState<{
+    userPrompt: string;
+    themeId: string;
+    themeInstructions: string;
+    finalPrompt: string;
+  } | null>(null);
   
   // AMP (Amplify) state
   const [isAmplifying, setIsAmplifying] = useState(false);
@@ -215,9 +224,21 @@ export default function ProjectDetail() {
             console.error('Failed to parse theme instructions:', e);
           }
         }
+
+        const themeId = theme || 'wakti-dark';
+        const injectedThemeBlock = customInstructions
+          ? `\n\n--- THEME (selected by user: ${themeId}) ---\n${customInstructions}`
+          : `\n\n--- THEME (selected by user: ${themeId}) ---`;
+        const finalPrompt = `${prompt}${injectedThemeBlock}`;
+        setCreationPromptInfo({
+          userPrompt: prompt,
+          themeId,
+          themeInstructions: customInstructions,
+          finalPrompt,
+        });
         
         setSearchParams({}, { replace: true });
-        runGeneration(prompt, theme || 'wakti-dark', assets, customInstructions);
+        runGeneration(prompt, themeId, assets, customInstructions);
       }
     }
   }, [user, id]);
@@ -377,20 +398,17 @@ export default function ProjectDetail() {
     try {
       // Step 2: Planning
       setGenerationSteps(prev => prev.map((s, i) => i === 0 ? { ...s, status: 'completed' } : i === 1 ? { ...s, status: 'loading' } : s));
-      
-      const themeColors: Record<string, string[]> = {
-        'wakti-dark': ['#0c0f14', '#060541', '#858384'],
-        'wakti-light': ['#fcfefd', '#060541', '#e9ceb0'],
-        'vibrant': ['hsl(210,100%,65%)', 'hsl(280,70%,65%)', 'hsl(25,95%,60%)'],
-        'emerald': ['hsl(160,80%,55%)', 'hsl(142,76%,55%)', '#0c0f14'],
-      };
-      
-      const colors = themeColors[theme] || themeColors['wakti-dark'];
-      // Include custom theme instructions if provided
-      const styleInstructions = customThemeInstructions || `Style: Use these colors: ${colors.join(', ')}.`;
-      const fullPrompt = customThemeInstructions 
-        ? `${prompt}\n\n${customThemeInstructions}`
-        : `${prompt}. ${styleInstructions}`;
+
+      const injectedThemeBlock = customThemeInstructions
+        ? `\n\n--- THEME (selected by user: ${theme}) ---\n${customThemeInstructions}`
+        : `\n\n--- THEME (selected by user: ${theme}) ---`;
+      const finalPrompt = `${prompt}${injectedThemeBlock}`;
+      setCreationPromptInfo({
+        userPrompt: prompt,
+        themeId: theme,
+        themeInstructions: customThemeInstructions,
+        finalPrompt,
+      });
       
       // Step 3: Generating
       setGenerationSteps(prev => prev.map((s, i) => i === 1 ? { ...s, status: 'completed' } : i === 2 ? { ...s, status: 'loading' } : s));
@@ -401,7 +419,7 @@ export default function ProjectDetail() {
           action: 'start',
           projectId: id,
           mode: 'create',
-          prompt: fullPrompt,
+          prompt: finalPrompt,
           theme,
           assets,
           userInstructions: customThemeInstructions,
@@ -1184,17 +1202,18 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       const beforeSnapshot = Object.keys(generatedFiles).length > 0 ? { ...generatedFiles } : null;
 
       if (leftPanelMode === 'chat') {
-        // Chat mode: Use PLAN mode to get a structured plan (Lovable-style)
+        // Chat mode: Smart AI that answers questions OR returns plans for code changes
         const response = await supabase.functions.invoke('projects-generate', {
           body: {
-            mode: 'plan',
+            mode: 'chat',
             projectId: id,
             prompt: userMessage,
+            currentFiles: generatedFiles,
           },
         });
 
         if (response.error || !response.data?.ok) {
-          throw new Error(response.data?.error || 'Failed to get plan');
+          throw new Error(response.data?.error || 'Failed to get response');
         }
 
         // Step 2 complete, Step 3 loading
@@ -1205,8 +1224,14 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         ));
         await delay(250);
 
-        // The plan is returned as JSON string - store it directly so Plan Card can parse it
-        assistantMsg = response.data.plan || (isRTL ? 'لم أتمكن من إنشاء خطة.' : 'Could not generate a plan.');
+        // Smart response: either a plan (JSON) or a regular message
+        if (response.data.mode === 'plan' && response.data.plan) {
+          // AI detected a code change request - show Plan Card
+          assistantMsg = response.data.plan;
+        } else {
+          // AI answered a question - show regular message
+          assistantMsg = response.data.message || (isRTL ? 'لم أتمكن من الإجابة.' : 'Could not generate a response.');
+        }
         setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
         await delay(250);
       } else {
@@ -1440,7 +1465,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         <div className="flex items-center gap-1.5 md:gap-2 shrink-0 ml-1">
           {/* Action buttons - icon only on mobile for better fit */}
           <div className="flex items-center gap-1 md:gap-1.5">
-            {displayProject.published_url && (
+            {displayProject.status === 'published' && displayProject.slug && (
               <button 
                 onClick={() => window.open(`${window.location.origin}/${displayProject.slug}`, '_blank')}
                 className="p-1.5 md:p-2 rounded-xl bg-muted/30 dark:bg-white/5 border border-border/50 text-muted-foreground hover:text-foreground hover:border-indigo-500/30 transition-all active:scale-95"
@@ -1615,6 +1640,74 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
             <>
               {/* Chat Messages Area - Clean bubbles, no avatars */}
               <div ref={chatContainerRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3 scrollbar-thin">
+                {creationPromptInfo && isGenerating && (
+                  <div className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg overflow-hidden">
+                    <div className="px-4 py-2.5 border-b border-[#2a2a2a] flex items-center justify-between">
+                      <span className="text-[13px] text-zinc-500">{isRTL ? 'تم إرسال هذا للذكاء الاصطناعي' : 'Sent to AI'}</span>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(creationPromptInfo.finalPrompt)}
+                        className="text-zinc-600 hover:text-zinc-400 transition-colors"
+                        title={isRTL ? 'نسخ الكل' : 'Copy all'}
+                        aria-label={isRTL ? 'نسخ الكل' : 'Copy all'}
+                      >
+                        <Copy className="h-3 w-3" />
+                      </button>
+                    </div>
+                    <div className="px-4 py-4 space-y-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] uppercase tracking-wider font-semibold text-zinc-500">
+                            {isRTL ? 'طلب المستخدم' : 'User Prompt'}
+                          </span>
+                          <button
+                            onClick={() => navigator.clipboard.writeText(creationPromptInfo.userPrompt)}
+                            className="text-zinc-600 hover:text-zinc-400 transition-colors"
+                            title={isRTL ? 'نسخ' : 'Copy'}
+                            aria-label={isRTL ? 'نسخ' : 'Copy'}
+                          >
+                            <Copy className="h-3 w-3" />
+                          </button>
+                        </div>
+                        <pre className="px-3 py-2 bg-[#0d0d0d] border border-[#252525] rounded-lg text-[12px] font-mono text-zinc-200 overflow-x-auto whitespace-pre-wrap">{creationPromptInfo.userPrompt}</pre>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] uppercase tracking-wider font-semibold text-zinc-500">
+                            {isRTL ? 'الثيم المختار (محقون)' : 'Selected Theme (Injected)'}
+                          </span>
+                          <button
+                            onClick={() => navigator.clipboard.writeText(creationPromptInfo.themeInstructions || `THEME: ${creationPromptInfo.themeId}`)}
+                            className="text-zinc-600 hover:text-zinc-400 transition-colors"
+                            title={isRTL ? 'نسخ' : 'Copy'}
+                            aria-label={isRTL ? 'نسخ' : 'Copy'}
+                          >
+                            <Copy className="h-3 w-3" />
+                          </button>
+                        </div>
+                        <pre className="px-3 py-2 bg-[#0d0d0d] border border-[#252525] rounded-lg text-[12px] font-mono text-blue-300 overflow-x-auto whitespace-pre-wrap">{creationPromptInfo.themeInstructions ? creationPromptInfo.themeInstructions : `THEME: ${creationPromptInfo.themeId}`}</pre>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] uppercase tracking-wider font-semibold text-zinc-500">
+                            {isRTL ? 'البرومبت النهائي' : 'Final Prompt'}
+                          </span>
+                          <button
+                            onClick={() => navigator.clipboard.writeText(creationPromptInfo.finalPrompt)}
+                            className="text-zinc-600 hover:text-zinc-400 transition-colors"
+                            title={isRTL ? 'نسخ' : 'Copy'}
+                            aria-label={isRTL ? 'نسخ' : 'Copy'}
+                          >
+                            <Copy className="h-3 w-3" />
+                          </button>
+                        </div>
+                        <pre className="px-3 py-2 bg-[#0d0d0d] border border-[#252525] rounded-lg text-[12px] font-mono text-emerald-300 overflow-x-auto whitespace-pre-wrap">{creationPromptInfo.finalPrompt}</pre>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Show More Button - at top if there are hidden messages */}
                 {chatMessages.length > visibleMessagesCount && (
                   <button
@@ -1639,14 +1732,46 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                   let isPlanCard = false;
                   
                   if (msg.role === 'assistant') {
+                    // Try to extract JSON plan from content (may be mixed with text)
+                    const content = msg.content;
+                    
+                    // Method 1: Try direct JSON parse
                     try {
-                      const parsed = JSON.parse(msg.content);
-                      if (parsed.title && (parsed.steps || parsed.codeChanges)) {
+                      const parsed = JSON.parse(content);
+                      if (parsed.type === 'plan' || (parsed.title && (parsed.steps || parsed.codeChanges))) {
                         parsedPlan = parsed;
                         isPlanCard = true;
                       }
                     } catch {
-                      // Not valid JSON - show as regular message
+                      // Method 2: Extract JSON object from mixed content
+                      const jsonMatch = content.match(/\{[\s\S]*"type"\s*:\s*"plan"[\s\S]*\}/);
+                      if (jsonMatch) {
+                        try {
+                          const extracted = JSON.parse(jsonMatch[0]);
+                          if (extracted.title && (extracted.steps || extracted.codeChanges)) {
+                            parsedPlan = extracted;
+                            isPlanCard = true;
+                          }
+                        } catch {
+                          // Still not valid JSON
+                        }
+                      }
+                      
+                      // Method 3: Look for any JSON with title + steps/codeChanges
+                      if (!isPlanCard) {
+                        const anyJsonMatch = content.match(/\{[\s\S]*"title"[\s\S]*("steps"|"codeChanges")[\s\S]*\}/);
+                        if (anyJsonMatch) {
+                          try {
+                            const extracted = JSON.parse(anyJsonMatch[0]);
+                            if (extracted.title && (extracted.steps || extracted.codeChanges)) {
+                              parsedPlan = extracted;
+                              isPlanCard = true;
+                            }
+                          } catch {
+                            // Not valid JSON
+                          }
+                        }
+                      }
                     }
                   }
                   
@@ -1826,19 +1951,38 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                     );
                   }
                   
-                  // Regular message bubble
+      // Regular message bubble with Markdown support (Lovable-style)
+                  const isAssistant = msg.role === 'assistant';
+                  
+                  // Helper to filter out plan JSON from display content
+                  let displayContent = msg.content;
+                  if (isAssistant && isPlanCard) {
+                    // Strip the JSON plan object from the chat bubble text so it doesn't look messy
+                    displayContent = msg.content.replace(/\{[\s\S]*"type"\s*:\s*"plan"[\s\S]*\}/g, '').trim();
+                    // If stripping left us with nothing, or just punctuation, use a default summary
+                    if (displayContent.length < 5) displayContent = isRTL ? 'إليك خطة العمل المقترحة:' : 'Here is the proposed plan:';
+                  }
+
                   return (
                     <div key={i} className={cn(
-                      "flex flex-col group",
+                      "flex flex-col group animate-in fade-in slide-in-from-bottom-1 duration-300",
                       msg.role === 'user' ? "items-end" : "items-start"
                     )}>
                       <div className={cn(
-                        "max-w-[90%] px-4 py-2.5 rounded-2xl text-[13px] leading-relaxed shadow-sm",
+                        "max-w-[90%] px-4 py-3 rounded-2xl shadow-sm transition-all",
                         msg.role === 'user' 
-                          ? "bg-indigo-600 text-white rounded-br-md"
-                          : "bg-muted/60 dark:bg-white/5 text-foreground rounded-bl-md border border-border/30 dark:border-white/10"
+                          ? "bg-indigo-600 text-white rounded-br-md text-[13px] leading-relaxed"
+                          : "bg-[#fafafa] dark:bg-[#1a1a1a] text-foreground rounded-bl-md border border-[#e5e5e5] dark:border-[#2a2a2a]"
                       )}>
-                        {msg.content}
+                        {isAssistant ? (
+                          <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1.5 prose-headings:my-2 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-table:my-2 prose-pre:my-2 prose-code:text-[12px] prose-code:bg-zinc-100 dark:prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none text-[13px] leading-relaxed">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                              {displayContent}
+                            </ReactMarkdown>
+                          </div>
+                        ) : (
+                          <div className="text-[13px] leading-relaxed">{msg.content}</div>
+                        )}
                       </div>
                       
                       {/* Revert Button - Right below the AI message */}
@@ -1885,6 +2029,12 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                                 : (isRTL ? 'جاري تطبيق التعديلات...' : 'Applying your changes...')}
                           </p>
                         </div>
+                        
+                        {isGenerating && (
+                          <p className="text-[11px] text-muted-foreground pl-6 animate-pulse">
+                            {isRTL ? 'قد يستغرق هذا ما يصل إلى 3 دقائق لضمان أفضل جودة' : 'This may take up to 3 minutes for premium quality'}
+                          </p>
+                        )}
                         
                         {/* Progress Steps */}
                         {(isGenerating || aiEditing) && generationSteps.length > 0 && (

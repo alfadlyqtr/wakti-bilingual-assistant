@@ -142,8 +142,8 @@ async function callGemini25Pro(
   const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
   if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
 
-  // Use stable Gemini 2.0 Flash for reliability (2.5 Pro preview may be unavailable)
-  const model = "gemini-2.0-flash";
+  // Use Gemini 2.5 Pro (stable) for Edit/Plan/Execute modes
+  const model = "gemini-2.5-pro";
   
   console.log(`[Gemini 2.5 Pro] Calling model: ${model}`);
 
@@ -167,7 +167,7 @@ async function callGemini25Pro(
         }),
       }
     ),
-    180000,
+    300000, // 300 seconds (5 minutes) - Note: Supabase gateway may still timeout at ~150s
     'GEMINI_25_PRO'
   );
 
@@ -183,6 +183,56 @@ async function callGemini25Pro(
   if (jsonMode) {
     text = normalizeGeminiResponseText(text);
   }
+  
+  return text;
+}
+
+// GEMINI 2.0 FLASH - FAST CREATE MODE (avoids gateway timeout)
+// ============================================================================
+async function callGemini20FlashCreate(
+  systemPrompt: string,
+  userPrompt: string
+): Promise<string> {
+  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
+  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
+
+  const model = "gemini-2.0-flash";
+  
+  console.log(`[Gemini 2.0 Flash Create] Calling model: ${model}`);
+
+  const response = await withTimeout(
+    fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": GEMINI_API_KEY,
+        },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          generationConfig: {
+            temperature: 0.2,
+            maxOutputTokens: 32768,
+            responseMimeType: "application/json",
+          },
+        }),
+      }
+    ),
+    90000, // 90 seconds - well under gateway timeout
+    'GEMINI_20_FLASH_CREATE'
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`[Gemini 2.0 Flash Create] HTTP ${response.status}: ${errorText}`);
+    throw new Error(`Gemini API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  let text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  text = normalizeGeminiResponseText(text);
   
   return text;
 }
@@ -766,6 +816,7 @@ CRITICAL RULES:
 4. Output must be a single parseable JSON object.
 5. ONLY use lucide-react for icons. NEVER use react-icons or heroicons.
 6. ALWAYS include /i18n.js in new projects.
+7. NEVER RETURN HTML. No <!DOCTYPE>, no <html>, no <head>, no <body> tags. You are building a REACT application, not a static HTML page. All code must be React JSX components.
 `;
 
 // ============================================================================
@@ -1087,7 +1138,8 @@ async function callGPT4oMini(systemPrompt: string, userPrompt: string): Promise<
 // REMOVED: Old patch-based editing system
 // The new system uses FULL FILE REWRITES only via callGeminiFullRewriteEdit
 
-async function callClaudeNonStreaming(systemPrompt: string, userPrompt: string, images: ImageAttachment[] | undefined): Promise<string> {
+// Claude 3.7 Sonnet with STREAMING to avoid 504 gateway timeout
+async function callClaudeStreaming(systemPrompt: string, userPrompt: string, images: ImageAttachment[] | undefined): Promise<string> {
   const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
   if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY missing");
 
@@ -1102,19 +1154,18 @@ async function callClaudeNonStreaming(systemPrompt: string, userPrompt: string, 
         type: "image",
         source: {
           type: "base64",
-          media_type: img.type.replace("image/jpg", "image/jpeg"), // Normalize
-          data: img.data.replace(/^data:image\/[^;]+;base64,/, "") // Strip data URI prefix if present
+          media_type: img.type.replace("image/jpg", "image/jpeg"),
+          data: img.data.replace(/^data:image\/[^;]+;base64,/, "")
         }
       });
     }
   }
   
-  // Add text prompt
   contentBlocks.push({ type: "text", text: userPrompt });
 
-  console.log(`[Claude] Requesting non-streaming response... (${contentBlocks.length} content blocks)`);
+  console.log(`[Claude 3.5 Sonnet] Starting STREAMING request... (${contentBlocks.length} content blocks)`);
 
-  const anthropicResponse = await withTimeout(fetch('https://api.anthropic.com/v1/messages', {
+  const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 
       'x-api-key': ANTHROPIC_API_KEY, 
@@ -1122,23 +1173,56 @@ async function callClaudeNonStreaming(systemPrompt: string, userPrompt: string, 
       'content-type': 'application/json' 
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-5-20250929",
+      model: "claude-3-5-sonnet-20241022",
       max_tokens: 16384,
+      stream: true,
       system: systemPrompt,
       messages: [{ role: "user", content: contentBlocks }],
     }),
-  }), 120000, 'CLAUDE_CREATE');
+  });
 
   if (!anthropicResponse.ok) {
-    const err = await anthropicResponse.json();
-    throw new Error(err.error?.message || "Anthropic API error");
+    const errText = await anthropicResponse.text();
+    console.error(`[Claude] HTTP ${anthropicResponse.status}: ${errText}`);
+    throw new Error(`Claude API error: ${anthropicResponse.status}`);
   }
 
-  const data = await anthropicResponse.json();
-  let content = data.content?.[0]?.text || "";
+  // Read streaming response
+  const reader = anthropicResponse.body?.getReader();
+  if (!reader) throw new Error("No response body from Claude");
+
+  const decoder = new TextDecoder();
+  let fullContent = "";
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        const jsonStr = line.slice(6).trim();
+        if (jsonStr === '[DONE]') continue;
+        try {
+          const event = JSON.parse(jsonStr);
+          if (event.type === 'content_block_delta' && event.delta?.text) {
+            fullContent += event.delta.text;
+          }
+        } catch {
+          // Skip malformed JSON
+        }
+      }
+    }
+  }
+
+  console.log(`[Claude 3.7 Sonnet] Streaming complete. Total length: ${fullContent.length}`);
 
   // Clean up response
-  content = content.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
+  let content = fullContent.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
   const jsonStart = content.indexOf('{');
   const jsonEnd = content.lastIndexOf('}');
   if (jsonStart !== -1 && jsonEnd !== -1) content = content.substring(jsonStart, jsonEnd + 1);
@@ -1203,11 +1287,109 @@ serve(async (req: Request) => {
     const images = body.images;
     const planToExecute = (body.planToExecute || '').toString();
 
-    // CHAT MODE: Q&A about the codebase (no changes)
+    // CHAT MODE: Smart Q&A - answers questions OR returns a plan if code changes are needed
     if (mode === 'chat') {
       const currentFiles = body.currentFiles || {};
       const filesStr = Object.entries(currentFiles || {}).map(([k, v]) => `FILE: ${k}\n${v}`).join('\n\n');
-      const answer = await callGPT4oMini("You are a Senior React Architect.", `CODEBASE:\n${filesStr}\n\nQUESTION: ${prompt}`);
+      
+      // Use Gemini 2.0 Flash for smart chat with intelligent detection
+      const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
+      if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
+      
+      const chatSystemPrompt = `You are a helpful AI assistant for a React code editor. You help users with their projects.
+
+🚨 CRITICAL DETECTION RULES:
+
+IS IT A CODE CHANGE REQUEST? Check for these keywords:
+- "fix", "change", "add", "remove", "update", "modify", "make", "create"
+- "doesn't work", "not working", "broken", "bug", "error"
+- "أصلح", "غير", "أضف", "احذف", "عدل", "اجعل", "لا يعمل", "مشكلة"
+- Any request implying the user wants you to DO something to the code
+
+IF YES → Return ONLY JSON (no text before or after)
+IF NO (pure question like "what does X do?") → Return markdown
+
+📋 JSON FORMAT FOR CODE CHANGES:
+{
+  "type": "plan",
+  "title": "🔧 Short description of the fix",
+  "file": "/App.js",
+  "steps": [
+    { "title": "Step description", "current": "old code snippet", "changeTo": "new code snippet" }
+  ],
+  "codeChanges": [
+    { "file": "/App.js", "line": 10, "code": "// Full code block to replace" }
+  ]
+}
+
+📝 MARKDOWN FORMAT FOR QUESTIONS:
+Use emojis, **bold**, \`code\`, and bullet points. Be friendly!
+
+⚠️ CRITICAL: For ANY request that implies changing code, return ONLY the JSON object. No explanations. No "Here's the plan". Just raw JSON starting with { and ending with }.
+
+Current project files:
+${filesStr}`;
+
+      const chatResponse = await withTimeout(
+        fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-goog-api-key": GEMINI_API_KEY,
+            },
+            body: JSON.stringify({
+              contents: [{ role: "user", parts: [{ text: prompt }] }],
+              systemInstruction: { parts: [{ text: chatSystemPrompt }] },
+              generationConfig: {
+                temperature: 0.7,
+                maxOutputTokens: 8192,
+              },
+            }),
+          }
+        ),
+        60000,
+        'GEMINI_CHAT'
+      );
+
+      if (!chatResponse.ok) {
+        const errorText = await chatResponse.text();
+        console.error(`[Chat Mode] Gemini error: ${errorText}`);
+        throw new Error(`Chat API error: ${chatResponse.status}`);
+      }
+
+      const chatData = await chatResponse.json();
+      const answer = chatData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      
+      // Check if the response contains a plan JSON (may be mixed with text)
+      const trimmedAnswer = answer.trim();
+      
+      // Try to extract JSON plan from response
+      let planJson: string | null = null;
+      
+      // Method 1: Direct JSON (starts with {)
+      if (trimmedAnswer.startsWith('{') && trimmedAnswer.includes('"type"') && trimmedAnswer.includes('"plan"')) {
+        planJson = trimmedAnswer;
+      } else {
+        // Method 2: Extract JSON from mixed content
+        const jsonMatch = trimmedAnswer.match(/\{[\s\S]*"type"\s*:\s*"plan"[\s\S]*\}/);
+        if (jsonMatch) {
+          planJson = jsonMatch[0];
+        }
+      }
+      
+      if (planJson) {
+        // Validate it's actually valid JSON before returning
+        try {
+          JSON.parse(planJson);
+          return new Response(JSON.stringify({ ok: true, plan: planJson, mode: 'plan' }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        } catch {
+          // Invalid JSON, return as regular message
+        }
+      }
+      
+      // Return as regular chat message
       return new Response(JSON.stringify({ ok: true, message: answer }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -1311,7 +1493,9 @@ serve(async (req: Request) => {
 
     try {
       const selectedThemeDesc = THEME_PRESETS[theme || 'none'] || THEME_PRESETS['none'];
-      const finalSystemPrompt = BASE_SYSTEM_PROMPT.replace("{{THEME_INSTRUCTIONS}}", selectedThemeDesc);
+      // CRITICAL: Force theme instructions to be the most important rule
+      const themeEnforcement = `\n\nCRITICAL STYLE RULES (MUST FOLLOW):\n${selectedThemeDesc}\nEnsure ALL components use these exact colors and vibe. DO NOT USE DEFAULT COLORS.`;
+      const finalSystemPrompt = BASE_SYSTEM_PROMPT.replace("{{THEME_INSTRUCTIONS}}", themeEnforcement);
 
       // CREATE MODE: Generate new project from scratch
       if (safeMode === 'create') {
@@ -1321,7 +1505,8 @@ serve(async (req: Request) => {
           textPrompt = `SCREENSHOT-TO-CODE: Analyze the attached screenshot(s) and recreate this UI as a React application.\n\n${textPrompt}`;
         }
 
-        const aiText = await callClaudeNonStreaming(finalSystemPrompt, textPrompt, images);
+        // Use Gemini 2.5 Pro for creation (As per user request - powerful for complex projects)
+        const aiText = await callGemini25Pro(finalSystemPrompt, textPrompt, true);
         assertNoHtml(aiText);
 
         let content = extractJsonObject(aiText);

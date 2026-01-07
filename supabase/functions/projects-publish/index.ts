@@ -98,16 +98,21 @@ async function resolveTeamId(token: string): Promise<string | null> {
 async function vercelDeploy(params: {
   token: string;
   teamId: string | null;
+  projectId: string | null;
   name: string;
   files: PublishFile[];
   target?: "production" | "preview";
 }): Promise<{ url: string; id?: string }>
 {
-  const qs = params.teamId ? `?teamId=${encodeURIComponent(params.teamId)}` : "";
+  const qsArr = [];
+  if (params.teamId) qsArr.push(`teamId=${encodeURIComponent(params.teamId)}`);
+  const qs = qsArr.length > 0 ? `?${qsArr.join("&")}` : "";
   const endpoint = `https://api.vercel.com/v13/deployments${qs}`;
 
   const payload = {
     name: params.name,
+    project: params.projectId || undefined,
+    public: true,
     files: params.files.map((f) => ({ file: f.path, data: f.content })),
     projectSettings: {
       framework: null,
@@ -202,12 +207,14 @@ serve(async (req) => {
     }
 
     const teamId = await resolveTeamId(VERCEL_TOKEN);
+    const VERCEL_PROJECT_ID = (Deno.env.get("VERCEL_PROJECT_ID") || "").trim();
 
     const name = `wakti-${projectSlug}`;
 
     const result = await vercelDeploy({
       token: VERCEL_TOKEN,
       teamId,
+      projectId: VERCEL_PROJECT_ID || null,
       name,
       files: publishFiles,
       target: "production",

@@ -5,7 +5,7 @@ import { EnhancedFrontendMemory, ConversationMetadata } from '@/services/Enhance
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { supabase } from '@/integrations/supabase/client';
 import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
-import { ChatInput, ImageMode, ChatSubmode } from '@/components/wakti-ai-v2/ChatInput';
+import { ChatInput, ImageMode, ChatSubmode, ReplyContext } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { ConversationSidebar } from '@/components/wakti-ai-v2/ConversationSidebar';
 import { DrawAfterBGCanvas, DrawAfterBGCanvasRef } from '@/components/wakti-ai/DrawAfterBGCanvas';
@@ -33,6 +33,7 @@ const WaktiAIV2 = () => {
   const [inputReservePx, setInputReservePx] = useState<number>(120);
   const [activeImageMode, setActiveImageMode] = useState<ImageMode>('text2image');
   const [chatSubmode, setChatSubmode] = useState<ChatSubmode>('chat');
+  const [replyContext, setReplyContext] = useState<ReplyContext | null>(null);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -200,13 +201,23 @@ const WaktiAIV2 = () => {
   }, [currentConversationId, handleClearChat, handleRefreshConversations]);
 
 
+  // Handler for reply button click
+  const handleReplyToMessage = useCallback((messageId: string, content: string) => {
+    setReplyContext({ messageId, content });
+  }, []);
+
+  const handleClearReply = useCallback(() => {
+    setReplyContext(null);
+  }, []);
+
   const handleSendMessage = useCallback(async (
     messageContent: string,
     trigger: string,
     attachedFiles?: any[],
     imageMode?: string,
     imageQuality?: 'fast' | 'best_fast',
-    chatSubmodeParam?: ChatSubmode
+    chatSubmodeParam?: ChatSubmode,
+    replyContextParam?: ReplyContext
   ) => {
     // Special handling for draw-after-bg mode - trigger generation in canvas
     if (trigger === 'image' && imageMode === 'draw-after-bg') {
@@ -264,15 +275,27 @@ const WaktiAIV2 = () => {
     const wantsArabic = /translate.+to\s+arabic/i.test(messageContent || '') || /إلى العربية/.test(messageContent || '');
     const requestLanguage = wantsArabic ? 'ar' : language;
 
+    // If replying to a message, prepend context for the AI
+    let finalMessageContent = messageContent;
+    if (replyContextParam) {
+      // Get the first line of the reply and truncate if necessary
+      const firstLine = replyContextParam.content.split('\n')[0].trim();
+      const replyQuote = firstLine.length > 150 
+        ? firstLine.substring(0, 150) + '...'
+        : firstLine;
+      finalMessageContent = `[Replying to: (wakti said) "${replyQuote}"]\n\n${messageContent}`;
+    }
+
     const userMessage: AIMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
-      content: messageContent,
+      content: finalMessageContent,
       timestamp: new Date(),
       intent: trigger,
       inputType,
       attachedFiles: attachedFiles,
       chatSubmode: effectiveChatSubmode, // Store study/chat mode for bubble styling
+      replyTo: replyContextParam?.messageId, // Store reference to replied message
     };
     const newMessages = [...sessionMessages, userMessage];
     setSessionMessages(newMessages);
@@ -634,6 +657,7 @@ const WaktiAIV2 = () => {
             onCancelTaskConfirmation={handleDeclineTask}
             conversationId={currentConversationId}
             isNewConversation={isNewConversation}
+            onReplyToMessage={handleReplyToMessage}
           />
         )}
       </div>
@@ -655,6 +679,8 @@ const WaktiAIV2 = () => {
               chatSubmode={chatSubmode}
               onChatSubmodeChange={setChatSubmode}
               onAddTalkMessage={handleAddTalkMessage}
+              replyContext={replyContext}
+              onClearReply={handleClearReply}
             />
           </div>,
           portalRoot
@@ -675,6 +701,8 @@ const WaktiAIV2 = () => {
               chatSubmode={chatSubmode}
               onChatSubmodeChange={setChatSubmode}
               onAddTalkMessage={handleAddTalkMessage}
+              replyContext={replyContext}
+              onClearReply={handleClearReply}
             />
           </div>
         )}

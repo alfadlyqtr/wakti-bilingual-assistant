@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useAudioSession } from '@/hooks/useAudioSession';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Loader2, ChevronDown, ChevronLeft, ChevronRight, Plus, ImagePlus, MessageSquare, Search as SearchIcon, Image as ImageIcon, SlidersHorizontal, Wand2, Mic } from 'lucide-react';
+import { Send, Loader2, ChevronDown, ChevronLeft, ChevronRight, Plus, ImagePlus, MessageSquare, Search as SearchIcon, Image as ImageIcon, SlidersHorizontal, Wand2, Mic, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -41,12 +41,17 @@ export type ImageMode = 'text2image' | 'image2image' | 'background-removal' | 'd
 
 export type ChatSubmode = 'chat' | 'study';
 
+export interface ReplyContext {
+  messageId: string;
+  content: string;
+}
+
 interface ChatInputProps {
   message: string;
   setMessage: (message: string) => void;
   isLoading: boolean;
   sessionMessages: any[];
-  onSendMessage: (message: string, trigger: string, files?: any[], imageMode?: ImageMode, imageQuality?: 'fast' | 'best_fast', chatSubmode?: ChatSubmode) => void;
+  onSendMessage: (message: string, trigger: string, files?: any[], imageMode?: ImageMode, imageQuality?: 'fast' | 'best_fast', chatSubmode?: ChatSubmode, replyContext?: ReplyContext) => void;
   onClearChat: () => void;
   onOpenPlusDrawer: () => void;
   onOpenConversations?: () => void;
@@ -60,6 +65,8 @@ interface ChatInputProps {
   chatSubmode?: ChatSubmode;
   onChatSubmodeChange?: (submode: ChatSubmode) => void;
   onAddTalkMessage?: (role: 'user' | 'assistant', text: string) => void;
+  replyContext?: ReplyContext | null;
+  onClearReply?: () => void;
 }
 
 export function ChatInput({
@@ -80,7 +87,9 @@ export function ChatInput({
   videoTemplate = 'image2video',
   chatSubmode = 'chat',
   onChatSubmodeChange,
-  onAddTalkMessage
+  onAddTalkMessage,
+  replyContext,
+  onClearReply
 }: ChatInputProps) {
   const { language } = useTheme();
   const [wasAutoSwitchedToVision, setWasAutoSwitchedToVision] = useState(false);
@@ -569,8 +578,14 @@ export function ChatInput({
         outgoingFiles,
         activeTrigger === 'image' ? imageMode : undefined, // Only pass imageMode if in image mode
         activeTrigger === 'image' && imageMode === 'text2image' ? imageQuality : undefined, // Only pass imageQuality for Text2Image
-        activeTrigger === 'chat' ? chatSubmode : undefined // Pass chatSubmode for Chat mode (chat vs study)
+        activeTrigger === 'chat' ? chatSubmode : undefined, // Pass chatSubmode for Chat mode (chat vs study)
+        replyContext || undefined // Pass reply context if replying to a message
       );
+      
+      // Clear reply context after sending
+      if (replyContext && onClearReply) {
+        onClearReply();
+      }
     } else {
       console.log('❌ SEND: No message or files to send');
     }
@@ -1529,6 +1544,41 @@ export function ChatInput({
             {/* INPUT ROW: Just textarea and send button */}
             {!isInputCollapsed && (
               <div className="relative px-3 pb-3 pt-1">
+                {/* Reply Context Bar (WhatsApp-style) */}
+                <AnimatePresence>
+                  {replyContext && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                      animate={{ opacity: 1, height: 'auto', marginBottom: 8 }}
+                      exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="flex items-center gap-2 px-3 py-2 bg-primary/10 border-l-4 border-primary rounded-r-lg">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-primary font-medium mb-0.5">
+                            {language === 'ar' ? '(قال وقطي)' : '(wakti said)'}
+                          </p>
+                          <p className="text-sm text-muted-foreground truncate">
+                            {(() => {
+                              const firstLine = replyContext.content.split('\n')[0].trim();
+                              return firstLine.length > 100 
+                                ? firstLine.substring(0, 100) + '...' 
+                                : firstLine;
+                            })()}
+                          </p>
+                        </div>
+                        <button
+                          onClick={onClearReply}
+                          className="p-1 hover:bg-background/80 rounded-md transition-colors flex-shrink-0"
+                          title={language === 'ar' ? 'إلغاء الرد' : 'Cancel reply'}
+                        >
+                          <X className="h-4 w-4 text-muted-foreground" />
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                
                 {/* Textarea with send button directly next to it */}
                 <div className="flex items-end gap-3">
                   <div className="flex-1 relative">
