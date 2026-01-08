@@ -28,6 +28,7 @@ async function callGeminiGrounded(prompt: string): Promise<string> {
   const geminiKey = Deno.env.get("GEMINI_API_KEY");
   if (!geminiKey) throw new Error("GEMINI_API_KEY not configured");
 
+  console.log("🔍 Attempting Gemini grounded search...");
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
     {
@@ -47,13 +48,88 @@ async function callGeminiGrounded(prompt: string): Promise<string> {
 
   if (!res.ok) {
     const text = await res.text();
-    console.error("Gemini grounded error:", text);
+    console.error("❌ Gemini grounded error:", text);
     throw new Error("Gemini grounded API error: " + res.status);
   }
 
   const data = await res.json();
   const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!responseText) throw new Error("No response from Gemini grounded");
+  console.log("✅ Gemini grounded success");
+  return responseText;
+}
+
+async function callTavilySearch(prompt: string, topic: string): Promise<string> {
+  const tavilyKey = Deno.env.get("TAVILY_API_KEY");
+  if (!tavilyKey) throw new Error("TAVILY_API_KEY not configured");
+
+  console.log("🔍 Attempting Tavily search as fallback...");
+  
+  // Extract a search query from the prompt (first 100 chars or until newline)
+  const searchQuery = topic.substring(0, 100);
+  
+  const res = await fetch("https://api.tavily.com/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      api_key: tavilyKey,
+      query: searchQuery,
+      max_results: 5,
+      include_answer: true,
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("❌ Tavily search error:", text);
+    throw new Error("Tavily API error: " + res.status);
+  }
+
+  const data = await res.json();
+  const answer = data?.answer || "";
+  const results = data?.results || [];
+  
+  if (!answer && results.length === 0) {
+    throw new Error("No search results from Tavily");
+  }
+
+  // Build a context string from search results
+  const context = results
+    .map((r: any) => `- ${r.title}: ${r.content}`)
+    .join("\n");
+
+  // Use Claude/OpenAI to structure the search results into slide format
+  const structurePrompt = prompt + `\n\nWeb search context:\n${answer}\n\n${context}`;
+  
+  // Try OpenAI to structure the results
+  const openaiKey = Deno.env.get("OPENAI_API_KEY");
+  if (!openaiKey) throw new Error("OPENAI_API_KEY not configured for Tavily fallback");
+
+  const structureRes = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${openaiKey}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: structurePrompt }],
+      temperature: 0.6,
+      max_tokens: 1400,
+    }),
+  });
+
+  if (!structureRes.ok) {
+    const text = await structureRes.text();
+    console.error("❌ OpenAI structure error:", text);
+    throw new Error("OpenAI structure error: " + structureRes.status);
+  }
+
+  const structureData = await structureRes.json();
+  const responseText = structureData?.choices?.[0]?.message?.content;
+  if (!responseText) throw new Error("No response from OpenAI structure");
+  
+  console.log("✅ Tavily + OpenAI fallback success");
   return responseText;
 }
 
@@ -137,14 +213,31 @@ Deno.serve(async (req: Request) => {
     }
 
     const prompt = buildPrompt(body);
-    const raw = await callGeminiGrounded(prompt);
+    let raw: string;
+    let usedProvider = "gemini";
+    let usedModel = "gemini-2.5-flash-lite";
+
+    // Try Gemini grounded first
+    try {
+      raw = await callGeminiGrounded(prompt);
+    } catch (geminiError) {
+      console.error("⚠️ Gemini failed, trying Tavily fallback...");
+      try {
+        raw = await callTavilySearch(prompt, body.topic);
+        usedProvider = "tavily";
+        usedModel = "tavily+gpt-4o-mini";
+      } catch (tavilyError) {
+        console.error("❌ Both Gemini and Tavily failed");
+        throw new Error(`Gemini: ${geminiError instanceof Error ? geminiError.message : "Unknown"} | Tavily: ${tavilyError instanceof Error ? tavilyError.message : "Unknown"}`);
+      }
+    }
 
     let slide;
     try {
       slide = JSON.parse(raw);
     } catch {
       const match = raw.match(/\{[\s\S]*\}/);
-      if (!match) throw new Error("Failed to parse Gemini response as JSON");
+      if (!match) throw new Error("Failed to parse response as JSON");
       slide = JSON.parse(match[0]);
     }
 
@@ -158,8 +251,8 @@ Deno.serve(async (req: Request) => {
 
     await logAIFromRequest(req, {
       functionName: "wakti-presentation-slide-research",
-      provider: "gemini",
-      model: "gemini-2.5-flash-lite",
+      provider: usedProvider as "gemini" | "tavily",
+      model: usedModel,
       inputText: body.topic,
       status: "success",
       metadata: { slideNumber: body.slideNumber, slideCount: body.slideCount },

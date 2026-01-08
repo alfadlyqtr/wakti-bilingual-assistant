@@ -36,38 +36,34 @@ export default function ProjectPreview({ subdomain: propSubdomain }: ProjectPrev
       setLoading(true);
       setError(null);
 
-      // Fetch project by subdomain
+      // Fetch project by subdomain (including bundled_code)
       const { data: projectData, error: projectError } = await supabase
         .from('projects' as any)
-        .select('id, name, subdomain, status')
+        .select('id, name, subdomain, status, bundled_code')
         .eq('subdomain', subdomainParam.toLowerCase())
         .eq('status', 'published')
-        .single();
+        .single() as { data: { id: string; name: string; subdomain: string; status: string; bundled_code: string | null } | null; error: any };
 
       if (projectError || !projectData) {
         setError('Project not found');
         return;
       }
 
-      // Fetch the bundled code file
-      const { data: bundledFile } = await supabase
-        .from('project_files' as any)
-        .select('content')
-        .eq('project_id', projectData.id)
-        .eq('path', '/__bundled__.json')
-        .single() as { data: { content: string } | null };
-
+      // Parse bundled_code from the project data
       let bundledCode = null;
-      if (bundledFile?.content) {
+      if (projectData.bundled_code) {
         try {
-          bundledCode = JSON.parse(bundledFile.content);
+          bundledCode = JSON.parse(projectData.bundled_code);
         } catch (e) {
           console.error('Failed to parse bundled code:', e);
         }
       }
 
       setProject({
-        ...projectData,
+        id: projectData.id,
+        name: projectData.name,
+        subdomain: projectData.subdomain,
+        status: projectData.status,
         bundledCode,
       });
     } catch (err) {

@@ -979,14 +979,11 @@ export default function ProjectDetail() {
       const bundledCode = flattenProjectFiles(projectFiles);
       console.log('Bundled code length:', bundledCode.length);
 
-      // Save bundled code to project_files as a special file
+      // Save bundled code directly to projects table
       const { error: bundleError } = await supabase
-        .from('project_files' as any)
-        .upsert({
-          project_id: project.id,
-          path: '/__bundled__.json',
-          content: bundledCode,
-        }, { onConflict: 'project_id,path' });
+        .from('projects' as any)
+        .update({ bundled_code: bundledCode })
+        .eq('id', project.id);
       
       if (bundleError) {
         console.error('Error saving bundled code:', bundleError);
