@@ -176,19 +176,38 @@ export default function ProjectPreview({ subdomain: propSubdomain }: ProjectPrev
     });
     const AnimatePresence = ({ children }) => children;
     
-    // i18next shim - full i18n object for initialization
+    // i18next shim - full i18n object with translation lookup
     const i18n = {
       language: 'en',
       languages: ['en', 'ar'],
-      t: (key) => key,
+      resources: {},
       use: function() { return this; },
       init: function(options) { 
         if (options?.lng) this.language = options.lng;
         if (options?.resources) this.resources = options.resources;
         return Promise.resolve(this); 
       },
+      t: function(key, options) {
+        // Try to find translation in resources
+        const lng = this.language || 'en';
+        const ns = options?.ns || 'translation';
+        try {
+          const langResources = this.resources[lng]?.[ns] || this.resources[lng]?.translation || {};
+          if (langResources[key]) return langResources[key];
+          // Try nested key lookup (e.g., "common.title")
+          const parts = key.split('.');
+          let value = langResources;
+          for (const part of parts) {
+            value = value?.[part];
+          }
+          if (value && typeof value === 'string') return value;
+        } catch (e) {}
+        return key; // Fallback to key
+      },
       changeLanguage: function(lng) { 
         this.language = lng || 'en'; 
+        // Trigger re-render by dispatching event
+        window.dispatchEvent(new CustomEvent('languageChanged', { detail: lng }));
         return Promise.resolve(this); 
       },
       dir: function(lng) { 
@@ -197,18 +216,29 @@ export default function ProjectPreview({ subdomain: propSubdomain }: ProjectPrev
       },
       on: function() { return this; },
       off: function() { return this; },
-      exists: function() { return true; },
-      getFixedT: function() { return (key) => key; },
+      exists: function(key) { return true; },
+      getFixedT: function(lng) { return (key) => this.t(key); },
       hasResourceBundle: function() { return true; },
-      addResourceBundle: function() { return this; },
-      resources: {}
+      addResourceBundle: function(lng, ns, resources) { 
+        if (!this.resources[lng]) this.resources[lng] = {};
+        this.resources[lng][ns] = { ...this.resources[lng][ns], ...resources };
+        return this; 
+      }
     };
     
-    // react-i18next shim - provides basic translation functionality
-    const useTranslation = () => ({
-      t: (key) => key,
-      i18n: i18n
-    });
+    // react-i18next shim - provides translation hook
+    const useTranslation = (ns) => {
+      const [, forceUpdate] = useState(0);
+      useEffect(() => {
+        const handler = () => forceUpdate(n => n + 1);
+        window.addEventListener('languageChanged', handler);
+        return () => window.removeEventListener('languageChanged', handler);
+      }, []);
+      return {
+        t: (key, options) => i18n.t(key, { ns, ...options }),
+        i18n: i18n
+      };
+    };
     
     // initReactI18next shim for i18n.use(initReactI18next)
     const initReactI18next = { type: '3rdParty', init: () => {} };

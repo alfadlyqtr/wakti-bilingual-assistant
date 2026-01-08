@@ -836,14 +836,6 @@ export default function ProjectDetail() {
       if (!files[filePath]) return;
       if (!filePath.match(/\.(js|jsx|ts|tsx)$/)) return;
       
-      // Skip i18n config files - they just initialize the library which we shim
-      // These files typically just do: i18n.use(X).init({...})
-      if (filePath.includes('i18n') && !filePath.includes('component')) {
-        console.log('Skipping i18n config file:', filePath);
-        processedFiles.add(filePath);
-        return;
-      }
-      
       processedFiles.add(filePath);
       const content = files[filePath];
       
