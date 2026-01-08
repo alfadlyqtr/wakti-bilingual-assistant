@@ -86,6 +86,7 @@ export default function ProjectPreview({ subdomain: propSubdomain }: ProjectPrev
   <title>${escapeHtml(projectName)}</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.23.5/babel.min.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Tajawal:wght@300;400;500;700&family=Cairo:wght@300;400;500;600;700&family=Oswald:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -133,7 +134,7 @@ export default function ProjectPreview({ subdomain: propSubdomain }: ProjectPrev
     };
   </script>
   
-  <script>
+  <script type="text/babel" data-presets="react">
     // Server-built bundle with all shims included
     ${bundledJs}
     
@@ -143,7 +144,7 @@ export default function ProjectPreview({ subdomain: propSubdomain }: ProjectPrev
         const root = ReactDOM.createRoot(document.getElementById('root'));
         // Handle both default export and named App
         const AppComponent = App.default || App;
-        root.render(React.createElement(AppComponent));
+        root.render(<AppComponent />);
       } else {
         throw new Error('App component not found in bundle');
       }
