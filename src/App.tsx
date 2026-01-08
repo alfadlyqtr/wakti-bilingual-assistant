@@ -12,6 +12,39 @@ import { Analytics } from "@vercel/analytics/react";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { AppStoreBanner } from "@/components/AppStoreBanner";
 
+// Subdomain detection helper
+function getSubdomain(): string | null {
+  const hostname = window.location.hostname;
+  
+  // Handle localhost/dev environments
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return null;
+  }
+  
+  // Split hostname into parts
+  const parts = hostname.split('.');
+  
+  // Check for wakti.ai domain (e.g., mozi.wakti.ai)
+  if (parts.length >= 3 && parts[parts.length - 2] === 'wakti' && parts[parts.length - 1] === 'ai') {
+    const subdomain = parts.slice(0, -2).join('.');
+    // Exclude reserved subdomains
+    if (subdomain && subdomain !== 'www' && subdomain !== 'app' && subdomain !== 'api') {
+      return subdomain;
+    }
+  }
+  
+  // Check for wakti.qa domain (e.g., mozi.wakti.qa)
+  if (parts.length >= 3 && parts[parts.length - 2] === 'wakti' && parts[parts.length - 1] === 'qa') {
+    const subdomain = parts.slice(0, -2).join('.');
+    // Exclude reserved subdomains
+    if (subdomain && subdomain !== 'www' && subdomain !== 'app' && subdomain !== 'api') {
+      return subdomain;
+    }
+  }
+  
+  return null;
+}
+
 // Import all your existing components
 import Index from "./pages/Index";
 import RootHandler from "@/components/RootHandler";
@@ -86,7 +119,24 @@ import "./App.css";
 
 const queryClient = new QueryClient();
 
+// Check for subdomain on app load
+const detectedSubdomain = getSubdomain();
+
 function App() {
+  // If subdomain detected (e.g., mozi.wakti.ai), render ProjectPreview directly
+  if (detectedSubdomain) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <ProjectPreview subdomain={detectedSubdomain} />
+          <SpeedInsights />
+          <Analytics />
+        </ThemeProvider>
+      </QueryClientProvider>
+    );
+  }
+
+  // Normal app routing
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>

@@ -11,8 +11,14 @@ interface ProjectData {
   files: Record<string, string>;
 }
 
-export default function ProjectPreview() {
-  const { subdomain } = useParams<{ subdomain: string }>();
+interface ProjectPreviewProps {
+  subdomain?: string;
+}
+
+export default function ProjectPreview({ subdomain: propSubdomain }: ProjectPreviewProps) {
+  const { subdomain: paramSubdomain } = useParams<{ subdomain: string }>();
+  const subdomain = propSubdomain || paramSubdomain;
+  
   const [project, setProject] = useState<ProjectData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
