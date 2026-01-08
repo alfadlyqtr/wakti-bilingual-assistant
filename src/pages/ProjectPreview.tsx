@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface ProjectData {
   id: string;
@@ -22,6 +22,8 @@ export default function ProjectPreview({ subdomain: propSubdomain }: ProjectPrev
   const [project, setProject] = useState<ProjectData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [iframeError, setIframeError] = useState<string | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     if (subdomain) {
@@ -120,11 +122,77 @@ ${convertToGlobalComponent(content, componentName)}
     * { font-family: 'Inter', 'Tajawal', system-ui, sans-serif; }
     body { margin: 0; padding: 0; min-height: 100vh; background: #fff; }
     #root { min-height: 100vh; }
+    .error-container { 
+      min-height: 100vh; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center; 
+      background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+      padding: 20px;
+    }
+    .error-box { 
+      text-align: center; 
+      color: white; 
+      max-width: 400px;
+    }
+    .error-icon {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 20px;
+      background: rgba(239, 68, 68, 0.2);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+    }
+    .error-title { font-size: 24px; font-weight: bold; margin-bottom: 12px; }
+    .error-message { color: #9ca3af; margin-bottom: 20px; }
+    .error-details { 
+      background: rgba(0,0,0,0.3); 
+      padding: 12px; 
+      border-radius: 8px; 
+      text-align: left;
+      margin-bottom: 20px;
+    }
+    .error-details code { 
+      color: #f87171; 
+      font-size: 12px; 
+      word-break: break-all;
+    }
+    .error-btn {
+      display: inline-block;
+      padding: 10px 24px;
+      background: white;
+      color: #111827;
+      border-radius: 9999px;
+      font-weight: 600;
+      text-decoration: none;
+    }
     ${inlineCss}
   </style>
 </head>
 <body>
   <div id="root"></div>
+  
+  <script>
+    // Global error handler to catch runtime errors
+    window.onerror = function(message, source, lineno, colno, error) {
+      console.error('Runtime error:', message, error);
+      var root = document.getElementById('root');
+      if (root) {
+        root.innerHTML = '<div class="error-container"><div class="error-box">' +
+          '<div class="error-icon">⚠️</div>' +
+          '<div class="error-title">Oops! Something went wrong</div>' +
+          '<div class="error-message">There was an error running this project. Please try regenerating it in the editor.</div>' +
+          '<div class="error-details"><code>' + message + '</code></div>' +
+          '<a href="https://wakti.qa/projects" class="error-btn">Open Editor</a>' +
+          '</div></div>';
+      }
+      return true;
+    };
+  </script>
+  
   <script type="text/babel" data-presets="react">
     const { useState, useEffect, useRef, useCallback, useMemo, createContext, useContext, Fragment } = React;
     
@@ -213,35 +281,142 @@ ${convertToGlobalComponent(content, componentName)}
     );
   }
 
+  // Handle iframe load and error detection
+  const handleIframeLoad = () => {
+    // Listen for errors from the iframe
+    try {
+      const iframe = iframeRef.current;
+      if (iframe && iframe.contentWindow) {
+        // Add error listener to iframe window
+        iframe.contentWindow.onerror = (message, source, lineno, colno, error) => {
+          console.error('Iframe error:', message, error);
+          setIframeError(`Runtime Error: ${message}`);
+          return true; // Prevent default error handling
+        };
+      }
+    } catch (e) {
+      // Cross-origin restrictions may prevent this
+      console.warn('Could not attach error handler to iframe:', e);
+    }
+  };
+
   // Render the project in an iframe for isolation
   const htmlContent = generateHtml(project.files, project.name);
   const blob = new Blob([htmlContent], { type: 'text/html' });
   const blobUrl = URL.createObjectURL(blob);
 
+  // Show iframe error screen
+  if (iframeError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800">
+        <div className="text-center text-white max-w-md px-6">
+          <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-red-500/20 flex items-center justify-center">
+            <AlertTriangle className="h-10 w-10 text-red-400" />
+          </div>
+          <h1 className="text-2xl font-bold mb-3">Oops! Something went wrong</h1>
+          <p className="text-gray-300 mb-6">
+            There was an error loading this project. The code may have an issue that needs to be fixed in the editor.
+          </p>
+          <div className="bg-gray-800/50 rounded-lg p-4 mb-6 text-left">
+            <p className="text-xs text-gray-400 mb-1">Error details:</p>
+            <code className="text-sm text-red-300 break-all">{iframeError}</code>
+          </div>
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={() => setIframeError(null)}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-full font-medium transition-colors"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Try Again
+            </button>
+            <a 
+              href="https://wakti.qa/projects" 
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-gray-900 rounded-full font-semibold hover:bg-gray-100 transition-colors"
+            >
+              Open Editor
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <iframe
+      ref={iframeRef}
       src={blobUrl}
       title={project.name}
       className="w-full h-screen border-0"
       sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+      onLoad={handleIframeLoad}
     />
   );
 }
 
 // Helper functions
 function convertToGlobalComponent(code: string, componentName: string): string {
+  if (!code || code.trim() === '') {
+    // Return a fallback component if no code provided
+    return `const ${componentName} = function() { 
+      return React.createElement('div', { 
+        style: { padding: '20px', textAlign: 'center' } 
+      }, 'Component ${componentName} is empty'); 
+    };`;
+  }
+
   let converted = code;
   
-  // Remove import statements
-  converted = converted.replace(/^import\s+.*?from\s+['"].*?['"];?\s*$/gm, '');
-  converted = converted.replace(/^import\s+['"].*?['"];?\s*$/gm, '');
+  // Remove import statements (multi-line and single-line)
+  converted = converted.replace(/^import\s+[\s\S]*?from\s+['"][^'"]*['"];?\s*$/gm, '');
+  converted = converted.replace(/^import\s+['"][^'"]*['"];?\s*$/gm, '');
+  converted = converted.replace(/^import\s*\{[\s\S]*?\}\s*from\s*['"][^'"]*['"];?\s*$/gm, '');
   
-  // Remove export default and convert to global assignment
-  converted = converted.replace(/export\s+default\s+function\s+(\w+)/g, 'const $1 = function');
-  converted = converted.replace(/export\s+default\s+(\w+);?/g, '');
-  converted = converted.replace(/export\s+function\s+(\w+)/g, 'const $1 = function');
+  // Handle: export default function ComponentName() { ... }
+  converted = converted.replace(/export\s+default\s+function\s+(\w+)\s*\(/g, 'const $1 = function(');
+  
+  // Handle: export default function() { ... } (anonymous) - assign to componentName
+  converted = converted.replace(/export\s+default\s+function\s*\(/g, `const ${componentName} = function(`);
+  
+  // Handle: const Component = () => { ... }; export default Component;
+  converted = converted.replace(/export\s+default\s+(\w+)\s*;?/g, '');
+  
+  // Handle: export function ComponentName() { ... }
+  converted = converted.replace(/export\s+function\s+(\w+)\s*\(/g, 'const $1 = function(');
+  
+  // Handle: export const ComponentName = ...
   converted = converted.replace(/export\s+const\s+/g, 'const ');
-  converted = converted.replace(/export\s+\{[^}]*\};?/g, '');
+  
+  // Handle: export { ... }
+  converted = converted.replace(/export\s+\{[^}]*\}\s*;?/g, '');
+  
+  // Handle arrow function components: const App = () => { ... }
+  // These should already work, but ensure they're defined
+  
+  // Check if the component is defined - if not, create a wrapper
+  const hasComponentDef = new RegExp(`(const|let|var|function)\\s+${componentName}\\s*[=(]`).test(converted);
+  
+  if (!hasComponentDef && componentName === 'App') {
+    // If App is not defined, look for any default export pattern we might have missed
+    // or wrap the entire code as the App component
+    const trimmed = converted.trim();
+    if (trimmed.length > 0 && !trimmed.includes('const App') && !trimmed.includes('function App')) {
+      // Check if there's JSX-like content that could be a component body
+      if (trimmed.includes('return') || trimmed.includes('React.createElement') || trimmed.includes('<')) {
+        // Wrap as App component
+        converted = `const App = function() {\n${converted}\n};`;
+      } else {
+        // Create a simple fallback App
+        converted += `\nconst App = function() { 
+          return React.createElement('div', { 
+            style: { padding: '40px', textAlign: 'center', fontFamily: 'system-ui' } 
+          }, [
+            React.createElement('h1', { key: 'title' }, 'Welcome'),
+            React.createElement('p', { key: 'desc', style: { color: '#666' } }, 'Your app is loading...')
+          ]); 
+        };`;
+      }
+    }
+  }
   
   return converted;
 }
