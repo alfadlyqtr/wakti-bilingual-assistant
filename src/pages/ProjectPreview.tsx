@@ -176,15 +176,45 @@ export default function ProjectPreview({ subdomain: propSubdomain }: ProjectPrev
     });
     const AnimatePresence = ({ children }) => children;
     
+    // i18next shim - full i18n object for initialization
+    const i18n = {
+      language: 'en',
+      languages: ['en', 'ar'],
+      t: (key) => key,
+      use: function() { return this; },
+      init: function(options) { 
+        if (options?.lng) this.language = options.lng;
+        if (options?.resources) this.resources = options.resources;
+        return Promise.resolve(this); 
+      },
+      changeLanguage: function(lng) { 
+        this.language = lng || 'en'; 
+        return Promise.resolve(this); 
+      },
+      dir: function(lng) { 
+        const l = lng || this.language;
+        return l?.startsWith('ar') ? 'rtl' : 'ltr'; 
+      },
+      on: function() { return this; },
+      off: function() { return this; },
+      exists: function() { return true; },
+      getFixedT: function() { return (key) => key; },
+      hasResourceBundle: function() { return true; },
+      addResourceBundle: function() { return this; },
+      resources: {}
+    };
+    
     // react-i18next shim - provides basic translation functionality
     const useTranslation = () => ({
-      t: (key) => key, // Return the key as-is (or could parse _en/_ar suffixes)
-      i18n: { 
-        language: 'en', 
-        changeLanguage: () => Promise.resolve(),
-        dir: () => 'ltr'
-      }
+      t: (key) => key,
+      i18n: i18n
     });
+    
+    // initReactI18next shim for i18n.use(initReactI18next)
+    const initReactI18next = { type: '3rdParty', init: () => {} };
+    
+    // I18nextProvider shim
+    const I18nextProvider = ({ children }) => children;
     
     // Lucide icons shim
     const createIcon = (name, paths) => (props) => React.createElement('svg', {
