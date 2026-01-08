@@ -143,6 +143,8 @@ export default function Projects() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [prompt, setPrompt] = useState('');
   const [generating, setGenerating] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState('none');
@@ -677,12 +679,28 @@ Apply these styles consistently throughout the entire design.`;
 
   const deleteProject = async (e: React.MouseEvent, projectId: string) => {
     e.stopPropagation();
+    
+    if (deleteConfirmId !== projectId) {
+      // First click - show confirmation dialog
+      setDeleteConfirmId(projectId);
+      setDeleteConfirmText('');
+      return;
+    }
+    
+    // Second click - verify text and delete
+    if (deleteConfirmText.toLowerCase() !== 'delete') {
+      toast.error(isRTL ? 'اكتب "delete" للتأكيد' : 'Type "delete" to confirm');
+      return;
+    }
+    
     try {
       setDeleting(projectId);
       await (supabase.from('project_files' as any).delete().eq('project_id', projectId) as any);
       await (supabase.from('projects' as any).delete().eq('id', projectId) as any);
       setProjects((prev) => prev.filter((p) => p.id !== projectId));
-      toast.success(isRTL ? 'تم الحذف' : 'Deleted');
+      setDeleteConfirmId(null);
+      setDeleteConfirmText('');
+      toast.success(isRTL ? 'تم الحذف' : 'Project deleted');
     } catch (err) {
       toast.error(isRTL ? 'فشل في الحذف' : 'Failed to delete');
     } finally {
@@ -1075,65 +1093,142 @@ Apply these styles consistently throughout the entire design.`;
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {projects.map((project) => (
-                <div
-                  key={project.id}
-                  onClick={() => navigate(`/projects/${project.id}`)}
-                  className="group relative bg-card rounded-2xl overflow-hidden cursor-pointer border hover:border-[#060541] dark:hover:border-blue-500 transition-all hover:shadow-lg"
-                >
-                  {/* Project Preview Thumbnail */}
-                  <ProjectPreviewThumbnail project={project} isRTL={isRTL} />
-                  
-                  {/* Info */}
-                  <div className="p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <h3 className="font-semibold truncate">{project.name}</h3>
-                        <p className="text-sm text-muted-foreground truncate mt-1">
-                          {project.description || (isRTL ? 'مشروع AI' : 'AI Project')}
-                        </p>
+                <div key={project.id}>
+                  <div
+                    onClick={() => navigate(`/projects/${project.id}`)}
+                    className="group relative overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-2xl"
+                    style={{
+                      background: isDark 
+                        ? 'linear-gradient(135deg, rgba(17,24,39,0.8) 0%, rgba(31,41,55,0.6) 50%, rgba(55,65,81,0.4) 100%)'
+                        : 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(249,250,251,0.9) 100%)',
+                      borderRadius: '20px',
+                      border: isDark 
+                        ? '1px solid rgba(99,102,241,0.2)' 
+                        : '1px solid rgba(229,231,235,0.8)',
+                      backdropFilter: 'blur(10px)',
+                      boxShadow: isDark
+                        ? '0 20px 60px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1)'
+                        : '0 20px 60px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.5)'
+                    }}
+                  >
+                    {/* Luxury Gradient Overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-purple-500/5 pointer-events-none" />
+                    
+                    {/* Project Preview Thumbnail */}
+                    <ProjectPreviewThumbnail project={project} isRTL={isRTL} />
+                    
+                    {/* Luxury Info Section */}
+                    <div className="p-6 relative z-10">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-bold text-lg truncate text-zinc-900 dark:text-white tracking-tight">{project.name}</h3>
+                        </div>
+                        <span
+                          className={cn(
+                            "shrink-0 px-3 py-1.5 text-[11px] rounded-full font-bold uppercase tracking-widest",
+                            project.status === 'published'
+                              ? "bg-emerald-500/30 text-emerald-600 dark:text-emerald-300 border border-emerald-500/50 shadow-lg shadow-emerald-500/20"
+                              : project.status === 'generating'
+                              ? "bg-indigo-500/30 text-indigo-600 dark:text-indigo-300 border border-indigo-500/50 shadow-lg shadow-indigo-500/20 animate-pulse"
+                              : "bg-amber-500/30 text-amber-600 dark:text-amber-300 border border-amber-500/50 shadow-lg shadow-amber-500/20"
+                          )}
+                        >
+                          {project.status === 'published' ? (isRTL ? 'منشور' : 'Live') : project.status === 'generating' ? (isRTL ? 'بناء' : 'Building') : (isRTL ? 'مسودة' : 'Draft')}
+                        </span>
                       </div>
-                      <span
-                        className={cn(
-                          "shrink-0 px-2 py-1 text-xs rounded-full font-medium",
-                          project.status === 'published'
-                            ? "bg-green-500/20 text-green-600 dark:text-green-400"
-                            : "bg-amber-500/20 text-amber-600 dark:text-amber-400"
-                        )}
+                    </div>
+
+                    {/* Actions - Always visible for mobile-friendliness */}
+                    <div className="absolute top-4 right-4 flex gap-2 z-10">
+                      {project.status === 'published' && project.slug && (
+                        <Button
+                          size="icon"
+                          className="h-9 w-9 rounded-full bg-white/90 dark:bg-zinc-800/90 backdrop-blur-sm shadow-lg hover:bg-white dark:hover:bg-zinc-700 text-indigo-600 dark:text-indigo-400 hover:shadow-xl transition-all"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(`${window.location.origin}/${project.slug}`, '_blank');
+                          }}
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <Button
+                        size="icon"
+                        className="h-9 w-9 rounded-full text-red-500 hover:text-red-600 bg-white/90 dark:bg-zinc-800/90 backdrop-blur-sm shadow-lg hover:bg-red-50 dark:hover:bg-red-500/10 hover:shadow-xl transition-all"
+                        onClick={(e) => deleteProject(e, project.id)}
+                        disabled={deleting === project.id}
                       >
-                        {project.status === 'published' ? (isRTL ? 'منشور' : 'Live') : (isRTL ? 'مسودة' : 'Draft')}
-                      </span>
+                        {deleting === project.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </Button>
                     </div>
                   </div>
 
-                  {/* Actions - Always visible for mobile-friendliness */}
-                  <div className="absolute top-3 right-3 flex gap-2 z-10">
-                    {project.status === 'published' && project.slug && (
-                      <Button
-                        size="icon"
-                        variant="secondary"
-                        className="h-8 w-8 rounded-full bg-white/80 dark:bg-zinc-800/80 backdrop-blur-sm shadow-sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.open(`${window.location.origin}/${project.slug}`, '_blank');
-                        }}
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </Button>
-                    )}
-                    <Button
-                      size="icon"
-                      variant="secondary"
-                      className="h-8 w-8 rounded-full text-red-500 hover:text-red-600 bg-white/80 dark:bg-zinc-800/80 backdrop-blur-sm shadow-sm hover:bg-red-500/10"
-                      onClick={(e) => deleteProject(e, project.id)}
-                      disabled={deleting === project.id}
-                    >
-                      {deleting === project.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
+                  {/* Delete Confirmation Dialog */}
+                  {deleteConfirmId === project.id && (
+                    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                      <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 max-w-sm w-full p-6 space-y-4">
+                        <div>
+                          <h3 className="text-lg font-bold text-zinc-900 dark:text-white">
+                            {isRTL ? 'حذف المشروع؟' : 'Delete Project?'}
+                          </h3>
+                          <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-2">
+                            {isRTL 
+                              ? 'هذا سيحذف المشروع وكل محتوياته - الكود والتصميم والخادم والرابط المنشور. لا يمكن التراجع عن هذا.'
+                              : 'This will permanently delete your project, including all code, design, backend, and its public URL. This cannot be undone.'}
+                          </p>
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 block mb-2">
+                            {isRTL ? 'اكتب "delete" للتأكيد:' : 'Type "delete" to confirm:'}
+                          </label>
+                          <input
+                            type="text"
+                            value={deleteConfirmText}
+                            onChange={(e) => setDeleteConfirmText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && deleteConfirmText.toLowerCase() === 'delete') {
+                                deleteProject(e as any, project.id);
+                              }
+                            }}
+                            placeholder="delete"
+                            className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                            autoFocus
+                          />
+                        </div>
+
+                        <div className="flex gap-3 pt-2">
+                          <button
+                            onClick={() => {
+                              setDeleteConfirmId(null);
+                              setDeleteConfirmText('');
+                            }}
+                            className="flex-1 px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors font-medium"
+                          >
+                            {isRTL ? 'إلغاء' : 'Cancel'}
+                          </button>
+                          <button
+                            onClick={(e) => deleteProject(e, project.id)}
+                            disabled={deleteConfirmText.toLowerCase() !== 'delete' || deleting === project.id}
+                            className="flex-1 px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 disabled:bg-red-500/50 disabled:cursor-not-allowed text-white transition-colors font-medium flex items-center justify-center gap-2"
+                          >
+                            {deleting === project.id ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                {isRTL ? 'جاري الحذف...' : 'Deleting...'}
+                              </>
+                            ) : (
+                              isRTL ? 'حذف المشروع' : 'Delete Project'
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

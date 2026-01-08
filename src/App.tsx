@@ -80,6 +80,7 @@ import MyWarranty from "./pages/MyWarranty";
 import Projects from "./pages/Projects";
 import ProjectDetail from "./pages/ProjectDetail";
 import ProjectSlugRedirect from "./pages/ProjectSlugRedirect";
+import ProjectPreview from "./pages/ProjectPreview";
 
 import "./App.css";
 
@@ -340,6 +341,9 @@ function App() {
                     <AppLayout><ProjectDetail /></AppLayout>
                   </GiftNotificationProvider>
                 } />
+                
+                {/* Public preview route for published projects (subdomain rewrite target) */}
+                <Route path="/preview/:subdomain" element={<ProjectPreview />} />
                 
                 <Route path="/:slug" element={<ProjectSlugRedirect />} />
                 

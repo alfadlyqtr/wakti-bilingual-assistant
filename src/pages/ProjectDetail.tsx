@@ -37,7 +37,8 @@ import {
   MousePointer2, 
   X,
   Camera,
-  Copy
+  Copy,
+  Edit2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -58,6 +59,7 @@ interface Project {
   published_url: string | null;
   deployment_id: string | null;
   thumbnail_url?: string | null;
+  subdomain?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -109,6 +111,8 @@ export default function ProjectDetail() {
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [codeContent, setCodeContent] = useState('');
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState('');
   
   // Multi-file support (like Google AI Studio)
   const [generatedFiles, setGeneratedFiles] = useState<Record<string, string>>({});
@@ -184,6 +188,12 @@ export default function ProjectDetail() {
   
   // Force Sandpack re-render key (incremented on revert)
   const [sandpackKey, setSandpackKey] = useState(0);
+
+  // Publish modal state
+  const [showPublishModal, setShowPublishModal] = useState(false);
+  const [subdomainInput, setSubdomainInput] = useState('');
+  const [subdomainError, setSubdomainError] = useState<string | null>(null);
+  const [checkingSubdomain, setCheckingSubdomain] = useState(false);
 
   // Track if we've already started generation to prevent double-runs
   const generationStartedRef = useRef(false);
@@ -706,8 +716,77 @@ export default function ProjectDetail() {
     setTimeout(() => setCodeContent(prev => prev.trim()), 10);
   };
 
+  // Validate subdomain format
+  const validateSubdomain = (value: string): string | null => {
+    if (!value) return isRTL ? 'أدخل اسم الموقع' : 'Enter a site name';
+    if (value.length < 3) return isRTL ? 'الاسم قصير جداً (3 أحرف على الأقل)' : 'Name too short (min 3 characters)';
+    if (value.length > 30) return isRTL ? 'الاسم طويل جداً (30 حرف كحد أقصى)' : 'Name too long (max 30 characters)';
+    if (!/^[a-z0-9-]+$/.test(value)) return isRTL ? 'استخدم أحرف صغيرة وأرقام وشرطات فقط' : 'Use only lowercase letters, numbers, and hyphens';
+    if (value.startsWith('-') || value.endsWith('-')) return isRTL ? 'لا يمكن أن يبدأ أو ينتهي بشرطة' : 'Cannot start or end with a hyphen';
+    if (['www', 'api', 'app', 'admin', 'mail', 'ftp', 'cdn', 'static'].includes(value)) {
+      return isRTL ? 'هذا الاسم محجوز' : 'This name is reserved';
+    }
+    return null;
+  };
+
+  // Check if subdomain is available
+  const checkSubdomainAvailability = async (value: string): Promise<boolean> => {
+    try {
+      setCheckingSubdomain(true);
+      const { data, error } = await supabase
+        .from('projects' as any)
+        .select('id')
+        .eq('subdomain', value.toLowerCase())
+        .neq('id', project?.id || '')
+        .maybeSingle();
+      
+      if (error) {
+        console.error('Error checking subdomain:', error);
+        return false;
+      }
+      return !data; // Available if no data returned
+    } finally {
+      setCheckingSubdomain(false);
+    }
+  };
+
+  // Open publish modal
+  const openPublishModal = () => {
+    // Pre-fill with existing subdomain or generate from project name
+    const defaultSubdomain = project?.subdomain || 
+      project?.name?.toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .slice(0, 30) || '';
+    setSubdomainInput(defaultSubdomain);
+    setSubdomainError(null);
+    setShowPublishModal(true);
+  };
+
+  // Handle subdomain input change
+  const handleSubdomainChange = (value: string) => {
+    const cleaned = value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    setSubdomainInput(cleaned);
+    setSubdomainError(validateSubdomain(cleaned));
+  };
+
   const publishProject = async () => {
     if (!project || !session?.access_token) return;
+
+    // Validate subdomain
+    const validationError = validateSubdomain(subdomainInput);
+    if (validationError) {
+      setSubdomainError(validationError);
+      return;
+    }
+
+    // Check availability
+    const isAvailable = await checkSubdomainAvailability(subdomainInput);
+    if (!isAvailable) {
+      setSubdomainError(isRTL ? 'هذا الاسم مستخدم بالفعل' : 'This name is already taken');
+      return;
+    }
 
     try {
       setPublishing(true);
@@ -765,13 +844,16 @@ export default function ProjectDetail() {
       }
 
       const { url, deploymentId } = response.data;
+      const finalSubdomain = subdomainInput.toLowerCase();
+      const subdomainUrl = `https://${finalSubdomain}.wakti.ai`;
 
       await (supabase
         .from('projects' as any)
         .update({
           status: 'published',
-          published_url: url,
+          published_url: subdomainUrl,
           deployment_id: deploymentId,
+          subdomain: finalSubdomain,
           published_at: new Date().toISOString(),
         })
         .eq('id', project.id) as any);
@@ -779,10 +861,12 @@ export default function ProjectDetail() {
       setProject(prev => prev ? {
         ...prev,
         status: 'published',
-        published_url: url,
+        published_url: subdomainUrl,
         deployment_id: deploymentId,
+        subdomain: finalSubdomain,
       } : null);
 
+      setShowPublishModal(false);
       toast.success(isRTL ? 'تم النشر بنجاح!' : 'Published successfully!');
     } catch (err: any) {
       console.error('Error publishing:', err);
@@ -1496,77 +1580,6 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
 
   return (
     <div className={cn("flex flex-col h-[calc(100vh-64px)] bg-background overflow-hidden", isRTL && "rtl")}>
-      {/* Enhanced Top Header Bar */}
-      <div className="flex items-center justify-between px-3 md:px-4 py-2 border-b border-border/50 bg-gradient-to-r from-background via-background to-indigo-500/5 dark:to-indigo-500/10 backdrop-blur-xl shrink-0 z-20 pt-[env(safe-area-inset-top)]">
-        <div className="flex items-center gap-2 md:gap-4 min-w-0">
-          {/* Back button and Status Badge stacked */}
-          <div className="flex flex-col items-center gap-0.5 shrink-0">
-            <button 
-              onClick={() => navigate('/projects')} 
-              className="p-1.5 md:p-2 rounded-xl bg-muted/50 dark:bg-white/5 border border-border/50 hover:border-indigo-500/30 hover:bg-indigo-500/10 text-muted-foreground hover:text-indigo-500 transition-all active:scale-95"
-              title={isRTL ? 'رجوع' : 'Back'}
-            >
-              <ArrowLeft className="h-4 w-4 md:h-5 md:w-5" />
-            </button>
-            <span className={cn(
-              "px-1 md:px-1.5 py-0.5 rounded-full text-[7px] md:text-[8px] font-bold uppercase tracking-wider",
-              displayProject.status === 'published' 
-                ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400" 
-                : displayProject.status === 'generating'
-                ? "bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 animate-pulse"
-                : "bg-amber-500/20 text-amber-600 dark:text-amber-400"
-            )}>
-              {displayProject.status === 'published' ? (isRTL ? 'منشور' : 'Live') : 
-               displayProject.status === 'generating' ? (isRTL ? 'بناء' : 'Building') :
-               (isRTL ? 'مسودة' : 'Draft')}
-            </span>
-          </div>
-          
-          {/* Project name only - Truncated for mobile */}
-          <h1 className="font-semibold text-xs md:text-sm leading-tight line-clamp-1 min-w-0 max-w-[120px] xs:max-w-[150px] sm:max-w-[200px] md:max-w-[350px]">
-            {displayProject.name}
-          </h1>
-        </div>
-        
-        <div className="flex items-center gap-1.5 md:gap-2 shrink-0 ml-1">
-          {/* Action buttons - icon only on mobile for better fit */}
-          <div className="flex items-center gap-1 md:gap-1.5">
-            {displayProject.status === 'published' && displayProject.slug && (
-              <button 
-                onClick={() => window.open(`${window.location.origin}/${displayProject.slug}`, '_blank')}
-                className="p-1.5 md:p-2 rounded-xl bg-muted/30 dark:bg-white/5 border border-border/50 text-muted-foreground hover:text-foreground hover:border-indigo-500/30 transition-all active:scale-95"
-                title={isRTL ? 'عرض' : 'View Live'}
-              >
-                <ExternalLink className="h-4 w-4" />
-              </button>
-            )}
-            <button 
-              onClick={downloadProject} 
-              className="p-1.5 md:p-2 rounded-xl bg-muted/30 dark:bg-white/5 border border-border/50 text-muted-foreground hover:text-foreground hover:border-indigo-500/30 transition-all active:scale-95"
-              title={isRTL ? 'تحميل' : 'Download'}
-            >
-              <Download className="h-4 w-4" />
-            </button>
-            <button 
-              onClick={publishProject}
-              disabled={publishing}
-              className={cn(
-                "h-8 md:h-10 px-2.5 md:px-4 rounded-xl font-semibold text-[10px] md:text-xs flex items-center gap-1.5 md:gap-2 transition-all active:scale-95 shrink-0",
-                "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/30",
-                "hover:shadow-xl hover:shadow-indigo-500/40 hover:from-indigo-600 hover:to-purple-700",
-                publishing && "opacity-70 pointer-events-none"
-              )}
-            >
-              {publishing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Upload className="h-3.5 w-3.5 md:h-4 md:w-4" />
-              )}
-              <span className="hidden xs:inline">{isRTL ? 'نشر' : 'Publish'}</span>
-            </button>
-          </div>
-        </div>
-      </div>
 
       {/* Modern Mobile Navigation Segmented Toggle */}
       <div className="md:hidden px-4 py-2 bg-background/50 backdrop-blur-sm border-b border-border/40 shrink-0">
@@ -2474,60 +2487,88 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
           "flex-1 flex flex-col bg-[#0c0f14] relative h-full",
           mobileTab === 'chat' ? "hidden md:flex" : "flex w-full h-full"
         )}>
-          {/* Preview Header - Compact */}
-          <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-900 border-b border-white/5 shrink-0">
-            <div className="flex items-center gap-2">
-              {/* Device Switcher - visible on all screens */}
-              <div className="flex items-center bg-zinc-800/50 rounded-lg p-0.5 border border-white/5">
-                {deviceOptions.map((option) => (
-                  <button
-                    key={option.id}
-                    onClick={() => setDeviceView(option.id)}
-                    className={cn(
-                      "p-1.5 rounded-md transition-all",
-                      deviceView === option.id 
-                        ? "bg-indigo-500 text-white shadow-md shadow-indigo-500/30" 
-                        : "text-zinc-400 hover:text-white hover:bg-zinc-700/50"
-                    )}
-                    title={option.label}
-                  >
-                    <option.icon className="h-3.5 w-3.5" />
-                  </button>
-                ))}
-              </div>
-              
-              <div className="h-4 w-px bg-white/10 hidden xs:block" />
-              
-              <button 
-                onClick={() => {
-                  const el = document.querySelector('.sandpack-preview-container');
-                  if (el) el.requestFullscreen?.();
+          {/* Project Info Bar - Back, Name, Status */}
+          <div className="flex items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-zinc-900/80 to-zinc-900/40 border-b border-white/10 shrink-0">
+            {/* Back button - Enhanced */}
+            <button 
+              onClick={() => navigate('/projects')} 
+              className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-all shrink-0 group"
+              title={isRTL ? 'رجوع' : 'Back'}
+            >
+              <ArrowLeft className="h-4 w-4 group-hover:scale-110 transition-transform" />
+            </button>
+            
+            {/* Project name - Editable with Edit/Save Toggle */}
+            <div className="flex-1 min-w-0 flex items-center gap-2">
+              <input 
+                type="text"
+                disabled={!isEditingName}
+                value={isEditingName ? editedName : (project?.name || displayProject.name)}
+                onChange={(e) => {
+                  setEditedName(e.target.value);
                 }}
-                className="p-1.5 text-zinc-400 hover:text-white flex items-center gap-1 transition-colors"
-                title={isRTL ? 'ملء الشاشة' : 'Fullscreen'}
+                className={cn(
+                  "flex-1 min-w-0 text-base md:text-lg font-bold text-white placeholder-zinc-500 border-b-2 transition-colors px-1 py-1",
+                  isEditingName 
+                    ? "bg-transparent border-indigo-500 focus:border-indigo-500 focus:outline-none" 
+                    : "bg-transparent border-transparent cursor-default"
+                )}
+                placeholder={isRTL ? 'اسم المشروع' : 'Project name'}
+              />
+              <button
+                onClick={async () => {
+                  if (isEditingName) {
+                    // Save mode - save to database
+                    if (editedName.trim() && project) {
+                      try {
+                        setSaving(true);
+                        const { error } = await supabase
+                          .from('projects' as any)
+                          .update({ name: editedName.trim() })
+                          .eq('id', project.id);
+                        if (error) throw error;
+                        setProject(prev => prev ? { ...prev, name: editedName.trim() } : null);
+                        setIsEditingName(false);
+                        setEditedName('');
+                        toast.success(isRTL ? 'تم حفظ الاسم' : 'Name saved');
+                      } catch (err) {
+                        toast.error(isRTL ? 'خطأ في الحفظ' : 'Failed to save');
+                      } finally {
+                        setSaving(false);
+                      }
+                    }
+                  } else {
+                    // Edit mode - activate input
+                    setIsEditingName(true);
+                    setEditedName(project?.name || displayProject.name);
+                  }
+                }}
+                disabled={saving}
+                className="p-1.5 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/20 rounded-lg transition-all shrink-0 disabled:opacity-50"
+                title={isEditingName ? (isRTL ? 'حفظ' : 'Save') : (isRTL ? 'تعديل' : 'Edit')}
               >
-                <ExternalLink className="h-3.5 w-3.5" />
-                <span className="text-[10px] uppercase font-bold hidden sm:inline">{isRTL ? 'كامل الشاشة' : 'Fullscreen'}</span>
-              </button>
-              
-              <button 
-                onClick={captureScreenshot}
-                className="p-1.5 text-amber-400 hover:text-amber-300 flex items-center gap-1.5 transition-colors border border-amber-500/30 rounded-md bg-amber-500/10 hover:bg-amber-500/20"
-                title={isRTL ? 'حفظ صورة مصغرة' : 'Save Thumbnail'}
-              >
-                <Camera className="h-3.5 w-3.5" />
-                <span className="text-[10px] uppercase font-bold">{isRTL ? 'حفظ صورة' : 'Save Thumbnail'}</span>
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : isEditingName ? (
+                  <Check className="h-4 w-4" />
+                ) : (
+                  <Edit2 className="h-4 w-4" />
+                )}
               </button>
             </div>
             
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={refreshPreview}
-                className="p-1.5 hover:bg-zinc-800 rounded-lg transition-colors text-zinc-400 hover:text-white"
-                title="Refresh"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-              </button>
+            {/* Status Badge - Enhanced */}
+            <div className={cn(
+              "px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase tracking-wider shrink-0 backdrop-blur-sm border",
+              displayProject.status === 'published' 
+                ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30 shadow-lg shadow-emerald-500/10" 
+                : displayProject.status === 'generating'
+                ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/30 shadow-lg shadow-indigo-500/10 animate-pulse"
+                : "bg-amber-500/20 text-amber-300 border-amber-500/30 shadow-lg shadow-amber-500/10"
+            )}>
+              {displayProject.status === 'published' ? (isRTL ? 'منشور' : 'Live') : 
+               displayProject.status === 'generating' ? (isRTL ? 'بناء' : 'Building') :
+               (isRTL ? 'مسودة' : 'Draft')}
             </div>
           </div>
 
@@ -2553,6 +2594,12 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                       onRuntimeError={handleRuntimeCrash}
                       elementSelectMode={elementSelectMode}
                       isLoading={isGenerating}
+                      deviceView={deviceView}
+                      onDeviceViewChange={setDeviceView}
+                      onRefresh={refreshPreview}
+                      onDownload={downloadProject}
+                      onPublish={openPublishModal}
+                      isPublishing={publishing}
                       onElementSelect={(ref, elementInfo) => {
                         if (elementInfo) setSelectedElementInfo(elementInfo);
                         setChatInput(prev => prev + (prev ? ' ' : '') + ref + ' ');
@@ -2712,6 +2759,91 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
           </div>
         </div>
       </div>
+
+      {/* Publish Modal */}
+      {showPublishModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 max-w-md w-full p-6 space-y-5">
+            {/* Header */}
+            <div className="text-center">
+              <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                <ExternalLink className="h-7 w-7 text-white" />
+              </div>
+              <h2 className="text-xl font-bold text-zinc-900 dark:text-white">
+                {isRTL ? 'نشر المشروع' : 'Publish Project'}
+              </h2>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+                {isRTL ? 'اختر اسم موقعك الفريد' : 'Choose your unique site name'}
+              </p>
+            </div>
+
+            {/* Subdomain Input */}
+            <div>
+              <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 block mb-2">
+                {isRTL ? 'اسم الموقع' : 'Site Name'}
+              </label>
+              <div className="flex items-center gap-0 rounded-xl border border-zinc-300 dark:border-zinc-700 overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/50">
+                <input
+                  type="text"
+                  value={subdomainInput}
+                  onChange={(e) => handleSubdomainChange(e.target.value)}
+                  placeholder={isRTL ? 'my-app' : 'my-app'}
+                  className="flex-1 px-4 py-3 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none text-base"
+                  autoFocus
+                  maxLength={30}
+                />
+                <span className="px-3 py-3 bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 text-sm font-medium border-l border-zinc-300 dark:border-zinc-600">
+                  .wakti.ai
+                </span>
+              </div>
+              
+              {/* Error message */}
+              {subdomainError && (
+                <p className="text-xs text-red-500 mt-2 flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  {subdomainError}
+                </p>
+              )}
+              
+              {/* Preview URL */}
+              {subdomainInput && !subdomainError && (
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2">
+                  {isRTL ? 'رابط موقعك: ' : 'Your site URL: '}
+                  <span className="font-mono font-semibold">https://{subdomainInput}.wakti.ai</span>
+                </p>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setShowPublishModal(false)}
+                disabled={publishing}
+                className="flex-1 px-4 py-3 rounded-xl border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors font-medium disabled:opacity-50"
+              >
+                {isRTL ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button
+                onClick={publishProject}
+                disabled={publishing || checkingSubdomain || !!subdomainError || !subdomainInput}
+                className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:from-zinc-400 disabled:to-zinc-500 disabled:cursor-not-allowed text-white transition-colors font-semibold flex items-center justify-center gap-2"
+              >
+                {publishing || checkingSubdomain ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {isRTL ? 'جاري النشر...' : 'Publishing...'}
+                  </>
+                ) : (
+                  <>
+                    <ExternalLink className="h-4 w-4" />
+                    {isRTL ? 'نشر' : 'Publish'}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
