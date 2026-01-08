@@ -1,14 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { SandpackProvider, SandpackPreview } from '@codesandbox/sandpack-react';
 
 interface ProjectData {
   id: string;
   name: string;
   subdomain: string;
   status: string;
-  bundledHtml: string | null;
+  filesJson: string | null;
 }
 
 interface ProjectPreviewProps {
@@ -22,8 +22,6 @@ export default function ProjectPreview({ subdomain: propSubdomain }: ProjectPrev
   const [project, setProject] = useState<ProjectData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [iframeError, setIframeError] = useState<string | null>(null);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     if (subdomain) {
@@ -36,7 +34,6 @@ export default function ProjectPreview({ subdomain: propSubdomain }: ProjectPrev
       setLoading(true);
       setError(null);
 
-      // Fetch project by subdomain (including bundled_code)
       const { data: projectData, error: projectError } = await supabase
         .from('projects' as any)
         .select('id, name, subdomain, status, bundled_code')
@@ -49,13 +46,12 @@ export default function ProjectPreview({ subdomain: propSubdomain }: ProjectPrev
         return;
       }
 
-      // bundled_code is now the full HTML string (not JSON)
       setProject({
         id: projectData.id,
         name: projectData.name,
         subdomain: projectData.subdomain,
         status: projectData.status,
-        bundledHtml: projectData.bundled_code || null,
+        filesJson: projectData.bundled_code || null,
       });
     } catch (err) {
       console.error('Error fetching project:', err);
@@ -66,7 +62,6 @@ export default function ProjectPreview({ subdomain: propSubdomain }: ProjectPrev
   };
 
   if (loading) {
-    // Minimal loading - just a subtle spinner, no text that exposes our backend
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
         <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-200 border-t-gray-600" />
@@ -94,34 +89,14 @@ export default function ProjectPreview({ subdomain: propSubdomain }: ProjectPrev
     );
   }
 
-  // Handle iframe load and error detection
-  const handleIframeLoad = () => {
-    // Listen for errors from the iframe
-    try {
-      const iframe = iframeRef.current;
-      if (iframe && iframe.contentWindow) {
-        // Add error listener to iframe window
-        iframe.contentWindow.onerror = (message, source, lineno, colno, error) => {
-          console.error('Iframe error:', message, error);
-          setIframeError(`Runtime Error: ${message}`);
-          return true; // Prevent default error handling
-        };
-      }
-    } catch (e) {
-      // Cross-origin restrictions may prevent this
-      console.warn('Could not attach error handler to iframe:', e);
-    }
-  };
-
-  // Check if bundled HTML exists
-  if (!project.bundledHtml) {
+  if (!project.filesJson) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800">
         <div className="text-center text-white max-w-md px-6">
           <div className="text-6xl mb-6">📦</div>
           <h1 className="text-2xl font-bold mb-4">Project Not Ready</h1>
           <p className="text-gray-300 mb-8">
-            This project needs to be re-published to generate the bundled code.
+            This project needs to be re-published.
           </p>
           <a 
             href="https://wakti.qa/projects" 
@@ -134,54 +109,66 @@ export default function ProjectPreview({ subdomain: propSubdomain }: ProjectPrev
     );
   }
 
-  // Render the project in an iframe for isolation - bundledHtml is already the full HTML
-  const blob = new Blob([project.bundledHtml], { type: 'text/html' });
-  const blobUrl = URL.createObjectURL(blob);
-
-  // Show iframe error screen
-  if (iframeError) {
+  // Parse the files JSON
+  let files: Record<string, string>;
+  try {
+    files = JSON.parse(project.filesJson);
+  } catch (e) {
+    console.error('Failed to parse files JSON:', e);
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800">
         <div className="text-center text-white max-w-md px-6">
-          <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-red-500/20 flex items-center justify-center">
-            <AlertTriangle className="h-10 w-10 text-red-400" />
-          </div>
-          <h1 className="text-2xl font-bold mb-3">Oops! Something went wrong</h1>
-          <p className="text-gray-300 mb-6">
-            There was an error loading this project. The code may have an issue that needs to be fixed in the editor.
+          <div className="text-6xl mb-6">⚠️</div>
+          <h1 className="text-2xl font-bold mb-4">Invalid Project Data</h1>
+          <p className="text-gray-300 mb-8">
+            The project data is corrupted. Please re-publish.
           </p>
-          <div className="bg-gray-800/50 rounded-lg p-4 mb-6 text-left">
-            <p className="text-xs text-gray-400 mb-1">Error details:</p>
-            <code className="text-sm text-red-300 break-all">{iframeError}</code>
-          </div>
-          <div className="flex gap-3 justify-center">
-            <button
-              onClick={() => setIframeError(null)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-full font-medium transition-colors"
-            >
-              <RefreshCw className="h-4 w-4" />
-              Try Again
-            </button>
-            <a 
-              href="https://wakti.qa/projects" 
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-gray-900 rounded-full font-semibold hover:bg-gray-100 transition-colors"
-            >
-              Open Editor
-            </a>
-          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Convert files to Sandpack format (keys without leading slash)
+  const sandpackFiles: Record<string, string> = {};
+  for (const [path, content] of Object.entries(files)) {
+    const cleanPath = path.startsWith('/') ? path : '/' + path;
+    sandpackFiles[cleanPath] = content;
+  }
+
+  // Ensure we have an App.js entry point
+  if (!sandpackFiles['/App.js'] && !sandpackFiles['/App.jsx']) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800">
+        <div className="text-center text-white max-w-md px-6">
+          <div className="text-6xl mb-6">⚠️</div>
+          <h1 className="text-2xl font-bold mb-4">Missing Entry Point</h1>
+          <p className="text-gray-300 mb-8">
+            No App.js found in the project files.
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <iframe
-      ref={iframeRef}
-      src={blobUrl}
-      title={project.name}
-      className="w-full h-screen border-0"
-      sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-      onLoad={handleIframeLoad}
-    />
+    <div style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
+      <SandpackProvider
+        template="react"
+        files={sandpackFiles}
+        options={{
+          externalResources: ['https://cdn.tailwindcss.com'],
+        }}
+        customSetup={{
+          entry: '/App.js',
+        }}
+      >
+        <SandpackPreview
+          style={{ width: '100%', height: '100%' }}
+          showNavigator={false}
+          showRefreshButton={false}
+          showOpenInCodeSandbox={false}
+        />
+      </SandpackProvider>
+    </div>
   );
 }

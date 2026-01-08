@@ -1021,97 +1021,21 @@ export default function ProjectDetail() {
       }
 
       // ============================================
-      // CLIENT-SIDE BUNDLING: The Lovable/Bolt Way
+      // SANDPACK APPROACH: Save raw files as JSON
       // ============================================
-      console.log('Performing client-side bundling...');
+      console.log('Saving raw files for Sandpack...');
       
-      // 1. Extract CSS
-      let collectedCss = '';
-      for (const [path, content] of Object.entries(projectFiles)) {
-        if (path.endsWith('.css')) {
-          collectedCss += `/* ${path} */\n${content.replace(/@tailwind\s+[^;]+;/g, '').replace(/@import\s+[^;]+;/g, '')}\n`;
-        }
-      }
+      // Save raw files as JSON string for Sandpack to render
+      const filesJson = JSON.stringify(projectFiles);
+      console.log('Files JSON size:', filesJson.length);
 
-      // 2. Process JS/JSX files starting from entry point
-      const processed = new Set<string>();
-      const jsChunks: string[] = [];
-
-      const resolvePath = (importPath: string, fromFile: string): string => {
-        const fromDir = fromFile.substring(0, fromFile.lastIndexOf('/')) || '';
-        const parts = importPath.split('/');
-        const resolved = fromDir.split('/').filter(p => p);
-        for (const part of parts) {
-          if (part === '.') continue;
-          if (part === '..') resolved.pop();
-          else resolved.push(part);
-        }
-        return '/' + resolved.join('/');
-      };
-
-      const transformCode = (code: string, filePath: string): string => {
-        let result = code;
-        // Strip imports and exports (simple regex approach for client-side)
-        result = result.replace(/^\s*import\s+.*?from\s+['"][^'"]+['"];?\s*$/gm, '');
-        result = result.replace(/^\s*import\s+['"][^'"]+['"];?\s*$/gm, '');
-        result = result.replace(/^\s*export\s+default\s+function\s+(\w+)/gm, 'function $1');
-        result = result.replace(/^\s*export\s+default\s+class\s+(\w+)/gm, 'class $1');
-        result = result.replace(/^\s*export\s+default\s+/gm, 'const __default__ = ');
-        result = result.replace(/^\s*export\s+function\s+(\w+)/gm, 'function $1');
-        result = result.replace(/^\s*export\s+class\s+(\w+)/gm, 'class $1');
-        result = result.replace(/^\s*export\s+const\s+(\w+)/gm, 'const $1');
-        result = result.replace(/^\s*export\s+let\s+(\w+)/gm, 'let $1');
-        result = result.replace(/^\s*export\s+\{[^}]*\};?\s*$/gm, '');
-        if (filePath.includes('App')) result += '\nwindow.App = App;';
-        return result;
-      };
-
-      const processFile = (filePath: string) => {
-        if (processed.has(filePath)) return;
-        let content = projectFiles[filePath];
-        let actualPath = filePath;
-        if (!content) {
-          for (const ext of ['.js', '.jsx', '.ts', '.tsx']) {
-            if (projectFiles[filePath + ext]) {
-              content = projectFiles[filePath + ext];
-              actualPath = filePath + ext;
-              break;
-            }
-          }
-        }
-        if (!content) return;
-        processed.add(actualPath);
-        processed.add(filePath);
-
-        const importRegex = /import\s+(?:[\w\s{},*]+\s+from\s+)?['"](\.[\/\w.-]+)['"];?/g;
-        let match;
-        while ((match = importRegex.exec(content)) !== null) {
-          processFile(resolvePath(match[1], actualPath));
-        }
-        jsChunks.push(`// --- ${actualPath} ---\n${transformCode(content, actualPath)}`);
-      };
-
-      processFile('/App.js');
-      
-      const bundle = {
-        js: jsChunks.join('\n\n'),
-        css: collectedCss
-      };
-      
-      // Generate a self-contained index.html with bundled code
-      const indexHtml = generateBundledIndexHtml(bundle, project.name);
-      console.log('Generated HTML, size:', indexHtml.length);
-
-      // ============================================
-      // SAVE TO SUPABASE ONLY - NO VERCEL DEPLOYMENT
-      // ============================================
       const finalSubdomain = subdomainInput.toLowerCase();
       const subdomainUrl = `https://${finalSubdomain}.wakti.ai`;
 
       const { error: updateError } = await supabase
         .from('projects' as any)
         .update({
-          bundled_code: indexHtml,
+          bundled_code: filesJson,
           status: 'published',
           published_url: subdomainUrl,
           subdomain: finalSubdomain,
@@ -1131,7 +1055,6 @@ export default function ProjectDetail() {
         status: 'published',
         published_url: subdomainUrl,
         subdomain: finalSubdomain,
-        bundled_code: indexHtml,
       } : null);
 
       setShowPublishModal(false);
@@ -1143,88 +1066,6 @@ export default function ProjectDetail() {
     } finally {
       setPublishing(false);
     }
-  };
-
-  // Generate a self-contained index.html with the server-bundled code
-  const generateBundledIndexHtml = (bundle: { js: string; css: string }, projectName: string): string => {
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapeHtml(projectName)}</title>
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone@7.23.5/babel.min.js"></script>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Tajawal:wght@300;400;500;700&family=Cairo:wght@300;400;500;600;700&family=Oswald:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    * { font-family: 'Inter', 'Tajawal', 'Cairo', system-ui, sans-serif; }
-    body { margin: 0; padding: 0; min-height: 100vh; }
-    #root { min-height: 100vh; }
-    .font-oswald { font-family: 'Oswald', sans-serif; }
-    .font-cairo { font-family: 'Cairo', sans-serif; }
-    .error-container { 
-      min-height: 100vh; 
-      display: flex; 
-      align-items: center; 
-      justify-content: center; 
-      background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
-      padding: 20px;
-    }
-    .error-box { text-align: center; color: white; max-width: 400px; }
-    .error-icon { width: 64px; height: 64px; margin: 0 auto 20px; background: rgba(239, 68, 68, 0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; }
-    .error-title { font-size: 24px; font-weight: bold; margin-bottom: 12px; }
-    .error-message { color: #9ca3af; margin-bottom: 20px; }
-    ${bundle.css}
-  </style>
-</head>
-<body>
-  <div id="root"></div>
-  
-  <script>
-    window.onerror = function(message, source, lineno, colno, error) {
-      console.error('Runtime error:', message, error);
-      var root = document.getElementById('root');
-      if (root) {
-        root.innerHTML = '<div class="error-container"><div class="error-box">' +
-          '<div class="error-icon">⚠️</div>' +
-          '<div class="error-title">Oops! Something went wrong</div>' +
-          '<div class="error-message">There was an error running this project.</div>' +
-          '<div style="background:rgba(0,0,0,0.3);padding:12px;border-radius:8px;text-align:left;margin-bottom:20px;"><code style="color:#f87171;font-size:12px;word-break:break-all;">' + message + '</code></div>' +
-          '</div></div>';
-      }
-      return true;
-    };
-  </script>
-  
-  <script type="text/babel" data-presets="react">
-    ${bundle.js}
-    
-    // Render the app
-    try {
-      if (typeof App !== 'undefined') {
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        const AppComponent = App.default || App;
-        root.render(<AppComponent />);
-      } else if (typeof window.App !== 'undefined') {
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        const AppComponent = window.App.default || window.App;
-        root.render(<AppComponent />);
-      } else {
-        throw new Error('App component not found');
-      }
-    } catch (err) {
-      console.error('Render error:', err);
-      document.getElementById('root').innerHTML = '<div class="error-container"><div class="error-box">' +
-        '<div class="error-icon">⚠️</div>' +
-        '<div class="error-title">Failed to render app</div>' +
-        '<div class="error-message">' + err.message + '</div>' +
-        '</div></div>';
-    }
-  </script>
-</body>
-</html>`;
   };
 
   // Generate a proper index.html that loads React from CDN and runs the multi-file project
