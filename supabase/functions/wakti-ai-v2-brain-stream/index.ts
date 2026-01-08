@@ -1546,9 +1546,9 @@ serve(async (req) => {
           { role: 'system', content: systemPrompt }
         ];
 
-        // Add history (Option 3: Increased from 6 to 15 for better flow)
+        // Add history (Increased from 15 to 30 for better conversation context retention)
         if (Array.isArray(recentMessages) && recentMessages.length > 0) {
-          const historyMessages = (recentMessages as Array<Record<string, unknown>>).slice(-15);
+          const historyMessages = (recentMessages as Array<Record<string, unknown>>).slice(-30);
           historyMessages.forEach((msg: Record<string, unknown>) => {
             const role = typeof msg.role === 'string' ? msg.role : undefined;
             const content = typeof msg.content === 'string' ? msg.content : '';

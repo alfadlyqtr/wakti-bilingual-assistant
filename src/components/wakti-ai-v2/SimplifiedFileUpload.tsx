@@ -12,6 +12,7 @@ interface SimplifiedFileUploadProps extends Omit<FileUploadProps, 'maxFiles'> {
 }
 
 const imageTypes = [
+  { id: 'user_prompt', name: '💬 User Prompt', description: 'Use image as context for my question' },
   { id: 'general', name: '🔍 General', description: 'Analyze anything' },
   { id: 'ids', name: '🆔 IDs & Documents', description: 'Extract text and info' },
   { id: 'bills', name: '💰 Bills & Receipts', description: 'Calculate expenses' },
@@ -125,7 +126,7 @@ export function SimplifiedFileUpload({
           url: base64DataUrl,           // ✅ PURE BASE64 DATA URL
           preview: base64DataUrl,       // ✅ PURE BASE64 DATA URL  
           base64: base64DataUrl,        // ✅ PURE BASE64 DATA URL
-          imageType: imageTypes[0]      // ✅ DEFAULT TO GENERAL
+          imageType: imageTypes[0]      // ✅ DEFAULT TO USER PROMPT
         };
         
         validFiles.push(uploadedFile);
@@ -236,7 +237,7 @@ export function SimplifiedFileUpload({
                 </div>
                 <div className="mt-2">
                   <select
-                    value={file.imageType?.id || 'general'}
+                    value={file.imageType?.id || 'user_prompt'}
                     onChange={(e) => {
                       const selectedType = imageTypes.find(type => type.id === e.target.value);
                       if (selectedType) {
@@ -249,6 +250,7 @@ export function SimplifiedFileUpload({
                     {imageTypes.map((type) => (
                       <option key={type.id} value={type.id} className="bg-background text-foreground dark:bg-popover dark:text-popover-foreground">
                         {language === 'ar' ? (
+                          type.id === 'user_prompt' ? '💬 سؤال المستخدم - استخدم الصورة كسياق' :
                           type.id === 'general' ? '🔍 عام - حلل أي شيء' :
                           type.id === 'ids' ? '🆔 هويات ومستندات - استخراج النص والمعلومات' :
                           type.id === 'bills' ? '💰 فواتير وإيصالات - حساب المصاريف' :

@@ -1616,6 +1616,36 @@ export function ChatInput({
                           }
                         }
                       }}
+                      onPaste={async (e) => {
+                        const items = e.clipboardData?.items;
+                        if (!items) return;
+                        for (let i = 0; i < items.length; i++) {
+                          const item = items[i];
+                          if (item.type.startsWith('image/')) {
+                            e.preventDefault();
+                            const file = item.getAsFile();
+                            if (file && file.size <= 5 * 1024 * 1024) {
+                              try {
+                                const base64DataUrl = await fileToBase64(file);
+                                const pastedFile: UploadedFile = {
+                                  id: `paste-${Date.now()}`,
+                                  name: `pasted-image-${Date.now()}.${file.type.split('/')[1] || 'png'}`,
+                                  type: file.type,
+                                  size: file.size,
+                                  url: base64DataUrl,
+                                  preview: base64DataUrl,
+                                  base64: base64DataUrl,
+                                  imageType: { id: 'user_prompt', name: 'User Prompt' }
+                                };
+                                handleFilesUploaded([pastedFile]);
+                              } catch (err) {
+                                console.error('Paste image conversion failed:', err);
+                              }
+                            }
+                            break;
+                          }
+                        }
+                      }}
                       disabled={isUploading || !isTextareaEnabled}
                     />
                     {/* Inline Quick Modes bar inside the textarea area (all breakpoints) */}

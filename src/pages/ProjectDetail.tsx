@@ -118,6 +118,8 @@ export default function ProjectDetail() {
   const [chatInput, setChatInput] = useState('');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [aiEditing, setAiEditing] = useState(false);
+  const [attachedImages, setAttachedImages] = useState<Array<{ file: File; preview: string }>>([]);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   const autoCaptureTimeoutRef = useRef<number | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -1144,9 +1146,55 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
     }, 100);
   };
 
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.currentTarget.files;
+    if (!files) return;
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (!file.type.startsWith('image/')) continue;
+      
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const preview = event.target?.result as string;
+        setAttachedImages(prev => [...prev, { file, preview }]);
+      };
+      reader.readAsDataURL(file);
+    }
+    
+    // Reset input
+    if (imageInputRef.current) {
+      imageInputRef.current.value = '';
+    }
+  };
+
+  const removeAttachedImage = (index: number) => {
+    setAttachedImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handlePaste = async (e: ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (!file) continue;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const preview = event.target?.result as string;
+          setAttachedImages(prev => [...prev, { file, preview }]);
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+  };
+
   const handleChatSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim() || aiEditing) return;
+    if (!chatInput.trim() && attachedImages.length === 0 || aiEditing) return;
     
     const userMessage = chatInput.trim();
     setChatInput('');
@@ -1169,20 +1217,29 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
     }
 
     // Save user message to DB
+    // Capture images BEFORE clearing them
+    const userImages = attachedImages.length > 0 ? attachedImages.map(img => img.preview) : [];
+    
     const { data: userMsg, error: msgError } = await supabase
       .from('project_chat_messages' as any)
-      .insert({ project_id: id, role: 'user', content: userMessage } as any)
+      .insert({ 
+        project_id: id, 
+        role: 'user', 
+        content: userMessage,
+        images: userImages.length > 0 ? userImages : null
+      } as any)
       .select()
       .single();
     
     if (msgError) console.error('Error saving user message:', msgError);
-    if (userMsg) setChatMessages(prev => [...prev, userMsg as any]);
+    if (userMsg) setChatMessages(prev => [...prev, { ...(userMsg as object), images: userImages } as any]);
     else {
       // Fallback local state if DB insert fails
       setChatMessages(prev => [...prev, {
         id: `user-${Date.now()}`,
         role: 'user',
-        content: userMessage
+        content: userMessage,
+        images: userImages
       }]);
     }
     
@@ -1203,12 +1260,16 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
 
       if (leftPanelMode === 'chat') {
         // Chat mode: Smart AI that answers questions OR returns plans for code changes
+        // Use userImages captured earlier (before clearing)
+        setAttachedImages([]); // Clear after capturing
+
         const response = await supabase.functions.invoke('projects-generate', {
           body: {
             mode: 'chat',
             projectId: id,
             prompt: userMessage,
             currentFiles: generatedFiles,
+            images: userImages.length > 0 ? userImages : undefined,
           },
         });
 
@@ -1237,6 +1298,11 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       } else {
         // Code mode: Option A job flow (start -> poll -> get_files)
         if (!id) throw new Error('Missing projectId');
+
+        // Clear attached images in Code mode too
+        if (attachedImages.length > 0) {
+          setAttachedImages([]);
+        }
 
         const startRes = await supabase.functions.invoke('projects-generate', {
           body: {
@@ -1640,73 +1706,6 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
             <>
               {/* Chat Messages Area - Clean bubbles, no avatars */}
               <div ref={chatContainerRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3 scrollbar-thin">
-                {creationPromptInfo && isGenerating && (
-                  <div className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg overflow-hidden">
-                    <div className="px-4 py-2.5 border-b border-[#2a2a2a] flex items-center justify-between">
-                      <span className="text-[13px] text-zinc-500">{isRTL ? 'تم إرسال هذا للذكاء الاصطناعي' : 'Sent to AI'}</span>
-                      <button
-                        onClick={() => navigator.clipboard.writeText(creationPromptInfo.finalPrompt)}
-                        className="text-zinc-600 hover:text-zinc-400 transition-colors"
-                        title={isRTL ? 'نسخ الكل' : 'Copy all'}
-                        aria-label={isRTL ? 'نسخ الكل' : 'Copy all'}
-                      >
-                        <Copy className="h-3 w-3" />
-                      </button>
-                    </div>
-                    <div className="px-4 py-4 space-y-3">
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] uppercase tracking-wider font-semibold text-zinc-500">
-                            {isRTL ? 'طلب المستخدم' : 'User Prompt'}
-                          </span>
-                          <button
-                            onClick={() => navigator.clipboard.writeText(creationPromptInfo.userPrompt)}
-                            className="text-zinc-600 hover:text-zinc-400 transition-colors"
-                            title={isRTL ? 'نسخ' : 'Copy'}
-                            aria-label={isRTL ? 'نسخ' : 'Copy'}
-                          >
-                            <Copy className="h-3 w-3" />
-                          </button>
-                        </div>
-                        <pre className="px-3 py-2 bg-[#0d0d0d] border border-[#252525] rounded-lg text-[12px] font-mono text-zinc-200 overflow-x-auto whitespace-pre-wrap">{creationPromptInfo.userPrompt}</pre>
-                      </div>
-
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] uppercase tracking-wider font-semibold text-zinc-500">
-                            {isRTL ? 'الثيم المختار (محقون)' : 'Selected Theme (Injected)'}
-                          </span>
-                          <button
-                            onClick={() => navigator.clipboard.writeText(creationPromptInfo.themeInstructions || `THEME: ${creationPromptInfo.themeId}`)}
-                            className="text-zinc-600 hover:text-zinc-400 transition-colors"
-                            title={isRTL ? 'نسخ' : 'Copy'}
-                            aria-label={isRTL ? 'نسخ' : 'Copy'}
-                          >
-                            <Copy className="h-3 w-3" />
-                          </button>
-                        </div>
-                        <pre className="px-3 py-2 bg-[#0d0d0d] border border-[#252525] rounded-lg text-[12px] font-mono text-blue-300 overflow-x-auto whitespace-pre-wrap">{creationPromptInfo.themeInstructions ? creationPromptInfo.themeInstructions : `THEME: ${creationPromptInfo.themeId}`}</pre>
-                      </div>
-
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] uppercase tracking-wider font-semibold text-zinc-500">
-                            {isRTL ? 'البرومبت النهائي' : 'Final Prompt'}
-                          </span>
-                          <button
-                            onClick={() => navigator.clipboard.writeText(creationPromptInfo.finalPrompt)}
-                            className="text-zinc-600 hover:text-zinc-400 transition-colors"
-                            title={isRTL ? 'نسخ' : 'Copy'}
-                            aria-label={isRTL ? 'نسخ' : 'Copy'}
-                          >
-                            <Copy className="h-3 w-3" />
-                          </button>
-                        </div>
-                        <pre className="px-3 py-2 bg-[#0d0d0d] border border-[#252525] rounded-lg text-[12px] font-mono text-emerald-300 overflow-x-auto whitespace-pre-wrap">{creationPromptInfo.finalPrompt}</pre>
-                      </div>
-                    </div>
-                  </div>
-                )}
 
                 {/* Show More Button - at top if there are hidden messages */}
                 {chatMessages.length > visibleMessagesCount && (
@@ -1914,7 +1913,20 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                                     setGeneratedFiles(newFiles);
                                     setCodeContent(newFiles["/App.js"] || Object.values(newFiles)[0] || "");
                                     
-                                    const successMsg = isRTL ? 'تم تنفيذ الخطة بنجاح! ✓' : 'Changes applied! ✓';
+                                    // Build Lovable-style response with plan summary
+                                    const planTitle = parsedPlan.title || 'Changes';
+                                    const changedFiles = parsedPlan.codeChanges?.map((c: any) => c.file).filter(Boolean) || [parsedPlan.file].filter(Boolean);
+                                    const uniqueChangedFiles = [...new Set(changedFiles)];
+                                    const stepsSummary = parsedPlan.steps?.map((s: any) => s.title).join('. ') || '';
+                                    
+                                    // Create a structured Lovable-style message
+                                    const successMsg = JSON.stringify({
+                                      type: 'execution_result',
+                                      title: planTitle,
+                                      summary: stepsSummary || (isRTL ? 'تم تطبيق التغييرات بنجاح' : 'Successfully applied the requested changes'),
+                                      files: uniqueChangedFiles
+                                    });
+                                    
                                     const { data: msgData } = await supabase
                                       .from('project_chat_messages' as any)
                                       .insert({ 
@@ -1927,7 +1939,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                                       .single();
                                     
                                     if (msgData) setChatMessages(prev => [...prev, msgData as any]);
-                                    toast.success(successMsg);
+                                    toast.success(isRTL ? 'تم تنفيذ الخطة بنجاح!' : 'Plan executed successfully!');
                                   }
                                   
                                   setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
@@ -1963,6 +1975,78 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                     if (displayContent.length < 5) displayContent = isRTL ? 'إليك خطة العمل المقترحة:' : 'Here is the proposed plan:';
                   }
 
+                  // EXECUTION RESPONSE FORMAT: Clean Lovable-style format
+                  // Detect structured execution_result OR verbose execution response
+                  let executionResult: { type: string; title: string; summary: string; files: string[] } | null = null;
+                  try {
+                    const parsed = JSON.parse(msg.content);
+                    if (parsed.type === 'execution_result') {
+                      executionResult = parsed;
+                    }
+                  } catch { /* not JSON */ }
+                  
+                  const isExecutionResponse = executionResult || (isAssistant && msg.content && msg.content.length > 150 && 
+                    (msg.content.includes('implement') || msg.content.includes('add') || msg.content.includes('update') || 
+                     msg.content.includes('تم') || msg.content.includes('أضفت') || msg.content.includes('عدلت')));
+                  
+                  if (isExecutionResponse && !isPlanCard) {
+                    // Use structured data if available, otherwise extract from verbose text
+                    let summary: string;
+                    let uniqueFiles: string[];
+                    
+                    if (executionResult) {
+                      summary = executionResult.summary;
+                      uniqueFiles = executionResult.files || [];
+                    } else {
+                      // Extract summary from verbose response - get first 2-3 sentences
+                      const sentences = msg.content.split(/[.!?]+/).filter((s: string) => s.trim().length > 0);
+                      summary = sentences.slice(0, 2).join('. ').trim() + (sentences.length > 2 ? '.' : '');
+                      // Extract files mentioned in the response
+                      const fileMatches = msg.content.match(/(?:\/\w+(?:\.tsx?|\.jsx?|\.css)?|App\.js|App\.tsx|index\.js)/g) || [];
+                      uniqueFiles = [...new Set(fileMatches)].slice(0, 3) as string[];
+                    }
+                    
+                    return (
+                      <div key={i} className={cn(
+                        "flex flex-col group animate-in fade-in slide-in-from-bottom-1 duration-300",
+                        "items-start w-full"
+                      )}>
+                        <div className="w-full bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border border-indigo-500/30 rounded-lg overflow-hidden backdrop-blur-sm">
+                          {/* Header with checkmark */}
+                          <div className="px-4 py-3 border-b border-indigo-500/20 flex items-center gap-2">
+                            <Check className="h-4 w-4 text-emerald-500" />
+                            <span className="text-[13px] text-emerald-500 font-semibold">{isRTL ? 'تم التطبيق' : 'Applied'}</span>
+                          </div>
+                          
+                          {/* Summary Section */}
+                          <div className="px-4 py-3 space-y-3">
+                            {/* Main summary */}
+                            <p className="text-[13px] text-foreground/85 leading-relaxed">
+                              {summary}
+                            </p>
+                            
+                            {/* Files edited section */}
+                            {uniqueFiles.length > 0 && (
+                              <div className="space-y-2">
+                                <p className="text-[11px] text-foreground/60 font-semibold uppercase tracking-wide">
+                                  {isRTL ? 'الملفات المعدلة' : 'Files Modified'}
+                                </p>
+                                <div className="space-y-1 ml-2">
+                                  {uniqueFiles.map((file, idx) => (
+                                    <div key={idx} className="flex items-center gap-2 text-[12px] text-foreground/70">
+                                      <FileCode className="h-3 w-3 text-indigo-500" />
+                                      <code className="font-mono text-indigo-600 dark:text-indigo-400">{file}</code>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
                   return (
                     <div key={i} className={cn(
                       "flex flex-col group animate-in fade-in slide-in-from-bottom-1 duration-300",
@@ -1981,7 +2065,22 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                             </ReactMarkdown>
                           </div>
                         ) : (
-                          <div className="text-[13px] leading-relaxed">{msg.content}</div>
+                          <div className="space-y-2">
+                            {/* Show attached images if any */}
+                            {(msg as any).images && Array.isArray((msg as any).images) && (msg as any).images.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mb-2">
+                                {(msg as any).images.map((imgSrc: string, imgIdx: number) => (
+                                  <img 
+                                    key={imgIdx}
+                                    src={imgSrc}
+                                    alt={`Attached ${imgIdx + 1}`}
+                                    className="max-w-[120px] max-h-[80px] rounded-lg object-cover border border-white/20"
+                                  />
+                                ))}
+                              </div>
+                            )}
+                            <div className="text-[13px] leading-relaxed">{msg.content}</div>
+                          </div>
                         )}
                       </div>
                       
@@ -1997,6 +2096,74 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                         </button>
                       )}
                       
+                      {/* Theme Info Card - Show AFTER user messages only, and keep it visible */}
+                      {msg.role === 'user' && creationPromptInfo && (
+                        <div className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg overflow-hidden mt-2">
+                          <div className="px-4 py-2.5 border-b border-[#2a2a2a] flex items-center justify-between">
+                            <span className="text-[13px] text-zinc-500">{isRTL ? 'تم إرسال هذا للذكاء الاصطناعي' : 'Sent to AI'}</span>
+                            <button
+                              onClick={() => navigator.clipboard.writeText(creationPromptInfo.finalPrompt)}
+                              className="text-zinc-600 hover:text-zinc-400 transition-colors"
+                              title={isRTL ? 'نسخ الكل' : 'Copy all'}
+                              aria-label={isRTL ? 'نسخ الكل' : 'Copy all'}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </button>
+                          </div>
+                          <div className="px-4 py-4 space-y-3">
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] uppercase tracking-wider font-semibold text-zinc-500">
+                                  {isRTL ? 'طلب المستخدم' : 'User Prompt'}
+                                </span>
+                                <button
+                                  onClick={() => navigator.clipboard.writeText(creationPromptInfo.userPrompt)}
+                                  className="text-zinc-600 hover:text-zinc-400 transition-colors"
+                                  title={isRTL ? 'نسخ' : 'Copy'}
+                                  aria-label={isRTL ? 'نسخ' : 'Copy'}
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </button>
+                              </div>
+                              <pre className="px-3 py-2 bg-[#0d0d0d] border border-[#252525] rounded-lg text-[12px] font-mono text-zinc-200 overflow-x-auto whitespace-pre-wrap">{creationPromptInfo.userPrompt}</pre>
+                            </div>
+
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] uppercase tracking-wider font-semibold text-zinc-500">
+                                  {isRTL ? 'الثيم المختار (محقون)' : 'Selected Theme (Injected)'}
+                                </span>
+                                <button
+                                  onClick={() => navigator.clipboard.writeText(creationPromptInfo.themeInstructions || `THEME: ${creationPromptInfo.themeId}`)}
+                                  className="text-zinc-600 hover:text-zinc-400 transition-colors"
+                                  title={isRTL ? 'نسخ' : 'Copy'}
+                                  aria-label={isRTL ? 'نسخ' : 'Copy'}
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </button>
+                              </div>
+                              <pre className="px-3 py-2 bg-[#0d0d0d] border border-[#252525] rounded-lg text-[12px] font-mono text-blue-300 overflow-x-auto whitespace-pre-wrap">{creationPromptInfo.themeInstructions ? creationPromptInfo.themeInstructions : `THEME: ${creationPromptInfo.themeId}`}</pre>
+                            </div>
+
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] uppercase tracking-wider font-semibold text-zinc-500">
+                                  {isRTL ? 'البرومبت النهائي' : 'Final Prompt'}
+                                </span>
+                                <button
+                                  onClick={() => navigator.clipboard.writeText(creationPromptInfo.finalPrompt)}
+                                  className="text-zinc-600 hover:text-zinc-400 transition-colors"
+                                  title={isRTL ? 'نسخ' : 'Copy'}
+                                  aria-label={isRTL ? 'نسخ' : 'Copy'}
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </button>
+                              </div>
+                              <pre className="px-3 py-2 bg-[#0d0d0d] border border-[#252525] rounded-lg text-[12px] font-mono text-emerald-300 overflow-x-auto whitespace-pre-wrap">{creationPromptInfo.finalPrompt}</pre>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -2152,6 +2319,29 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                   </div>
                   
                   <div className="relative flex flex-col gap-2">
+                    {/* Attached Images Preview */}
+                    {attachedImages.length > 0 && (
+                      <div className="flex flex-wrap gap-2 px-2">
+                        {attachedImages.map((img, idx) => (
+                          <div key={idx} className="relative group">
+                            <img 
+                              src={img.preview} 
+                              alt={`Attached ${idx + 1}`}
+                              className="h-16 w-16 rounded-lg object-cover border border-indigo-500/30 bg-muted"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeAttachedImage(idx)}
+                              className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                              title={isRTL ? 'إزالة' : 'Remove'}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     <form onSubmit={handleChatSubmit} className={cn(
                       "flex items-end gap-2 bg-muted/30 dark:bg-white/5 border rounded-2xl p-1.5 transition-all",
                       leftPanelMode === 'chat'
@@ -2174,21 +2364,36 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                             handleChatSubmit(e);
                           }
                         }}
+                        onPaste={(e) => handlePaste(e as any)}
                       />
                       
                       {/* Send Button with action buttons above */}
                       <div className="flex flex-col items-center gap-1 shrink-0">
                         {/* Action buttons - smaller, above send */}
                         <div className="flex flex-col gap-1">
-                          {/* Upload Button */}
+                          {/* Upload Screenshot Button */}
                           <button
                             type="button"
-                            onClick={() => toast.info(isRTL ? 'قريباً: رفع الملفات' : 'Coming soon: File upload')}
-                            className="h-6 w-6 rounded-md bg-muted/50 dark:bg-white/5 border border-border/50 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all active:scale-90"
-                            title={isRTL ? 'رفع ملف' : 'Upload file'}
+                            onClick={() => imageInputRef.current?.click()}
+                            className={cn(
+                              "h-6 w-6 rounded-md border flex items-center justify-center transition-all active:scale-90",
+                              attachedImages.length > 0
+                                ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-500 hover:bg-indigo-500/30"
+                                : "bg-muted/50 dark:bg-white/5 border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted"
+                            )}
+                            title={isRTL ? 'رفع لقطة شاشة' : 'Upload screenshot'}
                           >
-                            <Plus className="h-3 w-3" />
+                            <Camera className="h-3 w-3" />
                           </button>
+                          <input
+                            ref={imageInputRef}
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={handleImageSelect}
+                            className="hidden"
+                            aria-label={isRTL ? 'رفع صورة' : 'Upload image'}
+                          />
                           
                           {/* AMP Button - Amplify/Enhance prompt */}
                           <button

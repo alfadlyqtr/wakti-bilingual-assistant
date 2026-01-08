@@ -466,7 +466,11 @@ Apply these styles consistently throughout the entire design.`;
 
   const generateProjectTitle = (rawPrompt: string) => {
     const p = (rawPrompt || '').replace(/\s+/g, ' ').trim();
-    if (!p) return isRTL ? 'مشروعي' : 'My Project';
+    console.log('[generateProjectTitle] Input:', p);
+    if (!p) {
+      console.log('[generateProjectTitle] Empty prompt, returning default');
+      return isRTL ? 'مشروعي' : 'My Project';
+    }
 
     const lower = p.toLowerCase();
     const leadingPatterns: RegExp[] = [
@@ -479,11 +483,13 @@ Apply these styles consistently throughout the entire design.`;
       /^i\s+want\s+(a|an|the)?\s*/i,
       /^i\s+need\s+(a|an|the)?\s*/i,
       /^please\s+(build|create|make|generate|design|develop)\s+(a|an|the)?\s*/i,
+      /^you\s+to\s+(build|create|make|generate|design|develop)\s+(a|an|the)?\s*/i,
     ];
 
     let cleaned = p;
     for (const re of leadingPatterns) {
       if (re.test(cleaned)) {
+        console.log('[generateProjectTitle] Matched pattern, removing:', re);
         cleaned = cleaned.replace(re, '').trim();
         break;
       }
@@ -494,13 +500,20 @@ Apply these styles consistently throughout the entire design.`;
       .replace(/\s+/g, ' ')
       .trim();
 
-    if (!cleaned) return isRTL ? 'مشروعي' : 'My Project';
+    console.log('[generateProjectTitle] After cleanup:', cleaned);
+
+    if (!cleaned) {
+      console.log('[generateProjectTitle] Empty after cleanup, returning default');
+      return isRTL ? 'مشروعي' : 'My Project';
+    }
 
     const words = cleaned.split(' ').filter(Boolean);
     const maxWords = 7;
     const short = words.slice(0, maxWords).join(' ');
+    const result = short.length > 48 ? `${short.slice(0, 48).trim()}…` : short;
+    console.log('[generateProjectTitle] Final result:', result);
 
-    return short.length > 48 ? `${short.slice(0, 48).trim()}…` : short;
+    return result;
   };
 
   const createProject = async () => {

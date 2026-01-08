@@ -533,8 +533,8 @@ class WaktiAIV2ServiceClass {
     // Sort by timestamp
     uniqueMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     
-    // Apply smart filtering and return last 30
-    return this.smartFilterMessages(uniqueMessages).slice(-30);
+    // Apply smart filtering and return last 100 for better context retention
+    return this.smartFilterMessages(uniqueMessages).slice(-100);
   }
 
   private smartFilterMessages(messages: AIMessage[]): AIMessage[] {
@@ -547,8 +547,8 @@ class WaktiAIV2ServiceClass {
     ];
     
     return messages.filter((msg, index) => {
-      // Always keep the last 30 messages to maintain recent context
-      if (index >= messages.length - 30) return true;
+      // Always keep the last 100 messages to maintain extended context
+      if (index >= messages.length - 100) return true;
       
       // Filter out very short redundant responses
       if (msg.content && msg.content.length < 20) {
@@ -564,8 +564,9 @@ class WaktiAIV2ServiceClass {
   private generateConversationSummary(messages: AIMessage[]): string {
     if (!messages || messages.length < 10) return '';
     
-    // Take messages except the last 12 for summary (keep last 12 as recent context)
-    const summaryMessages = messages.slice(0, -12);
+    // Rolling summary: Take messages except the last 30 (keep last 30 as direct recent context)
+    // This ensures the summary covers the middle section of conversation history
+    const summaryMessages = messages.slice(0, -30);
     if (summaryMessages.length === 0) return '';
     
     // Extract key topics and context
@@ -575,10 +576,10 @@ class WaktiAIV2ServiceClass {
     
     summaryMessages.forEach(msg => {
       if (msg.role === 'user' && msg.content.length > 30) {
-        // Extract potential topics/keywords
+        // Extract potential topics/keywords from older messages
         const words = msg.content.toLowerCase().split(/\s+/);
         words.forEach(word => {
-          if (word.length > 4 && !['about', 'could', 'would', 'should', 'please'].includes(word)) {
+          if (word.length > 4 && !['about', 'could', 'would', 'should', 'please', 'think', 'really', 'thing', 'know'].includes(word)) {
             topics.add(word);
           }
         });
@@ -591,16 +592,22 @@ class WaktiAIV2ServiceClass {
       }
     });
     
-    // Build concise summary
+    // Build concise summary with context markers
     let summary = '';
     if (topics.size > 0) {
-      summary += `Topics discussed: ${Array.from(topics).slice(0, 5).join(', ')}. `;
+      const topicList = Array.from(topics).slice(0, 8).join(', ');
+      summary += `Earlier topics: ${topicList}. `;
     }
     if (userQuestions.length > 0) {
-      summary += `User asked about: ${userQuestions[userQuestions.length - 1]}. `;
+      summary += `Key questions: ${userQuestions.slice(-2).join(' | ')}. `;
     }
     if (assistantActions.length > 0) {
       summary += `${assistantActions.length} actions performed. `;
+    }
+    
+    // Add context marker to help AI understand this is older history
+    if (summary.trim()) {
+      summary = `[Earlier conversation context] ${summary.trim()}`;
     }
     
     return summary.trim();
@@ -740,7 +747,7 @@ class WaktiAIV2ServiceClass {
       const location = await this.getUserLocation(userId);
       const clientTimezone = location?.timezone || this.getClientTimezone();
 
-      // Enhanced message handling with 20-message memory
+      // Enhanced message handling with 100-message memory window
       // CRITICAL: Strip large data to avoid huge request bodies that crash Edge Functions
       const rawEnhanced = this.getEnhancedMessages(recentMessages);
       const enhancedMessages = rawEnhanced.map(msg => {
@@ -1245,6 +1252,7 @@ class WaktiAIV2ServiceClass {
 
         const visionPrompt = (() => {
           const n = payloadImages.length;
+          // Normal analysis mode: analyze the images
           if (n <= 1) return message;
           const header = language === 'ar'
             ? `مهم جداً: لديك ${n} صور. يجب تحليل جميع الصور بالترتيب وعدم تجاهل أي صورة. اكتب نتيجتك بهذه الأقسام بالضبط: صورة 1، صورة 2${n >= 3 ? '، صورة 3' : ''}${n >= 4 ? '، صورة 4' : ''}. إذا كانت الصور مستندات، استخرج النص من كل صورة ثم قارن بينها.`
@@ -1487,7 +1495,7 @@ class WaktiAIV2ServiceClass {
       // Load user location once (country, city) to include in metadata
       const location = await this.getUserLocation(userId);
 
-      // Enhanced message handling with 20-message memory
+      // Enhanced message handling with 100-message memory window
       // CRITICAL: Strip large data to avoid huge request bodies that crash Edge Functions
       const rawEnhanced = this.getEnhancedMessages(recentMessages);
       const enhancedMessages = rawEnhanced.map(msg => {
@@ -1510,6 +1518,7 @@ class WaktiAIV2ServiceClass {
             search: {
               answer: cleaned.metadata.search.answer?.substring(0, 500),
               total: cleaned.metadata.search.total,
+              // Exclude full results array - it's massive
             }
           };
         }

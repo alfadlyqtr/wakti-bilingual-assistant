@@ -246,57 +246,45 @@ async function callGeminiPlanMode(
     .map(([path, content]) => `=== FILE: ${path} ===\n${content}`)
     .join("\n\n");
 
-  const systemPrompt = `You are a code analysis engine. Output ONLY structured JSON. No explanations. No tutorials. No conversational text.
+  const systemPrompt = `You are a code analysis engine. Your ONLY job is to analyze the provided codebase and propose REAL, SPECIFIC changes.
+
+🚨 CRITICAL RULES (MUST FOLLOW):
+1. EXTRACT ACTUAL CODE from the provided files - do NOT invent or use placeholders
+2. Show REAL line numbers where code currently exists
+3. "current" field MUST contain the EXACT code snippet from the file (copy-paste from provided code)
+4. "changeTo" field MUST contain the EXACT new code (real modification, not placeholder)
+5. Output ONLY valid JSON - no explanations, no markdown, no text before/after
+6. Every "current" value MUST exist in the provided files - verify by line number
 
 OUTPUT FORMAT (STRICT JSON):
 {
-  "title": "Action Title (e.g., Change Title Color to Pink)",
-  "file": "/App.js",
+  "title": "Brief description of the change",
+  "file": "/path/to/file.js",
   "line": 45,
   "steps": [
     {
-      "title": "Step name with line reference (line 45-50)",
-      "current": "text-[#60a5fa]",
-      "changeTo": "text-pink-500"
+      "title": "Description with actual line reference (line 45)",
+      "current": "EXACT CODE FROM FILE AT LINE 45",
+      "changeTo": "EXACT NEW CODE TO REPLACE IT"
     }
   ],
   "codeChanges": [
     {
-      "file": "/App.js",
+      "file": "/path/to/file.js",
       "line": 45,
-      "code": "<motion.div className=\\"text-pink-500 font-thin\\">..."
+      "code": "FULL UPDATED CODE BLOCK (multiple lines if needed, with \\n for newlines)"
     }
   ]
 }
 
-EXAMPLE for "make title pink":
-{
-  "title": "Change Site Title Color to Pink",
-  "file": "/App.js",
-  "line": 23,
-  "steps": [
-    {
-      "title": "Update title className (line 23)",
-      "current": "text-[#60a5fa]",
-      "changeTo": "text-pink-500"
-    }
-  ],
-  "codeChanges": [
-    {
-      "file": "/App.js", 
-      "line": 23,
-      "code": "<motion.div whileHover={{ scale: 1.05 }} className=\\"text-2xl font-thin tracking-wider text-pink-500\\">\\n  موزة العلي\\n</motion.div>"
-    }
-  ]
-}
+VERIFICATION CHECKLIST:
+✅ "current" field = exact code copy from provided files
+✅ Line numbers match actual file positions
+✅ "changeTo" is a real modification (not generic placeholder)
+✅ Code snippets are complete and valid
+✅ No fake examples or placeholder values like "text-[#60a5fa]"
 
-RULES:
-- NO explanations, NO tutorials, NO "Here's how to..."
-- NO conversational text like "To change..." or "You need to..."
-- ONLY return the JSON object
-- Include specific line numbers from the code
-- Show exact current value and exact new value
-- Code snippets must be actual code, not descriptions`;
+If you cannot find the exact code in the provided files, do NOT make up placeholder values. Return an error instead.`;
 
   const userMessage = `CODEBASE:
 ${fileContext}
@@ -741,7 +729,37 @@ const THEME_PRESETS: Record<string, string> = {
 };
 
 const BASE_SYSTEM_PROMPT = `
-You are the world's most elite UI/UX designer, Full-Stack Architect, and React Expert. Your goal is to create "Wakti-standard" designs: ultra-premium, high-end, and artistic, while ensuring the application is fully functional, logical, and architecturally sound.
+🚨🚨🚨 CRITICAL: YOU ARE A REACT CODE GENERATOR 🚨🚨🚨
+You output ONLY React/JSX code. NEVER output HTML documents.
+- Your /App.js MUST start with: import React from 'react';
+- Your /App.js MUST have: export default function App() { return (...) }
+- FORBIDDEN: <!DOCTYPE>, <html>, <head>, <body>, <script> tags
+If you return HTML instead of React, the system will REJECT your output.
+
+### MANDATORY FILE STRUCTURE
+ALWAYS start with these files based on project complexity:
+
+**SIMPLE (landing page, single page):**
+- /App.js (main component with all sections)
+- /styles.css (if custom styles needed)
+
+**MEDIUM (multiple sections, modals, CTAs):**
+- /App.js (main with state management)
+- /components/Modal.jsx (reusable modal)
+- /components/Card.jsx (reusable cards)
+
+**COMPLEX (multi-page, dashboard, SaaS):**
+- /App.js (router/navigation state)
+- /components/Navbar.jsx
+- /components/Sidebar.jsx (if dashboard)
+- /pages/Home.jsx or /pages/LandingPage.jsx
+- /pages/Dashboard.jsx (if dashboard)
+- /utils/mockData.js (sample data)
+
+**IF USER ASKS FOR LANGUAGES:**
+- /i18n.js (translations setup)
+
+You are an elite React Expert creating premium UI applications.
 
 ### PART 1: AESTHETICS & DESIGN
 1.  **Theme Compliance**: {{THEME_INSTRUCTIONS}}
@@ -768,32 +786,22 @@ You may ONLY import from these packages (they are pre-installed):
 DO NOT use react-icons, heroicons, or any other icon library. ONLY use lucide-react.
 Example: import { Mail, Phone, Linkedin, Instagram, ChevronDown, Menu, X } from 'lucide-react';
 
-### PART 4: i18n SETUP (MANDATORY)
-ALWAYS include a basic i18n setup in every new project:
+### PART 4: i18n SETUP (ONLY IF USER ASKS)
+DO NOT add i18n/translations unless the user EXPLICITLY asks for:
+- Multiple languages
+- Arabic support
+- Language toggle
+- Bilingual
+- RTL support
 
-1. Create /i18n.js:
-import i18n from 'i18next';
-import { initReactI18next } from 'react-i18next';
+If user does NOT mention any of the above, just use plain English strings directly in the JSX.
+NO useTranslation hook unless explicitly requested. Just simple English text.
 
-i18n.use(initReactI18next).init({
-  resources: {
-    en: { translation: { /* English strings */ } },
-    ar: { translation: { /* Arabic strings */ } }
-  },
-  lng: 'en',
-  fallbackLng: 'en',
-  interpolation: { escapeValue: false }
-});
+### PART 5: SMART PROJECT NAMING
+Extract a meaningful project name from the user's request and use it in document.title and any header branding.
+Examples: "landing page for wife moza" → "MoziLove", "portfolio for photographer" → "PhotoPortfolio"
 
-export default i18n;
-
-2. Import i18n.js at the TOP of App.js (before other imports):
-import './i18n';
-
-3. Use useTranslation hook for text:
-const { t, i18n } = useTranslation();
-
-### PART 5: IMAGE IDS
+### PART 6: IMAGE IDS
 ONLY use these Unsplash IDs:
 - Luxury: 1523170335258-f5ed11844a49, 1515562141207-7a88fb7ce338, 1617038220319-276d3cf663c6
 - Tech: 1519389950473-47ba0277781c, 1551288049-bebda4e38f71, 1531297422935-40280f32a347
@@ -804,7 +812,6 @@ Return ONLY a valid JSON object. No markdown fences. No explanation.
 Structure:
 {
   "/App.js": "...",
-  "/i18n.js": "...",
   "/components/Navbar.jsx": "...",
   "/utils/mockData.js": "..."
 }
@@ -815,77 +822,67 @@ CRITICAL RULES:
 3. NEWLINES MUST BE ESCAPED AS \\n inside JSON strings. NO ACTUAL NEWLINES.
 4. Output must be a single parseable JSON object.
 5. ONLY use lucide-react for icons. NEVER use react-icons or heroicons.
-6. ALWAYS include /i18n.js in new projects.
-7. NEVER RETURN HTML. No <!DOCTYPE>, no <html>, no <head>, no <body> tags. You are building a REACT application, not a static HTML page. All code must be React JSX components.
+6. ALWAYS include /i18n.js in new projects when user asks for multiple languages.
+7. App.js must be a valid React functional component, NOT an HTML document.
 `;
 
 // ============================================================================
 // SYSTEM PROMPTS
 // ============================================================================
 
-const GEMINI_EXECUTE_SYSTEM_PROMPT = `You are a Senior React Maintenance Engineer.
-Your job is to implement changes into an existing React codebase.
+const GEMINI_EXECUTE_SYSTEM_PROMPT = `You are a Senior React Engineer who ACTUALLY IMPLEMENTS what users ask for.
 
-CRITICAL RULE: You must return the FULL CONTENT of every file you modify or create.
-NO PATCHES. NO DIFFS. FULL FILE REWRITES ONLY.
+🚨 CRITICAL: DO WHAT THE USER ASKS. If they want colors, add colors. If they want animations, add animations. If they want gradients, add gradients. NO EXCUSES.
 
-### AVAILABLE PACKAGES (PRE-INSTALLED)
-You may ONLY import from these packages:
+### YOUR JOB
+1. READ the user's request carefully
+2. IMPLEMENT exactly what they asked for - don't be conservative
+3. Return FULL FILE REWRITES (no patches, no diffs)
+
+### VISUAL CHANGES (IMPORTANT)
+When users ask for visual improvements, ACTUALLY ADD THEM:
+- **Gradients**: Use Tailwind gradient classes (bg-gradient-to-r, from-purple-500, to-pink-500, etc.)
+- **Animations**: Use framer-motion (motion.div with animate, whileHover, transition props)
+- **Floating elements**: Create animated background elements with absolute positioning
+- **Shadows**: Use Tailwind shadow classes (shadow-lg, shadow-xl, shadow-2xl)
+- **Glow effects**: Use box-shadow with colored shadows (style={{ boxShadow: '0 0 30px rgba(168,85,247,0.5)' }})
+- **Colors**: Use the theme colors provided, not black/white
+
+### AVAILABLE PACKAGES
 - react, react-dom
-- framer-motion
-- lucide-react (for ALL icons - NEVER use react-icons or heroicons)
-- date-fns
-- recharts
-- @tanstack/react-query
+- framer-motion (USE THIS for all animations)
+- lucide-react (for icons - NEVER use react-icons)
+- date-fns, recharts, @tanstack/react-query
 - clsx, tailwind-merge
-- i18next, react-i18next (for internationalization)
+- i18next, react-i18next
 
-### i18n SETUP (IMPORTANT)
-When implementing language/translation features:
-1. Create /i18n.js with proper i18next initialization
-2. Import i18n.js at the TOP of App.js (before other imports)
-3. Use the useTranslation hook: const { t, i18n } = useTranslation();
-4. Wrap text in t('key') function calls
+### ANIMATION EXAMPLES (USE THESE)
+\`\`\`jsx
+// Fade in on load
+<motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
 
-Example /i18n.js:
-import i18n from 'i18next';
-import { initReactI18next } from 'react-i18next';
+// Floating animation
+<motion.div animate={{ y: [0, -10, 0] }} transition={{ duration: 3, repeat: Infinity }}>
 
-i18n.use(initReactI18next).init({
-  resources: {
-    en: { translation: { greeting: 'Hello' } },
-    ar: { translation: { greeting: 'مرحبا' } }
-  },
-  lng: 'en',
-  fallbackLng: 'en',
-  interpolation: { escapeValue: false }
-});
+// Hover effect
+<motion.div whileHover={{ scale: 1.05, boxShadow: '0 0 30px rgba(168,85,247,0.5)' }}>
 
-export default i18n;
+// Gradient text
+<span className="bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent">
+\`\`\`
 
-### SAFETY RULES
-- DO NOT break existing imports
-- DO NOT delete export default function App
-- Maintain existing visual style unless asked to change
-- Keep mockData.js pattern for data
-
-### JSON OUTPUT FORMAT (CRITICAL)
-Return ONLY a valid JSON object:
+### JSON OUTPUT FORMAT
+Return ONLY valid JSON:
 {
   "files": {
-    "/App.js": "import React from 'react';\\n...",
-    "/i18n.js": "import i18n from 'i18next';\\n..."
+    "/App.js": "import React from 'react';\\nimport { motion } from 'framer-motion';\\n..."
   },
-  "summary": "Brief description of changes"
+  "summary": "Added gradient background, floating animations, and glow effects"
 }
 
-ESCAPING RULES:
-- Newlines: \\n
-- Quotes: \\"
-- Backslashes: \\\\
-- Tabs: \\t
+ESCAPING: Newlines=\\n, Quotes=\\", Backslashes=\\\\
 
-ONLY return files that were modified or created. Do NOT return unchanged files.`;
+ONLY return files that changed. Do NOT return unchanged files.`;
 
 const _GEMINI_EDIT_FULL_REWRITE_PROMPT = `You are a Senior React Architect and Maintenance Engineer.
 Your job is to implement user changes into an existing React codebase running in a Sandpack environment.
@@ -1296,8 +1293,12 @@ serve(async (req: Request) => {
       const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
       if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
       
+      // Check if images were provided
+      const hasImages = Array.isArray(images) && images.length > 0;
+      console.log(`[Chat Mode] Has images: ${hasImages}, count: ${hasImages ? images.length : 0}`);
+      
       const chatSystemPrompt = `You are a helpful AI assistant for a React code editor. You help users with their projects.
-
+${hasImages ? '\n🖼️ SCREENSHOT ANALYSIS MODE: The user has attached screenshot(s). Analyze them carefully and implement what you see or what the user asks based on the visual.\n' : ''}
 🚨 CRITICAL DETECTION RULES:
 
 IS IT A CODE CHANGE REQUEST? Check for these keywords:
@@ -1305,6 +1306,7 @@ IS IT A CODE CHANGE REQUEST? Check for these keywords:
 - "doesn't work", "not working", "broken", "bug", "error"
 - "أصلح", "غير", "أضف", "احذف", "عدل", "اجعل", "لا يعمل", "مشكلة"
 - Any request implying the user wants you to DO something to the code
+- If user attached a screenshot, they likely want you to recreate or modify based on it
 
 IF YES → Return ONLY JSON (no text before or after)
 IF NO (pure question like "what does X do?") → Return markdown
@@ -1330,6 +1332,32 @@ Use emojis, **bold**, \`code\`, and bullet points. Be friendly!
 Current project files:
 ${filesStr}`;
 
+      // Build the content parts - text + optional images
+      const contentParts: Array<{text?: string; inlineData?: {mimeType: string; data: string}}> = [];
+      
+      // Add images first if provided
+      if (hasImages) {
+        const imageArray = images as unknown as string[];
+        for (const imgData of imageArray) {
+          // imgData is base64 data URL like "data:image/png;base64,..."
+          if (typeof imgData === 'string' && imgData.startsWith('data:')) {
+            const matches = imgData.match(/^data:([^;]+);base64,(.+)$/);
+            if (matches) {
+              contentParts.push({
+                inlineData: {
+                  mimeType: matches[1],
+                  data: matches[2]
+                }
+              });
+            }
+          }
+        }
+        console.log(`[Chat Mode] Added ${contentParts.length} images to request`);
+      }
+      
+      // Add the text prompt
+      contentParts.push({ text: prompt });
+
       const chatResponse = await withTimeout(
         fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`,
@@ -1340,7 +1368,7 @@ ${filesStr}`;
               "x-goog-api-key": GEMINI_API_KEY,
             },
             body: JSON.stringify({
-              contents: [{ role: "user", parts: [{ text: prompt }] }],
+              contents: [{ role: "user", parts: contentParts }],
               systemInstruction: { parts: [{ text: chatSystemPrompt }] },
               generationConfig: {
                 temperature: 0.7,
@@ -1452,8 +1480,18 @@ ${filesStr}`;
         }
         
         console.log(`[Execute Mode] Executing plan...`);
+        console.log(`[Execute Mode] Plan to execute: ${planToExecute.substring(0, 200)}...`);
+        console.log(`[Execute Mode] Existing files: ${Object.keys(existingFiles).join(', ')}`);
+        
         const result = await callGeminiExecuteMode(planToExecute, existingFiles, userInstructions);
         const changedFiles = result.files || {};
+        
+        console.log(`[Execute Mode] Changed files returned: ${Object.keys(changedFiles).join(', ') || 'NONE'}`);
+        console.log(`[Execute Mode] Summary: ${result.summary}`);
+        
+        if (Object.keys(changedFiles).length === 0) {
+          console.error(`[Execute Mode] WARNING: AI returned no changed files!`);
+        }
         
         if (changedFiles["/App.js"]) assertNoHtml(changedFiles["/App.js"]);
         
@@ -1505,15 +1543,49 @@ ${filesStr}`;
           textPrompt = `SCREENSHOT-TO-CODE: Analyze the attached screenshot(s) and recreate this UI as a React application.\n\n${textPrompt}`;
         }
 
-        // Use Gemini 2.5 Pro for creation (As per user request - powerful for complex projects)
-        const aiText = await callGemini25Pro(finalSystemPrompt, textPrompt, true);
-        assertNoHtml(aiText);
+        // Use Gemini 2.5 Pro for creation
+        let aiText = await callGemini25Pro(finalSystemPrompt, textPrompt, true);
+        console.log(`[Create Mode] AI Response length: ${aiText.length}`);
+        console.log(`[Create Mode] AI Response (first 500 chars): ${aiText.substring(0, 500)}`);
 
         let content = extractJsonObject(aiText);
         content = fixUnescapedNewlines(content);
-        const parsed = JSON.parse(content);
-        const { files, summary } = coerceFilesMap(parsed);
-        if (!files["/App.js"]) throw new Error("MISSING_APP_JS");
+        let parsed = JSON.parse(content);
+        let { files, summary } = coerceFilesMap(parsed);
+        console.log(`[Create Mode] Files keys: ${Object.keys(files).join(', ')}`);
+
+        // If AI returned HTML instead of React, retry with ultra-strict prompt
+        if (!files["/App.js"] || files["/App.js"]?.toLowerCase().includes("<!doctype")) {
+          console.log(`[Create Mode] AI returned HTML, retrying with strict React prompt...`);
+          const strictPrompt = `You are a REACT CODE generator. Return ONLY a JSON object with React files.
+
+CRITICAL: Your response must be a JSON object like this:
+{
+  "/App.js": "import React from 'react';\\nexport default function App() { return (<div>...</div>); }"
+}
+
+DO NOT return HTML. DO NOT use <!DOCTYPE>. DO NOT use <html> tags.
+The /App.js file MUST start with: import React from 'react';
+
+USER REQUEST: ${prompt}
+
+Return ONLY the JSON object. No explanation.`;
+
+          aiText = await callGemini25Pro(strictPrompt, "", true);
+          console.log(`[Create Mode] Retry response (first 500 chars): ${aiText.substring(0, 500)}`);
+          content = extractJsonObject(aiText);
+          content = fixUnescapedNewlines(content);
+          parsed = JSON.parse(content);
+          const retryResult = coerceFilesMap(parsed);
+          files = retryResult.files;
+          summary = retryResult.summary;
+          console.log(`[Create Mode] Retry files keys: ${Object.keys(files).join(', ')}`);
+        }
+
+        if (!files["/App.js"]) {
+          console.error(`[Create Mode] MISSING /App.js after retry! Available: ${Object.keys(files).join(', ')}`);
+          throw new Error("MISSING_APP_JS");
+        }
         assertNoHtml(files["/App.js"]);
 
         await replaceProjectFiles(supabase, projectId, files);
@@ -1533,11 +1605,20 @@ ${filesStr}`;
       }
 
       console.log(`[Edit Mode] Full rewrite for: ${prompt.substring(0, 50)}...`);
+      console.log(`[Edit Mode] Existing files: ${Object.keys(existingFiles).join(', ')}`);
       const userPrompt = `${prompt}\n\n${userInstructions || ""}`;
       
       // USE FULL REWRITE - NO PATCHES
       const result = await callGeminiFullRewriteEdit(userPrompt, existingFiles, userInstructions);
       const changedFiles = result.files || {};
+      
+      console.log(`[Edit Mode] Changed files returned: ${Object.keys(changedFiles).join(', ') || 'NONE'}`);
+      console.log(`[Edit Mode] Summary: ${result.summary}`);
+      
+      if (Object.keys(changedFiles).length === 0) {
+        console.error(`[Edit Mode] WARNING: AI returned no changed files!`);
+      }
+      
       if (changedFiles["/App.js"]) assertNoHtml(changedFiles["/App.js"]);
 
       const missing = findMissingReferencedFiles({ changedFiles, existingFiles });

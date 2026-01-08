@@ -11,6 +11,7 @@ import { atomDark } from "@codesandbox/sandpack-themes";
 import { Code2, Eye, FileCode, FileJson, FileType, CheckCircle2, MousePointer2 } from "lucide-react";
 import { clsx } from "clsx";
 import { INSPECTOR_SCRIPT } from "@/utils/visualInspector";
+import sandpackI18nBundle from "@/assets/sandpack-i18n-bundle.mjs?raw";
 
 // --- 1. CUSTOM FILE EXPLORER (The Google Look) ---
 const CustomFileSidebar = () => {
@@ -153,6 +154,43 @@ root.render(<App />);`;
   if (!formattedFiles["/styles.css"]) {
     formattedFiles["/styles.css"] = "@tailwind base;\n@tailwind components;\n@tailwind utilities;";
   }
+
+  // If project uses i18n, inject our pre-bundled version under the original package names
+  // This way Sandpack resolves imports to our bundle instead of trying to fetch from npm
+  if (formattedFiles["/i18n.js"]) {
+    // Create shim packages that re-export from our bundle
+    const i18nShim = `// Pre-bundled i18n for Sandpack
+${sandpackI18nBundle}
+`;
+    
+    // i18next package shim
+    formattedFiles["/node_modules/i18next/package.json"] = JSON.stringify({
+      name: "i18next",
+      main: "./index.js",
+      module: "./index.js"
+    });
+    formattedFiles["/node_modules/i18next/index.js"] = `import { i18n } from './bundle.js';
+export default i18n;
+export * from './bundle.js';`;
+    formattedFiles["/node_modules/i18next/bundle.js"] = i18nShim;
+
+    // react-i18next package shim  
+    formattedFiles["/node_modules/react-i18next/package.json"] = JSON.stringify({
+      name: "react-i18next",
+      main: "./index.js",
+      module: "./index.js"
+    });
+    formattedFiles["/node_modules/react-i18next/index.js"] = `export { useTranslation, Trans, I18nextProvider, initReactI18next } from '../i18next/bundle.js';`;
+
+    // i18next-browser-languagedetector package shim
+    formattedFiles["/node_modules/i18next-browser-languagedetector/package.json"] = JSON.stringify({
+      name: "i18next-browser-languagedetector",
+      main: "./index.js",
+      module: "./index.js"
+    });
+    formattedFiles["/node_modules/i18next-browser-languagedetector/index.js"] = `export { LanguageDetector } from '../i18next/bundle.js';
+export { LanguageDetector as default } from '../i18next/bundle.js';`;
+  }
   
   // Always set index.html with the Visual Inspector script injected
   formattedFiles["/public/index.html"] = `<!DOCTYPE html>
@@ -225,6 +263,7 @@ root.render(<App />);`;
               "tailwind-merge": "2.0.0",
               "i18next": "^23.7.6",
               "react-i18next": "^13.5.0",
+              "i18next-browser-languagedetector": "^7.2.0",
               "date-fns": "^2.30.0",
               "recharts": "^2.10.3",
               "@tanstack/react-query": "^5.17.0"
