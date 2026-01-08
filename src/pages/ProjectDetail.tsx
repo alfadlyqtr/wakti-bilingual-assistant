@@ -1021,10 +1021,26 @@ export default function ProjectDetail() {
       }
 
       // ============================================
-      // FLATTEN: Bundle all files into one for preview
+      // SERVER-SIDE BUILD: Use esbuild Edge Function
       // ============================================
-      const bundledCode = flattenProjectFiles(projectFiles);
-      console.log('Bundled code length:', bundledCode.length);
+      console.log('Calling project-build Edge Function...');
+      const buildResponse = await supabase.functions.invoke('project-build', {
+        body: { files: projectFiles, entryPoint: '/App.js' }
+      });
+
+      if (buildResponse.error) {
+        console.error('Build error:', buildResponse.error);
+        throw new Error(buildResponse.error.message || 'Build failed');
+      }
+
+      if (!buildResponse.data?.success) {
+        console.error('Build failed:', buildResponse.data?.error);
+        throw new Error(buildResponse.data?.error || 'Build failed');
+      }
+
+      const { bundle } = buildResponse.data;
+      const bundledCode = JSON.stringify(bundle);
+      console.log('Server build successful, bundle size:', bundledCode.length);
 
       // Save bundled code directly to projects table
       const { error: bundleError } = await supabase
