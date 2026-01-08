@@ -1039,73 +1039,41 @@ export default function ProjectDetail() {
       }
 
       const { bundle } = buildResponse.data;
-      const bundledCode = JSON.stringify(bundle);
-      console.log('Server build successful, bundle size:', bundledCode.length);
-
-      // Save bundled code directly to projects table
-      const { error: bundleError } = await supabase
-        .from('projects' as any)
-        .update({ bundled_code: bundledCode })
-        .eq('id', project.id);
       
-      if (bundleError) {
-        console.error('Error saving bundled code:', bundleError);
-      }
-
       // Generate a self-contained index.html with bundled code
       const indexHtml = generateBundledIndexHtml(bundle, project.name);
-      
-      // Only deploy the single bundled index.html - no raw files needed
-      const filesToPublish: { path: string; content: string }[] = [
-        { path: 'index.html', content: indexHtml },
-      ];
+      console.log('Generated HTML, size:', indexHtml.length);
 
-      const response = await supabase.functions.invoke('projects-publish', {
-        body: {
-          projectName: project.name,
-          projectSlug: project.slug,
-          files: filesToPublish,
-        },
-      });
-
-      if (response.error) {
-        // Check for specific error codes
-        const errorCode = response.error?.message || response.data?.code || '';
-        if (errorCode.includes('MISSING_VERCEL_TOKEN')) {
-          throw new Error(isRTL ? 'خدمة النشر غير مهيأة' : 'Publishing service not configured');
-        }
-        throw response.error;
-      }
-
-      if (response.data?.ok === false) {
-        const errorMsg = response.data?.error || 'Unknown error';
-        if (errorMsg.includes('MISSING_VERCEL_TOKEN')) {
-          throw new Error(isRTL ? 'خدمة النشر غير مهيأة' : 'Publishing service not configured');
-        }
-        throw new Error(errorMsg);
-      }
-
-      const { url, deploymentId } = response.data;
+      // ============================================
+      // SAVE TO SUPABASE ONLY - NO VERCEL DEPLOYMENT
+      // ============================================
       const finalSubdomain = subdomainInput.toLowerCase();
       const subdomainUrl = `https://${finalSubdomain}.wakti.ai`;
 
-      await (supabase
+      const { error: updateError } = await supabase
         .from('projects' as any)
         .update({
+          bundled_code: indexHtml,
           status: 'published',
           published_url: subdomainUrl,
-          deployment_id: deploymentId,
           subdomain: finalSubdomain,
           published_at: new Date().toISOString(),
         })
-        .eq('id', project.id) as any);
+        .eq('id', project.id);
+      
+      if (updateError) {
+        console.error('Error saving project:', updateError);
+        throw new Error(updateError.message || 'Failed to save project');
+      }
+
+      console.log('Project published successfully to:', subdomainUrl);
 
       setProject(prev => prev ? {
         ...prev,
         status: 'published',
         published_url: subdomainUrl,
-        deployment_id: deploymentId,
         subdomain: finalSubdomain,
+        bundled_code: indexHtml,
       } : null);
 
       setShowPublishModal(false);
