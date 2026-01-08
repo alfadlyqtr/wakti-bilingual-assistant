@@ -717,16 +717,53 @@ export default function ProjectDetail() {
   };
 
   // ============================================
-  // FLATTENER/BUNDLER: Combines all files into one
+  // FLATTENER/BUNDLER: BRUTE FORCE - Include EVERYTHING
   // ============================================
   const flattenProjectFiles = (files: Record<string, string>): string => {
-    const processed = new Set<string>();
-    const cssContent: string[] = [];
-    const jsContent: string[] = [];
+    const allCss: string[] = [];
+    const allJs: string[] = [];
+    const processedFiles = new Set<string>();
     
-    // Helper to resolve import path
-    const resolveImportPath = (importPath: string, currentFile: string): string => {
-      // Remove quotes and semicolons
+    // ============================================
+    // STEP 1: BRUTE FORCE CSS - Collect ALL .css files
+    // ============================================
+    for (const [filePath, content] of Object.entries(files)) {
+      if (filePath.endsWith('.css')) {
+        let css = content;
+        // Remove @tailwind directives (we use Tailwind CDN)
+        css = css.replace(/@tailwind\s+[^;]+;/g, '');
+        // Remove @import for external fonts (loaded via link tags)
+        css = css.replace(/@import\s+url\([^)]+\);?/g, '');
+        allCss.push(`/* ===== ${filePath} ===== */\n${css}`);
+        processedFiles.add(filePath);
+      }
+    }
+    
+    // ============================================
+    // STEP 2: BRUTE FORCE JSON - Convert ALL .json to JS objects
+    // ============================================
+    const jsonVars: string[] = [];
+    for (const [filePath, content] of Object.entries(files)) {
+      if (filePath.endsWith('.json')) {
+        try {
+          // Create a variable name from the file path
+          // e.g., /locales/en.json -> locales_en_json
+          const varName = filePath
+            .replace(/^\//, '')
+            .replace(/[^a-zA-Z0-9]/g, '_')
+            .replace(/_+/g, '_');
+          jsonVars.push(`// JSON: ${filePath}\nconst ${varName} = ${content};`);
+          processedFiles.add(filePath);
+        } catch (e) {
+          console.error(`Failed to process JSON ${filePath}:`, e);
+        }
+      }
+    }
+    
+    // ============================================
+    // Helper: Resolve import path to actual file
+    // ============================================
+    const resolveImportPath = (importPath: string, currentFile: string): string | null => {
       let cleanPath = importPath.replace(/['"`;]/g, '').trim();
       
       // Handle relative paths
@@ -737,154 +774,164 @@ export default function ProjectDetail() {
         
         for (const part of parts) {
           if (part === '.') continue;
-          if (part === '..') {
-            resolvedParts.pop();
-          } else {
-            resolvedParts.push(part);
-          }
+          if (part === '..') resolvedParts.pop();
+          else resolvedParts.push(part);
         }
         cleanPath = '/' + resolvedParts.join('/');
       }
       
-      // Add leading slash if missing
-      if (!cleanPath.startsWith('/')) {
-        cleanPath = '/' + cleanPath;
-      }
+      if (!cleanPath.startsWith('/')) cleanPath = '/' + cleanPath;
       
-      // Try different extensions
-      const extensions = ['', '.js', '.jsx', '.ts', '.tsx'];
-      for (const ext of extensions) {
-        const fullPath = cleanPath + ext;
-        if (files[fullPath]) return fullPath;
+      // Try exact match first
+      if (files[cleanPath]) return cleanPath;
+      
+      // Try with extensions
+      for (const ext of ['', '.js', '.jsx', '.ts', '.tsx', '.json']) {
+        if (files[cleanPath + ext]) return cleanPath + ext;
       }
       
       // Try index files
-      for (const ext of ['/index.js', '/index.jsx', '/index.ts', '/index.tsx']) {
-        const fullPath = cleanPath + ext;
-        if (files[fullPath]) return fullPath;
+      for (const idx of ['/index.js', '/index.jsx', '/index.ts', '/index.tsx']) {
+        if (files[cleanPath + idx]) return cleanPath + idx;
       }
       
-      return cleanPath;
+      return null;
     };
     
-    // Helper to strip imports/exports and extract component name
-    const processFileContent = (content: string, filePath: string): string => {
+    // ============================================
+    // Helper: Strip imports/exports from JS content
+    // ============================================
+    const stripImportsExports = (content: string, filePath: string): string => {
       let result = content;
-      
-      // Extract component name from file path
       const fileName = filePath.split('/').pop()?.replace(/\.(js|jsx|ts|tsx)$/, '') || 'Component';
       
-      // Remove all import statements
+      // Remove ALL import statements (both 'from' and side-effect imports)
       result = result.replace(/^import\s+.*?from\s+['"][^'"]*['"];?\s*$/gm, '');
       result = result.replace(/^import\s+['"][^'"]*['"];?\s*$/gm, '');
       
-      // Handle: export default function ComponentName() { ... }
+      // Handle exports
       result = result.replace(/export\s+default\s+function\s+(\w+)/g, 'function $1');
-      
-      // Handle: export default function() { ... } (anonymous)
       result = result.replace(/export\s+default\s+function\s*\(/g, `function ${fileName}(`);
-      
-      // Handle: export default () => { ... } (anonymous arrow)
       result = result.replace(/export\s+default\s+\(\s*\)\s*=>/g, `const ${fileName} = () =>`);
       result = result.replace(/export\s+default\s+\(([^)]*)\)\s*=>/g, `const ${fileName} = ($1) =>`);
-      
-      // Handle: export default ComponentName;
       result = result.replace(/export\s+default\s+(\w+)\s*;?/g, '');
-      
-      // Handle: export function ComponentName() { ... }
       result = result.replace(/export\s+function\s+/g, 'function ');
-      
-      // Handle: export const ComponentName = ...
       result = result.replace(/export\s+const\s+/g, 'const ');
-      
-      // Handle: export let/var
       result = result.replace(/export\s+(let|var)\s+/g, '$1 ');
-      
-      // Handle: export { ... }
       result = result.replace(/export\s+\{[^}]*\}\s*;?/g, '');
       
-      // Clean up multiple blank lines
+      // Clean up blank lines
       result = result.replace(/\n{3,}/g, '\n\n');
       
       return result.trim();
     };
     
-    // Recursively process a file and its dependencies
-    const processFile = (filePath: string) => {
-      if (processed.has(filePath)) return;
-      
-      const content = files[filePath];
-      if (!content) return;
-      
-      processed.add(filePath);
-      
-      // Handle CSS files
-      if (filePath.endsWith('.css')) {
-        let css = content;
-        // Remove @tailwind directives (we'll use Tailwind CDN)
-        css = css.replace(/@tailwind\s+[^;]+;/g, '');
-        // Remove @import for external fonts (we'll load them separately)
-        css = css.replace(/@import\s+url\([^)]+\);?/g, '');
-        cssContent.push(`/* ${filePath} */\n${css}`);
-        return;
-      }
-      
-      // Skip non-JS files
+    // ============================================
+    // STEP 3: Process JS files with dependency ordering
+    // ============================================
+    const jsOrder: string[] = [];
+    
+    const processJsFile = (filePath: string) => {
+      if (processedFiles.has(filePath)) return;
+      if (!files[filePath]) return;
       if (!filePath.match(/\.(js|jsx|ts|tsx)$/)) return;
       
-      // Find all imports in this file
-      const importRegex = /import\s+(?:(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)\s*,?\s*)*from\s+['"]([^'"]+)['"]/g;
-      let match;
+      processedFiles.add(filePath);
+      const content = files[filePath];
       
-      while ((match = importRegex.exec(content)) !== null) {
+      // Find ALL imports (including side-effect imports like `import './i18n'`)
+      // Pattern 1: import X from 'path' or import { X } from 'path'
+      const fromImports = content.matchAll(/import\s+(?:[\s\S]*?)\s*from\s+['"]([^'"]+)['"]/g);
+      // Pattern 2: import 'path' (side-effect imports)
+      const sideEffectImports = content.matchAll(/import\s+['"]([^'"]+)['"]\s*;?/g);
+      
+      const allImportPaths = new Set<string>();
+      
+      for (const match of fromImports) {
         const importPath = match[1];
-        
-        // Skip external packages (react, lucide-react, framer-motion, etc.)
-        if (!importPath.startsWith('.') && !importPath.startsWith('/')) {
-          continue;
+        // Only process local imports
+        if (importPath.startsWith('.') || importPath.startsWith('/')) {
+          allImportPaths.add(importPath);
         }
-        
-        // Resolve and process the imported file
-        const resolvedPath = resolveImportPath(importPath, filePath);
-        processFile(resolvedPath);
       }
       
-      // Process this file's content
-      const processedContent = processFileContent(content, filePath);
-      jsContent.push(`// ========== ${filePath} ==========\n${processedContent}`);
+      for (const match of sideEffectImports) {
+        const importPath = match[1];
+        // Only process local imports
+        if (importPath.startsWith('.') || importPath.startsWith('/')) {
+          allImportPaths.add(importPath);
+        }
+      }
+      
+      // Process dependencies first (depth-first)
+      for (const importPath of allImportPaths) {
+        const resolved = resolveImportPath(importPath, filePath);
+        if (resolved && !processedFiles.has(resolved)) {
+          processJsFile(resolved);
+        }
+      }
+      
+      // Add this file to the order
+      jsOrder.push(filePath);
     };
     
-    // Start from App.js or App.jsx
+    // Start from App.js/App.jsx
     const appFile = files['/App.js'] ? '/App.js' : files['/App.jsx'] ? '/App.jsx' : null;
-    
-    if (!appFile) {
-      console.error('No App.js or App.jsx found');
-      return '';
+    if (appFile) {
+      processJsFile(appFile);
     }
     
-    // Process all files starting from App
-    processFile(appFile);
-    
-    // Also process any CSS files that weren't imported
+    // ============================================
+    // STEP 4: BRUTE FORCE - Include ANY remaining JS files
+    // ============================================
     for (const filePath of Object.keys(files)) {
-      if (filePath.endsWith('.css') && !processed.has(filePath)) {
-        processFile(filePath);
+      if (filePath.match(/\.(js|jsx|ts|tsx)$/) && !processedFiles.has(filePath)) {
+        processJsFile(filePath);
       }
     }
     
-    // Also process any data/utils files that might be needed
-    for (const filePath of Object.keys(files)) {
-      if ((filePath.includes('/utils/') || filePath.includes('/data/') || filePath.includes('/config/')) 
-          && !processed.has(filePath)) {
-        processFile(filePath);
+    // ============================================
+    // STEP 5: Build final JS bundle in correct order
+    // ============================================
+    // First: JSON variables
+    if (jsonVars.length > 0) {
+      allJs.push('// ========== JSON DATA ==========');
+      allJs.push(...jsonVars);
+    }
+    
+    // Then: All JS files in dependency order
+    for (const filePath of jsOrder) {
+      const content = files[filePath];
+      if (content) {
+        const processed = stripImportsExports(content, filePath);
+        allJs.push(`// ========== ${filePath} ==========\n${processed}`);
       }
     }
     
-    // Build the final bundled output
-    const bundledCss = cssContent.join('\n\n');
-    const bundledJs = jsContent.join('\n\n');
+    // ============================================
+    // STEP 6: Build CSS injection script
+    // ============================================
+    const bundledCss = allCss.join('\n\n');
+    const cssInjectionScript = bundledCss.length > 0 
+      ? `// ========== CSS INJECTION ==========
+(function() {
+  const style = document.createElement('style');
+  style.textContent = ${JSON.stringify(bundledCss)};
+  document.head.appendChild(style);
+})();`
+      : '';
     
-    return JSON.stringify({ css: bundledCss, js: bundledJs });
+    // Final bundle: CSS injection first, then all JS
+    const finalJs = cssInjectionScript + '\n\n' + allJs.join('\n\n');
+    
+    console.log('Bundler stats:', {
+      cssFiles: allCss.length,
+      jsonFiles: jsonVars.length,
+      jsFiles: jsOrder.length,
+      totalFiles: Object.keys(files).length
+    });
+    
+    return JSON.stringify({ css: '', js: finalJs });
   };
 
   // Validate subdomain format

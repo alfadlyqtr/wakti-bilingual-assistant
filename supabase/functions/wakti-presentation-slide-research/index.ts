@@ -1,6 +1,68 @@
 // @ts-nocheck: Deno/Supabase edge runtime
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { logAIFromRequest } from "../_shared/aiLogger.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+
+// Inline aiLogger functions to avoid import issues
+function estimateTokens(text: string | undefined | null): number {
+  if (!text) return 0;
+  return Math.ceil(text.length / 4);
+}
+
+async function logAIFromRequest(req: Request, params: any): Promise<void> {
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.warn("[aiLogger] Missing Supabase credentials, skipping log");
+      return;
+    }
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const inputTokens = params.inputTokens ?? estimateTokens(params.inputText);
+    const outputTokens = params.outputTokens ?? estimateTokens(params.outputText);
+    
+    // Extract userId from JWT
+    let userId: string | null = null;
+    try {
+      const authHeader = req.headers.get("authorization") || req.headers.get("Authorization");
+      if (authHeader) {
+        const token = authHeader.replace(/^Bearer\s+/i, "");
+        const parts = token.split(".");
+        if (parts.length === 3) {
+          const payloadB64 = parts[1];
+          const base64 = payloadB64.replace(/-/g, "+").replace(/_/g, "/");
+          const payloadJson = atob(base64);
+          const payload = JSON.parse(payloadJson);
+          userId = payload.sub || null;
+        }
+      }
+    } catch {
+      // Ignore JWT parsing errors
+    }
+    
+    const { error } = await supabase.rpc("log_ai_usage", {
+      p_user_id: userId,
+      p_function_name: params.functionName,
+      p_model: params.model,
+      p_status: params.status,
+      p_error_message: params.errorMessage || null,
+      p_prompt: params.inputText ? params.inputText.substring(0, 2000) : null,
+      p_response: params.outputText ? params.outputText.substring(0, 2000) : null,
+      p_metadata: params.metadata ? { ...params.metadata, provider: params.provider } : { provider: params.provider },
+      p_input_tokens: inputTokens,
+      p_output_tokens: outputTokens,
+      p_duration_ms: params.durationMs || 0,
+      p_cost_credits: 0,
+    });
+    
+    if (error) {
+      console.error("[aiLogger] Failed to log AI usage:", error.message);
+    }
+  } catch (err) {
+    console.error("[aiLogger] Error logging AI usage:", err);
+  }
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
