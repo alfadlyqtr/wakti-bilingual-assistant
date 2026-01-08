@@ -165,6 +165,7 @@ export default function ProjectPreview({ subdomain: propSubdomain }: ProjectPrev
             "react-dom": "^18.0.0",
             "react-i18next": "^13.0.0",
             "i18next": "^23.0.0",
+            "i18next-browser-languagedetector": "^7.0.0",
             "framer-motion": "^10.0.0",
             "lucide-react": "^0.263.1",
             "clsx": "^2.0.0",
