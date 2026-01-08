@@ -1021,24 +1021,82 @@ export default function ProjectDetail() {
       }
 
       // ============================================
-      // SERVER-SIDE BUILD: Use esbuild Edge Function
+      // CLIENT-SIDE BUNDLING: The Lovable/Bolt Way
       // ============================================
-      console.log('Calling project-build Edge Function...');
-      const buildResponse = await supabase.functions.invoke('project-build', {
-        body: { files: projectFiles, entryPoint: '/App.js' }
-      });
-
-      if (buildResponse.error) {
-        console.error('Build error:', buildResponse.error);
-        throw new Error(buildResponse.error.message || 'Build failed');
+      console.log('Performing client-side bundling...');
+      
+      // 1. Extract CSS
+      let collectedCss = '';
+      for (const [path, content] of Object.entries(projectFiles)) {
+        if (path.endsWith('.css')) {
+          collectedCss += `/* ${path} */\n${content.replace(/@tailwind\s+[^;]+;/g, '').replace(/@import\s+[^;]+;/g, '')}\n`;
+        }
       }
 
-      if (!buildResponse.data?.success) {
-        console.error('Build failed:', buildResponse.data?.error);
-        throw new Error(buildResponse.data?.error || 'Build failed');
-      }
+      // 2. Process JS/JSX files starting from entry point
+      const processed = new Set<string>();
+      const jsChunks: string[] = [];
 
-      const { bundle } = buildResponse.data;
+      const resolvePath = (importPath: string, fromFile: string): string => {
+        const fromDir = fromFile.substring(0, fromFile.lastIndexOf('/')) || '';
+        const parts = importPath.split('/');
+        const resolved = fromDir.split('/').filter(p => p);
+        for (const part of parts) {
+          if (part === '.') continue;
+          if (part === '..') resolved.pop();
+          else resolved.push(part);
+        }
+        return '/' + resolved.join('/');
+      };
+
+      const transformCode = (code: string, filePath: string): string => {
+        let result = code;
+        // Strip imports and exports (simple regex approach for client-side)
+        result = result.replace(/^\s*import\s+.*?from\s+['"][^'"]+['"];?\s*$/gm, '');
+        result = result.replace(/^\s*import\s+['"][^'"]+['"];?\s*$/gm, '');
+        result = result.replace(/^\s*export\s+default\s+function\s+(\w+)/gm, 'function $1');
+        result = result.replace(/^\s*export\s+default\s+class\s+(\w+)/gm, 'class $1');
+        result = result.replace(/^\s*export\s+default\s+/gm, 'const __default__ = ');
+        result = result.replace(/^\s*export\s+function\s+(\w+)/gm, 'function $1');
+        result = result.replace(/^\s*export\s+class\s+(\w+)/gm, 'class $1');
+        result = result.replace(/^\s*export\s+const\s+(\w+)/gm, 'const $1');
+        result = result.replace(/^\s*export\s+let\s+(\w+)/gm, 'let $1');
+        result = result.replace(/^\s*export\s+\{[^}]*\};?\s*$/gm, '');
+        if (filePath.includes('App')) result += '\nwindow.App = App;';
+        return result;
+      };
+
+      const processFile = (filePath: string) => {
+        if (processed.has(filePath)) return;
+        let content = projectFiles[filePath];
+        let actualPath = filePath;
+        if (!content) {
+          for (const ext of ['.js', '.jsx', '.ts', '.tsx']) {
+            if (projectFiles[filePath + ext]) {
+              content = projectFiles[filePath + ext];
+              actualPath = filePath + ext;
+              break;
+            }
+          }
+        }
+        if (!content) return;
+        processed.add(actualPath);
+        processed.add(filePath);
+
+        const importRegex = /import\s+(?:[\w\s{},*]+\s+from\s+)?['"](\.[\/\w.-]+)['"];?/g;
+        let match;
+        while ((match = importRegex.exec(content)) !== null) {
+          processFile(resolvePath(match[1], actualPath));
+        }
+        jsChunks.push(`// --- ${actualPath} ---\n${transformCode(content, actualPath)}`);
+      };
+
+      processFile('/App.js');
+      
+      const bundle = {
+        js: jsChunks.join('\n\n'),
+        css: collectedCss
+      };
       
       // Generate a self-contained index.html with bundled code
       const indexHtml = generateBundledIndexHtml(bundle, project.name);
