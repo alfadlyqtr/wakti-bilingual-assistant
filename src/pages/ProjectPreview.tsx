@@ -160,6 +160,16 @@ export default function ProjectPreview({ subdomain: propSubdomain }: ProjectPrev
         }}
         customSetup={{
           entry: '/App.js',
+          dependencies: {
+            "react": "^18.0.0",
+            "react-dom": "^18.0.0",
+            "react-i18next": "^13.0.0",
+            "i18next": "^23.0.0",
+            "framer-motion": "^10.0.0",
+            "lucide-react": "^0.263.1",
+            "clsx": "^2.0.0",
+            "tailwind-merge": "^1.14.0"
+          }
         }}
       >
         <SandpackPreview
