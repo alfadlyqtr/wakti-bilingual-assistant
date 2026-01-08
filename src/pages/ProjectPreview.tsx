@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface ProjectData {
   id: string;
   name: string;
   subdomain: string;
   status: string;
-  files: Record<string, string>;
+  bundledCode: { css: string; js: string } | null;
 }
 
 interface ProjectPreviewProps {
@@ -49,27 +49,26 @@ export default function ProjectPreview({ subdomain: propSubdomain }: ProjectPrev
         return;
       }
 
-      // Fetch project files
-      const { data: filesData, error: filesError } = await supabase
+      // Fetch the bundled code file
+      const { data: bundledFile } = await supabase
         .from('project_files' as any)
-        .select('path, content')
-        .eq('project_id', projectData.id);
+        .select('content')
+        .eq('project_id', projectData.id)
+        .eq('path', '/__bundled__.json')
+        .single() as { data: { content: string } | null };
 
-      if (filesError) {
-        setError('Failed to load project files');
-        return;
-      }
-
-      // Build files map
-      const files: Record<string, string> = {};
-      for (const file of filesData || []) {
-        const path = file.path.startsWith('/') ? file.path : `/${file.path}`;
-        files[path] = file.content;
+      let bundledCode = null;
+      if (bundledFile?.content) {
+        try {
+          bundledCode = JSON.parse(bundledFile.content);
+        } catch (e) {
+          console.error('Failed to parse bundled code:', e);
+        }
       }
 
       setProject({
         ...projectData,
-        files,
+        bundledCode,
       });
     } catch (err) {
       console.error('Error fetching project:', err);
@@ -79,41 +78,9 @@ export default function ProjectPreview({ subdomain: propSubdomain }: ProjectPrev
     }
   };
 
-  // Generate publishable HTML from project files
-  const generateHtml = (files: Record<string, string>, projectName: string): string => {
-    // Include both .js and .jsx files (excluding App.js/App.jsx which is handled separately)
-    const jsFiles = Object.keys(files).filter(f => 
-      (f.endsWith('.js') || f.endsWith('.jsx')) && 
-      f !== '/App.js' && 
-      f !== '/App.jsx' &&
-      !f.includes('i18n') // Skip i18n config as it requires external deps
-    );
-    const cssFiles = Object.keys(files).filter(f => f.endsWith('.css'));
-    
-    const inlineCss = cssFiles.map(f => files[f]).join('\n');
-    
-    // Sort JS files: data/utils first, then components
-    const sortedJsFiles = [...jsFiles].sort((a, b) => {
-      const aIsData = a.includes('data') || a.includes('utils') || a.includes('mock') || a.includes('config') || a.includes('poems');
-      const bIsData = b.includes('data') || b.includes('utils') || b.includes('mock') || b.includes('config') || b.includes('poems');
-      if (aIsData && !bIsData) return -1;
-      if (!aIsData && bIsData) return 1;
-      return 0;
-    });
-    
-    const componentScripts = sortedJsFiles.map(filePath => {
-      const content = files[filePath];
-      // Extract component name from path (e.g., /components/Modal.jsx -> Modal)
-      const componentName = filePath.replace(/^\//, '').replace(/\.(js|jsx)$/, '').split('/').pop() || 'Component';
-      return `
-// --- ${filePath} ---
-${convertToGlobalComponent(content, componentName)}
-`;
-    }).join('\n');
-
-    // Try App.js first, then App.jsx
-    const appJsContent = files['/App.js'] || files['/App.jsx'] || '';
-    const appComponent = convertToGlobalComponent(appJsContent, 'App');
+  // Generate publishable HTML from bundled code
+  const generateHtml = (bundledCode: { css: string; js: string }, projectName: string): string => {
+    const { css: bundledCss, js: bundledJs } = bundledCode;
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -177,7 +144,7 @@ ${convertToGlobalComponent(content, componentName)}
       font-weight: 600;
       text-decoration: none;
     }
-    ${inlineCss}
+    ${bundledCss}
   </style>
 </head>
 <body>
@@ -259,6 +226,8 @@ ${convertToGlobalComponent(content, componentName)}
     const Gift = createIcon('Gift', ['M20 12v10H4V12', 'M2 7h20v5H2z', 'M12 22V7', 'M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z', 'M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z']);
     const Smile = createIcon('Smile', ['M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z', 'M8 14s1.5 2 4 2 4-2 4-2', 'M9 9h.01', 'M15 9h.01']);
     const Book = createIcon('Book', ['M4 19.5A2.5 2.5 0 0 1 6.5 17H20', 'M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z']);
+    const BookOpen = createIcon('BookOpen', ['M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z', 'M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z']);
+    const Languages = createIcon('Languages', ['M5 8l6 6', 'M4 14l6-6 2-3', 'M2 5h12', 'M7 2v3', 'M22 22l-5-10-5 10', 'M14 18h6']);
     const Globe = createIcon('Globe', ['M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z', 'M2 12h20', 'M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z']);
     const Settings = createIcon('Settings', ['M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', 'M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z']);
     const Home = createIcon('Home', ['M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z', 'M9 22V12h6v10']);
@@ -393,13 +362,26 @@ ${convertToGlobalComponent(content, componentName)}
     const Key = createIcon('Key', ['M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4']);
     const Fingerprint = createIcon('Fingerprint', ['M2 12C2 6.5 6.5 2 12 2a10 10 0 0 1 8 4', 'M5 19.5C5.5 18 6 15 6 12c0-.7.12-1.37.34-2', 'M17.29 21.02c.12-.6.43-2.3.5-3.02', 'M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4', 'M8.65 22c.21-.66.45-1.32.57-2', 'M14 13.12c0 2.38 0 6.38-1 8.88', 'M2 16h.01', 'M21.8 16c.2-2 .131-5.354 0-6', 'M9 6.8a6 6 0 0 1 9 5.2c0 .47 0 1.17-.02 2']);
     
-    ${componentScripts}
+    // ========== BUNDLED PROJECT CODE ==========
+    ${bundledJs}
     
-    ${appComponent}
-    
-    // Render the app
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(React.createElement(App));
+    // Render the app after Babel transforms
+    try {
+      if (typeof App === 'function') {
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+      } else {
+        throw new Error('App component not found');
+      }
+    } catch (err) {
+      console.error('Render error:', err);
+      document.getElementById('root').innerHTML = '<div class="error-container"><div class="error-box">' +
+        '<div class="error-icon">⚠️</div>' +
+        '<div class="error-title">Failed to render app</div>' +
+        '<div class="error-message">' + err.message + '</div>' +
+        '<a href="https://wakti.qa/projects" class="error-btn">Open Editor</a>' +
+        '</div></div>';
+    }
   </script>
 </body>
 </html>`;
@@ -453,8 +435,29 @@ ${convertToGlobalComponent(content, componentName)}
     }
   };
 
+  // Check if bundled code exists
+  if (!project.bundledCode) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800">
+        <div className="text-center text-white max-w-md px-6">
+          <div className="text-6xl mb-6">📦</div>
+          <h1 className="text-2xl font-bold mb-4">Project Not Ready</h1>
+          <p className="text-gray-300 mb-8">
+            This project needs to be re-published to generate the bundled code.
+          </p>
+          <a 
+            href="https://wakti.qa/projects" 
+            className="inline-flex items-center gap-2 px-6 py-3 bg-white text-gray-900 rounded-full font-semibold hover:bg-gray-100 transition-colors"
+          >
+            Open Editor
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   // Render the project in an iframe for isolation
-  const htmlContent = generateHtml(project.files, project.name);
+  const htmlContent = generateHtml(project.bundledCode, project.name);
   const blob = new Blob([htmlContent], { type: 'text/html' });
   const blobUrl = URL.createObjectURL(blob);
 
@@ -506,74 +509,7 @@ ${convertToGlobalComponent(content, componentName)}
   );
 }
 
-// Helper functions
-function convertToGlobalComponent(code: string, componentName: string): string {
-  if (!code || code.trim() === '') {
-    // Return a fallback component if no code provided
-    return `const ${componentName} = function() { 
-      return React.createElement('div', { 
-        style: { padding: '20px', textAlign: 'center' } 
-      }, 'Component ${componentName} is empty'); 
-    };`;
-  }
-
-  let converted = code;
-  
-  // Remove import statements (multi-line and single-line)
-  converted = converted.replace(/^import\s+[\s\S]*?from\s+['"][^'"]*['"];?\s*$/gm, '');
-  converted = converted.replace(/^import\s+['"][^'"]*['"];?\s*$/gm, '');
-  converted = converted.replace(/^import\s*\{[\s\S]*?\}\s*from\s*['"][^'"]*['"];?\s*$/gm, '');
-  
-  // Handle: export default function ComponentName() { ... }
-  converted = converted.replace(/export\s+default\s+function\s+(\w+)\s*\(/g, 'const $1 = function(');
-  
-  // Handle: export default function() { ... } (anonymous) - assign to componentName
-  converted = converted.replace(/export\s+default\s+function\s*\(/g, `const ${componentName} = function(`);
-  
-  // Handle: const Component = () => { ... }; export default Component;
-  converted = converted.replace(/export\s+default\s+(\w+)\s*;?/g, '');
-  
-  // Handle: export function ComponentName() { ... }
-  converted = converted.replace(/export\s+function\s+(\w+)\s*\(/g, 'const $1 = function(');
-  
-  // Handle: export const ComponentName = ...
-  converted = converted.replace(/export\s+const\s+/g, 'const ');
-  
-  // Handle: export { ... }
-  converted = converted.replace(/export\s+\{[^}]*\}\s*;?/g, '');
-  
-  // Handle arrow function components: const App = () => { ... }
-  // These should already work, but ensure they're defined
-  
-  // Check if the component is defined - if not, create a wrapper
-  const hasComponentDef = new RegExp(`(const|let|var|function)\\s+${componentName}\\s*[=(]`).test(converted);
-  
-  if (!hasComponentDef && componentName === 'App') {
-    // If App is not defined, look for any default export pattern we might have missed
-    // or wrap the entire code as the App component
-    const trimmed = converted.trim();
-    if (trimmed.length > 0 && !trimmed.includes('const App') && !trimmed.includes('function App')) {
-      // Check if there's JSX-like content that could be a component body
-      if (trimmed.includes('return') || trimmed.includes('React.createElement') || trimmed.includes('<')) {
-        // Wrap as App component
-        converted = `const App = function() {\n${converted}\n};`;
-      } else {
-        // Create a simple fallback App
-        converted += `\nconst App = function() { 
-          return React.createElement('div', { 
-            style: { padding: '40px', textAlign: 'center', fontFamily: 'system-ui' } 
-          }, [
-            React.createElement('h1', { key: 'title' }, 'Welcome'),
-            React.createElement('p', { key: 'desc', style: { color: '#666' } }, 'Your app is loading...')
-          ]); 
-        };`;
-      }
-    }
-  }
-  
-  return converted;
-}
-
+// Helper function to escape HTML
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')

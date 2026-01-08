@@ -716,6 +716,177 @@ export default function ProjectDetail() {
     setTimeout(() => setCodeContent(prev => prev.trim()), 10);
   };
 
+  // ============================================
+  // FLATTENER/BUNDLER: Combines all files into one
+  // ============================================
+  const flattenProjectFiles = (files: Record<string, string>): string => {
+    const processed = new Set<string>();
+    const cssContent: string[] = [];
+    const jsContent: string[] = [];
+    
+    // Helper to resolve import path
+    const resolveImportPath = (importPath: string, currentFile: string): string => {
+      // Remove quotes and semicolons
+      let cleanPath = importPath.replace(/['"`;]/g, '').trim();
+      
+      // Handle relative paths
+      if (cleanPath.startsWith('./') || cleanPath.startsWith('../')) {
+        const currentDir = currentFile.substring(0, currentFile.lastIndexOf('/')) || '';
+        const parts = cleanPath.split('/');
+        let resolvedParts = currentDir.split('/').filter(p => p);
+        
+        for (const part of parts) {
+          if (part === '.') continue;
+          if (part === '..') {
+            resolvedParts.pop();
+          } else {
+            resolvedParts.push(part);
+          }
+        }
+        cleanPath = '/' + resolvedParts.join('/');
+      }
+      
+      // Add leading slash if missing
+      if (!cleanPath.startsWith('/')) {
+        cleanPath = '/' + cleanPath;
+      }
+      
+      // Try different extensions
+      const extensions = ['', '.js', '.jsx', '.ts', '.tsx'];
+      for (const ext of extensions) {
+        const fullPath = cleanPath + ext;
+        if (files[fullPath]) return fullPath;
+      }
+      
+      // Try index files
+      for (const ext of ['/index.js', '/index.jsx', '/index.ts', '/index.tsx']) {
+        const fullPath = cleanPath + ext;
+        if (files[fullPath]) return fullPath;
+      }
+      
+      return cleanPath;
+    };
+    
+    // Helper to strip imports/exports and extract component name
+    const processFileContent = (content: string, filePath: string): string => {
+      let result = content;
+      
+      // Extract component name from file path
+      const fileName = filePath.split('/').pop()?.replace(/\.(js|jsx|ts|tsx)$/, '') || 'Component';
+      
+      // Remove all import statements
+      result = result.replace(/^import\s+.*?from\s+['"][^'"]*['"];?\s*$/gm, '');
+      result = result.replace(/^import\s+['"][^'"]*['"];?\s*$/gm, '');
+      
+      // Handle: export default function ComponentName() { ... }
+      result = result.replace(/export\s+default\s+function\s+(\w+)/g, 'function $1');
+      
+      // Handle: export default function() { ... } (anonymous)
+      result = result.replace(/export\s+default\s+function\s*\(/g, `function ${fileName}(`);
+      
+      // Handle: export default () => { ... } (anonymous arrow)
+      result = result.replace(/export\s+default\s+\(\s*\)\s*=>/g, `const ${fileName} = () =>`);
+      result = result.replace(/export\s+default\s+\(([^)]*)\)\s*=>/g, `const ${fileName} = ($1) =>`);
+      
+      // Handle: export default ComponentName;
+      result = result.replace(/export\s+default\s+(\w+)\s*;?/g, '');
+      
+      // Handle: export function ComponentName() { ... }
+      result = result.replace(/export\s+function\s+/g, 'function ');
+      
+      // Handle: export const ComponentName = ...
+      result = result.replace(/export\s+const\s+/g, 'const ');
+      
+      // Handle: export let/var
+      result = result.replace(/export\s+(let|var)\s+/g, '$1 ');
+      
+      // Handle: export { ... }
+      result = result.replace(/export\s+\{[^}]*\}\s*;?/g, '');
+      
+      // Clean up multiple blank lines
+      result = result.replace(/\n{3,}/g, '\n\n');
+      
+      return result.trim();
+    };
+    
+    // Recursively process a file and its dependencies
+    const processFile = (filePath: string) => {
+      if (processed.has(filePath)) return;
+      
+      const content = files[filePath];
+      if (!content) return;
+      
+      processed.add(filePath);
+      
+      // Handle CSS files
+      if (filePath.endsWith('.css')) {
+        let css = content;
+        // Remove @tailwind directives (we'll use Tailwind CDN)
+        css = css.replace(/@tailwind\s+[^;]+;/g, '');
+        // Remove @import for external fonts (we'll load them separately)
+        css = css.replace(/@import\s+url\([^)]+\);?/g, '');
+        cssContent.push(`/* ${filePath} */\n${css}`);
+        return;
+      }
+      
+      // Skip non-JS files
+      if (!filePath.match(/\.(js|jsx|ts|tsx)$/)) return;
+      
+      // Find all imports in this file
+      const importRegex = /import\s+(?:(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)\s*,?\s*)*from\s+['"]([^'"]+)['"]/g;
+      let match;
+      
+      while ((match = importRegex.exec(content)) !== null) {
+        const importPath = match[1];
+        
+        // Skip external packages (react, lucide-react, framer-motion, etc.)
+        if (!importPath.startsWith('.') && !importPath.startsWith('/')) {
+          continue;
+        }
+        
+        // Resolve and process the imported file
+        const resolvedPath = resolveImportPath(importPath, filePath);
+        processFile(resolvedPath);
+      }
+      
+      // Process this file's content
+      const processedContent = processFileContent(content, filePath);
+      jsContent.push(`// ========== ${filePath} ==========\n${processedContent}`);
+    };
+    
+    // Start from App.js or App.jsx
+    const appFile = files['/App.js'] ? '/App.js' : files['/App.jsx'] ? '/App.jsx' : null;
+    
+    if (!appFile) {
+      console.error('No App.js or App.jsx found');
+      return '';
+    }
+    
+    // Process all files starting from App
+    processFile(appFile);
+    
+    // Also process any CSS files that weren't imported
+    for (const filePath of Object.keys(files)) {
+      if (filePath.endsWith('.css') && !processed.has(filePath)) {
+        processFile(filePath);
+      }
+    }
+    
+    // Also process any data/utils files that might be needed
+    for (const filePath of Object.keys(files)) {
+      if ((filePath.includes('/utils/') || filePath.includes('/data/') || filePath.includes('/config/')) 
+          && !processed.has(filePath)) {
+        processFile(filePath);
+      }
+    }
+    
+    // Build the final bundled output
+    const bundledCss = cssContent.join('\n\n');
+    const bundledJs = jsContent.join('\n\n');
+    
+    return JSON.stringify({ css: bundledCss, js: bundledJs });
+  };
+
   // Validate subdomain format
   const validateSubdomain = (value: string): string | null => {
     if (!value) return isRTL ? 'أدخل اسم الموقع' : 'Enter a site name';
@@ -800,6 +971,25 @@ export default function ProjectDetail() {
       // Ensure /App.js has latest editor content
       if (codeContent) {
         projectFiles["/App.js"] = codeContent;
+      }
+
+      // ============================================
+      // FLATTEN: Bundle all files into one for preview
+      // ============================================
+      const bundledCode = flattenProjectFiles(projectFiles);
+      console.log('Bundled code length:', bundledCode.length);
+
+      // Save bundled code to project_files as a special file
+      const { error: bundleError } = await supabase
+        .from('project_files' as any)
+        .upsert({
+          project_id: project.id,
+          path: '/__bundled__.json',
+          content: bundledCode,
+        }, { onConflict: 'project_id,path' });
+      
+      if (bundleError) {
+        console.error('Error saving bundled code:', bundleError);
       }
 
       // Generate a proper index.html that loads React from CDN and runs the app
