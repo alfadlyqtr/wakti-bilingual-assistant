@@ -220,6 +220,11 @@ async function vercelDeploy(params: {
   return { url, id };
 }
 
+// Sleep helper for retry backoff
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function assignVercelAlias(params: {
   token: string;
   teamId: string | null;
@@ -231,27 +236,48 @@ async function assignVercelAlias(params: {
   const qs = qsArr.length > 0 ? `?${qsArr.join("&")}` : "";
   const endpoint = `https://api.vercel.com/v2/deployments/${params.deploymentId}/aliases${qs}`;
 
-  const resp = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${params.token}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({ alias: params.alias }),
-  });
+  const MAX_RETRIES = 10;
+  const BASE_DELAY_MS = 2000; // Start with 2 seconds
 
-  const data = (await resp.json().catch(() => null)) as any;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const resp = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${params.token}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({ alias: params.alias }),
+    });
 
-  if (!resp.ok) {
+    const data = (await resp.json().catch(() => null)) as any;
+
+    if (resp.ok) {
+      console.log("[projects-publish] Alias assigned:", params.alias);
+      return;
+    }
+
+    const errorCode = data?.error?.code || "";
+    const errorMessage = data?.error?.message || "Unknown error";
+
+    // If deployment not ready, wait and retry
+    if (errorCode === "deployment_not_ready") {
+      const delayMs = BASE_DELAY_MS * attempt; // Linear backoff: 2s, 4s, 6s...
+      console.log(`[projects-publish] Alias attempt ${attempt}/${MAX_RETRIES} failed: deployment_not_ready, retrying in ${delayMs}ms`);
+      
+      if (attempt < MAX_RETRIES) {
+        await sleep(delayMs);
+        continue;
+      }
+    }
+
+    // For any other error or max retries exhausted, throw
     console.error("[projects-publish] assignVercelAlias failed:", resp.status, data);
-    throw new Error(`VERCEL_ALIAS_FAILED_${resp.status}: ${data?.error?.message || "Unknown error"}`);
+    throw new Error(`VERCEL_ALIAS_FAILED_${resp.status}: ${errorCode || errorMessage}`);
   }
-
-  console.log("[projects-publish] Alias assigned:", params.alias);
 }
 
-const CODE_VERSION = "2026-01-09-V2";
+const CODE_VERSION = "2026-01-09-V3";
 
 serve(async (req) => {
   console.log(`[projects-publish] CODE_VERSION=${CODE_VERSION}`);
