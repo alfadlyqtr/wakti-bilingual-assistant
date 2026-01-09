@@ -111,12 +111,15 @@ serve(async (req) => {
         export const hydrateRoot = window.ReactDOM.hydrateRoot;
       `,
       'framer-motion': `
-        // CRITICAL: Use REAL framer-motion from CDN - window.FramerMotion is loaded before this runs
-        // The CDN script MUST be loaded in the HTML before the bundled JS
-        const FM = (typeof window !== 'undefined' && window.FramerMotion) ? window.FramerMotion : null;
+        // CRITICAL: Use REAL framer-motion from CDN.
+        // NOTE: The UMD build from unpkg registers on window as window.Motion (not window.FramerMotion).
+        // The publishing HTML must load the CDN script before the bundled JS.
+        const FM = (typeof window !== 'undefined')
+          ? (window.FramerMotion || window.Motion || null)
+          : null;
         
         if (!FM) {
-          console.warn('[framer-motion shim] FramerMotion not found on window - animations may not work');
+          console.warn('[framer-motion shim] Motion library not found on window (expected window.Motion from UMD build)');
         }
         
         // Export the REAL motion proxy from CDN (preserves ALL animation props like initial, animate, transition)
