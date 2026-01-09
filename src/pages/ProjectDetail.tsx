@@ -1023,19 +1023,77 @@ export default function ProjectDetail() {
       const finalSubdomain = subdomainInput.toLowerCase();
 
       // ============================================
-      // REAL VERCEL DEPLOYMENT: Deploy as static site
+      // PROPER BUNDLING: Use project-build edge function with esbuild
       // ============================================
-      console.log('Generating publishable HTML for Vercel deployment...');
+      console.log('Bundling project with esbuild via project-build...');
+      console.log('Project files:', Object.keys(projectFiles));
       
-      // Generate a self-contained index.html that runs the React app
-      const indexHtml = generatePublishableIndexHtml(projectFiles, project.name || 'Wakti Project');
+      // Step 1: Call project-build to bundle the files properly
+      const { data: buildResult, error: buildError } = await supabase.functions.invoke('project-build', {
+        body: {
+          files: projectFiles,
+          entryPoint: '/App.js'
+        }
+      });
+
+      if (buildError) {
+        console.error('Build error:', buildError);
+        throw new Error(buildError.message || 'Failed to bundle project');
+      }
+
+      if (!buildResult?.success || !buildResult?.bundle) {
+        console.error('Build failed:', buildResult);
+        throw new Error(buildResult?.error || 'Project bundling failed');
+      }
+
+      const { js: bundledJs, css: bundledCss } = buildResult.bundle;
+      console.log(`Bundle successful: ${bundledJs.length} bytes JS, ${bundledCss.length} bytes CSS`);
+
+      // Step 2: Generate index.html with bundled code
+      const projectName = project.name || 'Wakti Project';
+      const indexHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(projectName)}</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Inter', 'Tajawal', system-ui, sans-serif; }
+    body { margin: 0; padding: 0; min-height: 100vh; background: #fff; }
+    #root { min-height: 100vh; }
+    ${bundledCss}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+    // Bundled app code with all shims included
+    ${bundledJs}
+    
+    // Render the app
+    try {
+      const rootElement = document.getElementById('root');
+      const root = ReactDOM.createRoot(rootElement);
+      root.render(React.createElement(App));
+    } catch (err) {
+      console.error('Render error:', err);
+      document.getElementById('root').innerHTML = '<div style="padding: 20px; color: red;"><h2>Error loading app</h2><pre>' + err.message + '</pre></div>';
+    }
+  </script>
+</body>
+</html>`;
+
       console.log('Generated index.html size:', indexHtml.length);
 
-      // Call the Edge Function to deploy to Vercel
+      // Step 3: Deploy to Vercel via projects-publish
       console.log('Deploying to Vercel via projects-publish...');
       const { data: publishResult, error: publishError } = await supabase.functions.invoke('projects-publish', {
         body: {
-          projectName: project.name || 'Wakti Project',
+          projectName: projectName,
           projectSlug: finalSubdomain,
           files: [
             { path: 'index.html', content: indexHtml }
