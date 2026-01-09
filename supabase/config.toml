@@ -115,6 +115,9 @@ verify_jwt = false
 [functions.whoop-sync]
 verify_jwt = false
 
+[functions.projects-publish]
+verify_jwt = false
+
 [studio]
 enabled = true
 port = 54323
