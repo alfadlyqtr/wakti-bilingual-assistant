@@ -144,7 +144,6 @@ async function vercelDeploy(params: {
   projectId: string | null;
   name: string;
   files: PublishFile[];
-  target?: "production" | "preview";
 }): Promise<{ url: string; id: string }>
 {
   // Step 1: Upload each file and compute SHA
@@ -170,11 +169,10 @@ async function vercelDeploy(params: {
   const qs = qsArr.length > 0 ? `?${qsArr.join("&")}` : "";
   const endpoint = `https://api.vercel.com/v13/deployments${qs}`;
 
-  // Build payload with uploaded file references
+  // Build payload with uploaded file references (no target = Vercel decides)
   const payload: Record<string, unknown> = {
     name: params.name,
     files: uploadedFiles,
-    target: params.target || "preview",
     projectSettings: {
       framework: null,
     },
@@ -190,7 +188,6 @@ async function vercelDeploy(params: {
     projectId: params.projectId,
     teamId: params.teamId,
     fileCount: uploadedFiles.length,
-    target: params.target,
   });
 
   const resp = await fetch(endpoint, {
@@ -320,14 +317,13 @@ serve(async (req) => {
 
     const name = `wakti-${projectSlug}`;
 
-    // Deploy as preview (not production) to avoid overwriting other deployments
+    // Deploy to Vercel (no target specified - Vercel will assign automatically)
     const result = await vercelDeploy({
       token: VERCEL_TOKEN,
       teamId,
       projectId: VERCEL_PROJECT_ID || null,
       name,
       files: publishFiles,
-      target: "preview",
     });
 
     // Assign the subdomain alias (e.g., myproject.wakti.ai)

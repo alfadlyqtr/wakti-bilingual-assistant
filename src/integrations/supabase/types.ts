@@ -2089,6 +2089,180 @@ export type Database = {
           },
         ]
       }
+      project_chat_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          project_id: string
+          role: string
+          snapshot: Json | null
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          project_id: string
+          role: string
+          snapshot?: Json | null
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          project_id?: string
+          role?: string
+          snapshot?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_chat_messages_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_files: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          path: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          path: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          path?: string
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_files_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_generation_jobs: {
+        Row: {
+          created_at: string
+          error: string | null
+          id: string
+          mode: string
+          project_id: string
+          prompt: string | null
+          result_summary: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          mode: string
+          project_id: string
+          prompt?: string | null
+          result_summary?: string | null
+          status: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          mode?: string
+          project_id?: string
+          prompt?: string | null
+          result_summary?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_generation_jobs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          bundled_code: string | null
+          created_at: string
+          deployment_id: string | null
+          description: string | null
+          id: string
+          name: string
+          published_at: string | null
+          published_url: string | null
+          require_login: boolean
+          slug: string
+          status: string
+          subdomain: string | null
+          template_type: string | null
+          thumbnail_url: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bundled_code?: string | null
+          created_at?: string
+          deployment_id?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          published_at?: string | null
+          published_url?: string | null
+          require_login?: boolean
+          slug: string
+          status?: string
+          subdomain?: string | null
+          template_type?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bundled_code?: string | null
+          created_at?: string
+          deployment_id?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          published_at?: string | null
+          published_url?: string | null
+          require_login?: boolean
+          slug?: string
+          status?: string
+          subdomain?: string | null
+          template_type?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       saved_messages: {
         Row: {
           conversation_id: string
@@ -3428,6 +3602,155 @@ export type Database = {
         }
         Relationships: []
       }
+      user_warranties: {
+        Row: {
+          ai_summary: string | null
+          category_id: string | null
+          created_at: string | null
+          expiry_date: string | null
+          extracted_data: Json | null
+          file_type: string | null
+          id: string
+          image_url: string | null
+          notes: string | null
+          product_name: string
+          provider: string | null
+          purchase_date: string | null
+          receipt_url: string | null
+          ref_number: string | null
+          status: string | null
+          support_contact: string | null
+          updated_at: string | null
+          user_id: string
+          warranty_months: number | null
+        }
+        Insert: {
+          ai_summary?: string | null
+          category_id?: string | null
+          created_at?: string | null
+          expiry_date?: string | null
+          extracted_data?: Json | null
+          file_type?: string | null
+          id?: string
+          image_url?: string | null
+          notes?: string | null
+          product_name: string
+          provider?: string | null
+          purchase_date?: string | null
+          receipt_url?: string | null
+          ref_number?: string | null
+          status?: string | null
+          support_contact?: string | null
+          updated_at?: string | null
+          user_id: string
+          warranty_months?: number | null
+        }
+        Update: {
+          ai_summary?: string | null
+          category_id?: string | null
+          created_at?: string | null
+          expiry_date?: string | null
+          extracted_data?: Json | null
+          file_type?: string | null
+          id?: string
+          image_url?: string | null
+          notes?: string | null
+          product_name?: string
+          provider?: string | null
+          purchase_date?: string | null
+          receipt_url?: string | null
+          ref_number?: string | null
+          status?: string | null
+          support_contact?: string | null
+          updated_at?: string | null
+          user_id?: string
+          warranty_months?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_warranties_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "warranty_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_whoop_ai_insights: {
+        Row: {
+          created_at: string | null
+          insight: Json
+          time_window: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          insight: Json
+          time_window: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          insight?: Json
+          time_window?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_whoop_insights: {
+        Row: {
+          content: Json
+          created_at: string
+          date: string
+          id: string
+          time_window: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          content: Json
+          created_at?: string
+          date?: string
+          id?: string
+          time_window: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          content?: Json
+          created_at?: string
+          date?: string
+          id?: string
+          time_window?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      user_whoop_metrics_cache: {
+        Row: {
+          history: Json
+          metrics: Json
+          status: Json
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          history?: Json
+          metrics?: Json
+          status?: Json
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          history?: Json
+          metrics?: Json
+          status?: Json
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_whoop_tokens: {
         Row: {
           access_token: string
@@ -3471,6 +3794,87 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      vault_items: {
+        Row: {
+          ai_summary: string | null
+          category: string | null
+          created_at: string | null
+          expiry_date: string | null
+          file_type: string
+          id: string
+          metadata: Json | null
+          original_file_url: string
+          purchase_date: string | null
+          serial_number: string | null
+          store_name: string | null
+          title: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          ai_summary?: string | null
+          category?: string | null
+          created_at?: string | null
+          expiry_date?: string | null
+          file_type: string
+          id?: string
+          metadata?: Json | null
+          original_file_url: string
+          purchase_date?: string | null
+          serial_number?: string | null
+          store_name?: string | null
+          title: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          ai_summary?: string | null
+          category?: string | null
+          created_at?: string | null
+          expiry_date?: string | null
+          file_type?: string
+          id?: string
+          metadata?: Json | null
+          original_file_url?: string
+          purchase_date?: string | null
+          serial_number?: string | null
+          store_name?: string | null
+          title?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      warranty_categories: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          id: string
+          item_count: number | null
+          name: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          item_count?: number | null
+          name: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          item_count?: number | null
+          name?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       whoop_account_mapping: {
         Row: {
@@ -4071,6 +4475,10 @@ export type Database = {
       cleanup_old_conversations: { Args: never; Returns: undefined }
       cleanup_old_messages: { Args: never; Returns: undefined }
       cleanup_user_translations_after_20_days: { Args: never; Returns: number }
+      create_default_warranty_categories: {
+        Args: { p_user_id: string }
+        Returns: undefined
+      }
       create_notification: {
         Args: {
           p_body: string
@@ -4423,6 +4831,7 @@ export type Database = {
         }
         Returns: string
       }
+      queue_whoop_insight_reminders: { Args: never; Returns: undefined }
       refresh_conversation_summary_if_needed: {
         Args: {
           p_conversation_id: string
@@ -4477,6 +4886,10 @@ export type Database = {
       }
       unsuspend_user: { Args: { p_user_id: string }; Returns: boolean }
       update_overdue_tasks: { Args: never; Returns: undefined }
+      update_user_timezone: {
+        Args: { p_timezone: string; p_user_id: string }
+        Returns: undefined
+      }
       update_voice_activity: {
         Args: { p_voice_id: string }
         Returns: undefined
@@ -4532,6 +4945,19 @@ export type Database = {
           updated_at: string
           user_id: string
         }[]
+      }
+      upsert_whoop_ai_insight: {
+        Args: { p_insight: Json; p_time_window: string; p_user_id: string }
+        Returns: undefined
+      }
+      upsert_whoop_cache: {
+        Args: {
+          p_history: Json
+          p_metrics: Json
+          p_status: Json
+          p_user_id: string
+        }
+        Returns: undefined
       }
       user_can_access_task: { Args: { task_id: string }; Returns: boolean }
       user_is_conversation_participant: {

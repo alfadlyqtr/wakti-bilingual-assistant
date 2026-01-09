@@ -199,7 +199,7 @@ const MyWarranty: React.FC = () => {
     setIsLoading(true);
     try {
       // Fetch warranties
-      const { data: warData, error: warError } = await supabase
+      const { data: warData, error: warError } = await (supabase as any)
         .from('user_warranties')
         .select('*')
         .eq('user_id', user.id)
@@ -300,6 +300,7 @@ const MyWarranty: React.FC = () => {
           provider: extracted.provider || '',
           ref_number: extracted.ref_number || '',
           support_contact: extracted.support_contact || '',
+          category_name: '',
           image_url: isPdf ? '' : urlData.publicUrl,
           receipt_url: urlData.publicUrl,
           file_type: isPdf ? 'pdf' : 'image',
@@ -334,7 +335,7 @@ const MyWarranty: React.FC = () => {
         user_tags: parsedTags,
       };
 
-      const { error } = await supabase.from('user_warranties').insert({
+      const { error } = await (supabase as any).from('user_warranties').insert({
         user_id: user.id,
         product_name: newItem.product_name,
         purchase_date: newItem.purchase_date || null,
@@ -390,7 +391,7 @@ const MyWarranty: React.FC = () => {
   // Delete warranty
   const handleDelete = async (id: string) => {
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('user_warranties')
         .delete()
         .eq('id', id);
@@ -1114,7 +1115,7 @@ const MyWarranty: React.FC = () => {
                           user_tags: parsed,
                         };
 
-                        const { error } = await supabase
+                        const { error } = await (supabase as any)
                           .from('user_warranties')
                           .update({ extracted_data: nextExtracted })
                           .eq('id', selectedItem.id);

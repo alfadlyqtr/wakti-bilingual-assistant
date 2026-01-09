@@ -114,7 +114,7 @@ export default function FitnessHealth() {
     (async () => {
       try {
         // 1. Try to load from Database Cache FIRST for instant UI
-        const { data: dbCache, error: cacheErr } = await supabase
+        const { data: dbCache, error: cacheErr } = await (supabase as any)
           .from('user_whoop_metrics_cache')
           .select('*')
           .eq('user_id', user.id)
