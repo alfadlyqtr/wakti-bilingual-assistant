@@ -1269,6 +1269,20 @@ ${convertToGlobalComponent(content, componentName)}
     Object.assign(window, LucideIcons);
     const { Menu, X, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Check, Star, Heart, Search, User, Users, Mail, Phone, MapPin, Calendar, Clock, Settings, Home, ShoppingCart, Plus, Minus, Trash, Edit, ExternalLink, ArrowRight, ArrowLeft, Send, Image, Play, Pause, Volume2, Globe, Facebook, Twitter, Instagram, Linkedin, Youtube, Award, Briefcase, GraduationCap, Camera, Book, Plane, Download, Upload, File, Folder, Lock, Eye, Bell, Info, Zap, Target, Gift, Code, Terminal, Database, Server, Shield, Activity, BarChart, TrendingUp, MessageCircle, Share2, Bookmark, Tag, Filter, Layers, Layout, Grid, List, Link, Sun, Moon, Cloud, Compass, Map, Navigation, Copy, Save, LogIn, LogOut, Power, RefreshCw, RotateCw, AlertCircle, CheckCircle, XCircle } = LucideIcons;
 
+    // i18n / react-i18next shim - provides useTranslation hook for published sites
+    const i18n = { 
+      language: 'en', 
+      changeLanguage: () => Promise.resolve(),
+      t: (key) => key
+    };
+    const useTranslation = () => ({
+      t: (key, defaultValue) => defaultValue || key,
+      i18n: i18n,
+      ready: true
+    });
+    window.i18n = i18n;
+    window.useTranslation = useTranslation;
+
     // Component definitions
     ${componentScripts}
 
