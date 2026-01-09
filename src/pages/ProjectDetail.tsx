@@ -1239,6 +1239,7 @@ ${convertToGlobalComponent(content, componentName)}
       Pause: createIcon('<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>'),
       Volume2: createIcon('<polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><path d="M19.07,4.93a10,10,0,0,1,0,14.14M15.54,8.46a5,5,0,0,1,0,7.07"/>'),
       Globe: createIcon('<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12,2a15.3,15.3,0,0,1,4,10,15.3,15.3,0,0,1-4,10,15.3,15.3,0,0,1-4-10A15.3,15.3,0,0,1,12,2Z"/>'),
+      Languages: createIcon('<path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/>'),
       Facebook: createIcon('<path d="M18,2H15a5,5,0,0,0-5,5v3H7v4h3v8h4V14h3l1-4H14V7a1,1,0,0,1,1-1h3Z"/>'),
       Twitter: createIcon('<path d="M23,3a10.9,10.9,0,0,1-3.14,1.53,4.48,4.48,0,0,0-7.86,3v1A10.66,10.66,0,0,1,3,4s-4,9,5,13a11.64,11.64,0,0,1-7,2c9,5,20,0,20-11.5a4.5,4.5,0,0,0-.08-.83A7.72,7.72,0,0,0,23,3Z"/>'),
       Instagram: createIcon('<rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16,11.37A4,4,0,1,1,12.63,8,4,4,0,0,1,16,11.37Z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>'),
@@ -1301,7 +1302,7 @@ ${convertToGlobalComponent(content, componentName)}
     
     // Make icons available globally
     Object.assign(window, LucideIcons);
-    const { Menu, X, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Check, Star, Heart, Search, User, Users, Mail, Phone, MapPin, Calendar, Clock, Settings, Home, ShoppingCart, Plus, Minus, Trash, Edit, ExternalLink, ArrowRight, ArrowLeft, Send, Image, Play, Pause, Volume2, Globe, Facebook, Twitter, Instagram, Linkedin, Youtube, Award, Briefcase, GraduationCap, Camera, Book, Plane, Download, Upload, File, Folder, Lock, Eye, Bell, Info, Zap, Target, Gift, Code, Terminal, Database, Server, Shield, Activity, BarChart, TrendingUp, MessageCircle, Share2, Bookmark, Tag, Filter, Layers, Layout, Grid, List, Link, Sun, Moon, Cloud, Compass, Map, Navigation, Copy, Save, LogIn, LogOut, Power, RefreshCw, RotateCw, AlertCircle, CheckCircle, XCircle } = LucideIcons;
+    const { Menu, X, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Check, Star, Heart, Search, User, Users, Mail, Phone, MapPin, Calendar, Clock, Settings, Home, ShoppingCart, Plus, Minus, Trash, Edit, ExternalLink, ArrowRight, ArrowLeft, Send, Image, Play, Pause, Volume2, Globe, Languages, Facebook, Twitter, Instagram, Linkedin, Youtube, Award, Briefcase, GraduationCap, Camera, Book, Plane, Download, Upload, File, Folder, Lock, Eye, Bell, Info, Zap, Target, Gift, Code, Terminal, Database, Server, Shield, Activity, BarChart, TrendingUp, MessageCircle, Share2, Bookmark, Tag, Filter, Layers, Layout, Grid, List, Link, Sun, Moon, Cloud, Compass, Map, Navigation, Copy, Save, LogIn, LogOut, Power, RefreshCw, RotateCw, AlertCircle, CheckCircle, XCircle } = LucideIcons;
 
     // LanguageDetector shim for i18next-browser-languagedetector
     const LanguageDetector = {
