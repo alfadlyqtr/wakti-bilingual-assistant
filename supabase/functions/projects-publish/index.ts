@@ -251,7 +251,10 @@ async function assignVercelAlias(params: {
   console.log("[projects-publish] Alias assigned:", params.alias);
 }
 
+const CODE_VERSION = "2026-01-09-V2";
+
 serve(async (req) => {
+  console.log(`[projects-publish] CODE_VERSION=${CODE_VERSION}`);
   const origin = req.headers.get("origin");
   const corsHeaders = getCorsHeaders(origin);
 
