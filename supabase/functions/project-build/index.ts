@@ -129,6 +129,7 @@ serve(async (req) => {
       `,
       'lucide-react': getLucideShim(),
       'i18next': `
+        // Create i18n instance and expose to window for react-i18next shim
         const i18n = {
           language: 'en',
           languages: ['en', 'ar'],
@@ -136,7 +137,10 @@ serve(async (req) => {
           use: function() { return this; },
           init: function(options) { 
             if (options?.lng) this.language = options.lng;
+            if (options?.fallbackLng && !options?.lng) this.language = options.fallbackLng;
             if (options?.resources) this.resources = options.resources;
+            // CRITICAL: Expose to window so react-i18next can find it
+            window.__i18n = this;
             return Promise.resolve(this); 
           },
           t: function(key, options) {
@@ -169,6 +173,8 @@ serve(async (req) => {
             return this; 
           }
         };
+        // Also expose immediately (before init is called)
+        window.__i18n = i18n;
         export default i18n;
         export { i18n };
       `,
