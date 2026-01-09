@@ -95,6 +95,49 @@ async function resolveTeamId(token: string): Promise<string | null> {
   return typeof id === "string" ? id : null;
 }
 
+// Compute SHA-1 hash of content for Vercel file upload
+async function computeSha1(content: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(content);
+  const hashBuffer = await crypto.subtle.digest("SHA-1", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Upload a file to Vercel and get its SHA
+async function uploadFileToVercel(params: {
+  token: string;
+  teamId: string | null;
+  content: string;
+  sha: string;
+}): Promise<void> {
+  const qsArr = [];
+  if (params.teamId) qsArr.push(`teamId=${encodeURIComponent(params.teamId)}`);
+  const qs = qsArr.length > 0 ? `?${qsArr.join("&")}` : "";
+  const endpoint = `https://api.vercel.com/v2/files${qs}`;
+
+  console.log("[projects-publish] Uploading file with SHA:", params.sha.substring(0, 12) + "...");
+
+  const resp = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${params.token}`,
+      "Content-Type": "application/octet-stream",
+      "x-vercel-digest": params.sha,
+    },
+    body: params.content,
+  });
+
+  if (!resp.ok && resp.status !== 409) {
+    // 409 means file already exists, which is fine
+    const text = await resp.text().catch(() => "");
+    console.error("[projects-publish] uploadFileToVercel failed:", resp.status, text);
+    throw new Error(`VERCEL_UPLOAD_FAILED_${resp.status}: ${text}`);
+  }
+
+  console.log("[projects-publish] File uploaded successfully");
+}
+
 async function vercelDeploy(params: {
   token: string;
   teamId: string | null;
@@ -104,22 +147,37 @@ async function vercelDeploy(params: {
   target?: "production" | "preview";
 }): Promise<{ url: string; id: string }>
 {
+  // Step 1: Upload each file and compute SHA
+  const uploadedFiles: { file: string; sha: string; size: number }[] = [];
+  
+  for (const f of params.files) {
+    const sha = await computeSha1(f.content);
+    const size = new TextEncoder().encode(f.content).length;
+    
+    await uploadFileToVercel({
+      token: params.token,
+      teamId: params.teamId,
+      content: f.content,
+      sha,
+    });
+    
+    uploadedFiles.push({ file: f.path, sha, size });
+  }
+
+  // Step 2: Create deployment referencing uploaded files
   const qsArr = [];
   if (params.teamId) qsArr.push(`teamId=${encodeURIComponent(params.teamId)}`);
   const qs = qsArr.length > 0 ? `?${qsArr.join("&")}` : "";
   const endpoint = `https://api.vercel.com/v13/deployments${qs}`;
 
-  // Vercel API: for plain text files, use 'data' with plain content (no encoding field)
-  const inlinedFiles = params.files.map((f) => ({
-    file: f.path,
-    data: f.content,
-  }));
-
-  // Build payload - use 'project' field with project ID
+  // Build payload with uploaded file references
   const payload: Record<string, unknown> = {
     name: params.name,
-    files: inlinedFiles,
+    files: uploadedFiles,
     target: params.target || "preview",
+    projectSettings: {
+      framework: null,
+    },
   };
 
   // Only add project if we have a valid project ID
@@ -127,13 +185,12 @@ async function vercelDeploy(params: {
     payload.project = params.projectId;
   }
 
-  console.log("[projects-publish] Deploying to Vercel:", {
+  console.log("[projects-publish] Creating deployment:", {
     name: params.name,
     projectId: params.projectId,
     teamId: params.teamId,
-    fileCount: params.files.length,
+    fileCount: uploadedFiles.length,
     target: params.target,
-    endpoint,
   });
 
   const resp = await fetch(endpoint, {
