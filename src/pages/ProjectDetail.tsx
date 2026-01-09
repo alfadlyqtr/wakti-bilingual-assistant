@@ -1020,22 +1020,46 @@ export default function ProjectDetail() {
         projectFiles["/App.js"] = codeContent;
       }
 
-      // ============================================
-      // SANDPACK APPROACH: Save raw files as JSON
-      // ============================================
-      console.log('Saving raw files for Sandpack...');
-      
-      // Save raw files as JSON string for Sandpack to render
-      const filesJson = JSON.stringify(projectFiles);
-      console.log('Files JSON size:', filesJson.length);
-
       const finalSubdomain = subdomainInput.toLowerCase();
-      const subdomainUrl = `https://${finalSubdomain}.wakti.ai`;
 
+      // ============================================
+      // REAL VERCEL DEPLOYMENT: Deploy as static site
+      // ============================================
+      console.log('Generating publishable HTML for Vercel deployment...');
+      
+      // Generate a self-contained index.html that runs the React app
+      const indexHtml = generatePublishableIndexHtml(projectFiles, project.name || 'Wakti Project');
+      console.log('Generated index.html size:', indexHtml.length);
+
+      // Call the Edge Function to deploy to Vercel
+      console.log('Deploying to Vercel via projects-publish...');
+      const { data: publishResult, error: publishError } = await supabase.functions.invoke('projects-publish', {
+        body: {
+          projectName: project.name || 'Wakti Project',
+          projectSlug: finalSubdomain,
+          files: [
+            { path: 'index.html', content: indexHtml }
+          ]
+        }
+      });
+
+      if (publishError) {
+        console.error('Edge function error:', publishError);
+        throw new Error(publishError.message || 'Failed to deploy');
+      }
+
+      if (!publishResult?.ok) {
+        console.error('Publish failed:', publishResult);
+        throw new Error(publishResult?.error || 'Deployment failed');
+      }
+
+      const subdomainUrl = publishResult.url || `https://${finalSubdomain}.wakti.ai`;
+      console.log('Deployed successfully to:', subdomainUrl);
+
+      // Update project in database with the published URL
       const { error: updateError } = await supabase
         .from('projects' as any)
         .update({
-          bundled_code: filesJson,
           status: 'published',
           published_url: subdomainUrl,
           subdomain: finalSubdomain,
@@ -1044,11 +1068,9 @@ export default function ProjectDetail() {
         .eq('id', project.id);
       
       if (updateError) {
-        console.error('Error saving project:', updateError);
-        throw new Error(updateError.message || 'Failed to save project');
+        console.error('Error updating project:', updateError);
+        // Don't throw - the site is already deployed, just log the DB error
       }
-
-      console.log('Project published successfully to:', subdomainUrl);
 
       setProject(prev => prev ? {
         ...prev,

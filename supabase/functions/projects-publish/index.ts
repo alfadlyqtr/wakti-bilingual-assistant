@@ -102,7 +102,7 @@ async function vercelDeploy(params: {
   name: string;
   files: PublishFile[];
   target?: "production" | "preview";
-}): Promise<{ url: string; id?: string }>
+}): Promise<{ url: string; id: string }>
 {
   const qsArr = [];
   if (params.teamId) qsArr.push(`teamId=${encodeURIComponent(params.teamId)}`);
@@ -117,7 +117,7 @@ async function vercelDeploy(params: {
     projectSettings: {
       framework: null,
     },
-    target: params.target || "production",
+    target: params.target || "preview",
   };
 
   const resp = await fetch(endpoint, {
@@ -138,11 +138,46 @@ async function vercelDeploy(params: {
   }
 
   const url = data?.url;
+  const id = data?.id;
   if (typeof url !== "string" || !url) {
     throw new Error("VERCEL_DEPLOY_MISSING_URL");
   }
+  if (typeof id !== "string" || !id) {
+    throw new Error("VERCEL_DEPLOY_MISSING_ID");
+  }
 
-  return { url, id: typeof data?.id === "string" ? data.id : undefined };
+  return { url, id };
+}
+
+async function assignVercelAlias(params: {
+  token: string;
+  teamId: string | null;
+  deploymentId: string;
+  alias: string;
+}): Promise<void> {
+  const qsArr = [];
+  if (params.teamId) qsArr.push(`teamId=${encodeURIComponent(params.teamId)}`);
+  const qs = qsArr.length > 0 ? `?${qsArr.join("&")}` : "";
+  const endpoint = `https://api.vercel.com/v2/deployments/${params.deploymentId}/aliases${qs}`;
+
+  const resp = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${params.token}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ alias: params.alias }),
+  });
+
+  const data = (await resp.json().catch(() => null)) as any;
+
+  if (!resp.ok) {
+    console.error("[projects-publish] assignVercelAlias failed:", resp.status, data);
+    throw new Error(`VERCEL_ALIAS_FAILED_${resp.status}: ${data?.error?.message || "Unknown error"}`);
+  }
+
+  console.log("[projects-publish] Alias assigned:", params.alias);
 }
 
 serve(async (req) => {
@@ -211,20 +246,34 @@ serve(async (req) => {
 
     const name = `wakti-${projectSlug}`;
 
+    // Deploy as preview (not production) to avoid overwriting other deployments
     const result = await vercelDeploy({
       token: VERCEL_TOKEN,
       teamId,
       projectId: VERCEL_PROJECT_ID || null,
       name,
       files: publishFiles,
-      target: "production",
+      target: "preview",
     });
+
+    // Assign the subdomain alias (e.g., myproject.wakti.ai)
+    const subdomainAlias = `${projectSlug}.wakti.ai`;
+    await assignVercelAlias({
+      token: VERCEL_TOKEN,
+      teamId,
+      deploymentId: result.id,
+      alias: subdomainAlias,
+    });
+
+    const finalUrl = `https://${subdomainAlias}`;
+    console.log("[projects-publish] Published successfully:", finalUrl);
 
     return new Response(
       JSON.stringify({
         ok: true,
-        url: `https://${result.url}`,
-        deploymentId: result.id || null,
+        url: finalUrl,
+        deploymentId: result.id,
+        vercelUrl: `https://${result.url}`,
         name,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
