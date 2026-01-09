@@ -1092,8 +1092,13 @@ export default function ProjectDetail() {
 
   // Generate a proper index.html that loads React from CDN and runs the multi-file project
   const generatePublishableIndexHtml = (files: Record<string, string>, projectName: string): string => {
-    // Collect all component/file paths (excluding App.js which we handle specially)
-    const jsFiles = Object.keys(files).filter(f => f.endsWith('.js') && f !== '/App.js');
+    // Collect all component/file paths (excluding App entry which we handle specially)
+    // Support both .js and .jsx extensions
+    const jsFiles = Object.keys(files).filter(f => 
+      (f.endsWith('.js') || f.endsWith('.jsx')) && 
+      f !== '/App.js' && 
+      f !== '/App.jsx'
+    );
     const cssFiles = Object.keys(files).filter(f => f.endsWith('.css'));
     
     // Build inline CSS
@@ -1111,7 +1116,8 @@ export default function ProjectDetail() {
     // Build component definitions - convert ES module syntax to browser-compatible
     const componentScripts = sortedJsFiles.map(filePath => {
       const content = files[filePath];
-      const componentName = filePath.replace(/^\//, '').replace(/\.js$/, '').split('/').pop() || 'Component';
+      // Remove both .js and .jsx extensions when extracting component name
+      const componentName = filePath.replace(/^\//, '').replace(/\.(js|jsx)$/, '').split('/').pop() || 'Component';
       // Wrap each component file content
       return `
 // --- ${filePath} ---
@@ -1119,8 +1125,8 @@ ${convertToGlobalComponent(content, componentName)}
 `;
     }).join('\n');
 
-    // Get App.js content and convert it
-    const appJsContent = files['/App.js'] || '';
+    // Get App entry content (support both .js and .jsx)
+    const appJsContent = files['/App.js'] || files['/App.jsx'] || '';
     const appComponent = convertToGlobalComponent(appJsContent, 'App');
 
     return `<!DOCTYPE html>
@@ -1143,6 +1149,32 @@ ${convertToGlobalComponent(content, componentName)}
 </head>
 <body>
   <div id="root"></div>
+  <!-- Debug overlay for published sites - shows runtime errors on screen -->
+  <script>
+    window.__PUBLISH_DEBUG__ = [];
+    window.onerror = function(msg, url, line, col, err) {
+      var errDiv = document.getElementById('__debug_overlay__');
+      if (!errDiv) {
+        errDiv = document.createElement('div');
+        errDiv.id = '__debug_overlay__';
+        errDiv.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#ff4444;color:#fff;padding:12px;font-size:14px;z-index:99999;font-family:monospace;white-space:pre-wrap;max-height:50vh;overflow:auto;';
+        document.body.appendChild(errDiv);
+      }
+      errDiv.innerHTML += '❌ ' + msg + '\\n   at line ' + line + ':' + col + '\\n';
+      window.__PUBLISH_DEBUG__.push({msg:msg,line:line,col:col,err:err});
+      return false;
+    };
+    window.onunhandledrejection = function(e) {
+      var errDiv = document.getElementById('__debug_overlay__');
+      if (!errDiv) {
+        errDiv = document.createElement('div');
+        errDiv.id = '__debug_overlay__';
+        errDiv.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#ff4444;color:#fff;padding:12px;font-size:14px;z-index:99999;font-family:monospace;white-space:pre-wrap;max-height:50vh;overflow:auto;';
+        document.body.appendChild(errDiv);
+      }
+      errDiv.innerHTML += '❌ Promise: ' + (e.reason?.message || e.reason || 'Unknown') + '\\n';
+    };
+  </script>
   <script type="text/babel" data-presets="react">
     const { useState, useEffect, useRef, useCallback, useMemo, createContext, useContext, Fragment } = React;
     
