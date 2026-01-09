@@ -1730,23 +1730,26 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
     }
 
     // Save user message to DB
-    // Capture images BEFORE clearing them
+    // Capture images BEFORE clearing them (for AI, not DB - DB has no images column)
     const userImages = attachedImages.length > 0 ? attachedImages.map(img => img.preview) : [];
     
+    // NOTE: Do NOT insert 'images' field - project_chat_messages table has no images column
     const { data: userMsg, error: msgError } = await supabase
       .from('project_chat_messages' as any)
       .insert({ 
         project_id: id, 
         role: 'user', 
-        content: userMessage,
-        images: userImages.length > 0 ? userImages : null
+        content: userMessage
       } as any)
       .select()
       .single();
     
     if (msgError) console.error('Error saving user message:', msgError);
-    if (userMsg) setChatMessages(prev => [...prev, { ...(userMsg as object), images: userImages } as any]);
-    else {
+    
+    // Add to local state (with images for display, even though not persisted)
+    if (userMsg) {
+      setChatMessages(prev => [...prev, { ...(userMsg as object), images: userImages } as any]);
+    } else {
       // Fallback local state if DB insert fails
       setChatMessages(prev => [...prev, {
         id: `user-${Date.now()}`,
@@ -1776,12 +1779,18 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         // Use userImages captured earlier (before clearing)
         setAttachedImages([]); // Clear after capturing
 
+        // CRITICAL: Always send the LATEST code to the AI (merge generatedFiles with current editor content)
+        const latestFiles = { ...generatedFiles };
+        if (codeContent) {
+          latestFiles['/App.js'] = codeContent;
+        }
+
         const response = await supabase.functions.invoke('projects-generate', {
           body: {
             mode: 'chat',
             projectId: id,
             prompt: userMessage,
-            currentFiles: generatedFiles,
+            currentFiles: latestFiles,
             images: userImages.length > 0 ? userImages : undefined,
           },
         });
