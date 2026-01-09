@@ -1151,6 +1151,8 @@ ${convertToGlobalComponent(content, componentName)}
   <div id="root"></div>
   <!-- Debug overlay for published sites - shows runtime errors on screen -->
   <script>
+    window.__PUBLISH_VERSION__ = '${new Date().toISOString()}';
+    console.log('Published HTML Version:', window.__PUBLISH_VERSION__);
     window.__PUBLISH_DEBUG__ = [];
     window.onerror = function(msg, url, line, col, err) {
       var errDiv = document.getElementById('__debug_overlay__');
