@@ -109,16 +109,32 @@ async function vercelDeploy(params: {
   const qs = qsArr.length > 0 ? `?${qsArr.join("&")}` : "";
   const endpoint = `https://api.vercel.com/v13/deployments${qs}`;
 
-  const payload = {
+  // Vercel API: for plain text files, use 'data' with plain content (no encoding field)
+  const inlinedFiles = params.files.map((f) => ({
+    file: f.path,
+    data: f.content,
+  }));
+
+  // Build payload - use 'project' field with project ID
+  const payload: Record<string, unknown> = {
     name: params.name,
-    project: params.projectId || undefined,
-    public: true,
-    files: params.files.map((f) => ({ file: f.path, data: f.content })),
-    projectSettings: {
-      framework: null,
-    },
+    files: inlinedFiles,
     target: params.target || "preview",
   };
+
+  // Only add project if we have a valid project ID
+  if (params.projectId) {
+    payload.project = params.projectId;
+  }
+
+  console.log("[projects-publish] Deploying to Vercel:", {
+    name: params.name,
+    projectId: params.projectId,
+    teamId: params.teamId,
+    fileCount: params.files.length,
+    target: params.target,
+    endpoint,
+  });
 
   const resp = await fetch(endpoint, {
     method: "POST",
@@ -133,8 +149,8 @@ async function vercelDeploy(params: {
   const data = (await resp.json().catch(() => null)) as any;
 
   if (!resp.ok) {
-    console.error("[projects-publish] vercelDeploy failed:", resp.status, data);
-    throw new Error(`VERCEL_DEPLOY_FAILED_${resp.status}`);
+    console.error("[projects-publish] vercelDeploy failed:", resp.status, JSON.stringify(data));
+    throw new Error(`VERCEL_DEPLOY_FAILED_${resp.status}: ${data?.error?.message || JSON.stringify(data)}`);
   }
 
   const url = data?.url;
@@ -146,6 +162,7 @@ async function vercelDeploy(params: {
     throw new Error("VERCEL_DEPLOY_MISSING_ID");
   }
 
+  console.log("[projects-publish] Deployment created:", { url, id });
   return { url, id };
 }
 
