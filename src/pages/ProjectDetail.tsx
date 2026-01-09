@@ -43,6 +43,7 @@ import {
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import html2canvas from 'html2canvas';
+import confetti from 'canvas-confetti';
 
 // Lazy load Sandpack Studio for full control over layout
 const SandpackStudio = lazy(() => import('@/components/projects/SandpackStudio'));
@@ -1190,7 +1191,36 @@ export default function ProjectDetail() {
       } : null);
 
       setShowPublishModal(false);
-      toast.success(isRTL ? 'تم النشر بنجاح!' : 'Published successfully!');
+      
+      // 🎉 Celebration confetti animation!
+      const duration = 2000;
+      const animationEnd = Date.now() + duration;
+      const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 9999 };
+      
+      const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+      
+      const interval = window.setInterval(() => {
+        const timeLeft = animationEnd - Date.now();
+        if (timeLeft <= 0) {
+          clearInterval(interval);
+          return;
+        }
+        const particleCount = 50 * (timeLeft / duration);
+        confetti({
+          ...defaults,
+          particleCount,
+          origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 },
+          colors: ['#a855f7', '#ec4899', '#6366f1', '#22c55e', '#eab308'],
+        });
+        confetti({
+          ...defaults,
+          particleCount,
+          origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 },
+          colors: ['#a855f7', '#ec4899', '#6366f1', '#22c55e', '#eab308'],
+        });
+      }, 250);
+      
+      toast.success(isRTL ? '🎉 تم النشر بنجاح!' : '🎉 Published successfully!');
     } catch (err: any) {
       console.error('Error publishing:', err);
       const errorMessage = err?.message || (isRTL ? 'فشل في النشر' : 'Failed to publish');
