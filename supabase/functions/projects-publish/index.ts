@@ -169,12 +169,15 @@ async function vercelDeploy(params: {
   const qs = qsArr.length > 0 ? `?${qsArr.join("&")}` : "";
   const endpoint = `https://api.vercel.com/v13/deployments${qs}`;
 
-  // Build payload with uploaded file references (no target = Vercel decides)
+  // Build payload with uploaded file references - skip build entirely
   const payload: Record<string, unknown> = {
     name: params.name,
     files: uploadedFiles,
     projectSettings: {
       framework: null,
+      buildCommand: null,      // Skip build
+      outputDirectory: null,   // Serve from root
+      installCommand: null,    // Skip npm install
     },
   };
 
@@ -277,7 +280,7 @@ async function assignVercelAlias(params: {
   }
 }
 
-const CODE_VERSION = "2026-01-09-V3";
+const CODE_VERSION = "2026-01-09-V4";
 
 serve(async (req) => {
   console.log(`[projects-publish] CODE_VERSION=${CODE_VERSION}`);
