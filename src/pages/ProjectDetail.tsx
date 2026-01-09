@@ -1057,13 +1057,55 @@ export default function ProjectDetail() {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(projectName)}</title>
+  <!-- React 18 -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <!-- Framer Motion for animations -->
+  <script src="https://unpkg.com/framer-motion@11/dist/framer-motion.js" crossorigin></script>
+  <!-- Tailwind CSS v3 (JIT) for all color shades -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Extended set for various themes -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Tajawal:wght@300;400;500;700&family=Oswald:wght@400;500;600;700&family=Cairo:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    // Configure Tailwind with extended theme
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            inter: ['Inter', 'sans-serif'],
+            tajawal: ['Tajawal', 'sans-serif'],
+            oswald: ['Oswald', 'sans-serif'],
+            cairo: ['Cairo', 'sans-serif'],
+            playfair: ['Playfair Display', 'serif'],
+            roboto: ['Roboto', 'sans-serif'],
+            poppins: ['Poppins', 'sans-serif'],
+          },
+          colors: {
+            // Extended palette for all shades
+            purple: {
+              50: '#faf5ff', 100: '#f3e8ff', 200: '#e9d5ff', 300: '#d8b4fe', 400: '#c084fc',
+              500: '#a855f7', 600: '#9333ea', 700: '#7e22ce', 800: '#6b21a8', 900: '#581c87', 950: '#3b0764',
+            },
+            slate: {
+              50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 300: '#cbd5e1', 400: '#94a3b8',
+              500: '#64748b', 600: '#475569', 700: '#334155', 800: '#1e293b', 900: '#0f172a', 950: '#020617',
+            },
+            pink: {
+              50: '#fdf2f8', 100: '#fce7f3', 200: '#fbcfe8', 300: '#f9a8d4', 400: '#f472b6',
+              500: '#ec4899', 600: '#db2777', 700: '#be185d', 800: '#9d174d', 900: '#831843', 950: '#500724',
+            },
+            rose: {
+              50: '#fff1f2', 100: '#ffe4e6', 200: '#fecdd3', 300: '#fda4af', 400: '#fb7185',
+              500: '#f43f5e', 600: '#e11d48', 700: '#be123c', 800: '#9f1239', 900: '#881337', 950: '#4c0519',
+            },
+          },
+        },
+      },
+    };
+  </script>
   <style>
     * { font-family: 'Inter', 'Tajawal', system-ui, sans-serif; }
-    body { margin: 0; padding: 0; min-height: 100vh; background: #fff; }
+    body { margin: 0; padding: 0; min-height: 100vh; }
     #root { min-height: 100vh; }
     ${bundledCss}
   </style>
@@ -1071,6 +1113,16 @@ export default function ProjectDetail() {
 <body>
   <div id="root"></div>
   <script>
+    // Expose framer-motion globally for the bundled shim
+    if (typeof window.FramerMotion !== 'undefined') {
+      window.motion = window.FramerMotion.motion;
+      window.AnimatePresence = window.FramerMotion.AnimatePresence;
+      window.useAnimation = window.FramerMotion.useAnimation;
+      window.useInView = window.FramerMotion.useInView;
+      window.useScroll = window.FramerMotion.useScroll;
+      window.useTransform = window.FramerMotion.useTransform;
+    }
+    
     // Bundled app code with all shims included
     ${bundledJs}
     
