@@ -384,7 +384,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
           }}
           customSetup={{
             dependencies: {
-              "lucide-react": "0.294.0",
+              "lucide-react": "0.462.0",
               "framer-motion": "10.16.4",
               "@emotion/is-prop-valid": "^1.2.1",
               "clsx": "2.0.0",
