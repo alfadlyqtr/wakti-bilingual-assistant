@@ -1,7 +1,29 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-// @ts-ignore - esbuild for Deno
-import * as esbuild from "https://deno.land/x/esbuild@v0.20.1/mod.js";
+// @ts-ignore - esbuild WASM for Deno Edge (no cache directory needed)
+import * as esbuild from "https://deno.land/x/esbuild@v0.20.1/wasm.js";
+
+// Initialize esbuild WASM once (singleton pattern for edge runtime)
+let esbuildInitialized = false;
+const initializeEsbuild = async () => {
+  if (esbuildInitialized) return;
+  try {
+    await esbuild.initialize({
+      wasmURL: "https://unpkg.com/esbuild-wasm@0.20.1/esbuild.wasm",
+      worker: false, // Edge runtime doesn't support workers
+    });
+    esbuildInitialized = true;
+    console.log("esbuild WASM initialized successfully");
+  } catch (error) {
+    // If already initialized, that's fine
+    if (error instanceof Error && error.message.includes("initialized")) {
+      esbuildInitialized = true;
+      console.log("esbuild was already initialized");
+    } else {
+      throw error;
+    }
+  }
+};
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,6 +52,11 @@ serve(async (req) => {
   }
 
   try {
+    // Initialize esbuild WASM first
+    const startTime = Date.now();
+    await initializeEsbuild();
+    console.log(`esbuild init took ${Date.now() - startTime}ms`);
+
     const { files, entryPoint = "/App.js" }: BuildRequest = await req.json();
 
     if (!files || Object.keys(files).length === 0) {
@@ -168,8 +195,8 @@ serve(async (req) => {
       sourcemap: false,
     });
 
-    // Stop esbuild
-    await esbuild.stop();
+    // Note: Don't call esbuild.stop() in WASM mode - it's managed differently
+    // and calling stop() can cause issues with subsequent builds
 
     // Get the bundled JS
     const bundledJs = result.outputFiles?.[0]?.text || '';
@@ -177,7 +204,8 @@ serve(async (req) => {
     // Build the final bundle with shims
     const finalBundle = buildFinalBundle(bundledJs, cssFiles.join('\n\n'));
 
-    console.log(`Build successful: ${finalBundle.js.length} bytes JS, ${finalBundle.css.length} bytes CSS`);
+    const buildTime = Date.now() - startTime;
+    console.log(`Build successful in ${buildTime}ms: ${finalBundle.js.length} bytes JS, ${finalBundle.css.length} bytes CSS`);
 
     return new Response(
       JSON.stringify({ success: true, bundle: finalBundle }),
@@ -186,7 +214,8 @@ serve(async (req) => {
 
   } catch (error) {
     console.error("Build error:", error);
-    await esbuild.stop();
+    console.error("Error stack:", error instanceof Error ? error.stack : 'No stack');
+    // Don't call esbuild.stop() in catch - may not be initialized
     
     return new Response(
       JSON.stringify({ 
