@@ -111,21 +111,31 @@ serve(async (req) => {
         export const hydrateRoot = window.ReactDOM.hydrateRoot;
       `,
       'framer-motion': `
-        const motionProxy = new Proxy({}, {
+        // Use real framer-motion from CDN if available, otherwise provide working fallback
+        const hasFramerMotion = typeof window !== 'undefined' && window.FramerMotion;
+        
+        // Real motion from CDN
+        const motion = hasFramerMotion ? window.FramerMotion.motion : new Proxy({}, {
           get: (_, tag) => {
-            const Component = window.React.forwardRef((props, ref) => {
+            return window.React.forwardRef((props, ref) => {
               const { initial, animate, exit, transition, whileHover, whileTap, whileInView, variants, ...rest } = props;
               return window.React.createElement(tag, { ...rest, ref });
             });
-            return Component;
           }
         });
-        export const motion = motionProxy;
-        export const AnimatePresence = ({ children }) => children;
-        export const useAnimation = () => ({ start: () => {}, stop: () => {} });
-        export const useInView = () => true;
-        export const useScroll = () => ({ scrollY: { get: () => 0 } });
-        export const useTransform = () => 0;
+        
+        // Real AnimatePresence from CDN
+        const AnimatePresence = hasFramerMotion ? window.FramerMotion.AnimatePresence : ({ children }) => children;
+        
+        // Real hooks from CDN
+        const useAnimation = hasFramerMotion ? window.FramerMotion.useAnimation : () => ({ start: () => Promise.resolve(), stop: () => {} });
+        const useInView = hasFramerMotion ? window.FramerMotion.useInView : (ref, opts) => true;
+        const useScroll = hasFramerMotion ? window.FramerMotion.useScroll : () => ({ scrollY: { get: () => 0, set: () => {} }, scrollYProgress: { get: () => 0 } });
+        const useTransform = hasFramerMotion ? window.FramerMotion.useTransform : (value, inputRange, outputRange) => 0;
+        const useMotionValue = hasFramerMotion && window.FramerMotion.useMotionValue ? window.FramerMotion.useMotionValue : (init) => ({ get: () => init, set: () => {} });
+        const useSpring = hasFramerMotion && window.FramerMotion.useSpring ? window.FramerMotion.useSpring : (value) => value;
+        
+        export { motion, AnimatePresence, useAnimation, useInView, useScroll, useTransform, useMotionValue, useSpring };
       `,
       'lucide-react': getLucideShim(),
       'i18next': `
@@ -136,15 +146,20 @@ serve(async (req) => {
           resources: {},
           use: function() { return this; },
           init: function(options) { 
-            if (options?.lng) this.language = options.lng;
-            if (options?.fallbackLng && !options?.lng) this.language = options.fallbackLng;
+            // Normalize language to base code (en-US -> en)
+            if (options?.lng) this.language = options.lng.split(/[-_]/)[0];
+            if (options?.fallbackLng && !options?.lng) {
+              const fb = Array.isArray(options.fallbackLng) ? options.fallbackLng[0] : options.fallbackLng;
+              this.language = fb.split(/[-_]/)[0];
+            }
             if (options?.resources) this.resources = options.resources;
             // CRITICAL: Expose to window so react-i18next can find it
             window.__i18n = this;
             return Promise.resolve(this); 
           },
           t: function(key, options) {
-            const lng = this.language || 'en';
+            // Normalize language to base code
+            const lng = (this.language || 'en').split(/[-_]/)[0];
             const ns = options?.ns || 'translation';
             try {
               const langResources = this.resources[lng]?.[ns] || this.resources[lng]?.translation || {};
@@ -157,19 +172,24 @@ serve(async (req) => {
             return key;
           },
           changeLanguage: function(lng) { 
-            this.language = lng || 'en';
-            window.dispatchEvent(new CustomEvent('languageChanged', { detail: lng }));
+            // Normalize language to base code
+            this.language = (lng || 'en').split(/[-_]/)[0];
+            window.dispatchEvent(new CustomEvent('languageChanged', { detail: this.language }));
             return Promise.resolve(this); 
           },
-          dir: function(lng) { return (lng || this.language)?.startsWith('ar') ? 'rtl' : 'ltr'; },
+          dir: function(lng) { 
+            const baseLng = (lng || this.language || 'en').split(/[-_]/)[0];
+            return baseLng === 'ar' ? 'rtl' : 'ltr'; 
+          },
           on: function() { return this; },
           off: function() { return this; },
           exists: () => true,
           getFixedT: function() { return (key) => this.t(key); },
           hasResourceBundle: () => true,
           addResourceBundle: function(lng, ns, res) { 
-            if (!this.resources[lng]) this.resources[lng] = {};
-            this.resources[lng][ns] = { ...this.resources[lng][ns], ...res };
+            const baseLng = lng.split(/[-_]/)[0];
+            if (!this.resources[baseLng]) this.resources[baseLng] = {};
+            this.resources[baseLng][ns] = { ...this.resources[baseLng][ns], ...res };
             return this; 
           }
         };
