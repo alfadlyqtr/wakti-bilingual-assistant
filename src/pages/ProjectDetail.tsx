@@ -1114,15 +1114,21 @@ export default function ProjectDetail() {
 <body>
   <div id="root"></div>
   <script>
-    // Expose framer-motion globally for the bundled shim
-    if (typeof window.FramerMotion !== 'undefined') {
-      window.motion = window.FramerMotion.motion;
-      window.AnimatePresence = window.FramerMotion.AnimatePresence;
-      window.useAnimation = window.FramerMotion.useAnimation;
-      window.useInView = window.FramerMotion.useInView;
-      window.useScroll = window.FramerMotion.useScroll;
-      window.useTransform = window.FramerMotion.useTransform;
-    }
+     // Expose framer-motion globally for the bundled shim
+     // IMPORTANT: unpkg UMD build registers as window.Motion
+     const FM = window.FramerMotion || window.Motion;
+     if (typeof FM !== 'undefined' && FM) {
+       window.FramerMotion = FM;
+       window.motion = FM.motion;
+       window.AnimatePresence = FM.AnimatePresence;
+       window.useAnimation = FM.useAnimation;
+       window.useInView = FM.useInView;
+       window.useScroll = FM.useScroll;
+       window.useTransform = FM.useTransform;
+       window.useMotionValue = FM.useMotionValue;
+     } else {
+       console.warn('Framer Motion not available on window (expected window.Motion from UMD build)');
+     }
     
     // Bundled app code with all shims included
     ${bundledJs}
