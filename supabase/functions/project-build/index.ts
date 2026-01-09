@@ -111,31 +111,95 @@ serve(async (req) => {
         export const hydrateRoot = window.ReactDOM.hydrateRoot;
       `,
       'framer-motion': `
-        // Use real framer-motion from CDN if available, otherwise provide working fallback
-        const hasFramerMotion = typeof window !== 'undefined' && window.FramerMotion;
+        // CRITICAL: Use REAL framer-motion from CDN - window.FramerMotion is loaded before this runs
+        // The CDN script MUST be loaded in the HTML before the bundled JS
+        const FM = (typeof window !== 'undefined' && window.FramerMotion) ? window.FramerMotion : null;
         
-        // Real motion from CDN
-        const motion = hasFramerMotion ? window.FramerMotion.motion : new Proxy({}, {
+        if (!FM) {
+          console.warn('[framer-motion shim] FramerMotion not found on window - animations may not work');
+        }
+        
+        // Export the REAL motion proxy from CDN (preserves ALL animation props like initial, animate, transition)
+        const motion = FM ? FM.motion : new Proxy({}, {
           get: (_, tag) => {
+            // Fallback: render element with inline animation via CSS
             return window.React.forwardRef((props, ref) => {
-              const { initial, animate, exit, transition, whileHover, whileTap, whileInView, variants, ...rest } = props;
-              return window.React.createElement(tag, { ...rest, ref });
+              const { 
+                initial, animate, exit, transition, whileHover, whileTap, whileInView, 
+                variants, style = {}, ...rest 
+              } = props;
+              
+              // Apply animate values directly as style if initial opacity is 0
+              let computedStyle = { ...style };
+              if (animate && typeof animate === 'object') {
+                if (animate.opacity !== undefined) computedStyle.opacity = animate.opacity;
+                if (animate.y !== undefined) computedStyle.transform = 'translateY(' + animate.y + 'px)';
+                if (animate.x !== undefined) computedStyle.transform = 'translateX(' + animate.x + 'px)';
+                if (animate.scale !== undefined) computedStyle.transform = 'scale(' + animate.scale + ')';
+              }
+              // Add transition CSS
+              if (transition && transition.duration) {
+                computedStyle.transition = 'all ' + transition.duration + 's ease-out';
+              }
+              
+              return window.React.createElement(tag, { ...rest, ref, style: computedStyle });
             });
           }
         });
         
-        // Real AnimatePresence from CDN
-        const AnimatePresence = hasFramerMotion ? window.FramerMotion.AnimatePresence : ({ children }) => children;
+        // Export REAL AnimatePresence from CDN
+        const AnimatePresence = FM ? FM.AnimatePresence : ({ children, mode, initial, onExitComplete }) => children;
         
-        // Real hooks from CDN
-        const useAnimation = hasFramerMotion ? window.FramerMotion.useAnimation : () => ({ start: () => Promise.resolve(), stop: () => {} });
-        const useInView = hasFramerMotion ? window.FramerMotion.useInView : (ref, opts) => true;
-        const useScroll = hasFramerMotion ? window.FramerMotion.useScroll : () => ({ scrollY: { get: () => 0, set: () => {} }, scrollYProgress: { get: () => 0 } });
-        const useTransform = hasFramerMotion ? window.FramerMotion.useTransform : (value, inputRange, outputRange) => 0;
-        const useMotionValue = hasFramerMotion && window.FramerMotion.useMotionValue ? window.FramerMotion.useMotionValue : (init) => ({ get: () => init, set: () => {} });
-        const useSpring = hasFramerMotion && window.FramerMotion.useSpring ? window.FramerMotion.useSpring : (value) => value;
+        // Export REAL hooks from CDN with proper fallbacks
+        const useAnimation = FM && FM.useAnimation ? FM.useAnimation : () => ({ 
+          start: () => Promise.resolve(), 
+          stop: () => {},
+          set: () => {}
+        });
+        const useInView = FM && FM.useInView ? FM.useInView : (ref, opts) => true;
+        const useScroll = FM && FM.useScroll ? FM.useScroll : () => ({ 
+          scrollY: { get: () => 0, set: () => {}, onChange: () => () => {} }, 
+          scrollYProgress: { get: () => 0, onChange: () => () => {} },
+          scrollX: { get: () => 0, set: () => {} },
+          scrollXProgress: { get: () => 0 }
+        });
+        const useTransform = FM && FM.useTransform ? FM.useTransform : (value, inputRange, outputRange) => {
+          // Simple linear transform fallback
+          if (Array.isArray(inputRange) && Array.isArray(outputRange) && inputRange.length > 0) {
+            return outputRange[0];
+          }
+          return 0;
+        };
+        const useMotionValue = FM && FM.useMotionValue ? FM.useMotionValue : (init) => ({ 
+          get: () => init, 
+          set: () => {},
+          onChange: () => () => {}
+        });
+        const useSpring = FM && FM.useSpring ? FM.useSpring : (value, config) => value;
+        const useMotionTemplate = FM && FM.useMotionTemplate ? FM.useMotionTemplate : (...args) => args.join('');
+        const useReducedMotion = FM && FM.useReducedMotion ? FM.useReducedMotion : () => false;
+        const useAnimate = FM && FM.useAnimate ? FM.useAnimate : () => [null, () => Promise.resolve()];
+        const usePresence = FM && FM.usePresence ? FM.usePresence : () => [true, () => {}];
+        const useIsPresent = FM && FM.useIsPresent ? FM.useIsPresent : () => true;
         
-        export { motion, AnimatePresence, useAnimation, useInView, useScroll, useTransform, useMotionValue, useSpring };
+        // Motion components for legacy usage
+        const m = motion;
+        
+        // Additional exports that some projects might use
+        const domAnimation = {};
+        const domMax = {};
+        const LazyMotion = ({ children }) => children;
+        const MotionConfig = ({ children }) => children;
+        const LayoutGroup = ({ children }) => children;
+        const Reorder = FM && FM.Reorder ? FM.Reorder : { Group: ({ children }) => children, Item: motion.div };
+        
+        export { 
+          motion, m, AnimatePresence, 
+          useAnimation, useInView, useScroll, useTransform, useMotionValue, useSpring,
+          useMotionTemplate, useReducedMotion, useAnimate, usePresence, useIsPresent,
+          domAnimation, domMax, LazyMotion, MotionConfig, LayoutGroup, Reorder
+        };
+        export default { motion, AnimatePresence };
       `,
       'lucide-react': getLucideShim(),
       'i18next': `
