@@ -1412,6 +1412,7 @@ ${convertToGlobalComponent(content, componentName)}
       Zap: createIcon('<polygon points="13,2 3,14 12,14 11,22 21,10 12,10 13,2"/>'),
       Target: createIcon('<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>'),
       Gift: createIcon('<polyline points="20,12 20,22 4,22 4,12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12,7H7.5a2.5,2.5,0,0,1,0-5C11,2,12,7,12,7Z"/><path d="M12,7h4.5a2.5,2.5,0,0,0,0-5C13,2,12,7,12,7Z"/>'),
+      Feather: createIcon('<path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"/><line x1="16" y1="8" x2="2" y2="22"/><line x1="17.5" y1="15" x2="9" y2="15"/>'),
       Code: createIcon('<polyline points="16,18 22,12 16,6"/><polyline points="8,6 2,12 8,18"/>'),
       Terminal: createIcon('<polyline points="4,17 10,11 4,5"/><line x1="12" y1="19" x2="20" y2="19"/>'),
       Database: createIcon('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21,12c0,1.66-4,3-9,3s-9-1.34-9-3"/><path d="M3,5V19c0,1.66,4,3,9,3s9-1.34,9-3V5"/>'),
