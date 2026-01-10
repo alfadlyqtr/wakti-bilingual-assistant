@@ -166,16 +166,21 @@ async function vercelDeploy(params: {
   // Step 2: Create deployment referencing uploaded files
   const qsArr = [];
   if (params.teamId) qsArr.push(`teamId=${encodeURIComponent(params.teamId)}`);
+  qsArr.push("skipAutoDetectionConfirmation=1");  // Skip framework auto-detection
   const qs = qsArr.length > 0 ? `?${qsArr.join("&")}` : "";
   const endpoint = `https://api.vercel.com/v13/deployments${qs}`;
 
-  // Build payload - PURE static file deployment (no project attachment, no build)
-  // CRITICAL: Do NOT attach to a Vercel Project or use projectSettings - that causes Vercel to run builds
-  // and serve a shell instead of our uploaded index.html
+  // Build payload with proper static file settings
   const payload: Record<string, unknown> = {
     name: params.name,
     files: uploadedFiles,
-    target: "production",  // Deploy as production (public), not preview (protected)
+    target: "production",  // Deploy as production (public, not protected preview)
+    projectSettings: {
+      framework: null,        // No framework - pure static
+      buildCommand: "",       // Empty = skip build
+      outputDirectory: "",    // Empty = serve from root
+      installCommand: "",     // Empty = skip npm install
+    },
   };
 
   console.log("[projects-publish] Creating deployment:", {
