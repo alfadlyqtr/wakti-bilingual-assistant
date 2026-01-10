@@ -1150,14 +1150,32 @@ export default function ProjectDetail() {
     // Bundled app code with all shims included
     ${bundledJs}
     
-    // Render the app
-    try {
-      const rootElement = document.getElementById('root');
-      const root = ReactDOM.createRoot(rootElement);
-      root.render(React.createElement(App));
-    } catch (err) {
-      console.error('Render error:', err);
-      document.getElementById('root').innerHTML = '<div style="padding: 20px; color: red;"><h2>Error loading app</h2><pre>' + err.message + '</pre></div>';
+    // Render the app with retry guard (wait for window.App)
+    function renderApp(retries) {
+      retries = retries || 0;
+      try {
+        if (typeof window.App === 'undefined' || window.App === null) {
+          if (retries < 20) {
+            console.log('[Wakti] Waiting for App... attempt', retries + 1);
+            setTimeout(function() { renderApp(retries + 1); }, 100);
+            return;
+          }
+          throw new Error('App component not found after ' + retries + ' attempts. window.App = ' + typeof window.App);
+        }
+        var rootElement = document.getElementById('root');
+        var root = ReactDOM.createRoot(rootElement);
+        root.render(React.createElement(window.App));
+        console.log('[Wakti] App rendered successfully');
+      } catch (err) {
+        console.error('[Wakti] Render error:', err);
+        document.getElementById('root').innerHTML = '<div style="padding:40px;text-align:center;color:#f87171;font-family:Inter,sans-serif;"><h2>Error loading app</h2><pre style="background:#1e1e1e;padding:20px;border-radius:8px;text-align:left;overflow:auto;max-width:100%;">' + (err.message || err) + '</pre><p style="color:#9ca3af;margin-top:20px;">Check the console for details.</p></div>';
+      }
+    }
+    // Start render on DOMContentLoaded or immediately if already loaded
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function() { renderApp(0); });
+    } else {
+      renderApp(0);
     }
   </script>
 </body>
