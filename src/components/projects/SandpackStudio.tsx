@@ -237,8 +237,8 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
 
   return (
     <div className="h-full w-full flex flex-col bg-[#0c0f14] border border-white/10 rounded-xl overflow-hidden shadow-2xl min-h-[500px] md:min-h-0">
-      {/* HEADER */}
-      <div className="h-10 md:h-12 flex items-center justify-between px-3 md:px-4 border-b border-white/10 bg-[#0c0f14] shrink-0">
+      {/* HEADER - STICKY */}
+      <div className="h-10 md:h-12 flex items-center justify-between px-3 md:px-4 border-b border-white/10 bg-[#0c0f14] shrink-0 sticky top-0 z-10">
         <div className="flex items-center gap-2 min-w-0">
            <FileCode className="w-3.5 h-3.5 md:w-4 md:h-4 text-indigo-500 shrink-0" />
            <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-gray-500 shrink-0">Editor</span>

@@ -2047,20 +2047,24 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       return img.preview;
     }) : [];
     
-    // NOTE: Do NOT insert 'images' field - project_chat_messages table has no images column
+    // Store attachment count in content as metadata marker for persistence
+    // Format: [ATTACHMENTS:N] at the start of content (hidden in display)
+    const attachmentMarker = userImages.length > 0 ? `[ATTACHMENTS:${userImages.length}]` : '';
+    const contentToStore = attachmentMarker + userMessage;
+    
     const { data: userMsg, error: msgError } = await supabase
       .from('project_chat_messages' as any)
       .insert({ 
         project_id: id, 
         role: 'user', 
-        content: userMessage
+        content: contentToStore
       } as any)
       .select()
       .single();
     
     if (msgError) console.error('Error saving user message:', msgError);
     
-    // Add to local state (with images for display, even though not persisted)
+    // Add to local state (with images for display)
     if (userMsg) {
       setChatMessages(prev => [...prev, { ...(userMsg as object), images: userImages } as any]);
     } else {
@@ -2068,7 +2072,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       setChatMessages(prev => [...prev, {
         id: `user-${Date.now()}`,
         role: 'user',
-        content: userMessage,
+        content: contentToStore,
         images: userImages
       }]);
     }
@@ -2135,6 +2139,9 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         // Code mode: Option A job flow (start -> poll -> get_files)
         if (!id) throw new Error('Missing projectId');
 
+        // Capture images BEFORE clearing (same as chat mode)
+        const codeImages = userImages.length > 0 ? userImages : undefined;
+        
         // Clear attached images in Code mode too
         if (attachedImages.length > 0) {
           setAttachedImages([]);
@@ -2147,6 +2154,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
             mode: 'edit',
             prompt: userMessage,
             userInstructions: userInstructions,
+            images: codeImages, // NOW SENDING IMAGES TO AI
           },
         });
 
@@ -2351,8 +2359,8 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
   return (
     <div className={cn("flex flex-col h-[calc(100vh-64px)] bg-background overflow-hidden", isRTL && "rtl")}>
 
-      {/* Main Tab Switcher - Builder / Server */}
-      <div className="hidden md:flex items-center gap-2 px-4 py-2 border-b border-border/50 dark:border-white/10 bg-background/80 backdrop-blur-sm shrink-0">
+      {/* Main Tab Switcher - Builder / Server - STICKY */}
+      <div className="hidden md:flex items-center gap-2 px-4 py-2 border-b border-border/50 dark:border-white/10 bg-background/95 dark:bg-[#0c0f14]/95 backdrop-blur-sm shrink-0 sticky top-0 z-20">
         <button
           onClick={() => setMainTab('builder')}
           className={cn(
@@ -2386,8 +2394,8 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         </div>
       ) : (
       <>
-      {/* Builder Tab Content */}
-      <div className="md:hidden px-4 py-2 bg-background/50 backdrop-blur-sm border-b border-border/40 shrink-0">
+      {/* Builder Tab Content - Mobile Chat/Preview Toggle - STICKY */}
+      <div className="md:hidden px-4 py-2 bg-background/95 dark:bg-[#0c0f14]/95 backdrop-blur-sm border-b border-border/40 shrink-0 sticky top-0 z-20">
         <div className="relative flex p-1 bg-muted/30 dark:bg-white/5 rounded-2xl border border-border/50">
           {/* Animated sliding background pill */}
           <div 
@@ -2429,14 +2437,14 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       <div className="flex-1 min-h-0 flex overflow-hidden relative">
         {/* Left Panel - Cascade-style Control Center */}
         <div className={cn(
-          "flex flex-col border-r transition-all duration-300",
+          "flex flex-col border-r transition-all duration-300 overflow-hidden",
           "bg-background dark:bg-[#0c0f14]",
           "md:w-[420px] lg:w-[480px] shrink-0",
           mobileTab === 'preview' ? "hidden md:flex" : "flex w-full",
-          "max-h-full"
+          "h-full"
         )}>
-          {/* Mode Toggle: Chat / Code - Like Cascade */}
-          <div className="flex items-center justify-between border-b border-border/50 dark:border-white/10 px-3 py-2 shrink-0">
+          {/* Mode Toggle: Chat / Code - Like Cascade - STICKY */}
+          <div className="flex items-center justify-between border-b border-border/50 dark:border-white/10 px-3 py-2 shrink-0 sticky top-0 z-10 bg-background dark:bg-[#0c0f14]">
             <div className="flex items-center gap-2">
               {/* Brain Icon - Opens Instructions Drawer */}
               <button
@@ -2522,8 +2530,8 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
 
           {(leftPanelMode === 'chat' || leftPanelMode === 'code') && (
             <>
-              {/* Chat Messages Area - Clean bubbles, no avatars */}
-              <div ref={chatContainerRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3 scrollbar-thin">
+              {/* Chat Messages Area - Clean bubbles, no avatars - SCROLLABLE */}
+              <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin">
 
                 {/* Show More Button - at top if there are hidden messages */}
                 {chatMessages.length > visibleMessagesCount && (
@@ -2884,20 +2892,53 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                           </div>
                         ) : (
                           <div className="space-y-2">
-                            {/* Show attached images if any */}
+                            {/* Show attached images/PDFs if any */}
                             {(msg as any).images && Array.isArray((msg as any).images) && (msg as any).images.length > 0 && (
                               <div className="flex flex-wrap gap-2 mb-2">
-                                {(msg as any).images.map((imgSrc: string, imgIdx: number) => (
-                                  <img 
-                                    key={imgIdx}
-                                    src={imgSrc}
-                                    alt={`Attached ${imgIdx + 1}`}
-                                    className="max-w-[120px] max-h-[80px] rounded-lg object-cover border border-white/20"
-                                  />
-                                ))}
+                                {(msg as any).images.map((imgSrc: string, imgIdx: number) => {
+                                  // Check if it's a PDF (has [PDF:filename] marker)
+                                  if (typeof imgSrc === 'string' && imgSrc.startsWith('[PDF:')) {
+                                    const endMarker = imgSrc.indexOf(']');
+                                    const pdfName = endMarker > 0 ? imgSrc.substring(5, endMarker) : 'PDF';
+                                    return (
+                                      <div 
+                                        key={imgIdx}
+                                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800 border border-indigo-500/30"
+                                      >
+                                        <span className="text-lg">📄</span>
+                                        <span className="text-xs text-slate-300 max-w-[100px] truncate">{pdfName}</span>
+                                      </div>
+                                    );
+                                  }
+                                  // Regular image
+                                  return (
+                                    <img 
+                                      key={imgIdx}
+                                      src={imgSrc}
+                                      alt={`Attached ${imgIdx + 1}`}
+                                      className="max-w-[120px] max-h-[80px] rounded-lg object-cover border border-white/20"
+                                    />
+                                  );
+                                })}
                               </div>
                             )}
-                            <div className="text-[13px] leading-relaxed">{msg.content}</div>
+                            {/* Show attachment indicator if no images but marker exists (after reload) */}
+                            {(!(msg as any).images || (msg as any).images.length === 0) && msg.content?.startsWith('[ATTACHMENTS:') && (
+                              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800/50 border border-indigo-500/20 mb-2">
+                                <span className="text-sm">📎</span>
+                                <span className="text-xs text-slate-400">
+                                  {(() => {
+                                    const match = msg.content.match(/^\[ATTACHMENTS:(\d+)\]/);
+                                    const count = match ? parseInt(match[1]) : 0;
+                                    return isRTL ? `${count} مرفق` : `${count} attachment${count > 1 ? 's' : ''} included`;
+                                  })()}
+                                </span>
+                              </div>
+                            )}
+                            <div className="text-[13px] leading-relaxed">
+                              {/* Strip attachment marker from display */}
+                              {msg.content?.replace(/^\[ATTACHMENTS:\d+\]/, '')}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -3093,8 +3134,8 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                   </div>
                 )}
 
-                {/* Chat Input Area - Clean with inline suggestions */}
-                <div className="p-2 border-t border-border/30 dark:border-white/10 shrink-0 space-y-1.5 bg-background/50 backdrop-blur-sm">
+                {/* Chat Input Area - FIXED at bottom */}
+                <div className="p-2 border-t border-border/30 dark:border-white/10 shrink-0 space-y-1.5 bg-background/95 dark:bg-[#0c0f14]/95 backdrop-blur-sm">
                   {/* Inline Suggestions + Jump to Bottom Button */}
                   <div className="flex items-center gap-2 px-1">
                     <div className="flex flex-wrap gap-1.5 flex-1">
@@ -3294,11 +3335,11 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
 
         {/* Right Panel - Studio Canvas */}
         <div className={cn(
-          "flex-1 flex flex-col bg-[#0c0f14] relative h-full",
-          mobileTab === 'chat' ? "hidden md:flex" : "flex w-full h-full"
+          "flex-1 flex flex-col bg-[#0c0f14] relative overflow-hidden",
+          mobileTab === 'chat' ? "hidden md:flex" : "flex w-full"
         )}>
-          {/* Project Info Bar - Back, Name, Status */}
-          <div className="flex items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-zinc-900/80 to-zinc-900/40 border-b border-white/10 shrink-0">
+          {/* Project Info Bar - Back, Name, Status - STICKY */}
+          <div className="flex items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-zinc-900 to-zinc-900/90 border-b border-white/10 shrink-0 sticky top-0 z-10">
             {/* Back button - Enhanced */}
             <button 
               onClick={() => navigate('/projects')} 

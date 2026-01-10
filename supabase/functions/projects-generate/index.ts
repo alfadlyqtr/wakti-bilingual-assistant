@@ -192,6 +192,112 @@ async function callGemini25Pro(
   return text;
 }
 
+// GEMINI 2.5 PRO WITH IMAGES - Vision-capable for screenshots/PDFs
+// ============================================================================
+async function callGemini25ProWithImages(
+  systemPrompt: string,
+  userPrompt: string,
+  images?: string[],
+  jsonMode: boolean = true
+): Promise<string> {
+  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
+  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
+
+  // Use Gemini 2.5 Pro (vision-capable)
+  const model = "gemini-2.5-pro";
+  
+  // Build content parts - text + optional images
+  const parts: Array<{text?: string; inlineData?: {mimeType: string; data: string}}> = [];
+  
+  // Add images first if provided
+  if (images && images.length > 0) {
+    console.log(`[Gemini 2.5 Pro Vision] Processing ${images.length} attachments...`);
+    for (const imgData of images) {
+      if (typeof imgData !== 'string') continue;
+      
+      // Handle PDF with marker [PDF:filename]data:...
+      if (imgData.startsWith('[PDF:')) {
+        const endMarker = imgData.indexOf(']');
+        if (endMarker > 0) {
+          const dataUrl = imgData.substring(endMarker + 1);
+          if (dataUrl.startsWith('data:application/pdf;base64,')) {
+            const base64Data = dataUrl.replace('data:application/pdf;base64,', '');
+            parts.push({
+              inlineData: {
+                mimeType: 'application/pdf',
+                data: base64Data
+              }
+            });
+            console.log(`[Gemini 2.5 Pro Vision] Added PDF attachment`);
+          }
+        }
+        continue;
+      }
+      
+      // Handle regular images (data:image/...;base64,...)
+      if (imgData.startsWith('data:image/')) {
+        const commaIdx = imgData.indexOf(',');
+        if (commaIdx > 0) {
+          const mimeMatch = imgData.match(/^data:(image\/[^;]+);base64,/);
+          const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+          const base64Data = imgData.substring(commaIdx + 1);
+          parts.push({
+            inlineData: {
+              mimeType,
+              data: base64Data
+            }
+          });
+          console.log(`[Gemini 2.5 Pro Vision] Added image (${mimeType})`);
+        }
+      }
+    }
+  }
+  
+  // Add text prompt
+  parts.push({ text: userPrompt });
+  
+  console.log(`[Gemini 2.5 Pro Vision] Calling model: ${model} with ${parts.length} parts`);
+
+  const response = await withTimeout(
+    fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": GEMINI_API_KEY,
+        },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts }],
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 65536,
+            ...(jsonMode ? { responseMimeType: "application/json" } : {}),
+          },
+        }),
+      }
+    ),
+    300000, // 300 seconds
+    'GEMINI_25_PRO_VISION'
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`[Gemini 2.5 Pro Vision] HTTP ${response.status}: ${errorText}`);
+    throw new Error(`Gemini API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  let text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  
+  if (jsonMode) {
+    text = normalizeGeminiResponseText(text);
+  }
+  
+  return text;
+}
+
 // GEMINI 2.0 FLASH - FAST CREATE MODE (avoids gateway timeout)
 // ============================================================================
 async function callGemini20FlashCreate(
@@ -353,7 +459,8 @@ Return ONLY a valid JSON object with the structure shown in the system prompt.`;
 async function callGeminiFullRewriteEdit(
   userPrompt: string,
   currentFiles: Record<string, string>,
-  userInstructions: string = ""
+  userInstructions: string = "",
+  images?: string[] // NEW: Support for images/PDFs
 ): Promise<{ files: Record<string, string>; summary: string }> {
   const fileContext = Object.entries(currentFiles || {})
     .map(([path, content]) => `=== FILE: ${path} ===\n${content}`)
@@ -361,9 +468,31 @@ async function callGeminiFullRewriteEdit(
 
   const systemPrompt = GEMINI_EXECUTE_SYSTEM_PROMPT;
 
+  // Build image context if provided
+  let imageContext = '';
+  let pdfTextContent = '';
+  if (images && images.length > 0) {
+    console.log(`[Edit Mode] Processing ${images.length} attached files...`);
+    for (const imgData of images) {
+      if (typeof imgData !== 'string') continue;
+      
+      // Check if it's a PDF with text marker
+      if (imgData.startsWith('[PDF:')) {
+        const endMarker = imgData.indexOf(']');
+        if (endMarker > 0) {
+          const pdfName = imgData.substring(5, endMarker);
+          pdfTextContent += `\n\n📄 ATTACHED PDF: ${pdfName}\n(PDF content attached - extract and use relevant information from it)\n`;
+        }
+      }
+    }
+    if (pdfTextContent) {
+      imageContext = `\n\n🖼️ ATTACHED FILES:\n${pdfTextContent}\nUSE THE INFORMATION FROM THESE ATTACHMENTS TO BUILD THE PROJECT.\n`;
+    }
+  }
+
   const userMessage = `CURRENT CODEBASE:
 ${fileContext}
-
+${imageContext}
 USER REQUEST:
 ${userPrompt}
 
@@ -371,7 +500,8 @@ ${userInstructions ? `ADDITIONAL INSTRUCTIONS:\n${userInstructions}\n\n` : ""}
 Implement this request. Return the FULL content of every file that needs to be modified or created.
 Return ONLY a valid JSON object with the structure shown in the system prompt.`;
 
-  const text = await callGemini25Pro(systemPrompt, userMessage, true);
+  // Use vision-capable model if images are provided
+  const text = await callGemini25ProWithImages(systemPrompt, userMessage, images, true);
   
   let parsed: unknown;
   try {
@@ -1738,10 +1868,12 @@ Return ONLY the JSON object. No explanation.`;
 
       console.log(`[Edit Mode] Full rewrite for: ${prompt.substring(0, 50)}...`);
       console.log(`[Edit Mode] Existing files: ${Object.keys(existingFiles).join(', ')}`);
+      console.log(`[Edit Mode] Images attached: ${images ? (Array.isArray(images) ? images.length : 'yes') : 'none'}`);
       const userPrompt = `${prompt}\n\n${userInstructions || ""}`;
       
-      // USE FULL REWRITE - NO PATCHES
-      const result = await callGeminiFullRewriteEdit(userPrompt, existingFiles, userInstructions);
+      // USE FULL REWRITE - NO PATCHES (now with image support)
+      const imageArray = Array.isArray(images) ? images as unknown as string[] : undefined;
+      const result = await callGeminiFullRewriteEdit(userPrompt, existingFiles, userInstructions, imageArray);
       const changedFiles = result.files || {};
       
       console.log(`[Edit Mode] Changed files returned: ${Object.keys(changedFiles).join(', ') || 'NONE'}`);
