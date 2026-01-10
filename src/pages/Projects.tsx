@@ -52,51 +52,32 @@ const MAX_PROJECTS = 2;
 
 // Project Preview Thumbnail Component - premium fallback card
 const ProjectPreviewThumbnail = ({ project, isRTL }: { project: Project; isRTL: boolean }) => {
-  const hasThumbnail = Boolean(project.thumbnail_url);
-  
   return (
-    <div className="aspect-video relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900">
-      {/* Show real thumbnail if available */}
-      {hasThumbnail && (
+    <div className="aspect-video relative overflow-hidden bg-[#0c0f14]">
+      {project.thumbnail_url ? (
         <img
-          src={project.thumbnail_url!}
+          src={project.thumbnail_url}
           alt={project.name}
-          className="absolute inset-0 w-full h-full object-cover object-top"
-          onError={(e) => {
-            // Hide broken image
-            (e.target as HTMLImageElement).style.display = 'none';
-          }}
+          className="absolute inset-0 w-full h-full object-cover object-top opacity-85"
         />
-      )}
-      
-      {/* Fallback gradient overlay - only show prominent when no thumbnail */}
-      {!hasThumbnail && (
-        <>
-          <div className="absolute inset-0 bg-[linear-gradient(135deg,hsl(210_100%_60%)_0%,hsl(280_70%_65%)_50%,hsl(25_95%_60%)_100%)] opacity-40" />
-          <div className="absolute -inset-10 bg-[radial-gradient(closest-side,hsla(210,100%,65%,0.4),transparent)]" />
-        </>
-      )}
-      
-      {/* Light overlay for consistency */}
-      <div className={cn(
-        "absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20",
-        hasThumbnail ? "opacity-50" : "opacity-30"
-      )} />
+      ) : null}
 
-      {/* Wakti Badge */}
-      <div className="absolute top-3 left-3 flex items-center gap-2 rounded-full bg-black/40 border border-white/20 backdrop-blur-md px-2.5 py-1 shadow-lg">
-        <div className="w-5 h-5 rounded-full bg-indigo-500/30 flex items-center justify-center">
-          <Code2 className="h-3 w-3 text-white" />
+      <div className="absolute inset-0 bg-[linear-gradient(135deg,hsl(210_100%_60%)_0%,hsl(280_70%_65%)_50%,hsl(25_95%_60%)_100%)] opacity-35" />
+      <div className="absolute -inset-10 bg-[radial-gradient(closest-side,hsla(210,100%,65%,0.35),transparent)]" />
+      <div className="absolute inset-0 bg-black/35" />
+
+      <div className="absolute top-3 left-3 flex items-center gap-2 rounded-full bg-white/10 border border-white/15 backdrop-blur px-2 py-1">
+        <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center">
+          <Code2 className="h-3.5 w-3.5 text-white/80" />
         </div>
-        <span className="text-[10px] font-bold text-white tracking-wide uppercase">
+        <div className="text-[11px] font-semibold text-white/90">
           {isRTL ? 'وقتي' : 'Wakti'}
-        </span>
+        </div>
       </div>
 
-      {/* Hover Preview Icon */}
-      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-        <div className="w-12 h-12 rounded-full bg-white/20 border border-white/30 backdrop-blur-sm flex items-center justify-center shadow-xl">
-          <Eye className="h-6 w-6 text-white drop-shadow-lg" />
+      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="w-11 h-11 rounded-full bg-white/10 border border-white/15 backdrop-blur flex items-center justify-center">
+          <Eye className="h-6 w-6 text-white drop-shadow" />
         </div>
       </div>
     </div>
