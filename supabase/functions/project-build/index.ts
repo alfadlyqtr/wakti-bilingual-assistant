@@ -487,229 +487,727 @@ if (typeof AppBundle !== 'undefined' && AppBundle.default) {
 }
 
 // Generate Lucide icons shim as ES module exports
+// CRITICAL: This uses the CDN-based lucide library from window.lucide
+// All ~1500 icons are available through window.lucide (or window.__lucideIcons)
 function getLucideShim(): string {
-  const icons: Record<string, string[]> = {
-    Heart: ['M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z'],
-    Sparkles: ['M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z'],
-    Gift: ['M20 12v10H4V12', 'M2 7h20v5H2z', 'M12 22V7', 'M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z', 'M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z'],
-    Smile: ['M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z', 'M8 14s1.5 2 4 2 4-2 4-2'],
-    BookOpen: ['M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z', 'M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z'],
-    Languages: ['M5 8l6 6', 'M4 14l6-6 2-3', 'M2 5h12', 'M7 2v3', 'M22 22l-5-10-5 10', 'M14 18h6'],
-    Star: ['M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z'],
-    Check: ['M20 6L9 17l-5-5'],
-    X: ['M18 6L6 18', 'M6 6l12 12'],
-    Menu: ['M3 12h18', 'M3 6h18', 'M3 18h18'],
-    ChevronRight: ['M9 18l6-6-6-6'],
-    ChevronLeft: ['M15 18l-6-6 6-6'],
-    ChevronUp: ['M18 15l-6-6-6 6'],
-    ChevronDown: ['M6 9l6 6 6-6'],
-    ArrowRight: ['M5 12h14', 'M12 5l7 7-7 7'],
-    ArrowLeft: ['M19 12H5', 'M12 19l-7-7 7-7'],
-    ArrowUp: ['M12 19V5', 'M5 12l7-7 7 7'],
-    ArrowDown: ['M12 5v14', 'M19 12l-7 7-7-7'],
-    Search: ['M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z', 'M21 21l-4.35-4.35'],
-    User: ['M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2', 'M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z'],
-    Settings: ['M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z'],
-    Home: ['M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z', 'M9 22V12h6v10'],
-    Mail: ['M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z', 'M22 6l-10 7L2 6'],
-    Phone: ['M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72'],
-    MapPin: ['M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z', 'M12 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6z'],
-    Clock: ['M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z', 'M12 6v6l4 2'],
-    Calendar: ['M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z', 'M16 2v4', 'M8 2v4', 'M3 10h18'],
-    Plus: ['M12 5v14', 'M5 12h14'],
-    Minus: ['M5 12h14'],
-    Edit: ['M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7'],
-    Trash: ['M3 6h18', 'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'],
-    Download: ['M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'M7 10l5 5 5-5', 'M12 15V3'],
-    Upload: ['M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'M17 8l-5-5-5 5', 'M12 3v12'],
-    Share: ['M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8', 'M16 6l-4-4-4 4', 'M12 2v13'],
-    ExternalLink: ['M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6', 'M15 3h6v6', 'M10 14L21 3'],
-    Copy: ['M20 9h-9a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2z', 'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'],
-    Info: ['M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z', 'M12 16v-4', 'M12 8h.01'],
-    AlertCircle: ['M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z', 'M12 8v4', 'M12 16h.01'],
-    CheckCircle: ['M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z', 'M9 12l2 2 4-4'],
-    XCircle: ['M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z', 'M15 9l-6 6', 'M9 9l6 6'],
-    Globe: ['M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z', 'M2 12h20'],
-    Lock: ['M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2z', 'M7 11V7a5 5 0 0 1 10 0v4'],
-    Eye: ['M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z'],
-    EyeOff: ['M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94', 'M1 1l22 22'],
-    Play: ['M5 3l14 9-14 9V3z'],
-    Pause: ['M6 4h4v16H6z', 'M14 4h4v16h-4z'],
-    Sun: ['M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10z'],
-    Moon: ['M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z'],
-    Send: ['M22 2L11 13', 'M22 2l-7 20-4-9-9-4 20-7z'],
-    Bell: ['M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9'],
-    MessageCircle: ['M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z'],
-    RefreshCw: ['M23 4v6h-6', 'M1 20v-6h6'],
-    Loader: ['M12 2v4', 'M12 18v4', 'M4.93 4.93l2.83 2.83', 'M16.24 16.24l2.83 2.83'],
-    Zap: ['M13 2L3 14h9l-1 8 10-12h-9l1-8z'],
-    Award: ['M12 15a7 7 0 1 0 0-14 7 7 0 0 0 0 14z'],
-    Target: ['M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z'],
-    TrendingUp: ['M23 6l-9.5 9.5-5-5L1 18'],
-    Bookmark: ['M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z'],
-    Tag: ['M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z'],
-    Folder: ['M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z'],
-    Filter: ['M22 3H2l8 9.46V19l4 2v-8.54L22 3z'],
-    Save: ['M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z'],
-    LogIn: ['M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4'],
-    LogOut: ['M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4'],
-    MoreHorizontal: ['M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z', 'M19 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z', 'M5 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z'],
-    MoreVertical: ['M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z', 'M12 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2z', 'M12 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2z'],
-    Activity: ['M22 12h-4l-3 9L9 3l-3 9H2'],
-    BarChart: ['M12 20V10', 'M18 20V4', 'M6 20v-4'],
-    Grid: ['M3 3h7v7H3z', 'M14 3h7v7h-7z', 'M14 14h7v7h-7z', 'M3 14h7v7H3z'],
-    List: ['M8 6h13', 'M8 12h13', 'M8 18h13', 'M3 6h.01', 'M3 12h.01', 'M3 18h.01'],
-    Code: ['M16 18l6-6-6-6', 'M8 6l-6 6 6 6'],
-    Terminal: ['M4 17l6-6-6-6', 'M12 19h8'],
-    Layers: ['M12 2L2 7l10 5 10-5-10-5z', 'M2 17l10 5 10-5', 'M2 12l10 5 10-5'],
-    // Added icons for publishing support
-    Feather: ['M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z', 'M16 8L2 22', 'M17.5 15H9'],
-    Crown: ['M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7z'],
-    Medal: ['M7.21 15L2.66 7.14a2 2 0 0 1 .13-2.2L4.4 2.8A2 2 0 0 1 6 2h12a2 2 0 0 1 1.6.8l1.6 2.14a2 2 0 0 1 .14 2.2L16.79 15'],
-    Trophy: ['M6 9H4.5a2.5 2.5 0 0 1 0-5H6', 'M18 9h1.5a2.5 2.5 0 0 0 0-5H18', 'M4 22h16', 'M18 2H6v7a6 6 0 0 0 12 0V2z'],
-    Flame: ['M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z'],
-    Flower: ['M12 7.5a4.5 4.5 0 1 1 4.5 4.5M12 7.5A4.5 4.5 0 1 0 7.5 12M12 7.5V9m-4.5 3a4.5 4.5 0 1 0 4.5 4.5M7.5 12H9m7.5 0a4.5 4.5 0 1 1-4.5 4.5m4.5-4.5H15m-3 4.5V15'],
-    Leaf: ['M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z', 'M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12'],
-    Rainbow: ['M22 17a10 10 0 0 0-20 0', 'M6 17a6 6 0 0 1 12 0', 'M10 17a2 2 0 0 1 4 0'],
-    Snowflake: ['M2 12h20', 'M12 2v20', 'M20 16l-4-4 4-4', 'M4 8l4 4-4 4', 'M16 4l-4 4-4-4', 'M8 20l4-4 4 4'],
-    CloudRain: ['M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242', 'M16 14v6', 'M8 14v6', 'M12 16v6'],
-    Wind: ['M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2', 'M9.6 4.6A2 2 0 1 1 11 8H2', 'M12.6 19.4A2 2 0 1 0 14 16H2'],
-    Music: ['M9 18V5l12-2v13'],
-    Mic: ['M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z', 'M19 10v2a7 7 0 0 1-14 0v-2', 'M12 19v3'],
-    Headphones: ['M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3'],
-    Video: ['M22 8l-6 4 6 4V8z', 'M2 6h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2V6z'],
-    Camera: ['M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z'],
-    Image: ['M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z', 'M8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z', 'M21 15l-5-5L5 21'],
-    Coffee: ['M17 8h1a4 4 0 1 1 0 8h-1', 'M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8z', 'M6 2v4', 'M10 2v4', 'M14 2v4'],
-    Pizza: ['M15 11h.01', 'M11 15h.01', 'M16 16h.01', 'M2 16l20 6-6-20A20 20 0 0 0 2 16', 'M5.71 17.11a17.04 17.04 0 0 1 11.4-11.4'],
-    Cake: ['M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8', 'M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1', 'M2 21h20', 'M7 8v2', 'M12 8v2', 'M17 8v2', 'M7 4h.01', 'M12 4h.01', 'M17 4h.01'],
-    Car: ['M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2'],
-    Truck: ['M10 17h4V5H2v12h3', 'M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5', 'M14 17h1'],
-    Plane: ['M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1V17l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2C18.7 20 18.9 19.6 17.8 19.2z'],
-    Rocket: ['M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z', 'M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z', 'M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0', 'M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5'],
-    Building: ['M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18z', 'M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2', 'M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2', 'M10 6h4', 'M10 10h4', 'M10 14h4', 'M10 18h4'],
-    Key: ['M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4'],
-    Pencil: ['M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z'],
-    Brush: ['M9.06 11.9l8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08', 'M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02z'],
-    Palette: ['M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.555C21.965 6.012 17.461 2 12 2z'],
-    Scissors: ['M6 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', 'M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', 'M20 4L8.12 15.88', 'M14.47 14.48L20 20', 'M8.12 8.12L12 12'],
-    Lightbulb: ['M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5', 'M9 18h6', 'M10 22h4'],
-    Gem: ['M6 3h12l4 6-10 13L2 9z', 'M11 3l8 6-7 13-7-13 6-6', 'M2 9h20'],
-    Diamond: ['M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41l-7.59-7.59a2.41 2.41 0 0 0-3.41 0z'],
-    Sparkle: ['M12 3l-1.9 5.8a2 2 0 0 1-1.287 1.288L3 12l5.8 1.9a2 2 0 0 1 1.288 1.287L12 21l1.9-5.8a2 2 0 0 1 1.287-1.288L21 12l-5.8-1.9a2 2 0 0 1-1.288-1.287z'],
-    PartyPopper: ['M5.8 11.3L2 22l10.7-3.79', 'M4 3h.01', 'M22 8h.01', 'M15 2h.01', 'M22 20h.01', 'M22 2l-2.24.75a2.9 2.9 0 0 0-1.96 3.12c.1.86-.57 1.63-1.45 1.63h-.38c-.86 0-1.6.6-1.76 1.44L14 10', 'M22 13l-.82-.33c-.86-.34-1.82.2-1.98 1.11-.11.7-.72 1.22-1.43 1.22H17', 'M11 2l.33.82c.34.86-.2 1.82-1.11 1.98C9.52 4.9 9 5.52 9 6.23V7', 'M11 13c1.93 1.93 2.83 4.17 2 5-.83.83-3.07-.07-5-2-1.93-1.93-2.83-4.17-2-5 .83-.83 3.07.07 5 2z'],
-    Angry: ['M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z', 'M16 16s-1.5-2-4-2-4 2-4 2', 'M7.5 8L10 9', 'M14 9l2.5-1', 'M9 10h.01', 'M15 10h.01'],
-    Laugh: ['M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z', 'M18 13a6 6 0 0 1-6 5 6 6 0 0 1-6-5h12z', 'M9 9h.01', 'M15 9h.01'],
-    Frown: ['M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z', 'M16 16s-1.5-2-4-2-4 2-4 2', 'M9 9h.01', 'M15 9h.01'],
-    Meh: ['M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z', 'M8 15h8', 'M9 9h.01', 'M15 9h.01'],
-    HeartCrack: ['M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7z', 'M12 13l-1-1 2-2-3-2.5 2-2'],
-    Users: ['M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2', 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', 'M23 21v-2a4 4 0 0 0-3-3.87', 'M16 3.13a4 4 0 0 1 0 7.75'],
-    UserPlus: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', 'M19 8v6', 'M22 11h-6'],
-    UserMinus: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', 'M22 11h-6'],
-    UserCheck: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', 'M16 11l2 2 4-4'],
-    Shield: ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'],
-    ShieldCheck: ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', 'M9 12l2 2 4-4'],
-    Verified: ['M12 2l2.4 2.4 3.4-.4-.4 3.4L20 10l-2.4 2.4.4 3.4-3.4-.4L12 18l-2.4-2.4-3.4.4.4-3.4L4 10l2.4-2.4-.4-3.4 3.4.4L12 2z', 'M9 12l2 2 4-4'],
-    BadgeCheck: ['M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76z', 'M9 12l2 2 4-4'],
-    HelpCircle: ['M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z', 'M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3', 'M12 17h.01'],
-    MessageSquare: ['M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'],
-    Reply: ['M9 17H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v3.5', 'M21 15l-5 5', 'M21 10l-5 5'],
-    Forward: ['M15 17H9a2 2 0 0 0-2 2v0a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3.5', 'M3 9l5-5', 'M3 14l5-5'],
-    FileText: ['M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z', 'M14 2v6h6', 'M16 13H8', 'M16 17H8', 'M10 9H8'],
-    Clipboard: ['M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2', 'M8 2h8a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z'],
-    ClipboardCheck: ['M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2', 'M8 2h8a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z', 'M9 14l2 2 4-4'],
-    StickyNote: ['M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3z', 'M15 3v6h6'],
-    Pin: ['M12 17v5', 'M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24z'],
-    Paperclip: ['M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48'],
-    AtSign: ['M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', 'M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8'],
-    Hash: ['M4 9h16', 'M4 15h16', 'M10 3l-2 18', 'M16 3l-2 18'],
-    DollarSign: ['M12 2v20', 'M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6'],
-    CreditCard: ['M2 5h20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z', 'M2 10h22'],
-    Wallet: ['M21 12V7H5a2 2 0 0 1 0-4h14v4', 'M3 5v14a2 2 0 0 0 2 2h16v-5', 'M18 12a2 2 0 0 0 0 4h4v-4z'],
-    ShoppingBag: ['M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z', 'M3 6h18', 'M16 10a4 4 0 0 1-8 0'],
-    ShoppingCart: ['M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6'],
-    Package: ['M7.5 4.27l9 5.15', 'M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z', 'M3.3 7l8.7 5 8.7-5', 'M12 22V12'],
-    Timer: ['M10 2h4', 'M12 14l0-4', 'M12 22a8 8 0 1 0 0-16 8 8 0 0 0 0 16z'],
-    Hourglass: ['M5 22h14', 'M5 2h14', 'M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22', 'M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2'],
-    AlarmClock: ['M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16z', 'M12 9v4l2 2', 'M5 3L2 6', 'M22 6l-3-3', 'M6.38 18.7L4 21', 'M17.64 18.67L20 21'],
-    Wifi: ['M5 13a10 10 0 0 1 14 0', 'M8.5 16.5a5 5 0 0 1 7 0', 'M2 8.82a15 15 0 0 1 20 0', 'M12 20h.01'],
-    WifiOff: ['M2 2l20 20', 'M8.5 16.5a5 5 0 0 1 7 0', 'M2 8.82a15 15 0 0 1 4.17-2.65', 'M10.66 5c4.01-.36 8.14.9 11.34 3.76', 'M16.85 11.25a10 10 0 0 1 2.22 1.68', 'M5 13a10 10 0 0 1 5.24-2.76', 'M12 20h.01'],
-    Bluetooth: ['M6.5 6.5l11 11L12 23V1l5.5 5.5-11 11'],
-    Battery: ['M2 7h16a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z', 'M22 11v2'],
-    Signal: ['M2 20h.01', 'M7 20v-4', 'M12 20v-8', 'M17 20V8', 'M22 4v16'],
-    Smartphone: ['M5 2h14a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z', 'M12 18h.01'],
-    Tablet: ['M4 2h16a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z', 'M12 18h.01'],
-    Laptop: ['M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0l1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16'],
-    Monitor: ['M2 3h20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z', 'M8 21h8', 'M12 17v4'],
-    Tv: ['M2 7h20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z', 'M17 2l-5 5-5-5'],
-    Server: ['M2 2h20a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z', 'M2 14h20a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2z', 'M6 6h.01', 'M6 18h.01'],
-    Database: ['M12 2c-5.523 0-10 1.5-10 4v12c0 2.5 4.477 4 10 4s10-1.5 10-4V6c0-2.5-4.477-4-10-4z', 'M2 6c0 2.5 4.477 4 10 4s10-1.5 10-4'],
-    Cloud: ['M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z'],
-    CloudUpload: ['M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242', 'M12 12v9', 'M16 16l-4-4-4 4'],
-    CloudDownload: ['M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242', 'M12 13v9', 'M8 17l4 4 4-4'],
-    Map: ['M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z', 'M8 2v16', 'M16 6v16'],
-    Compass: ['M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z', 'M16.24 7.76l-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z'],
-    Navigation: ['M3 11l19-9-9 19-2-8-8-2z'],
-    Printer: ['M6 9V2h12v7', 'M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2', 'M6 14h12v8H6z'],
-    QrCode: ['M3 3h5v5H3z', 'M16 3h5v5h-5z', 'M3 16h5v5H3z', 'M21 16h-3a2 2 0 0 0-2 2v3', 'M21 21v.01', 'M12 7v3a2 2 0 0 1-2 2H7', 'M3 12h.01', 'M12 3h.01', 'M12 16v.01', 'M16 12h1', 'M21 12v.01', 'M12 21v-1'],
-    Scan: ['M3 7V5a2 2 0 0 1 2-2h2', 'M17 3h2a2 2 0 0 1 2 2v2', 'M21 17v2a2 2 0 0 1-2 2h-2', 'M7 21H5a2 2 0 0 1-2-2v-2'],
-    Fingerprint: ['M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4', 'M14 13.12c0 2.38 0 6.38-1 8.88', 'M17.29 21.02c.12-.6.43-2.3.5-3.02', 'M2 12a10 10 0 0 1 18-6', 'M2 16h.01', 'M21.8 16c.2-2 .131-5.354 0-6', 'M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2', 'M8.65 22c.21-.66.45-1.32.57-2', 'M9 6.8a6 6 0 0 1 9 5.2v2'],
-    Move: ['M5 9l-3 3 3 3', 'M9 5l3-3 3 3', 'M15 19l-3 3-3-3', 'M19 9l3 3-3 3', 'M2 12h20', 'M12 2v20'],
-    Maximize: ['M8 3H5a2 2 0 0 0-2 2v3', 'M21 8V5a2 2 0 0 0-2-2h-3', 'M3 16v3a2 2 0 0 0 2 2h3', 'M16 21h3a2 2 0 0 0 2-2v-3'],
-    Minimize: ['M8 3v3a2 2 0 0 1-2 2H3', 'M21 8h-3a2 2 0 0 1-2-2V3', 'M3 16h3a2 2 0 0 1 2 2v3', 'M16 21v-3a2 2 0 0 1 2-2h3'],
-    Expand: ['M21 21l-6-6m6 6v-4.8m0 4.8h-4.8', 'M3 16.2V21m0 0h4.8M3 21l6-6', 'M21 7.8V3m0 0h-4.8M21 3l-6 6', 'M3 7.8V3m0 0h4.8M3 3l6 6'],
-    Shrink: ['M15 15l6 6m-6-6v4.8m0-4.8h4.8', 'M9 19.8V15m0 0H4.2M9 15l-6 6', 'M15 4.2V9m0 0h4.8M15 9l6-6', 'M9 4.2V9m0 0H4.2M9 9L3 3'],
-    RotateCcw: ['M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8', 'M3 3v5h5'],
-    Repeat: ['M17 2l4 4-4 4', 'M3 11V9a4 4 0 0 1 4-4h14', 'M7 22l-4-4 4-4', 'M21 13v2a4 4 0 0 1-4 4H3'],
-    Shuffle: ['M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22', 'M18 2l4 4-4 4', 'M2 6h1.9c1.5 0 2.9.9 3.6 2.2', 'M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8', 'M18 14l4 4-4 4'],
-    FastForward: ['M13 19l9-7-9-7v14z', 'M2 19l9-7-9-7v14z'],
-    Rewind: ['M11 19l-9-7 9-7v14z', 'M22 19l-9-7 9-7v14z'],
-    SkipForward: ['M5 4l10 8-10 8V4z', 'M19 5v14'],
-    SkipBack: ['M19 20L9 12l10-8v16z', 'M5 19V5'],
-    PlayCircle: ['M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z', 'M10 8l6 4-6 4V8z'],
-    PauseCircle: ['M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z', 'M10 15V9', 'M14 15V9'],
-    StopCircle: ['M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z', 'M9 9h6v6H9z'],
-    Volume: ['M11 5L6 9H2v6h4l5 4V5z'],
-    Volume2: ['M11 5L6 9H2v6h4l5 4V5z', 'M15.54 8.46a5 5 0 0 1 0 7.07', 'M19.07 4.93a10 10 0 0 1 0 14.14'],
-    VolumeX: ['M11 5L6 9H2v6h4l5 4V5z', 'M22 9l-6 6', 'M16 9l6 6'],
-    MicOff: ['M2 2l20 20', 'M18.89 13.23A7.12 7.12 0 0 0 19 12V10', 'M5 10v2a7 7 0 0 0 12 5', 'M15 9.34V5a3 3 0 0 0-5.68-1.33', 'M9 9v3a3 3 0 0 0 5.12 2.12', 'M12 19v4'],
-    VideoOff: ['M10.66 6H14a2 2 0 0 1 2 2v2.34l1 1L22 8v8', 'M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2l10 10z', 'M2 2l20 20'],
-    CameraOff: ['M2 2l20 20', 'M7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16', 'M9.5 4h5L17 7h4a2 2 0 0 1 2 2v7.5', 'M14.121 15.121A3 3 0 1 1 9.88 10.88'],
-    Type: ['M4 7V4h16v3', 'M9 20h6', 'M12 4v16'],
-    Bold: ['M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z', 'M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z'],
-    Italic: ['M19 4h-9', 'M14 20H5', 'M15 4L9 20'],
-    Underline: ['M6 4v6a6 6 0 0 0 12 0V4', 'M4 20h16'],
-    AlignLeft: ['M21 6H3', 'M15 12H3', 'M17 18H3'],
-    AlignCenter: ['M21 6H3', 'M17 12H7', 'M19 18H5'],
-    AlignRight: ['M21 6H3', 'M21 12H9', 'M21 18H7'],
-    AlignJustify: ['M3 6h18', 'M3 12h18', 'M3 18h18'],
-    Undo: ['M3 7v6h6', 'M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13'],
-    Redo: ['M21 7v6h-6', 'M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13'],
-    Quote: ['M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V21c0 1 0 1 1 1z', 'M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z'],
-    Link: ['M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71', 'M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'],
-    LinkOff: ['M2 2l20 20', 'M9 9a5 5 0 0 0 6.89 6.89', 'M14.71 14.71a5 5 0 0 0-7.07 0l-1.72 1.72', 'M16.24 7.76a5 5 0 0 1 0 7.07'],
-    Unlink: ['M18.84 12.25l1.72-1.71a5 5 0 0 0-7.07-7.07l-1.72 1.71', 'M5.16 11.75l-1.72 1.71a5 5 0 0 0 7.07 7.07l1.72-1.71', 'M8 2v3', 'M2 8h3', 'M16 22v-3', 'M22 16h-3'],
-    GripVertical: ['M9 12a1 1 0 1 0 0-2 1 1 0 0 0 0 2z', 'M9 5a1 1 0 1 0 0-2 1 1 0 0 0 0 2z', 'M9 19a1 1 0 1 0 0-2 1 1 0 0 0 0 2z', 'M15 12a1 1 0 1 0 0-2 1 1 0 0 0 0 2z', 'M15 5a1 1 0 1 0 0-2 1 1 0 0 0 0 2z', 'M15 19a1 1 0 1 0 0-2 1 1 0 0 0 0 2z'],
-    GripHorizontal: ['M12 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2z', 'M19 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2z', 'M5 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2z', 'M12 15a1 1 0 1 0 0-2 1 1 0 0 0 0 2z', 'M19 15a1 1 0 1 0 0-2 1 1 0 0 0 0 2z', 'M5 15a1 1 0 1 0 0-2 1 1 0 0 0 0 2z'],
-  };
+  return `
+// LUCIDE ICONS CDN-BASED SHIM
+// This shim dynamically creates React components from the lucide UMD build (window.lucide)
+// Supports ALL 1500+ Lucide icons without static embedding
 
-  // Generate export statements for each icon
-  const iconExports = Object.entries(icons).map(([name, paths]) => {
-    const pathsStr = JSON.stringify(paths);
-    return `export const ${name} = (props) => window.React.createElement('svg', {
-  xmlns: 'http://www.w3.org/2000/svg',
-  width: props?.size || 24,
-  height: props?.size || 24,
-  viewBox: '0 0 24 24',
-  fill: 'none',
-  stroke: 'currentColor',
-  strokeWidth: 2,
-  strokeLinecap: 'round',
-  strokeLinejoin: 'round',
-  className: props?.className || '',
-  ...props
-}, ${pathsStr}.map((d, i) => window.React.createElement('path', { key: i, d })));`;
-  }).join('\n\n');
+const createIconComponent = (iconName, iconNode) => {
+  // iconNode is an array of [elementType, attributes] tuples from lucide
+  return window.React.forwardRef((props, ref) => {
+    const { size = 24, color = 'currentColor', strokeWidth = 2, className = '', ...rest } = props || {};
+    
+    if (!iconNode) {
+      console.warn(\`[Lucide] Icon "\${iconName}" not found in lucide library\`);
+      return null;
+    }
+    
+    // Create children from icon node definition
+    const children = iconNode.map((item, i) => {
+      if (!Array.isArray(item) || item.length < 2) return null;
+      const [tag, attrs] = item;
+      return window.React.createElement(tag, { key: i, ...attrs });
+    });
+    
+    return window.React.createElement('svg', {
+      ref,
+      xmlns: 'http://www.w3.org/2000/svg',
+      width: size,
+      height: size,
+      viewBox: '0 0 24 24',
+      fill: 'none',
+      stroke: color,
+      strokeWidth: strokeWidth,
+      strokeLinecap: 'round',
+      strokeLinejoin: 'round',
+      className: className,
+      ...rest
+    }, ...children);
+  });
+};
 
-  return iconExports;
+// Get lucide icons from CDN (window.lucide or window.__lucideIcons)
+const lucideLib = (typeof window !== 'undefined') 
+  ? (window.__lucideIcons || window.lucide || {}) 
+  : {};
+
+// Create a Proxy that dynamically generates icon components on access
+// This supports ALL 1500+ icons without needing to enumerate them
+const iconsProxy = new Proxy({}, {
+  get: (target, prop) => {
+    if (typeof prop === 'string') {
+      // Check cache first
+      if (target[prop]) return target[prop];
+      
+      // Look up the icon in lucide library
+      const iconNode = lucideLib[prop];
+      if (iconNode) {
+        target[prop] = createIconComponent(prop, iconNode);
+        return target[prop];
+      }
+      
+      // Fallback: create a placeholder component that shows the icon name
+      return createIconComponent(prop, null);
+    }
+    return undefined;
+  }
+});
+
+// Export commonly used icons directly for tree-shaking compatibility
+// These are resolved at import time
+export const Heart = createIconComponent('Heart', lucideLib.Heart);
+export const Sparkles = createIconComponent('Sparkles', lucideLib.Sparkles);
+export const Gift = createIconComponent('Gift', lucideLib.Gift);
+export const Smile = createIconComponent('Smile', lucideLib.Smile);
+export const BookOpen = createIconComponent('BookOpen', lucideLib.BookOpen);
+export const Languages = createIconComponent('Languages', lucideLib.Languages);
+export const Star = createIconComponent('Star', lucideLib.Star);
+export const Check = createIconComponent('Check', lucideLib.Check);
+export const X = createIconComponent('X', lucideLib.X);
+export const Menu = createIconComponent('Menu', lucideLib.Menu);
+export const ChevronRight = createIconComponent('ChevronRight', lucideLib.ChevronRight);
+export const ChevronLeft = createIconComponent('ChevronLeft', lucideLib.ChevronLeft);
+export const ChevronUp = createIconComponent('ChevronUp', lucideLib.ChevronUp);
+export const ChevronDown = createIconComponent('ChevronDown', lucideLib.ChevronDown);
+export const ArrowRight = createIconComponent('ArrowRight', lucideLib.ArrowRight);
+export const ArrowLeft = createIconComponent('ArrowLeft', lucideLib.ArrowLeft);
+export const ArrowUp = createIconComponent('ArrowUp', lucideLib.ArrowUp);
+export const ArrowDown = createIconComponent('ArrowDown', lucideLib.ArrowDown);
+export const Search = createIconComponent('Search', lucideLib.Search);
+export const User = createIconComponent('User', lucideLib.User);
+export const Settings = createIconComponent('Settings', lucideLib.Settings);
+export const Home = createIconComponent('Home', lucideLib.Home);
+export const Mail = createIconComponent('Mail', lucideLib.Mail);
+export const Phone = createIconComponent('Phone', lucideLib.Phone);
+export const MapPin = createIconComponent('MapPin', lucideLib.MapPin);
+export const Clock = createIconComponent('Clock', lucideLib.Clock);
+export const Calendar = createIconComponent('Calendar', lucideLib.Calendar);
+export const Plus = createIconComponent('Plus', lucideLib.Plus);
+export const Minus = createIconComponent('Minus', lucideLib.Minus);
+export const Edit = createIconComponent('Edit', lucideLib.Edit);
+export const Trash = createIconComponent('Trash', lucideLib.Trash);
+export const Download = createIconComponent('Download', lucideLib.Download);
+export const Upload = createIconComponent('Upload', lucideLib.Upload);
+export const Share = createIconComponent('Share', lucideLib.Share);
+export const ExternalLink = createIconComponent('ExternalLink', lucideLib.ExternalLink);
+export const Copy = createIconComponent('Copy', lucideLib.Copy);
+export const Info = createIconComponent('Info', lucideLib.Info);
+export const AlertCircle = createIconComponent('AlertCircle', lucideLib.AlertCircle);
+export const CheckCircle = createIconComponent('CheckCircle', lucideLib.CheckCircle);
+export const XCircle = createIconComponent('XCircle', lucideLib.XCircle);
+export const Globe = createIconComponent('Globe', lucideLib.Globe);
+export const Lock = createIconComponent('Lock', lucideLib.Lock);
+export const Eye = createIconComponent('Eye', lucideLib.Eye);
+export const EyeOff = createIconComponent('EyeOff', lucideLib.EyeOff);
+export const Play = createIconComponent('Play', lucideLib.Play);
+export const Pause = createIconComponent('Pause', lucideLib.Pause);
+export const Sun = createIconComponent('Sun', lucideLib.Sun);
+export const Moon = createIconComponent('Moon', lucideLib.Moon);
+export const Send = createIconComponent('Send', lucideLib.Send);
+export const Bell = createIconComponent('Bell', lucideLib.Bell);
+export const MessageCircle = createIconComponent('MessageCircle', lucideLib.MessageCircle);
+export const RefreshCw = createIconComponent('RefreshCw', lucideLib.RefreshCw);
+export const Loader = createIconComponent('Loader', lucideLib.Loader);
+export const Loader2 = createIconComponent('Loader2', lucideLib.Loader2);
+export const Zap = createIconComponent('Zap', lucideLib.Zap);
+export const Award = createIconComponent('Award', lucideLib.Award);
+export const Target = createIconComponent('Target', lucideLib.Target);
+export const TrendingUp = createIconComponent('TrendingUp', lucideLib.TrendingUp);
+export const Bookmark = createIconComponent('Bookmark', lucideLib.Bookmark);
+export const Tag = createIconComponent('Tag', lucideLib.Tag);
+export const Folder = createIconComponent('Folder', lucideLib.Folder);
+export const Filter = createIconComponent('Filter', lucideLib.Filter);
+export const Save = createIconComponent('Save', lucideLib.Save);
+export const LogIn = createIconComponent('LogIn', lucideLib.LogIn);
+export const LogOut = createIconComponent('LogOut', lucideLib.LogOut);
+export const MoreHorizontal = createIconComponent('MoreHorizontal', lucideLib.MoreHorizontal);
+export const MoreVertical = createIconComponent('MoreVertical', lucideLib.MoreVertical);
+export const Activity = createIconComponent('Activity', lucideLib.Activity);
+export const BarChart = createIconComponent('BarChart', lucideLib.BarChart);
+export const Grid = createIconComponent('Grid', lucideLib.Grid);
+export const List = createIconComponent('List', lucideLib.List);
+export const Code = createIconComponent('Code', lucideLib.Code);
+export const Terminal = createIconComponent('Terminal', lucideLib.Terminal);
+export const Layers = createIconComponent('Layers', lucideLib.Layers);
+export const Feather = createIconComponent('Feather', lucideLib.Feather);
+export const Crown = createIconComponent('Crown', lucideLib.Crown);
+export const Medal = createIconComponent('Medal', lucideLib.Medal);
+export const Trophy = createIconComponent('Trophy', lucideLib.Trophy);
+export const Flame = createIconComponent('Flame', lucideLib.Flame);
+export const Flower = createIconComponent('Flower', lucideLib.Flower);
+export const Leaf = createIconComponent('Leaf', lucideLib.Leaf);
+export const Rainbow = createIconComponent('Rainbow', lucideLib.Rainbow);
+export const Snowflake = createIconComponent('Snowflake', lucideLib.Snowflake);
+export const CloudRain = createIconComponent('CloudRain', lucideLib.CloudRain);
+export const Wind = createIconComponent('Wind', lucideLib.Wind);
+export const Music = createIconComponent('Music', lucideLib.Music);
+export const Mic = createIconComponent('Mic', lucideLib.Mic);
+export const Headphones = createIconComponent('Headphones', lucideLib.Headphones);
+export const Video = createIconComponent('Video', lucideLib.Video);
+export const Camera = createIconComponent('Camera', lucideLib.Camera);
+export const Image = createIconComponent('Image', lucideLib.Image);
+export const Coffee = createIconComponent('Coffee', lucideLib.Coffee);
+export const Pizza = createIconComponent('Pizza', lucideLib.Pizza);
+export const Cake = createIconComponent('Cake', lucideLib.Cake);
+export const Car = createIconComponent('Car', lucideLib.Car);
+export const Truck = createIconComponent('Truck', lucideLib.Truck);
+export const Plane = createIconComponent('Plane', lucideLib.Plane);
+export const Rocket = createIconComponent('Rocket', lucideLib.Rocket);
+export const Building = createIconComponent('Building', lucideLib.Building);
+export const Key = createIconComponent('Key', lucideLib.Key);
+export const Pencil = createIconComponent('Pencil', lucideLib.Pencil);
+export const Brush = createIconComponent('Brush', lucideLib.Brush);
+export const Palette = createIconComponent('Palette', lucideLib.Palette);
+export const Scissors = createIconComponent('Scissors', lucideLib.Scissors);
+export const Lightbulb = createIconComponent('Lightbulb', lucideLib.Lightbulb);
+export const Gem = createIconComponent('Gem', lucideLib.Gem);
+export const Diamond = createIconComponent('Diamond', lucideLib.Diamond);
+export const Sparkle = createIconComponent('Sparkle', lucideLib.Sparkle);
+export const PartyPopper = createIconComponent('PartyPopper', lucideLib.PartyPopper);
+export const Angry = createIconComponent('Angry', lucideLib.Angry);
+export const Laugh = createIconComponent('Laugh', lucideLib.Laugh);
+export const Frown = createIconComponent('Frown', lucideLib.Frown);
+export const Meh = createIconComponent('Meh', lucideLib.Meh);
+export const HeartCrack = createIconComponent('HeartCrack', lucideLib.HeartCrack);
+export const Users = createIconComponent('Users', lucideLib.Users);
+export const UserPlus = createIconComponent('UserPlus', lucideLib.UserPlus);
+export const UserMinus = createIconComponent('UserMinus', lucideLib.UserMinus);
+export const UserCheck = createIconComponent('UserCheck', lucideLib.UserCheck);
+export const Shield = createIconComponent('Shield', lucideLib.Shield);
+export const ShieldCheck = createIconComponent('ShieldCheck', lucideLib.ShieldCheck);
+export const Verified = createIconComponent('Verified', lucideLib.Verified);
+export const BadgeCheck = createIconComponent('BadgeCheck', lucideLib.BadgeCheck);
+export const HelpCircle = createIconComponent('HelpCircle', lucideLib.HelpCircle);
+export const MessageSquare = createIconComponent('MessageSquare', lucideLib.MessageSquare);
+export const Reply = createIconComponent('Reply', lucideLib.Reply);
+export const Forward = createIconComponent('Forward', lucideLib.Forward);
+export const FileText = createIconComponent('FileText', lucideLib.FileText);
+export const Clipboard = createIconComponent('Clipboard', lucideLib.Clipboard);
+export const ClipboardCheck = createIconComponent('ClipboardCheck', lucideLib.ClipboardCheck);
+export const StickyNote = createIconComponent('StickyNote', lucideLib.StickyNote);
+export const Pin = createIconComponent('Pin', lucideLib.Pin);
+export const Paperclip = createIconComponent('Paperclip', lucideLib.Paperclip);
+export const AtSign = createIconComponent('AtSign', lucideLib.AtSign);
+export const Hash = createIconComponent('Hash', lucideLib.Hash);
+export const DollarSign = createIconComponent('DollarSign', lucideLib.DollarSign);
+export const CreditCard = createIconComponent('CreditCard', lucideLib.CreditCard);
+export const Wallet = createIconComponent('Wallet', lucideLib.Wallet);
+export const ShoppingBag = createIconComponent('ShoppingBag', lucideLib.ShoppingBag);
+export const ShoppingCart = createIconComponent('ShoppingCart', lucideLib.ShoppingCart);
+export const Package = createIconComponent('Package', lucideLib.Package);
+export const Timer = createIconComponent('Timer', lucideLib.Timer);
+export const Hourglass = createIconComponent('Hourglass', lucideLib.Hourglass);
+export const AlarmClock = createIconComponent('AlarmClock', lucideLib.AlarmClock);
+export const Wifi = createIconComponent('Wifi', lucideLib.Wifi);
+export const WifiOff = createIconComponent('WifiOff', lucideLib.WifiOff);
+export const Bluetooth = createIconComponent('Bluetooth', lucideLib.Bluetooth);
+export const Battery = createIconComponent('Battery', lucideLib.Battery);
+export const Signal = createIconComponent('Signal', lucideLib.Signal);
+export const Smartphone = createIconComponent('Smartphone', lucideLib.Smartphone);
+export const Tablet = createIconComponent('Tablet', lucideLib.Tablet);
+export const Laptop = createIconComponent('Laptop', lucideLib.Laptop);
+export const Monitor = createIconComponent('Monitor', lucideLib.Monitor);
+export const Tv = createIconComponent('Tv', lucideLib.Tv);
+export const Server = createIconComponent('Server', lucideLib.Server);
+export const Database = createIconComponent('Database', lucideLib.Database);
+export const Cloud = createIconComponent('Cloud', lucideLib.Cloud);
+export const CloudUpload = createIconComponent('CloudUpload', lucideLib.CloudUpload);
+export const CloudDownload = createIconComponent('CloudDownload', lucideLib.CloudDownload);
+export const Map = createIconComponent('Map', lucideLib.Map);
+export const Compass = createIconComponent('Compass', lucideLib.Compass);
+export const Navigation = createIconComponent('Navigation', lucideLib.Navigation);
+export const Printer = createIconComponent('Printer', lucideLib.Printer);
+export const QrCode = createIconComponent('QrCode', lucideLib.QrCode);
+export const Scan = createIconComponent('Scan', lucideLib.Scan);
+export const Fingerprint = createIconComponent('Fingerprint', lucideLib.Fingerprint);
+export const Move = createIconComponent('Move', lucideLib.Move);
+export const Maximize = createIconComponent('Maximize', lucideLib.Maximize);
+export const Minimize = createIconComponent('Minimize', lucideLib.Minimize);
+export const Expand = createIconComponent('Expand', lucideLib.Expand);
+export const Shrink = createIconComponent('Shrink', lucideLib.Shrink);
+export const RotateCcw = createIconComponent('RotateCcw', lucideLib.RotateCcw);
+export const Repeat = createIconComponent('Repeat', lucideLib.Repeat);
+export const Shuffle = createIconComponent('Shuffle', lucideLib.Shuffle);
+export const FastForward = createIconComponent('FastForward', lucideLib.FastForward);
+export const Rewind = createIconComponent('Rewind', lucideLib.Rewind);
+export const SkipForward = createIconComponent('SkipForward', lucideLib.SkipForward);
+export const SkipBack = createIconComponent('SkipBack', lucideLib.SkipBack);
+export const PlayCircle = createIconComponent('PlayCircle', lucideLib.PlayCircle);
+export const PauseCircle = createIconComponent('PauseCircle', lucideLib.PauseCircle);
+export const StopCircle = createIconComponent('StopCircle', lucideLib.StopCircle);
+export const Volume = createIconComponent('Volume', lucideLib.Volume);
+export const Volume2 = createIconComponent('Volume2', lucideLib.Volume2);
+export const VolumeX = createIconComponent('VolumeX', lucideLib.VolumeX);
+export const MicOff = createIconComponent('MicOff', lucideLib.MicOff);
+export const VideoOff = createIconComponent('VideoOff', lucideLib.VideoOff);
+export const CameraOff = createIconComponent('CameraOff', lucideLib.CameraOff);
+export const Type = createIconComponent('Type', lucideLib.Type);
+export const Bold = createIconComponent('Bold', lucideLib.Bold);
+export const Italic = createIconComponent('Italic', lucideLib.Italic);
+export const Underline = createIconComponent('Underline', lucideLib.Underline);
+export const AlignLeft = createIconComponent('AlignLeft', lucideLib.AlignLeft);
+export const AlignCenter = createIconComponent('AlignCenter', lucideLib.AlignCenter);
+export const AlignRight = createIconComponent('AlignRight', lucideLib.AlignRight);
+export const AlignJustify = createIconComponent('AlignJustify', lucideLib.AlignJustify);
+export const Undo = createIconComponent('Undo', lucideLib.Undo);
+export const Redo = createIconComponent('Redo', lucideLib.Redo);
+export const Quote = createIconComponent('Quote', lucideLib.Quote);
+export const Link = createIconComponent('Link', lucideLib.Link);
+export const LinkOff = createIconComponent('LinkOff', lucideLib.LinkOff);
+export const Unlink = createIconComponent('Unlink', lucideLib.Unlink);
+export const GripVertical = createIconComponent('GripVertical', lucideLib.GripVertical);
+export const GripHorizontal = createIconComponent('GripHorizontal', lucideLib.GripHorizontal);
+export const CircleCheck = createIconComponent('CircleCheck', lucideLib.CircleCheck);
+export const CircleX = createIconComponent('CircleX', lucideLib.CircleX);
+export const CirclePlus = createIconComponent('CirclePlus', lucideLib.CirclePlus);
+export const CircleMinus = createIconComponent('CircleMinus', lucideLib.CircleMinus);
+export const CircleAlert = createIconComponent('CircleAlert', lucideLib.CircleAlert);
+export const CircleHelp = createIconComponent('CircleHelp', lucideLib.CircleHelp);
+export const CircleUser = createIconComponent('CircleUser', lucideLib.CircleUser);
+export const CirclePlay = createIconComponent('CirclePlay', lucideLib.CirclePlay);
+export const CirclePause = createIconComponent('CirclePause', lucideLib.CirclePause);
+export const CircleStop = createIconComponent('CircleStop', lucideLib.CircleStop);
+export const Trash2 = createIconComponent('Trash2', lucideLib.Trash2);
+export const Edit2 = createIconComponent('Edit2', lucideLib.Edit2);
+export const Edit3 = createIconComponent('Edit3', lucideLib.Edit3);
+export const PenLine = createIconComponent('PenLine', lucideLib.PenLine);
+export const PenTool = createIconComponent('PenTool', lucideLib.PenTool);
+export const Eraser = createIconComponent('Eraser', lucideLib.Eraser);
+export const Highlighter = createIconComponent('Highlighter', lucideLib.Highlighter);
+export const Crop = createIconComponent('Crop', lucideLib.Crop);
+export const ZoomIn = createIconComponent('ZoomIn', lucideLib.ZoomIn);
+export const ZoomOut = createIconComponent('ZoomOut', lucideLib.ZoomOut);
+export const RotateCw = createIconComponent('RotateCw', lucideLib.RotateCw);
+export const FlipHorizontal = createIconComponent('FlipHorizontal', lucideLib.FlipHorizontal);
+export const FlipVertical = createIconComponent('FlipVertical', lucideLib.FlipVertical);
+export const Square = createIconComponent('Square', lucideLib.Square);
+export const Circle = createIconComponent('Circle', lucideLib.Circle);
+export const Triangle = createIconComponent('Triangle', lucideLib.Triangle);
+export const Hexagon = createIconComponent('Hexagon', lucideLib.Hexagon);
+export const Pentagon = createIconComponent('Pentagon', lucideLib.Pentagon);
+export const Octagon = createIconComponent('Octagon', lucideLib.Octagon);
+export const Box = createIconComponent('Box', lucideLib.Box);
+export const Boxes = createIconComponent('Boxes', lucideLib.Boxes);
+export const Cube = createIconComponent('Cube', lucideLib.Cube);
+export const Cylinder = createIconComponent('Cylinder', lucideLib.Cylinder);
+export const Shapes = createIconComponent('Shapes', lucideLib.Shapes);
+export const Gamepad = createIconComponent('Gamepad', lucideLib.Gamepad);
+export const Gamepad2 = createIconComponent('Gamepad2', lucideLib.Gamepad2);
+export const Dices = createIconComponent('Dices', lucideLib.Dices);
+export const Puzzle = createIconComponent('Puzzle', lucideLib.Puzzle);
+export const Swords = createIconComponent('Swords', lucideLib.Swords);
+export const Wand = createIconComponent('Wand', lucideLib.Wand);
+export const Wand2 = createIconComponent('Wand2', lucideLib.Wand2);
+export const PlusCircle = createIconComponent('PlusCircle', lucideLib.PlusCircle);
+export const MinusCircle = createIconComponent('MinusCircle', lucideLib.MinusCircle);
+export const XOctagon = createIconComponent('XOctagon', lucideLib.XOctagon);
+export const AlertTriangle = createIconComponent('AlertTriangle', lucideLib.AlertTriangle);
+export const AlertOctagon = createIconComponent('AlertOctagon', lucideLib.AlertOctagon);
+export const BellRing = createIconComponent('BellRing', lucideLib.BellRing);
+export const BellOff = createIconComponent('BellOff', lucideLib.BellOff);
+export const BellPlus = createIconComponent('BellPlus', lucideLib.BellPlus);
+export const BellMinus = createIconComponent('BellMinus', lucideLib.BellMinus);
+export const ChevronFirst = createIconComponent('ChevronFirst', lucideLib.ChevronFirst);
+export const ChevronLast = createIconComponent('ChevronLast', lucideLib.ChevronLast);
+export const ChevronsLeft = createIconComponent('ChevronsLeft', lucideLib.ChevronsLeft);
+export const ChevronsRight = createIconComponent('ChevronsRight', lucideLib.ChevronsRight);
+export const ChevronsUp = createIconComponent('ChevronsUp', lucideLib.ChevronsUp);
+export const ChevronsDown = createIconComponent('ChevronsDown', lucideLib.ChevronsDown);
+export const ChevronsUpDown = createIconComponent('ChevronsUpDown', lucideLib.ChevronsUpDown);
+export const ArrowUpRight = createIconComponent('ArrowUpRight', lucideLib.ArrowUpRight);
+export const ArrowDownRight = createIconComponent('ArrowDownRight', lucideLib.ArrowDownRight);
+export const ArrowUpLeft = createIconComponent('ArrowUpLeft', lucideLib.ArrowUpLeft);
+export const ArrowDownLeft = createIconComponent('ArrowDownLeft', lucideLib.ArrowDownLeft);
+export const ArrowBigUp = createIconComponent('ArrowBigUp', lucideLib.ArrowBigUp);
+export const ArrowBigDown = createIconComponent('ArrowBigDown', lucideLib.ArrowBigDown);
+export const ArrowBigLeft = createIconComponent('ArrowBigLeft', lucideLib.ArrowBigLeft);
+export const ArrowBigRight = createIconComponent('ArrowBigRight', lucideLib.ArrowBigRight);
+export const MoveUp = createIconComponent('MoveUp', lucideLib.MoveUp);
+export const MoveDown = createIconComponent('MoveDown', lucideLib.MoveDown);
+export const MoveLeft = createIconComponent('MoveLeft', lucideLib.MoveLeft);
+export const MoveRight = createIconComponent('MoveRight', lucideLib.MoveRight);
+export const PanelLeft = createIconComponent('PanelLeft', lucideLib.PanelLeft);
+export const PanelRight = createIconComponent('PanelRight', lucideLib.PanelRight);
+export const PanelTop = createIconComponent('PanelTop', lucideLib.PanelTop);
+export const PanelBottom = createIconComponent('PanelBottom', lucideLib.PanelBottom);
+export const Sidebar = createIconComponent('Sidebar', lucideLib.Sidebar);
+export const SidebarOpen = createIconComponent('SidebarOpen', lucideLib.SidebarOpen);
+export const SidebarClose = createIconComponent('SidebarClose', lucideLib.SidebarClose);
+export const LayoutGrid = createIconComponent('LayoutGrid', lucideLib.LayoutGrid);
+export const LayoutList = createIconComponent('LayoutList', lucideLib.LayoutList);
+export const LayoutDashboard = createIconComponent('LayoutDashboard', lucideLib.LayoutDashboard);
+export const LayoutTemplate = createIconComponent('LayoutTemplate', lucideLib.LayoutTemplate);
+export const Table = createIconComponent('Table', lucideLib.Table);
+export const Table2 = createIconComponent('Table2', lucideLib.Table2);
+export const Columns = createIconComponent('Columns', lucideLib.Columns);
+export const Rows = createIconComponent('Rows', lucideLib.Rows);
+export const Split = createIconComponent('Split', lucideLib.Split);
+export const Merge = createIconComponent('Merge', lucideLib.Merge);
+export const Github = createIconComponent('Github', lucideLib.Github);
+export const Gitlab = createIconComponent('Gitlab', lucideLib.Gitlab);
+export const Twitter = createIconComponent('Twitter', lucideLib.Twitter);
+export const Facebook = createIconComponent('Facebook', lucideLib.Facebook);
+export const Instagram = createIconComponent('Instagram', lucideLib.Instagram);
+export const Linkedin = createIconComponent('Linkedin', lucideLib.Linkedin);
+export const Youtube = createIconComponent('Youtube', lucideLib.Youtube);
+export const Twitch = createIconComponent('Twitch', lucideLib.Twitch);
+export const Slack = createIconComponent('Slack', lucideLib.Slack);
+export const Chrome = createIconComponent('Chrome', lucideLib.Chrome);
+export const Figma = createIconComponent('Figma', lucideLib.Figma);
+export const Framer = createIconComponent('Framer', lucideLib.Framer);
+export const Apple = createIconComponent('Apple', lucideLib.Apple);
+export const Dribbble = createIconComponent('Dribbble', lucideLib.Dribbble);
+export const Copyright = createIconComponent('Copyright', lucideLib.Copyright);
+export const Trademark = createIconComponent('Trademark', lucideLib.Trademark);
+export const Percent = createIconComponent('Percent', lucideLib.Percent);
+export const Infinity = createIconComponent('Infinity', lucideLib.Infinity);
+export const Equal = createIconComponent('Equal', lucideLib.Equal);
+export const EqualNot = createIconComponent('EqualNot', lucideLib.EqualNot);
+export const Divide = createIconComponent('Divide', lucideLib.Divide);
+export const Sigma = createIconComponent('Sigma', lucideLib.Sigma);
+export const Pi = createIconComponent('Pi', lucideLib.Pi);
+export const Asterisk = createIconComponent('Asterisk', lucideLib.Asterisk);
+export const Grip = createIconComponent('Grip', lucideLib.Grip);
+export const MoreHorizontalIcon = createIconComponent('MoreHorizontal', lucideLib.MoreHorizontal);
+export const Ellipsis = createIconComponent('Ellipsis', lucideLib.Ellipsis);
+export const EllipsisVertical = createIconComponent('EllipsisVertical', lucideLib.EllipsisVertical);
+export const House = createIconComponent('House', lucideLib.House);
+export const Building2 = createIconComponent('Building2', lucideLib.Building2);
+export const Store = createIconComponent('Store', lucideLib.Store);
+export const Factory = createIconComponent('Factory', lucideLib.Factory);
+export const Warehouse = createIconComponent('Warehouse', lucideLib.Warehouse);
+export const Hotel = createIconComponent('Hotel', lucideLib.Hotel);
+export const Hospital = createIconComponent('Hospital', lucideLib.Hospital);
+export const School = createIconComponent('School', lucideLib.School);
+export const Library = createIconComponent('Library', lucideLib.Library);
+export const Church = createIconComponent('Church', lucideLib.Church);
+export const Castle = createIconComponent('Castle', lucideLib.Castle);
+export const Mountain = createIconComponent('Mountain', lucideLib.Mountain);
+export const Trees = createIconComponent('Trees', lucideLib.Trees);
+export const Tent = createIconComponent('Tent', lucideLib.Tent);
+export const Anchor = createIconComponent('Anchor', lucideLib.Anchor);
+export const Ship = createIconComponent('Ship', lucideLib.Ship);
+export const Sailboat = createIconComponent('Sailboat', lucideLib.Sailboat);
+export const Train = createIconComponent('Train', lucideLib.Train);
+export const Bus = createIconComponent('Bus', lucideLib.Bus);
+export const Bike = createIconComponent('Bike', lucideLib.Bike);
+export const Footprints = createIconComponent('Footprints', lucideLib.Footprints);
+export const Baby = createIconComponent('Baby', lucideLib.Baby);
+export const PersonStanding = createIconComponent('PersonStanding', lucideLib.PersonStanding);
+export const Accessibility = createIconComponent('Accessibility', lucideLib.Accessibility);
+export const Ear = createIconComponent('Ear', lucideLib.Ear);
+export const EarOff = createIconComponent('EarOff', lucideLib.EarOff);
+export const Hand = createIconComponent('Hand', lucideLib.Hand);
+export const HandMetal = createIconComponent('HandMetal', lucideLib.HandMetal);
+export const ThumbsUp = createIconComponent('ThumbsUp', lucideLib.ThumbsUp);
+export const ThumbsDown = createIconComponent('ThumbsDown', lucideLib.ThumbsDown);
+export const Grab = createIconComponent('Grab', lucideLib.Grab);
+export const Pointer = createIconComponent('Pointer', lucideLib.Pointer);
+export const MousePointer = createIconComponent('MousePointer', lucideLib.MousePointer);
+export const MousePointer2 = createIconComponent('MousePointer2', lucideLib.MousePointer2);
+export const Mouse = createIconComponent('Mouse', lucideLib.Mouse);
+export const Keyboard = createIconComponent('Keyboard', lucideLib.Keyboard);
+export const Joystick = createIconComponent('Joystick', lucideLib.Joystick);
+export const Command = createIconComponent('Command', lucideLib.Command);
+export const Option = createIconComponent('Option', lucideLib.Option);
+export const Delete = createIconComponent('Delete', lucideLib.Delete);
+export const CornerUpLeft = createIconComponent('CornerUpLeft', lucideLib.CornerUpLeft);
+export const CornerUpRight = createIconComponent('CornerUpRight', lucideLib.CornerUpRight);
+export const CornerDownLeft = createIconComponent('CornerDownLeft', lucideLib.CornerDownLeft);
+export const CornerDownRight = createIconComponent('CornerDownRight', lucideLib.CornerDownRight);
+export const File = createIconComponent('File', lucideLib.File);
+export const FileCode = createIconComponent('FileCode', lucideLib.FileCode);
+export const FileJson = createIconComponent('FileJson', lucideLib.FileJson);
+export const FilePlus = createIconComponent('FilePlus', lucideLib.FilePlus);
+export const FileMinus = createIconComponent('FileMinus', lucideLib.FileMinus);
+export const FileX = createIconComponent('FileX', lucideLib.FileX);
+export const FileCheck = createIconComponent('FileCheck', lucideLib.FileCheck);
+export const FileSearch = createIconComponent('FileSearch', lucideLib.FileSearch);
+export const FileImage = createIconComponent('FileImage', lucideLib.FileImage);
+export const FileVideo = createIconComponent('FileVideo', lucideLib.FileVideo);
+export const FileAudio = createIconComponent('FileAudio', lucideLib.FileAudio);
+export const FileArchive = createIconComponent('FileArchive', lucideLib.FileArchive);
+export const FileSpreadsheet = createIconComponent('FileSpreadsheet', lucideLib.FileSpreadsheet);
+export const FileType = createIconComponent('FileType', lucideLib.FileType);
+export const FileType2 = createIconComponent('FileType2', lucideLib.FileType2);
+export const Files = createIconComponent('Files', lucideLib.Files);
+export const FolderOpen = createIconComponent('FolderOpen', lucideLib.FolderOpen);
+export const FolderPlus = createIconComponent('FolderPlus', lucideLib.FolderPlus);
+export const FolderMinus = createIconComponent('FolderMinus', lucideLib.FolderMinus);
+export const FolderX = createIconComponent('FolderX', lucideLib.FolderX);
+export const FolderCheck = createIconComponent('FolderCheck', lucideLib.FolderCheck);
+export const FolderSearch = createIconComponent('FolderSearch', lucideLib.FolderSearch);
+export const FolderArchive = createIconComponent('FolderArchive', lucideLib.FolderArchive);
+export const Folders = createIconComponent('Folders', lucideLib.Folders);
+export const Archive = createIconComponent('Archive', lucideLib.Archive);
+export const Inbox = createIconComponent('Inbox', lucideLib.Inbox);
+export const MailOpen = createIconComponent('MailOpen', lucideLib.MailOpen);
+export const MailCheck = createIconComponent('MailCheck', lucideLib.MailCheck);
+export const MailPlus = createIconComponent('MailPlus', lucideLib.MailPlus);
+export const MailMinus = createIconComponent('MailMinus', lucideLib.MailMinus);
+export const MailX = createIconComponent('MailX', lucideLib.MailX);
+export const MailSearch = createIconComponent('MailSearch', lucideLib.MailSearch);
+export const MailWarning = createIconComponent('MailWarning', lucideLib.MailWarning);
+export const MailQuestion = createIconComponent('MailQuestion', lucideLib.MailQuestion);
+export const Mails = createIconComponent('Mails', lucideLib.Mails);
+export const MessagesSquare = createIconComponent('MessagesSquare', lucideLib.MessagesSquare);
+export const MessageSquarePlus = createIconComponent('MessageSquarePlus', lucideLib.MessageSquarePlus);
+export const MessageSquareDashed = createIconComponent('MessageSquareDashed', lucideLib.MessageSquareDashed);
+export const MessageSquareWarning = createIconComponent('MessageSquareWarning', lucideLib.MessageSquareWarning);
+export const MessageSquareX = createIconComponent('MessageSquareX', lucideLib.MessageSquareX);
+export const MessageCirclePlus = createIconComponent('MessageCirclePlus', lucideLib.MessageCirclePlus);
+export const MessageCircleWarning = createIconComponent('MessageCircleWarning', lucideLib.MessageCircleWarning);
+export const MessageCircleX = createIconComponent('MessageCircleX', lucideLib.MessageCircleX);
+export const Speech = createIconComponent('Speech', lucideLib.Speech);
+export const Quote as QuoteIcon = createIconComponent('Quote', lucideLib.Quote);
+export const Text = createIconComponent('Text', lucideLib.Text);
+export const TextCursor = createIconComponent('TextCursor', lucideLib.TextCursor);
+export const TextCursorInput = createIconComponent('TextCursorInput', lucideLib.TextCursorInput);
+export const TextSelect = createIconComponent('TextSelect', lucideLib.TextSelect);
+export const TextSearch = createIconComponent('TextSearch', lucideLib.TextSearch);
+export const Heading = createIconComponent('Heading', lucideLib.Heading);
+export const Heading1 = createIconComponent('Heading1', lucideLib.Heading1);
+export const Heading2 = createIconComponent('Heading2', lucideLib.Heading2);
+export const Heading3 = createIconComponent('Heading3', lucideLib.Heading3);
+export const Heading4 = createIconComponent('Heading4', lucideLib.Heading4);
+export const Heading5 = createIconComponent('Heading5', lucideLib.Heading5);
+export const Heading6 = createIconComponent('Heading6', lucideLib.Heading6);
+export const ListOrdered = createIconComponent('ListOrdered', lucideLib.ListOrdered);
+export const ListChecks = createIconComponent('ListChecks', lucideLib.ListChecks);
+export const ListTodo = createIconComponent('ListTodo', lucideLib.ListTodo);
+export const ListPlus = createIconComponent('ListPlus', lucideLib.ListPlus);
+export const ListMinus = createIconComponent('ListMinus', lucideLib.ListMinus);
+export const ListX = createIconComponent('ListX', lucideLib.ListX);
+export const ListFilter = createIconComponent('ListFilter', lucideLib.ListFilter);
+export const ListTree = createIconComponent('ListTree', lucideLib.ListTree);
+export const ListCollapse = createIconComponent('ListCollapse', lucideLib.ListCollapse);
+export const ListRestart = createIconComponent('ListRestart', lucideLib.ListRestart);
+export const Indent = createIconComponent('Indent', lucideLib.Indent);
+export const Outdent = createIconComponent('Outdent', lucideLib.Outdent);
+export const WrapText = createIconComponent('WrapText', lucideLib.WrapText);
+export const CaseSensitive = createIconComponent('CaseSensitive', lucideLib.CaseSensitive);
+export const CaseUpper = createIconComponent('CaseUpper', lucideLib.CaseUpper);
+export const CaseLower = createIconComponent('CaseLower', lucideLib.CaseLower);
+export const Strikethrough = createIconComponent('Strikethrough', lucideLib.Strikethrough);
+export const Subscript = createIconComponent('Subscript', lucideLib.Subscript);
+export const Superscript = createIconComponent('Superscript', lucideLib.Superscript);
+export const RemoveFormatting = createIconComponent('RemoveFormatting', lucideLib.RemoveFormatting);
+export const Spellcheck = createIconComponent('Spellcheck', lucideLib.Spellcheck);
+export const Languages as LanguagesIcon = createIconComponent('Languages', lucideLib.Languages);
+export const BrainCircuit = createIconComponent('BrainCircuit', lucideLib.BrainCircuit);
+export const BrainCog = createIconComponent('BrainCog', lucideLib.BrainCog);
+export const Brain = createIconComponent('Brain', lucideLib.Brain);
+export const Cpu = createIconComponent('Cpu', lucideLib.Cpu);
+export const Chip = createIconComponent('Chip', lucideLib.Chip);
+export const Bot = createIconComponent('Bot', lucideLib.Bot);
+export const BotMessageSquare = createIconComponent('BotMessageSquare', lucideLib.BotMessageSquare);
+export const Workflow = createIconComponent('Workflow', lucideLib.Workflow);
+export const GitBranch = createIconComponent('GitBranch', lucideLib.GitBranch);
+export const GitCommit = createIconComponent('GitCommit', lucideLib.GitCommit);
+export const GitMerge = createIconComponent('GitMerge', lucideLib.GitMerge);
+export const GitPullRequest = createIconComponent('GitPullRequest', lucideLib.GitPullRequest);
+export const GitCompare = createIconComponent('GitCompare', lucideLib.GitCompare);
+export const GitFork = createIconComponent('GitFork', lucideLib.GitFork);
+export const Bug = createIconComponent('Bug', lucideLib.Bug);
+export const BugOff = createIconComponent('BugOff', lucideLib.BugOff);
+export const BugPlay = createIconComponent('BugPlay', lucideLib.BugPlay);
+export const TestTube = createIconComponent('TestTube', lucideLib.TestTube);
+export const TestTube2 = createIconComponent('TestTube2', lucideLib.TestTube2);
+export const TestTubes = createIconComponent('TestTubes', lucideLib.TestTubes);
+export const FlaskConical = createIconComponent('FlaskConical', lucideLib.FlaskConical);
+export const FlaskRound = createIconComponent('FlaskRound', lucideLib.FlaskRound);
+export const Microscope = createIconComponent('Microscope', lucideLib.Microscope);
+export const Stethoscope = createIconComponent('Stethoscope', lucideLib.Stethoscope);
+export const Syringe = createIconComponent('Syringe', lucideLib.Syringe);
+export const Pill = createIconComponent('Pill', lucideLib.Pill);
+export const Tablets = createIconComponent('Tablets', lucideLib.Tablets);
+export const Thermometer = createIconComponent('Thermometer', lucideLib.Thermometer);
+export const ThermometerSun = createIconComponent('ThermometerSun', lucideLib.ThermometerSun);
+export const ThermometerSnowflake = createIconComponent('ThermometerSnowflake', lucideLib.ThermometerSnowflake);
+export const HeartPulse = createIconComponent('HeartPulse', lucideLib.HeartPulse);
+export const HeartHandshake = createIconComponent('HeartHandshake', lucideLib.HeartHandshake);
+export const Droplet = createIconComponent('Droplet', lucideLib.Droplet);
+export const Droplets = createIconComponent('Droplets', lucideLib.Droplets);
+export const Waves = createIconComponent('Waves', lucideLib.Waves);
+export const Sunrise = createIconComponent('Sunrise', lucideLib.Sunrise);
+export const Sunset = createIconComponent('Sunset', lucideLib.Sunset);
+export const CloudSun = createIconComponent('CloudSun', lucideLib.CloudSun);
+export const CloudMoon = createIconComponent('CloudMoon', lucideLib.CloudMoon);
+export const CloudSnow = createIconComponent('CloudSnow', lucideLib.CloudSnow);
+export const CloudLightning = createIconComponent('CloudLightning', lucideLib.CloudLightning);
+export const CloudDrizzle = createIconComponent('CloudDrizzle', lucideLib.CloudDrizzle);
+export const CloudFog = createIconComponent('CloudFog', lucideLib.CloudFog);
+export const CloudHail = createIconComponent('CloudHail', lucideLib.CloudHail);
+export const CloudOff = createIconComponent('CloudOff', lucideLib.CloudOff);
+export const Tornado = createIconComponent('Tornado', lucideLib.Tornado);
+export const Flame as FlameIcon = createIconComponent('Flame', lucideLib.Flame);
+export const Fuel = createIconComponent('Fuel', lucideLib.Fuel);
+export const Gauge = createIconComponent('Gauge', lucideLib.Gauge);
+export const Speedometer = createIconComponent('Speedometer', lucideLib.Speedometer);
+export const Milestone = createIconComponent('Milestone', lucideLib.Milestone);
+export const Goal = createIconComponent('Goal', lucideLib.Goal);
+export const FlagTriangleLeft = createIconComponent('FlagTriangleLeft', lucideLib.FlagTriangleLeft);
+export const FlagTriangleRight = createIconComponent('FlagTriangleRight', lucideLib.FlagTriangleRight);
+export const Flag = createIconComponent('Flag', lucideLib.Flag);
+export const FlagOff = createIconComponent('FlagOff', lucideLib.FlagOff);
+export const Megaphone = createIconComponent('Megaphone', lucideLib.Megaphone);
+export const MegaphoneOff = createIconComponent('MegaphoneOff', lucideLib.MegaphoneOff);
+export const Radio = createIconComponent('Radio', lucideLib.Radio);
+export const RadioReceiver = createIconComponent('RadioReceiver', lucideLib.RadioReceiver);
+export const RadioTower = createIconComponent('RadioTower', lucideLib.RadioTower);
+export const Satellite = createIconComponent('Satellite', lucideLib.Satellite);
+export const SatelliteDish = createIconComponent('SatelliteDish', lucideLib.SatelliteDish);
+export const Rss = createIconComponent('Rss', lucideLib.Rss);
+export const Podcast = createIconComponent('Podcast', lucideLib.Podcast);
+export const TrendingDown = createIconComponent('TrendingDown', lucideLib.TrendingDown);
+export const LineChart = createIconComponent('LineChart', lucideLib.LineChart);
+export const BarChart2 = createIconComponent('BarChart2', lucideLib.BarChart2);
+export const BarChart3 = createIconComponent('BarChart3', lucideLib.BarChart3);
+export const BarChart4 = createIconComponent('BarChart4', lucideLib.BarChart4);
+export const BarChartBig = createIconComponent('BarChartBig', lucideLib.BarChartBig);
+export const BarChartHorizontal = createIconComponent('BarChartHorizontal', lucideLib.BarChartHorizontal);
+export const BarChartHorizontalBig = createIconComponent('BarChartHorizontalBig', lucideLib.BarChartHorizontalBig);
+export const AreaChart = createIconComponent('AreaChart', lucideLib.AreaChart);
+export const PieChart = createIconComponent('PieChart', lucideLib.PieChart);
+export const ScatterChart = createIconComponent('ScatterChart', lucideLib.ScatterChart);
+export const CandlestickChart = createIconComponent('CandlestickChart', lucideLib.CandlestickChart);
+export const GanttChart = createIconComponent('GanttChart', lucideLib.GanttChart);
+export const CalendarDays = createIconComponent('CalendarDays', lucideLib.CalendarDays);
+export const CalendarCheck = createIconComponent('CalendarCheck', lucideLib.CalendarCheck);
+export const CalendarCheck2 = createIconComponent('CalendarCheck2', lucideLib.CalendarCheck2);
+export const CalendarPlus = createIconComponent('CalendarPlus', lucideLib.CalendarPlus);
+export const CalendarMinus = createIconComponent('CalendarMinus', lucideLib.CalendarMinus);
+export const CalendarX = createIconComponent('CalendarX', lucideLib.CalendarX);
+export const CalendarX2 = createIconComponent('CalendarX2', lucideLib.CalendarX2);
+export const CalendarSearch = createIconComponent('CalendarSearch', lucideLib.CalendarSearch);
+export const CalendarClock = createIconComponent('CalendarClock', lucideLib.CalendarClock);
+export const CalendarHeart = createIconComponent('CalendarHeart', lucideLib.CalendarHeart);
+export const CalendarRange = createIconComponent('CalendarRange', lucideLib.CalendarRange);
+export const CalendarOff = createIconComponent('CalendarOff', lucideLib.CalendarOff);
+export const CalendarFold = createIconComponent('CalendarFold', lucideLib.CalendarFold);
+export const History = createIconComponent('History', lucideLib.History);
+export const Watch = createIconComponent('Watch', lucideLib.Watch);
+export const Stopwatch = createIconComponent('Stopwatch', lucideLib.Stopwatch);
+export const TimerOff = createIconComponent('TimerOff', lucideLib.TimerOff);
+export const TimerReset = createIconComponent('TimerReset', lucideLib.TimerReset);
+export const AlarmClockOff = createIconComponent('AlarmClockOff', lucideLib.AlarmClockOff);
+export const AlarmClockCheck = createIconComponent('AlarmClockCheck', lucideLib.AlarmClockCheck);
+export const AlarmClockPlus = createIconComponent('AlarmClockPlus', lucideLib.AlarmClockPlus);
+export const AlarmClockMinus = createIconComponent('AlarmClockMinus', lucideLib.AlarmClockMinus);
+export const ClockIcon = createIconComponent('Clock', lucideLib.Clock);
+export const Clock1 = createIconComponent('Clock1', lucideLib.Clock1);
+export const Clock2 = createIconComponent('Clock2', lucideLib.Clock2);
+export const Clock3 = createIconComponent('Clock3', lucideLib.Clock3);
+export const Clock4 = createIconComponent('Clock4', lucideLib.Clock4);
+export const Clock5 = createIconComponent('Clock5', lucideLib.Clock5);
+export const Clock6 = createIconComponent('Clock6', lucideLib.Clock6);
+export const Clock7 = createIconComponent('Clock7', lucideLib.Clock7);
+export const Clock8 = createIconComponent('Clock8', lucideLib.Clock8);
+export const Clock9 = createIconComponent('Clock9', lucideLib.Clock9);
+export const Clock10 = createIconComponent('Clock10', lucideLib.Clock10);
+export const Clock11 = createIconComponent('Clock11', lucideLib.Clock11);
+export const Clock12 = createIconComponent('Clock12', lucideLib.Clock12);
+export const Euro = createIconComponent('Euro', lucideLib.Euro);
+export const PoundSterling = createIconComponent('PoundSterling', lucideLib.PoundSterling);
+export const JapaneseYen = createIconComponent('JapaneseYen', lucideLib.JapaneseYen);
+export const RussianRuble = createIconComponent('RussianRuble', lucideLib.RussianRuble);
+export const SwissFranc = createIconComponent('SwissFranc', lucideLib.SwissFranc);
+export const IndianRupee = createIconComponent('IndianRupee', lucideLib.IndianRupee);
+export const BadgeDollarSign = createIconComponent('BadgeDollarSign', lucideLib.BadgeDollarSign);
+export const BadgePercent = createIconComponent('BadgePercent', lucideLib.BadgePercent);
+export const Receipt = createIconComponent('Receipt', lucideLib.Receipt);
+export const ReceiptText = createIconComponent('ReceiptText', lucideLib.ReceiptText);
+export const Banknote = createIconComponent('Banknote', lucideLib.Banknote);
+export const Coins = createIconComponent('Coins', lucideLib.Coins);
+export const PiggyBank = createIconComponent('PiggyBank', lucideLib.PiggyBank);
+export const Vault = createIconComponent('Vault', lucideLib.Vault);
+export const HandCoins = createIconComponent('HandCoins', lucideLib.HandCoins);
+export const CircleDollarSign = createIconComponent('CircleDollarSign', lucideLib.CircleDollarSign);
+export const BadgePlus = createIconComponent('BadgePlus', lucideLib.BadgePlus);
+export const BadgeMinus = createIconComponent('BadgeMinus', lucideLib.BadgeMinus);
+export const BadgeX = createIconComponent('BadgeX', lucideLib.BadgeX);
+export const BadgeAlert = createIconComponent('BadgeAlert', lucideLib.BadgeAlert);
+export const BadgeHelp = createIconComponent('BadgeHelp', lucideLib.BadgeHelp);
+export const BadgeInfo = createIconComponent('BadgeInfo', lucideLib.BadgeInfo);
+export const Award as AwardIcon = createIconComponent('Award', lucideLib.Award);
+export const Medal as MedalIcon = createIconComponent('Medal', lucideLib.Medal);
+export const Trophy as TrophyIcon = createIconComponent('Trophy', lucideLib.Trophy);
+export const Crown as CrownIcon = createIconComponent('Crown', lucideLib.Crown);
+export const LockKeyhole = createIconComponent('LockKeyhole', lucideLib.LockKeyhole);
+export const LockOpen = createIconComponent('LockOpen', lucideLib.LockOpen);
+export const Unlock = createIconComponent('Unlock', lucideLib.Unlock);
+export const UnlockKeyhole = createIconComponent('UnlockKeyhole', lucideLib.UnlockKeyhole);
+export const KeyRound = createIconComponent('KeyRound', lucideLib.KeyRound);
+export const KeySquare = createIconComponent('KeySquare', lucideLib.KeySquare);
+export const ShieldAlert = createIconComponent('ShieldAlert', lucideLib.ShieldAlert);
+export const ShieldOff = createIconComponent('ShieldOff', lucideLib.ShieldOff);
+export const ShieldPlus = createIconComponent('ShieldPlus', lucideLib.ShieldPlus);
+export const ShieldMinus = createIconComponent('ShieldMinus', lucideLib.ShieldMinus);
+export const ShieldX = createIconComponent('ShieldX', lucideLib.ShieldX);
+export const ShieldQuestion = createIconComponent('ShieldQuestion', lucideLib.ShieldQuestion);
+export const ShieldBan = createIconComponent('ShieldBan', lucideLib.ShieldBan);
+export const ShieldEllipsis = createIconComponent('ShieldEllipsis', lucideLib.ShieldEllipsis);
+export const ShieldHalf = createIconComponent('ShieldHalf', lucideLib.ShieldHalf);
+export const ScanFace = createIconComponent('ScanFace', lucideLib.ScanFace);
+export const ScanEye = createIconComponent('ScanEye', lucideLib.ScanEye);
+export const ScanText = createIconComponent('ScanText', lucideLib.ScanText);
+export const ScanLine = createIconComponent('ScanLine', lucideLib.ScanLine);
+export const ScanBarcode = createIconComponent('ScanBarcode', lucideLib.ScanBarcode);
+export const ScanSearch = createIconComponent('ScanSearch', lucideLib.ScanSearch);
+export const QrCodeIcon = createIconComponent('QrCode', lucideLib.QrCode);
+export const Barcode = createIconComponent('Barcode', lucideLib.Barcode);
+export const NfcIcon = createIconComponent('Nfc', lucideLib.Nfc);
+export const ContactlessIcon = createIconComponent('Contactless', lucideLib.Contactless);
+export const SquareCheck = createIconComponent('SquareCheck', lucideLib.SquareCheck);
+export const SquareX = createIconComponent('SquareX', lucideLib.SquareX);
+export const SquarePlus = createIconComponent('SquarePlus', lucideLib.SquarePlus);
+export const SquareMinus = createIconComponent('SquareMinus', lucideLib.SquareMinus);
+export const SquareSlash = createIconComponent('SquareSlash', lucideLib.SquareSlash);
+export const SquareCode = createIconComponent('SquareCode', lucideLib.SquareCode);
+export const SquareDot = createIconComponent('SquareDot', lucideLib.SquareDot);
+export const SquareAsterisk = createIconComponent('SquareAsterisk', lucideLib.SquareAsterisk);
+export const SquareStack = createIconComponent('SquareStack', lucideLib.SquareStack);
+export const SquareArrowUpRight = createIconComponent('SquareArrowUpRight', lucideLib.SquareArrowUpRight);
+export const SquareArrowOutUpRight = createIconComponent('SquareArrowOutUpRight', lucideLib.SquareArrowOutUpRight);
+export const ExternalLinkIcon = createIconComponent('ExternalLink', lucideLib.ExternalLink);
+export const SquareArrowOutUpLeft = createIconComponent('SquareArrowOutUpLeft', lucideLib.SquareArrowOutUpLeft);
+export const SquareArrowUp = createIconComponent('SquareArrowUp', lucideLib.SquareArrowUp);
+export const SquareArrowDown = createIconComponent('SquareArrowDown', lucideLib.SquareArrowDown);
+export const SquareArrowLeft = createIconComponent('SquareArrowLeft', lucideLib.SquareArrowLeft);
+export const SquareArrowRight = createIconComponent('SquareArrowRight', lucideLib.SquareArrowRight);
+export const SquareUser = createIconComponent('SquareUser', lucideLib.SquareUser);
+export const SquareUserRound = createIconComponent('SquareUserRound', lucideLib.SquareUserRound);
+export const SquarePen = createIconComponent('SquarePen', lucideLib.SquarePen);
+export const SquareTerminal = createIconComponent('SquareTerminal', lucideLib.SquareTerminal);
+export const SquareKanban = createIconComponent('SquareKanban', lucideLib.SquareKanban);
+export const SquareGanttChart = createIconComponent('SquareGanttChart', lucideLib.SquareGanttChart);
+export const SquareActivity = createIconComponent('SquareActivity', lucideLib.SquareActivity);
+export const SquarePlay = createIconComponent('SquarePlay', lucideLib.SquarePlay);
+export const SquareMenu = createIconComponent('SquareMenu', lucideLib.SquareMenu);
+export const SquareLibrary = createIconComponent('SquareLibrary', lucideLib.SquareLibrary);
+export const SquareBottomDashedScissors = createIconComponent('SquareBottomDashedScissors', lucideLib.SquareBottomDashedScissors);
+export const SquareChartGantt = createIconComponent('SquareChartGantt', lucideLib.SquareChartGantt);
+export const SquareFunction = createIconComponent('SquareFunction', lucideLib.SquareFunction);
+export const SquareEqual = createIconComponent('SquareEqual', lucideLib.SquareEqual);
+export const SquareDivide = createIconComponent('SquareDivide', lucideLib.SquareDivide);
+export const SquareSigma = createIconComponent('SquareSigma', lucideLib.SquareSigma);
+export const SquarePi = createIconComponent('SquarePi', lucideLib.SquarePi);
+export const SquarePercent = createIconComponent('SquarePercent', lucideLib.SquarePercent);
+export const SquareParking = createIconComponent('SquareParking', lucideLib.SquareParking);
+export const SquareParkingOff = createIconComponent('SquareParkingOff', lucideLib.SquareParkingOff);
+export const SquareM = createIconComponent('SquareM', lucideLib.SquareM);
+
+// CRITICAL: Export the icons proxy for dynamic icon resolution
+// This allows: import { icons } from 'lucide-react'; icons.SomeRareIcon
+export const icons = iconsProxy;
+
+// Also export createIconComponent for advanced usage
+export { createIconComponent };
+
+// Default export for compatibility
+export default { icons: iconsProxy };
+`;
 }
