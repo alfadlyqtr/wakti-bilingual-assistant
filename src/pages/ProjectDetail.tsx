@@ -36,7 +36,7 @@ import {
   Wand2, 
   MousePointer2, 
   X,
-  Camera,
+  Paperclip,
   Copy,
   Edit2,
   Lock,
@@ -3186,19 +3186,24 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                       <div className="flex flex-col items-center gap-1 shrink-0">
                         {/* Action buttons - smaller, above send */}
                         <div className="flex flex-col gap-1">
-                          {/* Upload Screenshot Button */}
+                          {/* Upload Files Button (Images + PDFs) */}
                           <button
                             type="button"
-                            onClick={() => imageInputRef.current?.click()}
+                            onClick={() => {
+                              if (imageInputRef.current) {
+                                imageInputRef.current.value = '';
+                                imageInputRef.current.click();
+                              }
+                            }}
                             className={cn(
                               "h-6 w-6 rounded-md border flex items-center justify-center transition-all active:scale-90",
                               attachedImages.length > 0
                                 ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-500 hover:bg-indigo-500/30"
                                 : "bg-muted/50 dark:bg-white/5 border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted"
                             )}
-                            title={isRTL ? 'رفع لقطة شاشة' : 'Upload screenshot'}
+                            title={isRTL ? 'رفع صور أو PDF' : 'Upload images or PDF'}
                           >
-                            <Camera className="h-3 w-3" />
+                            <Paperclip className="h-3 w-3" />
                           </button>
                           <input
                             ref={imageInputRef}
@@ -3207,7 +3212,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                             multiple
                             onChange={handleImageSelect}
                             className="hidden"
-                            aria-label={isRTL ? 'رفع صورة' : 'Upload image'}
+                            aria-label={isRTL ? 'رفع صور أو PDF' : 'Upload images or PDF'}
                           />
                           
                           {/* AMP Button - Amplify/Enhance prompt */}
