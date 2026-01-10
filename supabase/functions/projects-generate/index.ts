@@ -124,7 +124,11 @@ function normalizeFilePath(path: string): string {
   return p.startsWith("/") ? p : `/${p}`;
 }
 
-function assertNoHtml(value: string): void {
+function assertNoHtml(path: string, value: string): void {
+  const normalizedPath = normalizeFilePath(path);
+  // Legit HTML files (e.g., /index.html) are expected in many projects.
+  if (normalizedPath.toLowerCase().endsWith(".html")) return;
+
   const v = (value || "").toLowerCase();
   if (v.includes("<!doctype") || v.includes("<html")) {
     throw new Error("AI_RETURNED_HTML");
@@ -339,7 +343,7 @@ Return ONLY a valid JSON object with the structure shown in the system prompt.`;
     if (typeof c !== "string" || c.trim().length === 0) {
       throw new Error(`AI_RETURNED_EMPTY_FILE: ${p}`);
     }
-    assertNoHtml(c);
+    assertNoHtml(p, c);
   }
 
   return { files, summary: summary || "Changes applied." };
@@ -387,7 +391,7 @@ Return ONLY a valid JSON object with the structure shown in the system prompt.`;
     if (typeof c !== "string" || c.trim().length === 0) {
       throw new Error(`AI_RETURNED_EMPTY_FILE: ${p}`);
     }
-    assertNoHtml(c);
+    assertNoHtml(p, c);
   }
 
   return { files, summary: summary || "Updated." };
