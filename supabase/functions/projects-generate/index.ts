@@ -852,6 +852,53 @@ CRITICAL RULES:
    - ✅ GOOD: <span className="flex gap-2"><Heart className="text-pink-400" fill="currentColor" /><span className="text-transparent bg-clip-text ...">Title</span></span>
 2. Always give icons explicit color classes when parent uses gradients or text-transparent
 3. Only TEXT should be inside text-transparent bg-clip-text - separate icons from gradient text spans
+
+### PART 7: BACKEND API (CONTACT FORMS, DATA STORAGE)
+When the user asks for forms (contact, quote, newsletter, feedback, waitlist, etc.):
+
+1. BUILD THE FORM UI as normal with React state
+2. ON SUBMIT, send data to the WAKTI Backend API:
+
+\`\`\`jsx
+const BACKEND_URL = "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api";
+
+// Form submission handler
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setLoading(true);
+  setError(null);
+  try {
+    const response = await fetch(BACKEND_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId: "{{PROJECT_ID}}", // Auto-injected
+        action: "submit",
+        formName: "contact", // or "quote", "newsletter", "waitlist", etc.
+        data: { name, email, message } // form field values
+      })
+    });
+    if (response.ok) {
+      setSuccess(true);
+      setName(''); setEmail(''); setMessage(''); // Clear form
+    } else {
+      throw new Error('Failed to submit');
+    }
+  } catch (err) {
+    setError("Failed to send message. Please try again.");
+  } finally {
+    setLoading(false);
+  }
+};
+\`\`\`
+
+IMPORTANT FORM REQUIREMENTS:
+- Include loading state (disabled button, spinner) while submitting
+- Show success message/animation after submission
+- Include error handling with user-friendly feedback
+- Add form validation before submit (required fields, email format)
+- Clear form fields after successful submission
+- formName should describe the form purpose: "contact", "quote", "newsletter", "feedback", "waitlist"
 `;
 
 // ============================================================================
@@ -1365,15 +1412,33 @@ Use emojis, **bold**, \`code\`, and bullet points. Be friendly!
 Current project files:
 ${filesStr}`;
 
-      // Build the content parts - text + optional images
+      // Build the content parts - text + optional images/PDFs
       const contentParts: Array<{text?: string; inlineData?: {mimeType: string; data: string}}> = [];
+      
+      // Track any PDF text to inject into prompt
+      let pdfTextContent = '';
       
       // Add images first if provided
       if (hasImages) {
         const imageArray = images as unknown as string[];
         for (const imgData of imageArray) {
-          // imgData is base64 data URL like "data:image/png;base64,..."
-          if (typeof imgData === 'string' && imgData.startsWith('data:')) {
+          if (typeof imgData !== 'string') continue;
+          
+          // Check if it's a PDF (marked with [PDF:filename] prefix)
+          if (imgData.startsWith('[PDF:')) {
+            const endBracket = imgData.indexOf(']');
+            if (endBracket > 0) {
+              const pdfName = imgData.substring(5, endBracket);
+              // For PDFs, we can't send them to vision API, but we note that a PDF was attached
+              // The user should describe what's in the PDF or we could use a PDF extraction service
+              pdfTextContent += `\n\n📄 USER ATTACHED PDF: "${pdfName}" - Please consider this document was uploaded. If the user mentions "resume", "CV", "document", etc., they're referring to this file.`;
+              console.log(`[Chat Mode] PDF attached: ${pdfName}`);
+            }
+            continue;
+          }
+          
+          // Regular image handling
+          if (imgData.startsWith('data:')) {
             const matches = imgData.match(/^data:([^;]+);base64,(.+)$/);
             if (matches) {
               contentParts.push({
@@ -1388,8 +1453,9 @@ ${filesStr}`;
         console.log(`[Chat Mode] Added ${contentParts.length} images to request`);
       }
       
-      // Add the text prompt
-      contentParts.push({ text: prompt });
+      // Add the text prompt (with PDF context if any)
+      const fullPrompt = pdfTextContent ? `${prompt}${pdfTextContent}` : prompt;
+      contentParts.push({ text: fullPrompt });
 
       const chatResponse = await withTimeout(
         fetch(
@@ -1630,9 +1696,29 @@ Return ONLY the JSON object. No explanation.`;
           summary = summary ? `${summary} | CSS Warnings: ${warningsSummary}` : `CSS Warnings: ${warningsSummary}`;
         }
 
+        // Inject project ID into backend API calls
+        for (const [path, content] of Object.entries(files)) {
+          files[path] = content.replace(/\{\{PROJECT_ID\}\}/g, projectId);
+        }
+
+        // Check if project uses backend API and auto-enable it
+        const usesBackend = Object.values(files).some(content => 
+          content.includes('project-backend-api')
+        );
+        if (usesBackend) {
+          console.log(`[Create Mode] Project uses backend API, auto-enabling...`);
+          await supabase.from('project_backends').upsert({
+            project_id: projectId,
+            user_id: userId,
+            enabled: true,
+            enabled_at: new Date().toISOString(),
+            features: { forms: true }
+          }, { onConflict: 'project_id' });
+        }
+
         await replaceProjectFiles(supabase, projectId, files);
         await updateJob(supabase, job.id, { status: 'succeeded', result_summary: summary || 'Created.', error: null });
-        return new Response(JSON.stringify({ ok: true, jobId: job.id, status: 'succeeded', cssWarnings }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ ok: true, jobId: job.id, status: 'succeeded', cssWarnings, usesBackend }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
       // EDIT MODE: Full file rewrite (NO PATCHES)
@@ -1689,6 +1775,27 @@ Return ONLY the JSON object. No explanation.`;
         }
       }
 
+      // Inject project ID into backend API calls
+      for (const [path, content] of Object.entries(finalFilesToUpsert)) {
+        finalFilesToUpsert[path] = content.replace(/\{\{PROJECT_ID\}\}/g, projectId);
+      }
+
+      // Check if project uses backend API and auto-enable it
+      const allFilesContent = { ...existingFiles, ...finalFilesToUpsert };
+      const usesBackend = Object.values(allFilesContent).some(content => 
+        content.includes('project-backend-api')
+      );
+      if (usesBackend) {
+        console.log(`[Edit Mode] Project uses backend API, auto-enabling...`);
+        await supabase.from('project_backends').upsert({
+          project_id: projectId,
+          user_id: userId,
+          enabled: true,
+          enabled_at: new Date().toISOString(),
+          features: { forms: true }
+        }, { onConflict: 'project_id' });
+      }
+
       await upsertProjectFiles(supabase, projectId, finalFilesToUpsert);
       
       // Include the list of changed files in the response
@@ -1701,7 +1808,8 @@ Return ONLY the JSON object. No explanation.`;
         status: 'succeeded', 
         changedFiles: changedFilesList,
         summary: result.summary,
-        cssWarnings 
+        cssWarnings,
+        usesBackend
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     } catch (innerErr) {
