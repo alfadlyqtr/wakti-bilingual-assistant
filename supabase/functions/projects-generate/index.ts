@@ -1690,8 +1690,19 @@ Return ONLY the JSON object. No explanation.`;
       }
 
       await upsertProjectFiles(supabase, projectId, finalFilesToUpsert);
+      
+      // Include the list of changed files in the response
+      const changedFilesList = Object.keys(finalFilesToUpsert);
+      
       await updateJob(supabase, job.id, { status: 'succeeded', result_summary: result.summary || 'Updated.', error: null });
-      return new Response(JSON.stringify({ ok: true, jobId: job.id, status: 'succeeded', cssWarnings }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ 
+        ok: true, 
+        jobId: job.id, 
+        status: 'succeeded', 
+        changedFiles: changedFilesList,
+        summary: result.summary,
+        cssWarnings 
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     } catch (innerErr) {
       const innerMsg = innerErr instanceof Error ? innerErr.message : String(innerErr);

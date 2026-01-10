@@ -2120,7 +2120,25 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         setGeneratedFiles(newFiles);
         setCodeContent(newCode);
 
-        assistantMsg = job.result_summary || (isRTL ? 'تم تطبيق التعديلات! ✓' : 'Changes applied! ✓');
+        // Determine which files changed by comparing with beforeSnapshot
+        const changedFilesList: string[] = [];
+        for (const [path, content] of Object.entries(newFiles)) {
+          const oldContent = beforeSnapshot[path];
+          if (!oldContent || oldContent !== content) {
+            changedFilesList.push(path);
+          }
+        }
+        
+        const summaryText = job.result_summary || (isRTL ? 'تم تطبيق التعديلات!' : 'Changes applied!');
+        
+        // Store as structured JSON so the UI can parse it properly
+        assistantMsg = JSON.stringify({
+          type: 'execution_result',
+          title: isRTL ? 'تم التطبيق' : 'Applied',
+          summary: summaryText,
+          files: changedFilesList.length > 0 ? changedFilesList : ['/App.js']
+        });
+        
         setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
         await delay(250);
       }
