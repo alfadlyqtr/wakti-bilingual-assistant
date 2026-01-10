@@ -1122,53 +1122,99 @@ export default function ProjectDetail() {
   </style>
 </head>
 <body>
-  <div id="root"></div>
+  <div id="root">
+    <!-- Initial loading state - replaced when app renders -->
+    <div id="wakti-boot-status" style="padding:40px;text-align:center;font-family:Inter,system-ui,sans-serif;">
+      <div style="font-size:24px;margin-bottom:16px;">⏳</div>
+      <div style="color:#666;">Loading app...</div>
+    </div>
+  </div>
   <script>
-     // Expose framer-motion globally for the bundled shim
-     // IMPORTANT: unpkg UMD build registers as window.Motion
-     const FM = window.FramerMotion || window.Motion;
-     if (typeof FM !== 'undefined' && FM) {
-       window.FramerMotion = FM;
-       window.motion = FM.motion;
-       window.AnimatePresence = FM.AnimatePresence;
-       window.useAnimation = FM.useAnimation;
-       window.useInView = FM.useInView;
-       window.useScroll = FM.useScroll;
-       window.useTransform = FM.useTransform;
-       window.useMotionValue = FM.useMotionValue;
-     } else {
-       console.warn('Framer Motion not available on window (expected window.Motion from UMD build)');
-     }
-     
-     // Expose lucide icons globally for the bundled shim
-     if (typeof window.lucide !== 'undefined' && window.lucide) {
-       window.__lucideIcons = window.lucide;
-     } else {
-       console.warn('Lucide not available on window');
-     }
+    // ===== BOOT DIAGNOSTICS =====
+    window.__waktiBootLog = [];
+    function waktiLog(msg) {
+      window.__waktiBootLog.push('[' + new Date().toISOString() + '] ' + msg);
+      console.log('[Wakti Boot]', msg);
+    }
+    
+    // Catch any uncaught errors
+    window.onerror = function(msg, url, line, col, error) {
+      waktiLog('UNCAUGHT ERROR: ' + msg + ' at ' + url + ':' + line);
+      var bootDiv = document.getElementById('wakti-boot-status');
+      if (bootDiv) {
+        bootDiv.innerHTML = '<div style="color:#f87171;font-size:18px;margin-bottom:16px;">❌ Error</div>' +
+          '<pre style="background:#1e1e1e;padding:16px;border-radius:8px;text-align:left;overflow:auto;max-width:100%;font-size:12px;color:#f87171;">' + 
+          msg + '\\n' + (error?.stack || '') + '</pre>' +
+          '<div style="color:#9ca3af;margin-top:16px;font-size:12px;">Check console for details</div>';
+      }
+      return false;
+    };
+    window.onunhandledrejection = function(e) {
+      waktiLog('UNHANDLED PROMISE: ' + (e.reason?.message || e.reason || 'Unknown'));
+    };
+    
+    waktiLog('Script block starting');
+    waktiLog('React available: ' + (typeof React !== 'undefined'));
+    waktiLog('ReactDOM available: ' + (typeof ReactDOM !== 'undefined'));
+    
+    // Expose framer-motion globally for the bundled shim
+    // IMPORTANT: unpkg UMD build registers as window.Motion
+    const FM = window.FramerMotion || window.Motion;
+    waktiLog('Framer Motion (FM) available: ' + (!!FM) + ' (FramerMotion=' + (!!window.FramerMotion) + ', Motion=' + (!!window.Motion) + ')');
+    if (typeof FM !== 'undefined' && FM) {
+      window.FramerMotion = FM;
+      window.motion = FM.motion;
+      window.AnimatePresence = FM.AnimatePresence;
+      window.useAnimation = FM.useAnimation;
+      window.useInView = FM.useInView;
+      window.useScroll = FM.useScroll;
+      window.useTransform = FM.useTransform;
+      window.useMotionValue = FM.useMotionValue;
+    } else {
+      waktiLog('WARNING: Framer Motion not available on window');
+    }
+    
+    // Expose lucide icons globally for the bundled shim
+    waktiLog('Lucide available: ' + (typeof window.lucide !== 'undefined'));
+    if (typeof window.lucide !== 'undefined' && window.lucide) {
+      window.__lucideIcons = window.lucide;
+    } else {
+      waktiLog('WARNING: Lucide not available on window');
+    }
+    
+    waktiLog('About to execute bundled code...');
     
     // Bundled app code with all shims included
     ${bundledJs}
+    
+    waktiLog('Bundled code executed');
+    waktiLog('window.App type: ' + (typeof window.App));
+    waktiLog('window.AppBundle type: ' + (typeof window.AppBundle));
+    if (typeof window.AppBundle !== 'undefined') {
+      waktiLog('AppBundle keys: ' + Object.keys(window.AppBundle || {}).join(', '));
+    }
     
     // Render the app with retry guard (wait for window.App)
     function renderApp(retries) {
       retries = retries || 0;
       try {
+        waktiLog('renderApp attempt ' + (retries + 1) + ', window.App=' + (typeof window.App));
+        
         if (typeof window.App === 'undefined' || window.App === null) {
           if (retries < 20) {
-            console.log('[Wakti] Waiting for App... attempt', retries + 1);
             setTimeout(function() { renderApp(retries + 1); }, 100);
             return;
           }
-          throw new Error('App component not found after ' + retries + ' attempts. window.App = ' + typeof window.App);
+          throw new Error('App component not found after ' + retries + ' attempts. window.App = ' + typeof window.App + '. Boot log: ' + window.__waktiBootLog.join(' | '));
         }
         var rootElement = document.getElementById('root');
         var root = ReactDOM.createRoot(rootElement);
         root.render(React.createElement(window.App));
-        console.log('[Wakti] App rendered successfully');
+        waktiLog('App rendered successfully!');
       } catch (err) {
+        waktiLog('RENDER ERROR: ' + (err.message || err));
         console.error('[Wakti] Render error:', err);
-        document.getElementById('root').innerHTML = '<div style="padding:40px;text-align:center;color:#f87171;font-family:Inter,sans-serif;"><h2>Error loading app</h2><pre style="background:#1e1e1e;padding:20px;border-radius:8px;text-align:left;overflow:auto;max-width:100%;">' + (err.message || err) + '</pre><p style="color:#9ca3af;margin-top:20px;">Check the console for details.</p></div>';
+        document.getElementById('root').innerHTML = '<div style="padding:40px;text-align:center;color:#f87171;font-family:Inter,sans-serif;"><h2>Error loading app</h2><pre style="background:#1e1e1e;padding:20px;border-radius:8px;text-align:left;overflow:auto;max-width:100%;font-size:12px;">' + (err.message || err) + '</pre><details style="margin-top:20px;text-align:left;"><summary style="cursor:pointer;color:#9ca3af;">Boot Log</summary><pre style="background:#1e1e1e;padding:12px;border-radius:4px;font-size:10px;margin-top:8px;">' + (window.__waktiBootLog || []).join('\\n') + '</pre></details></div>';
       }
     }
     // Start render on DOMContentLoaded or immediately if already loaded
