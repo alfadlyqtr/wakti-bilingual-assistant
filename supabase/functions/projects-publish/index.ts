@@ -170,9 +170,11 @@ async function vercelDeploy(params: {
   const endpoint = `https://api.vercel.com/v13/deployments${qs}`;
 
   // Build payload with uploaded file references - skip build entirely
+  // CRITICAL: target: "production" makes the deployment PUBLIC (not a protected preview)
   const payload: Record<string, unknown> = {
     name: params.name,
     files: uploadedFiles,
+    target: "production",  // Deploy as production (public), not preview (protected)
     projectSettings: {
       framework: null,
       buildCommand: null,      // Skip build
