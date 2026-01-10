@@ -466,46 +466,54 @@ serve(async (req) => {
 });
 
 function buildFinalBundle(bundledJs: string, css: string): { js: string; css: string } {
-  // The bundled code already contains all shims via the virtual module system
-  // We just need to expose the App component globally
+  // The bundled code creates AppBundle as an IIFE result
+  // We need to execute it first, then extract the App component
+  // IMPORTANT: Don't wrap in another IIFE - let AppBundle be global
   const wrappedJs = `
 // ========== BUNDLED APP WITH SHIMS ==========
+// Execute the bundle (this creates window.AppBundle or var AppBundle)
+${bundledJs}
+
+// Extract the App component and make it globally accessible
 (function() {
   try {
-    ${bundledJs}
+    // Check both window.AppBundle and local AppBundle (esbuild IIFE creates local var)
+    var bundle = (typeof AppBundle !== 'undefined') ? AppBundle : window.AppBundle;
     
-    // Extract the default export (App component) and make it global
-    console.log('[Wakti Build] AppBundle type:', typeof AppBundle);
-    console.log('[Wakti Build] AppBundle.default type:', AppBundle ? typeof AppBundle.default : 'N/A');
+    console.log('[Wakti Build] bundle type:', typeof bundle);
+    if (bundle) {
+      console.log('[Wakti Build] bundle keys:', Object.keys(bundle));
+      console.log('[Wakti Build] bundle.default type:', typeof bundle.default);
+    }
     
-    if (typeof AppBundle !== 'undefined' && AppBundle && AppBundle.default) {
-      window.App = AppBundle.default;
-      console.log('[Wakti Build] Set window.App from AppBundle.default');
-    } else if (typeof AppBundle !== 'undefined' && AppBundle) {
-      // Check if AppBundle itself is a function/component
-      if (typeof AppBundle === 'function') {
-        window.App = AppBundle;
-        console.log('[Wakti Build] Set window.App from AppBundle (function)');
-      } else if (AppBundle.App) {
-        window.App = AppBundle.App;
-        console.log('[Wakti Build] Set window.App from AppBundle.App');
-      } else {
-        // Last resort: iterate through AppBundle to find a component
-        for (var key in AppBundle) {
-          if (typeof AppBundle[key] === 'function') {
-            window.App = AppBundle[key];
-            console.log('[Wakti Build] Set window.App from AppBundle.' + key);
-            break;
-          }
+    if (bundle && bundle.default) {
+      window.App = bundle.default;
+      console.log('[Wakti Build] Set window.App from bundle.default');
+    } else if (bundle && typeof bundle === 'function') {
+      window.App = bundle;
+      console.log('[Wakti Build] Set window.App from bundle (function)');
+    } else if (bundle && bundle.App) {
+      window.App = bundle.App;
+      console.log('[Wakti Build] Set window.App from bundle.App');
+    } else if (bundle) {
+      // Find first function export
+      for (var key in bundle) {
+        if (typeof bundle[key] === 'function') {
+          window.App = bundle[key];
+          console.log('[Wakti Build] Set window.App from bundle.' + key);
+          break;
         }
       }
     } else {
-      console.error('[Wakti Build] AppBundle is undefined!');
+      console.error('[Wakti Build] AppBundle is undefined! Check if esbuild output is correct.');
     }
     
     console.log('[Wakti Build] Final window.App type:', typeof window.App);
+    if (typeof window.App === 'undefined') {
+      console.error('[Wakti Build] CRITICAL: window.App is still undefined after all attempts!');
+    }
   } catch (e) {
-    console.error('[Wakti Build] Error in bundle wrapper:', e);
+    console.error('[Wakti Build] Error extracting App:', e);
   }
 })();
 `;
