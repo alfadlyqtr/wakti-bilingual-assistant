@@ -24,7 +24,11 @@ import {
   Square,
   Sun,
   Moon,
-  Settings2
+  Settings2,
+  Share2,
+  Copy,
+  Check,
+  Globe
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -37,6 +41,7 @@ interface Project {
   template_type: string | null;
   status: string;
   published_url: string | null;
+  subdomain: string | null;
   created_at: string;
   updated_at: string;
   thumbnail_url?: string | null;
@@ -1096,36 +1101,41 @@ Apply these styles consistently throughout the entire design.`;
                 <div key={project.id}>
                   <div
                     onClick={() => navigate(`/projects/${project.id}`)}
-                    className="group relative overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-2xl"
+                    className="group relative overflow-hidden cursor-pointer transition-all duration-300 hover:-translate-y-2"
                     style={{
                       background: isDark 
-                        ? 'linear-gradient(135deg, rgba(17,24,39,0.8) 0%, rgba(31,41,55,0.6) 50%, rgba(55,65,81,0.4) 100%)'
-                        : 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(249,250,251,0.9) 100%)',
-                      borderRadius: '20px',
+                        ? 'linear-gradient(145deg, rgba(17,24,39,0.95) 0%, rgba(31,41,55,0.85) 50%, rgba(55,65,81,0.7) 100%)'
+                        : 'linear-gradient(145deg, rgba(255,255,255,0.98) 0%, rgba(249,250,251,0.95) 100%)',
+                      borderRadius: '24px',
                       border: isDark 
-                        ? '1px solid rgba(99,102,241,0.2)' 
-                        : '1px solid rgba(229,231,235,0.8)',
-                      backdropFilter: 'blur(10px)',
+                        ? '1px solid rgba(99,102,241,0.3)' 
+                        : '1px solid rgba(229,231,235,0.9)',
+                      backdropFilter: 'blur(12px)',
                       boxShadow: isDark
-                        ? '0 20px 60px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1)'
-                        : '0 20px 60px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.5)'
+                        ? '0 25px 50px -12px rgba(0,0,0,0.5), 0 12px 24px -8px rgba(99,102,241,0.15), inset 0 1px 0 rgba(255,255,255,0.1), 0 0 0 1px rgba(99,102,241,0.1)'
+                        : '0 25px 50px -12px rgba(0,0,0,0.15), 0 12px 24px -8px rgba(99,102,241,0.08), inset 0 1px 0 rgba(255,255,255,0.8), 0 0 0 1px rgba(99,102,241,0.05)',
+                      transform: 'perspective(1000px) rotateX(0deg)',
                     }}
                   >
+                    {/* 3D Shine Effect on Hover */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none rounded-[24px]" />
+                    
                     {/* Luxury Gradient Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-purple-500/5 pointer-events-none" />
+                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-purple-500/5 pointer-events-none rounded-[24px]" />
                     
                     {/* Project Preview Thumbnail */}
-                    <ProjectPreviewThumbnail project={project} isRTL={isRTL} />
+                    <div className="relative overflow-hidden rounded-t-[24px]">
+                      <ProjectPreviewThumbnail project={project} isRTL={isRTL} />
+                    </div>
                     
                     {/* Luxury Info Section */}
-                    <div className="p-6 relative z-10">
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="min-w-0 flex-1">
-                          <h3 className="font-bold text-lg truncate text-zinc-900 dark:text-white tracking-tight">{project.name}</h3>
-                        </div>
+                    <div className="p-5 relative z-10">
+                      {/* Title and Status Row */}
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <h3 className="font-bold text-lg truncate text-zinc-900 dark:text-white tracking-tight">{project.name}</h3>
                         <span
                           className={cn(
-                            "shrink-0 px-3 py-1.5 text-[11px] rounded-full font-bold uppercase tracking-widest",
+                            "shrink-0 px-3 py-1.5 text-[10px] rounded-full font-bold uppercase tracking-widest",
                             project.status === 'published'
                               ? "bg-emerald-500/30 text-emerald-600 dark:text-emerald-300 border border-emerald-500/50 shadow-lg shadow-emerald-500/20"
                               : project.status === 'generating'
@@ -1136,22 +1146,68 @@ Apply these styles consistently throughout the entire design.`;
                           {project.status === 'published' ? (isRTL ? 'منشور' : 'Live') : project.status === 'generating' ? (isRTL ? 'بناء' : 'Building') : (isRTL ? 'مسودة' : 'Draft')}
                         </span>
                       </div>
+                      
+                      {/* Site URL - Show subdomain if published */}
+                      {project.subdomain && project.status === 'published' ? (
+                        <div className="flex items-center gap-1.5 text-xs text-indigo-600 dark:text-indigo-400 font-medium">
+                          <Globe className="h-3 w-3" />
+                          <span className="font-mono truncate">{project.subdomain}.wakti.ai</span>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          {isRTL ? 'غير منشور بعد' : 'Not published yet'}
+                        </p>
+                      )}
                     </div>
 
-                    {/* Actions - Always visible for mobile-friendliness */}
+                    {/* Actions - Top right */}
                     <div className="absolute top-4 right-4 flex gap-2 z-10">
-                      {project.status === 'published' && project.slug && (
+                      {/* Share Button - Only for published projects */}
+                      {project.status === 'published' && project.subdomain && (
                         <Button
                           size="icon"
                           className="h-9 w-9 rounded-full bg-white/90 dark:bg-zinc-800/90 backdrop-blur-sm shadow-lg hover:bg-white dark:hover:bg-zinc-700 text-indigo-600 dark:text-indigo-400 hover:shadow-xl transition-all"
                           onClick={(e) => {
                             e.stopPropagation();
-                            window.open(`${window.location.origin}/${project.slug}`, '_blank');
+                            const siteUrl = `https://${project.subdomain}.wakti.ai`;
+                            
+                            // Try native share first (mobile)
+                            if (navigator.share) {
+                              navigator.share({
+                                title: project.name,
+                                text: isRTL ? `شاهد موقعي: ${project.name}` : `Check out my site: ${project.name}`,
+                                url: siteUrl,
+                              }).catch(() => {
+                                // User cancelled or share failed, fall back to copy
+                                navigator.clipboard.writeText(siteUrl);
+                                toast.success(isRTL ? 'تم نسخ الرابط!' : 'Link copied!');
+                              });
+                            } else {
+                              // Desktop fallback: copy to clipboard
+                              navigator.clipboard.writeText(siteUrl);
+                              toast.success(isRTL ? 'تم نسخ الرابط!' : 'Link copied!');
+                            }
+                          }}
+                        >
+                          <Share2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                      
+                      {/* Open Site Button */}
+                      {project.status === 'published' && project.subdomain && (
+                        <Button
+                          size="icon"
+                          className="h-9 w-9 rounded-full bg-white/90 dark:bg-zinc-800/90 backdrop-blur-sm shadow-lg hover:bg-white dark:hover:bg-zinc-700 text-emerald-600 dark:text-emerald-400 hover:shadow-xl transition-all"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(`https://${project.subdomain}.wakti.ai`, '_blank');
                           }}
                         >
                           <ExternalLink className="h-4 w-4" />
                         </Button>
                       )}
+                      
+                      {/* Delete Button */}
                       <Button
                         size="icon"
                         className="h-9 w-9 rounded-full text-red-500 hover:text-red-600 bg-white/90 dark:bg-zinc-800/90 backdrop-blur-sm shadow-lg hover:bg-red-50 dark:hover:bg-red-500/10 hover:shadow-xl transition-all"
