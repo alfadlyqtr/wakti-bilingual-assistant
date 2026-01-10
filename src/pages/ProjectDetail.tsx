@@ -1941,14 +1941,17 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
           const reader = new FileReader();
           reader.onload = async (event) => {
             const dataUrl = event.target?.result as string;
-            // Create a text preview indicating it's a PDF
-            const pdfPreview = `data:image/svg+xml;base64,${btoa(`
+
+            const svg = `
               <svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
                 <rect width="200" height="200" fill="#1e293b" rx="8"/>
                 <text x="100" y="90" text-anchor="middle" fill="#f8fafc" font-size="14" font-family="system-ui">📄 PDF</text>
                 <text x="100" y="120" text-anchor="middle" fill="#94a3b8" font-size="12" font-family="system-ui">${file.name.slice(0, 20)}${file.name.length > 20 ? '...' : ''}</text>
               </svg>
-            `)}`;
+            `.trim();
+
+            // Avoid btoa() (breaks on non‑Latin1 characters). Use UTF‑8-safe SVG data URI.
+            const pdfPreview = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
             
             // Store PDF data with special type marker
             setAttachedImages(prev => [...prev, { 
