@@ -38,7 +38,8 @@ import {
   X,
   Camera,
   Copy,
-  Edit2
+  Edit2,
+  Lock
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -3468,10 +3469,16 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                 <ExternalLink className="h-7 w-7 text-white" />
               </div>
               <h2 className="text-xl font-bold text-zinc-900 dark:text-white">
-                {isRTL ? 'نشر المشروع' : 'Publish Project'}
+                {project?.subdomain 
+                  ? (isRTL ? 'تحديث المشروع' : 'Update Project')
+                  : (isRTL ? 'نشر المشروع' : 'Publish Project')
+                }
               </h2>
               <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-                {isRTL ? 'اختر اسم موقعك الفريد' : 'Choose your unique site name'}
+                {project?.subdomain 
+                  ? (isRTL ? 'سيتم تحديث موقعك الحالي' : 'Your existing site will be updated')
+                  : (isRTL ? 'اختر اسم موقعك الفريد' : 'Choose your unique site name')
+                }
               </p>
             </div>
 
@@ -3479,24 +3486,65 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
             <div>
               <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 block mb-2">
                 {isRTL ? 'اسم الموقع' : 'Site Name'}
+                {project?.subdomain && (
+                  <span className="text-amber-600 dark:text-amber-400 ml-2">
+                    ({isRTL ? 'مُقفل' : 'Locked'})
+                  </span>
+                )}
               </label>
-              <div className="flex items-center gap-0 rounded-xl border border-zinc-300 dark:border-zinc-700 overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/50">
+              <div className={`flex items-center gap-0 rounded-xl border overflow-hidden ${
+                project?.subdomain 
+                  ? 'border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50' 
+                  : 'border-zinc-300 dark:border-zinc-700 focus-within:ring-2 focus-within:ring-indigo-500/50'
+              }`}>
                 <input
                   type="text"
                   value={subdomainInput}
-                  onChange={(e) => handleSubdomainChange(e.target.value)}
+                  onChange={(e) => !project?.subdomain && handleSubdomainChange(e.target.value)}
                   placeholder={isRTL ? 'my-app' : 'my-app'}
-                  className="flex-1 px-4 py-3 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none text-base"
-                  autoFocus
+                  className={`flex-1 px-4 py-3 text-base focus:outline-none ${
+                    project?.subdomain 
+                      ? 'bg-zinc-50 dark:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400 cursor-not-allowed' 
+                      : 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder:text-zinc-400'
+                  }`}
+                  autoFocus={!project?.subdomain}
                   maxLength={30}
+                  readOnly={!!project?.subdomain}
+                  disabled={!!project?.subdomain}
                 />
                 <span className="px-3 py-3 bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 text-sm font-medium border-l border-zinc-300 dark:border-zinc-600">
                   .wakti.ai
                 </span>
               </div>
               
+              {/* Locked notice for existing subdomain */}
+              {project?.subdomain && (
+                <div className="mt-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50">
+                  <p className="text-xs text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
+                    <Lock className="h-3 w-3 flex-shrink-0" />
+                    {isRTL 
+                      ? 'لا يمكن تغيير اسم الموقع بعد النشر الأول'
+                      : 'Site name cannot be changed after first publish'
+                    }
+                  </p>
+                </div>
+              )}
+              
+              {/* First-time warning */}
+              {!project?.subdomain && subdomainInput && !subdomainError && (
+                <div className="mt-2 p-2.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50">
+                  <p className="text-xs text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+                    <AlertTriangle className="h-3 w-3 flex-shrink-0" />
+                    {isRTL 
+                      ? 'تنبيه: لا يمكن تغيير اسم الموقع بعد النشر الأول'
+                      : 'Note: You can only choose the site name once. It cannot be changed later.'
+                    }
+                  </p>
+                </div>
+              )}
+              
               {/* Error message */}
-              {subdomainError && (
+              {subdomainError && !project?.subdomain && (
                 <p className="text-xs text-red-500 mt-2 flex items-center gap-1">
                   <AlertTriangle className="h-3 w-3" />
                   {subdomainError}
@@ -3534,7 +3582,10 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                 ) : (
                   <>
                     <ExternalLink className="h-4 w-4" />
-                    {isRTL ? 'نشر' : 'Publish'}
+                    {project?.subdomain 
+                      ? (isRTL ? 'تحديث' : 'Update')
+                      : (isRTL ? 'نشر' : 'Publish')
+                    }
                   </>
                 )}
               </button>
