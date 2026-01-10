@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { validateProjectCSS, formatCSSWarnings, getCSSInheritanceGuidelines, type CSSWarning } from "../_shared/cssValidator.ts";
 
 // ============================================================================
 // WAKTI PROJECTS-GENERATE V2 - FULL REWRITE ENGINE
@@ -844,6 +845,13 @@ CRITICAL RULES:
 5. ONLY use lucide-react for icons. NEVER use react-icons or heroicons.
 6. ALWAYS include /i18n.js in new projects when user asks for multiple languages.
 7. App.js must be a valid React functional component, NOT an HTML document.
+
+### CSS INHERITANCE SAFETY (CRITICAL - ICONS VISIBILITY)
+1. NEVER put icons inside text-transparent elements - Icons using currentColor will become INVISIBLE
+   - ❌ BAD: <span className="text-transparent bg-clip-text ..."><Heart fill="currentColor" />Title</span>
+   - ✅ GOOD: <span className="flex gap-2"><Heart className="text-pink-400" fill="currentColor" /><span className="text-transparent bg-clip-text ...">Title</span></span>
+2. Always give icons explicit color classes when parent uses gradients or text-transparent
+3. Only TEXT should be inside text-transparent bg-clip-text - separate icons from gradient text spans
 `;
 
 // ============================================================================
@@ -902,7 +910,12 @@ Return ONLY valid JSON:
 
 ESCAPING: Newlines=\\n, Quotes=\\", Backslashes=\\\\
 
-ONLY return files that changed. Do NOT return unchanged files.`;
+ONLY return files that changed. Do NOT return unchanged files.
+
+### CSS INHERITANCE SAFETY (CRITICAL - ICONS VISIBILITY)
+1. NEVER put icons inside text-transparent elements - Icons using currentColor will become INVISIBLE
+2. Always give icons explicit color classes (e.g., text-pink-400) when parent uses gradients
+3. Only TEXT should be inside text-transparent bg-clip-text spans - separate icons from them`;
 
 const _GEMINI_EDIT_FULL_REWRITE_PROMPT = `You are a Senior React Architect and Maintenance Engineer.
 Your job is to implement user changes into an existing React codebase running in a Sandpack environment.
@@ -1608,9 +1621,18 @@ Return ONLY the JSON object. No explanation.`;
         }
         assertNoHtml(files["/App.js"]);
 
+        // CSS Inheritance Validation - warn about common visual bugs
+        const cssWarnings = validateProjectCSS(files);
+        if (cssWarnings.length > 0) {
+          console.warn(formatCSSWarnings(cssWarnings));
+          // Include warnings in the summary so they're visible to developers
+          const warningsSummary = cssWarnings.map(w => `⚠️ ${w.file}: ${w.issue}`).join('; ');
+          summary = summary ? `${summary} | CSS Warnings: ${warningsSummary}` : `CSS Warnings: ${warningsSummary}`;
+        }
+
         await replaceProjectFiles(supabase, projectId, files);
         await updateJob(supabase, job.id, { status: 'succeeded', result_summary: summary || 'Created.', error: null });
-        return new Response(JSON.stringify({ ok: true, jobId: job.id, status: 'succeeded' }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ ok: true, jobId: job.id, status: 'succeeded', cssWarnings }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
       // EDIT MODE: Full file rewrite (NO PATCHES)
@@ -1655,9 +1677,21 @@ Return ONLY the JSON object. No explanation.`;
         }
       }
 
+      // CSS Inheritance Validation - warn about common visual bugs
+      const allFilesToCheck = { ...existingFiles, ...finalFilesToUpsert };
+      const cssWarnings = validateProjectCSS(allFilesToCheck);
+      if (cssWarnings.length > 0) {
+        console.warn(formatCSSWarnings(cssWarnings));
+        // Log errors but don't fail the job - just warn
+        const warningsSummary = cssWarnings.filter(w => w.severity === 'error').map(w => `⚠️ ${w.file}: ${w.issue}`).join('; ');
+        if (warningsSummary) {
+          result.summary = result.summary ? `${result.summary} | CSS Issues: ${warningsSummary}` : `CSS Issues: ${warningsSummary}`;
+        }
+      }
+
       await upsertProjectFiles(supabase, projectId, finalFilesToUpsert);
       await updateJob(supabase, job.id, { status: 'succeeded', result_summary: result.summary || 'Updated.', error: null });
-      return new Response(JSON.stringify({ ok: true, jobId: job.id, status: 'succeeded' }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ ok: true, jobId: job.id, status: 'succeeded', cssWarnings }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     } catch (innerErr) {
       const innerMsg = innerErr instanceof Error ? innerErr.message : String(innerErr);
