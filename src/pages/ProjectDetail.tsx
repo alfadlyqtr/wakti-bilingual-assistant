@@ -1071,6 +1071,8 @@ export default function ProjectDetail() {
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <!-- Framer Motion for animations -->
   <script src="https://unpkg.com/framer-motion@11/dist/framer-motion.js" crossorigin></script>
+  <!-- Lucide Icons for all 1500+ icons -->
+  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js" crossorigin></script>
   <!-- Tailwind CSS v3 (JIT) for all color shades -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Google Fonts: Extended set for various themes -->
@@ -1136,6 +1138,13 @@ export default function ProjectDetail() {
        window.useMotionValue = FM.useMotionValue;
      } else {
        console.warn('Framer Motion not available on window (expected window.Motion from UMD build)');
+     }
+     
+     // Expose lucide icons globally for the bundled shim
+     if (typeof window.lucide !== 'undefined' && window.lucide) {
+       window.__lucideIcons = window.lucide;
+     } else {
+       console.warn('Lucide not available on window');
      }
     
     // Bundled app code with all shims included
