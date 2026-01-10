@@ -470,16 +470,43 @@ function buildFinalBundle(bundledJs: string, css: string): { js: string; css: st
   // We just need to expose the App component globally
   const wrappedJs = `
 // ========== BUNDLED APP WITH SHIMS ==========
-// Store i18n globally for react-i18next shim
 (function() {
-${bundledJs}
-
-// Extract the default export (App component) and make it global
-if (typeof AppBundle !== 'undefined' && AppBundle.default) {
-  window.App = AppBundle.default;
-} else if (typeof AppBundle !== 'undefined') {
-  window.App = AppBundle;
-}
+  try {
+    ${bundledJs}
+    
+    // Extract the default export (App component) and make it global
+    console.log('[Wakti Build] AppBundle type:', typeof AppBundle);
+    console.log('[Wakti Build] AppBundle.default type:', AppBundle ? typeof AppBundle.default : 'N/A');
+    
+    if (typeof AppBundle !== 'undefined' && AppBundle && AppBundle.default) {
+      window.App = AppBundle.default;
+      console.log('[Wakti Build] Set window.App from AppBundle.default');
+    } else if (typeof AppBundle !== 'undefined' && AppBundle) {
+      // Check if AppBundle itself is a function/component
+      if (typeof AppBundle === 'function') {
+        window.App = AppBundle;
+        console.log('[Wakti Build] Set window.App from AppBundle (function)');
+      } else if (AppBundle.App) {
+        window.App = AppBundle.App;
+        console.log('[Wakti Build] Set window.App from AppBundle.App');
+      } else {
+        // Last resort: iterate through AppBundle to find a component
+        for (var key in AppBundle) {
+          if (typeof AppBundle[key] === 'function') {
+            window.App = AppBundle[key];
+            console.log('[Wakti Build] Set window.App from AppBundle.' + key);
+            break;
+          }
+        }
+      }
+    } else {
+      console.error('[Wakti Build] AppBundle is undefined!');
+    }
+    
+    console.log('[Wakti Build] Final window.App type:', typeof window.App);
+  } catch (e) {
+    console.error('[Wakti Build] Error in bundle wrapper:', e);
+  }
 })();
 `;
 
