@@ -39,7 +39,9 @@ import {
   Camera,
   Copy,
   Edit2,
-  Lock
+  Lock,
+  Server,
+  Hammer
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -50,6 +52,7 @@ import confetti from 'canvas-confetti';
 const SandpackStudio = lazy(() => import('@/components/projects/SandpackStudio'));
 import { MatrixOverlay } from '@/components/projects/MatrixOverlay';
 import { TraceFlowLoader } from '@/components/projects/TraceFlowLoader';
+import { BackendDashboard } from '@/components/projects/backend/BackendDashboard';
 
 interface Project {
   id: string;
@@ -96,6 +99,7 @@ interface ChatMessage {
 
 type DeviceView = 'desktop' | 'tablet' | 'mobile';
 type LeftPanelMode = 'chat' | 'code';
+type MainTab = 'builder' | 'server';
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -152,6 +156,9 @@ export default function ProjectDetail() {
   
   // Mobile view state - for switching between chat/code and preview on mobile
   const [mobileTab, setMobileTab] = useState<'chat' | 'preview'>('preview');
+  
+  // Main tab state - Builder vs Server
+  const [mainTab, setMainTab] = useState<MainTab>('builder');
   
   // Self-healing: Runtime error detection
   const [crashReport, setCrashReport] = useState<string | null>(null);
@@ -2298,7 +2305,42 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
   return (
     <div className={cn("flex flex-col h-[calc(100vh-64px)] bg-background overflow-hidden", isRTL && "rtl")}>
 
-      {/* Modern Mobile Navigation Segmented Toggle */}
+      {/* Main Tab Switcher - Builder / Server */}
+      <div className="hidden md:flex items-center gap-2 px-4 py-2 border-b border-border/50 dark:border-white/10 bg-background/80 backdrop-blur-sm shrink-0">
+        <button
+          onClick={() => setMainTab('builder')}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
+            mainTab === 'builder'
+              ? "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+          )}
+        >
+          <Hammer className="h-4 w-4" />
+          {isRTL ? 'البناء' : 'Builder'}
+        </button>
+        <button
+          onClick={() => setMainTab('server')}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
+            mainTab === 'server'
+              ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+          )}
+        >
+          <Server className="h-4 w-4" />
+          {isRTL ? 'السيرفر' : 'Server'}
+        </button>
+      </div>
+
+      {/* Server Tab Content */}
+      {mainTab === 'server' ? (
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <BackendDashboard projectId={id || ''} isRTL={isRTL} />
+        </div>
+      ) : (
+      <>
+      {/* Builder Tab Content */}
       <div className="md:hidden px-4 py-2 bg-background/50 backdrop-blur-sm border-b border-border/40 shrink-0">
         <div className="relative flex p-1 bg-muted/30 dark:bg-white/5 rounded-2xl border border-border/50">
           {/* Animated sliding background pill */}
@@ -3610,6 +3652,8 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
             </div>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );
