@@ -169,24 +169,14 @@ async function vercelDeploy(params: {
   const qs = qsArr.length > 0 ? `?${qsArr.join("&")}` : "";
   const endpoint = `https://api.vercel.com/v13/deployments${qs}`;
 
-  // Build payload with uploaded file references - skip build entirely
-  // CRITICAL: target: "production" makes the deployment PUBLIC (not a protected preview)
+  // Build payload - PURE static file deployment (no project attachment, no build)
+  // CRITICAL: Do NOT attach to a Vercel Project or use projectSettings - that causes Vercel to run builds
+  // and serve a shell instead of our uploaded index.html
   const payload: Record<string, unknown> = {
     name: params.name,
     files: uploadedFiles,
     target: "production",  // Deploy as production (public), not preview (protected)
-    projectSettings: {
-      framework: null,
-      buildCommand: null,      // Skip build
-      outputDirectory: null,   // Serve from root
-      installCommand: null,    // Skip npm install
-    },
   };
-
-  // Only add project if we have a valid project ID
-  if (params.projectId) {
-    payload.project = params.projectId;
-  }
 
   console.log("[projects-publish] Creating deployment:", {
     name: params.name,
