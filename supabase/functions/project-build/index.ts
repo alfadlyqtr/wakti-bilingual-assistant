@@ -1200,6 +1200,269 @@ export const SquareParking = createIconComponent('SquareParking', lucideLib.Squa
 export const SquareParkingOff = createIconComponent('SquareParkingOff', lucideLib.SquareParkingOff);
 export const SquareM = createIconComponent('SquareM', lucideLib.SquareM);
 
+// Work & Education icons (commonly used in portfolios)
+export const Briefcase = createIconComponent('Briefcase', lucideLib.Briefcase);
+export const BriefcaseBusiness = createIconComponent('BriefcaseBusiness', lucideLib.BriefcaseBusiness);
+export const BriefcaseMedical = createIconComponent('BriefcaseMedical', lucideLib.BriefcaseMedical);
+export const GraduationCap = createIconComponent('GraduationCap', lucideLib.GraduationCap);
+export const BookMarked = createIconComponent('BookMarked', lucideLib.BookMarked);
+export const BookCopy = createIconComponent('BookCopy', lucideLib.BookCopy);
+export const BookText = createIconComponent('BookText', lucideLib.BookText);
+export const BookOpenCheck = createIconComponent('BookOpenCheck', lucideLib.BookOpenCheck);
+export const BookOpenText = createIconComponent('BookOpenText', lucideLib.BookOpenText);
+export const BookUser = createIconComponent('BookUser', lucideLib.BookUser);
+export const BookPlus = createIconComponent('BookPlus', lucideLib.BookPlus);
+export const BookMinus = createIconComponent('BookMinus', lucideLib.BookMinus);
+export const BookX = createIconComponent('BookX', lucideLib.BookX);
+export const BookCheck = createIconComponent('BookCheck', lucideLib.BookCheck);
+export const Notebook = createIconComponent('Notebook', lucideLib.Notebook);
+export const NotebookPen = createIconComponent('NotebookPen', lucideLib.NotebookPen);
+export const NotebookText = createIconComponent('NotebookText', lucideLib.NotebookText);
+export const NotebookTabs = createIconComponent('NotebookTabs', lucideLib.NotebookTabs);
+export const Presentation = createIconComponent('Presentation', lucideLib.Presentation);
+export const PresentationIcon = createIconComponent('Presentation', lucideLib.Presentation);
+export const GalleryHorizontal = createIconComponent('GalleryHorizontal', lucideLib.GalleryHorizontal);
+export const GalleryVertical = createIconComponent('GalleryVertical', lucideLib.GalleryVertical);
+export const GalleryHorizontalEnd = createIconComponent('GalleryHorizontalEnd', lucideLib.GalleryHorizontalEnd);
+export const GalleryVerticalEnd = createIconComponent('GalleryVerticalEnd', lucideLib.GalleryVerticalEnd);
+export const GalleryThumbnails = createIconComponent('GalleryThumbnails', lucideLib.GalleryThumbnails);
+
+// Portfolio & Professional icons
+export const Award2 = createIconComponent('Award', lucideLib.Award);
+export const Briefcase2 = createIconComponent('Briefcase', lucideLib.Briefcase);
+export const UserRound = createIconComponent('UserRound', lucideLib.UserRound);
+export const UserRoundCheck = createIconComponent('UserRoundCheck', lucideLib.UserRoundCheck);
+export const UserRoundPlus = createIconComponent('UserRoundPlus', lucideLib.UserRoundPlus);
+export const UserRoundMinus = createIconComponent('UserRoundMinus', lucideLib.UserRoundMinus);
+export const UserRoundX = createIconComponent('UserRoundX', lucideLib.UserRoundX);
+export const UserRoundCog = createIconComponent('UserRoundCog', lucideLib.UserRoundCog);
+export const UserRoundSearch = createIconComponent('UserRoundSearch', lucideLib.UserRoundSearch);
+export const UserCog = createIconComponent('UserCog', lucideLib.UserCog);
+export const UserX = createIconComponent('UserX', lucideLib.UserX);
+export const UserSearch = createIconComponent('UserSearch', lucideLib.UserSearch);
+export const UsersRound = createIconComponent('UsersRound', lucideLib.UsersRound);
+export const Contact = createIconComponent('Contact', lucideLib.Contact);
+export const Contact2 = createIconComponent('Contact2', lucideLib.Contact2);
+export const ContactRound = createIconComponent('ContactRound', lucideLib.ContactRound);
+export const IdCard = createIconComponent('IdCard', lucideLib.IdCard);
+export const BadgeId = createIconComponent('BadgeId', lucideLib.BadgeId);
+export const CircleUserRound = createIconComponent('CircleUserRound', lucideLib.CircleUserRound);
+export const Handshake = createIconComponent('Handshake', lucideLib.Handshake);
+export const Building3 = createIconComponent('Building', lucideLib.Building);
+export const Landmark = createIconComponent('Landmark', lucideLib.Landmark);
+export const LandPlot = createIconComponent('LandPlot', lucideLib.LandPlot);
+export const Hammer = createIconComponent('Hammer', lucideLib.Hammer);
+export const Wrench = createIconComponent('Wrench', lucideLib.Wrench);
+export const Cog = createIconComponent('Cog', lucideLib.Cog);
+export const Settings2 = createIconComponent('Settings2', lucideLib.Settings2);
+export const SlidersHorizontal = createIconComponent('SlidersHorizontal', lucideLib.SlidersHorizontal);
+export const SlidersVertical = createIconComponent('SlidersVertical', lucideLib.SlidersVertical);
+export const Sliders = createIconComponent('Sliders', lucideLib.Sliders);
+export const Gauge = createIconComponent('Gauge', lucideLib.Gauge);
+export const GaugeCircle = createIconComponent('GaugeCircle', lucideLib.GaugeCircle);
+
+// Communication & Social
+export const AtSignIcon = createIconComponent('AtSign', lucideLib.AtSign);
+export const PhoneCall = createIconComponent('PhoneCall', lucideLib.PhoneCall);
+export const PhoneForwarded = createIconComponent('PhoneForwarded', lucideLib.PhoneForwarded);
+export const PhoneIncoming = createIconComponent('PhoneIncoming', lucideLib.PhoneIncoming);
+export const PhoneOutgoing = createIconComponent('PhoneOutgoing', lucideLib.PhoneOutgoing);
+export const PhoneMissed = createIconComponent('PhoneMissed', lucideLib.PhoneMissed);
+export const PhoneOff = createIconComponent('PhoneOff', lucideLib.PhoneOff);
+export const Voicemail = createIconComponent('Voicemail', lucideLib.Voicemail);
+export const VideoIcon = createIconComponent('Video', lucideLib.Video);
+export const ScreenShare = createIconComponent('ScreenShare', lucideLib.ScreenShare);
+export const ScreenShareOff = createIconComponent('ScreenShareOff', lucideLib.ScreenShareOff);
+export const Cast = createIconComponent('Cast', lucideLib.Cast);
+export const Airplay = createIconComponent('Airplay', lucideLib.Airplay);
+
+// More social icons
+export const Linkedin2 = createIconComponent('Linkedin', lucideLib.Linkedin);
+export const Instagram2 = createIconComponent('Instagram', lucideLib.Instagram);
+export const TwitterIcon = createIconComponent('Twitter', lucideLib.Twitter);
+export const FacebookIcon = createIconComponent('Facebook', lucideLib.Facebook);
+export const YoutubeIcon = createIconComponent('Youtube', lucideLib.Youtube);
+export const TwitchIcon = createIconComponent('Twitch', lucideLib.Twitch);
+export const DiscordIcon = createIconComponent('Discord', lucideLib.Discord);
+export const Discord = createIconComponent('Discord', lucideLib.Discord);
+export const GithubIcon = createIconComponent('Github', lucideLib.Github);
+export const GitlabIcon = createIconComponent('Gitlab', lucideLib.Gitlab);
+export const Codepen = createIconComponent('Codepen', lucideLib.Codepen);
+export const Codesandbox = createIconComponent('Codesandbox', lucideLib.Codesandbox);
+
+// Nature & Weather
+export const Flower2 = createIconComponent('Flower2', lucideLib.Flower2);
+export const TreeDeciduous = createIconComponent('TreeDeciduous', lucideLib.TreeDeciduous);
+export const TreePine = createIconComponent('TreePine', lucideLib.TreePine);
+export const TreePalm = createIconComponent('TreePalm', lucideLib.TreePalm);
+export const Clover = createIconComponent('Clover', lucideLib.Clover);
+export const Sprout = createIconComponent('Sprout', lucideLib.Sprout);
+export const MountainSnow = createIconComponent('MountainSnow', lucideLib.MountainSnow);
+export const Sunrise = createIconComponent('Sunrise', lucideLib.Sunrise);
+export const Sunset = createIconComponent('Sunset', lucideLib.Sunset);
+export const CloudSun = createIconComponent('CloudSun', lucideLib.CloudSun);
+export const CloudMoon = createIconComponent('CloudMoon', lucideLib.CloudMoon);
+export const CloudSnow = createIconComponent('CloudSnow', lucideLib.CloudSnow);
+export const CloudLightning = createIconComponent('CloudLightning', lucideLib.CloudLightning);
+export const CloudDrizzle = createIconComponent('CloudDrizzle', lucideLib.CloudDrizzle);
+export const CloudFog = createIconComponent('CloudFog', lucideLib.CloudFog);
+export const CloudHail = createIconComponent('CloudHail', lucideLib.CloudHail);
+export const CloudOff = createIconComponent('CloudOff', lucideLib.CloudOff);
+export const Umbrella = createIconComponent('Umbrella', lucideLib.Umbrella);
+export const Thermometer = createIconComponent('Thermometer', lucideLib.Thermometer);
+export const ThermometerSun = createIconComponent('ThermometerSun', lucideLib.ThermometerSun);
+export const ThermometerSnowflake = createIconComponent('ThermometerSnowflake', lucideLib.ThermometerSnowflake);
+export const Droplet = createIconComponent('Droplet', lucideLib.Droplet);
+export const Droplets = createIconComponent('Droplets', lucideLib.Droplets);
+export const Waves = createIconComponent('Waves', lucideLib.Waves);
+
+// More commonly used icons
+export const HeartHandshake = createIconComponent('HeartHandshake', lucideLib.HeartHandshake);
+export const HeartPulse = createIconComponent('HeartPulse', lucideLib.HeartPulse);
+export const Heartbeat = createIconComponent('HeartPulse', lucideLib.HeartPulse);
+export const Activity2 = createIconComponent('Activity', lucideLib.Activity);
+export const Stethoscope = createIconComponent('Stethoscope', lucideLib.Stethoscope);
+export const Pill = createIconComponent('Pill', lucideLib.Pill);
+export const Syringe = createIconComponent('Syringe', lucideLib.Syringe);
+export const Dna = createIconComponent('Dna', lucideLib.Dna);
+export const Atom = createIconComponent('Atom', lucideLib.Atom);
+export const Microscope = createIconComponent('Microscope', lucideLib.Microscope);
+export const TestTube = createIconComponent('TestTube', lucideLib.TestTube);
+export const TestTube2 = createIconComponent('TestTube2', lucideLib.TestTube2);
+export const TestTubes = createIconComponent('TestTubes', lucideLib.TestTubes);
+export const Beaker = createIconComponent('Beaker', lucideLib.Beaker);
+export const FlaskConical = createIconComponent('FlaskConical', lucideLib.FlaskConical);
+export const FlaskRound = createIconComponent('FlaskRound', lucideLib.FlaskRound);
+
+// Food & Drink
+export const UtensilsCrossed = createIconComponent('UtensilsCrossed', lucideLib.UtensilsCrossed);
+export const Utensils = createIconComponent('Utensils', lucideLib.Utensils);
+export const ChefHat = createIconComponent('ChefHat', lucideLib.ChefHat);
+export const CookingPot = createIconComponent('CookingPot', lucideLib.CookingPot);
+export const Soup = createIconComponent('Soup', lucideLib.Soup);
+export const Salad = createIconComponent('Salad', lucideLib.Salad);
+export const Sandwich = createIconComponent('Sandwich', lucideLib.Sandwich);
+export const Croissant = createIconComponent('Croissant', lucideLib.Croissant);
+export const Cookie = createIconComponent('Cookie', lucideLib.Cookie);
+export const Candy = createIconComponent('Candy', lucideLib.Candy);
+export const CandyCane = createIconComponent('CandyCane', lucideLib.CandyCane);
+export const IceCream = createIconComponent('IceCream', lucideLib.IceCream);
+export const IceCream2 = createIconComponent('IceCream2', lucideLib.IceCream2);
+export const Lollipop = createIconComponent('Lollipop', lucideLib.Lollipop);
+export const Popcorn = createIconComponent('Popcorn', lucideLib.Popcorn);
+export const Citrus = createIconComponent('Citrus', lucideLib.Citrus);
+export const Apple = createIconComponent('Apple', lucideLib.Apple);
+export const Banana = createIconComponent('Banana', lucideLib.Banana);
+export const Cherry = createIconComponent('Cherry', lucideLib.Cherry);
+export const Grape = createIconComponent('Grape', lucideLib.Grape);
+export const Carrot = createIconComponent('Carrot', lucideLib.Carrot);
+export const Egg = createIconComponent('Egg', lucideLib.Egg);
+export const EggFried = createIconComponent('EggFried', lucideLib.EggFried);
+export const Beef = createIconComponent('Beef', lucideLib.Beef);
+export const Fish = createIconComponent('Fish', lucideLib.Fish);
+export const Milk = createIconComponent('Milk', lucideLib.Milk);
+export const Beer = createIconComponent('Beer', lucideLib.Beer);
+export const Wine = createIconComponent('Wine', lucideLib.Wine);
+export const Martini = createIconComponent('Martini', lucideLib.Martini);
+export const CupSoda = createIconComponent('CupSoda', lucideLib.CupSoda);
+export const GlassWater = createIconComponent('GlassWater', lucideLib.GlassWater);
+export const Wheat = createIconComponent('Wheat', lucideLib.Wheat);
+export const WheatOff = createIconComponent('WheatOff', lucideLib.WheatOff);
+
+// Animals
+export const Dog = createIconComponent('Dog', lucideLib.Dog);
+export const Cat = createIconComponent('Cat', lucideLib.Cat);
+export const Bird = createIconComponent('Bird', lucideLib.Bird);
+export const Rabbit = createIconComponent('Rabbit', lucideLib.Rabbit);
+export const Turtle = createIconComponent('Turtle', lucideLib.Turtle);
+export const Snail = createIconComponent('Snail', lucideLib.Snail);
+export const Bug = createIconComponent('Bug', lucideLib.Bug);
+export const BugPlay = createIconComponent('BugPlay', lucideLib.BugPlay);
+export const BugOff = createIconComponent('BugOff', lucideLib.BugOff);
+export const Spider = createIconComponent('Spider', lucideLib.Spider);
+export const Worm = createIconComponent('Worm', lucideLib.Worm);
+export const Rat = createIconComponent('Rat', lucideLib.Rat);
+export const Squirrel = createIconComponent('Squirrel', lucideLib.Squirrel);
+export const Paw = createIconComponent('Paw', lucideLib.Paw);
+export const PawPrint = createIconComponent('PawPrint', lucideLib.PawPrint);
+export const Bone = createIconComponent('Bone', lucideLib.Bone);
+export const FishSymbol = createIconComponent('FishSymbol', lucideLib.FishSymbol);
+export const Shell = createIconComponent('Shell', lucideLib.Shell);
+
+// Arrows and directions (more)
+export const MoveHorizontal = createIconComponent('MoveHorizontal', lucideLib.MoveHorizontal);
+export const MoveVertical = createIconComponent('MoveVertical', lucideLib.MoveVertical);
+export const MoveDiagonal = createIconComponent('MoveDiagonal', lucideLib.MoveDiagonal);
+export const MoveDiagonal2 = createIconComponent('MoveDiagonal2', lucideLib.MoveDiagonal2);
+export const ArrowLeftRight = createIconComponent('ArrowLeftRight', lucideLib.ArrowLeftRight);
+export const ArrowUpDown = createIconComponent('ArrowUpDown', lucideLib.ArrowUpDown);
+export const ArrowRightLeft = createIconComponent('ArrowRightLeft', lucideLib.ArrowRightLeft);
+export const ArrowDownUp = createIconComponent('ArrowDownUp', lucideLib.ArrowDownUp);
+export const Maximize2 = createIconComponent('Maximize2', lucideLib.Maximize2);
+export const Minimize2 = createIconComponent('Minimize2', lucideLib.Minimize2);
+export const FullscreenIcon = createIconComponent('Fullscreen', lucideLib.Fullscreen);
+export const Fullscreen = createIconComponent('Fullscreen', lucideLib.Fullscreen);
+export const FullscreenExit = createIconComponent('FullscreenExit', lucideLib.FullscreenExit);
+
+// Sports & Fitness
+export const Dumbbell = createIconComponent('Dumbbell', lucideLib.Dumbbell);
+export const PersonStandingIcon = createIconComponent('PersonStanding', lucideLib.PersonStanding);
+export const Footprints2 = createIconComponent('Footprints', lucideLib.Footprints);
+export const Timer2 = createIconComponent('Timer', lucideLib.Timer);
+export const Route = createIconComponent('Route', lucideLib.Route);
+export const Signpost = createIconComponent('Signpost', lucideLib.Signpost);
+export const SignpostBig = createIconComponent('SignpostBig', lucideLib.SignpostBig);
+
+// Gaming & Entertainment  
+export const Joystick2 = createIconComponent('Joystick', lucideLib.Joystick);
+export const Dice1 = createIconComponent('Dice1', lucideLib.Dice1);
+export const Dice2 = createIconComponent('Dice2', lucideLib.Dice2);
+export const Dice3 = createIconComponent('Dice3', lucideLib.Dice3);
+export const Dice4 = createIconComponent('Dice4', lucideLib.Dice4);
+export const Dice5 = createIconComponent('Dice5', lucideLib.Dice5);
+export const Dice6 = createIconComponent('Dice6', lucideLib.Dice6);
+export const Spade = createIconComponent('Spade', lucideLib.Spade);
+export const Club = createIconComponent('Club', lucideLib.Club);
+export const Drama = createIconComponent('Drama', lucideLib.Drama);
+export const Theater = createIconComponent('Theater', lucideLib.Theater);
+export const Ticket = createIconComponent('Ticket', lucideLib.Ticket);
+export const TicketCheck = createIconComponent('TicketCheck', lucideLib.TicketCheck);
+export const TicketX = createIconComponent('TicketX', lucideLib.TicketX);
+export const TicketSlash = createIconComponent('TicketSlash', lucideLib.TicketSlash);
+export const TicketPercent = createIconComponent('TicketPercent', lucideLib.TicketPercent);
+export const TicketPlus = createIconComponent('TicketPlus', lucideLib.TicketPlus);
+export const TicketMinus = createIconComponent('TicketMinus', lucideLib.TicketMinus);
+export const Clapperboard = createIconComponent('Clapperboard', lucideLib.Clapperboard);
+export const Film = createIconComponent('Film', lucideLib.Film);
+export const FilmIcon = createIconComponent('Film', lucideLib.Film);
+export const Tv2 = createIconComponent('Tv2', lucideLib.Tv2);
+export const MonitorPlay = createIconComponent('MonitorPlay', lucideLib.MonitorPlay);
+export const MonitorSmartphone = createIconComponent('MonitorSmartphone', lucideLib.MonitorSmartphone);
+export const MonitorSpeaker = createIconComponent('MonitorSpeaker', lucideLib.MonitorSpeaker);
+export const MonitorCheck = createIconComponent('MonitorCheck', lucideLib.MonitorCheck);
+export const MonitorX = createIconComponent('MonitorX', lucideLib.MonitorX);
+export const MonitorDot = createIconComponent('MonitorDot', lucideLib.MonitorDot);
+export const MonitorOff = createIconComponent('MonitorOff', lucideLib.MonitorOff);
+export const MonitorUp = createIconComponent('MonitorUp', lucideLib.MonitorUp);
+export const MonitorDown = createIconComponent('MonitorDown', lucideLib.MonitorDown);
+
+// Tools & Construction
+export const HardHat = createIconComponent('HardHat', lucideLib.HardHat);
+export const Construction = createIconComponent('Construction', lucideLib.Construction);
+export const PaintBucket = createIconComponent('PaintBucket', lucideLib.PaintBucket);
+export const PaintRoller = createIconComponent('PaintRoller', lucideLib.PaintRoller);
+export const PaintbrushIcon = createIconComponent('Paintbrush', lucideLib.Paintbrush);
+export const Paintbrush = createIconComponent('Paintbrush', lucideLib.Paintbrush);
+export const Paintbrush2 = createIconComponent('Paintbrush2', lucideLib.Paintbrush2);
+export const Pipette = createIconComponent('Pipette', lucideLib.Pipette);
+export const Ruler = createIconComponent('Ruler', lucideLib.Ruler);
+export const RulerIcon = createIconComponent('Ruler', lucideLib.Ruler);
+export const Scaling = createIconComponent('Scaling', lucideLib.Scaling);
+export const Blend = createIconComponent('Blend', lucideLib.Blend);
+export const Sparkle2 = createIconComponent('Sparkle', lucideLib.Sparkle);
+export const GraduationCapIcon = createIconComponent('GraduationCap', lucideLib.GraduationCap);
+export const BriefcaseIcon = createIconComponent('Briefcase', lucideLib.Briefcase);
+
 // CRITICAL: Export the icons proxy for dynamic icon resolution
 // This allows: import { icons } from 'lucide-react'; icons.SomeRareIcon
 export const icons = iconsProxy;
