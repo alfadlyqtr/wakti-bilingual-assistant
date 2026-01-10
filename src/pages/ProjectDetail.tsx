@@ -128,7 +128,7 @@ export default function ProjectDetail() {
   const [chatInput, setChatInput] = useState('');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [aiEditing, setAiEditing] = useState(false);
-  const [attachedImages, setAttachedImages] = useState<Array<{ file: File; preview: string }>>([]);
+  const [attachedImages, setAttachedImages] = useState<Array<{ file: File; preview: string; pdfDataUrl?: string }>>([]);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   const autoCaptureTimeoutRef = useRef<number | null>(null);
@@ -1933,6 +1933,41 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
     
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
+      
+      // Handle PDF files - extract text and add as context
+      if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+        try {
+          // For PDFs, we'll read as data URL and add a special marker
+          const reader = new FileReader();
+          reader.onload = async (event) => {
+            const dataUrl = event.target?.result as string;
+            // Create a text preview indicating it's a PDF
+            const pdfPreview = `data:image/svg+xml;base64,${btoa(`
+              <svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+                <rect width="200" height="200" fill="#1e293b" rx="8"/>
+                <text x="100" y="90" text-anchor="middle" fill="#f8fafc" font-size="14" font-family="system-ui">📄 PDF</text>
+                <text x="100" y="120" text-anchor="middle" fill="#94a3b8" font-size="12" font-family="system-ui">${file.name.slice(0, 20)}${file.name.length > 20 ? '...' : ''}</text>
+              </svg>
+            `)}`;
+            
+            // Store PDF data with special type marker
+            setAttachedImages(prev => [...prev, { 
+              file: new File([file], file.name, { type: 'application/pdf' }), 
+              preview: pdfPreview,
+              pdfDataUrl: dataUrl // Store actual PDF data
+            } as any]);
+            
+            toast.success(isRTL ? `تم إضافة ${file.name}` : `Added ${file.name}`);
+          };
+          reader.readAsDataURL(file);
+        } catch (err) {
+          console.error('Error processing PDF:', err);
+          toast.error(isRTL ? 'فشل في معالجة PDF' : 'Failed to process PDF');
+        }
+        continue;
+      }
+      
+      // Handle image files
       if (!file.type.startsWith('image/')) continue;
       
       const reader = new FileReader();
@@ -1999,7 +2034,15 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
 
     // Save user message to DB
     // Capture images BEFORE clearing them (for AI, not DB - DB has no images column)
-    const userImages = attachedImages.length > 0 ? attachedImages.map(img => img.preview) : [];
+    // Capture images and PDFs BEFORE clearing them
+    // For PDFs, we send the actual data URL, not the preview SVG
+    const userImages = attachedImages.length > 0 ? attachedImages.map(img => {
+      if (img.pdfDataUrl) {
+        // For PDFs, return the actual PDF data with a prefix marker
+        return `[PDF:${img.file.name}]${img.pdfDataUrl}`;
+      }
+      return img.preview;
+    }) : [];
     
     // NOTE: Do NOT insert 'images' field - project_chat_messages table has no images column
     const { data: userMsg, error: msgError } = await supabase
@@ -3160,7 +3203,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                           <input
                             ref={imageInputRef}
                             type="file"
-                            accept="image/*"
+                            accept="image/*,.pdf,application/pdf"
                             multiple
                             onChange={handleImageSelect}
                             className="hidden"
