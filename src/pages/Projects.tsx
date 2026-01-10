@@ -28,7 +28,8 @@ import {
   Share2,
   Copy,
   Check,
-  Globe
+  Globe,
+  Server
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -153,6 +154,8 @@ export default function Projects() {
   const [prompt, setPrompt] = useState('');
   const [generating, setGenerating] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState('none');
+  const [backendStatus, setBackendStatus] = useState<Record<string, boolean>>({});
+  const [togglingBackend, setTogglingBackend] = useState<string | null>(null);
   const [showThemes, setShowThemes] = useState(false);
   const [themeSearch, setThemeSearch] = useState('');
   
@@ -232,6 +235,23 @@ export default function Projects() {
 
       if (error) throw error;
       
+      // Fetch backend status for all projects
+      if (data && data.length > 0) {
+        const projectIds = data.map((p: Project) => p.id);
+        const { data: backends } = await (supabase
+          .from('project_backends' as any)
+          .select('project_id, enabled')
+          .in('project_id', projectIds) as any);
+        
+        if (backends && Array.isArray(backends)) {
+          const statusMap: Record<string, boolean> = {};
+          (backends as Array<{ project_id: string; enabled: boolean }>).forEach((b) => {
+            statusMap[b.project_id] = b.enabled;
+          });
+          setBackendStatus(statusMap);
+        }
+      }
+      
       // Fetch files for each project to enable preview
       const projectsWithFiles = await Promise.all((data || []).map(async (project: Project) => {
         try {
@@ -275,6 +295,49 @@ export default function Projects() {
       console.error('Error fetching projects:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Toggle backend for a project
+  const toggleBackend = async (e: React.MouseEvent, projectId: string) => {
+    e.stopPropagation();
+    if (!user) return;
+    
+    setTogglingBackend(projectId);
+    try {
+      const isEnabled = backendStatus[projectId] || false;
+      
+      if (isEnabled) {
+        // Disable backend
+        await supabase
+          .from('project_backends' as any)
+          .update({ enabled: false })
+          .eq('project_id', projectId);
+        
+        setBackendStatus(prev => ({ ...prev, [projectId]: false }));
+        toast.success(isRTL ? 'تم إيقاف الخادم' : 'Server disabled');
+      } else {
+        // Enable backend - upsert to create if not exists
+        const { error } = await supabase
+          .from('project_backends' as any)
+          .upsert({
+            project_id: projectId,
+            user_id: user.id,
+            enabled: true,
+            enabled_at: new Date().toISOString(),
+            allowed_origins: ['*'], // Allow all origins by default
+          }, { onConflict: 'project_id' });
+        
+        if (error) throw error;
+        
+        setBackendStatus(prev => ({ ...prev, [projectId]: true }));
+        toast.success(isRTL ? 'تم تفعيل الخادم!' : 'Server enabled!');
+      }
+    } catch (err) {
+      console.error('Error toggling backend:', err);
+      toast.error(isRTL ? 'حدث خطأ' : 'Something went wrong');
+    } finally {
+      setTogglingBackend(null);
     }
   };
 
@@ -1206,6 +1269,28 @@ Apply these styles consistently throughout the entire design.`;
                           <ExternalLink className="h-4 w-4" />
                         </Button>
                       )}
+                      
+                      {/* Server/Backend Button */}
+                      <Button
+                        size="icon"
+                        className={cn(
+                          "h-9 w-9 rounded-full backdrop-blur-sm shadow-lg hover:shadow-xl transition-all",
+                          backendStatus[project.id]
+                            ? "bg-indigo-500 hover:bg-indigo-600 text-white"
+                            : "bg-white/90 dark:bg-zinc-800/90 hover:bg-white dark:hover:bg-zinc-700 text-indigo-600 dark:text-indigo-400"
+                        )}
+                        onClick={(e) => toggleBackend(e, project.id)}
+                        disabled={togglingBackend === project.id}
+                        title={backendStatus[project.id] 
+                          ? (isRTL ? 'الخادم مفعل' : 'Server enabled') 
+                          : (isRTL ? 'تفعيل الخادم' : 'Enable server')}
+                      >
+                        {togglingBackend === project.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Server className="h-4 w-4" />
+                        )}
+                      </Button>
                       
                       {/* Delete Button */}
                       <Button
