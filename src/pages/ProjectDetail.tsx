@@ -1073,6 +1073,8 @@ export default function ProjectDetail() {
   <script src="https://unpkg.com/framer-motion@6.5.1/dist/framer-motion.js" crossorigin></script>
   <!-- Lucide Icons for all 1500+ icons -->
   <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js" crossorigin></script>
+  <!-- Recharts for data visualization -->
+  <script src="https://unpkg.com/recharts@2.10.3/umd/Recharts.min.js" crossorigin></script>
   <!-- Tailwind CSS v3 (JIT) for all color shades -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Google Fonts: Extended set for various themes -->
