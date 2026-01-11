@@ -2333,8 +2333,11 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         ));
         await delay(250);
 
-        // Smart response: either a plan (JSON) or a regular message
-        if (response.data.mode === 'plan' && response.data.plan) {
+        // Smart response: either a plan (JSON), asset_picker, or regular message
+        if (response.data.mode === 'asset_picker' && response.data.assetPicker) {
+          // AI wants user to pick which asset to use - show Asset Picker Card
+          assistantMsg = JSON.stringify(response.data.assetPicker);
+        } else if (response.data.mode === 'plan' && response.data.plan) {
           // AI detected a code change request - show Plan Card
           assistantMsg = response.data.plan;
         } else {
@@ -2353,6 +2356,45 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         // Clear attached images in Code mode too
         if (attachedImages.length > 0) {
           setAttachedImages([]);
+        }
+
+        // SAFEGUARD: If user mentions "my photo/image" and has 2+ uploads without specifying filename,
+        // show asset picker instead of running edit immediately
+        const photoKeywords = /\b(my photo|my image|uploaded image|صورتي|الصورة)\b/i;
+        const hasSpecificFile = uploadedAssets.some(a => userMessage.includes(a.filename));
+        
+        if (uploadedAssets.length >= 2 && photoKeywords.test(userMessage) && !hasSpecificFile) {
+          // Build asset picker response manually and skip edit
+          assistantMsg = JSON.stringify({
+            type: 'asset_picker',
+            message: isRTL ? 'أي صورة تريد استخدامها؟' : 'Which image would you like me to use?',
+            originalRequest: userMessage,
+            assets: uploadedAssets.map(a => ({ filename: a.filename, url: a.url, file_type: a.file_type }))
+          });
+          
+          setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
+          await delay(250);
+          
+          // Save assistant message to DB
+          const { data: assistantMsgData, error: assistError } = await supabase
+            .from('project_chat_messages' as any)
+            .insert({ 
+              project_id: id, 
+              role: 'assistant', 
+              content: assistantMsg,
+              snapshot: null
+            } as any)
+            .select()
+            .single();
+          
+          if (assistError) console.error('Error saving assistant message:', assistError);
+          if (assistantMsgData) {
+            setChatMessages(prev => [...prev, assistantMsgData as any]);
+          }
+          
+          setAiEditing(false);
+          setGenerationSteps([]);
+          return; // Exit early - don't run edit
         }
 
         const startRes = await supabase.functions.invoke('projects-generate', {
