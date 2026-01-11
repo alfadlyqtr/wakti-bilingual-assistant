@@ -1155,23 +1155,76 @@ export default function ProjectDetail() {
     h1, h2, h3, h4, h5, h6 { color: inherit; }
     p { color: inherit; }
     
-    /* Tailwind gray shades as fallback for missing classes */
+    /* Tailwind text color fallbacks - ALL shades for visibility */
+    .text-white { color: #ffffff !important; }
+    .text-gray-50 { color: #f9fafb !important; }
+    .text-gray-100 { color: #f3f4f6 !important; }
+    .text-gray-200 { color: #e5e7eb !important; }
     .text-gray-300 { color: #d1d5db !important; }
     .text-gray-400 { color: #9ca3af !important; }
     .text-gray-500 { color: #6b7280 !important; }
+    .text-gray-600 { color: #4b5563 !important; }
+    .text-gray-700 { color: #374151 !important; }
+    .text-gray-800 { color: #1f2937 !important; }
+    .text-gray-900 { color: #111827 !important; }
+    .text-slate-50 { color: #f8fafc !important; }
+    .text-slate-100 { color: #f1f5f9 !important; }
+    .text-slate-200 { color: #e2e8f0 !important; }
     .text-slate-300 { color: #cbd5e1 !important; }
     .text-slate-400 { color: #94a3b8 !important; }
     .text-slate-500 { color: #64748b !important; }
+    .text-zinc-50 { color: #fafafa !important; }
+    .text-zinc-100 { color: #f4f4f5 !important; }
+    .text-zinc-200 { color: #e4e4e7 !important; }
     .text-zinc-300 { color: #d4d4d8 !important; }
     .text-zinc-400 { color: #a1a1aa !important; }
     .text-zinc-500 { color: #71717a !important; }
+    
+    /* Pink/Purple text colors for accents */
+    .text-pink-300 { color: #f9a8d4 !important; }
+    .text-pink-400 { color: #f472b6 !important; }
+    .text-pink-500 { color: #ec4899 !important; }
+    .text-purple-300 { color: #d8b4fe !important; }
+    .text-purple-400 { color: #c084fc !important; }
+    .text-purple-500 { color: #a855f7 !important; }
+    .text-green-400 { color: #4ade80 !important; }
+    
+    /* Background colors - ensuring dark theme works */
+    .bg-gray-800 { background-color: #1f2937 !important; }
+    .bg-gray-800\\/50 { background-color: rgba(31, 41, 55, 0.5) !important; }
+    .bg-gray-900 { background-color: #111827 !important; }
+    .bg-gray-900\\/50 { background-color: rgba(17, 24, 39, 0.5) !important; }
+    .bg-purple-500\\/20 { background-color: rgba(168, 85, 247, 0.2) !important; }
+    .bg-purple-500\\/40 { background-color: rgba(168, 85, 247, 0.4) !important; }
+    
+    /* Border colors */
+    .border-purple-500 { border-color: #a855f7 !important; }
+    .border-purple-500\\/30 { border-color: rgba(168, 85, 247, 0.3) !important; }
+    .border-gray-900 { border-color: #111827 !important; }
+    
+    /* Gradient backgrounds */
+    .from-purple-400 { --tw-gradient-from: #c084fc; }
+    .to-pink-500 { --tw-gradient-to: #ec4899; }
+    .bg-gradient-to-r { background-image: linear-gradient(to right, var(--tw-gradient-from), var(--tw-gradient-to)); }
     
     /* Gradient text support */
     .bg-clip-text { -webkit-background-clip: text; background-clip: text; }
     .text-transparent { color: transparent; }
     
-    /* User's custom CSS below */
+    /* User's custom CSS below - MAY contain body color overrides */
     ${bundledCss}
+    
+    /* CRITICAL POST-OVERRIDE: Ensure Tailwind text classes win over user body color */
+    /* These are duplicated with higher specificity to guarantee they work */
+    body.text-gray-200 { color: #e5e7eb !important; }
+    div.text-gray-200 { color: #e5e7eb !important; }
+    body .text-gray-100, .text-gray-100 { color: #f3f4f6 !important; }
+    body .text-gray-200, .text-gray-200 { color: #e5e7eb !important; }
+    body .text-gray-300, .text-gray-300 { color: #d1d5db !important; }
+    body .text-gray-400, .text-gray-400 { color: #9ca3af !important; }
+    body .text-pink-400, .text-pink-400 { color: #f472b6 !important; }
+    body .text-purple-300, .text-purple-300 { color: #d8b4fe !important; }
+    body .text-purple-400, .text-purple-400 { color: #c084fc !important; }
   </style>
 </head>
 <body>
