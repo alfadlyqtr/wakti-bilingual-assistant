@@ -46,6 +46,12 @@ interface ImageAttachment {
   name?: string;
 }
 
+interface UploadedAsset {
+  filename: string;
+  url: string;
+  file_type: string | null;
+}
+
 interface RequestBody {
   action?: 'start' | 'status' | 'get_files';
   jobId?: string;
@@ -58,6 +64,7 @@ interface RequestBody {
   userInstructions?: string;
   images?: ImageAttachment[];
   planToExecute?: string;
+  uploadedAssets?: UploadedAsset[];
 }
 
 type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
@@ -460,7 +467,8 @@ async function callGeminiFullRewriteEdit(
   userPrompt: string,
   currentFiles: Record<string, string>,
   userInstructions: string = "",
-  images?: string[] // NEW: Support for images/PDFs
+  images?: string[], // Support for images/PDFs
+  uploadedAssets?: UploadedAsset[] // User uploaded assets from backend
 ): Promise<{ files: Record<string, string>; summary: string }> {
   const fileContext = Object.entries(currentFiles || {})
     .map(([path, content]) => `=== FILE: ${path} ===\n${content}`)
@@ -489,10 +497,17 @@ async function callGeminiFullRewriteEdit(
       imageContext = `\n\n🖼️ ATTACHED FILES:\n${pdfTextContent}\nUSE THE INFORMATION FROM THESE ATTACHMENTS TO BUILD THE PROJECT.\n`;
     }
   }
+  
+  // Build uploaded assets context
+  const uploadedAssetsContext = uploadedAssets && uploadedAssets.length > 0 
+    ? `\n\n📁 USER UPLOADED ASSETS (Use these URLs directly in the code):
+${uploadedAssets.map(a => `- **${a.filename}** (${a.file_type || 'file'}): ${a.url}`).join('\n')}
+When user says "my photo", "my image", "uploaded image", "profile picture", use the appropriate URL from above.\n`
+    : '';
 
   const userMessage = `CURRENT CODEBASE:
 ${fileContext}
-${imageContext}
+${imageContext}${uploadedAssetsContext}
 USER REQUEST:
 ${userPrompt}
 
@@ -1554,6 +1569,17 @@ serve(async (req: Request) => {
     const userInstructions = (body.userInstructions || '').toString();
     const images = body.images;
     const planToExecute = (body.planToExecute || '').toString();
+    const uploadedAssets = Array.isArray(body.uploadedAssets) ? body.uploadedAssets : [];
+    
+    // Build uploaded assets section for prompts
+    const uploadedAssetsStr = uploadedAssets.length > 0 
+      ? `\n\n### 📁 USER UPLOADED ASSETS (Available for use in the project)
+These files have been uploaded by the user to their backend storage. You can use them directly in the code:
+${uploadedAssets.map((a: UploadedAsset) => `- **${a.filename}** (${a.file_type || 'file'}): \`${a.url}\``).join('\n')}
+
+When the user refers to "my photo", "my image", "uploaded image", "profile picture", etc., use the appropriate URL from above.
+Example usage: <img src="${uploadedAssets[0]?.url || 'URL_HERE'}" alt="User uploaded image" />`
+      : '';
 
     // CHAT MODE: Smart Q&A - answers questions OR returns a plan if code changes are needed
     if (mode === 'chat') {
@@ -1607,6 +1633,7 @@ When users ask about forms, data storage, or backend features, you can use:
 - **Get Collection:** GET ?projectId=X&action=collection/products
 - **Create Item:** POST with { projectId, action: 'collection/products', data: {...} }
 The projectId should be extracted from the context or passed from the parent app.
+${uploadedAssetsStr}
 
 Current project files:
 ${filesStr}`;
@@ -1934,11 +1961,12 @@ Return ONLY the JSON object. No explanation.`;
       console.log(`[Edit Mode] Full rewrite for: ${prompt.substring(0, 50)}...`);
       console.log(`[Edit Mode] Existing files: ${Object.keys(existingFiles).join(', ')}`);
       console.log(`[Edit Mode] Images attached: ${images ? (Array.isArray(images) ? images.length : 'yes') : 'none'}`);
+      console.log(`[Edit Mode] Uploaded assets: ${uploadedAssets.length}`);
       const userPrompt = `${prompt}\n\n${userInstructions || ""}`;
       
-      // USE FULL REWRITE - NO PATCHES (now with image support)
+      // USE FULL REWRITE - NO PATCHES (now with image support + uploaded assets)
       const imageArray = Array.isArray(images) ? images as unknown as string[] : undefined;
-      const result = await callGeminiFullRewriteEdit(userPrompt, existingFiles, userInstructions, imageArray);
+      const result = await callGeminiFullRewriteEdit(userPrompt, existingFiles, userInstructions, imageArray, uploadedAssets);
       const changedFiles = result.files || {};
       
       console.log(`[Edit Mode] Changed files returned: ${Object.keys(changedFiles).join(', ') || 'NONE'}`);
