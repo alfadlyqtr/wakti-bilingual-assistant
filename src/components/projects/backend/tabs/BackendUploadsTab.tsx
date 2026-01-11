@@ -67,7 +67,9 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
       if (!user) throw new Error('Not authenticated');
 
       for (const file of acceptedFiles) {
-        const storagePath = `${projectId}/${Date.now()}-${file.name}`;
+        // Path format enforced by storage RLS policies:
+        //   {userId}/{projectId}/{timestamp}-{filename}
+        const storagePath = `${user.id}/${projectId}/${Date.now()}-${file.name}`;
         
         // Upload to storage
         const { error: uploadError } = await supabase.storage
