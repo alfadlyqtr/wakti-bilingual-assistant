@@ -1092,14 +1092,22 @@ export default function ProjectDetail() {
             poppins: ['Poppins', 'sans-serif'],
           },
           colors: {
-            // Extended palette for all shades
-            purple: {
-              50: '#faf5ff', 100: '#f3e8ff', 200: '#e9d5ff', 300: '#d8b4fe', 400: '#c084fc',
-              500: '#a855f7', 600: '#9333ea', 700: '#7e22ce', 800: '#6b21a8', 900: '#581c87', 950: '#3b0764',
+            // Extended palette for all shades - ensures all text colors work
+            gray: {
+              50: '#f9fafb', 100: '#f3f4f6', 200: '#e5e7eb', 300: '#d1d5db', 400: '#9ca3af',
+              500: '#6b7280', 600: '#4b5563', 700: '#374151', 800: '#1f2937', 900: '#111827', 950: '#030712',
+            },
+            zinc: {
+              50: '#fafafa', 100: '#f4f4f5', 200: '#e4e4e7', 300: '#d4d4d8', 400: '#a1a1aa',
+              500: '#71717a', 600: '#52525b', 700: '#3f3f46', 800: '#27272a', 900: '#18181b', 950: '#09090b',
             },
             slate: {
               50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 300: '#cbd5e1', 400: '#94a3b8',
               500: '#64748b', 600: '#475569', 700: '#334155', 800: '#1e293b', 900: '#0f172a', 950: '#020617',
+            },
+            purple: {
+              50: '#faf5ff', 100: '#f3e8ff', 200: '#e9d5ff', 300: '#d8b4fe', 400: '#c084fc',
+              500: '#a855f7', 600: '#9333ea', 700: '#7e22ce', 800: '#6b21a8', 900: '#581c87', 950: '#3b0764',
             },
             pink: {
               50: '#fdf2f8', 100: '#fce7f3', 200: '#fbcfe8', 300: '#f9a8d4', 400: '#f472b6',
@@ -1109,15 +1117,60 @@ export default function ProjectDetail() {
               50: '#fff1f2', 100: '#ffe4e6', 200: '#fecdd3', 300: '#fda4af', 400: '#fb7185',
               500: '#f43f5e', 600: '#e11d48', 700: '#be123c', 800: '#9f1239', 900: '#881337', 950: '#4c0519',
             },
+            amber: {
+              50: '#fffbeb', 100: '#fef3c7', 200: '#fde68a', 300: '#fcd34d', 400: '#fbbf24',
+              500: '#f59e0b', 600: '#d97706', 700: '#b45309', 800: '#92400e', 900: '#78350f', 950: '#451a03',
+            },
           },
         },
       },
     };
   </script>
   <style>
-    * { font-family: 'Inter', 'Tajawal', system-ui, sans-serif; }
+    /* Base Reset & Defaults */
+    * { font-family: 'Inter', 'Tajawal', system-ui, sans-serif; box-sizing: border-box; }
     body { margin: 0; padding: 0; min-height: 100vh; }
     #root { min-height: 100vh; }
+    
+    /* CRITICAL: Ensure text is visible by default */
+    /* Many themes use CSS variables for colors - provide sensible defaults */
+    :root {
+      --foreground: 0 0% 95%;
+      --background: 222 47% 6%;
+      --muted: 215 16% 47%;
+      --muted-foreground: 215 16% 70%;
+      --primary: 262 80% 55%;
+      --primary-foreground: 0 0% 100%;
+      --secondary: 215 16% 17%;
+      --secondary-foreground: 0 0% 95%;
+      --accent: 262 80% 55%;
+      --accent-foreground: 0 0% 100%;
+      --card: 222 47% 8%;
+      --card-foreground: 0 0% 95%;
+      --border: 215 16% 20%;
+    }
+    
+    /* Default text colors to ensure visibility */
+    body { color: hsl(var(--foreground, 0 0% 95%)); }
+    h1, h2, h3, h4, h5, h6 { color: inherit; }
+    p { color: inherit; }
+    
+    /* Tailwind gray shades as fallback for missing classes */
+    .text-gray-300 { color: #d1d5db !important; }
+    .text-gray-400 { color: #9ca3af !important; }
+    .text-gray-500 { color: #6b7280 !important; }
+    .text-slate-300 { color: #cbd5e1 !important; }
+    .text-slate-400 { color: #94a3b8 !important; }
+    .text-slate-500 { color: #64748b !important; }
+    .text-zinc-300 { color: #d4d4d8 !important; }
+    .text-zinc-400 { color: #a1a1aa !important; }
+    .text-zinc-500 { color: #71717a !important; }
+    
+    /* Gradient text support */
+    .bg-clip-text { -webkit-background-clip: text; background-clip: text; }
+    .text-transparent { color: transparent; }
+    
+    /* User's custom CSS below */
     ${bundledCss}
   </style>
 </head>
