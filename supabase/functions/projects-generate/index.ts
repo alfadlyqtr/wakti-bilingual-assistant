@@ -52,6 +52,14 @@ interface UploadedAsset {
   file_type: string | null;
 }
 
+interface BackendContext {
+  enabled: boolean;
+  collections: Array<{ name: string; itemCount: number; schema?: any }>;
+  formSubmissionsCount: number;
+  uploadsCount: number;
+  siteUsersCount: number;
+}
+
 interface RequestBody {
   action?: 'start' | 'status' | 'get_files';
   jobId?: string;
@@ -65,6 +73,7 @@ interface RequestBody {
   images?: ImageAttachment[];
   planToExecute?: string;
   uploadedAssets?: UploadedAsset[];
+  backendContext?: BackendContext;
 }
 
 type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
@@ -468,7 +477,8 @@ async function callGeminiFullRewriteEdit(
   currentFiles: Record<string, string>,
   userInstructions: string = "",
   images?: string[], // Support for images/PDFs
-  uploadedAssets?: UploadedAsset[] // User uploaded assets from backend
+  uploadedAssets?: UploadedAsset[], // User uploaded assets from backend
+  backendContext?: BackendContext // Backend context for AI awareness
 ): Promise<{ files: Record<string, string>; summary: string }> {
   const fileContext = Object.entries(currentFiles || {})
     .map(([path, content]) => `=== FILE: ${path} ===\n${content}`)
@@ -505,9 +515,24 @@ ${uploadedAssets.map(a => `- **${a.filename}** (${a.file_type || 'file'}): ${a.u
 When user says "my photo", "my image", "uploaded image", "profile picture", use the appropriate URL from above.\n`
     : '';
 
+  // Build backend context section
+  const backendContextStr = backendContext?.enabled ? `
+
+🗄️ PROJECT BACKEND (ENABLED):
+- Collections: ${backendContext.collections.length > 0 
+  ? backendContext.collections.map(c => `${c.name}(${c.itemCount})`).join(', ') 
+  : 'None'}
+- Forms: ${backendContext.formSubmissionsCount} submissions
+- Uploads: ${backendContext.uploadsCount} files
+- Users: ${backendContext.siteUsersCount} registered
+
+API: https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
+Use { projectId, action: 'collection/{name}', data: {...} } for data operations.
+` : '';
+
   const userMessage = `CURRENT CODEBASE:
 ${fileContext}
-${imageContext}${uploadedAssetsContext}
+${imageContext}${uploadedAssetsContext}${backendContextStr}
 USER REQUEST:
 ${userPrompt}
 
@@ -1570,6 +1595,7 @@ serve(async (req: Request) => {
     const images = body.images;
     const planToExecute = (body.planToExecute || '').toString();
     const uploadedAssets = Array.isArray(body.uploadedAssets) ? body.uploadedAssets : [];
+    const backendContext = body.backendContext;
     
     // Build uploaded assets section for prompts
     const uploadedAssetsStr = uploadedAssets.length > 0 
@@ -1580,6 +1606,35 @@ ${uploadedAssets.map((a: UploadedAsset) => `- **${a.filename}** (${a.file_type |
 When the user refers to "my photo", "my image", "uploaded image", "profile picture", etc., use the appropriate URL from above.
 Example usage: <img src="${uploadedAssets[0]?.url || 'URL_HERE'}" alt="User uploaded image" />`
       : '';
+
+    // Build backend context section for prompts
+    const backendContextStr = backendContext?.enabled ? `
+
+### 🗄️ PROJECT BACKEND STATUS (Your project has a backend!)
+The backend is **ENABLED** for this project. Here's what's available:
+
+**Current Data:**
+- 📊 **Collections:** ${backendContext.collections.length > 0 
+  ? backendContext.collections.map(c => `${c.name} (${c.itemCount} items)`).join(', ') 
+  : 'None created yet'}
+- 📝 **Form Submissions:** ${backendContext.formSubmissionsCount} received
+- 📤 **Uploaded Files:** ${backendContext.uploadsCount} files
+- 👥 **Site Users:** ${backendContext.siteUsersCount} registered
+
+**API Endpoint:** https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
+
+**Available Actions:**
+1. **Form Submission:** POST { projectId, action: 'submit', formName: 'contact', data: {...} }
+2. **Get Collection:** GET ?projectId=X&action=collection/{name}
+3. **Create Item:** POST { projectId, action: 'collection/{name}', data: {...} }
+4. **File Upload:** User can upload files via Backend Dashboard → Uploads tab
+
+**The projectId for this project is: ${projectId}**
+
+When user asks to "add products", "create blog posts", "store data", etc., use the collection API.
+When user asks for "contact form", "newsletter", use the form submission API.
+` : '';
+
 
     // CHAT MODE: Smart Q&A - answers questions OR returns a plan if code changes are needed
     if (mode === 'chat') {
@@ -1625,15 +1680,7 @@ IF NO (pure question like "what does X do?") → Return markdown
 Use emojis, **bold**, \`code\`, and bullet points. Be friendly!
 
 ⚠️ CRITICAL: For ANY request that implies changing code, return ONLY the JSON object. No explanations. No "Here's the plan". Just raw JSON starting with { and ending with }.
-
-### WAKTI BACKEND API (Available for this project)
-When users ask about forms, data storage, or backend features, you can use:
-- **API Endpoint:** https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
-- **Form Submit:** POST with { projectId, action: 'submit', formName: 'contact', data: {...} }
-- **Get Collection:** GET ?projectId=X&action=collection/products
-- **Create Item:** POST with { projectId, action: 'collection/products', data: {...} }
-The projectId should be extracted from the context or passed from the parent app.
-${uploadedAssetsStr}
+${backendContextStr}${uploadedAssetsStr}
 
 Current project files:
 ${filesStr}`;
@@ -1962,11 +2009,12 @@ Return ONLY the JSON object. No explanation.`;
       console.log(`[Edit Mode] Existing files: ${Object.keys(existingFiles).join(', ')}`);
       console.log(`[Edit Mode] Images attached: ${images ? (Array.isArray(images) ? images.length : 'yes') : 'none'}`);
       console.log(`[Edit Mode] Uploaded assets: ${uploadedAssets.length}`);
+      console.log(`[Edit Mode] Backend enabled: ${backendContext?.enabled || false}`);
       const userPrompt = `${prompt}\n\n${userInstructions || ""}`;
       
-      // USE FULL REWRITE - NO PATCHES (now with image support + uploaded assets)
+      // USE FULL REWRITE - NO PATCHES (now with image support + uploaded assets + backend context)
       const imageArray = Array.isArray(images) ? images as unknown as string[] : undefined;
-      const result = await callGeminiFullRewriteEdit(userPrompt, existingFiles, userInstructions, imageArray, uploadedAssets);
+      const result = await callGeminiFullRewriteEdit(userPrompt, existingFiles, userInstructions, imageArray, uploadedAssets, backendContext);
       const changedFiles = result.files || {};
       
       console.log(`[Edit Mode] Changed files returned: ${Object.keys(changedFiles).join(', ') || 'NONE'}`);

@@ -163,6 +163,15 @@ export default function ProjectDetail() {
   // Uploaded assets from backend (for AI context)
   const [uploadedAssets, setUploadedAssets] = useState<Array<{ filename: string; url: string; file_type: string | null }>>([]);
   
+  // Backend context for AI coder awareness
+  const [backendContext, setBackendContext] = useState<{
+    enabled: boolean;
+    collections: Array<{ name: string; itemCount: number; schema?: any }>;
+    formSubmissionsCount: number;
+    uploadsCount: number;
+    siteUsersCount: number;
+  } | null>(null);
+  
   // Self-healing: Runtime error detection
   const [crashReport, setCrashReport] = useState<string | null>(null);
 
@@ -320,10 +329,72 @@ export default function ProjectDetail() {
     }
   };
 
-  // Fetch uploaded assets when project loads
+  // Fetch backend context for AI coder awareness
+  const fetchBackendContext = async () => {
+    if (!id) return;
+    try {
+      // Check if backend is enabled
+      const { data: backendData } = await supabase
+        .from('project_backends')
+        .select('enabled')
+        .eq('project_id', id)
+        .maybeSingle();
+      
+      if (!backendData?.enabled) {
+        setBackendContext({ enabled: false, collections: [], formSubmissionsCount: 0, uploadsCount: 0, siteUsersCount: 0 });
+        return;
+      }
+
+      // Fetch collections with counts
+      const { data: collectionsData } = await supabase
+        .from('project_collections')
+        .select('collection_name')
+        .eq('project_id', id);
+      
+      const collectionCounts: Record<string, number> = {};
+      (collectionsData || []).forEach((item: any) => {
+        collectionCounts[item.collection_name] = (collectionCounts[item.collection_name] || 0) + 1;
+      });
+      
+      const collections = Object.entries(collectionCounts).map(([name, itemCount]) => ({ name, itemCount }));
+
+      // Fetch form submissions count
+      const { count: formSubmissionsCount } = await supabase
+        .from('project_form_submissions')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', id);
+
+      // Fetch uploads count
+      const { count: uploadsCount } = await supabase
+        .from('project_uploads')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', id);
+
+      // Fetch site users count
+      const { count: siteUsersCount } = await supabase
+        .from('project_site_users')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', id);
+
+      setBackendContext({
+        enabled: true,
+        collections,
+        formSubmissionsCount: formSubmissionsCount || 0,
+        uploadsCount: uploadsCount || 0,
+        siteUsersCount: siteUsersCount || 0
+      });
+      
+      console.log('[ProjectDetail] Backend context loaded:', { enabled: true, collections: collections.length, formSubmissionsCount, uploadsCount, siteUsersCount });
+    } catch (err) {
+      console.error('Exception fetching backend context:', err);
+    }
+  };
+
+  // Fetch uploaded assets and backend context when project loads
   useEffect(() => {
     if (id && user) {
       fetchUploadedAssets();
+      fetchBackendContext();
     }
   }, [id, user]);
 
@@ -2246,6 +2317,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
             currentFiles: latestFiles,
             images: userImages.length > 0 ? userImages : undefined,
             uploadedAssets: uploadedAssets.length > 0 ? uploadedAssets : undefined,
+            backendContext: backendContext || undefined,
           },
         });
 
@@ -2292,6 +2364,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
             userInstructions: userInstructions,
             images: codeImages, // NOW SENDING IMAGES TO AI
             uploadedAssets: uploadedAssets.length > 0 ? uploadedAssets : undefined,
+            backendContext: backendContext || undefined,
           },
         });
 
@@ -2499,7 +2572,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       {/* Main Tab Switcher - Builder / Server - STICKY */}
       <div className="hidden md:flex items-center gap-2 px-4 py-2 border-b border-border/50 dark:border-white/10 bg-background/95 dark:bg-[#0c0f14]/95 backdrop-blur-sm shrink-0 sticky top-0 z-20">
         <button
-          onClick={() => { setMainTab('builder'); fetchUploadedAssets(); }}
+          onClick={() => { setMainTab('builder'); fetchUploadedAssets(); fetchBackendContext(); }}
           className={cn(
             "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
             mainTab === 'builder'
