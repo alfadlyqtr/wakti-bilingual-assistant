@@ -1,7 +1,8 @@
 import React, { useState, useCallback } from 'react';
-import { Upload, FileImage, FileText, File, Download, Trash2, Eye, X, ImageIcon, FolderOpen } from 'lucide-react';
+import { Upload, FileImage, FileText, File, Download, Trash2, Eye, X, ImageIcon, FolderOpen, LayoutGrid, List } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useDropzone } from 'react-dropzone';
@@ -32,6 +33,7 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
   const [uploading, setUploading] = useState(false);
   const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   const totalSize = uploads.reduce((sum, u) => sum + (u.size_bytes || 0), 0);
   const maxSize = 50 * 1024 * 1024; // 50MB limit
@@ -205,92 +207,191 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
         </div>
       </div>
 
-      {/* Files Grid */}
+      {/* View Toggle + Files */}
       {uploads.length === 0 ? (
         <div className="text-center py-12">
-          <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-muted/50 to-muted/30 flex items-center justify-center">
-            <FolderOpen className="h-10 w-10 text-muted-foreground/50" />
+          <div className="w-16 h-16 mx-auto mb-3 rounded-xl bg-gradient-to-br from-muted/50 to-muted/30 flex items-center justify-center">
+            <FolderOpen className="h-8 w-8 text-muted-foreground/50" />
           </div>
           <p className="text-muted-foreground text-sm">
             {isRTL ? 'لا توجد ملفات مرفوعة بعد' : 'No files uploaded yet'}
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {uploads.map((upload) => {
-            const FileIcon = getFileIcon(upload.file_type);
-            const isImg = isImage(upload.file_type);
-            const publicUrl = getPublicUrl(upload.storage_path);
+        <>
+          {/* View Toggle */}
+          <div className={cn("flex items-center justify-between mb-3", isRTL && "flex-row-reverse")}>
+            <span className="text-xs text-muted-foreground">
+              {uploads.length} {isRTL ? 'ملف' : uploads.length === 1 ? 'file' : 'files'}
+            </span>
+            <ToggleGroup type="single" value={viewMode} onValueChange={(v) => v && setViewMode(v as 'grid' | 'list')}>
+              <ToggleGroupItem value="grid" size="sm" className="h-8 w-8 p-0">
+                <LayoutGrid className="h-4 w-4" />
+              </ToggleGroupItem>
+              <ToggleGroupItem value="list" size="sm" className="h-8 w-8 p-0">
+                <List className="h-4 w-4" />
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
 
-            return (
-              <div
-                key={upload.id}
-                className="group relative bg-card rounded-xl border border-border/50 overflow-hidden hover:border-primary/30 hover:shadow-lg transition-all duration-300"
-              >
-                {/* Preview/Thumbnail */}
-                <div 
-                  className="aspect-square bg-gradient-to-br from-muted/30 to-muted/10 flex items-center justify-center cursor-pointer"
-                  onClick={() => isImg && setPreviewFile(upload)}
-                >
-                  {isImg ? (
-                    <img 
-                      src={publicUrl} 
-                      alt={upload.filename}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <FileIcon className="h-12 w-12 text-muted-foreground/50" />
-                  )}
-                </div>
+          {/* Grid View */}
+          {viewMode === 'grid' && (
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+              {uploads.map((upload) => {
+                const FileIcon = getFileIcon(upload.file_type);
+                const isImg = isImage(upload.file_type);
+                const publicUrl = getPublicUrl(upload.storage_path);
 
-                {/* Info */}
-                <div className="p-3">
-                  <p className="text-sm font-medium text-foreground truncate" title={upload.filename}>
-                    {upload.filename}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {formatFileSize(upload.size_bytes)}
-                  </p>
-                </div>
-
-                {/* Actions Overlay */}
-                <div className={cn(
-                  "absolute inset-0 bg-background/90 backdrop-blur-sm flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200",
-                  isRTL && "flex-row-reverse"
-                )}>
-                  {isImg && (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-10 w-10 rounded-xl bg-primary/10 hover:bg-primary/20"
-                      onClick={() => setPreviewFile(upload)}
+                return (
+                  <div
+                    key={upload.id}
+                    className="group relative bg-card rounded-lg border border-border/50 overflow-hidden hover:border-primary/30 hover:shadow-md transition-all duration-200"
+                  >
+                    {/* Thumbnail - smaller */}
+                    <div 
+                      className="aspect-square bg-gradient-to-br from-muted/30 to-muted/10 flex items-center justify-center cursor-pointer"
+                      onClick={() => isImg && setPreviewFile(upload)}
                     >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  )}
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-10 w-10 rounded-xl bg-accent/10 hover:bg-accent/20"
-                    onClick={() => handleDownload(upload)}
+                      {isImg ? (
+                        <img 
+                          src={publicUrl} 
+                          alt={upload.filename}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <FileIcon className="h-8 w-8 text-muted-foreground/50" />
+                      )}
+                    </div>
+
+                    {/* Compact Info */}
+                    <div className="p-1.5">
+                      <p className="text-xs font-medium text-foreground truncate" title={upload.filename}>
+                        {upload.filename}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {formatFileSize(upload.size_bytes)}
+                      </p>
+                    </div>
+
+                    {/* Actions Overlay */}
+                    <div className={cn(
+                      "absolute inset-0 bg-background/90 backdrop-blur-sm flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200",
+                      isRTL && "flex-row-reverse"
+                    )}>
+                      {isImg && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 rounded-lg bg-primary/10 hover:bg-primary/20"
+                          onClick={() => setPreviewFile(upload)}
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 rounded-lg bg-accent/10 hover:bg-accent/20"
+                        onClick={() => handleDownload(upload)}
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 rounded-lg bg-destructive/10 hover:bg-destructive/20 text-destructive"
+                        onClick={() => handleDelete(upload)}
+                        disabled={deletingId === upload.id}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* List View */}
+          {viewMode === 'list' && (
+            <div className="space-y-1.5">
+              {uploads.map((upload) => {
+                const FileIcon = getFileIcon(upload.file_type);
+                const isImg = isImage(upload.file_type);
+                const publicUrl = getPublicUrl(upload.storage_path);
+
+                return (
+                  <div
+                    key={upload.id}
+                    className={cn(
+                      "flex items-center gap-3 p-2 bg-card rounded-lg border border-border/50 hover:border-primary/30 transition-all",
+                      isRTL && "flex-row-reverse"
+                    )}
                   >
-                    <Download className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-10 w-10 rounded-xl bg-destructive/10 hover:bg-destructive/20 text-destructive"
-                    onClick={() => handleDelete(upload)}
-                    disabled={deletingId === upload.id}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                    {/* Small Thumbnail */}
+                    <div 
+                      className="w-10 h-10 shrink-0 rounded-md bg-gradient-to-br from-muted/30 to-muted/10 flex items-center justify-center overflow-hidden cursor-pointer"
+                      onClick={() => isImg && setPreviewFile(upload)}
+                    >
+                      {isImg ? (
+                        <img 
+                          src={publicUrl} 
+                          alt={upload.filename}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <FileIcon className="h-5 w-5 text-muted-foreground/50" />
+                      )}
+                    </div>
+
+                    {/* Info */}
+                    <div className={cn("flex-1 min-w-0", isRTL ? "text-right" : "text-left")}>
+                      <p className="text-sm font-medium text-foreground truncate" title={upload.filename}>
+                        {upload.filename}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatFileSize(upload.size_bytes)}
+                      </p>
+                    </div>
+
+                    {/* Actions */}
+                    <div className={cn("flex items-center gap-1", isRTL && "flex-row-reverse")}>
+                      {isImg && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 rounded-lg"
+                          onClick={() => setPreviewFile(upload)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 rounded-lg"
+                        onClick={() => handleDownload(upload)}
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 rounded-lg text-destructive hover:bg-destructive/10"
+                        onClick={() => handleDelete(upload)}
+                        disabled={deletingId === upload.id}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
 
       {/* Image Preview Modal */}
