@@ -175,19 +175,22 @@ async function vercelDeploy(params: {
     name: params.name,
     files: uploadedFiles,
     target: "production",  // Deploy as production (public, not protected preview)
+    // CRITICAL: Attach to existing project so all sites go to wakti-user-sites
+    ...(params.projectId ? { project: params.projectId } : {}),
     projectSettings: {
       framework: null,        // No framework - pure static
-      buildCommand: "",       // Empty = skip build
-      outputDirectory: "",    // Empty = serve from root
-      installCommand: "",     // Empty = skip npm install
+      buildCommand: null,     // null = explicitly skip (NOT empty string which means "use default")
+      outputDirectory: null,  // null = serve from root
+      installCommand: null,   // null = skip npm install
     },
   };
 
   console.log("[projects-publish] Creating deployment:", {
     name: params.name,
-    projectId: params.projectId,
+    attachingToProject: params.projectId || "none (will create new)",
     teamId: params.teamId,
     fileCount: uploadedFiles.length,
+    totalSize: uploadedFiles.reduce((acc, f) => acc + f.size, 0),
   });
 
   const resp = await fetch(endpoint, {
