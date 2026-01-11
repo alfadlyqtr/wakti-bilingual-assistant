@@ -1096,7 +1096,64 @@ ONLY return files that changed. Do NOT return unchanged files.
 ### CSS INHERITANCE SAFETY (CRITICAL - ICONS VISIBILITY)
 1. NEVER put icons inside text-transparent elements - Icons using currentColor will become INVISIBLE
 2. Always give icons explicit color classes (e.g., text-pink-400) when parent uses gradients
-3. Only TEXT should be inside text-transparent bg-clip-text spans - separate icons from them`;
+3. Only TEXT should be inside text-transparent bg-clip-text spans - separate icons from them
+
+### WAKTI BACKEND API (OPTIONAL - USE WHEN USER NEEDS BACKEND FEATURES)
+The project has access to a simple backend API. Use it when users need:
+- Contact forms / Newsletter signups
+- Dynamic data (products, blog posts, testimonials, etc.)
+- File uploads
+- Simple user authentication for their site
+
+**API Endpoint:** https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
+
+**1. Form Submission (Contact/Newsletter):**
+\`\`\`javascript
+const submitForm = async (formData) => {
+  const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      projectId: 'PROJECT_ID_HERE', // Replace with actual project ID
+      action: 'submit',
+      formName: 'contact', // or 'newsletter'
+      data: formData
+    })
+  });
+  return response.json();
+};
+\`\`\`
+
+**2. Fetch Collection Data (Products, Blog Posts, etc.):**
+\`\`\`javascript
+const getProducts = async () => {
+  const response = await fetch(
+    'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api' +
+    '?projectId=PROJECT_ID_HERE&action=collection/products'
+  );
+  return response.json();
+};
+\`\`\`
+
+**3. Create Collection Item:**
+\`\`\`javascript
+const createProduct = async (productData) => {
+  const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      projectId: 'PROJECT_ID_HERE',
+      action: 'collection/products',
+      data: productData
+    })
+  });
+  return response.json();
+};
+\`\`\`
+
+**IMPORTANT:** Replace 'PROJECT_ID_HERE' with the actual projectId from the request context.
+Only use the backend API when users explicitly ask for backend functionality like forms, data storage, or authentication.
+Do NOT add backend calls unless the user requests it.`;
 
 const _GEMINI_EDIT_FULL_REWRITE_PROMPT = `You are a Senior React Architect and Maintenance Engineer.
 Your job is to implement user changes into an existing React codebase running in a Sandpack environment.
@@ -1542,6 +1599,14 @@ IF NO (pure question like "what does X do?") → Return markdown
 Use emojis, **bold**, \`code\`, and bullet points. Be friendly!
 
 ⚠️ CRITICAL: For ANY request that implies changing code, return ONLY the JSON object. No explanations. No "Here's the plan". Just raw JSON starting with { and ending with }.
+
+### WAKTI BACKEND API (Available for this project)
+When users ask about forms, data storage, or backend features, you can use:
+- **API Endpoint:** https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
+- **Form Submit:** POST with { projectId, action: 'submit', formName: 'contact', data: {...} }
+- **Get Collection:** GET ?projectId=X&action=collection/products
+- **Create Item:** POST with { projectId, action: 'collection/products', data: {...} }
+The projectId should be extracted from the context or passed from the parent app.
 
 Current project files:
 ${filesStr}`;
