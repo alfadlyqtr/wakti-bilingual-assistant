@@ -1665,9 +1665,45 @@ When user asks for "contact form", "newsletter", use the form submission API.
       const hasImages = Array.isArray(images) && images.length > 0;
       console.log(`[Chat Mode] Has images: ${hasImages}, count: ${hasImages ? images.length : 0}`);
       
+      // Build asset picker priority section - MUST be checked FIRST
+      const assetPickerPriorityStr = uploadedAssets.length > 1 
+        ? `
+🚨🚨🚨 PRIORITY 1 - ASSET SELECTION CHECK (CHECK THIS FIRST!) 🚨🚨🚨
+
+BEFORE doing ANYTHING else, check these conditions:
+1. Does the user mention "my photo", "my image", "uploaded image", "profile picture", "my picture", "صورتي", "الصورة" WITHOUT specifying a filename?
+2. Are there MULTIPLE uploaded assets available? (YES - there are ${uploadedAssets.length} files)
+
+Available uploaded files:
+${uploadedAssets.map((a: UploadedAsset, i: number) => `${i + 1}. ${a.filename}`).join('\n')}
+
+IF BOTH CONDITIONS ARE TRUE → You MUST return ONLY this JSON (nothing else, no text before or after):
+{
+  "type": "asset_picker",
+  "message": "Which image would you like me to use?",
+  "originalRequest": "[copy the user's exact request here]",
+  "assets": [${uploadedAssets.map((a: UploadedAsset) => `{"filename":"${a.filename}","url":"${a.url}","file_type":"${a.file_type || 'file'}"}`).join(',')}]
+}
+
+SKIP asset_picker ONLY IF:
+- User specifies a filename like "use ${uploadedAssets[0]?.filename}" or mentions a specific file
+- User is asking a pure question (not requesting any change)
+
+EXAMPLE - RETURN ASSET_PICKER:
+User: "Use my photo as the profile picture" → Return asset_picker JSON
+User: "Add my image to the hero section" → Return asset_picker JSON
+User: "استخدم صورتي في الخلفية" → Return asset_picker JSON
+
+EXAMPLE - DON'T RETURN ASSET_PICKER:
+User: "Use ${uploadedAssets[0]?.filename} as the profile picture" → Use that specific file
+User: "What does useState do?" → Answer the question
+
+`
+        : '';
+
       const chatSystemPrompt = `You are a helpful AI assistant for a React code editor. You help users with their projects.
-${hasImages ? '\n🖼️ SCREENSHOT ANALYSIS MODE: The user has attached screenshot(s). Analyze them carefully and implement what you see or what the user asks based on the visual.\n' : ''}
-🚨 CRITICAL DETECTION RULES:
+${assetPickerPriorityStr}${hasImages ? '\n🖼️ SCREENSHOT ANALYSIS MODE: The user has attached screenshot(s). Analyze them carefully and implement what you see or what the user asks based on the visual.\n' : ''}
+🚨 PRIORITY 2 - CODE CHANGE DETECTION (Only if asset_picker doesn't apply):
 
 IS IT A CODE CHANGE REQUEST? Check for these keywords:
 - "fix", "change", "add", "remove", "update", "modify", "make", "create"
@@ -1695,8 +1731,16 @@ IF NO (pure question like "what does X do?") → Return markdown
 📝 MARKDOWN FORMAT FOR QUESTIONS:
 Use emojis, **bold**, \`code\`, and bullet points. Be friendly!
 
-⚠️ CRITICAL: For ANY request that implies changing code, return ONLY the JSON object. No explanations. No "Here's the plan". Just raw JSON starting with { and ending with }.
-${backendContextStr}${uploadedAssetsStr}
+⚠️ CRITICAL: For ANY request that implies changing code (and asset_picker doesn't apply), return ONLY the JSON object. No explanations. No "Here's the plan". Just raw JSON starting with { and ending with }.
+${backendContextStr}${uploadedAssets.length === 1 ? `
+
+### 📁 USER UPLOADED ASSET
+When the user refers to "my photo", "my image", "uploaded image", use this URL: ${uploadedAssets[0]?.url}
+Example: <img src="${uploadedAssets[0]?.url}" alt="User image" />` : uploadedAssets.length > 1 ? `
+
+### 📁 USER UPLOADED ASSETS
+Files available: ${uploadedAssets.map((a: UploadedAsset) => a.filename).join(', ')}
+Remember: If user doesn't specify which file, return asset_picker JSON first!` : ''}
 
 Current project files:
 ${filesStr}`;
@@ -1778,30 +1822,60 @@ ${filesStr}`;
       const chatData = await chatResponse.json();
       const answer = chatData.candidates?.[0]?.content?.parts?.[0]?.text || "";
       
-      // Check if the response contains a plan JSON (may be mixed with text)
+      // Check if the response contains a JSON (plan or asset_picker)
       const trimmedAnswer = answer.trim();
       
-      // Try to extract JSON plan from response
-      let planJson: string | null = null;
+      // Try to extract JSON from response
+      let extractedJson: string | null = null;
+      let jsonType: 'plan' | 'asset_picker' | null = null;
       
       // Method 1: Direct JSON (starts with {)
-      if (trimmedAnswer.startsWith('{') && trimmedAnswer.includes('"type"') && trimmedAnswer.includes('"plan"')) {
-        planJson = trimmedAnswer;
-      } else {
-        // Method 2: Extract JSON from mixed content
-        const jsonMatch = trimmedAnswer.match(/\{[\s\S]*"type"\s*:\s*"plan"[\s\S]*\}/);
-        if (jsonMatch) {
-          planJson = jsonMatch[0];
+      if (trimmedAnswer.startsWith('{') && trimmedAnswer.includes('"type"')) {
+        if (trimmedAnswer.includes('"asset_picker"')) {
+          extractedJson = trimmedAnswer;
+          jsonType = 'asset_picker';
+        } else if (trimmedAnswer.includes('"plan"')) {
+          extractedJson = trimmedAnswer;
+          jsonType = 'plan';
         }
       }
       
-      if (planJson) {
+      // Method 2: Extract JSON from mixed content
+      if (!extractedJson) {
+        // Check for asset_picker first (higher priority)
+        const assetPickerMatch = trimmedAnswer.match(/\{[\s\S]*"type"\s*:\s*"asset_picker"[\s\S]*\}/);
+        if (assetPickerMatch) {
+          extractedJson = assetPickerMatch[0];
+          jsonType = 'asset_picker';
+        } else {
+          // Check for plan
+          const planMatch = trimmedAnswer.match(/\{[\s\S]*"type"\s*:\s*"plan"[\s\S]*\}/);
+          if (planMatch) {
+            extractedJson = planMatch[0];
+            jsonType = 'plan';
+          }
+        }
+      }
+      
+      if (extractedJson && jsonType) {
         // Validate it's actually valid JSON before returning
         try {
-          JSON.parse(planJson);
-          return new Response(JSON.stringify({ ok: true, plan: planJson, mode: 'plan' }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          const parsed = JSON.parse(extractedJson);
+          console.log(`[Chat Mode] Detected ${jsonType} response`);
+          
+          if (jsonType === 'asset_picker') {
+            // Return asset_picker for frontend to show selection UI
+            return new Response(JSON.stringify({ 
+              ok: true, 
+              assetPicker: parsed,
+              mode: 'asset_picker' 
+            }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          } else {
+            return new Response(JSON.stringify({ ok: true, plan: extractedJson, mode: 'plan' }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }
         } catch {
           // Invalid JSON, return as regular message
+          console.log(`[Chat Mode] Failed to parse ${jsonType} JSON`);
         }
       }
       
