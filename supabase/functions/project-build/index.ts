@@ -118,12 +118,16 @@ serve(async (req) => {
           ? (window.FramerMotion || window.Motion || null)
           : null;
         
+        // CRITICAL: Log what we found for debugging
+        console.log('[framer-motion shim] FM detected:', !!FM, 'FM.motion:', !!(FM && FM.motion), 'FM.AnimatePresence:', !!(FM && FM.AnimatePresence));
+        
         if (!FM) {
           console.warn('[framer-motion shim] Motion library not found on window (expected window.Motion from UMD build)');
         }
         
-        // Export the REAL motion proxy from CDN (preserves ALL animation props like initial, animate, transition)
-        const motion = FM ? FM.motion : new Proxy({}, {
+        // CRITICAL FIX: Use defensive per-property checks to prevent React Error #130
+        // If FM exists but FM.motion is undefined, we MUST use the fallback, not undefined!
+        const motion = (FM && FM.motion) ? FM.motion : new Proxy({}, {
           get: (_, tag) => {
             // Fallback: render element with inline animation via CSS
             return window.React.forwardRef((props, ref) => {
@@ -145,13 +149,13 @@ serve(async (req) => {
                 computedStyle.transition = 'all ' + transition.duration + 's ease-out';
               }
               
-              return window.React.createElement(tag, { ...rest, ref, style: computedStyle });
+              return window.React.createElement(String(tag) || 'div', { ...rest, ref, style: computedStyle });
             });
           }
         });
         
-        // Export REAL AnimatePresence from CDN
-        const AnimatePresence = FM ? FM.AnimatePresence : ({ children, mode, initial, onExitComplete }) => children;
+        // CRITICAL FIX: Defensive check - AnimatePresence must NEVER be undefined
+        const AnimatePresence = (FM && FM.AnimatePresence) ? FM.AnimatePresence : ({ children, mode, initial, onExitComplete }) => children;
         
         // Export REAL hooks from CDN with proper fallbacks
         const useAnimation = FM && FM.useAnimation ? FM.useAnimation : () => ({ 
