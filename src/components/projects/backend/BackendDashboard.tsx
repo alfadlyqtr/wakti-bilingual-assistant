@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Server, Mail, Database, FileUp, Users, Loader2, CheckCircle2, ExternalLink, Copy, RefreshCw } from 'lucide-react';
+import { Server, Upload, Mail, Database, Users, Loader2, CheckCircle2, RefreshCw, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 import { BackendEmptyState } from './BackendEmptyState';
-import { BackendSection } from './BackendSection';
-import { BackendSubmissions } from './BackendSubmissions';
-import { BackendCollectionView } from './BackendCollectionView';
-import { BackendUploads } from './BackendUploads';
-import { BackendSiteUsers } from './BackendSiteUsers';
+import { BackendUploadsTab } from './tabs/BackendUploadsTab';
+import { BackendInboxTab } from './tabs/BackendInboxTab';
+import { BackendDataTab } from './tabs/BackendDataTab';
+import { BackendUsersTab } from './tabs/BackendUsersTab';
 
 interface BackendDashboardProps {
   projectId: string;
@@ -29,6 +29,7 @@ export function BackendDashboard({ projectId, isRTL }: BackendDashboardProps) {
   const [enabling, setEnabling] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [backendStatus, setBackendStatus] = useState<BackendStatus | null>(null);
+  const [activeTab, setActiveTab] = useState('uploads');
   
   // Data states
   const [submissions, setSubmissions] = useState<any[]>([]);
@@ -169,18 +170,7 @@ export function BackendDashboard({ projectId, isRTL }: BackendDashboardProps) {
     }
   };
 
-  const copyApiEndpoint = () => {
-    const endpoint = `${window.location.origin.replace('lovable.dev', 'supabase.co')}/functions/v1/project-backend-api`;
-    navigator.clipboard.writeText(endpoint);
-    toast.success(isRTL ? 'تم النسخ!' : 'Copied!');
-  };
-
   // Handlers for submissions
-  const handleViewSubmission = (submission: any) => {
-    // TODO: Open modal with full submission details
-    console.log('View submission:', submission);
-  };
-
   const handleDeleteSubmission = async (id: string) => {
     const { error } = await supabase
       .from('project_form_submissions')
@@ -205,14 +195,35 @@ export function BackendDashboard({ projectId, isRTL }: BackendDashboardProps) {
   };
 
   // Collection handlers
-  const handleAddItem = (collectionName: string) => {
-    // TODO: Open add modal
-    console.log('Add to collection:', collectionName);
+  const handleAddItem = async (collectionName: string, data: Record<string, any>) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase
+      .from('project_collections')
+      .insert({
+        project_id: projectId,
+        user_id: user.id,
+        collection_name: collectionName,
+        data,
+      });
+    
+    if (!error) {
+      toast.success(isRTL ? 'تمت الإضافة' : 'Added');
+      fetchAllData();
+    }
   };
 
-  const handleEditItem = (item: any) => {
-    // TODO: Open edit modal
-    console.log('Edit item:', item);
+  const handleEditItem = async (item: any, data: Record<string, any>) => {
+    const { error } = await supabase
+      .from('project_collections')
+      .update({ data, updated_at: new Date().toISOString() })
+      .eq('id', item.id);
+    
+    if (!error) {
+      toast.success(isRTL ? 'تم الحفظ' : 'Saved');
+      fetchAllData();
+    }
   };
 
   const handleDeleteItem = async (id: string, collectionName: string) => {
@@ -257,24 +268,6 @@ export function BackendDashboard({ projectId, isRTL }: BackendDashboardProps) {
     URL.revokeObjectURL(url);
   };
 
-  // Upload handlers
-  const handleDownloadFile = (upload: any) => {
-    // TODO: Get signed URL and download
-    console.log('Download:', upload);
-  };
-
-  const handleDeleteFile = async (id: string) => {
-    const { error } = await supabase
-      .from('project_uploads')
-      .delete()
-      .eq('id', id);
-    
-    if (!error) {
-      setUploads(prev => prev.filter(u => u.id !== id));
-      toast.success(isRTL ? 'تم الحذف' : 'Deleted');
-    }
-  };
-
   // Site user handlers
   const handleSuspendUser = async (id: string) => {
     const { error } = await supabase
@@ -314,8 +307,11 @@ export function BackendDashboard({ projectId, isRTL }: BackendDashboardProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+      <div className="flex items-center justify-center h-full min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <span className="text-sm text-muted-foreground">{isRTL ? 'جاري التحميل...' : 'Loading...'}</span>
+        </div>
       </div>
     );
   }
@@ -325,122 +321,140 @@ export function BackendDashboard({ projectId, isRTL }: BackendDashboardProps) {
   }
 
   const unreadCount = submissions.filter(s => s.status === 'unread').length;
-  const totalUploadSize = uploads.reduce((sum, u) => sum + (u.size_bytes || 0), 0);
+  const collectionsCount = Object.keys(collections).reduce((sum, key) => sum + collections[key].length, 0);
 
   return (
     <div className={cn("h-full flex flex-col", isRTL && "rtl")}>
       {/* Header */}
       <div className={cn(
-        "flex items-center justify-between px-4 py-3 border-b border-border/50 dark:border-white/10 shrink-0",
+        "flex items-center justify-between px-4 py-4 border-b border-border/50 shrink-0",
         isRTL && "flex-row-reverse"
       )}>
         <div className={cn("flex items-center gap-3", isRTL && "flex-row-reverse")}>
-          <div className="p-2 rounded-xl bg-gradient-to-br from-indigo-500/20 via-purple-500/20 to-pink-500/20">
-            <Server className="h-5 w-5 text-indigo-500" />
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-primary/20 via-accent/15 to-secondary/20 shadow-sm">
+            <Server className="h-5 w-5 text-primary" />
           </div>
-          <div>
-            <h2 className="text-base font-bold text-foreground">
-              {isRTL ? 'لوحة السيرفر' : 'Server Dashboard'}
+          <div className={isRTL ? "text-right" : "text-left"}>
+            <h2 className="text-lg font-bold text-foreground">
+              {isRTL ? 'لوحة السيرفر' : 'Backend Dashboard'}
             </h2>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <CheckCircle2 className="h-3 w-3 text-green-500" />
-              {isRTL ? 'نشط' : 'Active'}
+            <div className={cn("flex items-center gap-2 text-xs text-muted-foreground", isRTL && "flex-row-reverse")}>
+              <span className="flex items-center gap-1">
+                <CheckCircle2 className="h-3 w-3 text-green-500" />
+                {isRTL ? 'السيرفر نشط' : 'Server Active'}
+              </span>
+              <span className="text-border">•</span>
+              <span className="flex items-center gap-1">
+                <Zap className="h-3 w-3 text-amber-500" />
+                {isRTL ? 'جاهز للاستخدام' : 'Ready to use'}
+              </span>
             </div>
           </div>
         </div>
         
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8"
-            onClick={() => fetchAllData()}
-            disabled={refreshing}
-          >
-            <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
-          </Button>
-        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 gap-2"
+          onClick={() => fetchAllData()}
+          disabled={refreshing}
+        >
+          <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
+          {!refreshing && (isRTL ? 'تحديث' : 'Refresh')}
+        </Button>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* Form Submissions */}
-        <BackendSection
-          icon={Mail}
-          title={isRTL ? 'الرسائل' : 'Form Submissions'}
-          count={submissions.length}
-          subtitle={unreadCount > 0 ? (isRTL ? `${unreadCount} غير مقروءة` : `${unreadCount} unread`) : undefined}
-          defaultOpen={submissions.length > 0}
-          isRTL={isRTL}
-        >
-          <BackendSubmissions 
-            submissions={submissions}
-            isRTL={isRTL}
-            onView={handleViewSubmission}
-            onDelete={handleDeleteSubmission}
-            onMarkRead={handleMarkRead}
-          />
-        </BackendSection>
-
-        {/* Dynamic Collections */}
-        {Object.entries(collections).map(([name, items]) => (
-          <BackendSection
-            key={name}
-            icon={Database}
-            title={collectionSchemas[name]?.display_name || name}
-            count={items.length}
-            defaultOpen={false}
-            isRTL={isRTL}
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
+        <TabsList className="w-full justify-start px-4 py-2 h-auto bg-transparent border-b border-border/30 rounded-none shrink-0">
+          <TabsTrigger 
+            value="uploads" 
+            className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-xl px-4 py-2"
           >
-            <BackendCollectionView 
-              collectionName={name}
-              displayName={collectionSchemas[name]?.display_name}
-              items={items}
-              schema={collectionSchemas[name]?.schema}
+            <Upload className="h-4 w-4" />
+            <span className="hidden sm:inline">{isRTL ? 'الملفات' : 'Uploads'}</span>
+            {uploads.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 text-xs rounded-md bg-muted/50">{uploads.length}</span>
+            )}
+          </TabsTrigger>
+          
+          <TabsTrigger 
+            value="inbox" 
+            className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-xl px-4 py-2"
+          >
+            <Mail className="h-4 w-4" />
+            <span className="hidden sm:inline">{isRTL ? 'الرسائل' : 'Inbox'}</span>
+            {unreadCount > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 text-xs rounded-md bg-primary text-primary-foreground">{unreadCount}</span>
+            )}
+          </TabsTrigger>
+          
+          <TabsTrigger 
+            value="data" 
+            className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-xl px-4 py-2"
+          >
+            <Database className="h-4 w-4" />
+            <span className="hidden sm:inline">{isRTL ? 'البيانات' : 'Data'}</span>
+            {collectionsCount > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 text-xs rounded-md bg-muted/50">{collectionsCount}</span>
+            )}
+          </TabsTrigger>
+          
+          <TabsTrigger 
+            value="users" 
+            className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-xl px-4 py-2"
+          >
+            <Users className="h-4 w-4" />
+            <span className="hidden sm:inline">{isRTL ? 'المستخدمون' : 'Users'}</span>
+            {siteUsers.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 text-xs rounded-md bg-muted/50">{siteUsers.length}</span>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        <div className="flex-1 overflow-y-auto p-4">
+          <TabsContent value="uploads" className="mt-0 h-full">
+            <BackendUploadsTab 
+              uploads={uploads}
+              projectId={projectId}
               isRTL={isRTL}
-              onAdd={() => handleAddItem(name)}
-              onEdit={handleEditItem}
-              onDelete={(id) => handleDeleteItem(id, name)}
-              onExport={(format) => handleExport(name, items, format)}
+              onRefresh={fetchAllData}
             />
-          </BackendSection>
-        ))}
-
-        {/* Uploads */}
-        <BackendSection
-          icon={FileUp}
-          title={isRTL ? 'الملفات' : 'Uploads'}
-          count={uploads.length}
-          subtitle={`${(totalUploadSize / (1024 * 1024)).toFixed(1)} MB`}
-          defaultOpen={false}
-          isRTL={isRTL}
-        >
-          <BackendUploads 
-            uploads={uploads}
-            totalSize={totalUploadSize}
-            isRTL={isRTL}
-            onDownload={handleDownloadFile}
-            onDelete={handleDeleteFile}
-          />
-        </BackendSection>
-
-        {/* Site Users */}
-        <BackendSection
-          icon={Users}
-          title={isRTL ? 'مستخدمو الموقع' : 'Site Users'}
-          count={siteUsers.length}
-          defaultOpen={false}
-          isRTL={isRTL}
-        >
-          <BackendSiteUsers 
-            users={siteUsers}
-            isRTL={isRTL}
-            onSuspend={handleSuspendUser}
-            onActivate={handleActivateUser}
-            onDelete={handleDeleteUser}
-          />
-        </BackendSection>
-      </div>
+          </TabsContent>
+          
+          <TabsContent value="inbox" className="mt-0 h-full">
+            <BackendInboxTab 
+              submissions={submissions}
+              isRTL={isRTL}
+              onDelete={handleDeleteSubmission}
+              onMarkRead={handleMarkRead}
+            />
+          </TabsContent>
+          
+          <TabsContent value="data" className="mt-0 h-full">
+            <BackendDataTab 
+              collections={collections}
+              schemas={collectionSchemas}
+              projectId={projectId}
+              isRTL={isRTL}
+              onAdd={handleAddItem}
+              onEdit={handleEditItem}
+              onDelete={handleDeleteItem}
+              onExport={handleExport}
+            />
+          </TabsContent>
+          
+          <TabsContent value="users" className="mt-0 h-full">
+            <BackendUsersTab 
+              users={siteUsers}
+              isRTL={isRTL}
+              onSuspend={handleSuspendUser}
+              onActivate={handleActivateUser}
+              onDelete={handleDeleteUser}
+            />
+          </TabsContent>
+        </div>
+      </Tabs>
     </div>
   );
 }
