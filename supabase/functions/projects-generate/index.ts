@@ -1639,13 +1639,15 @@ The backend is **ENABLED** for this project. Here's what's available:
 
 **API Endpoint:** https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
 
-**Available Actions:**
-1. **Form Submission:** POST { projectId, action: 'submit', formName: 'contact', data: {...} }
-2. **Get Collection:** GET ?projectId=X&action=collection/{name}
-3. **Create Item:** POST { projectId, action: 'collection/{name}', data: {...} }
-4. **File Upload:** User can upload files via Backend Dashboard → Uploads tab
+**⚠️ CRITICAL - PROJECT ID (USE THIS EXACT VALUE):**
+The projectId for ALL API calls is: **${projectId}**
+DO NOT extract project IDs from image URLs or storage paths! Always use exactly: "${projectId}"
 
-**The projectId for this project is: ${projectId}**
+**Available Actions:**
+1. **Form Submission:** POST { projectId: '${projectId}', action: 'submit', formName: 'contact', data: {...} }
+2. **Get Collection:** GET ?projectId=${projectId}&action=collection/{name}
+3. **Create Item:** POST { projectId: '${projectId}', action: 'collection/{name}', data: {...} }
+4. **File Upload:** User can upload files via Backend Dashboard → Uploads tab
 
 When user asks to "add products", "create blog posts", "store data", etc., use the collection API.
 When user asks for "contact form", "newsletter", use the form submission API.
