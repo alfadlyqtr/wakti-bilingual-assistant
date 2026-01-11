@@ -160,6 +160,9 @@ export default function ProjectDetail() {
   // Main tab state - Builder vs Server
   const [mainTab, setMainTab] = useState<MainTab>('builder');
   
+  // Uploaded assets from backend (for AI context)
+  const [uploadedAssets, setUploadedAssets] = useState<Array<{ filename: string; url: string; file_type: string | null }>>([]);
+  
   // Self-healing: Runtime error detection
   const [crashReport, setCrashReport] = useState<string | null>(null);
 
@@ -285,6 +288,44 @@ export default function ProjectDetail() {
       console.error('Exception fetching chat history:', err);
     }
   };
+
+  // Fetch uploaded assets from project backend storage
+  const fetchUploadedAssets = async () => {
+    if (!id) return;
+    try {
+      const { data, error } = await supabase
+        .from('project_uploads')
+        .select('filename, storage_path, file_type')
+        .eq('project_id', id);
+      
+      if (error) {
+        console.error('Error fetching uploaded assets:', error);
+        return;
+      }
+      
+      if (data && data.length > 0) {
+        const assets = data.map((upload: any) => {
+          const { data: urlData } = supabase.storage.from('project-uploads').getPublicUrl(upload.storage_path);
+          return {
+            filename: upload.filename,
+            url: urlData.publicUrl,
+            file_type: upload.file_type
+          };
+        });
+        setUploadedAssets(assets);
+        console.log('[ProjectDetail] Loaded', assets.length, 'uploaded assets for AI context');
+      }
+    } catch (err) {
+      console.error('Exception fetching uploaded assets:', err);
+    }
+  };
+
+  // Fetch uploaded assets when project loads
+  useEffect(() => {
+    if (id && user) {
+      fetchUploadedAssets();
+    }
+  }, [id, user]);
 
   const handleRevert = async (messageId: string) => {
     const targetMessage = chatMessages.find(m => m.id === messageId);
@@ -2204,6 +2245,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
             prompt: userMessage,
             currentFiles: latestFiles,
             images: userImages.length > 0 ? userImages : undefined,
+            uploadedAssets: uploadedAssets.length > 0 ? uploadedAssets : undefined,
           },
         });
 
@@ -2249,6 +2291,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
             prompt: userMessage,
             userInstructions: userInstructions,
             images: codeImages, // NOW SENDING IMAGES TO AI
+            uploadedAssets: uploadedAssets.length > 0 ? uploadedAssets : undefined,
           },
         });
 
@@ -2456,7 +2499,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       {/* Main Tab Switcher - Builder / Server - STICKY */}
       <div className="hidden md:flex items-center gap-2 px-4 py-2 border-b border-border/50 dark:border-white/10 bg-background/95 dark:bg-[#0c0f14]/95 backdrop-blur-sm shrink-0 sticky top-0 z-20">
         <button
-          onClick={() => setMainTab('builder')}
+          onClick={() => { setMainTab('builder'); fetchUploadedAssets(); }}
           className={cn(
             "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
             mainTab === 'builder'
