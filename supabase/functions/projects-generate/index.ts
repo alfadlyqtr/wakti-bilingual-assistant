@@ -1601,9 +1601,25 @@ serve(async (req: Request) => {
     const uploadedAssetsStr = uploadedAssets.length > 0 
       ? `\n\n### 📁 USER UPLOADED ASSETS (Available for use in the project)
 These files have been uploaded by the user to their backend storage. You can use them directly in the code:
-${uploadedAssets.map((a: UploadedAsset) => `- **${a.filename}** (${a.file_type || 'file'}): \`${a.url}\``).join('\n')}
+${uploadedAssets.map((a: UploadedAsset, i: number) => `${i + 1}. **${a.filename}** (${a.file_type || 'file'}): \`${a.url}\``).join('\n')}
 
-When the user refers to "my photo", "my image", "uploaded image", "profile picture", etc., use the appropriate URL from above.
+${uploadedAssets.length > 1 
+  ? `⚠️ IMPORTANT: If the user says "my photo", "my image", "uploaded image" without specifying which one, you MUST ask them to choose by returning this JSON:
+{
+  "type": "asset_picker",
+  "message": "Which image would you like me to use?",
+  "originalRequest": "[the user's original request]",
+  "assets": [${uploadedAssets.map((a: UploadedAsset) => `{ "filename": "${a.filename}", "url": "${a.url}", "file_type": "${a.file_type || 'file'}" }`).join(', ')}]
+}
+
+Only return the asset_picker JSON if:
+1. User mentions "my photo/image" generically AND
+2. There are multiple uploaded assets AND
+3. User didn't specify which file by name
+
+If user says "use image-196.png" or specifies a filename, use that specific file directly.` 
+  : `When the user refers to "my photo", "my image", "uploaded image", "profile picture", etc., use this URL: ${uploadedAssets[0]?.url}`}
+
 Example usage: <img src="${uploadedAssets[0]?.url || 'URL_HERE'}" alt="User uploaded image" />`
       : '';
 

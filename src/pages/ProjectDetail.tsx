@@ -2766,6 +2766,14 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                   } | null = null;
                   let isPlanCard = false;
                   
+                  // ASSET PICKER DETECTION
+                  let assetPicker: {
+                    type: string;
+                    message: string;
+                    originalRequest: string;
+                    assets: Array<{ filename: string; url: string; file_type: string }>;
+                  } | null = null;
+                  
                   if (msg.role === 'assistant') {
                     // Try to extract JSON plan from content (may be mixed with text)
                     const content = msg.content;
@@ -2773,41 +2781,197 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                     // Method 1: Try direct JSON parse
                     try {
                       const parsed = JSON.parse(content);
-                      if (parsed.type === 'plan' || (parsed.title && (parsed.steps || parsed.codeChanges))) {
+                      if (parsed.type === 'asset_picker' && parsed.assets) {
+                        assetPicker = parsed;
+                      } else if (parsed.type === 'plan' || (parsed.title && (parsed.steps || parsed.codeChanges))) {
                         parsedPlan = parsed;
                         isPlanCard = true;
                       }
                     } catch {
                       // Method 2: Extract JSON object from mixed content
-                      const jsonMatch = content.match(/\{[\s\S]*"type"\s*:\s*"plan"[\s\S]*\}/);
-                      if (jsonMatch) {
+                      // First check for asset_picker
+                      const assetPickerMatch = content.match(/\{[\s\S]*"type"\s*:\s*"asset_picker"[\s\S]*\}/);
+                      if (assetPickerMatch) {
                         try {
-                          const extracted = JSON.parse(jsonMatch[0]);
-                          if (extracted.title && (extracted.steps || extracted.codeChanges)) {
-                            parsedPlan = extracted;
-                            isPlanCard = true;
+                          const extracted = JSON.parse(assetPickerMatch[0]);
+                          if (extracted.type === 'asset_picker' && extracted.assets) {
+                            assetPicker = extracted;
                           }
                         } catch {
-                          // Still not valid JSON
+                          // Not valid JSON
                         }
                       }
                       
-                      // Method 3: Look for any JSON with title + steps/codeChanges
-                      if (!isPlanCard) {
-                        const anyJsonMatch = content.match(/\{[\s\S]*"title"[\s\S]*("steps"|"codeChanges")[\s\S]*\}/);
-                        if (anyJsonMatch) {
+                      // Then check for plan
+                      if (!assetPicker) {
+                        const jsonMatch = content.match(/\{[\s\S]*"type"\s*:\s*"plan"[\s\S]*\}/);
+                        if (jsonMatch) {
                           try {
-                            const extracted = JSON.parse(anyJsonMatch[0]);
+                            const extracted = JSON.parse(jsonMatch[0]);
                             if (extracted.title && (extracted.steps || extracted.codeChanges)) {
                               parsedPlan = extracted;
                               isPlanCard = true;
                             }
                           } catch {
-                            // Not valid JSON
+                            // Still not valid JSON
+                          }
+                        }
+                        
+                        // Method 3: Look for any JSON with title + steps/codeChanges
+                        if (!isPlanCard) {
+                          const anyJsonMatch = content.match(/\{[\s\S]*"title"[\s\S]*("steps"|"codeChanges")[\s\S]*\}/);
+                          if (anyJsonMatch) {
+                            try {
+                              const extracted = JSON.parse(anyJsonMatch[0]);
+                              if (extracted.title && (extracted.steps || extracted.codeChanges)) {
+                                parsedPlan = extracted;
+                                isPlanCard = true;
+                              }
+                            } catch {
+                              // Not valid JSON
+                            }
                           }
                         }
                       }
                     }
+                  }
+                  
+                  // ASSET PICKER CARD UI (Interactive selection grid)
+                  if (assetPicker && assetPicker.assets?.length > 0) {
+                    return (
+                      <div key={i} className="flex flex-col items-start w-full animate-in fade-in slide-in-from-bottom-1 duration-300">
+                        <div className="w-full bg-gradient-to-br from-indigo-500/10 to-purple-500/5 border border-indigo-500/30 rounded-xl overflow-hidden backdrop-blur-sm">
+                          {/* Header */}
+                          <div className="px-4 py-3 border-b border-indigo-500/20 flex items-center gap-2">
+                            <Upload className="h-4 w-4 text-indigo-500" />
+                            <span className="text-[13px] font-semibold text-foreground">
+                              {isRTL ? 'اختر صورة' : 'Select an Image'}
+                            </span>
+                          </div>
+                          
+                          {/* Message */}
+                          <div className="px-4 py-3 border-b border-indigo-500/10">
+                            <p className="text-[13px] text-foreground/80">
+                              {assetPicker.message || (isRTL ? 'أي صورة تريد استخدامها؟' : 'Which image would you like me to use?')}
+                            </p>
+                          </div>
+                          
+                          {/* Asset Grid */}
+                          <div className="p-4 grid grid-cols-3 gap-3">
+                            {assetPicker.assets.map((asset, assetIdx) => {
+                              const isImage = asset.file_type?.startsWith('image/') || 
+                                /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(asset.filename);
+                              
+                              return (
+                                <button
+                                  key={assetIdx}
+                                  onClick={async () => {
+                                    // Send a follow-up message with the selected asset
+                                    const selectionMsg = `Use ${asset.filename} (${asset.url}) for: ${assetPicker.originalRequest || 'my request'}`;
+                                    
+                                    // Add user message
+                                    const { data: userMsgData } = await supabase
+                                      .from('project_chat_messages' as any)
+                                      .insert({ 
+                                        project_id: id, 
+                                        role: 'user', 
+                                        content: selectionMsg 
+                                      } as any)
+                                      .select()
+                                      .single();
+                                    
+                                    if (userMsgData) {
+                                      setChatMessages(prev => [...prev, userMsgData as any]);
+                                    }
+                                    
+                                    // Now trigger the chat/edit flow with the specific file
+                                    setChatInput('');
+                                    setAiEditing(true);
+                                    
+                                    try {
+                                      const response = await supabase.functions.invoke('projects-generate', {
+                                        body: {
+                                          action: 'start',
+                                          projectId: id,
+                                          mode: 'edit',
+                                          prompt: selectionMsg,
+                                          currentFiles: generatedFiles,
+                                          uploadedAssets,
+                                          backendContext,
+                                        },
+                                      });
+                                      
+                                      if (response.error) throw new Error(response.error.message);
+                                      
+                                      const jobId = response.data?.jobId;
+                                      if (jobId) {
+                                        const job = await pollJobUntilDone(jobId);
+                                        const newFiles = await loadFilesFromDb(id!);
+                                        
+                                        setGeneratedFiles(newFiles);
+                                        setCodeContent(newFiles["/App.js"] || Object.values(newFiles)[0] || "");
+                                        setSandpackKey(prev => prev + 1);
+                                        
+                                        // Add success message
+                                        const successMsg = isRTL 
+                                          ? `✓ تم استخدام ${asset.filename} بنجاح!`
+                                          : `✓ Successfully used ${asset.filename}!`;
+                                        
+                                        const { data: aiMsgData } = await supabase
+                                          .from('project_chat_messages' as any)
+                                          .insert({ 
+                                            project_id: id, 
+                                            role: 'assistant', 
+                                            content: successMsg,
+                                            snapshot: newFiles
+                                          } as any)
+                                          .select()
+                                          .single();
+                                        
+                                        if (aiMsgData) {
+                                          setChatMessages(prev => [...prev, aiMsgData as any]);
+                                        }
+                                        
+                                        toast.success(isRTL ? 'تم تطبيق الصورة!' : 'Image applied!');
+                                      }
+                                    } catch (err: any) {
+                                      console.error('Asset selection error:', err);
+                                      toast.error(isRTL ? 'فشل في تطبيق الصورة' : 'Failed to apply image');
+                                    } finally {
+                                      setAiEditing(false);
+                                    }
+                                  }}
+                                  disabled={aiEditing}
+                                  className="flex flex-col items-center gap-2 p-3 rounded-xl bg-white/5 dark:bg-zinc-900/50 border border-white/10 hover:border-indigo-500/50 hover:bg-indigo-500/10 transition-all duration-200 group disabled:opacity-50"
+                                >
+                                  {/* Thumbnail */}
+                                  {isImage ? (
+                                    <div className="w-16 h-16 rounded-lg overflow-hidden bg-zinc-800">
+                                      <img 
+                                        src={asset.url} 
+                                        alt={asset.filename}
+                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="w-16 h-16 rounded-lg bg-zinc-800 flex items-center justify-center">
+                                      <FileCode className="h-6 w-6 text-zinc-500" />
+                                    </div>
+                                  )}
+                                  
+                                  {/* Filename */}
+                                  <span className="text-[11px] text-foreground/70 text-center truncate max-w-full group-hover:text-indigo-400 transition-colors">
+                                    {asset.filename.length > 12 
+                                      ? asset.filename.substring(0, 10) + '...' 
+                                      : asset.filename}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    );
                   }
                   
                   // PLAN CARD UI (Lovable-style - clean, minimal, professional)
