@@ -311,6 +311,163 @@ serve(async (req) => {
             return result;
           };
         }
+      `,
+      '@emotion/is-prop-valid': `
+        export default function isPropValid(prop) {
+          const validProps = new Set([
+            'children', 'className', 'style', 'id', 'onClick', 'onChange', 
+            'onSubmit', 'onFocus', 'onBlur', 'disabled', 'type', 'value',
+            'placeholder', 'href', 'src', 'alt', 'title', 'role', 'aria-label'
+          ]);
+          return validProps.has(prop) || 
+                 prop.startsWith('data-') || 
+                 prop.startsWith('aria-') ||
+                 !prop.startsWith('$');
+        }
+      `,
+      'date-fns': `
+        export function format(date, formatStr) {
+          const d = new Date(date);
+          const tokens = {
+            'yyyy': d.getFullYear(),
+            'MM': String(d.getMonth() + 1).padStart(2, '0'),
+            'dd': String(d.getDate()).padStart(2, '0'),
+            'HH': String(d.getHours()).padStart(2, '0'),
+            'mm': String(d.getMinutes()).padStart(2, '0'),
+            'ss': String(d.getSeconds()).padStart(2, '0'),
+            'MMMM': d.toLocaleString('default', { month: 'long' }),
+            'MMM': d.toLocaleString('default', { month: 'short' }),
+            'EEEE': d.toLocaleString('default', { weekday: 'long' }),
+            'EEE': d.toLocaleString('default', { weekday: 'short' })
+          };
+          let result = formatStr;
+          for (const [token, value] of Object.entries(tokens)) {
+            result = result.replace(new RegExp(token, 'g'), value);
+          }
+          return result;
+        }
+        export function parseISO(str) { return new Date(str); }
+        export function isValid(date) { return date instanceof Date && !isNaN(date); }
+        export function addDays(date, days) { 
+          const d = new Date(date); d.setDate(d.getDate() + days); return d; 
+        }
+        export function subDays(date, days) { return addDays(date, -days); }
+        export function addMonths(date, months) { 
+          const d = new Date(date); d.setMonth(d.getMonth() + months); return d; 
+        }
+        export function startOfDay(date) { 
+          const d = new Date(date); d.setHours(0,0,0,0); return d; 
+        }
+        export function endOfDay(date) { 
+          const d = new Date(date); d.setHours(23,59,59,999); return d; 
+        }
+        export function isBefore(date1, date2) { return new Date(date1) < new Date(date2); }
+        export function isAfter(date1, date2) { return new Date(date1) > new Date(date2); }
+        export function differenceInDays(date1, date2) {
+          return Math.round((new Date(date1) - new Date(date2)) / (1000 * 60 * 60 * 24));
+        }
+        export function formatDistance(date, baseDate) {
+          const diff = Math.abs(new Date(date) - new Date(baseDate));
+          const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+          if (days === 0) return 'today';
+          if (days === 1) return '1 day ago';
+          return days + ' days ago';
+        }
+      `,
+      'recharts': `
+        const RC = window.Recharts || {};
+        export const LineChart = RC.LineChart || (({ children, ...props }) => 
+          window.React.createElement('div', { 
+            style: { width: props.width || '100%', height: props.height || 300, 
+                     background: '#1a1a2e', borderRadius: 8, display: 'flex', 
+                     alignItems: 'center', justifyContent: 'center', color: '#888' }
+          }, 'Chart loading...'));
+        export const BarChart = RC.BarChart || LineChart;
+        export const AreaChart = RC.AreaChart || LineChart;
+        export const PieChart = RC.PieChart || LineChart;
+        export const ComposedChart = RC.ComposedChart || LineChart;
+        export const RadarChart = RC.RadarChart || LineChart;
+        export const RadialBarChart = RC.RadialBarChart || LineChart;
+        export const ScatterChart = RC.ScatterChart || LineChart;
+        export const Treemap = RC.Treemap || LineChart;
+        export const Line = RC.Line || (() => null);
+        export const Bar = RC.Bar || (() => null);
+        export const Area = RC.Area || (() => null);
+        export const Pie = RC.Pie || (() => null);
+        export const Scatter = RC.Scatter || (() => null);
+        export const Radar = RC.Radar || (() => null);
+        export const RadialBar = RC.RadialBar || (() => null);
+        export const XAxis = RC.XAxis || (() => null);
+        export const YAxis = RC.YAxis || (() => null);
+        export const ZAxis = RC.ZAxis || (() => null);
+        export const CartesianGrid = RC.CartesianGrid || (() => null);
+        export const PolarGrid = RC.PolarGrid || (() => null);
+        export const PolarAngleAxis = RC.PolarAngleAxis || (() => null);
+        export const PolarRadiusAxis = RC.PolarRadiusAxis || (() => null);
+        export const Tooltip = RC.Tooltip || (() => null);
+        export const Legend = RC.Legend || (() => null);
+        export const ResponsiveContainer = RC.ResponsiveContainer || 
+          (({ children }) => window.React.createElement('div', 
+            { style: { width: '100%', height: '100%' }}, children));
+        export const Cell = RC.Cell || (() => null);
+        export const LabelList = RC.LabelList || (() => null);
+        export const Brush = RC.Brush || (() => null);
+        export const ReferenceLine = RC.ReferenceLine || (() => null);
+        export const ReferenceArea = RC.ReferenceArea || (() => null);
+        export const ReferenceDot = RC.ReferenceDot || (() => null);
+      `,
+      '@tanstack/react-query': `
+        const QueryClientContext = window.React.createContext(null);
+        
+        export class QueryClient {
+          constructor() { this.cache = new Map(); }
+          getQueryData(key) { return this.cache.get(JSON.stringify(key)); }
+          setQueryData(key, data) { this.cache.set(JSON.stringify(key), data); }
+          invalidateQueries() { this.cache.clear(); return Promise.resolve(); }
+          prefetchQuery() { return Promise.resolve(); }
+        }
+        
+        export function QueryClientProvider({ client, children }) {
+          return window.React.createElement(QueryClientContext.Provider, 
+            { value: client }, children);
+        }
+        
+        export function useQuery({ queryKey, queryFn, enabled = true }) {
+          const [state, setState] = window.React.useState({ 
+            data: undefined, isLoading: true, error: null, isError: false, isSuccess: false 
+          });
+          window.React.useEffect(() => {
+            if (!enabled) { setState(s => ({ ...s, isLoading: false })); return; }
+            let cancelled = false;
+            queryFn().then(data => {
+              if (!cancelled) setState({ data, isLoading: false, error: null, isError: false, isSuccess: true });
+            }).catch(error => {
+              if (!cancelled) setState({ data: undefined, isLoading: false, error, isError: true, isSuccess: false });
+            });
+            return () => { cancelled = true; };
+          }, [JSON.stringify(queryKey), enabled]);
+          return { ...state, refetch: () => queryFn().then(d => setState(s => ({ ...s, data: d }))) };
+        }
+        
+        export function useMutation({ mutationFn, onSuccess, onError }) {
+          const [state, setState] = window.React.useState({ 
+            isLoading: false, error: null, data: undefined, isPending: false 
+          });
+          return {
+            ...state,
+            mutate: (vars) => {
+              setState({ isLoading: true, isPending: true, error: null, data: undefined });
+              mutationFn(vars)
+                .then(data => { setState({ isLoading: false, isPending: false, error: null, data }); onSuccess?.(data); })
+                .catch(error => { setState({ isLoading: false, isPending: false, error, data: undefined }); onError?.(error); });
+            },
+            mutateAsync: (vars) => mutationFn(vars)
+          };
+        }
+        
+        export function useQueryClient() {
+          return window.React.useContext(QueryClientContext) || new QueryClient();
+        }
       `
     };
 
