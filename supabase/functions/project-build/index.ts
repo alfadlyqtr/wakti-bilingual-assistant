@@ -68,16 +68,10 @@ serve(async (req) => {
 
     console.log(`Building project with ${Object.keys(files).length} files, entry: ${entryPoint}`);
 
-    // Collect all CSS content
-    const cssFiles: string[] = [];
-    for (const [path, content] of Object.entries(files)) {
-      if (path.endsWith('.css')) {
-        // Remove @tailwind directives (we use CDN)
-        let css = content.replace(/@tailwind\s+[^;]+;/g, '');
-        css = css.replace(/@import\s+url\([^)]+\);?/g, '');
-        cssFiles.push(`/* ${path} */\n${css}`);
-      }
-    }
+    // PHASE 1 FIX: Do NOT collect all CSS files blindly.
+    // CSS will only be bundled when it's ACTUALLY IMPORTED by JS (matching Sandpack behavior).
+    // esbuild handles this automatically when loader: 'css' is used for .css files.
+    // We'll extract CSS from esbuild's outputFiles after the build.
 
     // Create shim content for external packages
     const packageShims: Record<string, string> = {
@@ -440,11 +434,35 @@ serve(async (req) => {
     // Note: Don't call esbuild.stop() in WASM mode - it's managed differently
     // and calling stop() can cause issues with subsequent builds
 
-    // Get the bundled JS
-    const bundledJs = result.outputFiles?.[0]?.text || '';
+    // PHASE 1 FIX: Extract JS and CSS from esbuild outputFiles
+    // esbuild only includes CSS that was ACTUALLY IMPORTED by the JS entry point
+    // This matches Sandpack's behavior - unused CSS files are NOT bundled
+    let bundledJs = '';
+    const importedCssChunks: string[] = [];
+    
+    for (const outputFile of (result.outputFiles || [])) {
+      if (outputFile.path.endsWith('.js')) {
+        bundledJs = outputFile.text;
+      } else if (outputFile.path.endsWith('.css')) {
+        // This CSS was imported by JS - clean it and include
+        let css = outputFile.text;
+        // Remove @tailwind directives (we use CDN)
+        css = css.replace(/@tailwind\s+[^;]+;/g, '');
+        css = css.replace(/@import\s+url\([^)]+\);?/g, '');
+        importedCssChunks.push(css);
+      }
+    }
+    
+    // If no JS output found, use the first output as fallback
+    if (!bundledJs && result.outputFiles?.[0]) {
+      bundledJs = result.outputFiles[0].text;
+    }
+    
+    const importedCss = importedCssChunks.join('\n\n');
+    console.log(`esbuild output: ${bundledJs.length} bytes JS, ${importedCss.length} bytes imported CSS (${importedCssChunks.length} chunks)`);
 
-    // Build the final bundle with shims
-    const finalBundle = buildFinalBundle(bundledJs, cssFiles.join('\n\n'));
+    // Build the final bundle with ONLY imported CSS
+    const finalBundle = buildFinalBundle(bundledJs, importedCss);
 
     const buildTime = Date.now() - startTime;
     console.log(`Build successful in ${buildTime}ms: ${finalBundle.js.length} bytes JS, ${finalBundle.css.length} bytes CSS`);
