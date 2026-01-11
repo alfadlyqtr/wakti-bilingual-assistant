@@ -541,11 +541,11 @@ const createLazyIconComponent = (iconName) => {
     
     // LAZY LOOKUP: Get lucide library at render time, not module load time
     const lucideLib = window.__lucideIcons || window.lucide || {};
-    const iconNode = lucideLib[iconName];
+    const iconDef = lucideLib[iconName];
     
-    if (!iconNode) {
+    if (!iconDef) {
       // Return a placeholder span instead of null to avoid React error #130
-      console.warn('[Lucide] Icon "' + iconName + '" not found in lucide library');
+      console.warn('[Lucide] Icon "' + iconName + '" not found in lucide library. Available:', Object.keys(lucideLib).slice(0, 5).join(', ') + '...');
       return window.React.createElement('span', {
         ref,
         className: className,
@@ -553,12 +553,31 @@ const createLazyIconComponent = (iconName) => {
       });
     }
     
-    // Create children from icon node definition
-    const children = [];
-    for (var i = 0; i < iconNode.length; i++) {
-      var item = iconNode[i];
-      if (Array.isArray(item) && item.length >= 2) {
-        children.push(window.React.createElement(item[0], Object.assign({ key: i }, item[1])));
+    // CRITICAL FIX: Handle Lucide UMD icon format correctly
+    // Lucide UMD format: [tagName, defaultAttrs, [[childTag, childAttrs], ...]]
+    // Example: Heart = ["svg", {xmlns:..., viewBox:...}, [["path", {d:"M..."}]]]
+    
+    let children = [];
+    
+    // Check if iconDef is an array (UMD format) or function (React component)
+    if (typeof iconDef === 'function') {
+      // It's already a React component - use it directly
+      return window.React.createElement(iconDef, { ref, size, color, strokeWidth, className, ...rest });
+    }
+    
+    if (Array.isArray(iconDef)) {
+      // UMD format: [tagName, attrs, children] where children = [[tag, attrs], ...]
+      const iconChildren = iconDef[2] || iconDef; // children array or the whole thing
+      
+      // Handle the children array
+      const childArray = Array.isArray(iconChildren) ? iconChildren : [];
+      
+      for (var i = 0; i < childArray.length; i++) {
+        var item = childArray[i];
+        if (Array.isArray(item) && item.length >= 2) {
+          // Format: [tagName, attributes]
+          children.push(window.React.createElement(item[0], Object.assign({ key: 'path-' + i }, item[1])));
+        }
       }
     }
     
