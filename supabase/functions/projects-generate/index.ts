@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validateProjectCSS, formatCSSWarnings, getCSSInheritanceGuidelines, type CSSWarning } from "../_shared/cssValidator.ts";
+import { AGENT_TOOLS, AGENT_SYSTEM_PROMPT, executeToolCall, getGeminiToolsConfig, type AgentDebugContext, type AgentResult } from "./agentTools.ts";
 
 // ============================================================================
 // WAKTI PROJECTS-GENERATE V2 - FULL REWRITE ENGINE
@@ -85,7 +86,7 @@ interface RequestBody {
   action?: 'start' | 'status' | 'get_files';
   jobId?: string;
   projectId?: string;
-  mode?: 'create' | 'edit' | 'plan' | 'execute' | 'chat';
+  mode?: 'create' | 'edit' | 'plan' | 'execute' | 'chat' | 'agent';
   prompt?: string;
   currentFiles?: Record<string, string>;
   assets?: string[];
@@ -1932,6 +1933,188 @@ ${filesStr}`;
       
       // Return as regular chat message
       return new Response(JSON.stringify({ ok: true, message: answer }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // ========================================================================
+    // AGENT MODE: Full autonomous agent with tool calling
+    // ========================================================================
+    if (mode === 'agent') {
+      if (!projectId) {
+        return new Response(JSON.stringify({ ok: false, error: 'Missing projectId' }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      if (!prompt) {
+        return new Response(JSON.stringify({ ok: false, error: 'Missing prompt' }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      
+      await assertProjectOwnership(supabase, projectId, userId);
+      
+      console.log(`[Agent Mode] Starting agent loop for: ${prompt.substring(0, 100)}...`);
+      
+      const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
+      if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
+      
+      // Build enhanced debug context for the agent
+      const agentDebugContext: AgentDebugContext = {
+        errors: debugContext?.errors || [],
+        networkErrors: debugContext?.networkErrors || [],
+        consoleLogs: debugContext?.consoleLogs || [],
+        autoFixAttempt: debugContext?.autoFixAttempt,
+        maxAutoFixAttempts: debugContext?.maxAutoFixAttempts
+      };
+      
+      // Build system prompt with project ID
+      const systemPromptWithProjectId = AGENT_SYSTEM_PROMPT.replace(/PROJECT_ID/g, projectId);
+      
+      // Prepare the initial user message with context
+      let userMessageContent = prompt;
+      
+      // Add debug context if there are errors
+      if (agentDebugContext.errors.length > 0 || agentDebugContext.networkErrors.length > 0) {
+        userMessageContent += `\n\n🔴 ERRORS DETECTED - YOU MUST FIX THESE:\n`;
+        
+        if (agentDebugContext.errors.length > 0) {
+          userMessageContent += `\n**Runtime Errors:**\n`;
+          agentDebugContext.errors.slice(-5).forEach((e, i) => {
+            userMessageContent += `${i + 1}. [${e.type}] ${e.message}\n`;
+            if (e.file) userMessageContent += `   File: ${e.file}${e.line ? `:${e.line}` : ''}\n`;
+          });
+        }
+        
+        if (agentDebugContext.networkErrors.length > 0) {
+          userMessageContent += `\n**Network Errors:**\n`;
+          agentDebugContext.networkErrors.slice(-3).forEach((e, i) => {
+            userMessageContent += `${i + 1}. ${e.method} ${e.url} → ${e.status} ${e.statusText}\n`;
+          });
+        }
+      }
+      
+      // Agent conversation loop
+      const messages: Array<{ role: string; parts: Array<{ text?: string; functionCall?: any; functionResponse?: any }> }> = [
+        { role: "user", parts: [{ text: userMessageContent }] }
+      ];
+      
+      const maxIterations = 8;
+      const toolCallsLog: Array<{ tool: string; args: any; result: any }> = [];
+      let taskCompleteResult: { summary: string; filesChanged: string[] } | null = null;
+      
+      for (let iteration = 0; iteration < maxIterations; iteration++) {
+        console.log(`[Agent Mode] Iteration ${iteration + 1}/${maxIterations}`);
+        
+        // Call Gemini with tools
+        const geminiResponse = await withTimeout(
+          fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-goog-api-key": GEMINI_API_KEY,
+              },
+              body: JSON.stringify({
+                contents: messages,
+                systemInstruction: { parts: [{ text: systemPromptWithProjectId }] },
+                tools: [getGeminiToolsConfig()],
+                generationConfig: {
+                  temperature: 0.2,
+                  maxOutputTokens: 8192,
+                },
+              }),
+            }
+          ),
+          120000,
+          'GEMINI_AGENT'
+        );
+        
+        if (!geminiResponse.ok) {
+          const errorText = await geminiResponse.text();
+          console.error(`[Agent Mode] Gemini error: ${errorText}`);
+          throw new Error(`Agent API error: ${geminiResponse.status}`);
+        }
+        
+        const geminiData = await geminiResponse.json();
+        const candidate = geminiData.candidates?.[0];
+        const finishReason = candidate?.finishReason;
+        const content = candidate?.content;
+        
+        if (!content) {
+          console.error(`[Agent Mode] No content in response`);
+          break;
+        }
+        
+        // Add model response to messages
+        messages.push({ role: "model", parts: content.parts });
+        
+        // Check for function calls
+        const functionCalls = content.parts?.filter((p: any) => p.functionCall);
+        
+        if (!functionCalls || functionCalls.length === 0) {
+          // No function calls, check if we got a text response
+          const textPart = content.parts?.find((p: any) => p.text);
+          if (textPart) {
+            console.log(`[Agent Mode] Got text response: ${textPart.text.substring(0, 100)}...`);
+          }
+          break;
+        }
+        
+        // Execute function calls
+        const functionResponses: Array<{ functionResponse: { name: string; response: any } }> = [];
+        
+        for (const fc of functionCalls) {
+          const { name, args } = fc.functionCall;
+          console.log(`[Agent Mode] Tool call: ${name}`, args);
+          
+          const result = await executeToolCall(projectId, { name, arguments: args || {} }, agentDebugContext, supabase);
+          
+          toolCallsLog.push({ tool: name, args, result });
+          functionResponses.push({
+            functionResponse: { name, response: result }
+          });
+          
+          // Check for task_complete
+          if (name === 'task_complete' && result.acknowledged) {
+            taskCompleteResult = {
+              summary: result.summary || 'Task completed',
+              filesChanged: result.filesChanged || []
+            };
+          }
+        }
+        
+        // Add function responses to messages
+        messages.push({ role: "user", parts: functionResponses });
+        
+        // If task is complete, exit loop
+        if (taskCompleteResult) {
+          console.log(`[Agent Mode] Task completed: ${taskCompleteResult.summary}`);
+          break;
+        }
+      }
+      
+      // Collect all files that were written
+      const filesChanged: string[] = [];
+      toolCallsLog.forEach(tc => {
+        if (tc.tool === 'write_file' && tc.result?.success && tc.result?.path) {
+          filesChanged.push(tc.result.path);
+        }
+        if (tc.tool === 'delete_file' && tc.result?.success && tc.result?.deletedPath) {
+          filesChanged.push(`(deleted) ${tc.result.deletedPath}`);
+        }
+      });
+      
+      const result: AgentResult = {
+        success: true,
+        summary: taskCompleteResult?.summary || `Agent completed after ${toolCallsLog.length} tool calls`,
+        filesChanged: taskCompleteResult?.filesChanged || filesChanged,
+        iterations: Math.ceil(toolCallsLog.length / 2),
+        toolCalls: toolCallsLog
+      };
+      
+      console.log(`[Agent Mode] Completed. Files changed: ${result.filesChanged.join(', ')}`);
+      
+      return new Response(JSON.stringify({ 
+        ok: true, 
+        mode: 'agent',
+        result
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // PLAN MODE: Propose changes without executing (Lovable-style)

@@ -67,6 +67,7 @@ interface DebugContextValue {
   
   // Error context for AI
   getDebugContextForAI: () => string;
+  getDebugContextForAgent: () => any; // Full context object for agent mode
   hasErrors: () => boolean;
   getErrorCount: () => number;
   
@@ -194,19 +195,36 @@ export const DebugContextProvider: React.FC<DebugContextProviderProps> = ({
   }, [maxAutoFixAttempts]);
 
   const captureConsoleLog = useCallback((log: Omit<CapturedConsoleLog, 'id' | 'timestamp'>) => {
-    // Only capture errors and warnings, skip regular logs to avoid noise
-    if (log.level !== 'error' && log.level !== 'warn') return;
-    
+    // Capture ALL console logs for agent mode (not just errors/warnings)
     setSession(prev => {
-      if (!prev) return prev;
+      if (!prev) {
+        // Auto-start session on first log
+        return {
+          id: generateId(),
+          startedAt: new Date(),
+          errors: [],
+          networkErrors: [],
+          consoleLogs: [{ ...log, id: generateId(), timestamp: new Date() }],
+          autoFixAttempts: 0,
+          maxAutoFixAttempts,
+          status: 'capturing'
+        };
+      }
       
-      // Limit console logs to last 50
+      // Deduplicate: don't add same log message twice in 1 second
+      const recentDupe = prev.consoleLogs.find(
+        l => l.message === log.message && 
+        new Date().getTime() - l.timestamp.getTime() < 1000
+      );
+      if (recentDupe) return prev;
+      
+      // Limit console logs to last 100
       const newLogs = [...prev.consoleLogs, { ...log, id: generateId(), timestamp: new Date() }];
-      if (newLogs.length > 50) newLogs.shift();
+      if (newLogs.length > 100) newLogs.shift();
       
       return { ...prev, consoleLogs: newLogs };
     });
-  }, []);
+  }, [maxAutoFixAttempts]);
 
   const hasErrors = useCallback(() => {
     return (session?.errors.length ?? 0) > 0 || (session?.networkErrors.length ?? 0) > 0;
@@ -278,6 +296,44 @@ export const DebugContextProvider: React.FC<DebugContextProviderProps> = ({
     return context;
   }, [session]);
 
+  // Get full debug context object for agent mode
+  const getDebugContextForAgent = useCallback(() => {
+    if (!session) {
+      return {
+        errors: [],
+        networkErrors: [],
+        consoleLogs: [],
+        autoFixAttempt: 0,
+        maxAutoFixAttempts: 3
+      };
+    }
+    
+    return {
+      errors: session.errors.map(e => ({
+        type: e.type,
+        message: e.message,
+        stack: e.stack,
+        file: e.file,
+        line: e.line,
+        componentStack: e.componentStack
+      })),
+      networkErrors: session.networkErrors.map(e => ({
+        url: e.url,
+        method: e.method,
+        status: e.status,
+        statusText: e.statusText,
+        responseBody: e.responseBody
+      })),
+      consoleLogs: session.consoleLogs.slice(-50).map(l => ({
+        level: l.level,
+        message: l.message,
+        timestamp: l.timestamp.toISOString()
+      })),
+      autoFixAttempt: session.autoFixAttempts,
+      maxAutoFixAttempts: session.maxAutoFixAttempts
+    };
+  }, [session]);
+
   const incrementAutoFixAttempt = useCallback(() => {
     let canContinue = true;
     setSession(prev => {
@@ -316,6 +372,7 @@ export const DebugContextProvider: React.FC<DebugContextProviderProps> = ({
     endSession,
     clearSession,
     getDebugContextForAI,
+    getDebugContextForAgent,
     hasErrors,
     getErrorCount,
     enableAutoFix,
