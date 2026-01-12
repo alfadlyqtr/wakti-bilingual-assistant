@@ -60,6 +60,27 @@ interface BackendContext {
   siteUsersCount: number;
 }
 
+// Debug context from the AI Coder debug system
+interface DebugContext {
+  errors: Array<{
+    type: 'runtime' | 'syntax' | 'network' | 'render' | 'build' | 'console';
+    message: string;
+    stack?: string;
+    file?: string;
+    line?: number;
+    componentStack?: string;
+  }>;
+  networkErrors: Array<{
+    url: string;
+    method: string;
+    status: number;
+    statusText: string;
+    responseBody?: string;
+  }>;
+  autoFixAttempt?: number;
+  maxAutoFixAttempts?: number;
+}
+
 interface RequestBody {
   action?: 'start' | 'status' | 'get_files';
   jobId?: string;
@@ -74,6 +95,7 @@ interface RequestBody {
   planToExecute?: string;
   uploadedAssets?: UploadedAsset[];
   backendContext?: BackendContext;
+  debugContext?: DebugContext;  // NEW: Debug context for error-aware editing
 }
 
 type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
@@ -1601,6 +1623,28 @@ serve(async (req: Request) => {
     const planToExecute = (body.planToExecute || '').toString();
     const uploadedAssets = Array.isArray(body.uploadedAssets) ? body.uploadedAssets : [];
     const backendContext = body.backendContext;
+    const debugContext = body.debugContext;  // NEW: Captured errors from preview
+    
+    // Build debug context section for prompts (OPTION B: Smart Error Context)
+    const debugContextStr = debugContext && (debugContext.errors?.length > 0 || debugContext.networkErrors?.length > 0) ? `
+
+### 🔴 DEBUG CONTEXT - ERRORS DETECTED IN PREVIEW
+The preview is showing errors that MUST be fixed. This is auto-fix attempt ${debugContext.autoFixAttempt || 1} of ${debugContext.maxAutoFixAttempts || 3}.
+
+**Runtime Errors (${debugContext.errors?.length || 0}):**
+${debugContext.errors?.slice(-5).map((e, i) => `
+${i + 1}. [${e.type}] ${e.message}
+   ${e.file ? `File: ${e.file}${e.line ? `:${e.line}` : ''}` : ''}
+   ${e.stack ? `Stack: ${e.stack.split('\\n').slice(0, 3).join('\\n')}` : ''}
+`).join('') || 'None'}
+
+**Network Errors (${debugContext.networkErrors?.length || 0}):**
+${debugContext.networkErrors?.slice(-3).map((e, i) => `
+${i + 1}. ${e.method} ${e.url} → ${e.status} ${e.statusText}
+`).join('') || 'None'}
+
+🚨 **CRITICAL INSTRUCTION**: You MUST fix these errors in your response. The previous code had bugs that broke the preview. Analyze the errors above and ensure your code changes resolve them.
+` : '';
     
     // Build uploaded assets section for prompts
     const uploadedAssetsStr = uploadedAssets.length > 0 
