@@ -22,6 +22,8 @@ interface RequestBody {
   email?: string;
   password?: string;
   name?: string;
+  sessionId?: string;
+  token?: string;
 }
 
 // Simple password hashing (for site users - not WAKTI auth users)
@@ -53,6 +55,13 @@ function verifySiteToken(token: string): { projectId: string; siteUserId: string
   } catch {
     return null;
   }
+}
+
+// Generate order number
+function generateOrderNumber(): string {
+  const timestamp = Date.now().toString(36).toUpperCase();
+  const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+  return `ORD-${timestamp}-${random}`;
 }
 
 // Validate that project backend is enabled and origin is allowed
@@ -90,6 +99,27 @@ async function validateRequest(projectId: string, origin: string | null): Promis
   }
 
   return { valid: true, ownerId: backend.user_id };
+}
+
+// Create notification for project owner
+async function createOwnerNotification(
+  projectId: string,
+  ownerId: string,
+  type: string,
+  title: string,
+  message: string,
+  data: Record<string, unknown> = {}
+) {
+  await supabase
+    .from('project_notifications')
+    .insert({
+      project_id: projectId,
+      user_id: ownerId,
+      type,
+      title,
+      message,
+      data,
+    });
 }
 
 // Handle form submissions
@@ -243,7 +273,7 @@ async function handleSiteAuth(action: string, projectId: string, ownerId: string
           password_hash: passwordHash,
           display_name: (name as string) || null,
         })
-        .select('id, email, display_name')
+        .select('id, email, display_name, role')
         .single();
 
       if (error) {
@@ -254,7 +284,7 @@ async function handleSiteAuth(action: string, projectId: string, ownerId: string
       }
 
       const token = generateSiteToken(projectId, user.id, user.email);
-      return { user: { id: user.id, email: user.email, name: user.display_name }, token };
+      return { user: { id: user.id, email: user.email, name: user.display_name, role: user.role }, token };
     }
 
     case 'login': {
@@ -265,7 +295,7 @@ async function handleSiteAuth(action: string, projectId: string, ownerId: string
 
       const { data: user, error } = await supabase
         .from('project_site_users')
-        .select('id, email, display_name, status')
+        .select('id, email, display_name, status, role, permissions')
         .eq('project_id', projectId)
         .eq('email', email as string)
         .eq('password_hash', passwordHash)
@@ -286,7 +316,7 @@ async function handleSiteAuth(action: string, projectId: string, ownerId: string
         .eq('id', user.id);
 
       const token = generateSiteToken(projectId, user.id, user.email);
-      return { user: { id: user.id, email: user.email, name: user.display_name }, token };
+      return { user: { id: user.id, email: user.email, name: user.display_name, role: user.role, permissions: user.permissions }, token };
     }
 
     case 'me': {
@@ -298,18 +328,842 @@ async function handleSiteAuth(action: string, projectId: string, ownerId: string
 
       const { data: user, error } = await supabase
         .from('project_site_users')
-        .select('id, email, display_name, metadata')
+        .select('id, email, display_name, metadata, role, permissions')
         .eq('id', decoded.siteUserId)
         .eq('project_id', projectId)
         .single();
 
       if (error || !user) throw new Error('User not found');
 
-      return { user: { id: user.id, email: user.email, name: user.display_name, metadata: user.metadata } };
+      return { user: { id: user.id, email: user.email, name: user.display_name, metadata: user.metadata, role: user.role, permissions: user.permissions } };
     }
 
     default:
       throw new Error(`Unknown auth action: ${action}`);
+  }
+}
+
+// Handle cart operations
+async function handleCart(action: string, projectId: string, ownerId: string, data: Record<string, unknown>) {
+  console.log(`[project-backend-api] Cart: ${action}`, data);
+
+  const siteUserId = data.siteUserId as string | undefined;
+  const sessionId = data.sessionId as string | undefined;
+
+  // Get or create cart
+  async function getOrCreateCart() {
+    const query = supabase
+      .from('project_carts')
+      .select('*')
+      .eq('project_id', projectId);
+
+    if (siteUserId) {
+      query.eq('site_user_id', siteUserId);
+    } else if (sessionId) {
+      query.eq('session_id', sessionId);
+    } else {
+      throw new Error('siteUserId or sessionId required');
+    }
+
+    const { data: existingCart } = await query.single();
+
+    if (existingCart) return existingCart;
+
+    // Create new cart
+    const { data: newCart, error } = await supabase
+      .from('project_carts')
+      .insert({
+        project_id: projectId,
+        site_user_id: siteUserId || null,
+        session_id: sessionId || null,
+        items: [],
+      })
+      .select()
+      .single();
+
+    if (error) throw new Error('Failed to create cart');
+    return newCart;
+  }
+
+  switch (action) {
+    case 'get': {
+      const cart = await getOrCreateCart();
+      return { cart };
+    }
+
+    case 'add': {
+      const cart = await getOrCreateCart();
+      const item = data.item as Record<string, unknown>;
+      if (!item) throw new Error('Item required');
+
+      const items = [...(cart.items as unknown[]), { ...item, addedAt: new Date().toISOString() }];
+
+      const { data: updatedCart, error } = await supabase
+        .from('project_carts')
+        .update({ items, updated_at: new Date().toISOString() })
+        .eq('id', cart.id)
+        .select()
+        .single();
+
+      if (error) throw new Error('Failed to add to cart');
+      return { cart: updatedCart };
+    }
+
+    case 'remove': {
+      const cart = await getOrCreateCart();
+      const itemIndex = data.itemIndex as number;
+      const itemId = data.itemId as string;
+
+      let items = cart.items as unknown[];
+      
+      if (typeof itemIndex === 'number') {
+        items = items.filter((_, i) => i !== itemIndex);
+      } else if (itemId) {
+        items = items.filter((item: any) => item.id !== itemId);
+      } else {
+        throw new Error('itemIndex or itemId required');
+      }
+
+      const { data: updatedCart, error } = await supabase
+        .from('project_carts')
+        .update({ items, updated_at: new Date().toISOString() })
+        .eq('id', cart.id)
+        .select()
+        .single();
+
+      if (error) throw new Error('Failed to remove from cart');
+      return { cart: updatedCart };
+    }
+
+    case 'update': {
+      const cart = await getOrCreateCart();
+      const itemIndex = data.itemIndex as number;
+      const updates = data.updates as Record<string, unknown>;
+
+      if (typeof itemIndex !== 'number') throw new Error('itemIndex required');
+      if (!updates) throw new Error('updates required');
+
+      const items = cart.items as any[];
+      if (itemIndex >= 0 && itemIndex < items.length) {
+        items[itemIndex] = { ...items[itemIndex], ...updates };
+      }
+
+      const { data: updatedCart, error } = await supabase
+        .from('project_carts')
+        .update({ items, updated_at: new Date().toISOString() })
+        .eq('id', cart.id)
+        .select()
+        .single();
+
+      if (error) throw new Error('Failed to update cart');
+      return { cart: updatedCart };
+    }
+
+    case 'clear': {
+      const cart = await getOrCreateCart();
+
+      const { data: updatedCart, error } = await supabase
+        .from('project_carts')
+        .update({ items: [], updated_at: new Date().toISOString() })
+        .eq('id', cart.id)
+        .select()
+        .single();
+
+      if (error) throw new Error('Failed to clear cart');
+      return { cart: updatedCart };
+    }
+
+    default:
+      throw new Error(`Unknown cart action: ${action}`);
+  }
+}
+
+// Handle order operations
+async function handleOrder(action: string, projectId: string, ownerId: string, data: Record<string, unknown>) {
+  console.log(`[project-backend-api] Order: ${action}`, data);
+
+  switch (action) {
+    case 'create': {
+      const { items, buyerInfo, siteUserId, sessionId, notes, totalAmount } = data;
+      
+      if (!items || !buyerInfo) throw new Error('items and buyerInfo required');
+
+      const orderNumber = generateOrderNumber();
+
+      const { data: order, error } = await supabase
+        .from('project_orders')
+        .insert({
+          project_id: projectId,
+          owner_id: ownerId,
+          site_user_id: siteUserId || null,
+          order_number: orderNumber,
+          items,
+          buyer_info: buyerInfo,
+          total_amount: totalAmount || null,
+          notes: notes || null,
+          status: 'pending',
+        })
+        .select()
+        .single();
+
+      if (error) throw new Error('Failed to create order');
+
+      // Clear cart if exists
+      if (siteUserId || sessionId) {
+        const query = supabase
+          .from('project_carts')
+          .update({ items: [], updated_at: new Date().toISOString() })
+          .eq('project_id', projectId);
+
+        if (siteUserId) {
+          query.eq('site_user_id', siteUserId);
+        } else {
+          query.eq('session_id', sessionId);
+        }
+        await query;
+      }
+
+      // Notify owner
+      const buyer = buyerInfo as any;
+      await createOwnerNotification(
+        projectId,
+        ownerId,
+        'order',
+        'New Order Received',
+        `Order ${orderNumber} from ${buyer.name || buyer.email || 'Customer'}`,
+        { orderId: order.id, orderNumber, buyerInfo }
+      );
+
+      // Decrement inventory if tracking enabled
+      const orderItems = items as any[];
+      for (const item of orderItems) {
+        if (item.collectionItemId) {
+          await supabase.rpc('decrement_inventory', {
+            p_project_id: projectId,
+            p_item_id: item.collectionItemId,
+            p_quantity: item.quantity || 1,
+          }).catch(() => {
+            // Ignore if no inventory tracking
+          });
+        }
+      }
+
+      return { order };
+    }
+
+    case 'list': {
+      const { status, limit = 50 } = data;
+      
+      let query = supabase
+        .from('project_orders')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false })
+        .limit(limit as number);
+
+      if (status) {
+        query = query.eq('status', status);
+      }
+
+      const { data: orders, error } = await query;
+
+      if (error) throw new Error('Failed to fetch orders');
+      return { orders };
+    }
+
+    case 'get': {
+      const { orderId } = data;
+      if (!orderId) throw new Error('orderId required');
+
+      const { data: order, error } = await supabase
+        .from('project_orders')
+        .select('*')
+        .eq('id', orderId)
+        .eq('project_id', projectId)
+        .single();
+
+      if (error) throw new Error('Order not found');
+      return { order };
+    }
+
+    case 'update': {
+      const { orderId, status, notes } = data;
+      if (!orderId) throw new Error('orderId required');
+
+      const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (status) updates.status = status;
+      if (notes !== undefined) updates.notes = notes;
+
+      const { data: order, error } = await supabase
+        .from('project_orders')
+        .update(updates)
+        .eq('id', orderId)
+        .eq('project_id', projectId)
+        .select()
+        .single();
+
+      if (error) throw new Error('Failed to update order');
+      return { order };
+    }
+
+    default:
+      throw new Error(`Unknown order action: ${action}`);
+  }
+}
+
+// Handle inventory operations
+async function handleInventory(action: string, projectId: string, ownerId: string, data: Record<string, unknown>) {
+  console.log(`[project-backend-api] Inventory: ${action}`, data);
+
+  switch (action) {
+    case 'check': {
+      const { itemId, itemIds } = data;
+      
+      let query = supabase
+        .from('project_inventory')
+        .select('*')
+        .eq('project_id', projectId);
+
+      if (itemId) {
+        query = query.eq('collection_item_id', itemId);
+      } else if (itemIds) {
+        query = query.in('collection_item_id', itemIds as string[]);
+      }
+
+      const { data: inventory, error } = await query;
+
+      if (error) throw new Error('Failed to check inventory');
+      return { inventory };
+    }
+
+    case 'set': {
+      const { itemId, collectionName, quantity, lowStockThreshold, trackInventory } = data;
+      if (!itemId) throw new Error('itemId required');
+
+      const { data: inventory, error } = await supabase
+        .from('project_inventory')
+        .upsert({
+          project_id: projectId,
+          collection_item_id: itemId,
+          collection_name: collectionName || 'products',
+          stock_quantity: quantity ?? 0,
+          low_stock_threshold: lowStockThreshold ?? 5,
+          track_inventory: trackInventory ?? true,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'project_id,collection_item_id',
+        })
+        .select()
+        .single();
+
+      if (error) throw new Error('Failed to set inventory');
+      return { inventory };
+    }
+
+    case 'adjust': {
+      const { itemId, delta } = data;
+      if (!itemId || delta === undefined) throw new Error('itemId and delta required');
+
+      const { data: current } = await supabase
+        .from('project_inventory')
+        .select('stock_quantity')
+        .eq('project_id', projectId)
+        .eq('collection_item_id', itemId)
+        .single();
+
+      const newQuantity = Math.max(0, (current?.stock_quantity || 0) + (delta as number));
+
+      const { data: inventory, error } = await supabase
+        .from('project_inventory')
+        .update({ stock_quantity: newQuantity, updated_at: new Date().toISOString() })
+        .eq('project_id', projectId)
+        .eq('collection_item_id', itemId)
+        .select()
+        .single();
+
+      if (error) throw new Error('Failed to adjust inventory');
+      return { inventory };
+    }
+
+    default:
+      throw new Error(`Unknown inventory action: ${action}`);
+  }
+}
+
+// Handle booking operations with WAKTI calendar sync
+async function handleBooking(action: string, projectId: string, ownerId: string, data: Record<string, unknown>) {
+  console.log(`[project-backend-api] Booking: ${action}`, data);
+
+  switch (action) {
+    case 'check': {
+      const { date, startTime, endTime, duration } = data;
+      if (!date) throw new Error('date required');
+
+      // Check owner's maw3d_events for conflicts
+      let query = supabase
+        .from('maw3d_events')
+        .select('id, title, start_time, end_time, event_date')
+        .eq('created_by', ownerId)
+        .eq('event_date', date);
+
+      const { data: existingEvents, error } = await query;
+
+      if (error) throw new Error('Failed to check availability');
+
+      // Check project_bookings too
+      const { data: existingBookings } = await supabase
+        .from('project_bookings')
+        .select('id, service_name, start_time, end_time, booking_date, status')
+        .eq('project_id', projectId)
+        .eq('booking_date', date)
+        .neq('status', 'cancelled');
+
+      // Check for conflicts if time specified
+      let conflicts: any[] = [];
+      if (startTime && endTime) {
+        const checkStart = startTime as string;
+        const checkEnd = endTime as string;
+
+        conflicts = [
+          ...(existingEvents || []).filter((e: any) => {
+            if (!e.start_time || !e.end_time) return false;
+            return !(checkEnd <= e.start_time || checkStart >= e.end_time);
+          }),
+          ...(existingBookings || []).filter((b: any) => {
+            if (!b.start_time || !b.end_time) return false;
+            return !(checkEnd <= b.start_time || checkStart >= b.end_time);
+          }),
+        ];
+      }
+
+      return {
+        available: conflicts.length === 0,
+        conflicts,
+        existingEvents: existingEvents || [],
+        existingBookings: existingBookings || [],
+      };
+    }
+
+    case 'create': {
+      const { serviceName, date, startTime, endTime, duration, customerInfo, siteUserId, notes } = data;
+      
+      if (!serviceName || !date || !customerInfo) {
+        throw new Error('serviceName, date, and customerInfo required');
+      }
+
+      const customer = customerInfo as any;
+
+      // Create booking record
+      const { data: booking, error: bookingError } = await supabase
+        .from('project_bookings')
+        .insert({
+          project_id: projectId,
+          owner_id: ownerId,
+          site_user_id: siteUserId || null,
+          service_name: serviceName,
+          booking_date: date,
+          start_time: startTime || null,
+          end_time: endTime || null,
+          duration_minutes: duration || null,
+          customer_info: customerInfo,
+          notes: notes || null,
+          status: 'pending',
+        })
+        .select()
+        .single();
+
+      if (bookingError) throw new Error('Failed to create booking');
+
+      // Create maw3d_event for owner's WAKTI calendar
+      const eventTitle = `📅 ${serviceName}`;
+      const eventDescription = `Customer: ${customer.name || 'N/A'}\nPhone: ${customer.phone || 'N/A'}\nEmail: ${customer.email || 'N/A'}${notes ? `\nNotes: ${notes}` : ''}`;
+
+      const { data: calendarEvent, error: eventError } = await supabase
+        .from('maw3d_events')
+        .insert({
+          created_by: ownerId,
+          title: eventTitle,
+          description: eventDescription,
+          event_date: date,
+          start_time: startTime || null,
+          end_time: endTime || null,
+          is_all_day: !startTime,
+          is_public: false,
+          background_type: 'color',
+          background_value: '#4F46E5', // Indigo for bookings
+          text_style: { titleColor: '#ffffff', descriptionColor: '#e0e0e0' },
+        })
+        .select('id')
+        .single();
+
+      // Link booking to calendar event
+      if (calendarEvent && !eventError) {
+        await supabase
+          .from('project_bookings')
+          .update({ maw3d_event_id: calendarEvent.id })
+          .eq('id', booking.id);
+
+        booking.maw3d_event_id = calendarEvent.id;
+      }
+
+      // Notify owner
+      await createOwnerNotification(
+        projectId,
+        ownerId,
+        'booking',
+        'New Booking',
+        `${serviceName} on ${date}${startTime ? ` at ${startTime}` : ''} - ${customer.name || customer.email || 'Customer'}`,
+        { bookingId: booking.id, serviceName, date, startTime, customerInfo }
+      );
+
+      return { booking, calendarEventId: calendarEvent?.id };
+    }
+
+    case 'list': {
+      const { status, fromDate, toDate, limit = 50 } = data;
+
+      let query = supabase
+        .from('project_bookings')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('booking_date', { ascending: true })
+        .order('start_time', { ascending: true })
+        .limit(limit as number);
+
+      if (status) query = query.eq('status', status);
+      if (fromDate) query = query.gte('booking_date', fromDate);
+      if (toDate) query = query.lte('booking_date', toDate);
+
+      const { data: bookings, error } = await query;
+
+      if (error) throw new Error('Failed to fetch bookings');
+      return { bookings };
+    }
+
+    case 'update': {
+      const { bookingId, status, notes } = data;
+      if (!bookingId) throw new Error('bookingId required');
+
+      const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (status) updates.status = status;
+      if (notes !== undefined) updates.notes = notes;
+
+      // Get current booking to find linked calendar event
+      const { data: currentBooking } = await supabase
+        .from('project_bookings')
+        .select('maw3d_event_id')
+        .eq('id', bookingId)
+        .single();
+
+      const { data: booking, error } = await supabase
+        .from('project_bookings')
+        .update(updates)
+        .eq('id', bookingId)
+        .eq('project_id', projectId)
+        .select()
+        .single();
+
+      if (error) throw new Error('Failed to update booking');
+
+      // Update calendar event if status changed to cancelled
+      if (status === 'cancelled' && currentBooking?.maw3d_event_id) {
+        await supabase
+          .from('maw3d_events')
+          .update({ 
+            title: `❌ CANCELLED: ${booking.service_name}`,
+            background_value: '#6B7280', // Gray for cancelled
+          })
+          .eq('id', currentBooking.maw3d_event_id);
+      }
+
+      return { booking };
+    }
+
+    default:
+      throw new Error(`Unknown booking action: ${action}`);
+  }
+}
+
+// Handle chat room operations
+async function handleChat(action: string, projectId: string, ownerId: string, data: Record<string, unknown>) {
+  console.log(`[project-backend-api] Chat: ${action}`, data);
+
+  switch (action) {
+    case 'rooms': {
+      const { siteUserId } = data;
+
+      let query = supabase
+        .from('project_chat_rooms')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('updated_at', { ascending: false });
+
+      // If site user, filter to rooms they're in
+      if (siteUserId) {
+        query = query.contains('participants', [siteUserId]);
+      }
+
+      const { data: rooms, error } = await query;
+
+      if (error) throw new Error('Failed to fetch chat rooms');
+      return { rooms };
+    }
+
+    case 'createRoom': {
+      const { name, type, participants } = data;
+
+      const { data: room, error } = await supabase
+        .from('project_chat_rooms')
+        .insert({
+          project_id: projectId,
+          name: name || null,
+          type: type || 'direct',
+          participants: participants || [],
+        })
+        .select()
+        .single();
+
+      if (error) throw new Error('Failed to create chat room');
+      return { room };
+    }
+
+    case 'messages': {
+      const { roomId, limit = 50, before } = data;
+      if (!roomId) throw new Error('roomId required');
+
+      let query = supabase
+        .from('project_chat_messages')
+        .select('*')
+        .eq('room_id', roomId)
+        .order('created_at', { ascending: false })
+        .limit(limit as number);
+
+      if (before) {
+        query = query.lt('created_at', before);
+      }
+
+      const { data: messages, error } = await query;
+
+      if (error) throw new Error('Failed to fetch messages');
+      return { messages: messages?.reverse() || [] };
+    }
+
+    case 'send': {
+      const { roomId, senderId, content, messageType } = data;
+      if (!roomId || !content) throw new Error('roomId and content required');
+
+      const { data: message, error } = await supabase
+        .from('project_chat_messages')
+        .insert({
+          project_id: projectId,
+          room_id: roomId,
+          sender_id: senderId || null,
+          content,
+          message_type: messageType || 'text',
+        })
+        .select()
+        .single();
+
+      if (error) throw new Error('Failed to send message');
+
+      // Update room's updated_at
+      await supabase
+        .from('project_chat_rooms')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', roomId);
+
+      return { message };
+    }
+
+    default:
+      throw new Error(`Unknown chat action: ${action}`);
+  }
+}
+
+// Handle comment operations
+async function handleComments(action: string, projectId: string, ownerId: string, data: Record<string, unknown>) {
+  console.log(`[project-backend-api] Comments: ${action}`, data);
+
+  switch (action) {
+    case 'list': {
+      const { itemType, itemId, limit = 50 } = data;
+      if (!itemType || !itemId) throw new Error('itemType and itemId required');
+
+      const { data: comments, error } = await supabase
+        .from('project_comments')
+        .select('*')
+        .eq('project_id', projectId)
+        .eq('item_type', itemType)
+        .eq('item_id', itemId)
+        .order('created_at', { ascending: true })
+        .limit(limit as number);
+
+      if (error) throw new Error('Failed to fetch comments');
+      return { comments };
+    }
+
+    case 'add': {
+      const { itemType, itemId, content, siteUserId, authorName, parentId } = data;
+      if (!itemType || !itemId || !content) throw new Error('itemType, itemId, and content required');
+
+      const { data: comment, error } = await supabase
+        .from('project_comments')
+        .insert({
+          project_id: projectId,
+          item_type: itemType,
+          item_id: itemId,
+          content,
+          site_user_id: siteUserId || null,
+          author_name: authorName || null,
+          parent_id: parentId || null,
+        })
+        .select()
+        .single();
+
+      if (error) throw new Error('Failed to add comment');
+      return { comment };
+    }
+
+    case 'delete': {
+      const { commentId } = data;
+      if (!commentId) throw new Error('commentId required');
+
+      const { error } = await supabase
+        .from('project_comments')
+        .delete()
+        .eq('id', commentId)
+        .eq('project_id', projectId);
+
+      if (error) throw new Error('Failed to delete comment');
+      return { success: true };
+    }
+
+    default:
+      throw new Error(`Unknown comments action: ${action}`);
+  }
+}
+
+// Handle role operations
+async function handleRoles(action: string, projectId: string, ownerId: string, data: Record<string, unknown>) {
+  console.log(`[project-backend-api] Roles: ${action}`, data);
+
+  switch (action) {
+    case 'assign': {
+      const { siteUserId, role, permissions } = data;
+      if (!siteUserId) throw new Error('siteUserId required');
+
+      const updates: Record<string, unknown> = {};
+      if (role) updates.role = role;
+      if (permissions) updates.permissions = permissions;
+
+      const { data: user, error } = await supabase
+        .from('project_site_users')
+        .update(updates)
+        .eq('id', siteUserId)
+        .eq('project_id', projectId)
+        .select('id, email, display_name, role, permissions')
+        .single();
+
+      if (error) throw new Error('Failed to assign role');
+      return { user };
+    }
+
+    case 'check': {
+      const { siteUserId, permission } = data;
+      if (!siteUserId) throw new Error('siteUserId required');
+
+      const { data: user, error } = await supabase
+        .from('project_site_users')
+        .select('role, permissions')
+        .eq('id', siteUserId)
+        .eq('project_id', projectId)
+        .single();
+
+      if (error || !user) throw new Error('User not found');
+
+      // Check permission
+      const hasPermission = permission
+        ? (user.permissions as string[] || []).includes(permission as string) || user.role === 'owner' || user.role === 'admin'
+        : true;
+
+      return { role: user.role, permissions: user.permissions, hasPermission };
+    }
+
+    case 'list': {
+      const { role } = data;
+
+      let query = supabase
+        .from('project_site_users')
+        .select('id, email, display_name, role, permissions, created_at, last_login')
+        .eq('project_id', projectId)
+        .eq('status', 'active');
+
+      if (role) {
+        query = query.eq('role', role);
+      }
+
+      const { data: users, error } = await query;
+
+      if (error) throw new Error('Failed to list users');
+      return { users };
+    }
+
+    default:
+      throw new Error(`Unknown roles action: ${action}`);
+  }
+}
+
+// Handle notifications
+async function handleNotifications(action: string, projectId: string, ownerId: string, data: Record<string, unknown>) {
+  console.log(`[project-backend-api] Notifications: ${action}`, data);
+
+  switch (action) {
+    case 'list': {
+      const { unreadOnly, limit = 50 } = data;
+
+      let query = supabase
+        .from('project_notifications')
+        .select('*')
+        .eq('user_id', ownerId)
+        .order('created_at', { ascending: false })
+        .limit(limit as number);
+
+      if (unreadOnly) {
+        query = query.eq('read', false);
+      }
+
+      if (projectId && projectId !== 'all') {
+        query = query.eq('project_id', projectId);
+      }
+
+      const { data: notifications, error } = await query;
+
+      if (error) throw new Error('Failed to fetch notifications');
+      return { notifications };
+    }
+
+    case 'markRead': {
+      const { notificationId, all } = data;
+
+      if (all) {
+        await supabase
+          .from('project_notifications')
+          .update({ read: true })
+          .eq('user_id', ownerId)
+          .eq('read', false);
+      } else if (notificationId) {
+        await supabase
+          .from('project_notifications')
+          .update({ read: true })
+          .eq('id', notificationId)
+          .eq('user_id', ownerId);
+      }
+
+      return { success: true };
+    }
+
+    default:
+      throw new Error(`Unknown notifications action: ${action}`);
   }
 }
 
@@ -437,13 +1291,37 @@ Deno.serve(async (req) => {
     // Route to handler
     let result: unknown;
 
-    // Parse action - format: "action" or "collection/name" or "auth/action"
+    // Parse action - format: "action" or "collection/name" or "auth/action" or "cart/action" etc.
     if (action?.startsWith('collection/')) {
       const collectionName = action.replace('collection/', '');
       result = await handleCollection(method, projectId, ownerId, collectionName, body?.data, itemId || body?.id);
     } else if (action?.startsWith('auth/')) {
       const authAction = action.replace('auth/', '');
       result = await handleSiteAuth(authAction, projectId, ownerId, body?.data || body || {});
+    } else if (action?.startsWith('cart/')) {
+      const cartAction = action.replace('cart/', '');
+      result = await handleCart(cartAction, projectId, ownerId, body?.data || body || {});
+    } else if (action?.startsWith('order/')) {
+      const orderAction = action.replace('order/', '');
+      result = await handleOrder(orderAction, projectId, ownerId, body?.data || body || {});
+    } else if (action?.startsWith('inventory/')) {
+      const inventoryAction = action.replace('inventory/', '');
+      result = await handleInventory(inventoryAction, projectId, ownerId, body?.data || body || {});
+    } else if (action?.startsWith('booking/')) {
+      const bookingAction = action.replace('booking/', '');
+      result = await handleBooking(bookingAction, projectId, ownerId, body?.data || body || {});
+    } else if (action?.startsWith('chat/')) {
+      const chatAction = action.replace('chat/', '');
+      result = await handleChat(chatAction, projectId, ownerId, body?.data || body || {});
+    } else if (action?.startsWith('comments/')) {
+      const commentsAction = action.replace('comments/', '');
+      result = await handleComments(commentsAction, projectId, ownerId, body?.data || body || {});
+    } else if (action?.startsWith('roles/')) {
+      const rolesAction = action.replace('roles/', '');
+      result = await handleRoles(rolesAction, projectId, ownerId, body?.data || body || {});
+    } else if (action?.startsWith('notifications/')) {
+      const notificationsAction = action.replace('notifications/', '');
+      result = await handleNotifications(notificationsAction, projectId, ownerId, body?.data || body || {});
     } else if (action === 'submit' || action === 'subscribe') {
       const formName = body?.formName || (action === 'subscribe' ? 'newsletter' : 'contact');
       result = await handleFormSubmit(projectId, ownerId, formName, body?.data || {}, origin);

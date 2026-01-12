@@ -2133,34 +2133,219 @@ export type Database = {
           },
         ]
       }
+      project_bookings: {
+        Row: {
+          booking_date: string
+          created_at: string | null
+          customer_info: Json
+          duration_minutes: number | null
+          end_time: string | null
+          id: string
+          maw3d_event_id: string | null
+          notes: string | null
+          owner_id: string
+          project_id: string
+          service_name: string
+          site_user_id: string | null
+          start_time: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          booking_date: string
+          created_at?: string | null
+          customer_info?: Json
+          duration_minutes?: number | null
+          end_time?: string | null
+          id?: string
+          maw3d_event_id?: string | null
+          notes?: string | null
+          owner_id: string
+          project_id: string
+          service_name: string
+          site_user_id?: string | null
+          start_time?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          booking_date?: string
+          created_at?: string | null
+          customer_info?: Json
+          duration_minutes?: number | null
+          end_time?: string | null
+          id?: string
+          maw3d_event_id?: string | null
+          notes?: string | null
+          owner_id?: string
+          project_id?: string
+          service_name?: string
+          site_user_id?: string | null
+          start_time?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_bookings_maw3d_event_id_fkey"
+            columns: ["maw3d_event_id"]
+            isOneToOne: false
+            referencedRelation: "maw3d_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_bookings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_bookings_site_user_id_fkey"
+            columns: ["site_user_id"]
+            isOneToOne: false
+            referencedRelation: "project_site_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_carts: {
+        Row: {
+          created_at: string | null
+          id: string
+          items: Json | null
+          project_id: string
+          session_id: string | null
+          site_user_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          items?: Json | null
+          project_id: string
+          session_id?: string | null
+          site_user_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          items?: Json | null
+          project_id?: string
+          session_id?: string | null
+          site_user_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_carts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_carts_site_user_id_fkey"
+            columns: ["site_user_id"]
+            isOneToOne: false
+            referencedRelation: "project_site_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_chat_messages: {
         Row: {
           content: string
           created_at: string
           id: string
+          message_type: string | null
           project_id: string
           role: string
+          room_id: string | null
+          sender_id: string | null
           snapshot: Json | null
         }
         Insert: {
           content: string
           created_at?: string
           id?: string
+          message_type?: string | null
           project_id: string
           role: string
+          room_id?: string | null
+          sender_id?: string | null
           snapshot?: Json | null
         }
         Update: {
           content?: string
           created_at?: string
           id?: string
+          message_type?: string | null
           project_id?: string
           role?: string
+          room_id?: string | null
+          sender_id?: string | null
           snapshot?: Json | null
         }
         Relationships: [
           {
             foreignKeyName: "project_chat_messages_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_chat_messages_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "project_chat_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_chat_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "project_site_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_chat_rooms: {
+        Row: {
+          created_at: string | null
+          id: string
+          metadata: Json | null
+          name: string | null
+          participants: Json | null
+          project_id: string
+          type: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          name?: string | null
+          participants?: Json | null
+          project_id: string
+          type?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          name?: string | null
+          participants?: Json | null
+          project_id?: string
+          type?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_chat_rooms_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -2252,6 +2437,64 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_comments: {
+        Row: {
+          author_name: string | null
+          content: string
+          created_at: string | null
+          id: string
+          item_id: string
+          item_type: string
+          parent_id: string | null
+          project_id: string
+          site_user_id: string | null
+        }
+        Insert: {
+          author_name?: string | null
+          content: string
+          created_at?: string | null
+          id?: string
+          item_id: string
+          item_type: string
+          parent_id?: string | null
+          project_id: string
+          site_user_id?: string | null
+        }
+        Update: {
+          author_name?: string | null
+          content?: string
+          created_at?: string | null
+          id?: string
+          item_id?: string
+          item_type?: string
+          parent_id?: string | null
+          project_id?: string
+          site_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_comments_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "project_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_comments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_comments_site_user_id_fkey"
+            columns: ["site_user_id"]
+            isOneToOne: false
+            referencedRelation: "project_site_users"
             referencedColumns: ["id"]
           },
         ]
@@ -2379,6 +2622,151 @@ export type Database = {
           },
         ]
       }
+      project_inventory: {
+        Row: {
+          collection_item_id: string
+          collection_name: string
+          id: string
+          low_stock_threshold: number | null
+          project_id: string
+          stock_quantity: number | null
+          track_inventory: boolean | null
+          updated_at: string | null
+        }
+        Insert: {
+          collection_item_id: string
+          collection_name: string
+          id?: string
+          low_stock_threshold?: number | null
+          project_id: string
+          stock_quantity?: number | null
+          track_inventory?: boolean | null
+          updated_at?: string | null
+        }
+        Update: {
+          collection_item_id?: string
+          collection_name?: string
+          id?: string
+          low_stock_threshold?: number | null
+          project_id?: string
+          stock_quantity?: number | null
+          track_inventory?: boolean | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_inventory_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_notifications: {
+        Row: {
+          created_at: string | null
+          data: Json | null
+          id: string
+          message: string | null
+          project_id: string
+          read: boolean | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          data?: Json | null
+          id?: string
+          message?: string | null
+          project_id: string
+          read?: boolean | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          data?: Json | null
+          id?: string
+          message?: string | null
+          project_id?: string
+          read?: boolean | null
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_notifications_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_orders: {
+        Row: {
+          buyer_info: Json
+          created_at: string | null
+          id: string
+          items: Json
+          notes: string | null
+          order_number: string
+          owner_id: string
+          project_id: string
+          site_user_id: string | null
+          status: string | null
+          total_amount: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          buyer_info?: Json
+          created_at?: string | null
+          id?: string
+          items?: Json
+          notes?: string | null
+          order_number: string
+          owner_id: string
+          project_id: string
+          site_user_id?: string | null
+          status?: string | null
+          total_amount?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          buyer_info?: Json
+          created_at?: string | null
+          id?: string
+          items?: Json
+          notes?: string | null
+          order_number?: string
+          owner_id?: string
+          project_id?: string
+          site_user_id?: string | null
+          status?: string | null
+          total_amount?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_orders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_orders_site_user_id_fkey"
+            columns: ["site_user_id"]
+            isOneToOne: false
+            referencedRelation: "project_site_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_site_users: {
         Row: {
           created_at: string | null
@@ -2389,8 +2777,11 @@ export type Database = {
           metadata: Json | null
           owner_id: string
           password_hash: string
+          permissions: Json | null
           project_id: string
+          role: string | null
           status: string | null
+          team_id: string | null
         }
         Insert: {
           created_at?: string | null
@@ -2401,8 +2792,11 @@ export type Database = {
           metadata?: Json | null
           owner_id: string
           password_hash: string
+          permissions?: Json | null
           project_id: string
+          role?: string | null
           status?: string | null
+          team_id?: string | null
         }
         Update: {
           created_at?: string | null
@@ -2413,12 +2807,54 @@ export type Database = {
           metadata?: Json | null
           owner_id?: string
           password_hash?: string
+          permissions?: Json | null
           project_id?: string
+          role?: string | null
           status?: string | null
+          team_id?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "project_site_users_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_site_users_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "project_teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_teams: {
+        Row: {
+          created_at: string | null
+          id: string
+          metadata: Json | null
+          name: string
+          project_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          name: string
+          project_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          name?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_teams_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
