@@ -799,7 +799,26 @@ Apply these styles consistently throughout the entire design.`;
             {isRTL ? `جاهز للبناء، ${userName}؟` : `Ready to build, ${userName}?`}
           </h1>
 
-          <div className="w-full max-w-2xl bg-white dark:bg-[#0c0f14] rounded-2xl shadow-2xl border border-white/20">
+          <div className="w-full max-w-2xl bg-white dark:bg-[#0c0f14] rounded-2xl shadow-2xl border border-white/20 relative">
+            {/* Limit Reached Overlay */}
+            {projects.length >= MAX_PROJECTS && (
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm rounded-2xl z-20 flex items-center justify-center">
+                <div className="text-center px-6">
+                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500/20 border-2 border-amber-500/50 rounded-full mb-3">
+                    <span className="text-2xl">🔒</span>
+                    <span className="text-sm font-bold text-amber-300 uppercase tracking-wider">
+                      {isRTL ? 'وصلت للحد الأقصى' : 'Limit Reached'}
+                    </span>
+                  </div>
+                  <p className="text-white/90 text-sm font-medium">
+                    {isRTL 
+                      ? 'لديك مشروعان نشطان. احذف مشروعًا لإنشاء جديد.'
+                      : 'You have 2 active projects. Delete one to create a new one.'}
+                  </p>
+                </div>
+              </div>
+            )}
+            
             <div className="p-4">
                 <textarea
                   id="projectPrompt"
@@ -813,7 +832,7 @@ Apply these styles consistently throughout the entire design.`;
                   }}
                   placeholder={`${isRTL ? 'اطلب من Wakti إنشاء ' : 'Ask Wakti to create '}${displayedPlaceholder}`}
                   className="w-full bg-transparent text-base outline-none placeholder:text-muted-foreground/50 resize-none min-h-[100px] max-h-[300px] overflow-y-auto"
-                  disabled={generating}
+                  disabled={generating || projects.length >= MAX_PROJECTS}
                   rows={4}
                   title={isRTL ? 'صف ما تريد بناءه' : 'Describe what you want to build'}
                 />
@@ -881,7 +900,7 @@ Apply these styles consistently throughout the entire design.`;
                   size="sm" 
                   className="gap-1.5 text-muted-foreground hover:text-foreground"
                   onClick={handleAttachClick}
-                  disabled={generating}
+                  disabled={generating || projects.length >= MAX_PROJECTS}
                 >
                   <Paperclip className="h-4 w-4" />
                   <span className="text-xs hidden sm:inline">{isRTL ? 'إرفاق' : 'Attach'}</span>
@@ -893,7 +912,7 @@ Apply these styles consistently throughout the entire design.`;
                   size="sm" 
                   className="gap-1.5 text-muted-foreground hover:text-foreground hover:bg-purple-500/10"
                   onClick={enhancePrompt}
-                  disabled={generating || isEnhancing || !prompt.trim()}
+                  disabled={generating || isEnhancing || !prompt.trim() || projects.length >= MAX_PROJECTS}
                   title={isRTL ? 'تحسين الطلب' : 'Enhance My Prompt'}
                 >
                   {isEnhancing ? (
@@ -911,7 +930,7 @@ Apply these styles consistently throughout the entire design.`;
                     size="sm" 
                     className="gap-1.5 text-muted-foreground hover:text-foreground"
                     onClick={() => setShowThemes(!showThemes)}
-                    disabled={generating}
+                    disabled={generating || projects.length >= MAX_PROJECTS}
                   >
                     {/* Color preview dots */}
                     <div className="flex -space-x-0.5">
@@ -1101,7 +1120,7 @@ Apply these styles consistently throughout the entire design.`;
                   variant="outline" 
                   size="sm" 
                   className="gap-1.5 text-xs"
-                  disabled={generating}
+                  disabled={generating || projects.length >= MAX_PROJECTS}
                 >
                   <MessageSquare className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">{isRTL ? 'محادثة' : 'Chat'}</span>
@@ -1111,7 +1130,7 @@ Apply these styles consistently throughout the entire design.`;
                 <Button
                   size="sm"
                   onClick={createProject}
-                  disabled={generating || !prompt.trim()}
+                  disabled={generating || !prompt.trim() || projects.length >= MAX_PROJECTS}
                   className="bg-[#060541] hover:bg-[#060541]/90 text-white gap-1.5"
                 >
                   {generating ? (

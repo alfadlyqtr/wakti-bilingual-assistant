@@ -7,7 +7,7 @@ import {
   Shield, Plus, SortAsc, Camera, Upload, X, 
   ChevronLeft, Trash2, FileText, MessageCircle, Calendar,
   Tag, Clock, CheckCircle, AlertTriangle, XCircle, Loader2,
-  Edit2
+  Edit2, ExternalLink
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -264,8 +264,9 @@ const MyWarranty: React.FC = () => {
       const isPdf = file.type === 'application/pdf';
       const mimeType = file.type;
 
-      // Upload to storage
-      const fileName = `${user.id}/${Date.now()}_${file.name}`;
+      // Upload to storage - sanitize filename to avoid URL issues
+      const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const fileName = `${user.id}/${Date.now()}_${sanitizedName}`;
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('warranty-docs')
         .upload(fileName, file);
@@ -275,6 +276,8 @@ const MyWarranty: React.FC = () => {
       const { data: urlData } = supabase.storage
         .from('warranty-docs')
         .getPublicUrl(fileName);
+      
+      console.log('[MyWarranty] Uploaded file URL:', urlData.publicUrl);
 
       // Call AI extraction
       const { data: aiData, error: aiError } = await supabase.functions.invoke('my-warranty-ai', {
@@ -301,8 +304,8 @@ const MyWarranty: React.FC = () => {
           ref_number: extracted.ref_number || '',
           support_contact: extracted.support_contact || '',
           category_name: '',
-          image_url: isPdf ? '' : urlData.publicUrl,
-          receipt_url: urlData.publicUrl,
+          image_url: isPdf ? '' : urlData.publicUrl.trim(),
+          receipt_url: urlData.publicUrl.trim(),
           file_type: isPdf ? 'pdf' : 'image',
           extracted_data: extracted,
           ai_summary: `Provider: ${extracted.provider || 'N/A'}\nRef: ${extracted.ref_number || 'N/A'}\nContact: ${extracted.support_contact || 'N/A'}`,
@@ -421,15 +424,21 @@ const MyWarranty: React.FC = () => {
     if (!askQuestion.trim() || !selectedItem) return;
 
     setIsAsking(true);
+    setAskAnswer(''); // Clear previous answer while loading
+    
     try {
+      // Build comprehensive context from ALL stored warranty data
       const context = JSON.stringify({
         product_name: selectedItem.product_name,
+        provider: selectedItem.provider,
+        ref_number: selectedItem.ref_number,
+        support_contact: selectedItem.support_contact,
         purchase_date: selectedItem.purchase_date,
         expiry_date: selectedItem.expiry_date,
         warranty_months: selectedItem.warranty_months,
         notes: selectedItem.notes,
         ai_summary: selectedItem.ai_summary,
-        extracted_data: selectedItem.extracted_data,
+        extracted_data: selectedItem.extracted_data, // Contains full document extraction
       });
 
       const { data, error } = await supabase.functions.invoke('my-warranty-ai', {
@@ -444,6 +453,9 @@ const MyWarranty: React.FC = () => {
 
       if (data?.success) {
         setAskAnswer(data.answer);
+        // Ensure we're in ask mode to see the answer
+        setViewMode('ask');
+        setActiveTab('ask');
       }
     } catch (error) {
       console.error('Error asking Wakti:', error);
@@ -488,6 +500,9 @@ const MyWarranty: React.FC = () => {
   const renderWarrantyCard = (item: WarrantyItem) => {
     const timeRemaining = getTimeRemaining(item.expiry_date);
     const tags = getUserTags(item);
+    // Sanitize URL by removing leading spaces and properly trimming
+    const rawUrl = (item.receipt_url || item.image_url || '').trim();
+    const isPdf = item.file_type === 'pdf' || rawUrl.toLowerCase().endsWith('.pdf');
 
     return (
       <div
@@ -497,18 +512,34 @@ const MyWarranty: React.FC = () => {
           setViewMode('detail');
         }}
         className="enhanced-card p-4 mb-3 cursor-pointer active:scale-[0.98] transition-transform"
-        style={{
-          background: 'linear-gradient(135deg, hsl(235, 25%, 12%) 0%, hsl(250, 20%, 14%) 100%)',
-        }}
       >
         <div className="flex gap-4">
           {/* Product Image */}
-          <div className="w-20 h-20 rounded-xl overflow-hidden bg-gradient-to-br from-amber-400 to-orange-500 flex-shrink-0">
-            {item.image_url ? (
-              <img src={item.image_url} alt={item.product_name} className="w-full h-full object-cover" />
+          <div className="w-20 h-20 rounded-xl overflow-hidden bg-white/5 border border-white/10 flex-shrink-0 relative">
+            {rawUrl && !isPdf ? (
+              <img 
+                src={rawUrl} 
+                alt={item.product_name} 
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                  const parent = (e.target as HTMLImageElement).parentElement;
+                  if (parent) {
+                    const fallback = document.createElement('div');
+                    fallback.className = 'w-full h-full flex items-center justify-center bg-white/5';
+                    fallback.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shield text-foreground/20"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>';
+                    parent.appendChild(fallback);
+                  }
+                }}
+              />
+            ) : isPdf ? (
+              <div className="w-full h-full flex flex-col items-center justify-center bg-red-500/10 gap-1">
+                <FileText className="w-8 h-8 text-red-400/60" />
+                <span className="text-[10px] text-red-400/80 font-medium">PDF</span>
+              </div>
             ) : (
               <div className="w-full h-full flex items-center justify-center">
-                <Shield className="w-8 h-8 text-white/80" />
+                <Shield className="w-8 h-8 text-foreground/20" />
               </div>
             )}
           </div>
@@ -560,7 +591,7 @@ const MyWarranty: React.FC = () => {
   // Render List View
   const renderWarrantiesTab = () => (
     <div className="flex flex-col h-full">
-      <div className="px-4 pt-4 pb-3">
+      <div className="px-4 pt-4 pb-3 solid-bg">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-foreground">{t.title}</h1>
@@ -579,7 +610,12 @@ const MyWarranty: React.FC = () => {
           <Button
             type="button"
             variant={statusFilter === 'all' ? 'default' : 'outline'}
-            className="rounded-full h-9"
+            className={
+              'rounded-full h-9 ' +
+              (statusFilter === 'all'
+                ? 'btn-enhanced'
+                : '')
+            }
             onClick={() => setStatusFilter('all')}
           >
             {t.filterAll}
@@ -587,7 +623,12 @@ const MyWarranty: React.FC = () => {
           <Button
             type="button"
             variant={statusFilter === 'expiring' ? 'default' : 'outline'}
-            className="rounded-full h-9"
+            className={
+              'rounded-full h-9 ' +
+              (statusFilter === 'expiring'
+                ? 'bg-orange-500/15 border border-orange-500/30 text-foreground hover:bg-orange-500/20'
+                : '')
+            }
             onClick={() => setStatusFilter('expiring')}
           >
             {t.filterExpiring}
@@ -595,7 +636,12 @@ const MyWarranty: React.FC = () => {
           <Button
             type="button"
             variant={statusFilter === 'expired' ? 'default' : 'outline'}
-            className="rounded-full h-9"
+            className={
+              'rounded-full h-9 ' +
+              (statusFilter === 'expired'
+                ? 'bg-red-500/15 border border-red-500/30 text-foreground hover:bg-red-500/20'
+                : '')
+            }
             onClick={() => setStatusFilter('expired')}
           >
             {t.filterExpired}
@@ -641,7 +687,7 @@ const MyWarranty: React.FC = () => {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pb-10">
+      <div className="flex-1 overflow-y-auto px-4 pb-24">
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -654,7 +700,7 @@ const MyWarranty: React.FC = () => {
             <button
               type="button"
               onClick={() => setViewMode('add')}
-              className="mt-6 w-16 h-16 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 shadow-lg shadow-blue-500/30 flex items-center justify-center active:scale-95 transition"
+              className="mt-6 w-16 h-16 rounded-full btn-enhanced flex items-center justify-center active:scale-95 transition"
               aria-label={t.addNew}
             >
               <Plus className="w-7 h-7 text-white" />
@@ -807,6 +853,8 @@ const MyWarranty: React.FC = () => {
               capture="environment"
               className="hidden"
               onChange={(e) => handleFileSelect(e, true)}
+              aria-label="Snap Photo"
+              title="Snap Photo"
             />
             <input
               ref={fileInputRef}
@@ -814,31 +862,45 @@ const MyWarranty: React.FC = () => {
               accept="image/*,application/pdf"
               className="hidden"
               onChange={(e) => handleFileSelect(e, false)}
+              aria-label="Upload Document"
+              title="Upload Document"
             />
 
-            {/* Preview */}
+            {/* Document Preview - LARGE & CLEAR */}
             {(newItem.image_url || newItem.receipt_url) && (
-              <div className="mb-6 relative">
-                {newItem.file_type === 'pdf' ? (
-                  <div className="w-full h-48 rounded-xl bg-gradient-to-br from-red-500/20 to-orange-500/20 border border-white/10 flex flex-col items-center justify-center gap-3">
-                    <FileText className="w-16 h-16 text-red-400" />
-                    <span className="text-sm text-muted-foreground">PDF Document</span>
-                  </div>
-                ) : (
-                  <img 
-                    src={newItem.image_url || newItem.receipt_url} 
-                    alt="Receipt" 
-                    className="w-full h-48 object-cover rounded-xl"
-                  />
-                )}
-                <Button
-                  variant="destructive"
-                  size="icon"
-                  className="absolute top-2 right-2"
-                  onClick={() => setNewItem(prev => ({ ...prev, image_url: '', receipt_url: '', file_type: '' }))}
-                >
-                  <X className="w-4 h-4" />
-                </Button>
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-medium text-foreground">{isRTL ? 'المستند' : 'Receipt'}</h4>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setNewItem(prev => ({ ...prev, image_url: '', receipt_url: '', file_type: '' }))}
+                  >
+                    <X className="w-3 h-3 mr-1" />
+                    {isRTL ? 'حذف' : 'Remove'}
+                  </Button>
+                </div>
+                <div className="relative w-full h-[400px] rounded-xl overflow-hidden bg-white/5 border-2 border-blue-500/30">
+                  {newItem.file_type === 'pdf' ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-4 bg-red-500/10">
+                      <FileText className="w-24 h-24 text-red-400" />
+                      <div className="text-center">
+                        <p className="text-foreground font-medium text-lg">PDF Document</p>
+                        <p className="text-xs text-blue-400 mt-2">✓ Uploaded & AI Analyzed</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <img 
+                      src={newItem.image_url || newItem.receipt_url} 
+                      alt="Receipt Preview" 
+                      className="w-full h-full object-contain bg-black/20"
+                      onError={(e) => {
+                        console.error('Image failed to load:', newItem.image_url || newItem.receipt_url);
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  )}
+                </div>
               </div>
             )}
 
@@ -1000,15 +1062,61 @@ const MyWarranty: React.FC = () => {
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-4 pb-32">
-          {/* Product Image */}
-          <div className="w-full h-48 rounded-xl overflow-hidden bg-gradient-to-br from-amber-400 to-orange-500 mb-4">
-            {selectedItem.image_url ? (
-              <img src={selectedItem.image_url} alt={selectedItem.product_name} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <Shield className="w-16 h-16 text-white/80" />
-              </div>
-            )}
+          {/* Document Preview - LARGE & PROMINENT */}
+          <div className="w-full mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-sm font-medium text-foreground">{isRTL ? 'المستند' : 'Document'}</h4>
+              {selectedItem.receipt_url && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => window.open(selectedItem.receipt_url, '_blank')}
+                  className="text-xs"
+                >
+                  <ExternalLink className="w-3 h-3 mr-1" />
+                  {isRTL ? 'فتح' : 'Open'}
+                </Button>
+              )}
+            </div>
+            <div className="w-full h-[400px] rounded-xl overflow-hidden bg-white/5 border border-white/10 cursor-pointer hover:border-blue-500/50 transition-all"
+              onClick={() => {
+                const url = selectedItem.receipt_url || selectedItem.image_url;
+                if (url) window.open(url, '_blank');
+              }}
+            >
+              {(() => {
+                const rawUrl = (selectedItem.receipt_url || selectedItem.image_url || '').trim();
+                const isPdf = selectedItem.file_type === 'pdf' || rawUrl.toLowerCase().endsWith('.pdf');
+                
+                if (rawUrl && !isPdf) {
+                  return (
+                    <img 
+                      src={rawUrl} 
+                      alt={selectedItem.product_name} 
+                      className="w-full h-full object-contain bg-black/20" 
+                    />
+                  );
+                } else if (isPdf) {
+                  return (
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-4 bg-red-500/5">
+                      <FileText className="w-24 h-24 text-red-400" />
+                      <div className="text-center">
+                        <p className="text-foreground font-medium text-lg">PDF Document</p>
+                        <p className="text-sm text-muted-foreground mt-2">Tap to open full document</p>
+                        <p className="text-xs text-blue-400 mt-1">✓ Saved & AI Analyzed</p>
+                      </div>
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-3">
+                      <Shield className="w-20 h-20 text-foreground/20" />
+                      <span className="text-sm text-muted-foreground">No document attached</span>
+                    </div>
+                  );
+                }
+              })()}
+            </div>
           </div>
 
           {/* Progress Bar */}
@@ -1165,7 +1273,44 @@ const MyWarranty: React.FC = () => {
           {selectedItem.receipt_url && (
             <Button
               className="w-full mb-3 bg-gradient-to-r from-blue-500 to-cyan-500"
-              onClick={() => window.open(selectedItem.receipt_url!, '_blank')}
+              onClick={async () => {
+                try {
+                  const rawUrl = (selectedItem.receipt_url || '').trim();
+                  if (!rawUrl) {
+                    toast({
+                      title: 'Error',
+                      description: isRTL ? 'لا يوجد إيصال' : 'No receipt available',
+                      variant: 'destructive'
+                    });
+                    return;
+                  }
+                  
+                  // Check if URL is accessible before opening
+                  try {
+                    const response = await fetch(rawUrl, { method: 'HEAD' });
+                    if (!response.ok) {
+                      toast({
+                        title: isRTL ? 'الملف غير موجود' : 'File Not Found',
+                        description: isRTL ? 'يرجى حذف هذا الضمان وإعادة رفعه' : 'Please delete this warranty and re-upload it',
+                        variant: 'destructive'
+                      });
+                      return;
+                    }
+                  } catch {
+                    // If HEAD request fails, try opening anyway
+                  }
+                  
+                  console.log('Opening receipt URL:', rawUrl);
+                  window.open(rawUrl, '_blank');
+                } catch (error) {
+                  console.error('Error opening receipt:', error);
+                  toast({
+                    title: 'Error',
+                    description: isRTL ? 'فشل في فتح الإيصال' : 'Could not open receipt',
+                    variant: 'destructive'
+                  });
+                }
+              }}
             >
               <FileText className="w-4 h-4 mr-2" />
               {t.viewReceipt}
@@ -1200,24 +1345,84 @@ const MyWarranty: React.FC = () => {
     );
   };
 
+  // Render Ask View (dedicated view for asking questions about a warranty)
+  const renderAskView = () => (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center gap-3 px-4 py-4 border-b border-white/10 shrink-0">
+        <Button variant="ghost" size="icon" onClick={() => setViewMode('detail')}>
+          <ChevronLeft className="w-5 h-5" />
+        </Button>
+        <div>
+          <h1 className="text-xl font-bold text-foreground">{t.askWakti}</h1>
+          <p className="text-sm text-muted-foreground">{selectedItem?.product_name}</p>
+        </div>
+      </div>
+
+      {/* Scrollable Chat Area */}
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        {selectedItem && (
+          <div className="space-y-4">
+            {/* AI Summary Card - Always at top */}
+            {selectedItem.ai_summary && (
+              <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                <h4 className="text-sm font-medium text-blue-400 mb-2">{t.aiSummary}</h4>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{selectedItem.ai_summary}</p>
+              </div>
+            )}
+
+            {/* Wakti's Answer - Shows ABOVE input when available */}
+            {askAnswer && (
+              <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <h4 className="text-sm font-medium text-emerald-400 mb-2">{isRTL ? 'إجابة وقتي' : 'Wakti\'s Answer'}</h4>
+                <p className="text-sm text-foreground whitespace-pre-wrap">{askAnswer}</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Fixed Input Area at Bottom */}
+      <div className="shrink-0 px-4 py-4 border-t border-white/10 bg-background">
+        <div className="space-y-3">
+          <Textarea
+            value={askQuestion}
+            onChange={(e) => setAskQuestion(e.target.value)}
+            placeholder={t.askQuestion}
+            className="min-h-[80px] bg-white/5 border-white/10"
+          />
+
+          <Button
+            className="w-full bg-gradient-to-r from-blue-500 to-cyan-500"
+            onClick={handleAskWakti}
+            disabled={isAsking || !askQuestion.trim()}
+          >
+            {isAsking ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <MessageCircle className="w-4 h-4 mr-2" />}
+            {isAsking ? (isRTL ? 'جاري التحليل...' : 'Analyzing...') : t.send}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+
   // Main render
   return (
     <div
       className="h-full w-full bg-background"
       style={{ direction: isRTL ? 'rtl' : 'ltr' }}
     >
-      {viewMode === 'add' ? renderAddView() : viewMode === 'detail' ? renderDetailView() : renderMainView()}
+      {viewMode === 'add' ? renderAddView() : viewMode === 'detail' ? renderDetailView() : viewMode === 'ask' ? renderAskView() : renderMainView()}
 
-      {/* Center-bottom FAB (+) - Only show when NOT in empty state or detail/add views */}
-      {viewMode !== 'add' && viewMode !== 'detail' && activeTab === 'warranties' && warranties.length > 0 && (
-        <div className="fixed left-1/2 -translate-x-1/2 bottom-8 z-50">
+      {/* Center-bottom FAB (+) - Only show when NOT in empty state or detail/add/ask views */}
+      {viewMode !== 'add' && viewMode !== 'detail' && viewMode !== 'ask' && activeTab === 'warranties' && warranties.length > 0 && (
+        <div className="fixed left-1/2 -translate-x-1/2 bottom-20 z-50">
           <button
             type="button"
             onClick={() => setViewMode('add')}
-            className="w-14 h-14 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 shadow-lg shadow-blue-500/30 flex items-center justify-center active:scale-95 transition"
+            className="w-14 h-14 rounded-full btn-enhanced flex items-center justify-center active:scale-95 transition"
             aria-label={t.addNew}
           >
-            <Plus className="w-6 h-6 text-white" />
+            <Plus className="w-7 h-7 text-white" />
           </button>
         </div>
       )}

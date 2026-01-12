@@ -8,7 +8,7 @@ import {
 } from "@codesandbox/sandpack-react";
 import { SandpackErrorListener } from "./SandpackErrorListener";
 import { atomDark } from "@codesandbox/sandpack-themes";
-import { Code2, Eye, FileCode, FileJson, FileType, CheckCircle2, MousePointer2, Monitor, Tablet, Smartphone, ExternalLink, RefreshCw, Download, Upload, Loader2, Settings, Share2 } from "lucide-react";
+import { Code2, Eye, FileCode, FileJson, FileType, CheckCircle2, MousePointer2, Monitor, Tablet, Smartphone, ExternalLink, RefreshCw, Download, Upload, Loader2, Settings, Share2, Save } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -82,6 +82,8 @@ interface SandpackStudioProps {
   elementSelectMode?: boolean;
   onElementSelect?: (elementRef: string, elementInfo?: SelectedElementInfo) => void;
   isLoading?: boolean; // Show loading overlay while AI is generating
+  onSave?: (files: Record<string, string>) => void;
+  isSaving?: boolean;
   deviceView?: 'desktop' | 'tablet' | 'mobile';
   onDeviceViewChange?: (view: 'desktop' | 'tablet' | 'mobile') => void;
   onRefresh?: () => void;
@@ -96,6 +98,8 @@ export default function SandpackStudio({
   elementSelectMode, 
   onElementSelect, 
   isLoading,
+  onSave,
+  isSaving = false,
   deviceView = 'desktop',
   onDeviceViewChange,
   onRefresh,
@@ -235,70 +239,98 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
   
   console.log('[SandpackStudio] Files:', Object.keys(formattedFiles));
 
-  return (
-    <div className="h-full w-full flex flex-col bg-[#0c0f14] border border-white/10 rounded-xl overflow-hidden shadow-2xl min-h-[500px] md:min-h-0">
-      {/* HEADER - STICKY */}
+  const Header = () => {
+    const { sandpack } = useSandpack();
+
+    const handleSave = () => {
+      if (!onSave) return;
+
+      const liveFiles: Record<string, string> = {};
+      for (const [path, file] of Object.entries(sandpack.files)) {
+        const anyFile = file as any;
+        liveFiles[path] = anyFile?.code ?? anyFile?.content ?? '';
+      }
+      onSave(liveFiles);
+    };
+
+    return (
       <div className="h-10 md:h-12 flex items-center justify-between px-3 md:px-4 border-b border-white/10 bg-[#0c0f14] shrink-0 sticky top-0 z-10">
         <div className="flex items-center gap-2 min-w-0">
-           <FileCode className="w-3.5 h-3.5 md:w-4 md:h-4 text-indigo-500 shrink-0" />
-           <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-gray-500 shrink-0">Editor</span>
-           
-           <div className="h-4 w-px bg-white/10 hidden xs:block" />
-           
-           {/* Device Switcher Dropdown */}
-           <DropdownMenu>
-             <DropdownMenuTrigger asChild>
-               <button 
-                 className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors shrink-0"
-                 title="Device view"
-               >
-                 {deviceView === 'desktop' && <Monitor className="h-3.5 w-3.5" />}
-                 {deviceView === 'tablet' && <Tablet className="h-3.5 w-3.5" />}
-                 {deviceView === 'mobile' && <Smartphone className="h-3.5 w-3.5" />}
-               </button>
-             </DropdownMenuTrigger>
-             <DropdownMenuContent align="start" className="w-40">
-               <DropdownMenuItem 
-                 onClick={() => onDeviceViewChange?.('desktop')}
-                 className={clsx("flex items-center gap-2 cursor-pointer", deviceView === 'desktop' && "bg-indigo-500/20")}
-               >
-                 <Monitor className="h-4 w-4" />
-                 <span>Desktop</span>
-               </DropdownMenuItem>
-               
-               <DropdownMenuItem 
-                 onClick={() => onDeviceViewChange?.('tablet')}
-                 className={clsx("flex items-center gap-2 cursor-pointer", deviceView === 'tablet' && "bg-indigo-500/20")}
-               >
-                 <Tablet className="h-4 w-4" />
-                 <span>Tablet</span>
-               </DropdownMenuItem>
-               
-               <DropdownMenuItem 
-                 onClick={() => onDeviceViewChange?.('mobile')}
-                 className={clsx("flex items-center gap-2 cursor-pointer", deviceView === 'mobile' && "bg-indigo-500/20")}
-               >
-                 <Smartphone className="h-4 w-4" />
-                 <span>Mobile</span>
-               </DropdownMenuItem>
-             </DropdownMenuContent>
-           </DropdownMenu>
-           
-           <div className="h-4 w-px bg-white/10 hidden xs:block" />
-           
-           <button 
-             onClick={() => {
-               const el = document.querySelector('.sandpack-preview-container');
-               if (el) el.requestFullscreen?.();
-             }}
-             className="p-1.5 text-zinc-400 hover:text-white flex items-center gap-1 transition-colors shrink-0"
-             title="Fullscreen"
-           >
-             <ExternalLink className="h-3.5 w-3.5" />
-           </button>
+          <FileCode className="w-3.5 h-3.5 md:w-4 md:h-4 text-indigo-500 shrink-0" />
+          <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-gray-500 shrink-0">Editor</span>
+          
+          <div className="h-4 w-px bg-white/10 hidden xs:block" />
+          
+          {/* Device Switcher Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button 
+                className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors shrink-0"
+                title="Device view"
+              >
+                {deviceView === 'desktop' && <Monitor className="h-3.5 w-3.5" />}
+                {deviceView === 'tablet' && <Tablet className="h-3.5 w-3.5" />}
+                {deviceView === 'mobile' && <Smartphone className="h-3.5 w-3.5" />}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-40">
+              <DropdownMenuItem 
+                onClick={() => onDeviceViewChange?.('desktop')}
+                className={clsx("flex items-center gap-2 cursor-pointer", deviceView === 'desktop' && "bg-indigo-500/20")}
+              >
+                <Monitor className="h-4 w-4" />
+                <span>Desktop</span>
+              </DropdownMenuItem>
+              
+              <DropdownMenuItem 
+                onClick={() => onDeviceViewChange?.('tablet')}
+                className={clsx("flex items-center gap-2 cursor-pointer", deviceView === 'tablet' && "bg-indigo-500/20")}
+              >
+                <Tablet className="h-4 w-4" />
+                <span>Tablet</span>
+              </DropdownMenuItem>
+              
+              <DropdownMenuItem 
+                onClick={() => onDeviceViewChange?.('mobile')}
+                className={clsx("flex items-center gap-2 cursor-pointer", deviceView === 'mobile' && "bg-indigo-500/20")}
+              >
+                <Smartphone className="h-4 w-4" />
+                <span>Mobile</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          
+          <div className="h-4 w-px bg-white/10 hidden xs:block" />
+          
+          <button 
+            onClick={() => {
+              const el = document.querySelector('.sandpack-preview-container');
+              if (el) el.requestFullscreen?.();
+            }}
+            className="p-1.5 text-zinc-400 hover:text-white flex items-center gap-1 transition-colors shrink-0"
+            title="Fullscreen"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+          </button>
         </div>
         
         <div className="flex items-center gap-2 shrink-0">
+          {/* Save (Code mode only) */}
+          {viewMode === 'code' && onSave && (
+            <button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors disabled:opacity-50"
+              title="Save"
+            >
+              {isSaving ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Save className="h-3.5 w-3.5" />
+              )}
+            </button>
+          )}
+
           {/* Actions Dropdown Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -349,61 +381,68 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
           {/* VIEW TOGGLE PILL */}
           <div className="flex bg-white/5 rounded-lg p-0.5 md:p-1 border border-white/5 shrink-0">
             {(['preview', 'code'] as const).map((mode) => (
-               <button 
-                 key={mode}
-                 onClick={() => setViewMode(mode)}
-                 className={clsx(
-                   "px-3 md:px-4 py-1 md:py-1.5 rounded-md text-[10px] md:text-xs font-medium transition-all capitalize flex items-center gap-1.5",
-                   viewMode === mode ? "bg-white/10 text-white shadow-sm" : "text-gray-500 hover:text-gray-300"
-                 )}
-               >
-                 {mode === 'preview' && <Eye className="w-3 h-3" />}
-                 {mode === 'code' && <Code2 className="w-3 h-3" />}
-                 <span>{mode}</span>
-               </button>
+              <button 
+                key={mode}
+                onClick={() => setViewMode(mode)}
+                className={clsx(
+                  "px-3 md:px-4 py-1 md:py-1.5 rounded-md text-[10px] md:text-xs font-medium transition-all capitalize flex items-center gap-1.5",
+                  viewMode === mode ? "bg-white/10 text-white shadow-sm" : "text-gray-500 hover:text-gray-300"
+                )}
+              >
+                {mode === 'preview' && <Eye className="w-3 h-3" />}
+                {mode === 'code' && <Code2 className="w-3 h-3" />}
+                <span>{mode}</span>
+              </button>
             ))}
           </div>
         </div>
       </div>
+    );
+  };
 
-      {/* SANDPACK ENGINE */}
-      <div className="flex-1 relative min-h-0 overflow-hidden">
-        <SandpackProvider
-          template="react"
-          theme={atomDark}
-          files={formattedFiles}
-          options={{
-            externalResources: ["https://cdn.tailwindcss.com"],
-            classes: {
-              "sp-wrapper": "h-full w-full block",
-              "sp-layout": "h-full w-full flex",
-              "sp-stack": "h-full w-full flex flex-col",
-              "sp-code-editor": "flex-1 overflow-auto",
-              "sp-preview": "flex-1"
-            },
-          }}
-          customSetup={{
-            dependencies: {
-              "lucide-react": "0.462.0",
-              "framer-motion": "10.16.4",
-              "@emotion/is-prop-valid": "^1.2.1",
-              "clsx": "2.0.0",
-              "tailwind-merge": "2.0.0",
-              "i18next": "^23.7.6",
-              "react-i18next": "^13.5.0",
-              "i18next-browser-languagedetector": "^7.2.0",
-              "date-fns": "^2.30.0",
-              "recharts": "^2.10.3",
-              "@tanstack/react-query": "^5.17.0"
-            }
-          }}
-          style={{ height: '100%', width: '100%' }}
-        >
+  return (
+    <SandpackProvider
+      template="react"
+      theme={atomDark}
+      files={formattedFiles}
+      options={{
+        externalResources: ["https://cdn.tailwindcss.com"],
+        classes: {
+          "sp-wrapper": "h-full w-full block",
+          "sp-layout": "h-full w-full flex",
+          "sp-stack": "h-full w-full flex flex-col",
+          "sp-code-editor": "flex-1 overflow-auto",
+          "sp-preview": "flex-1"
+        },
+      }}
+      customSetup={{
+        dependencies: {
+          "lucide-react": "0.462.0",
+          "framer-motion": "10.16.4",
+          "@emotion/is-prop-valid": "^1.2.1",
+          "clsx": "2.0.0",
+          "tailwind-merge": "2.0.0",
+          "i18next": "^23.7.6",
+          "react-i18next": "^13.5.0",
+          "i18next-browser-languagedetector": "^7.2.0",
+          "date-fns": "^2.30.0",
+          "recharts": "^2.10.3",
+          "@tanstack/react-query": "^5.17.0"
+        }
+      }}
+      style={{ height: '100%', width: '100%' }}
+    >
+      <div className="h-full w-full flex flex-col bg-[#0c0f14] border border-white/10 rounded-xl overflow-hidden shadow-2xl min-h-[500px] md:min-h-0">
+        {/* HEADER - STICKY */}
+        <Header />
+
+        {/* SANDPACK ENGINE */}
+        <div className="flex-1 relative min-h-0 overflow-hidden">
           <SandpackLayout style={{ height: '100%', width: '100%', border: 'none', backgroundColor: '#0c0f14' }}>
-            
+
             {/* LEFT SIDE: CUSTOM GOOGLE-STYLE EXPLORER */}
             {(viewMode === 'code') && (
-               <CustomFileSidebar />
+              <CustomFileSidebar />
             )}
 
             {/* CENTER: CODE EDITOR */}
@@ -486,7 +525,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                   showOpenInCodeSandbox={false} 
                   style={{ height: '100%' }} 
                 />
-                
+
                 {/* Visual Mode Indicator */}
                 {elementSelectMode && (
                   <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-4 py-2 rounded-full text-[10px] md:text-xs font-medium shadow-lg flex items-center gap-2 animate-pulse z-50 whitespace-nowrap">
@@ -501,10 +540,9 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
             {onRuntimeError && (
               <SandpackErrorListener onErrorDetected={onRuntimeError} />
             )}
-
           </SandpackLayout>
-        </SandpackProvider>
+        </div>
       </div>
-    </div>
+    </SandpackProvider>
   );
 }

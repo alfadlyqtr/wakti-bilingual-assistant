@@ -170,37 +170,37 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
         </div>
       </div>
 
-      {/* Upload Zone */}
+      {/* Upload Zone - Smaller & Compact */}
       <div
         {...getRootProps()}
         className={cn(
-          "relative border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all duration-300",
+          "relative border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all duration-300",
           isDragActive 
-            ? "border-primary bg-primary/10 scale-[1.02]" 
+            ? "border-primary bg-primary/10 scale-[1.01]" 
             : "border-border/50 hover:border-primary/50 hover:bg-primary/5",
           uploading && "opacity-50 pointer-events-none"
         )}
       >
         <input {...getInputProps()} />
-        <div className="flex flex-col items-center gap-3">
+        <div className={cn("flex items-center justify-center gap-4", isRTL && "flex-row-reverse")}>
           <div className={cn(
-            "w-16 h-16 rounded-2xl flex items-center justify-center transition-all duration-300",
+            "w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-300",
             isDragActive 
-              ? "bg-primary text-primary-foreground scale-110" 
+              ? "bg-primary text-primary-foreground" 
               : "bg-gradient-to-br from-primary/20 via-accent/20 to-secondary/20 text-primary"
           )}>
-            <Upload className="h-8 w-8" />
+            <Upload className="h-5 w-5" />
           </div>
-          <div>
-            <p className="text-base font-semibold text-foreground">
+          <div className={isRTL ? "text-right" : "text-left"}>
+            <p className="text-sm font-semibold text-foreground">
               {uploading 
                 ? (isRTL ? 'جاري الرفع...' : 'Uploading...')
                 : isDragActive 
-                  ? (isRTL ? 'أفلت الملفات هنا' : 'Drop files here')
-                  : (isRTL ? 'اسحب الملفات أو انقر للرفع' : 'Drag files or click to upload')
+                  ? (isRTL ? 'أفلت الملفات' : 'Drop files')
+                  : (isRTL ? 'انقر أو اسحب للرفع' : 'Click or drag to upload')
               }
             </p>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-[10px] text-muted-foreground">
               {isRTL ? 'صور، PDF، ملفات (حتى 10MB)' : 'Images, PDFs, files (up to 10MB)'}
             </p>
           </div>
@@ -274,9 +274,9 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
                       </p>
                     </div>
 
-                    {/* Actions Overlay */}
+                    {/* Actions - Always visible at bottom */}
                     <div className={cn(
-                      "absolute inset-0 bg-background/90 backdrop-blur-sm flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200",
+                      "absolute bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm flex items-center justify-center gap-1 p-1.5 border-t border-border/30",
                       isRTL && "flex-row-reverse"
                     )}>
                       {isImg && (
