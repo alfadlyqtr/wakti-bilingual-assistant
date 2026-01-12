@@ -1147,6 +1147,12 @@ The project has access to a simple backend API. Use it when users need:
 
 **API Endpoint:** https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
 
+**⚠️ CRITICAL - PROJECT ID:**
+- The projectId placeholder is: {{PROJECT_ID}}
+- It will be AUTO-REPLACED with the real project ID after generation
+- DO NOT extract IDs from image URLs, storage paths, or any other source!
+- NEVER use user_id as projectId - they are different!
+
 **1. Form Submission (Contact/Newsletter):**
 \`\`\`javascript
 const submitForm = async (formData) => {
@@ -1154,7 +1160,7 @@ const submitForm = async (formData) => {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      projectId: 'PROJECT_ID_HERE', // Replace with actual project ID
+      projectId: '{{PROJECT_ID}}', // AUTO-INJECTED - do not change
       action: 'submit',
       formName: 'contact', // or 'newsletter'
       data: formData
@@ -1169,7 +1175,7 @@ const submitForm = async (formData) => {
 const getProducts = async () => {
   const response = await fetch(
     'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api' +
-    '?projectId=PROJECT_ID_HERE&action=collection/products'
+    '?projectId={{PROJECT_ID}}&action=collection/products'
   );
   return response.json();
 };
@@ -1182,7 +1188,7 @@ const createProduct = async (productData) => {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      projectId: 'PROJECT_ID_HERE',
+      projectId: '{{PROJECT_ID}}', // AUTO-INJECTED - do not change
       action: 'collection/products',
       data: productData
     })
@@ -1191,7 +1197,6 @@ const createProduct = async (productData) => {
 };
 \`\`\`
 
-**IMPORTANT:** Replace 'PROJECT_ID_HERE' with the actual projectId from the request context.
 Only use the backend API when users explicitly ask for backend functionality like forms, data storage, or authentication.
 Do NOT add backend calls unless the user requests it.`;
 
@@ -2061,9 +2066,25 @@ Return ONLY the JSON object. No explanation.`;
           summary = summary ? `${summary} | CSS Warnings: ${warningsSummary}` : `CSS Warnings: ${warningsSummary}`;
         }
 
-        // Inject project ID into backend API calls
+        // Inject project ID into backend API calls (catches multiple placeholder patterns)
         for (const [path, content] of Object.entries(files)) {
-          files[path] = content.replace(/\{\{PROJECT_ID\}\}/g, projectId);
+          // Replace all known placeholder patterns
+          let fixed = content.replace(/\{\{PROJECT_ID\}\}|PROJECT_ID_HERE/g, projectId);
+          files[path] = fixed;
+        }
+        
+        // Post-generation validation: auto-fix any wrong projectId values
+        for (const [path, content] of Object.entries(files)) {
+          const wrongProjectIdPattern = /projectId:\s*['"]([a-f0-9-]{36})['"]/gi;
+          let match;
+          let fixedContent = content;
+          while ((match = wrongProjectIdPattern.exec(content)) !== null) {
+            if (match[1] !== projectId) {
+              console.warn(`[Create Mode] Auto-fixing wrong projectId: ${match[1]} → ${projectId} in ${path}`);
+              fixedContent = fixedContent.replace(new RegExp(`['"]${match[1]}['"]`, 'g'), `'${projectId}'`);
+            }
+          }
+          files[path] = fixedContent;
         }
 
         // Check if project uses backend API and auto-enable it
@@ -2144,9 +2165,25 @@ Return ONLY the JSON object. No explanation.`;
         }
       }
 
-      // Inject project ID into backend API calls
+      // Inject project ID into backend API calls (catches multiple placeholder patterns)
       for (const [path, content] of Object.entries(finalFilesToUpsert)) {
-        finalFilesToUpsert[path] = content.replace(/\{\{PROJECT_ID\}\}/g, projectId);
+        // Replace all known placeholder patterns
+        let fixed = content.replace(/\{\{PROJECT_ID\}\}|PROJECT_ID_HERE/g, projectId);
+        finalFilesToUpsert[path] = fixed;
+      }
+      
+      // Post-generation validation: auto-fix any wrong projectId values
+      for (const [path, content] of Object.entries(finalFilesToUpsert)) {
+        const wrongProjectIdPattern = /projectId:\s*['"]([a-f0-9-]{36})['"]/gi;
+        let match;
+        let fixedContent = content;
+        while ((match = wrongProjectIdPattern.exec(content)) !== null) {
+          if (match[1] !== projectId) {
+            console.warn(`[Edit Mode] Auto-fixing wrong projectId: ${match[1]} → ${projectId} in ${path}`);
+            fixedContent = fixedContent.replace(new RegExp(`['"]${match[1]}['"]`, 'g'), `'${projectId}'`);
+          }
+        }
+        finalFilesToUpsert[path] = fixedContent;
       }
 
       // Check if project uses backend API and auto-enable it
