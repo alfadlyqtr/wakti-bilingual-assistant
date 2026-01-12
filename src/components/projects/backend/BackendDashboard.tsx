@@ -472,7 +472,7 @@ export function BackendDashboard({ projectId, isRTL, onBack }: BackendDashboardP
 
         {/* Feature Tabs - Horizontal Scroll on Mobile */}
         <div className="relative">
-          <div className="flex overflow-x-auto scrollbar-none px-2 pb-3 gap-1.5 md:gap-2 md:px-4">
+          <div className="flex overflow-x-auto scrollbar-none px-3 pb-3 gap-2.5 md:gap-3 md:px-4">
             {FEATURE_TABS.map((tab) => {
               const Icon = tab.icon;
               const count = getBadgeCount(tab.id);
@@ -483,20 +483,19 @@ export function BackendDashboard({ projectId, isRTL, onBack }: BackendDashboardP
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={cn(
-                    "flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all shrink-0 active:scale-95",
-                    "min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0", // Touch-friendly on mobile
+                    "flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium transition-all shrink-0 active:scale-95",
+                    "min-w-[48px] min-h-[48px]", // Touch-friendly
                     isActive
-                      ? `bg-gradient-to-r ${tab.color} text-white shadow-lg`
-                      : "bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-foreground border border-white/5"
+                      ? `bg-gradient-to-r ${tab.color} text-white shadow-lg shadow-${tab.color.split(' ')[0].replace('from-', '')}/20`
+                      : "bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-foreground border border-white/10"
                   )}
                 >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  <span className="hidden sm:inline">{isRTL ? tab.labelAr : tab.label}</span>
+                  <Icon className="h-4.5 w-4.5 shrink-0" />
                   {count > 0 && (
                     <span className={cn(
-                      "px-1.5 py-0.5 text-[10px] rounded-full font-bold",
+                      "px-1.5 py-0.5 text-[10px] rounded-full font-bold min-w-[18px] text-center",
                       isActive 
-                        ? "bg-white/20 text-white" 
+                        ? "bg-white/25 text-white" 
                         : "bg-white/10 text-muted-foreground"
                     )}>
                       {count > 99 ? '99+' : count}
