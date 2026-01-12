@@ -188,6 +188,10 @@ const MyWarranty: React.FC = () => {
   const [askQuestion, setAskQuestion] = useState('');
   const [askAnswer, setAskAnswer] = useState('');
   const [isAsking, setIsAsking] = useState(false);
+  
+  // Document viewer modal state
+  const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
+  const [documentToView, setDocumentToView] = useState<{ url: string; type: 'image' | 'pdf' } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -246,6 +250,24 @@ const MyWarranty: React.FC = () => {
     const file = event.target.files?.[0];
     if (!file || !user) return;
 
+    // CLEAR all old state before starting new upload
+    setNewItem({
+      product_name: '',
+      purchase_date: '',
+      expiry_date: '',
+      warranty_months: '',
+      notes: '',
+      provider: '',
+      ref_number: '',
+      support_contact: '',
+      category_name: '',
+      image_url: '',
+      receipt_url: '',
+      file_type: '',
+      extracted_data: {},
+      ai_summary: '',
+    });
+    
     setIsAnalyzing(true);
     setViewMode('add');
 
@@ -811,7 +833,30 @@ const MyWarranty: React.FC = () => {
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-4 border-b border-white/10">
-        <Button variant="ghost" size="icon" onClick={() => setViewMode('list')}>
+        <Button variant="ghost" size="icon" onClick={() => {
+          // Clear form when going back
+          setNewItem({
+            product_name: '',
+            purchase_date: '',
+            expiry_date: '',
+            warranty_months: '',
+            notes: '',
+            provider: '',
+            ref_number: '',
+            support_contact: '',
+            category_name: '',
+            image_url: '',
+            receipt_url: '',
+            file_type: '',
+            extracted_data: {},
+            ai_summary: '',
+          });
+          setNewTagsInput('');
+          // Reset file inputs
+          if (cameraInputRef.current) cameraInputRef.current.value = '';
+          if (fileInputRef.current) fileInputRef.current.value = '';
+          setViewMode('list');
+        }}>
           <ChevronLeft className="w-5 h-5" />
         </Button>
         <h1 className="text-xl font-bold text-foreground">{t.addNew}</h1>
@@ -904,139 +949,131 @@ const MyWarranty: React.FC = () => {
               </div>
             )}
 
-            {/* Form Fields */}
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm text-muted-foreground mb-1 block">{t.productName} *</label>
-                <Input
-                  value={newItem.product_name}
-                  onChange={(e) => setNewItem(prev => ({ ...prev, product_name: e.target.value }))}
-                  className="bg-white/5 border-white/10"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm text-muted-foreground mb-1 block">{t.provider}</label>
-                  <Input
-                    value={newItem.provider}
-                    onChange={(e) => setNewItem(prev => ({ ...prev, provider: e.target.value }))}
-                    className="bg-white/5 border-white/10"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm text-muted-foreground mb-1 block">{t.refNumber}</label>
-                  <Input
-                    value={newItem.ref_number}
-                    onChange={(e) => setNewItem(prev => ({ ...prev, ref_number: e.target.value }))}
-                    className="bg-white/5 border-white/10"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm text-muted-foreground mb-1 block">{t.purchaseDate}</label>
-                  <Input
-                    type="date"
-                    value={newItem.purchase_date}
-                    onChange={(e) => setNewItem(prev => ({ ...prev, purchase_date: e.target.value }))}
-                    className="bg-white/5 border-white/10"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm text-muted-foreground mb-1 block">{t.expiryDate}</label>
-                  <Input
-                    type="date"
-                    value={newItem.expiry_date}
-                    onChange={(e) => setNewItem(prev => ({ ...prev, expiry_date: e.target.value }))}
-                    className="bg-white/5 border-white/10"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm text-muted-foreground mb-1 block">{t.warrantyMonths}</label>
-                  <Input
-                    type="number"
-                    value={newItem.warranty_months}
-                    onChange={(e) => setNewItem(prev => ({ ...prev, warranty_months: e.target.value }))}
-                    className="bg-white/5 border-white/10"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm text-muted-foreground mb-1 block">{t.supportContact}</label>
-                  <Input
-                    value={newItem.support_contact}
-                    onChange={(e) => setNewItem(prev => ({ ...prev, support_contact: e.target.value }))}
-                    className="bg-white/5 border-white/10"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm text-muted-foreground mb-1 block">{t.notes} ({t.optional})</label>
-                <Textarea
-                  value={newItem.notes}
-                  onChange={(e) => setNewItem(prev => ({ ...prev, notes: e.target.value }))}
-                  className="bg-white/5 border-white/10 min-h-[80px]"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm text-muted-foreground mb-1 block">Tags ({t.optional})</label>
-                <Input
-                  value={newTagsInput}
-                  onChange={(e) => setNewTagsInput(e.target.value)}
-                  placeholder="e.g. iPhone, TV, Car"
-                  className="bg-white/5 border-white/10"
-                />
-                <div className="mt-2 flex gap-2 flex-wrap">
-                  {newTagsInput
-                    .split(',')
-                    .map((x) => x.trim())
-                    .filter(Boolean)
-                    .slice(0, 8)
-                    .map((tag) => (
-                      <span key={tag} className="px-2 py-0.5 rounded-full text-xs bg-white/5 border border-white/10 text-foreground/80">
-                        {tag}
-                      </span>
-                    ))}
+            {/* AI Extracted Data - Display ALL captured information */}
+            {newItem.extracted_data && Object.keys(newItem.extracted_data).length > 0 && (
+              <div className="space-y-4">
+                <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-500/10 to-blue-500/10 border border-emerald-500/20">
+                  <h4 className="text-sm font-bold text-emerald-400 mb-3 flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4" />
+                    {isRTL ? 'البيانات المستخرجة بالذكاء الاصطناعي' : 'AI Extracted Data'}
+                  </h4>
+                  <div className="space-y-3">
+                    {/* Title */}
+                    {(newItem.extracted_data as any).title && (
+                      <div className="p-3 rounded-lg bg-white/5">
+                        <p className="text-xs text-muted-foreground mb-1">{isRTL ? 'العنوان' : 'Title'}</p>
+                        <p className="text-foreground font-medium">{(newItem.extracted_data as any).title}</p>
+                      </div>
+                    )}
+                    
+                    {/* Provider & Category */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {(newItem.extracted_data as any).provider && (
+                        <div className="p-3 rounded-lg bg-white/5">
+                          <p className="text-xs text-muted-foreground mb-1">{isRTL ? 'المزود' : 'Provider'}</p>
+                          <p className="text-foreground text-sm">{(newItem.extracted_data as any).provider}</p>
+                        </div>
+                      )}
+                      {(newItem.extracted_data as any).category && (
+                        <div className="p-3 rounded-lg bg-white/5">
+                          <p className="text-xs text-muted-foreground mb-1">{isRTL ? 'الفئة' : 'Category'}</p>
+                          <p className="text-foreground text-sm">{(newItem.extracted_data as any).category}</p>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Ref Number */}
+                    {(newItem.extracted_data as any).ref_number && (
+                      <div className="p-3 rounded-lg bg-white/5">
+                        <p className="text-xs text-muted-foreground mb-1">{isRTL ? 'رقم المرجع' : 'Reference Number'}</p>
+                        <p className="text-foreground text-sm font-mono">{(newItem.extracted_data as any).ref_number}</p>
+                      </div>
+                    )}
+                    
+                    {/* Dates */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {(newItem.extracted_data as any).purchase_date && (
+                        <div className="p-3 rounded-lg bg-white/5">
+                          <p className="text-xs text-muted-foreground mb-1">{isRTL ? 'تاريخ الشراء' : 'Purchase Date'}</p>
+                          <p className="text-foreground text-sm">{(newItem.extracted_data as any).purchase_date}</p>
+                        </div>
+                      )}
+                      {(newItem.extracted_data as any).expiry_date && (
+                        <div className="p-3 rounded-lg bg-white/5">
+                          <p className="text-xs text-muted-foreground mb-1">{isRTL ? 'تاريخ الانتهاء' : 'Expiry Date'}</p>
+                          <p className="text-foreground text-sm">{(newItem.extracted_data as any).expiry_date}</p>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Warranty Period */}
+                    {(newItem.extracted_data as any).warranty_period && (
+                      <div className="p-3 rounded-lg bg-white/5">
+                        <p className="text-xs text-muted-foreground mb-1">{isRTL ? 'مدة الضمان' : 'Warranty Period'}</p>
+                        <p className="text-foreground text-sm">{(newItem.extracted_data as any).warranty_period}</p>
+                      </div>
+                    )}
+                    
+                    {/* Support Contact */}
+                    {(newItem.extracted_data as any).support_contact && (
+                      <div className="p-3 rounded-lg bg-white/5">
+                        <p className="text-xs text-muted-foreground mb-1">{isRTL ? 'جهة الاتصال' : 'Support Contact'}</p>
+                        <p className="text-foreground text-sm">{(newItem.extracted_data as any).support_contact}</p>
+                      </div>
+                    )}
+                    
+                    {/* Notes - This contains ALL the comprehensive details */}
+                    {(newItem.extracted_data as any).notes && (
+                      <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                        <p className="text-xs text-blue-400 mb-2 font-medium">{isRTL ? 'التفاصيل الكاملة' : 'Complete Details'}</p>
+                        <p className="text-foreground text-sm whitespace-pre-wrap leading-relaxed">{(newItem.extracted_data as any).notes}</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-
-              {/* AI Summary */}
-              {newItem.ai_summary && (
-                <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
-                  <h4 className="text-sm font-medium text-blue-400 mb-2">AI Summary</h4>
-                  <p className="text-sm text-muted-foreground">{newItem.ai_summary}</p>
-                </div>
-              )}
-            </div>
+            )}
           </>
         )}
       </div>
 
-      {/* Save Button */}
-      {!isAnalyzing && (
+      {/* Save Button - Only show if we have extracted data */}
+      {!isAnalyzing && newItem.extracted_data && Object.keys(newItem.extracted_data).length > 0 && (
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-xl border-t border-white/10 pb-safe">
-          <div className="flex gap-3">
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => setViewMode('list')}
-            >
-              {t.cancel}
-            </Button>
-            <Button
-              className="flex-1 bg-gradient-to-r from-blue-500 to-cyan-500"
-              onClick={handleSave}
-              disabled={!newItem.product_name}
-            >
-              {t.save}
-            </Button>
-          </div>
+          <Button
+            className="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white font-bold py-3"
+            onClick={async () => {
+              await handleSave();
+              // Clear form after successful save
+              setNewItem({
+                product_name: '',
+                purchase_date: '',
+                expiry_date: '',
+                warranty_months: '',
+                notes: '',
+                provider: '',
+                ref_number: '',
+                support_contact: '',
+                category_name: '',
+                image_url: '',
+                receipt_url: '',
+                file_type: '',
+                extracted_data: {},
+                ai_summary: '',
+              });
+              setNewTagsInput('');
+              // Reset file inputs
+              if (cameraInputRef.current) cameraInputRef.current.value = '';
+              if (fileInputRef.current) fileInputRef.current.value = '';
+              // Go back to list
+              setViewMode('list');
+              // Refresh data
+              fetchData();
+            }}
+          >
+            <CheckCircle className="w-5 h-5 mr-2" />
+            {isRTL ? 'حفظ الضمان' : 'Save Warranty'}
+          </Button>
         </div>
       )}
     </div>
@@ -1273,43 +1310,21 @@ const MyWarranty: React.FC = () => {
           {selectedItem.receipt_url && (
             <Button
               className="w-full mb-3 bg-gradient-to-r from-blue-500 to-cyan-500"
-              onClick={async () => {
-                try {
-                  const rawUrl = (selectedItem.receipt_url || '').trim();
-                  if (!rawUrl) {
-                    toast({
-                      title: 'Error',
-                      description: isRTL ? 'لا يوجد إيصال' : 'No receipt available',
-                      variant: 'destructive'
-                    });
-                    return;
-                  }
-                  
-                  // Check if URL is accessible before opening
-                  try {
-                    const response = await fetch(rawUrl, { method: 'HEAD' });
-                    if (!response.ok) {
-                      toast({
-                        title: isRTL ? 'الملف غير موجود' : 'File Not Found',
-                        description: isRTL ? 'يرجى حذف هذا الضمان وإعادة رفعه' : 'Please delete this warranty and re-upload it',
-                        variant: 'destructive'
-                      });
-                      return;
-                    }
-                  } catch {
-                    // If HEAD request fails, try opening anyway
-                  }
-                  
-                  console.log('Opening receipt URL:', rawUrl);
-                  window.open(rawUrl, '_blank');
-                } catch (error) {
-                  console.error('Error opening receipt:', error);
+              onClick={() => {
+                const rawUrl = (selectedItem.receipt_url || '').trim();
+                if (!rawUrl) {
                   toast({
                     title: 'Error',
-                    description: isRTL ? 'فشل في فتح الإيصال' : 'Could not open receipt',
+                    description: isRTL ? 'لا يوجد إيصال' : 'No receipt available',
                     variant: 'destructive'
                   });
+                  return;
                 }
+                
+                // Open document in modal
+                const isPdf = selectedItem.file_type === 'pdf' || rawUrl.toLowerCase().endsWith('.pdf');
+                setDocumentToView({ url: rawUrl, type: isPdf ? 'pdf' : 'image' });
+                setIsDocumentModalOpen(true);
               }}
             >
               <FileText className="w-4 h-4 mr-2" />
@@ -1424,6 +1439,48 @@ const MyWarranty: React.FC = () => {
           >
             <Plus className="w-7 h-7 text-white" />
           </button>
+        </div>
+      )}
+
+      {/* Document Viewer Modal */}
+      {isDocumentModalOpen && documentToView && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm"
+          onClick={() => setIsDocumentModalOpen(false)}
+        >
+          <div 
+            className="relative w-full h-full max-w-6xl max-h-[90vh] m-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close Button */}
+            <button
+              onClick={() => setIsDocumentModalOpen(false)}
+              className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/50 hover:bg-black/70 text-white transition-all"
+              aria-label={isRTL ? 'إغلاق' : 'Close'}
+              title={isRTL ? 'إغلاق' : 'Close'}
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            {/* Document Display */}
+            <div className="w-full h-full flex items-center justify-center">
+              {documentToView.type === 'pdf' ? (
+                <div className="w-full h-full bg-white rounded-lg overflow-hidden">
+                  <iframe
+                    src={documentToView.url}
+                    className="w-full h-full"
+                    title="PDF Document"
+                  />
+                </div>
+              ) : (
+                <img
+                  src={documentToView.url}
+                  alt="Document"
+                  className="max-w-full max-h-full object-contain rounded-lg"
+                />
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

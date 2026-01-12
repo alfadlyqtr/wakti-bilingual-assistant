@@ -144,6 +144,104 @@ async function handleFormSubmit(projectId: string, ownerId: string, formName: st
     throw new Error('Failed to save form submission');
   }
 
+  // AUTO-CREATE BOOKING: If form is a booking form, also create a booking record
+  const isBookingForm = formName.toLowerCase().includes('booking') || 
+                        formName.toLowerCase().includes('appointment') ||
+                        formName.toLowerCase().includes('reservation') ||
+                        formName.toLowerCase().includes('حجز');
+  
+  if (isBookingForm) {
+    console.log(`[project-backend-api] Detected booking form, auto-creating booking record`);
+    
+    try {
+      // Extract booking info from form data
+      const customerInfo = {
+        name: data.name || data.fullName || data.full_name || data.customerName || data.الاسم || 'Customer',
+        email: data.email || data.البريد || '',
+        phone: data.phone || data.mobile || data.الهاتف || data.الجوال || '',
+      };
+      
+      const serviceName = data.service || data.serviceName || data.service_name || data.الخدمة || formName;
+      const bookingDate = data.date || data.booking_date || data.bookingDate || data.التاريخ || new Date().toISOString().split('T')[0];
+      const startTime = data.time || data.start_time || data.startTime || data.الوقت || null;
+      const notes = data.notes || data.message || data.الملاحظات || data.الرسالة || '';
+
+      // Get project name for calendar entry
+      const { data: project } = await supabase
+        .from('projects')
+        .select('name')
+        .eq('id', projectId)
+        .single();
+
+      const projectName = project?.name || 'Project';
+
+      // Create booking record
+      const { data: booking, error: bookingError } = await supabase
+        .from('project_bookings')
+        .insert({
+          project_id: projectId,
+          owner_id: ownerId,
+          service_name: serviceName,
+          booking_date: bookingDate,
+          start_time: startTime,
+          customer_info: customerInfo,
+          notes: notes,
+          status: 'pending',
+        })
+        .select()
+        .single();
+
+      if (!bookingError && booking) {
+        console.log(`[project-backend-api] Auto-created booking: ${booking.id}`);
+        
+        // Create calendar entry for owner
+        const entryTitle = `📅 [${projectName}] ${serviceName}`;
+        const entryDescription = `Customer: ${customerInfo.name}\nPhone: ${customerInfo.phone || 'N/A'}\nEmail: ${customerInfo.email || 'N/A'}${notes ? `\nNotes: ${notes}` : ''}`;
+
+        const { data: calendarEntry } = await supabase
+          .from('project_calendar_entries')
+          .insert({
+            project_id: projectId,
+            owner_id: ownerId,
+            source_type: 'booking',
+            source_id: booking.id,
+            title: entryTitle,
+            description: entryDescription,
+            entry_date: bookingDate,
+            start_time: startTime,
+            is_all_day: !startTime,
+            color: '#4F46E5',
+            metadata: { serviceName, customerInfo, formSubmissionId: result.id },
+          })
+          .select('id')
+          .single();
+
+        // Link booking to calendar entry
+        if (calendarEntry) {
+          await supabase
+            .from('project_bookings')
+            .update({ calendar_entry_id: calendarEntry.id })
+            .eq('id', booking.id);
+        }
+
+        // Notify owner
+        await createOwnerNotification(
+          projectId,
+          ownerId,
+          'booking',
+          'New Booking',
+          `${serviceName} on ${bookingDate}${startTime ? ` at ${startTime}` : ''} - ${customerInfo.name}`,
+          { bookingId: booking.id, formSubmissionId: result.id }
+        );
+
+        return { success: true, id: result.id, bookingId: booking.id, calendarEntryId: calendarEntry?.id };
+      }
+    } catch (bookingErr) {
+      console.error(`[project-backend-api] Auto-booking creation failed:`, bookingErr);
+      // Don't fail the form submission, just log the error
+    }
+  }
+
   return { success: true, id: result.id };
 }
 

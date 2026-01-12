@@ -55,8 +55,41 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
 
   const isImage = (fileType: string | null) => fileType?.startsWith('image/');
 
-  const getPublicUrl = (storagePath: string) => {
-    const { data } = supabase.storage.from('project-uploads').getPublicUrl(storagePath);
+  // State for signed URLs (for private bucket)
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+
+  // Generate signed URLs for all uploads
+  React.useEffect(() => {
+    const generateSignedUrls = async () => {
+      const urls: Record<string, string> = {};
+      for (const upload of uploads) {
+        try {
+          const { data, error } = await supabase.storage
+            .from('project-uploads')
+            .createSignedUrl(upload.storage_path, 3600); // 1 hour expiry
+          
+          if (data?.signedUrl) {
+            urls[upload.id] = data.signedUrl;
+          }
+        } catch (err) {
+          console.error('Error generating signed URL:', err);
+        }
+      }
+      setSignedUrls(urls);
+    };
+
+    if (uploads.length > 0) {
+      generateSignedUrls();
+    }
+  }, [uploads]);
+
+  const getFileUrl = (upload: UploadedFile) => {
+    // Use signed URL if available, otherwise try public URL
+    if (signedUrls[upload.id]) {
+      return signedUrls[upload.id];
+    }
+    // Fallback to public URL (in case bucket is public)
+    const { data } = supabase.storage.from('project-uploads').getPublicUrl(upload.storage_path);
     return data.publicUrl;
   };
 
@@ -116,7 +149,7 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
   });
 
   const handleDownload = (upload: UploadedFile) => {
-    const url = getPublicUrl(upload.storage_path);
+    const url = getFileUrl(upload);
     const link = document.createElement('a');
     link.href = url;
     link.download = upload.filename;
@@ -240,7 +273,7 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
               {uploads.map((upload) => {
                 const FileIcon = getFileIcon(upload.file_type);
                 const isImg = isImage(upload.file_type);
-                const publicUrl = getPublicUrl(upload.storage_path);
+                const publicUrl = getFileUrl(upload);
 
                 return (
                   <div
@@ -319,7 +352,7 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
               {uploads.map((upload) => {
                 const FileIcon = getFileIcon(upload.file_type);
                 const isImg = isImage(upload.file_type);
-                const publicUrl = getPublicUrl(upload.storage_path);
+                const publicUrl = getFileUrl(upload);
 
                 return (
                   <div
@@ -403,7 +436,7 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
           {previewFile && (
             <div className="relative">
               <img
-                src={getPublicUrl(previewFile.storage_path)}
+                src={getFileUrl(previewFile)}
                 alt={previewFile.filename}
                 className="w-full max-h-[70vh] object-contain bg-muted/20"
               />

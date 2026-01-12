@@ -62,6 +62,7 @@ export function BackendDashboard({ projectId, isRTL, onBack }: BackendDashboardP
   const [bookings, setBookings] = useState<any[]>([]);
   const [chatRooms, setChatRooms] = useState<any[]>([]);
   const [comments, setComments] = useState<any[]>([]);
+  const [showTabMenu, setShowTabMenu] = useState(false);
 
   const fetchBackendStatus = async () => {
     try {
@@ -470,9 +471,68 @@ export function BackendDashboard({ projectId, isRTL, onBack }: BackendDashboardP
           </Button>
         </div>
 
-        {/* Feature Tabs - Horizontal Scroll on Mobile */}
-        <div className="relative">
-          <div className="flex overflow-x-auto scrollbar-none px-3 pb-3 gap-2.5 md:gap-3 md:px-4">
+        {/* Feature Selector - Dropdown on Mobile, Grid on Desktop */}
+        <div className="px-3 pb-3 md:px-4">
+          {/* Mobile: Current Tab Display + Dropdown */}
+          <div className="md:hidden">
+            <button
+              onClick={() => setShowTabMenu(!showTabMenu)}
+              className={cn(
+                "w-full flex items-center justify-between gap-3 p-3 rounded-xl transition-all active:scale-[0.98]",
+                `bg-gradient-to-r ${currentTab.color} text-white shadow-lg`
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <currentTab.icon className="h-5 w-5" />
+                <span className="font-semibold">{isRTL ? currentTab.labelAr : currentTab.label}</span>
+                {getBadgeCount(currentTab.id) > 0 && (
+                  <span className="px-2 py-0.5 text-xs rounded-full bg-white/25 font-bold">
+                    {getBadgeCount(currentTab.id)}
+                  </span>
+                )}
+              </div>
+              <ChevronRight className={cn("h-5 w-5 transition-transform", showTabMenu && "rotate-90")} />
+            </button>
+            
+            {/* Dropdown Menu */}
+            {showTabMenu && (
+              <div className="mt-2 p-2 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xl">
+                <div className="grid grid-cols-3 gap-2">
+                  {FEATURE_TABS.map((tab) => {
+                    const Icon = tab.icon;
+                    const count = getBadgeCount(tab.id);
+                    const isActive = activeTab === tab.id;
+                    
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => { setActiveTab(tab.id); setShowTabMenu(false); }}
+                        className={cn(
+                          "flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all active:scale-95",
+                          isActive
+                            ? `bg-gradient-to-br ${tab.color} text-white shadow-lg`
+                            : "bg-white/5 hover:bg-white/10 text-muted-foreground"
+                        )}
+                      >
+                        <div className="relative">
+                          <Icon className="h-5 w-5" />
+                          {count > 0 && (
+                            <span className="absolute -top-1 -right-2 px-1 min-w-[14px] text-[9px] rounded-full bg-red-500 text-white font-bold">
+                              {count > 99 ? '99+' : count}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] font-medium">{isRTL ? tab.labelAr : tab.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+          
+          {/* Desktop: Grid Layout */}
+          <div className="hidden md:grid md:grid-cols-9 gap-1.5">
             {FEATURE_TABS.map((tab) => {
               const Icon = tab.icon;
               const count = getBadgeCount(tab.id);
@@ -483,32 +543,25 @@ export function BackendDashboard({ projectId, isRTL, onBack }: BackendDashboardP
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={cn(
-                    "flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium transition-all shrink-0 active:scale-95",
-                    "min-w-[48px] min-h-[48px]", // Touch-friendly
+                    "flex flex-col items-center gap-1 p-2 rounded-lg text-xs font-medium transition-all active:scale-95",
                     isActive
-                      ? `bg-gradient-to-r ${tab.color} text-white shadow-lg shadow-${tab.color.split(' ')[0].replace('from-', '')}/20`
-                      : "bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-foreground border border-white/10"
+                      ? `bg-gradient-to-br ${tab.color} text-white shadow-md`
+                      : "bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  <Icon className="h-4.5 w-4.5 shrink-0" />
-                  {count > 0 && (
-                    <span className={cn(
-                      "px-1.5 py-0.5 text-[10px] rounded-full font-bold min-w-[18px] text-center",
-                      isActive 
-                        ? "bg-white/25 text-white" 
-                        : "bg-white/10 text-muted-foreground"
-                    )}>
-                      {count > 99 ? '99+' : count}
-                    </span>
-                  )}
+                  <div className="relative">
+                    <Icon className="h-4 w-4" />
+                    {count > 0 && (
+                      <span className="absolute -top-1 -right-1.5 px-1 min-w-[12px] text-[8px] rounded-full bg-red-500 text-white font-bold">
+                        {count}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[10px] truncate max-w-full">{isRTL ? tab.labelAr : tab.label}</span>
                 </button>
               );
             })}
           </div>
-          
-          {/* Scroll Fade Indicators */}
-          <div className="absolute left-0 top-0 bottom-3 w-4 bg-gradient-to-r from-background dark:from-[#0c0f14] to-transparent pointer-events-none md:hidden" />
-          <div className="absolute right-0 top-0 bottom-3 w-4 bg-gradient-to-l from-background dark:from-[#0c0f14] to-transparent pointer-events-none md:hidden" />
         </div>
       </div>
 
