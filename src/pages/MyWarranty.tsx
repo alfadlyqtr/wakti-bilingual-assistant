@@ -475,6 +475,10 @@ const MyWarranty: React.FC = () => {
 
       if (data?.success) {
         setAskAnswer(data.answer);
+        // Keep the current question visible until we clear it
+        const currentQuestion = askQuestion;
+        // Clear the input but keep the question displayed
+        setAskQuestion('');
         // Ensure we're in ask mode to see the answer
         setViewMode('ask');
         setActiveTab('ask');
@@ -1386,11 +1390,24 @@ const MyWarranty: React.FC = () => {
               </div>
             )}
 
-            {/* Wakti's Answer - Shows ABOVE input when available */}
-            {askAnswer && (
-              <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                <h4 className="text-sm font-medium text-emerald-400 mb-2">{isRTL ? 'إجابة وقتي' : 'Wakti\'s Answer'}</h4>
-                <p className="text-sm text-foreground whitespace-pre-wrap">{askAnswer}</p>
+            {/* Question & Answer Chat */}
+            {(askQuestion || askAnswer) && (
+              <div className="space-y-4">
+                {/* Your Question */}
+                {askQuestion && (
+                  <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                    <h4 className="text-sm font-medium text-blue-400 mb-2">{isRTL ? 'سؤالك' : 'Your Question'}</h4>
+                    <p className="text-sm text-foreground whitespace-pre-wrap">{askQuestion}</p>
+                  </div>
+                )}
+                
+                {/* Wakti's Answer */}
+                {askAnswer && (
+                  <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                    <h4 className="text-sm font-medium text-emerald-400 mb-2">{isRTL ? 'إجابة وقتي' : 'Wakti\'s Answer'}</h4>
+                    <p className="text-sm text-foreground whitespace-pre-wrap">{askAnswer}</p>
+                  </div>
+                )}
               </div>
             )}
           </div>

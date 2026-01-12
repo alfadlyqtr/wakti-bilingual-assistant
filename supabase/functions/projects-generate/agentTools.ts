@@ -455,6 +455,65 @@ Orders and bookings automatically notify the project owner in WAKTI. To read not
 Use multipart/form-data with: projectId, file (File object)
 Returns: { success: true, url: "public-url", path, filename, size }
 
+### 🖼️ FREEPIK STOCK IMAGES & VIDEOS (USE THIS FOR PROFESSIONAL IMAGES!)
+When creating websites, landing pages, or any UI that needs images, use FreePik to get professional stock photos and videos instead of placeholder images.
+
+**🎯 SMART IMAGE SELECTION - MATCH IMAGES TO CONTEXT:**
+You MUST search for images that match the SPECIFIC context of what you're building:
+
+| Website Type | Search Queries to Use |
+|--------------|----------------------|
+| Restaurant | "restaurant interior", "chef cooking", "food dish plating", "dining table" |
+| E-commerce | "product photography", "shopping bags", "online shopping", "delivery box" |
+| Portfolio | "creative workspace", "designer working", "laptop mockup", "professional headshot" |
+| Fitness | "gym workout", "fitness training", "healthy lifestyle", "running athlete" |
+| Real Estate | "modern house exterior", "luxury apartment", "home interior design", "living room" |
+| Medical | "doctor patient", "medical clinic", "healthcare professional", "hospital" |
+| Tech/SaaS | "technology abstract", "software dashboard", "team collaboration", "startup office" |
+| Travel | "travel destination", "beach vacation", "adventure hiking", "airplane travel" |
+| Education | "students learning", "classroom", "online education", "books studying" |
+| Wedding | "wedding ceremony", "bride groom", "wedding flowers", "celebration" |
+
+**For EACH section of the website, use DIFFERENT relevant queries:**
+- Hero section → Use broad, impactful images (e.g., "restaurant elegant dining")
+- About section → Use team/people images (e.g., "chef portrait", "restaurant team")
+- Services/Menu → Use specific service images (e.g., "pasta dish", "grilled steak")
+- Testimonials → Use customer/people images (e.g., "happy customer", "people dining")
+- Contact → Use location/building images (e.g., "restaurant exterior", "storefront")
+
+\`\`\`js
+// Search for stock images (photos, vectors, illustrations)
+{ projectId, action: "freepik/images", data: { 
+  query: "business team meeting",  // MUST match the website context!
+  limit: 10,                        // Max 100
+  filters: { 
+    type: "photo",                  // photo, vector, psd
+    orientation: "horizontal",      // horizontal, vertical, square
+    color: "blue"                   // Filter by dominant color
+  }
+}}
+// Returns: { images: [{ id, title, url, thumbnail, author, type, premium }], total, page }
+
+// Search for stock videos
+{ projectId, action: "freepik/videos", data: { 
+  query: "technology abstract",
+  limit: 10,
+  filters: { 
+    duration: "short",              // short, medium, long
+    orientation: "horizontal" 
+  }
+}}
+// Returns: { videos: [{ id, title, thumbnail, preview_url, duration, author, premium }], total, page }
+
+// Get download URL for a resource
+{ projectId, action: "freepik/download", data: { resourceId: "12345", type: "image" } }
+// Returns: { url: "download-url", filename }
+\`\`\`
+
+**⚠️ NEVER use placeholder URLs!** Always search FreePik with context-specific queries.
+**⚠️ NEVER use the same image twice!** Search for different images for different sections.
+**⚠️ Match orientation to layout:** Use "horizontal" for hero banners, "vertical" for cards, "square" for avatars.
+
 ### 🔄 REAL-TIME SUBSCRIPTIONS
 These tables support Supabase Realtime for live updates:
 - project_chat_messages (new messages)

@@ -1147,6 +1147,140 @@ async function handleComments(action: string, projectId: string, ownerId: string
   }
 }
 
+// Handle FreePik stock media search (images and videos)
+const FREEPIK_API_KEY = Deno.env.get('FREEPIK_API_KEY') || 'FPSX97f81d1b76ea19976ac068b75e93ea9d';
+
+async function handleFreepik(action: string, _projectId: string, _ownerId: string, data: Record<string, unknown>) {
+  console.log(`[project-backend-api] Freepik: ${action}`, data);
+
+  const headers = {
+    'x-freepik-api-key': FREEPIK_API_KEY,
+    'Accept': 'application/json',
+  };
+
+  switch (action) {
+    case 'images': {
+      // Search for images/photos/vectors
+      const { query, page = 1, limit = 20, filters } = data;
+      if (!query) throw new Error('query required');
+
+      const params = new URLSearchParams({
+        term: query as string,
+        page: String(page),
+        limit: String(Math.min(limit as number, 100)),
+      });
+
+      // Add optional filters
+      if (filters) {
+        const f = filters as Record<string, string>;
+        if (f.type) params.append('filters[content_type][photo]', f.type === 'photo' ? '1' : '0');
+        if (f.orientation) params.append('filters[orientation]', f.orientation);
+        if (f.color) params.append('filters[color]', f.color);
+      }
+
+      const response = await fetch(`https://api.freepik.com/v1/resources?${params}`, { headers });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[Freepik] Images search error:`, errorText);
+        throw new Error(`Freepik API error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      // Transform to simpler format for AI
+      const images = (result.data || []).map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        url: item.image?.source_url || item.preview?.url,
+        thumbnail: item.thumbnails?.[0]?.url || item.image?.source_url,
+        author: item.author?.name,
+        type: item.type,
+        premium: item.is_premium,
+      }));
+
+      return { 
+        images, 
+        total: result.meta?.pagination?.total || images.length,
+        page: result.meta?.pagination?.current_page || page,
+      };
+    }
+
+    case 'videos': {
+      // Search for videos
+      const { query, page = 1, limit = 20, filters } = data;
+      if (!query) throw new Error('query required');
+
+      const params = new URLSearchParams({
+        term: query as string,
+        page: String(page),
+        limit: String(Math.min(limit as number, 50)),
+      });
+
+      // Add optional filters
+      if (filters) {
+        const f = filters as Record<string, string>;
+        if (f.duration) params.append('filters[duration]', f.duration);
+        if (f.orientation) params.append('filters[orientation]', f.orientation);
+      }
+
+      const response = await fetch(`https://api.freepik.com/v1/videos?${params}`, { headers });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[Freepik] Videos search error:`, errorText);
+        throw new Error(`Freepik API error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      // Transform to simpler format for AI
+      const videos = (result.data || []).map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        thumbnail: item.thumbnails?.[0]?.url,
+        preview_url: item.video?.preview_url,
+        duration: item.video?.duration,
+        author: item.author?.name,
+        premium: item.is_premium,
+      }));
+
+      return { 
+        videos, 
+        total: result.meta?.pagination?.total || videos.length,
+        page: result.meta?.pagination?.current_page || page,
+      };
+    }
+
+    case 'download': {
+      // Get download URL for a resource
+      const { resourceId, type = 'image' } = data;
+      if (!resourceId) throw new Error('resourceId required');
+
+      const endpoint = type === 'video' 
+        ? `https://api.freepik.com/v1/videos/${resourceId}/download`
+        : `https://api.freepik.com/v1/resources/${resourceId}/download`;
+
+      const response = await fetch(endpoint, { headers });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[Freepik] Download error:`, errorText);
+        throw new Error(`Freepik API error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return { 
+        url: result.data?.url || result.url,
+        filename: result.data?.filename,
+      };
+    }
+
+    default:
+      throw new Error(`Unknown freepik action: ${action}`);
+  }
+}
+
 // Handle role operations
 async function handleRoles(action: string, projectId: string, ownerId: string, data: Record<string, unknown>) {
   console.log(`[project-backend-api] Roles: ${action}`, data);
@@ -1426,6 +1560,9 @@ Deno.serve(async (req) => {
     } else if (action?.startsWith('notifications/')) {
       const notificationsAction = action.replace('notifications/', '');
       result = await handleNotifications(notificationsAction, projectId, ownerId, body?.data || body || {});
+    } else if (action?.startsWith('freepik/')) {
+      const freepikAction = action.replace('freepik/', '');
+      result = await handleFreepik(freepikAction, projectId, ownerId, body?.data || body || {});
     } else if (action === 'submit' || action === 'subscribe') {
       const formName = body?.formName || (action === 'subscribe' ? 'newsletter' : 'contact');
       result = await handleFormSubmit(projectId, ownerId, formName, body?.data || {}, origin);
