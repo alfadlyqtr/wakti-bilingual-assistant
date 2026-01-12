@@ -336,20 +336,133 @@ You are in a sandbox. You CANNOT:
 
 ## BACKEND API (for THIS project only)
 
-If the project uses backend features, the API is:
-https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
+The project backend API is: https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
+All requests must include: { projectId: "{{PROJECT_ID}}", action: "...", ...data }
 
-For form submissions:
-{
-  projectId: "{{PROJECT_ID}}",
-  action: "submit",
-  formName: "contact",
-  data: { name, email, message }
-}
+### 📝 FORMS & COLLECTIONS (Basic)
+\`\`\`js
+// Submit a form
+{ projectId, action: "submit", formName: "contact", data: { name, email, message } }
 
-For collections:
-GET: ?projectId={{PROJECT_ID}}&action=collection/products
-POST: { projectId: "{{PROJECT_ID}}", action: "collection/products", data: {...} }
+// Newsletter subscribe
+{ projectId, action: "subscribe", data: { email } }
+
+// CRUD for any collection
+GET: ?projectId=...&action=collection/products
+POST: { projectId, action: "collection/products", data: { name, price, image } }
+PUT: { projectId, action: "collection/products", id: "item-uuid", data: { price: 99 } }
+DELETE: { projectId, action: "collection/products", id: "item-uuid" }
+\`\`\`
+
+### 🛒 E-COMMERCE (Cart, Orders, Inventory)
+\`\`\`js
+// Cart - use sessionId for guests or siteUserId for logged-in users
+{ projectId, action: "cart/get", data: { sessionId: "guest-123" } }
+{ projectId, action: "cart/add", data: { sessionId, item: { id, name, price, quantity } } }
+{ projectId, action: "cart/remove", data: { sessionId, itemIndex: 0 } }
+{ projectId, action: "cart/update", data: { sessionId, itemIndex: 0, updates: { quantity: 2 } } }
+{ projectId, action: "cart/clear", data: { sessionId } }
+
+// Orders - creates order from cart, notifies project owner
+{ projectId, action: "order/create", data: {
+  items: [{ id, name, price, quantity }],
+  buyerInfo: { name, email, phone, address },
+  totalAmount: 150.00,
+  sessionId // optional: clears cart after order
+}}
+{ projectId, action: "order/list", data: { status: "pending", limit: 50 } }
+{ projectId, action: "order/get", data: { orderId: "uuid" } }
+{ projectId, action: "order/update", data: { orderId: "uuid", status: "fulfilled" } }
+
+// Inventory tracking
+{ projectId, action: "inventory/check", data: { itemId: "uuid" } }
+{ projectId, action: "inventory/set", data: { itemId, collectionName: "products", quantity: 100, lowStockThreshold: 5 } }
+{ projectId, action: "inventory/adjust", data: { itemId, delta: -1 } } // decrease by 1
+\`\`\`
+
+### 📅 BOOKINGS (Shows in owner's WAKTI calendar!)
+\`\`\`js
+// Check availability for a date/time
+{ projectId, action: "booking/check", data: { date: "2025-01-15", startTime: "10:00", endTime: "11:00" } }
+// Returns: { available: true/false, conflicts: [], existingBookings: [] }
+
+// Create booking - auto-adds to owner's WAKTI calendar with project name
+{ projectId, action: "booking/create", data: {
+  serviceName: "Haircut",
+  date: "2025-01-15",
+  startTime: "10:00",
+  endTime: "11:00",
+  duration: 60, // optional minutes
+  customerInfo: { name: "John", email: "john@email.com", phone: "+974..." },
+  notes: "First time customer"
+}}
+
+{ projectId, action: "booking/list", data: { status: "pending", fromDate: "2025-01-01", toDate: "2025-12-31" } }
+{ projectId, action: "booking/update", data: { bookingId: "uuid", status: "confirmed" } }
+// Status options: pending, confirmed, cancelled, completed
+\`\`\`
+
+### 👤 SITE USER AUTH (for user accounts in YOUR site)
+\`\`\`js
+// Signup - creates account, returns token
+{ projectId, action: "auth/signup", data: { email, password, name } }
+// Returns: { user: { id, email, name, role }, token }
+
+// Login
+{ projectId, action: "auth/login", data: { email, password } }
+// Returns: { user: { id, email, name, role, permissions }, token }
+
+// Get current user (pass token)
+{ projectId, action: "auth/me", data: { token: "..." } }
+\`\`\`
+
+### 💬 REAL-TIME CHAT
+\`\`\`js
+// Chat rooms
+{ projectId, action: "chat/rooms", data: { siteUserId } }
+{ projectId, action: "chat/createRoom", data: { name: "Support", type: "direct", participants: ["user1", "user2"] } }
+
+// Messages (real-time via Supabase subscriptions)
+{ projectId, action: "chat/messages", data: { roomId: "uuid", limit: 50 } }
+{ projectId, action: "chat/send", data: { roomId, senderId, content: "Hello!", messageType: "text" } }
+\`\`\`
+
+### 💬 COMMENTS (on any item type)
+\`\`\`js
+{ projectId, action: "comments/list", data: { itemType: "product", itemId: "uuid" } }
+{ projectId, action: "comments/add", data: { itemType: "product", itemId, content: "Great!", authorName: "John", parentId: null } }
+{ projectId, action: "comments/delete", data: { commentId: "uuid" } }
+\`\`\`
+
+### 👥 ROLES & PERMISSIONS (SaaS features)
+\`\`\`js
+// Roles: customer (default), staff, admin, owner
+{ projectId, action: "roles/assign", data: { siteUserId, role: "admin", permissions: ["manage_orders", "view_stats"] } }
+{ projectId, action: "roles/check", data: { siteUserId, permission: "manage_orders" } }
+// Returns: { role, permissions, hasPermission: true/false }
+{ projectId, action: "roles/list", data: { role: "admin" } } // list all admins
+\`\`\`
+
+### 🔔 OWNER NOTIFICATIONS
+Orders and bookings automatically notify the project owner in WAKTI. To read notifications:
+\`\`\`js
+{ projectId, action: "notifications/list", data: { unreadOnly: true, limit: 50 } }
+{ projectId, action: "notifications/markRead", data: { notificationId: "uuid" } }
+{ projectId, action: "notifications/markRead", data: { all: true } } // mark all read
+\`\`\`
+
+### 📤 FILE UPLOADS
+Use multipart/form-data with: projectId, file (File object)
+Returns: { success: true, url: "public-url", path, filename, size }
+
+### 🔄 REAL-TIME SUBSCRIPTIONS
+These tables support Supabase Realtime for live updates:
+- project_chat_messages (new messages)
+- project_comments (new comments)
+- project_orders (order updates)
+- project_notifications (new notifications)
+
+Use supabase.channel().on('postgres_changes', ...) to subscribe.
 `;
 
 // Normalize file path to always start with /
