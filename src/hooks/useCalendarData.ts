@@ -1,8 +1,9 @@
 
 import { useState, useEffect, useCallback } from "react";
-import { getCalendarEntries, CalendarEntry } from "@/utils/calendarUtils";
+import { getCalendarEntries, CalendarEntry, ProjectCalendarEntry } from "@/utils/calendarUtils";
 import { Maw3dService } from "@/services/maw3dService";
 import { TRService, TRTask, TRReminder } from "@/services/trService";
+import { supabase, getCurrentUserId } from "@/integrations/supabase/client";
 
 // Identifies when any manual entries are updated from anywhere in the app
 const MANUAL_ENTRIES_KEY = "calendarManualEntries";
@@ -12,6 +13,7 @@ export function useCalendarData() {
   const [maw3dEvents, setMaw3dEvents] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [reminders, setReminders] = useState([]);
+  const [projectCalendarEntries, setProjectCalendarEntries] = useState<ProjectCalendarEntry[]>([]);
   const [entries, setEntries] = useState<CalendarEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -37,18 +39,44 @@ export function useCalendarData() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  // Maw3d, Tasks, Reminders (refetch when tab gets focus as backup)
+  // Fetch project calendar entries
+  const fetchProjectCalendarEntries = async (): Promise<ProjectCalendarEntry[]> => {
+    try {
+      const userId = await getCurrentUserId();
+      if (!userId) return [];
+
+      const { data, error } = await supabase
+        .from('project_calendar_entries')
+        .select('*')
+        .eq('owner_id', userId)
+        .order('entry_date', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching project calendar entries:', error);
+        return [];
+      }
+
+      return (data || []) as ProjectCalendarEntry[];
+    } catch (error) {
+      console.error('Error fetching project calendar entries:', error);
+      return [];
+    }
+  };
+
+  // Maw3d, Tasks, Reminders, Project Calendar Entries
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [maw3d, tasks, rems] = await Promise.all([
+      const [maw3d, tasks, rems, projectEntries] = await Promise.all([
         Maw3dService.getUserEvents(),
         TRService.getTasks(),
-        TRService.getReminders()
+        TRService.getReminders(),
+        fetchProjectCalendarEntries()
       ]);
       setMaw3dEvents(maw3d || []);
       setTasks(tasks || []);
       setReminders(rems || []);
+      setProjectCalendarEntries(projectEntries || []);
     } finally {
       setLoading(false);
     }
@@ -62,19 +90,16 @@ export function useCalendarData() {
     return () => window.removeEventListener("focus", onFocus);
   }, [fetchData]);
 
-  // Optionally: subscribe to real-time events here for auto-refresh
-  
   // Recompute entries on source change
   useEffect(() => {
-    getCalendarEntries(manualEntries, [], maw3dEvents, tasks, reminders)
+    getCalendarEntries(manualEntries, [], maw3dEvents, tasks, reminders, [], projectCalendarEntries)
       .then(setEntries)
       .catch(() => setEntries([]));
-  }, [manualEntries, maw3dEvents, tasks, reminders]);
+  }, [manualEntries, maw3dEvents, tasks, reminders, projectCalendarEntries]);
 
   // Expose a manual refresh
   const refresh = async () => {
     await fetchData();
-    // manualEntries is kept by storage event if changed
     return;
   };
 
@@ -85,7 +110,8 @@ export function useCalendarData() {
     maw3dEvents,
     tasks,
     reminders,
+    projectCalendarEntries,
     refresh,
-    setManualEntries // for manual entry creation/editing
+    setManualEntries
   };
 }

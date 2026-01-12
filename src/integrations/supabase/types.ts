@@ -2136,12 +2136,12 @@ export type Database = {
       project_bookings: {
         Row: {
           booking_date: string
+          calendar_entry_id: string | null
           created_at: string | null
           customer_info: Json
           duration_minutes: number | null
           end_time: string | null
           id: string
-          maw3d_event_id: string | null
           notes: string | null
           owner_id: string
           project_id: string
@@ -2153,12 +2153,12 @@ export type Database = {
         }
         Insert: {
           booking_date: string
+          calendar_entry_id?: string | null
           created_at?: string | null
           customer_info?: Json
           duration_minutes?: number | null
           end_time?: string | null
           id?: string
-          maw3d_event_id?: string | null
           notes?: string | null
           owner_id: string
           project_id: string
@@ -2170,12 +2170,12 @@ export type Database = {
         }
         Update: {
           booking_date?: string
+          calendar_entry_id?: string | null
           created_at?: string | null
           customer_info?: Json
           duration_minutes?: number | null
           end_time?: string | null
           id?: string
-          maw3d_event_id?: string | null
           notes?: string | null
           owner_id?: string
           project_id?: string
@@ -2187,10 +2187,10 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "project_bookings_maw3d_event_id_fkey"
-            columns: ["maw3d_event_id"]
+            foreignKeyName: "project_bookings_calendar_entry_id_fkey"
+            columns: ["calendar_entry_id"]
             isOneToOne: false
-            referencedRelation: "maw3d_events"
+            referencedRelation: "project_calendar_entries"
             referencedColumns: ["id"]
           },
           {
@@ -2205,6 +2205,68 @@ export type Database = {
             columns: ["site_user_id"]
             isOneToOne: false
             referencedRelation: "project_site_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_calendar_entries: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          description: string | null
+          end_time: string | null
+          entry_date: string
+          id: string
+          is_all_day: boolean | null
+          metadata: Json | null
+          owner_id: string
+          project_id: string
+          source_id: string | null
+          source_type: string
+          start_time: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          description?: string | null
+          end_time?: string | null
+          entry_date: string
+          id?: string
+          is_all_day?: boolean | null
+          metadata?: Json | null
+          owner_id: string
+          project_id: string
+          source_id?: string | null
+          source_type: string
+          start_time?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          description?: string | null
+          end_time?: string | null
+          entry_date?: string
+          id?: string
+          is_all_day?: boolean | null
+          metadata?: Json | null
+          owner_id?: string
+          project_id?: string
+          source_id?: string | null
+          source_type?: string
+          start_time?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_calendar_entries_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
