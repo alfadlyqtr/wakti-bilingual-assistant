@@ -2412,49 +2412,93 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         });
 
         if (startRes.error) {
-          throw new Error(startRes.error.message || 'Failed to start edit');
+          throw new Error(startRes.error.message || 'Failed to start agent');
         }
 
-        const jobId = startRes.data?.jobId as string | undefined;
-        if (!jobId) throw new Error('Missing jobId');
+        // AGENT MODE: Returns results directly (no job polling needed!)
+        const agentResult = startRes.data;
+        
+        if (agentResult?.mode === 'agent' && agentResult?.result) {
+          // Agent mode completed synchronously - load updated files
+          setGenerationSteps(prev => prev.map((s, i) => 
+            i === 0 ? { ...s, status: 'completed' } : 
+            i === 1 ? { ...s, status: 'completed' } : 
+            i === 2 ? { ...s, status: 'loading' } : s
+          ));
+          await delay(250);
 
-        // Step 2 complete, Step 3 loading
-        setGenerationSteps(prev => prev.map((s, i) => 
-          i === 0 ? { ...s, status: 'completed' } : 
-          i === 1 ? { ...s, status: 'completed' } : 
-          i === 2 ? { ...s, status: 'loading' } : s
-        ));
-        await delay(250);
+          const newFiles = await loadFilesFromDb(id);
+          const newCode = newFiles["/App.js"] || Object.values(newFiles)[0] || "";
 
-        const job = await pollJobUntilDone(jobId);
-        const newFiles = await loadFilesFromDb(id);
-        const newCode = newFiles["/App.js"] || Object.values(newFiles)[0] || "";
+          snapshotToSave = beforeSnapshot;
+          setGeneratedFiles(newFiles);
+          setCodeContent(newCode);
 
-        snapshotToSave = beforeSnapshot;
-        setGeneratedFiles(newFiles);
-        setCodeContent(newCode);
-
-        // Determine which files changed by comparing with beforeSnapshot
-        const changedFilesList: string[] = [];
-        for (const [path, content] of Object.entries(newFiles)) {
-          const oldContent = beforeSnapshot[path];
-          if (!oldContent || oldContent !== content) {
-            changedFilesList.push(path);
+          // Get files changed from agent result
+          const changedFilesList: string[] = agentResult.result.filesChanged || [];
+          
+          // If no files reported, compare with snapshot
+          if (changedFilesList.length === 0) {
+            for (const [path, content] of Object.entries(newFiles)) {
+              const oldContent = beforeSnapshot[path];
+              if (!oldContent || oldContent !== content) {
+                changedFilesList.push(path);
+              }
+            }
           }
+          
+          const summaryText = agentResult.result.summary || (isRTL ? 'تم تطبيق التعديلات!' : 'Changes applied!');
+          
+          // Store as structured JSON so the UI can parse it properly
+          assistantMsg = JSON.stringify({
+            type: 'execution_result',
+            title: isRTL ? 'تم التطبيق' : 'Applied',
+            summary: summaryText,
+            files: changedFilesList.length > 0 ? changedFilesList : ['/App.js']
+          });
+          
+          setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
+          await delay(250);
+        } else {
+          // Fallback: If there's a jobId, use the old polling method
+          const jobId = agentResult?.jobId as string | undefined;
+          if (!jobId) throw new Error('Agent mode failed - no result returned');
+
+          setGenerationSteps(prev => prev.map((s, i) => 
+            i === 0 ? { ...s, status: 'completed' } : 
+            i === 1 ? { ...s, status: 'completed' } : 
+            i === 2 ? { ...s, status: 'loading' } : s
+          ));
+          await delay(250);
+
+          const job = await pollJobUntilDone(jobId);
+          const newFiles = await loadFilesFromDb(id);
+          const newCode = newFiles["/App.js"] || Object.values(newFiles)[0] || "";
+
+          snapshotToSave = beforeSnapshot;
+          setGeneratedFiles(newFiles);
+          setCodeContent(newCode);
+
+          const changedFilesList: string[] = [];
+          for (const [path, content] of Object.entries(newFiles)) {
+            const oldContent = beforeSnapshot[path];
+            if (!oldContent || oldContent !== content) {
+              changedFilesList.push(path);
+            }
+          }
+          
+          const summaryText = job.result_summary || (isRTL ? 'تم تطبيق التعديلات!' : 'Changes applied!');
+          
+          assistantMsg = JSON.stringify({
+            type: 'execution_result',
+            title: isRTL ? 'تم التطبيق' : 'Applied',
+            summary: summaryText,
+            files: changedFilesList.length > 0 ? changedFilesList : ['/App.js']
+          });
+          
+          setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
+          await delay(250);
         }
-        
-        const summaryText = job.result_summary || (isRTL ? 'تم تطبيق التعديلات!' : 'Changes applied!');
-        
-        // Store as structured JSON so the UI can parse it properly
-        assistantMsg = JSON.stringify({
-          type: 'execution_result',
-          title: isRTL ? 'تم التطبيق' : 'Applied',
-          summary: summaryText,
-          files: changedFilesList.length > 0 ? changedFilesList : ['/App.js']
-        });
-        
-        setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
-        await delay(250);
       }
 
       // Save assistant message to DB with snapshot
@@ -2947,9 +2991,11 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                                       
                                       if (response.error) throw new Error(response.error.message);
                                       
-                                      const jobId = response.data?.jobId;
-                                      if (jobId) {
-                                        const job = await pollJobUntilDone(jobId);
+                                      // AGENT MODE: Returns results directly
+                                      const agentResult = response.data;
+                                      
+                                      if (agentResult?.mode === 'agent' && agentResult?.result) {
+                                        // Agent completed synchronously
                                         const newFiles = await loadFilesFromDb(id!);
                                         
                                         setGeneratedFiles(newFiles);
@@ -2957,6 +3003,35 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                                         setSandpackKey(prev => prev + 1);
                                         
                                         // Add success message
+                                        const successMsg = isRTL 
+                                          ? `✓ تم استخدام ${asset.filename} بنجاح!`
+                                          : `✓ Successfully used ${asset.filename}!`;
+                                        
+                                        const { data: aiMsgData } = await supabase
+                                          .from('project_chat_messages' as any)
+                                          .insert({ 
+                                            project_id: id, 
+                                            role: 'assistant', 
+                                            content: successMsg,
+                                            snapshot: newFiles
+                                          } as any)
+                                          .select()
+                                          .single();
+                                        
+                                        if (aiMsgData) {
+                                          setChatMessages(prev => [...prev, aiMsgData as any]);
+                                        }
+                                        
+                                        toast.success(isRTL ? 'تم تطبيق الصورة!' : 'Image applied!');
+                                      } else if (agentResult?.jobId) {
+                                        // Fallback: job-based polling
+                                        const job = await pollJobUntilDone(agentResult.jobId);
+                                        const newFiles = await loadFilesFromDb(id!);
+                                        
+                                        setGeneratedFiles(newFiles);
+                                        setCodeContent(newFiles["/App.js"] || Object.values(newFiles)[0] || "");
+                                        setSandpackKey(prev => prev + 1);
+                                        
                                         const successMsg = isRTL 
                                           ? `✓ تم استخدام ${asset.filename} بنجاح!`
                                           : `✓ Successfully used ${asset.filename}!`;
