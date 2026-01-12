@@ -29,27 +29,27 @@
   },
   "styles": {
     "short answers": {
-      "max_tokens": 768,
+      "max_tokens": 2048,
       "structure": "Answer in 2–4 concise sentences maximum. End with a crisp takeaway."
     },
     "bullet points": {
-      "max_tokens": 1024,
+      "max_tokens": 3072,
       "structure": "Use clear bullet points. 3–7 bullets. Each bullet is one compact line."
     },
     "step-by-step": {
-      "max_tokens": 1536,
+      "max_tokens": 4096,
       "structure": "Numbered steps. Each step is a short sentence. Include tips if essential."
     },
     "detailed": {
-      "max_tokens": 3072,
+      "max_tokens": 6144,
       "structure": "Well-structured paragraphs with sub-points/examples. End with a summary."
     },
     "conversational": {
-      "max_tokens": 1280,
+      "max_tokens": 4096,
       "structure": "Sound like a friendly human. Use short paragraphs, occasional questions, and light emojis only if the user does first."
     },
     "analytical": {
-      "max_tokens": 2048,
+      "max_tokens": 5120,
       "structure": "Break the answer into analysis sections: context, evaluation, pros vs cons, and a clear recommendation."
     }
   }

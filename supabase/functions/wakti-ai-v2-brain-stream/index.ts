@@ -240,7 +240,67 @@ function buildStayHotSummary(recentMessages: unknown[]): string {
 
     const locationLine = bracketedEntities.find(e => e.startsWith('[User Location:')) || '';
 
+    // CRITICAL: Detect current conversation topic from last exchange
+    const lastAssistant = [...texts].reverse().find((t) => t.role === 'assistant')?.content || '';
+    let currentTopic = 'General conversation';
+    let userGoal = 'Not specified';
+    
+    // Analyze last assistant message to understand what user is working on
+    if (lastAssistant) {
+      const assistLower = lastAssistant.toLowerCase();
+      // Document/Image analysis patterns
+      if (/\b(image|photo|document|resume|cv|certificate|id|passport|invoice|receipt)\b/i.test(assistLower)) {
+        if (/\b(resume|cv)\b/i.test(assistLower)) {
+          currentTopic = 'Resume/CV Analysis';
+          userGoal = 'Extract and structure resume information';
+        } else if (/\b(table|extract|field|data)\b/i.test(assistLower)) {
+          currentTopic = 'Document Data Extraction';
+          userGoal = 'Extract structured data from uploaded document';
+        } else {
+          currentTopic = 'Image/Document Analysis';
+          userGoal = 'Analyze uploaded image or document';
+        }
+      }
+      // Task/Planning patterns
+      else if (/\b(task|todo|plan|schedule|remind|event)\b/i.test(assistLower)) {
+        currentTopic = 'Task & Planning';
+        userGoal = 'Manage tasks, events, or schedule';
+      }
+      // Research/Learning patterns
+      else if (/\b(explain|learn|understand|study|teach|how does|what is)\b/i.test(assistLower)) {
+        currentTopic = 'Learning & Research';
+        userGoal = 'Understand a concept or learn something new';
+      }
+      // Problem-solving patterns
+      else if (/\b(solve|fix|debug|error|problem|issue|help)\b/i.test(assistLower)) {
+        currentTopic = 'Problem Solving';
+        userGoal = 'Resolve an issue or fix a problem';
+      }
+      // Creation patterns
+      else if (/\b(create|generate|make|build|write|design)\b/i.test(assistLower)) {
+        currentTopic = 'Content Creation';
+        userGoal = 'Generate or create something';
+      }
+    }
+    
+    // Also check last user message for additional context
+    if (lastUser) {
+      if (/\b(search|find|look up|google)\b/i.test(lastUserLower) && currentTopic !== 'General conversation') {
+        userGoal = `Search for information related to: ${currentTopic}`;
+      }
+    }
+
     const lines: string[] = [];
+    
+    // NEW: Add current topic section at the top (most important)
+    lines.push('🎯 CURRENT CONVERSATION TOPIC (CRITICAL - USE THIS FOR CONTEXT)');
+    lines.push(`- TOPIC: ${currentTopic}`);
+    lines.push(`- USER GOAL: ${userGoal}`);
+    if (lastUser.length > 0) {
+      lines.push(`- LAST USER MESSAGE: ${lastUser.slice(0, 200)}`);
+    }
+    lines.push('');
+    
     lines.push('KEY ENTITIES DETECTED');
     const keyEntitiesOut = [...bracketedEntities];
     for (const c of topCaps) keyEntitiesOut.push(`[Entity: ${c}]`);
@@ -814,9 +874,21 @@ STUDY MODE RULES:
 This applies to ALL subjects: math, science, history, languages, programming, exam prep, general knowledge, etc.
 If the user uploads an image (photo of notes, textbook, problem), analyze it and teach based on what you see.
 ` : ''}${activeTrigger === 'search' ? `
-CRITICAL: YOU HAVE NO INTERNAL KNOWLEDGE OF CURRENT EVENTS.
-You MUST use the google_search tool for EVERY query. Do NOT answer from memory. If you do not search, your answer will be wrong.
-Before generating ANY response, you MUST first perform a Google Search. This is mandatory and non-negotiable.
+🔍 SEARCH MODE INTELLIGENCE (CRITICAL)
+
+CONTEXT-AWARE SEARCH PROTOCOL:
+1. CHECK CONVERSATION CONTEXT FIRST: Look at the "CURRENT CONVERSATION TOPIC" section in the Stay Hot Summary above.
+2. INFER SEARCH INTENT: If user says just "search" or "find" without specifying what:
+   - Check what they were just discussing (TOPIC and USER GOAL)
+   - Intelligently infer what they want to search for
+   - Example: If discussing "Resume/CV Analysis" for "Abdullah Hassan" → search for "Abdullah Hassan IT Finance professional"
+   - Example: If discussing a car model → search for that car's specs/reviews
+3. ASK ONLY IF TRULY AMBIGUOUS: Only ask "search about what?" if there's genuinely no context to infer from.
+
+SEARCH EXECUTION RULES:
+- You MUST use the google_search tool for web facts and current events.
+- Do NOT answer from pre-trained memory for live data (scores, prices, news).
+- For general knowledge that doesn't require live data, you may answer directly if confident.
 
 CRITICAL SEARCH FORMATTING RULES (NON-NEGOTIABLE)
 You are in SEARCH MODE. You will receive search results in the conversation.
@@ -1859,7 +1931,7 @@ If you are running out of space, keep this order and drop the rest:
             await streamGemini3WithSearch(
               message,
               searchSystemPrompt,
-              { temperature: 0.3, maxOutputTokens: 4000 },
+              { temperature: 0.3, maxOutputTokens: 6000 },
               recentMessages,
               (token: string) => {
                 fullResponseText += token;
@@ -2114,7 +2186,7 @@ If you are running out of space, keep this order and drop the rest:
               try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`)); } catch { /* ignore */ }
             },
             sysMsg,
-            { temperature: activeTrigger === 'search' ? 0.3 : 0.7, maxOutputTokens: 4000 }
+            { temperature: activeTrigger === 'search' ? 0.3 : 0.7, maxOutputTokens: activeTrigger === 'search' ? 6000 : 8000 }
           );
           
           if (geminiTokenCount === 0) {
@@ -2135,7 +2207,7 @@ If you are running out of space, keep this order and drop the rest:
               model: 'gpt-4o-mini',
               messages,
               temperature: activeTrigger === 'search' ? 0.3 : 0.7,
-              max_tokens: 4000,
+              max_tokens: activeTrigger === 'search' ? 6000 : 8000,
               stream: true,
             }),
           });
@@ -2164,7 +2236,7 @@ If you are running out of space, keep this order and drop the rest:
               model: 'claude-3-5-sonnet-20241022',
               messages: claudeMessages,
               system,
-              max_tokens: 4000,
+              max_tokens: activeTrigger === 'search' ? 6000 : 8000,
               stream: true,
             }),
           });

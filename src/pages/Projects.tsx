@@ -4,10 +4,10 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import ShareButton from '@/components/ui/ShareButton';
 import { 
   Code2, 
   Trash2, 
-  ExternalLink, 
   Loader2, 
   Paperclip,
   Send,
@@ -29,7 +29,8 @@ import {
   Copy,
   Check,
   Globe,
-  Server
+  Server,
+  Bot
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -1196,18 +1197,34 @@ Apply these styles consistently throughout the entire design.`;
                       {/* Title and Status Row */}
                       <div className="flex items-center justify-between gap-3 mb-2">
                         <h3 className="font-bold text-lg truncate text-zinc-900 dark:text-white tracking-tight">{project.name}</h3>
-                        <span
-                          className={cn(
-                            "shrink-0 px-3 py-1.5 text-[10px] rounded-full font-bold uppercase tracking-widest",
-                            project.status === 'published'
-                              ? "bg-emerald-500/30 text-emerald-600 dark:text-emerald-300 border border-emerald-500/50 shadow-lg shadow-emerald-500/20"
-                              : project.status === 'generating'
-                              ? "bg-indigo-500/30 text-indigo-600 dark:text-indigo-300 border border-indigo-500/50 shadow-lg shadow-indigo-500/20 animate-pulse"
-                              : "bg-amber-500/30 text-amber-600 dark:text-amber-300 border border-amber-500/50 shadow-lg shadow-amber-500/20"
-                          )}
-                        >
-                          {project.status === 'published' ? (isRTL ? 'منشور' : 'Live') : project.status === 'generating' ? (isRTL ? 'بناء' : 'Building') : (isRTL ? 'مسودة' : 'Draft')}
-                        </span>
+                        <div className="flex flex-col items-end gap-1">
+                          <span
+                            className={cn(
+                              "shrink-0 px-3 py-1.5 text-[10px] rounded-full font-bold uppercase tracking-widest",
+                              project.status === 'published'
+                                ? "bg-emerald-500/30 text-emerald-600 dark:text-emerald-300 border border-emerald-500/50 shadow-lg shadow-emerald-500/20"
+                                : project.status === 'generating'
+                                ? "bg-indigo-500/30 text-indigo-600 dark:text-indigo-300 border border-indigo-500/50 shadow-lg shadow-indigo-500/20 animate-pulse"
+                                : "bg-amber-500/30 text-amber-600 dark:text-amber-300 border border-amber-500/50 shadow-lg shadow-amber-500/20"
+                            )}
+                          >
+                            {project.status === 'published' ? (isRTL ? 'منشور' : 'Live') : project.status === 'generating' ? (isRTL ? 'بناء' : 'Building') : (isRTL ? 'مسودة' : 'Draft')}
+                          </span>
+                          {/* Server Status Badge */}
+                          <span
+                            className={cn(
+                              "shrink-0 px-2 py-0.5 text-[9px] rounded-full font-semibold uppercase tracking-wider",
+                              backendStatus[project.id]
+                                ? "bg-green-500/30 text-green-600 dark:text-green-300 border border-green-500/50"
+                                : "bg-red-500/30 text-red-600 dark:text-red-300 border border-red-500/50"
+                            )}
+                          >
+                            {backendStatus[project.id] 
+                              ? (isRTL ? 'الخادم نشط' : 'Server Live')
+                              : (isRTL ? 'الخادم متوقف' : 'Server Off')
+                            }
+                          </span>
+                        </div>
                       </div>
                       
                       {/* Site URL - Show subdomain if published */}
@@ -1225,59 +1242,26 @@ Apply these styles consistently throughout the entire design.`;
 
                     {/* Actions - Top right */}
                     <div className="absolute top-4 right-4 flex gap-2 z-10">
-                      {/* Share Button - Only for published projects */}
+                      {/* Share Button */}
                       {project.status === 'published' && project.subdomain && (
-                        <Button
-                          size="icon"
-                          className="h-9 w-9 rounded-full bg-white/90 dark:bg-zinc-800/90 backdrop-blur-sm shadow-lg hover:bg-white dark:hover:bg-zinc-700 text-indigo-600 dark:text-indigo-400 hover:shadow-xl transition-all"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const siteUrl = `https://${project.subdomain}.wakti.ai`;
-                            
-                            // Try native share first (mobile)
-                            if (navigator.share) {
-                              navigator.share({
-                                title: project.name,
-                                text: isRTL ? `شاهد موقعي: ${project.name}` : `Check out my site: ${project.name}`,
-                                url: siteUrl,
-                              }).catch(() => {
-                                // User cancelled or share failed, fall back to copy
-                                navigator.clipboard.writeText(siteUrl);
-                                toast.success(isRTL ? 'تم نسخ الرابط!' : 'Link copied!');
-                              });
-                            } else {
-                              // Desktop fallback: copy to clipboard
-                              navigator.clipboard.writeText(siteUrl);
-                              toast.success(isRTL ? 'تم نسخ الرابط!' : 'Link copied!');
-                            }
-                          }}
-                        >
-                          <Share2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                      
-                      {/* Open Site Button */}
-                      {project.status === 'published' && project.subdomain && (
-                        <Button
-                          size="icon"
-                          className="h-9 w-9 rounded-full bg-white/90 dark:bg-zinc-800/90 backdrop-blur-sm shadow-lg hover:bg-white dark:hover:bg-zinc-700 text-emerald-600 dark:text-emerald-400 hover:shadow-xl transition-all"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.open(`https://${project.subdomain}.wakti.ai`, '_blank');
-                          }}
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                        </Button>
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <ShareButton
+                            shareUrl={`https://${project.subdomain}.wakti.ai`}
+                            shareTitle={project.name}
+                            shareDescription={isRTL ? `شاهد موقعي: ${project.name}` : `Check out my site: ${project.name}`}
+                            size="sm"
+                          />
+                        </div>
                       )}
                       
                       {/* Server/Backend Button */}
                       <Button
                         size="icon"
                         className={cn(
-                          "h-9 w-9 rounded-full backdrop-blur-sm shadow-lg hover:shadow-xl transition-all",
+                          "h-9 w-9 rounded-full backdrop-blur-sm shadow-lg hover:shadow-xl transition-all bg-white/90 dark:bg-zinc-800/90 hover:bg-white dark:hover:bg-zinc-700",
                           backendStatus[project.id]
-                            ? "bg-indigo-500 hover:bg-indigo-600 text-white"
-                            : "bg-white/90 dark:bg-zinc-800/90 hover:bg-white dark:hover:bg-zinc-700 text-indigo-600 dark:text-indigo-400"
+                            ? "text-green-600 dark:text-green-400 shadow-[0_0_20px_rgba(34,197,94,0.6)] hover:shadow-[0_0_25px_rgba(34,197,94,0.8)]"
+                            : "text-red-600 dark:text-red-400 shadow-[0_0_20px_rgba(239,68,68,0.6)] hover:shadow-[0_0_25px_rgba(239,68,68,0.8)]"
                         )}
                         onClick={(e) => toggleBackend(e, project.id)}
                         disabled={togglingBackend === project.id}
