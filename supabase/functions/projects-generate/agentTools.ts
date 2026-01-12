@@ -68,6 +68,7 @@ export interface AgentDebugContext {
 }
 
 // Tool definitions for Gemini function calling
+// These tools are designed for TARGETED EDITS like Lovable - not full file rewrites
 export const AGENT_TOOLS = [
   {
     name: "read_file",
@@ -96,9 +97,55 @@ export const AGENT_TOOLS = [
       }
     }
   },
+  // 🚀 NEW: SEARCH AND REPLACE - Targeted edits like Lovable uses!
+  {
+    name: "search_replace",
+    description: "PREFERRED tool for editing existing files. Find exact code snippet and replace it with new code. Much faster than rewriting entire files. Use this for targeted changes like updating a button color, fixing a bug, or modifying a function.",
+    parameters: {
+      type: "object",
+      properties: {
+        path: { 
+          type: "string", 
+          description: "File path like /App.js" 
+        },
+        search: { 
+          type: "string", 
+          description: "EXACT code to find (must match exactly, including whitespace). Copy-paste from read_file output." 
+        },
+        replace: { 
+          type: "string", 
+          description: "New code to replace the search text with" 
+        }
+      },
+      required: ["path", "search", "replace"]
+    }
+  },
+  // 🚀 NEW: INSERT CODE - Add code at specific location
+  {
+    name: "insert_code",
+    description: "Insert new code at a specific location in a file. Use when adding new functions, imports, or components without changing existing code.",
+    parameters: {
+      type: "object",
+      properties: {
+        path: { 
+          type: "string", 
+          description: "File path like /App.js" 
+        },
+        insertAfter: { 
+          type: "string", 
+          description: "Insert new code AFTER this exact code snippet. Use empty string to insert at beginning of file." 
+        },
+        code: { 
+          type: "string", 
+          description: "New code to insert" 
+        }
+      },
+      required: ["path", "insertAfter", "code"]
+    }
+  },
   {
     name: "write_file",
-    description: "Create or update a file in the project. Use this to save your code changes. ALWAYS write the COMPLETE file content, not patches.",
+    description: "Create a NEW file or completely overwrite an existing file. Use this ONLY for: 1) Creating brand new files, 2) Complete rewrites when more than 50% of the file changes. For small changes, use search_replace instead!",
     parameters: {
       type: "object",
       properties: {
@@ -206,7 +253,8 @@ export const AGENT_TOOLS = [
 ];
 
 // Agent system prompt that tells AI about its capabilities and SCOPE
-export const AGENT_SYSTEM_PROMPT = `You are WAKTI AI Coder - a powerful coding agent for the PROJECTS feature.
+// This prompt teaches the AI to work LIKE LOVABLE - targeted edits, not full rewrites
+export const AGENT_SYSTEM_PROMPT = `You are WAKTI AI Coder - a powerful coding agent that works LIKE LOVABLE.
 
 ## ⚠️ CRITICAL: YOUR SCOPE IS LIMITED TO THIS PROJECT ONLY
 
@@ -216,40 +264,57 @@ You are working on a USER PROJECT within the WAKTI AI Coder feature.
 - You CANNOT access the main WAKTI app (tasks, events, messages, contacts, etc.)
 - You are sandboxed to the projects feature only
 
-## YOUR CAPABILITIES (USE THEM!)
+## 🚀 KEY DIFFERENCE: TARGETED EDITS, NOT FULL REWRITES
 
-You have these tools and MUST use them:
+Unlike basic code generators, you make SURGICAL, TARGETED changes:
+- **Change button color?** → Use search_replace to find the button and change its class
+- **Fix a bug?** → Use search_replace to fix just that line
+- **Add new function?** → Use insert_code to add it without touching other code
+- **Create new file?** → Use write_file ONLY for new files
 
-1. **read_file** - Read files from THIS project only
-2. **list_files** - See files in THIS project only
-3. **write_file** - Create/update files in THIS project only
-4. **delete_file** - Remove files from THIS project only
-5. **get_console_logs** - See runtime logs from THIS project's preview
-6. **get_network_errors** - See failed API calls from THIS project
-7. **get_runtime_errors** - See React/JS errors from THIS project
-8. **query_collection** - Query THIS project's backend collections
-9. **get_project_info** - Get THIS project's metadata
-10. **task_complete** - Call when done with your summary
+## YOUR TOOLS (PRIORITIZED BY EFFICIENCY)
 
-## YOUR WORKFLOW
+1. **search_replace** ⭐ PRIMARY - Find exact code and replace it. FASTEST for edits!
+2. **insert_code** ⭐ - Add new code after a specific location
+3. **read_file** - Read files BEFORE editing (always required)
+4. **list_files** - See project structure
+5. **write_file** - ONLY for NEW files or complete rewrites (>50% changes)
+6. **delete_file** - Remove files
+7. **get_console_logs** - Debug runtime issues
+8. **get_network_errors** - Debug API calls
+9. **get_runtime_errors** - See all errors
+10. **query_collection** - Query backend data
+11. **get_project_info** - Get project metadata
+12. **task_complete** - Call when DONE
 
-1. FIRST: Use list_files to see the project structure
-2. THEN: Use read_file to read relevant files
-3. CHECK: Use get_runtime_errors or get_console_logs if there are problems
-4. FIX: Use write_file to save your changes
-5. VERIFY: Check errors again if needed
-6. DONE: Call task_complete with a summary
+## YOUR WORKFLOW (LIKE LOVABLE)
 
-## CRITICAL RULES
+1. **READ FIRST**: Always read_file before editing
+2. **THINK SMALL**: Identify the MINIMUM code that needs to change
+3. **TARGETED EDIT**: Use search_replace for existing code changes
+4. **INSERT NEW**: Use insert_code for adding new functionality
+5. **VERIFY**: Check for errors after changes
+6. **DONE**: Call task_complete with summary
 
-- NEVER guess file contents. Always read_file first.
-- ALWAYS check console logs and errors when debugging
-- You can call multiple tools in sequence
-- Write COMPLETE files, not patches or diffs
-- If you create new components, make sure to import them where needed
-- Only use lucide-react for icons (never react-icons or heroicons)
-- Use Tailwind CSS for styling
-- Test your logic mentally before writing
+## SEARCH_REPLACE BEST PRACTICES
+
+✅ Copy EXACT code from read_file output (including whitespace)
+✅ Keep search string SHORT but UNIQUE (2-5 lines usually)
+✅ Include enough context to be unique
+❌ DON'T guess or type code from memory
+❌ DON'T include too much context (slows things down)
+
+Example - Change button color:
+\`\`\`
+search: "className=\\"bg-blue-500"
+replace: "className=\\"bg-red-500"
+\`\`\`
+
+Example - Fix text:
+\`\`\`
+search: "<h1>Welcome to My App</h1>"
+replace: "<h1>Welcome to Cool App</h1>"
+\`\`\`
 
 ## SECURITY BOUNDARIES
 
@@ -266,6 +331,8 @@ You are in a sandbox. You CANNOT:
 - export default function ComponentName() is the pattern
 - Use { useState, useEffect, ... } from React
 - Import components with relative paths ./components/Name
+- Use lucide-react for icons only
+- Use Tailwind CSS for styling
 
 ## BACKEND API (for THIS project only)
 
@@ -425,6 +492,151 @@ export async function executeToolCall(
       return { success: true, deletedPath: path };
     }
     
+    // 🚀 NEW: SEARCH AND REPLACE - Targeted edits like Lovable!
+    case "search_replace": {
+      const path = normalizeFilePath(args.path || "");
+      const search = args.search || "";
+      const replace = args.replace || "";
+      
+      if (!search) {
+        return { error: "search_replace: 'search' parameter is required" };
+      }
+      
+      // Read current file content
+      const { data, error: readError } = await supabase
+        .from('project_files')
+        .select('content')
+        .eq('project_id', projectId)
+        .eq('path', path)
+        .maybeSingle();
+      
+      if (readError) {
+        console.error(`[Agent] search_replace read error:`, readError);
+        return { error: `Failed to read file: ${readError.message}` };
+      }
+      if (!data) {
+        return { error: `File not found: ${path}` };
+      }
+      
+      const currentContent = data.content;
+      
+      // Check if search string exists in file
+      if (!currentContent.includes(search)) {
+        // Try to provide helpful feedback
+        const searchPreview = search.substring(0, 100);
+        console.error(`[Agent] search_replace: Search string not found in ${path}`);
+        console.error(`[Agent] Search preview: "${searchPreview}..."`);
+        return { 
+          error: `Search string not found in ${path}. Make sure you copied the exact code including whitespace. Search preview: "${searchPreview}..."`,
+          suggestion: "Use read_file to get the exact content, then copy-paste the search string exactly."
+        };
+      }
+      
+      // Count occurrences
+      const occurrences = currentContent.split(search).length - 1;
+      if (occurrences > 1) {
+        console.warn(`[Agent] search_replace: Found ${occurrences} occurrences, replacing first one`);
+      }
+      
+      // Perform the replacement
+      const newContent = currentContent.replace(search, replace);
+      
+      assertNoHtml(path, newContent);
+      
+      // Write updated content
+      const { error: writeError } = await supabase
+        .from('project_files')
+        .update({ content: newContent })
+        .eq('project_id', projectId)
+        .eq('path', path);
+      
+      if (writeError) {
+        console.error(`[Agent] search_replace write error:`, writeError);
+        return { error: `Failed to write file: ${writeError.message}` };
+      }
+      
+      const changeSize = replace.length - search.length;
+      console.log(`[Agent] search_replace success: ${path} (${changeSize > 0 ? '+' : ''}${changeSize} chars)`);
+      
+      return { 
+        success: true, 
+        path, 
+        occurrences,
+        charsRemoved: search.length,
+        charsAdded: replace.length,
+        netChange: changeSize
+      };
+    }
+    
+    // 🚀 NEW: INSERT CODE - Add code at specific location
+    case "insert_code": {
+      const path = normalizeFilePath(args.path || "");
+      const insertAfter = args.insertAfter ?? "";
+      const code = args.code || "";
+      
+      if (!code) {
+        return { error: "insert_code: 'code' parameter is required" };
+      }
+      
+      // Read current file content
+      const { data, error: readError } = await supabase
+        .from('project_files')
+        .select('content')
+        .eq('project_id', projectId)
+        .eq('path', path)
+        .maybeSingle();
+      
+      if (readError) {
+        console.error(`[Agent] insert_code read error:`, readError);
+        return { error: `Failed to read file: ${readError.message}` };
+      }
+      if (!data) {
+        return { error: `File not found: ${path}` };
+      }
+      
+      const currentContent = data.content;
+      let newContent: string;
+      
+      if (insertAfter === "") {
+        // Insert at beginning of file
+        newContent = code + currentContent;
+      } else if (!currentContent.includes(insertAfter)) {
+        const insertPreview = insertAfter.substring(0, 100);
+        console.error(`[Agent] insert_code: insertAfter string not found in ${path}`);
+        return { 
+          error: `insertAfter string not found in ${path}. Search preview: "${insertPreview}..."`,
+          suggestion: "Use read_file to get the exact content, then copy-paste the insertAfter string exactly."
+        };
+      } else {
+        // Insert after the found string
+        const insertIndex = currentContent.indexOf(insertAfter) + insertAfter.length;
+        newContent = currentContent.slice(0, insertIndex) + code + currentContent.slice(insertIndex);
+      }
+      
+      assertNoHtml(path, newContent);
+      
+      // Write updated content
+      const { error: writeError } = await supabase
+        .from('project_files')
+        .update({ content: newContent })
+        .eq('project_id', projectId)
+        .eq('path', path);
+      
+      if (writeError) {
+        console.error(`[Agent] insert_code write error:`, writeError);
+        return { error: `Failed to write file: ${writeError.message}` };
+      }
+      
+      console.log(`[Agent] insert_code success: ${path} (+${code.length} chars)`);
+      
+      return { 
+        success: true, 
+        path, 
+        charsInserted: code.length,
+        insertedAt: insertAfter === "" ? "beginning" : "after marker"
+      };
+    }
+
     case "get_console_logs": {
       const filter = args.filter || 'all';
       const logs = debugContext.consoleLogs || [];
