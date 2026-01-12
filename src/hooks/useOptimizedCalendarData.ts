@@ -1,10 +1,11 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { getCalendarEntries, CalendarEntry } from "@/utils/calendarUtils";
+import { getCalendarEntries, CalendarEntry, ProjectCalendarEntry } from "@/utils/calendarUtils";
 import { Maw3dService } from "@/services/maw3dService";
 import { TRService, TRTask, TRReminder } from "@/services/trService";
 import { useDebounced } from "./useDebounced";
 import { JournalService } from "@/services/journalService";
+import { supabase, getCurrentUserId } from "@/integrations/supabase/client";
 
 const MANUAL_ENTRIES_KEY = "calendarManualEntries";
 
@@ -14,6 +15,7 @@ let calendarCache: {
   tasks: TRTask[];
   reminders: TRReminder[];
   journalOverlay: { date: string; mood_value: number | null }[];
+  projectCalendarEntries: ProjectCalendarEntry[];
   timestamp: number;
 } | null = null;
 
@@ -25,6 +27,7 @@ export function useOptimizedCalendarData() {
   const [tasks, setTasks] = useState([]);
   const [reminders, setReminders] = useState([]);
   const [journalOverlay, setJournalOverlay] = useState<{ date: string; mood_value: number | null }[]>([]);
+  const [projectCalendarEntries, setProjectCalendarEntries] = useState<ProjectCalendarEntry[]>([]);
   const [entries, setEntries] = useState<CalendarEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const mountedRef = useRef(true);
@@ -54,6 +57,30 @@ export function useOptimizedCalendarData() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
+  // Fetch project calendar entries (bookings from user's projects)
+  const fetchProjectCalendarEntries = async (): Promise<ProjectCalendarEntry[]> => {
+    try {
+      const userId = await getCurrentUserId();
+      if (!userId) return [];
+
+      const { data, error } = await supabase
+        .from('project_calendar_entries')
+        .select('*')
+        .eq('owner_id', userId)
+        .order('entry_date', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching project calendar entries:', error);
+        return [];
+      }
+
+      return (data || []) as ProjectCalendarEntry[];
+    } catch (error) {
+      console.error('Error fetching project calendar entries:', error);
+      return [];
+    }
+  };
+
   // Optimized data fetching with caching
   const fetchData = useCallback(async (force = false) => {
     if (fetchingRef.current && !force) {
@@ -68,6 +95,7 @@ export function useOptimizedCalendarData() {
       setTasks(calendarCache.tasks);
       setReminders(calendarCache.reminders);
       setJournalOverlay(calendarCache.journalOverlay || []);
+      setProjectCalendarEntries(calendarCache.projectCalendarEntries || []);
       setLoading(false);
       return;
     }
@@ -77,11 +105,12 @@ export function useOptimizedCalendarData() {
       setLoading(true);
       
       console.log('🔄 Fetching fresh calendar data from API');
-      const [maw3d, tasksData, reminderData, journalDays] = await Promise.all([
+      const [maw3d, tasksData, reminderData, journalDays, projectEntries] = await Promise.all([
         Maw3dService.getUserEvents(),
         TRService.getTasks(),
         TRService.getReminders(),
-        JournalService.getCalendarOverlay(60)
+        JournalService.getCalendarOverlay(60),
+        fetchProjectCalendarEntries()
       ]);
       
       if (!mountedRef.current) return;
@@ -92,6 +121,7 @@ export function useOptimizedCalendarData() {
         tasks: tasksData || [],
         reminders: reminderData || [],
         journalOverlay: journalDays || [],
+        projectCalendarEntries: projectEntries || [],
         timestamp: now
       };
 
@@ -99,6 +129,7 @@ export function useOptimizedCalendarData() {
       setTasks(tasksData || []);
       setReminders(reminderData || []);
       setJournalOverlay(journalDays || []);
+      setProjectCalendarEntries(projectEntries || []);
       
       console.log('✅ Calendar data fetched and cached');
     } catch (error) {
@@ -132,10 +163,10 @@ export function useOptimizedCalendarData() {
 
   // Recompute entries when data changes
   useEffect(() => {
-    getCalendarEntries(manualEntries, [], maw3dEvents, tasks, reminders, journalOverlay)
+    getCalendarEntries(manualEntries, [], maw3dEvents, tasks, reminders, journalOverlay, projectCalendarEntries)
       .then(setEntries)
       .catch(() => setEntries([]));
-  }, [manualEntries, maw3dEvents, tasks, reminders, journalOverlay]);
+  }, [manualEntries, maw3dEvents, tasks, reminders, journalOverlay, projectCalendarEntries]);
 
   // Safe manual entries setter with localStorage persistence
   const updateManualEntries = useCallback((newEntries: CalendarEntry[]) => {
@@ -156,6 +187,7 @@ export function useOptimizedCalendarData() {
     tasks,
     reminders,
     journalOverlay,
+    projectCalendarEntries,
     refresh,
     debouncedRefresh,
     setManualEntries: updateManualEntries

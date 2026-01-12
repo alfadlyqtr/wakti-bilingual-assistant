@@ -690,25 +690,21 @@ async function handleInventory(action: string, projectId: string, ownerId: strin
   }
 }
 
-// Handle booking operations with WAKTI calendar sync
+// Handle booking operations with WAKTI calendar sync (uses project_calendar_entries, NOT maw3d_events)
 async function handleBooking(action: string, projectId: string, ownerId: string, data: Record<string, unknown>) {
   console.log(`[project-backend-api] Booking: ${action}`, data);
 
   switch (action) {
     case 'check': {
-      const { date, startTime, endTime, duration } = data;
+      const { date, startTime, endTime } = data;
       if (!date) throw new Error('date required');
 
-      // Check owner's maw3d_events for conflicts
-      let query = supabase
-        .from('maw3d_events')
-        .select('id, title, start_time, end_time, event_date')
-        .eq('created_by', ownerId)
-        .eq('event_date', date);
-
-      const { data: existingEvents, error } = await query;
-
-      if (error) throw new Error('Failed to check availability');
+      // Check project_calendar_entries for conflicts (owner's calendar entries from projects)
+      const { data: existingCalendarEntries } = await supabase
+        .from('project_calendar_entries')
+        .select('id, title, start_time, end_time, entry_date')
+        .eq('owner_id', ownerId)
+        .eq('entry_date', date);
 
       // Check project_bookings too
       const { data: existingBookings } = await supabase
@@ -725,7 +721,7 @@ async function handleBooking(action: string, projectId: string, ownerId: string,
         const checkEnd = endTime as string;
 
         conflicts = [
-          ...(existingEvents || []).filter((e: any) => {
+          ...(existingCalendarEntries || []).filter((e: any) => {
             if (!e.start_time || !e.end_time) return false;
             return !(checkEnd <= e.start_time || checkStart >= e.end_time);
           }),
@@ -739,7 +735,7 @@ async function handleBooking(action: string, projectId: string, ownerId: string,
       return {
         available: conflicts.length === 0,
         conflicts,
-        existingEvents: existingEvents || [],
+        existingCalendarEntries: existingCalendarEntries || [],
         existingBookings: existingBookings || [],
       };
     }
@@ -752,6 +748,15 @@ async function handleBooking(action: string, projectId: string, ownerId: string,
       }
 
       const customer = customerInfo as any;
+
+      // Get project name for calendar entry
+      const { data: project } = await supabase
+        .from('projects')
+        .select('name')
+        .eq('id', projectId)
+        .single();
+
+      const projectName = project?.name || 'Project';
 
       // Create booking record
       const { data: booking, error: bookingError } = await supabase
@@ -774,36 +779,37 @@ async function handleBooking(action: string, projectId: string, ownerId: string,
 
       if (bookingError) throw new Error('Failed to create booking');
 
-      // Create maw3d_event for owner's WAKTI calendar
-      const eventTitle = `📅 ${serviceName}`;
-      const eventDescription = `Customer: ${customer.name || 'N/A'}\nPhone: ${customer.phone || 'N/A'}\nEmail: ${customer.email || 'N/A'}${notes ? `\nNotes: ${notes}` : ''}`;
+      // Create project_calendar_entry for owner's WAKTI calendar (NOT maw3d_events)
+      const entryTitle = `📅 [${projectName}] ${serviceName}`;
+      const entryDescription = `Customer: ${customer.name || 'N/A'}\nPhone: ${customer.phone || 'N/A'}\nEmail: ${customer.email || 'N/A'}${notes ? `\nNotes: ${notes}` : ''}`;
 
-      const { data: calendarEvent, error: eventError } = await supabase
-        .from('maw3d_events')
+      const { data: calendarEntry, error: entryError } = await supabase
+        .from('project_calendar_entries')
         .insert({
-          created_by: ownerId,
-          title: eventTitle,
-          description: eventDescription,
-          event_date: date,
+          project_id: projectId,
+          owner_id: ownerId,
+          source_type: 'booking',
+          source_id: booking.id,
+          title: entryTitle,
+          description: entryDescription,
+          entry_date: date,
           start_time: startTime || null,
           end_time: endTime || null,
           is_all_day: !startTime,
-          is_public: false,
-          background_type: 'color',
-          background_value: '#4F46E5', // Indigo for bookings
-          text_style: { titleColor: '#ffffff', descriptionColor: '#e0e0e0' },
+          color: '#4F46E5', // Indigo for bookings
+          metadata: { serviceName, customerInfo },
         })
         .select('id')
         .single();
 
-      // Link booking to calendar event
-      if (calendarEvent && !eventError) {
+      // Link booking to calendar entry
+      if (calendarEntry && !entryError) {
         await supabase
           .from('project_bookings')
-          .update({ maw3d_event_id: calendarEvent.id })
+          .update({ calendar_entry_id: calendarEntry.id })
           .eq('id', booking.id);
 
-        booking.maw3d_event_id = calendarEvent.id;
+        booking.calendar_entry_id = calendarEntry.id;
       }
 
       // Notify owner
@@ -816,7 +822,7 @@ async function handleBooking(action: string, projectId: string, ownerId: string,
         { bookingId: booking.id, serviceName, date, startTime, customerInfo }
       );
 
-      return { booking, calendarEventId: calendarEvent?.id };
+      return { booking, calendarEntryId: calendarEntry?.id };
     }
 
     case 'list': {
@@ -848,10 +854,10 @@ async function handleBooking(action: string, projectId: string, ownerId: string,
       if (status) updates.status = status;
       if (notes !== undefined) updates.notes = notes;
 
-      // Get current booking to find linked calendar event
+      // Get current booking to find linked calendar entry
       const { data: currentBooking } = await supabase
         .from('project_bookings')
-        .select('maw3d_event_id')
+        .select('calendar_entry_id, service_name')
         .eq('id', bookingId)
         .single();
 
@@ -865,15 +871,15 @@ async function handleBooking(action: string, projectId: string, ownerId: string,
 
       if (error) throw new Error('Failed to update booking');
 
-      // Update calendar event if status changed to cancelled
-      if (status === 'cancelled' && currentBooking?.maw3d_event_id) {
+      // Update calendar entry if status changed to cancelled
+      if (status === 'cancelled' && currentBooking?.calendar_entry_id) {
         await supabase
-          .from('maw3d_events')
+          .from('project_calendar_entries')
           .update({ 
-            title: `❌ CANCELLED: ${booking.service_name}`,
-            background_value: '#6B7280', // Gray for cancelled
+            title: `❌ CANCELLED: ${currentBooking.service_name}`,
+            color: '#6B7280', // Gray for cancelled
           })
-          .eq('id', currentBooking.maw3d_event_id);
+          .eq('id', currentBooking.calendar_entry_id);
       }
 
       return { booking };

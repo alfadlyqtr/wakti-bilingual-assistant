@@ -10,10 +10,29 @@ export enum EntryType {
   MAW3D_EVENT = 'maw3d_event',
   TASK = 'task',
   REMINDER = 'reminder',
-  JOURNAL = 'journal'
+  JOURNAL = 'journal',
+  PROJECT_BOOKING = 'project_booking'
 }
 
 export type CalendarView = 'month' | 'week' | 'year';
+
+export interface ProjectCalendarEntry {
+  id: string;
+  project_id: string;
+  owner_id: string;
+  source_type: string;
+  source_id: string | null;
+  title: string;
+  description: string | null;
+  entry_date: string;
+  start_time: string | null;
+  end_time: string | null;
+  is_all_day: boolean;
+  color: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface CalendarEntry {
   id: string;
@@ -26,6 +45,7 @@ export interface CalendarEntry {
   isAllDay?: boolean;
   completed?: boolean;
   priority?: 'normal' | 'high' | 'urgent';
+  color?: string;
 }
 
 export const getCalendarEntries = async (
@@ -34,7 +54,8 @@ export const getCalendarEntries = async (
   maw3dEvents: Maw3dEvent[] = [],
   tasks: TRTask[] = [],
   reminders: TRReminder[] = [],
-  journalOverlay: { date: string; mood_value: number | null }[] = []
+  journalOverlay: { date: string; mood_value: number | null }[] = [],
+  projectCalendarEntries: ProjectCalendarEntry[] = []
 ): Promise<CalendarEntry[]> => {
   console.log('Getting calendar entries:', {
     manualEntries: manualEntries.length,
@@ -42,7 +63,8 @@ export const getCalendarEntries = async (
     maw3dEvents: maw3dEvents.length,
     tasks: tasks.length,
     reminders: reminders.length,
-    journalDays: journalOverlay.length
+    journalDays: journalOverlay.length,
+    projectCalendarEntries: projectCalendarEntries.length
   });
 
   const entries: CalendarEntry[] = [];
@@ -50,7 +72,7 @@ export const getCalendarEntries = async (
   // Add manual entries
   entries.push(...manualEntries);
 
-  // Add Maw3d events
+  // Add Maw3d events (completely separate from project bookings)
   const maw3dEntries: CalendarEntry[] = maw3dEvents.map(event => ({
     id: `maw3d-${event.id}`,
     title: event.title,
@@ -106,6 +128,21 @@ export const getCalendarEntries = async (
       isAllDay: true
     }));
     entries.push(...journalEntries);
+  }
+
+  // Add project calendar entries (bookings from user's projects)
+  if (projectCalendarEntries && projectCalendarEntries.length > 0) {
+    const projectEntries: CalendarEntry[] = projectCalendarEntries.map(entry => ({
+      id: `project-${entry.id}`,
+      title: entry.title,
+      date: entry.entry_date,
+      time: entry.start_time || undefined,
+      type: EntryType.PROJECT_BOOKING,
+      description: entry.description || undefined,
+      isAllDay: entry.is_all_day,
+      color: entry.color
+    }));
+    entries.push(...projectEntries);
   }
 
   console.log('Total calendar entries:', entries.length);
