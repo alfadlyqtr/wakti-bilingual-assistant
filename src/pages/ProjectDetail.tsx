@@ -563,8 +563,13 @@ export default function ProjectDetail() {
         throw new Error(startRes.error.message || 'Failed to start generation');
       }
 
-      const jobId = startRes.data?.jobId as string | undefined;
-      if (!jobId) throw new Error('Missing jobId');
+      const startData: any = startRes.data;
+      if (!startData?.ok) {
+        throw new Error(startData?.error || 'Failed to start generation');
+      }
+
+      const jobId = startData?.jobId as string | undefined;
+      if (!jobId) throw new Error('Generation did not return a jobId');
 
       await pollJobUntilDone(jobId);
 
@@ -2296,7 +2301,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       let snapshotToSave: any = null;
 
       // IMPORTANT: Save snapshot of CURRENT state BEFORE applying changes (for revert)
-      const beforeSnapshot = Object.keys(generatedFiles).length > 0 ? { ...generatedFiles } : null;
+      const beforeSnapshot: Record<string, string> = Object.keys(generatedFiles).length > 0 ? { ...generatedFiles } : {};
 
       if (leftPanelMode === 'chat') {
         // Chat mode: Smart AI that answers questions OR returns plans for code changes
