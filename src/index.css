@@ -499,6 +499,24 @@ textarea::placeholder {
     filter: drop-shadow(0 0 8px hsla(var(--accent-blue), 0.6));
   }
 
+  /* Super-glued mobile navigation */
+  .mobile-nav-fixed {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 2147483647 !important; /* Maximum z-index */
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-transform: translate3d(0, 0, 0);
+    -webkit-backface-visibility: hidden;
+    will-change: transform;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    pointer-events: auto !important;
+    touch-action: none;
+    user-select: none;
+  }
+
   .nav-icon-maw3d {
     color: hsl(var(--accent-purple));
     filter: drop-shadow(0 0 8px hsla(var(--accent-purple), 0.6));

@@ -53,6 +53,8 @@ const SandpackStudio = lazy(() => import('@/components/projects/SandpackStudio')
 import { MatrixOverlay } from '@/components/projects/MatrixOverlay';
 import { TraceFlowLoader } from '@/components/projects/TraceFlowLoader';
 import { BackendDashboard } from '@/components/projects/backend/BackendDashboard';
+import { StockPhotoSelector } from '@/components/projects/StockPhotoSelector';
+import { FreepikService } from '@/services/FreepikService';
 
 interface Project {
   id: string;
@@ -134,6 +136,11 @@ export default function ProjectDetail() {
   const autoCaptureTimeoutRef = useRef<number | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationSteps, setGenerationSteps] = useState<{ label: string, status: 'pending' | 'loading' | 'completed' | 'error' }[]>([]);
+  
+  // Stock photo selector state
+  const [showStockPhotoSelector, setShowStockPhotoSelector] = useState(false);
+  const [photoSearchTerm, setPhotoSearchTerm] = useState('');
+  const [photoSelectorInitialTab, setPhotoSelectorInitialTab] = useState<'stock' | 'user'>('stock');
 
   useEffect(() => {
     return () => {
@@ -2201,6 +2208,33 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
   const removeAttachedImage = (index: number) => {
     setAttachedImages(prev => prev.filter((_, i) => i !== index));
   };
+  
+  // Handle stock photo selection
+  const handleStockPhotoSelect = (photo: { url: string; title: string }) => {
+    // Create a File object from the URL
+    fetch(photo.url)
+      .then(res => res.blob())
+      .then(blob => {
+        const file = new File([blob], photo.title, { type: blob.type || 'image/jpeg' });
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const preview = event.target?.result as string;
+          setAttachedImages(prev => [...prev, { file, preview }]);
+        };
+        reader.readAsDataURL(file);
+      })
+      .catch(err => {
+        console.error('Error fetching stock photo:', err);
+        toast.error(isRTL ? 'فشل في تحميل الصورة' : 'Failed to load image');
+      });
+  };
+  
+  // Open stock photo selector with search term and optional initial tab
+  const openStockPhotoSelector = (term: string = '', initialTab: 'stock' | 'user' = 'stock') => {
+    setPhotoSearchTerm(term);
+    setPhotoSelectorInitialTab(initialTab);
+    setShowStockPhotoSelector(true);
+  };
 
   const handlePaste = async (e: ClipboardEvent) => {
     const items = e.clipboardData?.items;
@@ -2228,6 +2262,61 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
     
     const userMessage = chatInput.trim();
     setChatInput('');
+    
+    // Check if the user is asking for love photos or specific photo types
+    const lovePhotoRegex = /\b(love|heart|romance|romantic|valentine)\s+photos?\b/i;
+    const photoRequestRegex = /\b(\w+)\s+photos?\b/i;
+    const myPhotosRegex = /\b(my|uploaded|user)\s+photos?\b/i;
+    
+    // Check for "my photos" request
+    if (myPhotosRegex.test(userMessage)) {
+      // Check if user has uploaded photos
+      try {
+        const { success, count } = await FreepikService.checkUserUploads(user?.id || '');
+        
+        if (success && count > 0) {
+          // User has photos, open selector with user tab active
+          openStockPhotoSelector('', 'user');
+          return;
+        } else {
+          // No user photos found, add assistant message explaining this
+          const noPhotosMsg = isRTL 
+            ? 'لم يتم العثور على صور مرفوعة. يرجى تحميل الصور أولاً.' 
+            : 'No uploaded photos found. Please upload photos first.';
+          
+          setChatMessages(prev => [...prev, {
+            id: `assistant-${Date.now()}`,
+            role: 'assistant',
+            content: noPhotosMsg
+          }]);
+          
+          // Save to DB
+          await supabase
+            .from('project_chat_messages' as any)
+            .insert({ 
+              project_id: id, 
+              role: 'assistant', 
+              content: noPhotosMsg
+            } as any);
+          
+          return;
+        }
+      } catch (err) {
+        console.error('Error checking user photos:', err);
+      }
+    }
+    // Check for love photos or other specific photo requests
+    else if (lovePhotoRegex.test(userMessage)) {
+      openStockPhotoSelector('love');
+      return;
+    } else {
+      const photoMatch = userMessage.match(photoRequestRegex);
+      if (photoMatch && photoMatch[1] && !['use', 'upload', 'select', 'choose', 'find', 'get', 'show', 'display', 'add'].includes(photoMatch[1].toLowerCase())) {
+        openStockPhotoSelector(photoMatch[1]);
+        return;
+      }
+    }
+    
     setAiEditing(true);
     
     // Set initial progress steps based on mode
@@ -2720,6 +2809,15 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
           {/* Mode Toggle: Chat / Code / Server - FIXED at top */}
           <div className="flex items-center justify-between border-b border-border/50 dark:border-white/10 px-3 py-0 h-[56px] shrink-0 absolute top-0 left-0 right-0 z-[100] bg-background dark:bg-[#0c0f14]">
             <div className="flex items-center gap-2">
+              {/* Back Button */}
+              <button
+                onClick={() => navigate('/projects')}
+                className="p-1.5 rounded-lg bg-gradient-to-br from-blue-500/20 via-blue-400/20 to-blue-300/20 border border-blue-500/30 hover:border-blue-500/50 hover:from-blue-500/30 hover:via-blue-400/30 hover:to-blue-300/30 transition-all active:scale-95 group"
+                title={isRTL ? 'رجوع' : 'Back'}
+              >
+                <ArrowLeft className="h-4 w-4 text-blue-500 group-hover:text-blue-400 transition-colors" />
+              </button>
+              
               {/* Brain Icon - Opens Instructions Drawer */}
               <button
                 onClick={() => {
@@ -4228,6 +4326,16 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
             </div>
           </div>
         </div>
+      )}
+      {/* Stock Photo Selector Modal */}
+      {showStockPhotoSelector && (
+        <StockPhotoSelector
+          userId={user?.id || ''}
+          onSelectPhoto={handleStockPhotoSelect}
+          onClose={() => setShowStockPhotoSelector(false)}
+          searchTerm={photoSearchTerm}
+          initialTab={photoSelectorInitialTab}
+        />
       )}
       </>
       )}

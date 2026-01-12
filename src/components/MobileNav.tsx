@@ -109,9 +109,9 @@ export function MobileNav({
   };
   
   return (
-    <nav className="fixed bottom-1 left-0 w-full z-50">
-      <div className="bg-gradient-nav backdrop-blur-lg border-t border-border/50 shadow-vibrant">
-        <ul className="flex justify-around items-center h-16 px-2">
+    <nav className="mobile-nav-fixed glue-fixed glue-bottom left-0 w-full z-[2147483647]">
+      <div className="bg-gradient-nav backdrop-blur-xl border-t border-border/50 shadow-vibrant">
+        <ul className="flex justify-around items-center h-16 px-2 pb-safe">
           {navItems.map((item) => {
             const IconComponent = iconMap[item.icon] || Calendar;
             const isActive = pathname === item.path || (item.path === '/maw3d' && pathname.startsWith('/maw3d')) || (item.path === '/tr' && pathname.startsWith('/tr'));
