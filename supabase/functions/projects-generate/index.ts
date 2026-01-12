@@ -1962,8 +1962,8 @@ ${filesStr}`;
         maxAutoFixAttempts: debugContext?.maxAutoFixAttempts
       };
       
-      // Build system prompt with project ID
-      const systemPromptWithProjectId = AGENT_SYSTEM_PROMPT.replace(/PROJECT_ID/g, projectId);
+      // Build system prompt with project ID - replace placeholder with actual project ID
+      const systemPromptWithProjectId = AGENT_SYSTEM_PROMPT.replace(/\{\{PROJECT_ID\}\}/g, projectId);
       
       // Prepare the initial user message with context
       let userMessageContent = prompt;
@@ -2063,7 +2063,7 @@ ${filesStr}`;
           const { name, args } = fc.functionCall;
           console.log(`[Agent Mode] Tool call: ${name}`, args);
           
-          const result = await executeToolCall(projectId, { name, arguments: args || {} }, agentDebugContext, supabase);
+          const result = await executeToolCall(projectId, { name, arguments: args || {} }, agentDebugContext, supabase, userId);
           
           toolCallsLog.push({ tool: name, args, result });
           functionResponses.push({

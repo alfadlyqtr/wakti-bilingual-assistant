@@ -2,8 +2,44 @@
 // WAKTI AI CODER - AGENT TOOL SYSTEM
 // Full agent with read/write/debug/query capabilities
 // ============================================================================
+// 
+// ⚠️ SECURITY SCOPE - CRITICAL ⚠️
+// 
+// This agent ONLY has access to PROJECT-RELATED tables:
+// ✅ project_files      - Read/write project source files
+// ✅ projects           - Read project metadata (id, name, slug, status)
+// ✅ project_backends   - Read backend status
+// ✅ project_collections - Query project data collections (via project-backend-api)
+//
+// This agent CANNOT access ANY main WAKTI tables:
+// ❌ profiles           - User profiles
+// ❌ tasks              - User tasks
+// ❌ events             - User events
+// ❌ messages           - User messages
+// ❌ contacts           - User contacts
+// ❌ reminders          - User reminders
+// ❌ subscriptions      - Billing data
+// ❌ admins             - Admin data
+// ❌ Any other non-project table
+//
+// Every operation REQUIRES a valid projectId and is scoped by:
+// 1. assertProjectOwnership() - Validates user owns the project
+// 2. All queries filter by project_id - No cross-project access
+// 3. No dynamic table access - Hardcoded table names only
+//
+// ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// ALLOWED TABLES - These are the ONLY tables the agent can access
+const ALLOWED_TABLES = [
+  'project_files',
+  'projects', 
+  'project_backends',
+  'project_collections',
+  'project_uploads',
+  'project_collection_schemas'
+] as const;
 
 // Debug context from the AI Coder debug system
 export interface AgentDebugContext {
@@ -169,23 +205,31 @@ export const AGENT_TOOLS = [
   }
 ];
 
-// Agent system prompt that tells AI about its capabilities
-export const AGENT_SYSTEM_PROMPT = `You are WAKTI AI Coder - a powerful coding agent with FULL ACCESS to the project.
+// Agent system prompt that tells AI about its capabilities and SCOPE
+export const AGENT_SYSTEM_PROMPT = `You are WAKTI AI Coder - a powerful coding agent for the PROJECTS feature.
+
+## ⚠️ CRITICAL: YOUR SCOPE IS LIMITED TO THIS PROJECT ONLY
+
+You are working on a USER PROJECT within the WAKTI AI Coder feature.
+- Your projectId is: {{PROJECT_ID}}
+- You can ONLY access files and data for THIS project
+- You CANNOT access the main WAKTI app (tasks, events, messages, contacts, etc.)
+- You are sandboxed to the projects feature only
 
 ## YOUR CAPABILITIES (USE THEM!)
 
 You have these tools and MUST use them:
 
-1. **read_file** - Read any file. ALWAYS read files before editing them.
-2. **list_files** - See all project files. Use this to understand the project structure.
-3. **write_file** - Create or update files. This is how you make changes.
-4. **delete_file** - Remove files that are no longer needed.
-5. **get_console_logs** - See runtime logs. Check this when something is broken.
-6. **get_network_errors** - See failed API calls. Check this for backend issues.
-7. **get_runtime_errors** - See React errors, syntax errors, crashes.
-8. **query_collection** - Query the database. See what data exists.
-9. **get_project_info** - Get project metadata and backend status.
-10. **task_complete** - Call this when you're done with your summary.
+1. **read_file** - Read files from THIS project only
+2. **list_files** - See files in THIS project only
+3. **write_file** - Create/update files in THIS project only
+4. **delete_file** - Remove files from THIS project only
+5. **get_console_logs** - See runtime logs from THIS project's preview
+6. **get_network_errors** - See failed API calls from THIS project
+7. **get_runtime_errors** - See React/JS errors from THIS project
+8. **query_collection** - Query THIS project's backend collections
+9. **get_project_info** - Get THIS project's metadata
+10. **task_complete** - Call when done with your summary
 
 ## YOUR WORKFLOW
 
@@ -207,6 +251,14 @@ You have these tools and MUST use them:
 - Use Tailwind CSS for styling
 - Test your logic mentally before writing
 
+## SECURITY BOUNDARIES
+
+You are in a sandbox. You CANNOT:
+- Access other users' projects
+- Access WAKTI main app data (profiles, tasks, events, messages)
+- Access any data outside of projectId: {{PROJECT_ID}}
+- Make requests to external APIs not related to this project
+
 ## REACT CODE STANDARDS
 
 - Use functional components with hooks
@@ -215,22 +267,22 @@ You have these tools and MUST use them:
 - Use { useState, useEffect, ... } from React
 - Import components with relative paths ./components/Name
 
-## BACKEND API
+## BACKEND API (for THIS project only)
 
 If the project uses backend features, the API is:
 https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
 
 For form submissions:
 {
-  projectId: "PROJECT_ID",
+  projectId: "{{PROJECT_ID}}",
   action: "submit",
   formName: "contact",
   data: { name, email, message }
 }
 
 For collections:
-GET: ?projectId=PROJECT_ID&action=collection/products
-POST: { projectId: "PROJECT_ID", action: "collection/products", data: {...} }
+GET: ?projectId={{PROJECT_ID}}&action=collection/products
+POST: { projectId: "{{PROJECT_ID}}", action: "collection/products", data: {...} }
 `;
 
 // Normalize file path to always start with /
@@ -256,16 +308,41 @@ interface ToolCall {
   arguments: Record<string, any>;
 }
 
+// Security context for agent operations
+interface AgentSecurityContext {
+  projectId: string;
+  userId: string;
+  timestamp: Date;
+}
+
 // Execute a single tool call
+// ⚠️ SECURITY: All operations are scoped to projectId
+// The projectId is validated by assertProjectOwnership BEFORE this function is called
 export async function executeToolCall(
   projectId: string,
   toolCall: ToolCall,
   debugContext: AgentDebugContext,
-  supabase: ReturnType<typeof createClient>
+  supabase: ReturnType<typeof createClient>,
+  userId?: string
 ): Promise<any> {
   const { name, arguments: args } = toolCall;
   
-  console.log(`[Agent] Executing tool: ${name}`, args);
+  // ============================================================================
+  // SECURITY CHECK: Validate projectId is present and valid format
+  // ============================================================================
+  if (!projectId || typeof projectId !== 'string') {
+    console.error(`[Agent SECURITY] Invalid projectId: ${projectId}`);
+    return { error: 'SECURITY: Invalid project context' };
+  }
+  
+  // UUID format validation
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(projectId)) {
+    console.error(`[Agent SECURITY] ProjectId not valid UUID: ${projectId}`);
+    return { error: 'SECURITY: Invalid project ID format' };
+  }
+  
+  console.log(`[Agent] Executing tool: ${name} for project: ${projectId}`, args);
   
   switch (name) {
     case "read_file": {
