@@ -23,16 +23,22 @@ export const SandpackErrorListener = ({ onErrorDetected }: ErrorListenerProps) =
   // Listen for messages from the preview iframe (console errors, React errors)
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      // Sandpack internal error messages
-      if (event.data?.type === 'console' && event.data?.log?.method === 'error') {
-        const errorMessage = event.data.log.data?.join(' ') || 'Unknown console error';
+      // Capture ALL console messages for agent mode (not just errors)
+      if (event.data?.type === 'console' && event.data?.log) {
+        const method = event.data.log.method || 'log';
+        const message = event.data.log.data?.join(' ') || 'Unknown console message';
         
         if (debugContext) {
-          debugContext.captureError({
-            type: 'console',
-            message: errorMessage,
-            metadata: { source: 'iframe-console' }
+          debugContext.captureConsoleLog({
+            level: method === 'error' ? 'error' : method === 'warn' ? 'warn' : method === 'info' ? 'info' : 'log',
+            message: message,
+            args: event.data.log.data
           });
+        }
+        
+        // For errors, also trigger the legacy callback
+        if (method === 'error') {
+          onErrorDetected(message);
         }
       }
       
