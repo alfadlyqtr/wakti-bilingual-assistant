@@ -2397,11 +2397,12 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
           return; // Exit early - don't run edit
         }
 
+        // Using AGENT mode for targeted, intelligent edits (not full file rewrites)
         const startRes = await supabase.functions.invoke('projects-generate', {
           body: {
             action: 'start',
             projectId: id,
-            mode: 'edit',
+            mode: 'agent',
             prompt: userMessage,
             userInstructions: userInstructions,
             images: codeImages, // NOW SENDING IMAGES TO AI
@@ -2931,11 +2932,12 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                                     setAiEditing(true);
                                     
                                     try {
+                                      // Using AGENT mode for targeted edits
                                       const response = await supabase.functions.invoke('projects-generate', {
                                         body: {
                                           action: 'start',
                                           projectId: id,
-                                          mode: 'edit',
+                                          mode: 'agent',
                                           prompt: selectionMsg,
                                           currentFiles: generatedFiles,
                                           uploadedAssets,
