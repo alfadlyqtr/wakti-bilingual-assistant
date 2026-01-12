@@ -1953,9 +1953,10 @@ ${filesStr}`;
         console.log(`[Agent Mode] Iteration ${iteration + 1}/${maxIterations}`);
         
         // Call Gemini with tools
+        // Using gemini-2.5-pro for EXCELLENT code quality in agent mode
         const geminiResponse = await withTimeout(
           fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent`,
             {
               method: "POST",
               headers: {
