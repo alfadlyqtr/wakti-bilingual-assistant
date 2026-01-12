@@ -337,55 +337,7 @@ async function callGemini25ProWithImages(
   return text;
 }
 
-// GEMINI 2.0 FLASH - FAST CREATE MODE (avoids gateway timeout)
-// ============================================================================
-async function callGemini20FlashCreate(
-  systemPrompt: string,
-  userPrompt: string
-): Promise<string> {
-  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
-  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
-
-  const model = "gemini-2.0-flash";
-  
-  console.log(`[Gemini 2.0 Flash Create] Calling model: ${model}`);
-
-  const response = await withTimeout(
-    fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": GEMINI_API_KEY,
-        },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          generationConfig: {
-            temperature: 0.2,
-            maxOutputTokens: 32768,
-            responseMimeType: "application/json",
-          },
-        }),
-      }
-    ),
-    90000, // 90 seconds - well under gateway timeout
-    'GEMINI_20_FLASH_CREATE'
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`[Gemini 2.0 Flash Create] HTTP ${response.status}: ${errorText}`);
-    throw new Error(`Gemini API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  let text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  text = normalizeGeminiResponseText(text);
-  
-  return text;
-}
+// NOTE: Create mode uses callGemini25Pro directly (line ~2243)
 
 // PLAN MODE: AI proposes changes, returns a structured plan (Lovable-style)
 async function callGeminiPlanMode(
