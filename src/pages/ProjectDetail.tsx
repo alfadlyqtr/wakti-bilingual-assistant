@@ -2895,7 +2895,14 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
   }
 
   return (
-    <div className={cn("fixed inset-0 flex flex-col bg-background overflow-hidden z-10", isRTL && "rtl")}>
+    <div className={cn(
+      "fixed flex flex-col bg-background overflow-hidden z-10",
+      // On desktop: account for sidebar (left) - positioned right of sidebar
+      "md:left-[68px] md:right-0 md:top-[64px] md:bottom-0",
+      // On mobile: full screen (no sidebar visible)
+      "left-0 right-0 top-0 bottom-0 md:inset-auto",
+      isRTL && "rtl md:left-0 md:right-[68px]"
+    )}>
 
       {/* Server Tab Content */}
       {mainTab === 'server' ? (
@@ -4597,6 +4604,11 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
           userId={user?.id || ''}
           projectId={id}
           onSelectPhoto={handleStockPhotoSelect}
+          onSelectPhotos={(photos) => {
+            // Handle multi-select - use all photos
+            photos.forEach(photo => handleStockPhotoSelect(photo));
+          }}
+          multiSelect={true}
           onClose={() => setShowStockPhotoSelector(false)}
           searchTerm={photoSearchTerm}
           initialTab={photoSelectorInitialTab}
