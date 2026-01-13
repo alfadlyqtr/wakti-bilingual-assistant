@@ -66,6 +66,9 @@ import { ClarifyingQuestionsModal, ClarifyingQuestion } from '@/components/proje
 import { MigrationApprovalDialog } from '@/components/projects/MigrationApprovalDialog';
 import { ElementEditPopover } from '@/components/projects/ElementEditPopover';
 
+// Direct style editor for FREE visual edits (no AI prompts needed)
+import { applyDirectEdits, validateJSX } from '@/utils/directStyleEditor';
+
 interface Project {
   id: string;
   name: string;
@@ -4607,31 +4610,48 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
             setSelectedElementInfo(null);
           }}
           onDirectEdit={(changes) => {
-            // Apply direct edits to the code
-            let code = generatedFiles['/App.js'] || '';
+            // Apply direct edits to the code - NO AI PROMPTS, NO CREDITS!
+            const currentCode = generatedFiles['/App.js'] || '';
             
-            // Simple text replacement
-            if (changes.text && selectedElementInfo.innerText) {
-              code = code.replace(selectedElementInfo.innerText, changes.text);
-            }
+            // Use the direct style editor for ALL changes
+            const result = applyDirectEdits(currentCode, selectedElementInfo, changes);
             
-            // For colors and styles, we need to use AI to properly update the code
-            // since direct style changes are complex
-            if (changes.color || changes.bgColor || changes.fontSize) {
-              const styleChanges: string[] = [];
-              if (changes.color) styleChanges.push(`text color to ${changes.color}`);
-              if (changes.bgColor && changes.bgColor !== 'transparent') styleChanges.push(`background color to ${changes.bgColor}`);
-              if (changes.fontSize) styleChanges.push(`font size to ${changes.fontSize}`);
-              
-              const prompt = `For the ${selectedElementInfo.tagName} element containing "${selectedElementInfo.innerText.substring(0, 30)}...", change: ${styleChanges.join(', ')}`;
-              setChatInput(prompt);
-              toast.info(isRTL ? 'تم إضافة الطلب - اضغط إرسال' : 'Prompt added - press send');
-            } else if (changes.text) {
-              setGeneratedFiles(prev => ({
-                ...prev,
-                '/App.js': code
-              }));
-              toast.success(isRTL ? 'تم تحديث النص!' : 'Text updated!');
+            if (result.success) {
+              // Validate the resulting JSX before applying
+              if (validateJSX(result.code)) {
+                setGeneratedFiles(prev => ({
+                  ...prev,
+                  '/App.js': result.code
+                }));
+                toast.success(isRTL ? `تم التطبيق: ${result.message}` : `Applied: ${result.message}`);
+              } else {
+                // JSX validation failed - shouldn't happen but fallback to simple text replace
+                console.warn('[Visual Edits] JSX validation failed, trying simple replace');
+                if (changes.text && selectedElementInfo.innerText) {
+                  const simpleCode = currentCode.replace(selectedElementInfo.innerText, changes.text);
+                  setGeneratedFiles(prev => ({
+                    ...prev,
+                    '/App.js': simpleCode
+                  }));
+                  toast.success(isRTL ? 'تم تحديث النص!' : 'Text updated!');
+                } else {
+                  toast.error(isRTL ? 'فشل تطبيق التغييرات' : 'Failed to apply changes');
+                }
+              }
+            } else {
+              // Direct edit failed - for complex cases, still allow AI fallback
+              if ((changes.color || changes.bgColor || changes.fontSize) && !changes.text) {
+                const styleChanges: string[] = [];
+                if (changes.color) styleChanges.push(`text color to ${changes.color}`);
+                if (changes.bgColor && changes.bgColor !== 'transparent') styleChanges.push(`background color to ${changes.bgColor}`);
+                if (changes.fontSize) styleChanges.push(`font size to ${changes.fontSize}`);
+                
+                const prompt = `For the ${selectedElementInfo.tagName} element containing "${selectedElementInfo.innerText.substring(0, 30)}...", change: ${styleChanges.join(', ')}`;
+                setChatInput(prompt);
+                toast.info(isRTL ? 'تم إضافة الطلب - اضغط إرسال' : 'Prompt added - press send');
+              } else {
+                toast.warning(isRTL ? 'لم يتم تطبيق أي تغييرات' : 'No changes were applied');
+              }
             }
             
             setShowElementEditPopover(false);
