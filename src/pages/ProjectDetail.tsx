@@ -22,6 +22,7 @@ import {
   Code2, 
   Check, 
   ChevronUp, 
+  ChevronDown,
   RefreshCw, 
   Sparkles, 
   Brain, 
@@ -41,7 +42,10 @@ import {
   Edit2,
   Lock,
   Server,
-  Hammer
+  Hammer,
+  Lightbulb,
+  Circle,
+  FileText
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -103,6 +107,32 @@ type DeviceView = 'desktop' | 'tablet' | 'mobile';
 type LeftPanelMode = 'chat' | 'code';
 type MainTab = 'builder' | 'server';
 
+// Lovable-style Thinking Timer Component
+const ThinkingTimerDisplay: React.FC<{ startTime: number; isRTL: boolean }> = ({ startTime, isRTL }) => {
+  const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
+
+  React.useEffect(() => {
+    const initialElapsed = Math.floor((Date.now() - startTime) / 1000);
+    setElapsedSeconds(initialElapsed);
+
+    const interval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      setElapsedSeconds(elapsed);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [startTime]);
+
+  const label = isRTL ? `فكّر لمدة ${elapsedSeconds} ث` : `Thought for ${elapsedSeconds}s`;
+
+  return (
+    <div className={`flex items-center gap-2 text-sm text-muted-foreground mb-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
+      <Lightbulb className="h-4 w-4 text-yellow-500" />
+      <span>{label}</span>
+    </div>
+  );
+};
+
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -136,6 +166,11 @@ export default function ProjectDetail() {
   const autoCaptureTimeoutRef = useRef<number | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationSteps, setGenerationSteps] = useState<{ label: string, status: 'pending' | 'loading' | 'completed' | 'error' }[]>([]);
+  
+  // Lovable-style thinking timer and edited files tracking
+  const [thinkingStartTime, setThinkingStartTime] = useState<number | null>(null);
+  const [editedFilesTracking, setEditedFilesTracking] = useState<Array<{ id: string; fileName: string; status: 'editing' | 'edited' }>>([]);
+  const [showAllEditedFiles, setShowAllEditedFiles] = useState(false);
   
   // Stock photo selector state
   const [showStockPhotoSelector, setShowStockPhotoSelector] = useState(false);
@@ -2318,7 +2353,8 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
     }
     
     setAiEditing(true);
-    
+    setThinkingStartTime(Date.now());
+    setEditedFilesTracking([]); // Reset edited files
     // Set initial progress steps based on mode
     if (leftPanelMode === 'code') {
       setGenerationSteps([
@@ -2487,6 +2523,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
           }
           
           setAiEditing(false);
+          setThinkingStartTime(null);
           setGenerationSteps([]);
           return; // Exit early - don't run edit
         }
@@ -2541,6 +2578,13 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
             }
           }
           
+          // Update edited files tracking for Lovable-style UI
+          setEditedFilesTracking(changedFilesList.map((filePath, idx) => ({
+            id: `file-${idx}-${Date.now()}`,
+            fileName: filePath.replace(/^\//, ''),
+            status: 'edited' as const
+          })));
+          
           const summaryText = agentResult.result.summary || (isRTL ? 'تم تطبيق التعديلات!' : 'Changes applied!');
           
           // Store as structured JSON so the UI can parse it properly
@@ -2580,6 +2624,13 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
               changedFilesList.push(path);
             }
           }
+          
+          // Update edited files tracking for Lovable-style UI
+          setEditedFilesTracking(changedFilesList.map((filePath, idx) => ({
+            id: `file-${idx}-${Date.now()}`,
+            fileName: filePath.replace(/^\//, ''),
+            status: 'edited' as const
+          })));
           
           const summaryText = job.result_summary || (isRTL ? 'تم تطبيق التعديلات!' : 'Changes applied!');
           
@@ -2697,6 +2748,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       toast.error(err.message || (isRTL ? 'حدث خطأ' : 'An error occurred'));
     } finally {
       setAiEditing(false);
+      setThinkingStartTime(null);
     }
   };
 
@@ -3057,7 +3109,8 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                                     // Now trigger the chat/edit flow with the specific file
                                     setChatInput('');
                                     setAiEditing(true);
-                                    
+                                    setThinkingStartTime(Date.now());
+                                    setEditedFilesTracking([]);
                                     try {
                                       // Using AGENT mode for targeted edits
                                       const response = await supabase.functions.invoke('projects-generate', {
@@ -3141,6 +3194,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                                       toast.error(isRTL ? 'فشل في تطبيق الصورة' : 'Failed to apply image');
                                     } finally {
                                       setAiEditing(false);
+                                      setThinkingStartTime(null);
                                     }
                                   }}
                                   disabled={aiEditing}
@@ -3278,6 +3332,8 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                                 setLeftPanelMode('code');
                                 
                                 setAiEditing(true);
+                                setThinkingStartTime(Date.now());
+                                setEditedFilesTracking([]);
                                 setGenerationSteps([
                                   { label: isRTL ? 'تنفيذ الخطة...' : 'Applying changes...', status: 'loading' },
                                   { label: isRTL ? 'كتابة الكود...' : 'Writing code...', status: 'pending' },
@@ -3351,6 +3407,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                                   setGenerationSteps([]);
                                 } finally {
                                   setAiEditing(false);
+                                  setThinkingStartTime(null);
                                 }
                               }}
                               disabled={aiEditing}
@@ -3603,83 +3660,136 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                   );
                 })}
                   
-                  {/* AI Working Indicator */}
+                  {/* AI Working Indicator - Lovable Style */}
                   {(isGenerating || aiEditing) && (
-                    <div className="flex flex-col items-start animate-in fade-in slide-in-from-bottom-2 duration-300 relative z-[100]">
+                    <div className="flex flex-col items-start animate-in fade-in slide-in-from-bottom-2 duration-300 relative z-[100] w-full max-w-full">
+                      {/* Thinking Timer - Lovable Style */}
+                      {thinkingStartTime && (
+                        <ThinkingTimerDisplay startTime={thinkingStartTime} isRTL={isRTL} />
+                      )}
+                      
+                      {/* Main Content Area */}
                       <div 
                         ref={thinkingBoxRef}
-                        className="bg-muted/60 dark:bg-zinc-900/80 border border-border/30 dark:border-white/10 rounded-2xl rounded-bl-md px-4 py-3 space-y-3 max-w-[95%] shadow-sm relative z-10 overflow-visible ring-1 ring-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.1)]"
+                        className="w-full space-y-4"
                       >
                         {/* Trace Flow Loader - Browser animation (Chat mode only) */}
                         {leftPanelMode === 'chat' && (
-                          <div className="w-full h-[140px] rounded-lg overflow-hidden bg-zinc-950/50 mb-2">
+                          <div className="w-full h-[140px] rounded-lg overflow-hidden bg-zinc-950/50">
                             <TraceFlowLoader />
                           </div>
                         )}
 
-                        {/* Header */}
-                        <div className="flex items-center gap-2 relative z-20">
-                          <Sparkles className={cn(
-                            "h-4 w-4 animate-pulse",
-                            leftPanelMode === 'chat' ? "text-emerald-500" : "text-blue-500"
-                          )} />
-                          <p className="text-[13px] text-foreground font-medium">
-                            {isGenerating 
-                              ? (isRTL ? 'جاري إنشاء مشروعك...' : 'Building your project...') 
-                              : leftPanelMode === 'chat'
-                                ? (isRTL ? 'جاري التفكير...' : 'Thinking...')
-                                : (isRTL ? 'جاري تطبيق التعديلات...' : 'Applying your changes...')}
-                          </p>
-                        </div>
+                        {/* Header Text */}
+                        <p className="text-sm text-foreground">
+                          {isGenerating 
+                            ? (isRTL ? 'جاري إنشاء مشروعك...' : 'Building your project...') 
+                            : leftPanelMode === 'chat'
+                              ? (isRTL ? 'جاري التفكير...' : 'Thinking...')
+                              : (isRTL ? 'جاري تطبيق التعديلات...' : 'Applying your changes...')}
+                        </p>
                         
                         {isGenerating && (
-                          <p className="text-[11px] text-muted-foreground pl-6 animate-pulse">
+                          <p className="text-xs text-muted-foreground animate-pulse">
                             {isRTL ? 'قد يستغرق هذا ما يصل إلى 3 دقائق لضمان أفضل جودة' : 'This may take up to 3 minutes for premium quality'}
                           </p>
                         )}
                         
-                        {/* Progress Steps */}
+                        {/* Tasks Panel - Lovable Dark Card Style */}
                         {(isGenerating || aiEditing) && generationSteps.length > 0 && (
-                          <div className="space-y-1.5 pl-6">
-                            {generationSteps.map((step, idx) => (
-                              <div key={idx} className="flex items-center gap-2">
-                                {step.status === 'completed' ? (
-                                  <div className={cn(
-                                    "w-4 h-4 rounded-full flex items-center justify-center",
-                                    leftPanelMode === 'chat' ? "bg-emerald-500" : "bg-blue-500"
-                                  )}>
-                                    <Check className="h-2.5 w-2.5 text-white" />
+                          <div className="bg-zinc-900 dark:bg-zinc-900 rounded-xl p-4 border border-zinc-800">
+                            {/* Tasks Header */}
+                            <div className={`flex items-center justify-between mb-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
+                              <h3 className="text-sm font-medium text-white">{isRTL ? 'المهام' : 'Tasks'}</h3>
+                              <span className="text-xs text-zinc-500">
+                                {generationSteps.filter(s => s.status === 'completed').length}/{generationSteps.length}
+                              </span>
+                            </div>
+
+                            {/* Tasks List */}
+                            <div className="space-y-2">
+                              {generationSteps.map((step, idx) => (
+                                <div key={idx} className={`flex items-center gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
+                                  {/* Status Icon */}
+                                  <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
+                                    {step.status === 'completed' ? (
+                                      <div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
+                                        <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />
+                                      </div>
+                                    ) : step.status === 'loading' ? (
+                                      <div className="w-4 h-4 rounded-full border-2 border-zinc-400 border-t-transparent animate-spin" />
+                                    ) : (
+                                      <Circle className="h-4 w-4 text-zinc-600" />
+                                    )}
                                   </div>
-                                ) : step.status === 'loading' ? (
-                                  <div className={cn(
-                                    "w-5 h-5 rounded-full border-[3px] border-t-transparent animate-spin",
-                                    leftPanelMode === 'chat' ? "border-emerald-500" : "border-blue-500"
-                                  )} />
-                                ) : (
-                                  <div className="w-4 h-4 rounded-full bg-muted-foreground/30" />
-                                )}
-                                <span className={cn(
-                                  "text-[11px]",
-                                  step.status === 'completed' ? (leftPanelMode === 'chat' ? "text-emerald-500" : "text-blue-500") :
-                                  step.status === 'loading' ? "text-foreground font-medium" :
-                                  "text-muted-foreground"
-                                )}>
-                                  {step.label}
-                                </span>
-                              </div>
-                            ))}
+
+                                  {/* Task Label */}
+                                  <span className={cn(
+                                    "text-sm",
+                                    step.status === 'completed' 
+                                      ? "text-zinc-500 line-through" 
+                                      : step.status === 'loading'
+                                        ? "text-white"
+                                        : "text-zinc-500"
+                                  )}>
+                                    {step.label}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         )}
                         
                         {(isGenerating || aiEditing) && generationSteps.length === 0 && (
-                          <div className="flex items-center gap-2 pl-6">
+                          <div className="flex items-center gap-2">
                             <div className={cn(
-                              "w-5 h-5 border-[3px] border-t-transparent rounded-full animate-spin",
+                              "w-5 h-5 border-2 border-t-transparent rounded-full animate-spin",
                               leftPanelMode === 'chat' ? "border-emerald-500" : "border-blue-500"
                             )} />
-                            <span className="text-[11px] text-foreground">
+                            <span className="text-sm text-foreground">
                               {isRTL ? 'معالجة...' : 'Processing...'}
                             </span>
+                          </div>
+                        )}
+
+                        {/* Edited Files Panel - Lovable Style */}
+                        {editedFilesTracking.length > 0 && (
+                          <div className={`flex flex-wrap items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
+                            {(showAllEditedFiles ? editedFilesTracking : editedFilesTracking.slice(0, 4)).map((file) => (
+                              <div
+                                key={file.id}
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-800 text-xs ${isRTL ? 'flex-row-reverse' : ''}`}
+                              >
+                                <FileText className={cn(
+                                  "h-3.5 w-3.5 flex-shrink-0",
+                                  file.status === 'editing' ? "text-primary animate-pulse" : "text-zinc-400"
+                                )} />
+                                <span className={file.status === 'editing' ? 'text-primary' : 'text-zinc-400'}>
+                                  {isRTL 
+                                    ? (file.status === 'editing' ? 'يعدل' : 'تم') 
+                                    : (file.status === 'editing' ? 'Editing' : 'Edited')}
+                                </span>
+                                <span className="text-zinc-300 font-medium" title={file.fileName}>
+                                  {file.fileName.length > 18 ? `${file.fileName.slice(0, 15)}...` : file.fileName}
+                                </span>
+                              </div>
+                            ))}
+
+                            {editedFilesTracking.length > 4 && (
+                              <button
+                                onClick={() => setShowAllEditedFiles(!showAllEditedFiles)}
+                                className="h-7 px-3 text-xs text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-md transition-colors flex items-center gap-1"
+                              >
+                                {showAllEditedFiles 
+                                  ? (isRTL ? 'إخفاء' : 'Hide') 
+                                  : (isRTL ? 'عرض الكل' : 'Show all')}
+                                {showAllEditedFiles ? (
+                                  <ChevronUp className="h-3 w-3" />
+                                ) : (
+                                  <ChevronDown className="h-3 w-3" />
+                                )}
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -3714,22 +3824,19 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                 <div className="p-2 border-t border-border/30 dark:border-white/10 shrink-0 space-y-1.5 bg-background/95 dark:bg-[#0c0f14]/95 backdrop-blur-sm">
                   {/* Inline Suggestions + Jump to Bottom Button */}
                   <div className="flex items-center gap-2 px-1">
-                    <div className="flex flex-wrap gap-1.5 flex-1">
-                      {/* Dynamic suggestions (2 chips) - update based on last AI response */}
+                    <div className="flex flex-wrap gap-2 flex-1">
+                      {/* Dynamic suggestions - Lovable style dark chips */}
                       {(dynamicSuggestions.length > 0 
                         ? dynamicSuggestions 
                         : [
                             isRTL ? 'أضف ميزة جديدة' : 'Add a new feature',
                             isRTL ? 'حسّن التصميم' : 'Improve the design',
                           ]
-                      ).slice(0, 2).map((suggestion, i) => (
+                      ).slice(0, 3).map((suggestion, i) => (
                         <button
                           key={i}
                           onClick={() => setChatInput(suggestion)}
-                          className={cn(
-                            "px-3 py-1 text-[11px] font-medium border rounded-full transition-all",
-                            "bg-indigo-500/10 dark:bg-indigo-500/5 border-indigo-500/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 hover:border-indigo-500/40"
-                          )}
+                          className="px-4 py-2 text-xs font-medium bg-zinc-800 dark:bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg transition-all border border-zinc-700 hover:border-zinc-600"
                         >
                           {suggestion}
                         </button>
