@@ -46,50 +46,101 @@ const isImageElement = (tagName: string, className: string = '') => {
   return imageTags.includes(tagName.toLowerCase()) || hasImageClass;
 };
 
-// Helper to get context-aware quick prompts based on element type
+// Helper to get context-aware quick prompts based on element type and context
 const getContextAwarePrompts = (element: SelectedElementInfo, isRTL: boolean): string[] => {
   const tag = element.tagName.toLowerCase();
   const className = element.className || '';
+  const text = element.innerText?.toLowerCase() || '';
+  const openingTag = element.openingTag || '';
   
+  // Carousel/Slider context
+  if (/carousel|slider|swiper|slick|embla/i.test(className) || /carousel|slider/i.test(openingTag)) {
+    return isRTL 
+      ? ['غير الصور', 'أضف مؤشرات', 'أضف تشغيل تلقائي', 'أضف أسهم']
+      : ['Change images', 'Add indicators', 'Add autoplay', 'Add arrows'];
+  }
+  
+  // Gallery context
+  if (/gallery|grid.*image|photo.*grid/i.test(className)) {
+    return isRTL 
+      ? ['غير الصور', 'أضف lightbox', 'غير التخطيط', 'أضف فلتر']
+      : ['Change images', 'Add lightbox', 'Change layout', 'Add filter'];
+  }
+  
+  // Hero/Banner context
+  if (/hero|banner|jumbotron|landing/i.test(className) || tag === 'section' && /hero|banner/i.test(openingTag)) {
+    return isRTL 
+      ? ['غير الخلفية', 'أضف تأثير parallax', 'أضف تحريك', 'غير النص']
+      : ['Change background', 'Add parallax', 'Add animation', 'Change text'];
+  }
+  
+  // Card context
+  if (/card|tile|item/i.test(className)) {
+    return isRTL 
+      ? ['أضف hover effect', 'أضف ظل', 'غير الحدود', 'غير التخطيط']
+      : ['Add hover effect', 'Add shadow', 'Change border', 'Change layout'];
+  }
+
   // Image elements
   if (isImageElement(tag, className)) {
     return isRTL 
       ? ['غير الصورة', 'أضف تأثير hover', 'اجعلها دائرية', 'أضف ظل']
-      : ['Change the image', 'Add hover effect', 'Make it rounded', 'Add shadow'];
+      : ['Change image', 'Add hover effect', 'Make rounded', 'Add shadow'];
   }
   
   // Button elements
-  if (tag === 'button' || tag === 'a' || className.includes('btn') || className.includes('button')) {
+  if (tag === 'button' || tag === 'a' || /btn|button|cta/i.test(className)) {
     return isRTL
-      ? ['أضف تأثير hover', 'اجعله gradient', 'أضف أيقونة', 'غير الشكل']
-      : ['Add hover effect', 'Make it gradient', 'Add an icon', 'Change shape'];
+      ? ['أضف تأثير hover', 'اجعله gradient', 'أضف أيقونة', 'غير الحجم']
+      : ['Add hover effect', 'Make gradient', 'Add icon', 'Change size'];
   }
   
   // Heading elements
   if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tag)) {
     return isRTL
-      ? ['اجعله أكبر', 'أضف gradient للنص', 'أضف أيقونة', 'غير المحاذاة']
-      : ['Make it bigger', 'Add text gradient', 'Add an icon', 'Change alignment'];
+      ? ['اجعله أكبر', 'أضف gradient للنص', 'أضف تحريك', 'غير اللون']
+      : ['Make bigger', 'Add text gradient', 'Add animation', 'Change color'];
   }
   
-  // Container/div elements
-  if (tag === 'div' || tag === 'section' || tag === 'article') {
+  // Navigation context
+  if (/nav|menu|header/i.test(className) || tag === 'nav') {
     return isRTL
-      ? ['غير الخلفية', 'أضف حدود', 'أضف ظل', 'أضف تأثير حركة']
-      : ['Change background', 'Add border', 'Add shadow', 'Add animation'];
+      ? ['أضف قائمة موبايل', 'أضف hover effect', 'غير الخلفية', 'أضف ظل']
+      : ['Add mobile menu', 'Add hover effect', 'Change background', 'Add shadow'];
+  }
+  
+  // Form elements
+  if (tag === 'form' || /form/i.test(className)) {
+    return isRTL
+      ? ['أضف تحقق', 'أضف رسائل خطأ', 'غير الستايل', 'أضف أيقونات']
+      : ['Add validation', 'Add error messages', 'Change style', 'Add icons'];
   }
   
   // Input elements
   if (tag === 'input' || tag === 'textarea' || tag === 'select') {
     return isRTL
-      ? ['غير الستايل', 'أضف أيقونة', 'أضف تأثير focus', 'اجعله أكبر']
-      : ['Change style', 'Add icon', 'Add focus effect', 'Make it bigger'];
+      ? ['غير الستايل', 'أضف أيقونة', 'أضف focus effect', 'اجعله أكبر']
+      : ['Change style', 'Add icon', 'Add focus effect', 'Make bigger'];
   }
   
-  // Default prompts
+  // Footer context
+  if (/footer/i.test(className) || tag === 'footer') {
+    return isRTL
+      ? ['أضف روابط', 'غير التخطيط', 'أضف أيقونات اجتماعية', 'غير الخلفية']
+      : ['Add links', 'Change layout', 'Add social icons', 'Change background'];
+  }
+  
+  // Container/Section elements - generic
+  if (tag === 'div' || tag === 'section' || tag === 'article') {
+    return isRTL
+      ? ['غير الخلفية', 'أضف حدود', 'أضف ظل', 'أضف padding']
+      : ['Change background', 'Add border', 'Add shadow', 'Add padding'];
+  }
+  
+  // Default - text elements
   return isRTL 
-    ? ['اجعله أكبر', 'أضف تأثير hover', 'أضف أيقونة', 'اجعله gradient']
-    : ['Make it bigger', 'Add hover effect', 'Add an icon', 'Make it gradient'];
+    ? ['اجعله أكبر', 'غير اللون', 'أضف أيقونة', 'غير الخط']
+    : ['Make bigger', 'Change color', 'Add icon', 'Change font'];
 };
 
 // Helper to parse font size (e.g., "16px" -> 16)
