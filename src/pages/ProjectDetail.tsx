@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, lazy, Suspense, useMemo } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -59,6 +59,11 @@ import { TraceFlowLoader } from '@/components/projects/TraceFlowLoader';
 import { BackendDashboard } from '@/components/projects/backend/BackendDashboard';
 import { StockPhotoSelector } from '@/components/projects/StockPhotoSelector';
 import { FreepikService } from '@/services/FreepikService';
+
+// Lovable-style components
+import { QuickActionButtons } from '@/components/projects/QuickActionButtons';
+import { ClarifyingQuestionsModal, ClarifyingQuestion } from '@/components/projects/ClarifyingQuestionsModal';
+import { MigrationApprovalDialog } from '@/components/projects/MigrationApprovalDialog';
 
 interface Project {
   id: string;
@@ -176,6 +181,33 @@ export default function ProjectDetail() {
   const [showStockPhotoSelector, setShowStockPhotoSelector] = useState(false);
   const [photoSearchTerm, setPhotoSearchTerm] = useState('');
   const [photoSelectorInitialTab, setPhotoSelectorInitialTab] = useState<'stock' | 'user'>('stock');
+
+  // Clarifying questions modal state
+  const [showClarifyingQuestions, setShowClarifyingQuestions] = useState(false);
+  const [clarifyingQuestions, setClarifyingQuestions] = useState<ClarifyingQuestion[]>([]);
+  const [pendingPrompt, setPendingPrompt] = useState('');
+
+  // Migration approval dialog state
+  const [showMigrationApproval, setShowMigrationApproval] = useState(false);
+  const [pendingMigration, setPendingMigration] = useState<{
+    title: string;
+    titleAr?: string;
+    sqlPreview: string;
+    description?: string;
+    descriptionAr?: string;
+  } | null>(null);
+  const [alwaysAllowMigrations, setAlwaysAllowMigrations] = useState(false);
+
+  // Helper to build prompt with clarifying question answers
+  const buildPromptWithAnswers = useCallback((basePrompt: string, answers: Record<string, string | string[]>) => {
+    const answerText = Object.entries(answers)
+      .map(([question, answer]) => {
+        const answerStr = Array.isArray(answer) ? answer.join(', ') : answer;
+        return `- ${question}: ${answerStr}`;
+      })
+      .join('\n');
+    return `${basePrompt}\n\nUser preferences:\n${answerText}`;
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -3587,6 +3619,18 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                           {isRTL ? 'استعادة' : 'Restore'}
                         </button>
                       )}
+
+                      {/* Quick Action Buttons - After AI responses */}
+                      {msg.role === 'assistant' && !aiEditing && (
+                        <QuickActionButtons
+                          responseContent={msg.content}
+                          onActionClick={(prompt) => {
+                            setChatInput(prompt);
+                          }}
+                          isRTL={isRTL}
+                          className="mt-2"
+                        />
+                      )}
                       
                       {/* Theme Info Card - Show AFTER user messages only, and keep it visible */}
                       {msg.role === 'user' && creationPromptInfo && (
@@ -4439,6 +4483,52 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
           initialTab={photoSelectorInitialTab}
         />
       )}
+
+      {/* Clarifying Questions Modal */}
+      <ClarifyingQuestionsModal
+        isOpen={showClarifyingQuestions}
+        onClose={() => setShowClarifyingQuestions(false)}
+        questions={clarifyingQuestions}
+        onComplete={(answers) => {
+          const enhancedPrompt = buildPromptWithAnswers(pendingPrompt, answers);
+          setChatInput(enhancedPrompt);
+          setShowClarifyingQuestions(false);
+          setPendingPrompt('');
+          setClarifyingQuestions([]);
+        }}
+        onSkip={() => {
+          setChatInput(pendingPrompt);
+          setShowClarifyingQuestions(false);
+          setPendingPrompt('');
+          setClarifyingQuestions([]);
+        }}
+        isRTL={isRTL}
+      />
+
+      {/* Migration Approval Dialog */}
+      <MigrationApprovalDialog
+        isOpen={showMigrationApproval}
+        onClose={() => setShowMigrationApproval(false)}
+        onApprove={() => {
+          // Execute the pending migration
+          if (pendingMigration) {
+            toast.success(isRTL ? 'تم الموافقة على الترحيل' : 'Migration approved');
+          }
+          setShowMigrationApproval(false);
+          setPendingMigration(null);
+        }}
+        onCancel={() => {
+          setShowMigrationApproval(false);
+          setPendingMigration(null);
+        }}
+        migrationTitle={pendingMigration?.title || ''}
+        migrationTitleAr={pendingMigration?.titleAr}
+        sqlPreview={pendingMigration?.sqlPreview || ''}
+        description={pendingMigration?.description}
+        descriptionAr={pendingMigration?.descriptionAr}
+        onAlwaysAllowChange={(value) => setAlwaysAllowMigrations(value)}
+        isRTL={isRTL}
+      />
       </>
       )}
     </div>
