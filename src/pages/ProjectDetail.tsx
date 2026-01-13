@@ -2859,12 +2859,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                 </button>
                 <button
                   onClick={() => setMainTab('server')}
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
-                    mainTab === 'server' 
-                      ? "bg-purple-600 text-white shadow-sm" 
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all text-muted-foreground hover:text-foreground"
                   title={isRTL ? 'السيرفر' : 'Server'}
                 >
                   <Server className="h-3.5 w-3.5" />
