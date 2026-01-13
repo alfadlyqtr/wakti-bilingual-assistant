@@ -41,7 +41,7 @@ export function StockPhotoSelector({
   const { language } = useTheme();
   const isRTL = language === 'ar';
   const [activeTab, setActiveTab] = useState<'stock' | 'user'>(initialTab);
-  const [searchQuery, setSearchQuery] = useState(searchTerm);
+  const [searchQuery, setSearchQuery] = useState(''); // Always start empty - user must type search
   const [isSearching, setIsSearching] = useState(false);
   const [stockPhotos, setStockPhotos] = useState<FreepikResource[]>([]);
   const [backendPhotos, setBackendPhotos] = useState<BackendPhoto[]>([]);
@@ -63,12 +63,7 @@ export function StockPhotoSelector({
     }
   }, [projectId]);
 
-  // Initial search if term provided
-  useEffect(() => {
-    if (searchTerm) {
-      handleSearch();
-    }
-  }, [searchTerm]);
+  // Removed: auto-search on mount - user must manually search
 
   const loadBackendPhotos = async () => {
     if (!projectId) {
@@ -318,22 +313,25 @@ export function StockPhotoSelector({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-stretch sm:items-center justify-center p-0 sm:p-4">
       <div 
         className={cn(
-          "bg-background rounded-t-2xl sm:rounded-lg shadow-lg w-full flex flex-col",
-          "max-h-[85vh] sm:max-h-[90vh]",
-          "sm:max-w-3xl"
+          "bg-background shadow-lg w-full flex flex-col",
+          "h-[100dvh] rounded-none", // Full screen on mobile
+          "sm:h-auto sm:max-h-[90vh] sm:rounded-xl sm:max-w-3xl"
         )}
         dir={isRTL ? 'rtl' : 'ltr'}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between p-3 sm:p-4 border-b shrink-0">
-          <h2 className="text-lg sm:text-xl font-semibold">
-            {isRTL ? 'اختيار صورة' : 'Select Photo'}
+        {/* Header - Safe area aware */}
+        <div className="flex items-center justify-between p-4 border-b shrink-0 pt-[max(1rem,env(safe-area-inset-top))]">
+          <h2 className="text-lg font-semibold">
+            {multiSelect 
+              ? (isRTL ? 'اختيار صور متعددة' : 'Select Multiple Photos')
+              : (isRTL ? 'اختيار صورة' : 'Select Photo')
+            }
           </h2>
-          <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 sm:h-9 sm:w-9">
-            <X className="h-4 w-4 sm:h-5 sm:w-5" />
+          <Button variant="ghost" size="icon" onClick={onClose} className="h-10 w-10 rounded-full">
+            <X className="h-5 w-5" />
           </Button>
         </div>
         
@@ -417,13 +415,15 @@ export function StockPhotoSelector({
                   <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-primary" />
                 </div>
               ) : stockPhotos.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4">
+                <div className="grid grid-cols-2 gap-3">
                   {stockPhotos.map((photo) => (
                     <div 
                       key={photo.id}
                       className={cn(
-                        "relative aspect-square rounded-lg overflow-hidden border cursor-pointer hover:opacity-90 transition-all",
-                        isPhotoSelected(photo.image.source.url) && "ring-2 ring-primary"
+                        "relative aspect-square rounded-xl overflow-hidden cursor-pointer transition-all active:scale-[0.98]",
+                        isPhotoSelected(photo.image.source.url) 
+                          ? "ring-3 ring-primary ring-offset-2 ring-offset-background" 
+                          : "border border-border/50"
                       )}
                       onClick={() => handleSelectPhoto({
                         url: photo.image.source.url,
@@ -435,9 +435,14 @@ export function StockPhotoSelector({
                         alt={photo.title}
                         className="w-full h-full object-cover"
                       />
+                      {/* Selection overlay */}
                       {isPhotoSelected(photo.image.source.url) && (
-                        <div className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 bg-primary text-primary-foreground rounded-full p-0.5 sm:p-1">
-                          <Check className="h-3 w-3 sm:h-4 sm:w-4" />
+                        <div className="absolute inset-0 bg-primary/20" />
+                      )}
+                      {/* Checkmark badge */}
+                      {isPhotoSelected(photo.image.source.url) && (
+                        <div className="absolute top-2 right-2 bg-primary text-primary-foreground rounded-full p-1.5 shadow-lg">
+                          <Check className="h-4 w-4" strokeWidth={3} />
                         </div>
                       )}
                     </div>
@@ -512,13 +517,15 @@ export function StockPhotoSelector({
                   </p>
                 </div>
               ) : backendPhotos.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4">
+                <div className="grid grid-cols-2 gap-3">
                   {backendPhotos.map((photo) => (
                     <div 
                       key={photo.id}
                       className={cn(
-                        "relative aspect-square rounded-lg overflow-hidden border cursor-pointer hover:opacity-90 transition-all",
-                        isPhotoSelected(photo.url) && "ring-2 ring-primary"
+                        "relative aspect-square rounded-xl overflow-hidden cursor-pointer transition-all active:scale-[0.98]",
+                        isPhotoSelected(photo.url) 
+                          ? "ring-3 ring-primary ring-offset-2 ring-offset-background" 
+                          : "border border-border/50"
                       )}
                       onClick={() => handleSelectPhoto({
                         url: photo.url,
@@ -530,9 +537,14 @@ export function StockPhotoSelector({
                         alt={photo.filename}
                         className="w-full h-full object-cover"
                       />
+                      {/* Selection overlay */}
                       {isPhotoSelected(photo.url) && (
-                        <div className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 bg-primary text-primary-foreground rounded-full p-0.5 sm:p-1">
-                          <Check className="h-3 w-3 sm:h-4 sm:w-4" />
+                        <div className="absolute inset-0 bg-primary/20" />
+                      )}
+                      {/* Checkmark badge */}
+                      {isPhotoSelected(photo.url) && (
+                        <div className="absolute top-2 right-2 bg-primary text-primary-foreground rounded-full p-1.5 shadow-lg">
+                          <Check className="h-4 w-4" strokeWidth={3} />
                         </div>
                       )}
                     </div>
@@ -582,28 +594,53 @@ export function StockPhotoSelector({
           </TabsContent>
         </Tabs>
         
-        {/* Footer Actions */}
-        <div className="p-3 sm:p-4 border-t flex items-center justify-between shrink-0">
-          {/* Selection counter for multi-select */}
-          <div className="text-xs sm:text-sm text-muted-foreground">
-            {multiSelect && selectedPhotos.length > 0 && (
-              <span>{isRTL ? `${selectedPhotos.length} صور مختارة` : `${selectedPhotos.length} selected`}</span>
-            )}
-          </div>
-          
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose} className="h-10 sm:h-11 text-sm">
-              {isRTL ? 'إلغاء' : 'Cancel'}
-            </Button>
-            <Button 
-              onClick={handleConfirmSelection}
-              disabled={multiSelect ? selectedPhotos.length === 0 : !selectedPhoto}
-              className="h-10 sm:h-11 text-sm"
-            >
-              {isRTL ? 'اختيار' : 'Select'}
-              {multiSelect && selectedPhotos.length > 0 && ` (${selectedPhotos.length})`}
-            </Button>
-          </div>
+        {/* Footer Actions - Safe area aware */}
+        <div className="p-4 border-t shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))] bg-background">
+          {multiSelect ? (
+            <div className="flex flex-col gap-3">
+              {/* Selection counter */}
+              {selectedPhotos.length > 0 && (
+                <div className="text-center text-sm font-medium text-primary">
+                  {isRTL ? `${selectedPhotos.length} صور مختارة` : `${selectedPhotos.length} photo${selectedPhotos.length > 1 ? 's' : ''} selected`}
+                </div>
+              )}
+              {/* Full-width buttons for mobile */}
+              <div className="flex gap-3">
+                <Button 
+                  variant="outline" 
+                  onClick={onClose} 
+                  className="flex-1 h-12 text-base font-medium rounded-xl"
+                >
+                  {isRTL ? 'إلغاء' : 'Cancel'}
+                </Button>
+                <Button 
+                  onClick={handleConfirmSelection}
+                  disabled={selectedPhotos.length === 0}
+                  className="flex-1 h-12 text-base font-medium rounded-xl"
+                >
+                  {isRTL ? 'تأكيد' : 'Confirm'}
+                  {selectedPhotos.length > 0 && ` (${selectedPhotos.length})`}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-3">
+              <Button 
+                variant="outline" 
+                onClick={onClose} 
+                className="flex-1 h-12 text-base font-medium rounded-xl"
+              >
+                {isRTL ? 'إلغاء' : 'Cancel'}
+              </Button>
+              <Button 
+                onClick={handleConfirmSelection}
+                disabled={!selectedPhoto}
+                className="flex-1 h-12 text-base font-medium rounded-xl"
+              >
+                {isRTL ? 'اختيار' : 'Select'}
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </div>
