@@ -8,41 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { 
-  ArrowLeft, 
-  Download, 
-  ExternalLink, 
-  Loader2, 
-  Monitor, 
-  Smartphone, 
-  Tablet, 
-  Upload, 
-  Save, 
-  MessageSquare, 
-  Code2, 
-  Check, 
-  ChevronUp, 
-  RefreshCw, 
-  Sparkles, 
-  Brain, 
-  FileCode, 
-  Zap, 
-  Plus, 
-  SendHorizontal, 
-  ArrowDown,
-  Palette, 
-  Send, 
-  AlertTriangle, 
-  Wand2, 
-  MousePointer2, 
-  X,
-  Paperclip,
-  Copy,
-  Edit2,
-  Lock,
-  Server,
-  Hammer
-} from 'lucide-react';
+import { ArrowLeft, Download, ExternalLink, Loader2, Monitor, Smartphone, Tablet, Upload, Save, MessageSquare, Code2, Check, ChevronUp, RefreshCw, Sparkles, Brain, FileCode, Zap, Plus, SendHorizontal, ArrowDown, Palette, Send, AlertTriangle, Wand2, MousePointer2, X, Paperclip, Copy, Edit2, Lock, Server, Hammer } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import html2canvas from 'html2canvas';
@@ -55,7 +21,6 @@ import { TraceFlowLoader } from '@/components/projects/TraceFlowLoader';
 import { BackendDashboard } from '@/components/projects/backend/BackendDashboard';
 import { StockPhotoSelector } from '@/components/projects/StockPhotoSelector';
 import { FreepikService } from '@/services/FreepikService';
-
 interface Project {
   id: string;
   name: string;
@@ -70,16 +35,13 @@ interface Project {
   created_at: string;
   updated_at: string;
 }
-
 interface ProjectFile {
   id: string;
   project_id: string;
   path: string;
   content: string;
 }
-
 type GenerationJobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
-
 type GenerationJob = {
   id: string;
   project_id: string;
@@ -90,29 +52,33 @@ type GenerationJob = {
   created_at: string;
   updated_at: string;
 };
-
-
 interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   snapshot?: any; // To store project files snapshot for reverting
 }
-
 type DeviceView = 'desktop' | 'tablet' | 'mobile';
 type LeftPanelMode = 'chat' | 'code';
 type MainTab = 'builder' | 'server';
-
 export default function ProjectDetail() {
-  const { id } = useParams<{ id: string }>();
+  const {
+    id
+  } = useParams<{
+    id: string;
+  }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { language } = useTheme();
-  const { user, session } = useAuth();
+  const {
+    language
+  } = useTheme();
+  const {
+    user,
+    session
+  } = useAuth();
   const isRTL = language === 'ar';
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
-
   const [project, setProject] = useState<Project | null>(null);
   const [files, setFiles] = useState<ProjectFile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -121,27 +87,32 @@ export default function ProjectDetail() {
   const [codeContent, setCodeContent] = useState('');
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState('');
-  
+
   // Multi-file support (like Google AI Studio)
   const [generatedFiles, setGeneratedFiles] = useState<Record<string, string>>({});
-  
+
   // Left panel state
   const [leftPanelMode, setLeftPanelMode] = useState<LeftPanelMode>('chat');
   const [chatInput, setChatInput] = useState('');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [aiEditing, setAiEditing] = useState(false);
-  const [attachedImages, setAttachedImages] = useState<Array<{ file: File; preview: string; pdfDataUrl?: string }>>([]);
+  const [attachedImages, setAttachedImages] = useState<Array<{
+    file: File;
+    preview: string;
+    pdfDataUrl?: string;
+  }>>([]);
   const imageInputRef = useRef<HTMLInputElement>(null);
-
   const autoCaptureTimeoutRef = useRef<number | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generationSteps, setGenerationSteps] = useState<{ label: string, status: 'pending' | 'loading' | 'completed' | 'error' }[]>([]);
-  
+  const [generationSteps, setGenerationSteps] = useState<{
+    label: string;
+    status: 'pending' | 'loading' | 'completed' | 'error';
+  }[]>([]);
+
   // Stock photo selector state
   const [showStockPhotoSelector, setShowStockPhotoSelector] = useState(false);
   const [photoSearchTerm, setPhotoSearchTerm] = useState('');
   const [photoSelectorInitialTab, setPhotoSelectorInitialTab] = useState<'stock' | 'user'>('stock');
-
   useEffect(() => {
     return () => {
       if (autoCaptureTimeoutRef.current) {
@@ -150,7 +121,7 @@ export default function ProjectDetail() {
       }
     };
   }, []);
-  
+
   // Preview state - default to mobile if on mobile device
   const [deviceView, setDeviceView] = useState<DeviceView>(() => {
     if (typeof window !== 'undefined' && window.innerWidth < 768) {
@@ -160,25 +131,33 @@ export default function ProjectDetail() {
   });
   const [showDeviceMenu, setShowDeviceMenu] = useState(false);
   const [rightPanelMode, setRightPanelMode] = useState<'preview' | 'code' | 'both'>('preview');
-  
+
   // Mobile view state - for switching between chat/code and preview on mobile
   const [mobileTab, setMobileTab] = useState<'chat' | 'preview'>('preview');
-  
+
   // Main tab state - Builder vs Server
   const [mainTab, setMainTab] = useState<MainTab>('builder');
-  
+
   // Uploaded assets from backend (for AI context)
-  const [uploadedAssets, setUploadedAssets] = useState<Array<{ filename: string; url: string; file_type: string | null }>>([]);
-  
+  const [uploadedAssets, setUploadedAssets] = useState<Array<{
+    filename: string;
+    url: string;
+    file_type: string | null;
+  }>>([]);
+
   // Backend context for AI coder awareness
   const [backendContext, setBackendContext] = useState<{
     enabled: boolean;
-    collections: Array<{ name: string; itemCount: number; schema?: any }>;
+    collections: Array<{
+      name: string;
+      itemCount: number;
+      schema?: any;
+    }>;
     formSubmissionsCount: number;
     uploadsCount: number;
     siteUsersCount: number;
   } | null>(null);
-  
+
   // Self-healing: Runtime error detection
   const [crashReport, setCrashReport] = useState<string | null>(null);
 
@@ -193,14 +172,13 @@ export default function ProjectDetail() {
   const [instructionsDrawerOpen, setInstructionsDrawerOpen] = useState(false);
   const [userInstructions, setUserInstructions] = useState('');
   const [tempInstructions, setTempInstructions] = useState('');
-
   const [creationPromptInfo, setCreationPromptInfo] = useState<{
     userPrompt: string;
     themeId: string;
     themeInstructions: string;
     finalPrompt: string;
   } | null>(null);
-  
+
   // AMP (Amplify) state
   const [isAmplifying, setIsAmplifying] = useState(false);
 
@@ -213,7 +191,7 @@ export default function ProjectDetail() {
     innerText: string;
     openingTag: string;
   } | null>(null);
-  
+
   // Force Sandpack re-render key (incremented on revert)
   const [sandpackKey, setSandpackKey] = useState(0);
 
@@ -235,24 +213,22 @@ export default function ProjectDetail() {
       const theme = searchParams.get('theme');
       const assetsParam = searchParams.get('assets');
       const themeInstructionsParam = searchParams.get('themeInstructions');
-      
       fetchProject(); // Always fetch project files
       fetchChatHistory(); // Always fetch chat history
-      
+
       if (generating === 'true' && prompt && !generationStartedRef.current) {
         generationStartedRef.current = true;
         // Set loading to false immediately so we show the full UI during generation
         setLoading(false);
         setIsGenerating(true);
         console.log('[ProjectDetail] Starting generation for prompt:', prompt.substring(0, 50));
-        
         let assets: string[] = [];
         try {
           if (assetsParam) assets = JSON.parse(decodeURIComponent(assetsParam));
         } catch (e) {
           console.error('Failed to parse assets:', e);
         }
-        
+
         // Decode custom theme instructions if provided
         let customInstructions = '';
         if (themeInstructionsParam) {
@@ -264,34 +240,31 @@ export default function ProjectDetail() {
             console.error('Failed to parse theme instructions:', e);
           }
         }
-
         const themeId = theme || 'wakti-dark';
-        const injectedThemeBlock = customInstructions
-          ? `\n\n--- THEME (selected by user: ${themeId}) ---\n${customInstructions}`
-          : `\n\n--- THEME (selected by user: ${themeId}) ---`;
+        const injectedThemeBlock = customInstructions ? `\n\n--- THEME (selected by user: ${themeId}) ---\n${customInstructions}` : `\n\n--- THEME (selected by user: ${themeId}) ---`;
         const finalPrompt = `${prompt}${injectedThemeBlock}`;
         setCreationPromptInfo({
           userPrompt: prompt,
           themeId,
           themeInstructions: customInstructions,
-          finalPrompt,
+          finalPrompt
         });
-        
-        setSearchParams({}, { replace: true });
+        setSearchParams({}, {
+          replace: true
+        });
         runGeneration(prompt, themeId, assets, customInstructions);
       }
     }
   }, [user, id]);
-  
   const fetchChatHistory = async () => {
     if (!id) return;
     try {
-      const { data, error } = await supabase
-        .from('project_chat_messages' as any)
-        .select('id, role, content, snapshot')
-        .eq('project_id', id)
-        .order('created_at', { ascending: true });
-      
+      const {
+        data,
+        error
+      } = await supabase.from('project_chat_messages' as any).select('id, role, content, snapshot').eq('project_id', id).order('created_at', {
+        ascending: true
+      });
       if (error) {
         console.error('Error fetching chat history:', error);
       } else if (data && data.length > 0) {
@@ -309,19 +282,19 @@ export default function ProjectDetail() {
   const fetchUploadedAssets = async () => {
     if (!id) return;
     try {
-      const { data, error } = await supabase
-        .from('project_uploads')
-        .select('filename, storage_path, file_type')
-        .eq('project_id', id);
-      
+      const {
+        data,
+        error
+      } = await supabase.from('project_uploads').select('filename, storage_path, file_type').eq('project_id', id);
       if (error) {
         console.error('Error fetching uploaded assets:', error);
         return;
       }
-      
       if (data && data.length > 0) {
         const assets = data.map((upload: any) => {
-          const { data: urlData } = supabase.storage.from('project-uploads').getPublicUrl(upload.storage_path);
+          const {
+            data: urlData
+          } = supabase.storage.from('project-uploads').getPublicUrl(upload.storage_path);
           return {
             filename: upload.filename,
             url: urlData.publicUrl,
@@ -341,48 +314,56 @@ export default function ProjectDetail() {
     if (!id) return;
     try {
       // Check if backend is enabled
-      const { data: backendData } = await supabase
-        .from('project_backends')
-        .select('enabled')
-        .eq('project_id', id)
-        .maybeSingle();
-      
+      const {
+        data: backendData
+      } = await supabase.from('project_backends').select('enabled').eq('project_id', id).maybeSingle();
       if (!backendData?.enabled) {
-        setBackendContext({ enabled: false, collections: [], formSubmissionsCount: 0, uploadsCount: 0, siteUsersCount: 0 });
+        setBackendContext({
+          enabled: false,
+          collections: [],
+          formSubmissionsCount: 0,
+          uploadsCount: 0,
+          siteUsersCount: 0
+        });
         return;
       }
 
       // Fetch collections with counts
-      const { data: collectionsData } = await supabase
-        .from('project_collections')
-        .select('collection_name')
-        .eq('project_id', id);
-      
+      const {
+        data: collectionsData
+      } = await supabase.from('project_collections').select('collection_name').eq('project_id', id);
       const collectionCounts: Record<string, number> = {};
       (collectionsData || []).forEach((item: any) => {
         collectionCounts[item.collection_name] = (collectionCounts[item.collection_name] || 0) + 1;
       });
-      
-      const collections = Object.entries(collectionCounts).map(([name, itemCount]) => ({ name, itemCount }));
+      const collections = Object.entries(collectionCounts).map(([name, itemCount]) => ({
+        name,
+        itemCount
+      }));
 
       // Fetch form submissions count
-      const { count: formSubmissionsCount } = await supabase
-        .from('project_form_submissions')
-        .select('*', { count: 'exact', head: true })
-        .eq('project_id', id);
+      const {
+        count: formSubmissionsCount
+      } = await supabase.from('project_form_submissions').select('*', {
+        count: 'exact',
+        head: true
+      }).eq('project_id', id);
 
       // Fetch uploads count
-      const { count: uploadsCount } = await supabase
-        .from('project_uploads')
-        .select('*', { count: 'exact', head: true })
-        .eq('project_id', id);
+      const {
+        count: uploadsCount
+      } = await supabase.from('project_uploads').select('*', {
+        count: 'exact',
+        head: true
+      }).eq('project_id', id);
 
       // Fetch site users count
-      const { count: siteUsersCount } = await supabase
-        .from('project_site_users')
-        .select('*', { count: 'exact', head: true })
-        .eq('project_id', id);
-
+      const {
+        count: siteUsersCount
+      } = await supabase.from('project_site_users').select('*', {
+        count: 'exact',
+        head: true
+      }).eq('project_id', id);
       setBackendContext({
         enabled: true,
         collections,
@@ -390,8 +371,13 @@ export default function ProjectDetail() {
         uploadsCount: uploadsCount || 0,
         siteUsersCount: siteUsersCount || 0
       });
-      
-      console.log('[ProjectDetail] Backend context loaded:', { enabled: true, collections: collections.length, formSubmissionsCount, uploadsCount, siteUsersCount });
+      console.log('[ProjectDetail] Backend context loaded:', {
+        enabled: true,
+        collections: collections.length,
+        formSubmissionsCount,
+        uploadsCount,
+        siteUsersCount
+      });
     } catch (err) {
       console.error('Exception fetching backend context:', err);
     }
@@ -404,21 +390,18 @@ export default function ProjectDetail() {
       fetchBackendContext();
     }
   }, [id, user]);
-
   const handleRevert = async (messageId: string) => {
     const targetMessage = chatMessages.find(m => m.id === messageId);
     console.log('[Revert] Target message:', messageId, targetMessage);
     console.log('[Revert] Snapshot:', targetMessage?.snapshot);
     console.log('[Revert] Snapshot keys:', targetMessage?.snapshot ? Object.keys(targetMessage.snapshot) : 'none');
-    
     if (!targetMessage || !targetMessage.snapshot) {
       toast.error(isRTL ? 'لا توجد نسخة احتياطية متاحة' : 'No snapshot available for this point');
       return;
     }
-
     try {
       setIsGenerating(true);
-      
+
       // Parse snapshot if it's a string (from DB)
       let snapshot = targetMessage.snapshot;
       if (typeof snapshot === 'string') {
@@ -428,10 +411,9 @@ export default function ProjectDetail() {
           console.error('[Revert] Failed to parse snapshot string:', e);
         }
       }
-      
       console.log('[Revert] Final snapshot to apply:', snapshot);
       console.log('[Revert] HeroSection content preview:', snapshot['/components/HeroSection.js']?.substring(0, 200));
-      
+
       // Update local state and force Sandpack re-render
       setGeneratedFiles(snapshot);
       setCodeContent(snapshot["/App.js"] || Object.values(snapshot)[0] || "");
@@ -439,44 +421,32 @@ export default function ProjectDetail() {
 
       // Save to database - delete old files and insert new ones from snapshot
       // First delete all existing files for this project
-      await (supabase
-        .from('project_files' as any)
-        .delete()
-        .eq('project_id', id) as any);
-      
+      await (supabase.from('project_files' as any).delete().eq('project_id', id) as any);
+
       // Then insert all files from the snapshot
       const fileRows = Object.entries(snapshot).map(([path, content]) => ({
         project_id: id,
         path: path.startsWith('/') ? path : `/${path}`,
-        content: content as string,
+        content: content as string
       }));
-      
       if (fileRows.length > 0) {
-        await (supabase
-          .from('project_files' as any)
-          .insert(fileRows) as any);
+        await (supabase.from('project_files' as any).insert(fileRows) as any);
       }
 
       // Add a system message about the revert (WITHOUT copying the snapshot - it's the restored state now)
-      const revertMsg = isRTL 
-        ? `تم استعادة المشروع إلى نقطة سابقة. ✓` 
-        : `Project restored to this point. ✓`;
-
-      const { data: newMsg, error: msgError } = await supabase
-        .from('project_chat_messages' as any)
-        .insert({ 
-          project_id: id, 
-          role: 'assistant', 
-          content: revertMsg
-          // NO snapshot here - this is just a status message
-        } as any)
-        .select()
-        .single();
-
+      const revertMsg = isRTL ? `تم استعادة المشروع إلى نقطة سابقة. ✓` : `Project restored to this point. ✓`;
+      const {
+        data: newMsg,
+        error: msgError
+      } = await supabase.from('project_chat_messages' as any).insert({
+        project_id: id,
+        role: 'assistant',
+        content: revertMsg
+        // NO snapshot here - this is just a status message
+      } as any).select().single();
       if (!msgError && newMsg) {
         setChatMessages(prev => [...prev, newMsg as any]);
       }
-
       toast.success(isRTL ? 'تم استعادة الحالة بنجاح!' : 'Successfully restored state!');
     } catch (err) {
       console.error('Revert error:', err);
@@ -492,7 +462,6 @@ export default function ProjectDetail() {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   };
-
   useEffect(() => {
     // Scroll to bottom when messages change (including initial load)
     // Use a small delay to ensure DOM has updated
@@ -501,32 +470,41 @@ export default function ProjectDetail() {
     }, 150);
     return () => clearTimeout(timer);
   }, [chatMessages]);
-
   const thinkingBoxRef = useRef<HTMLDivElement>(null);
-
   const runGeneration = async (prompt: string, theme: string, assets: string[] = [], customThemeInstructions: string = '') => {
     setIsGenerating(true);
     setLeftPanelMode('code'); // Start in Code mode so user sees the preview building
-    
+
     // Reset steps
-    const steps: { label: string, status: 'pending' | 'loading' | 'completed' | 'error' }[] = [
-      { label: isRTL ? 'تحليل الطلب...' : 'Analyzing prompt...', status: 'loading' },
-      { label: isRTL ? 'تخطيط هيكل المشروع...' : 'Planning project structure...', status: 'pending' },
-      { label: isRTL ? 'إنشاء المكونات والأنماط...' : 'Generating components & styles...', status: 'pending' },
-      { label: isRTL ? 'تجميع الملفات النهائية...' : 'Assembling final files...', status: 'pending' },
-    ];
+    const steps: {
+      label: string;
+      status: 'pending' | 'loading' | 'completed' | 'error';
+    }[] = [{
+      label: isRTL ? 'تحليل الطلب...' : 'Analyzing prompt...',
+      status: 'loading'
+    }, {
+      label: isRTL ? 'تخطيط هيكل المشروع...' : 'Planning project structure...',
+      status: 'pending'
+    }, {
+      label: isRTL ? 'إنشاء المكونات والأنماط...' : 'Generating components & styles...',
+      status: 'pending'
+    }, {
+      label: isRTL ? 'تجميع الملفات النهائية...' : 'Assembling final files...',
+      status: 'pending'
+    }];
     setGenerationSteps(steps);
 
     // Save user message to DB
-    const { data: newMsg, error: msgError } = await supabase
-      .from('project_chat_messages' as any)
-      .insert({ project_id: id, role: 'user', content: prompt } as any)
-      .select()
-      .single();
-    
+    const {
+      data: newMsg,
+      error: msgError
+    } = await supabase.from('project_chat_messages' as any).insert({
+      project_id: id,
+      role: 'user',
+      content: prompt
+    } as any).select().single();
     if (msgError) console.error('Error saving user message:', msgError);
-    if (newMsg) setChatMessages(prev => [...prev, newMsg as any]);
-    else {
+    if (newMsg) setChatMessages(prev => [...prev, newMsg as any]);else {
       // Fallback local state if DB insert fails
       setChatMessages(prev => [...prev, {
         id: `user-${Date.now()}`,
@@ -534,24 +512,32 @@ export default function ProjectDetail() {
         content: prompt
       }]);
     }
-    
     try {
       // Step 2: Planning
-      setGenerationSteps(prev => prev.map((s, i) => i === 0 ? { ...s, status: 'completed' } : i === 1 ? { ...s, status: 'loading' } : s));
-
-      const injectedThemeBlock = customThemeInstructions
-        ? `\n\n--- THEME (selected by user: ${theme}) ---\n${customThemeInstructions}`
-        : `\n\n--- THEME (selected by user: ${theme}) ---`;
+      setGenerationSteps(prev => prev.map((s, i) => i === 0 ? {
+        ...s,
+        status: 'completed'
+      } : i === 1 ? {
+        ...s,
+        status: 'loading'
+      } : s));
+      const injectedThemeBlock = customThemeInstructions ? `\n\n--- THEME (selected by user: ${theme}) ---\n${customThemeInstructions}` : `\n\n--- THEME (selected by user: ${theme}) ---`;
       const finalPrompt = `${prompt}${injectedThemeBlock}`;
       setCreationPromptInfo({
         userPrompt: prompt,
         themeId: theme,
         themeInstructions: customThemeInstructions,
-        finalPrompt,
+        finalPrompt
       });
-      
+
       // Step 3: Generating
-      setGenerationSteps(prev => prev.map((s, i) => i === 1 ? { ...s, status: 'completed' } : i === 2 ? { ...s, status: 'loading' } : s));
+      setGenerationSteps(prev => prev.map((s, i) => i === 1 ? {
+        ...s,
+        status: 'completed'
+      } : i === 2 ? {
+        ...s,
+        status: 'loading'
+      } : s));
 
       // Option A: start job then poll
       const startRes = await supabase.functions.invoke('projects-generate', {
@@ -562,55 +548,49 @@ export default function ProjectDetail() {
           prompt: finalPrompt,
           theme,
           assets,
-          userInstructions: customThemeInstructions,
-        },
+          userInstructions: customThemeInstructions
+        }
       });
-
       if (startRes.error) {
         throw new Error(startRes.error.message || 'Failed to start generation');
       }
-
       const startData: any = startRes.data;
       if (!startData?.ok) {
         throw new Error(startData?.error || 'Failed to start generation');
       }
-
       const jobId = startData?.jobId as string | undefined;
       if (!jobId) throw new Error('Generation did not return a jobId');
-
       await pollJobUntilDone(jobId);
 
       // Step 4: Finalizing
-      setGenerationSteps(prev => prev.map((s, i) => i === 2 ? { ...s, status: 'completed' } : i === 3 ? { ...s, status: 'loading' } : s));
-
+      setGenerationSteps(prev => prev.map((s, i) => i === 2 ? {
+        ...s,
+        status: 'completed'
+      } : i === 3 ? {
+        ...s,
+        status: 'loading'
+      } : s));
       const generatedFilesData = await loadFilesFromDb(id as string);
       const generatedCode = generatedFilesData["/App.js"] || Object.values(generatedFilesData)[0] || "";
-
       if (!generatedCode || Object.keys(generatedFilesData).length === 0) {
         throw new Error('No code returned from AI');
       }
-
       setGeneratedFiles(generatedFilesData);
       setCodeContent(generatedCode);
 
       // Save assistant message to DB with snapshot (remind user to save thumbnail)
-      const assistantMsg = isRTL 
-        ? 'لقد انتهيت من بناء مشروعك! ألقِ نظرة على المعاينة. 📸 اضغط على زر "حفظ صورة" لحفظ صورة مصغرة.' 
-        : "I've finished building your project! Take a look at the preview. 📸 Click 'Save Thumbnail' to save a thumbnail.";
-      const { data: assistantMsgData, error: assistError } = await supabase
-        .from('project_chat_messages' as any)
-        .insert({ 
-          project_id: id, 
-          role: 'assistant', 
-          content: assistantMsg,
-          snapshot: generatedFilesData 
-        } as any)
-        .select()
-        .single();
-      
+      const assistantMsg = isRTL ? 'لقد انتهيت من بناء مشروعك! ألقِ نظرة على المعاينة. 📸 اضغط على زر "حفظ صورة" لحفظ صورة مصغرة.' : "I've finished building your project! Take a look at the preview. 📸 Click 'Save Thumbnail' to save a thumbnail.";
+      const {
+        data: assistantMsgData,
+        error: assistError
+      } = await supabase.from('project_chat_messages' as any).insert({
+        project_id: id,
+        role: 'assistant',
+        content: assistantMsg,
+        snapshot: generatedFilesData
+      } as any).select().single();
       if (assistError) console.error('Error saving assistant message:', assistError);
-      if (assistantMsgData) setChatMessages(prev => [...prev, assistantMsgData as any]);
-      else {
+      if (assistantMsgData) setChatMessages(prev => [...prev, assistantMsgData as any]);else {
         setChatMessages(prev => [...prev, {
           id: `assist-${Date.now()}`,
           role: 'assistant',
@@ -620,37 +600,37 @@ export default function ProjectDetail() {
       }
 
       // Complete all steps
-      setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
-      
+      setGenerationSteps(prev => prev.map(s => ({
+        ...s,
+        status: 'completed'
+      })));
+
       // Update project status
-      const { error: statusError } = await (supabase
-        .from('projects' as any)
-        .update({ status: 'draft' })
-        .eq('id', id) as any);
-      
+      const {
+        error: statusError
+      } = await (supabase.from('projects' as any).update({
+        status: 'draft'
+      }).eq('id', id) as any);
       if (statusError) {
         console.error('Failed to update status:', statusError);
       }
-      
-      setProject(prev => prev ? { ...prev, status: 'draft' } : null);
-      
+      setProject(prev => prev ? {
+        ...prev,
+        status: 'draft'
+      } : null);
+
       // Sandpack auto-updates when codeContent changes
       console.log('Code updated - Sandpack will refresh automatically');
-      
       const readyMsg = isRTL ? 'تم إنشاء مشروعك! ✓ يمكنك الآن تعديله أو نشره.' : 'Your project is ready! ✓ You can now edit or publish it.';
-      const { data: readyMsgData } = await supabase
-        .from('project_chat_messages' as any)
-        .insert({ 
-          project_id: id, 
-          role: 'assistant', 
-          content: readyMsg,
-          snapshot: generatedFilesData 
-        } as any)
-        .select()
-        .single();
-        
-      if (readyMsgData) setChatMessages(prev => [...prev, readyMsgData as any]);
-      else {
+      const {
+        data: readyMsgData
+      } = await supabase.from('project_chat_messages' as any).insert({
+        project_id: id,
+        role: 'assistant',
+        content: readyMsg,
+        snapshot: generatedFilesData
+      } as any).select().single();
+      if (readyMsgData) setChatMessages(prev => [...prev, readyMsgData as any]);else {
         setChatMessages(prev => [...prev, {
           id: `ready-${Date.now()}`,
           role: 'assistant',
@@ -659,29 +639,24 @@ export default function ProjectDetail() {
         }]);
       }
       toast.success(isRTL ? 'تم إنشاء المشروع!' : 'Project created!');
-      
     } catch (err: any) {
       console.error('Generation error:', err);
       const errorMsg = isRTL ? 'عذرًا، حدث خطأ. حاول مرة أخرى.' : 'Sorry, an error occurred. Please try again.';
-      
-      const { data: errorMsgData } = await supabase
-        .from('project_chat_messages' as any)
-        .insert({ 
-          project_id: id, 
-          role: 'assistant', 
-          content: errorMsg 
-        } as any)
-        .select()
-        .single();
-        
+      const {
+        data: errorMsgData
+      } = await supabase.from('project_chat_messages' as any).insert({
+        project_id: id,
+        role: 'assistant',
+        content: errorMsg
+      } as any).select().single();
       if (errorMsgData) {
         setChatMessages(prev => [...prev, errorMsgData as any]);
       } else {
         // Fallback if DB save fails
-        setChatMessages(prev => [...prev, { 
+        setChatMessages(prev => [...prev, {
           id: `error-${Date.now()}`,
-          role: 'assistant', 
-          content: errorMsg 
+          role: 'assistant',
+          content: errorMsg
         }]);
       }
       toast.error(err.message || (isRTL ? 'فشل في الإنشاء' : 'Failed to generate'));
@@ -693,12 +668,10 @@ export default function ProjectDetail() {
   // Fetch only project info (used during generation to avoid overwriting generated code)
   const fetchProjectInfoOnly = async () => {
     try {
-      const { data: projectData, error: projectError } = await (supabase
-        .from('projects' as any)
-        .select('*')
-        .eq('id', id)
-        .single() as any);
-
+      const {
+        data: projectData,
+        error: projectError
+      } = await (supabase.from('projects' as any).select('*').eq('id', id).single() as any);
       if (projectError) throw projectError;
       setProject(projectData);
       setLoading(false);
@@ -706,25 +679,19 @@ export default function ProjectDetail() {
       console.error('Error fetching project info:', err);
     }
   };
-
   const fetchProject = async () => {
     try {
       setLoading(true);
-      
-      const { data: projectData, error: projectError } = await (supabase
-        .from('projects' as any)
-        .select('*')
-        .eq('id', id)
-        .single() as any);
-
+      const {
+        data: projectData,
+        error: projectError
+      } = await (supabase.from('projects' as any).select('*').eq('id', id).single() as any);
       if (projectError) throw projectError;
       setProject(projectData);
-
-      const { data: filesData, error: filesError } = await (supabase
-        .from('project_files' as any)
-        .select('*')
-        .eq('project_id', id) as any);
-
+      const {
+        data: filesData,
+        error: filesError
+      } = await (supabase.from('project_files' as any).select('*').eq('project_id', id) as any);
       if (filesError) throw filesError;
       setFiles(filesData || []);
 
@@ -763,29 +730,27 @@ export default function ProjectDetail() {
       setLoading(false);
     }
   };
-
   const saveCode = async () => {
     try {
       setSaving(true);
-
-      const filesToSave: Record<string, string> =
-        Object.keys(generatedFiles).length > 0
-          ? { ...generatedFiles }
-          : { "/App.js": codeContent };
+      const filesToSave: Record<string, string> = Object.keys(generatedFiles).length > 0 ? {
+        ...generatedFiles
+      } : {
+        "/App.js": codeContent
+      };
 
       // Ensure /App.js reflects editor text
       filesToSave["/App.js"] = codeContent;
-
       const rows = Object.entries(filesToSave).map(([path, content]) => ({
         project_id: id,
         path,
-        content,
+        content
       }));
-
-      const { error } = await (supabase
-        .from('project_files' as any)
-        .upsert(rows, { onConflict: 'project_id,path' }) as any);
-
+      const {
+        error
+      } = await (supabase.from('project_files' as any).upsert(rows, {
+        onConflict: 'project_id,path'
+      }) as any);
       if (error) throw error;
 
       // Refresh local rows list
@@ -794,12 +759,18 @@ export default function ProjectDetail() {
         for (const f of prev) byPath.set(f.path, f);
         for (const [path, content] of Object.entries(filesToSave)) {
           const existing = byPath.get(path);
-          if (existing) byPath.set(path, { ...existing, content });
-          else byPath.set(path, { id: `local-${Date.now()}-${path}`, project_id: id as string, path, content });
+          if (existing) byPath.set(path, {
+            ...existing,
+            content
+          });else byPath.set(path, {
+            id: `local-${Date.now()}-${path}`,
+            project_id: id as string,
+            path,
+            content
+          });
         }
         return Array.from(byPath.values());
       });
-      
       toast.success(isRTL ? 'تم الحفظ!' : 'Saved!');
       refreshPreview();
     } catch (err) {
@@ -809,39 +780,37 @@ export default function ProjectDetail() {
       setSaving(false);
     }
   };
-
   const pollJobUntilDone = async (jobId: string, timeoutMs: number = 180000): Promise<GenerationJob> => {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
       const res = await supabase.functions.invoke('projects-generate', {
-        body: { action: 'status', jobId }
+        body: {
+          action: 'status',
+          jobId
+        }
       });
-
       if (res.error) {
         throw new Error(res.error.message || 'Failed to check job status');
       }
-
       const job = (res.data?.job || null) as GenerationJob | null;
       if (!job) throw new Error('Job not found');
-
       if (job.status === 'succeeded') return job;
       if (job.status === 'failed') throw new Error(job.error || 'Generation failed');
-
       await delay(900);
     }
-
     throw new Error('Generation timed out');
   };
-
   const loadFilesFromDb = async (projectId: string): Promise<Record<string, string>> => {
     const res = await supabase.functions.invoke('projects-generate', {
-      body: { action: 'get_files', projectId }
+      body: {
+        action: 'get_files',
+        projectId
+      }
     });
     if (res.error) throw new Error(res.error.message || 'Failed to load files');
     const filesMap = (res.data?.files || {}) as Record<string, string>;
     return filesMap;
   };
-
   const refreshPreview = () => {
     // Sandpack auto-refreshes when code changes
     // Force a re-render by toggling the code
@@ -856,7 +825,7 @@ export default function ProjectDetail() {
     const allCss: string[] = [];
     const allJs: string[] = [];
     const processedFiles = new Set<string>();
-    
+
     // ============================================
     // STEP 1: BRUTE FORCE CSS - Collect ALL .css files
     // ============================================
@@ -871,7 +840,7 @@ export default function ProjectDetail() {
         processedFiles.add(filePath);
       }
     }
-    
+
     // ============================================
     // STEP 2: BRUTE FORCE JSON - Convert ALL .json to JS objects
     // ============================================
@@ -881,10 +850,7 @@ export default function ProjectDetail() {
         try {
           // Create a variable name from the file path
           // e.g., /locales/en.json -> locales_en_json
-          const varName = filePath
-            .replace(/^\//, '')
-            .replace(/[^a-zA-Z0-9]/g, '_')
-            .replace(/_+/g, '_');
+          const varName = filePath.replace(/^\//, '').replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
           jsonVars.push(`// JSON: ${filePath}\nconst ${varName} = ${content};`);
           processedFiles.add(filePath);
         } catch (e) {
@@ -892,56 +858,52 @@ export default function ProjectDetail() {
         }
       }
     }
-    
+
     // ============================================
     // Helper: Resolve import path to actual file
     // ============================================
     const resolveImportPath = (importPath: string, currentFile: string): string | null => {
       let cleanPath = importPath.replace(/['"`;]/g, '').trim();
-      
+
       // Handle relative paths
       if (cleanPath.startsWith('./') || cleanPath.startsWith('../')) {
         const currentDir = currentFile.substring(0, currentFile.lastIndexOf('/')) || '';
         const parts = cleanPath.split('/');
         let resolvedParts = currentDir.split('/').filter(p => p);
-        
         for (const part of parts) {
           if (part === '.') continue;
-          if (part === '..') resolvedParts.pop();
-          else resolvedParts.push(part);
+          if (part === '..') resolvedParts.pop();else resolvedParts.push(part);
         }
         cleanPath = '/' + resolvedParts.join('/');
       }
-      
       if (!cleanPath.startsWith('/')) cleanPath = '/' + cleanPath;
-      
+
       // Try exact match first
       if (files[cleanPath]) return cleanPath;
-      
+
       // Try with extensions
       for (const ext of ['', '.js', '.jsx', '.ts', '.tsx', '.json']) {
         if (files[cleanPath + ext]) return cleanPath + ext;
       }
-      
+
       // Try index files
       for (const idx of ['/index.js', '/index.jsx', '/index.ts', '/index.tsx']) {
         if (files[cleanPath + idx]) return cleanPath + idx;
       }
-      
       return null;
     };
-    
+
     // ============================================
     // Helper: Strip imports/exports from JS content
     // ============================================
     const stripImportsExports = (content: string, filePath: string): string => {
       let result = content;
       const fileName = filePath.split('/').pop()?.replace(/\.(js|jsx|ts|tsx)$/, '') || 'Component';
-      
+
       // Remove ALL import statements (both 'from' and side-effect imports)
       result = result.replace(/^import\s+.*?from\s+['"][^'"]*['"];?\s*$/gm, '');
       result = result.replace(/^import\s+['"][^'"]*['"];?\s*$/gm, '');
-      
+
       // Handle exports
       result = result.replace(/export\s+default\s+function\s+(\w+)/g, 'function $1');
       result = result.replace(/export\s+default\s+function\s*\(/g, `function ${fileName}(`);
@@ -952,34 +914,29 @@ export default function ProjectDetail() {
       result = result.replace(/export\s+const\s+/g, 'const ');
       result = result.replace(/export\s+(let|var)\s+/g, '$1 ');
       result = result.replace(/export\s+\{[^}]*\}\s*;?/g, '');
-      
+
       // Clean up blank lines
       result = result.replace(/\n{3,}/g, '\n\n');
-      
       return result.trim();
     };
-    
+
     // ============================================
     // STEP 3: Process JS files with dependency ordering
     // ============================================
     const jsOrder: string[] = [];
-    
     const processJsFile = (filePath: string) => {
       if (processedFiles.has(filePath)) return;
       if (!files[filePath]) return;
       if (!filePath.match(/\.(js|jsx|ts|tsx)$/)) return;
-      
       processedFiles.add(filePath);
       const content = files[filePath];
-      
+
       // Find ALL imports (including side-effect imports like `import './i18n'`)
       // Pattern 1: import X from 'path' or import { X } from 'path'
       const fromImports = content.matchAll(/import\s+(?:[\s\S]*?)\s*from\s+['"]([^'"]+)['"]/g);
       // Pattern 2: import 'path' (side-effect imports)
       const sideEffectImports = content.matchAll(/import\s+['"]([^'"]+)['"]\s*;?/g);
-      
       const allImportPaths = new Set<string>();
-      
       for (const match of fromImports) {
         const importPath = match[1];
         // Only process local imports
@@ -987,7 +944,6 @@ export default function ProjectDetail() {
           allImportPaths.add(importPath);
         }
       }
-      
       for (const match of sideEffectImports) {
         const importPath = match[1];
         // Only process local imports
@@ -995,7 +951,7 @@ export default function ProjectDetail() {
           allImportPaths.add(importPath);
         }
       }
-      
+
       // Process dependencies first (depth-first)
       for (const importPath of allImportPaths) {
         const resolved = resolveImportPath(importPath, filePath);
@@ -1003,17 +959,17 @@ export default function ProjectDetail() {
           processJsFile(resolved);
         }
       }
-      
+
       // Add this file to the order
       jsOrder.push(filePath);
     };
-    
+
     // Start from App.js/App.jsx
     const appFile = files['/App.js'] ? '/App.js' : files['/App.jsx'] ? '/App.jsx' : null;
     if (appFile) {
       processJsFile(appFile);
     }
-    
+
     // ============================================
     // STEP 4: BRUTE FORCE - Include ANY remaining JS files
     // ============================================
@@ -1022,7 +978,7 @@ export default function ProjectDetail() {
         processJsFile(filePath);
       }
     }
-    
+
     // ============================================
     // STEP 5: Build final JS bundle in correct order
     // ============================================
@@ -1031,7 +987,7 @@ export default function ProjectDetail() {
       allJs.push('// ========== JSON DATA ==========');
       allJs.push(...jsonVars);
     }
-    
+
     // Then: All JS files in dependency order
     for (const filePath of jsOrder) {
       const content = files[filePath];
@@ -1040,31 +996,30 @@ export default function ProjectDetail() {
         allJs.push(`// ========== ${filePath} ==========\n${processed}`);
       }
     }
-    
+
     // ============================================
     // STEP 6: Build CSS injection script
     // ============================================
     const bundledCss = allCss.join('\n\n');
-    const cssInjectionScript = bundledCss.length > 0 
-      ? `// ========== CSS INJECTION ==========
+    const cssInjectionScript = bundledCss.length > 0 ? `// ========== CSS INJECTION ==========
 (function() {
   const style = document.createElement('style');
   style.textContent = ${JSON.stringify(bundledCss)};
   document.head.appendChild(style);
-})();`
-      : '';
-    
+})();` : '';
+
     // Final bundle: CSS injection first, then all JS
     const finalJs = cssInjectionScript + '\n\n' + allJs.join('\n\n');
-    
     console.log('Bundler stats:', {
       cssFiles: allCss.length,
       jsonFiles: jsonVars.length,
       jsFiles: jsOrder.length,
       totalFiles: Object.keys(files).length
     });
-    
-    return JSON.stringify({ css: '', js: finalJs });
+    return JSON.stringify({
+      css: '',
+      js: finalJs
+    });
   };
 
   // Validate subdomain format
@@ -1084,13 +1039,10 @@ export default function ProjectDetail() {
   const checkSubdomainAvailability = async (value: string): Promise<boolean> => {
     try {
       setCheckingSubdomain(true);
-      const { data, error } = await supabase
-        .from('projects' as any)
-        .select('id')
-        .eq('subdomain', value.toLowerCase())
-        .neq('id', project?.id || '')
-        .maybeSingle();
-      
+      const {
+        data,
+        error
+      } = await supabase.from('projects' as any).select('id').eq('subdomain', value.toLowerCase()).neq('id', project?.id || '').maybeSingle();
       if (error) {
         console.error('Error checking subdomain:', error);
         return false;
@@ -1104,12 +1056,7 @@ export default function ProjectDetail() {
   // Open publish modal
   const openPublishModal = () => {
     // Pre-fill with existing subdomain or generate from project name
-    const defaultSubdomain = project?.subdomain || 
-      project?.name?.toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, '')
-        .replace(/\s+/g, '-')
-        .replace(/-+/g, '-')
-        .slice(0, 30) || '';
+    const defaultSubdomain = project?.subdomain || project?.name?.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').slice(0, 30) || '';
     setSubdomainInput(defaultSubdomain);
     setSubdomainError(null);
     setShowPublishModal(true);
@@ -1121,7 +1068,6 @@ export default function ProjectDetail() {
     setSubdomainInput(cleaned);
     setSubdomainError(validateSubdomain(cleaned));
   };
-
   const publishProject = async () => {
     if (!project || !session?.access_token) return;
 
@@ -1138,21 +1084,20 @@ export default function ProjectDetail() {
       setSubdomainError(isRTL ? 'هذا الاسم مستخدم بالفعل' : 'This name is already taken');
       return;
     }
-
     try {
       setPublishing(true);
-      
+
       // Build the files to publish from generatedFiles (multi-file project)
-      const projectFiles: Record<string, string> = 
-        Object.keys(generatedFiles).length > 0 
-          ? { ...generatedFiles } 
-          : { "/App.js": codeContent };
-      
+      const projectFiles: Record<string, string> = Object.keys(generatedFiles).length > 0 ? {
+        ...generatedFiles
+      } : {
+        "/App.js": codeContent
+      };
+
       // Ensure /App.js has latest editor content
       if (codeContent) {
         projectFiles["/App.js"] = codeContent;
       }
-
       const finalSubdomain = subdomainInput.toLowerCase();
 
       // ============================================
@@ -1160,26 +1105,29 @@ export default function ProjectDetail() {
       // ============================================
       console.log('Bundling project with esbuild via project-build...');
       console.log('Project files:', Object.keys(projectFiles));
-      
+
       // Step 1: Call project-build to bundle the files properly
-      const { data: buildResult, error: buildError } = await supabase.functions.invoke('project-build', {
+      const {
+        data: buildResult,
+        error: buildError
+      } = await supabase.functions.invoke('project-build', {
         body: {
           files: projectFiles,
           entryPoint: '/App.js'
         }
       });
-
       if (buildError) {
         console.error('Build error:', buildError);
         throw new Error(buildError.message || 'Failed to bundle project');
       }
-
       if (!buildResult?.success || !buildResult?.bundle) {
         console.error('Build failed:', buildResult);
         throw new Error(buildResult?.error || 'Project bundling failed');
       }
-
-      const { js: bundledJs, css: bundledCss } = buildResult.bundle;
+      const {
+        js: bundledJs,
+        css: bundledCss
+      } = buildResult.bundle;
       console.log(`Bundle successful: ${bundledJs.length} bytes JS, ${bundledCss.length} bytes CSS`);
 
       // Step 2: Generate index.html with bundled code
@@ -1371,66 +1319,65 @@ export default function ProjectDetail() {
   </script>
 </body>
 </html>`;
-
       console.log('Generated index.html size:', indexHtml.length);
 
       // Step 3: Deploy to Vercel via projects-publish
       console.log('Deploying to Vercel via projects-publish...');
-      const { data: publishResult, error: publishError } = await supabase.functions.invoke('projects-publish', {
+      const {
+        data: publishResult,
+        error: publishError
+      } = await supabase.functions.invoke('projects-publish', {
         body: {
           projectName: projectName,
           projectSlug: finalSubdomain,
-          files: [
-            { path: 'index.html', content: indexHtml }
-          ]
+          files: [{
+            path: 'index.html',
+            content: indexHtml
+          }]
         }
       });
-
       if (publishError) {
         console.error('Edge function error:', publishError);
         throw new Error(publishError.message || 'Failed to deploy');
       }
-
       if (!publishResult?.ok) {
         console.error('Publish failed:', publishResult);
         throw new Error(publishResult?.error || 'Deployment failed');
       }
-
       const subdomainUrl = publishResult.url || `https://${finalSubdomain}.wakti.ai`;
       console.log('Deployed successfully to:', subdomainUrl);
 
       // Update project in database with the published URL
-      const { error: updateError } = await supabase
-        .from('projects' as any)
-        .update({
-          status: 'published',
-          published_url: subdomainUrl,
-          subdomain: finalSubdomain,
-          published_at: new Date().toISOString(),
-        })
-        .eq('id', project.id);
-      
+      const {
+        error: updateError
+      } = await supabase.from('projects' as any).update({
+        status: 'published',
+        published_url: subdomainUrl,
+        subdomain: finalSubdomain,
+        published_at: new Date().toISOString()
+      }).eq('id', project.id);
       if (updateError) {
         console.error('Error updating project:', updateError);
         // Don't throw - the site is already deployed, just log the DB error
       }
-
       setProject(prev => prev ? {
         ...prev,
         status: 'published',
         published_url: subdomainUrl,
-        subdomain: finalSubdomain,
+        subdomain: finalSubdomain
       } : null);
-
       setShowPublishModal(false);
-      
+
       // 🎉 Celebration confetti animation!
       const duration = 2000;
       const animationEnd = Date.now() + duration;
-      const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 9999 };
-      
+      const defaults = {
+        startVelocity: 30,
+        spread: 360,
+        ticks: 60,
+        zIndex: 9999
+      };
       const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
-      
       const interval = window.setInterval(() => {
         const timeLeft = animationEnd - Date.now();
         if (timeLeft <= 0) {
@@ -1441,17 +1388,22 @@ export default function ProjectDetail() {
         confetti({
           ...defaults,
           particleCount,
-          origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 },
-          colors: ['#a855f7', '#ec4899', '#6366f1', '#22c55e', '#eab308'],
+          origin: {
+            x: randomInRange(0.1, 0.3),
+            y: Math.random() - 0.2
+          },
+          colors: ['#a855f7', '#ec4899', '#6366f1', '#22c55e', '#eab308']
         });
         confetti({
           ...defaults,
           particleCount,
-          origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 },
-          colors: ['#a855f7', '#ec4899', '#6366f1', '#22c55e', '#eab308'],
+          origin: {
+            x: randomInRange(0.7, 0.9),
+            y: Math.random() - 0.2
+          },
+          colors: ['#a855f7', '#ec4899', '#6366f1', '#22c55e', '#eab308']
         });
       }, 250);
-      
       toast.success(isRTL ? '🎉 تم النشر بنجاح!' : '🎉 Published successfully!');
     } catch (err: any) {
       console.error('Error publishing:', err);
@@ -1466,16 +1418,12 @@ export default function ProjectDetail() {
   const generatePublishableIndexHtml = (files: Record<string, string>, projectName: string): string => {
     // Collect all component/file paths (excluding App entry which we handle specially)
     // Support both .js and .jsx extensions
-    const jsFiles = Object.keys(files).filter(f => 
-      (f.endsWith('.js') || f.endsWith('.jsx')) && 
-      f !== '/App.js' && 
-      f !== '/App.jsx'
-    );
+    const jsFiles = Object.keys(files).filter(f => (f.endsWith('.js') || f.endsWith('.jsx')) && f !== '/App.js' && f !== '/App.jsx');
     const cssFiles = Object.keys(files).filter(f => f.endsWith('.css'));
-    
+
     // Build inline CSS
     const inlineCss = cssFiles.map(f => files[f]).join('\n');
-    
+
     // Sort JS files: data/utils/mock files first (they define data used by components)
     const sortedJsFiles = [...jsFiles].sort((a, b) => {
       const aIsData = a.includes('data') || a.includes('utils') || a.includes('mock') || a.includes('config') || a.includes('constants');
@@ -1484,7 +1432,7 @@ export default function ProjectDetail() {
       if (!aIsData && bIsData) return 1;
       return 0;
     });
-    
+
     // Build component definitions - convert ES module syntax to browser-compatible
     const componentScripts = sortedJsFiles.map(filePath => {
       const content = files[filePath];
@@ -1500,7 +1448,6 @@ ${convertToGlobalComponent(content, componentName)}
     // Get App entry content (support both .js and .jsx)
     const appJsContent = files['/App.js'] || files['/App.jsx'] || '';
     const appComponent = convertToGlobalComponent(appJsContent, 'App');
-
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1988,41 +1935,36 @@ ${convertToGlobalComponent(content, componentName)}
   // Convert ES module component to global browser-compatible code
   const convertToGlobalComponent = (code: string, defaultName: string): string => {
     let result = code;
-    
+
     // Remove import statements (React is loaded globally, local imports become globals)
     result = result.replace(/^import\s+.*?from\s+['"].*?['"];?\s*$/gm, '');
     result = result.replace(/^import\s+['"].*?['"];?\s*$/gm, '');
-    
+
     // Convert "export const X = ..." to "const X = ..." (will be global in script scope)
     result = result.replace(/export\s+const\s+/g, 'const ');
     result = result.replace(/export\s+let\s+/g, 'let ');
     result = result.replace(/export\s+var\s+/g, 'var ');
     result = result.replace(/export\s+function\s+/g, 'function ');
     result = result.replace(/export\s+class\s+/g, 'class ');
-    
+
     // Remove export default and capture component
     result = result.replace(/export\s+default\s+function\s+(\w+)/g, 'function $1');
     result = result.replace(/export\s+default\s+(\w+);?\s*$/gm, '');
     result = result.replace(/export\s+default\s+/g, `const ${defaultName} = `);
-    
+
     // Remove named export statements like "export { X, Y };"
     result = result.replace(/export\s+\{[^}]*\};?\s*$/gm, '');
-    
     return result.trim();
   };
 
   // Escape HTML for safe insertion
   const escapeHtml = (str: string): string => {
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
   };
-
   const downloadProject = () => {
-    const blob = new Blob([codeContent], { type: 'text/html' });
+    const blob = new Blob([codeContent], {
+      type: 'text/html'
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -2035,45 +1977,39 @@ ${convertToGlobalComponent(content, componentName)}
   };
 
   // Capture screenshot of the preview and save as thumbnail
-  const captureScreenshotInternal = async ({ silent }: { silent: boolean }) => {
+  const captureScreenshotInternal = async ({
+    silent
+  }: {
+    silent: boolean;
+  }) => {
     if (!project) return;
-
     try {
       // Sandpack preview is rendered inside an iframe. We capture the container that holds it.
-      const previewContainer =
-        document.querySelector('.sp-preview-container') ||
-        document.querySelector('.sandpack-preview-container') ||
-        (document.querySelector('.sp-preview-iframe') as HTMLIFrameElement | null)?.parentElement;
-
+      const previewContainer = document.querySelector('.sp-preview-container') || document.querySelector('.sandpack-preview-container') || (document.querySelector('.sp-preview-iframe') as HTMLIFrameElement | null)?.parentElement;
       if (!previewContainer) {
         if (!silent) toast.error(isRTL ? 'لا يوجد معاينة للتصوير' : 'No preview to capture');
         return;
       }
-
       if (!silent) toast.loading(isRTL ? 'جاري التقاط الصورة...' : 'Capturing screenshot...');
-
       const canvas = await html2canvas(previewContainer as HTMLElement, {
         useCORS: true,
         allowTaint: true,
         scale: 0.5,
-        backgroundColor: '#0c0f14',
+        backgroundColor: '#0c0f14'
       });
-
       const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((b) => {
+        canvas.toBlob(b => {
           if (!b) return reject(new Error('Failed to create screenshot blob'));
           resolve(b);
         }, 'image/jpeg', 0.8);
       });
-
       const fileName = `${project.id}-${Date.now()}.jpg`;
-      const { error: uploadError } = await supabase.storage
-        .from('project-thumbnails')
-        .upload(fileName, blob, {
-          contentType: 'image/jpeg',
-          upsert: true,
-        });
-
+      const {
+        error: uploadError
+      } = await supabase.storage.from('project-thumbnails').upload(fileName, blob, {
+        contentType: 'image/jpeg',
+        upsert: true
+      });
       if (uploadError) {
         console.error('Upload error:', uploadError);
         if (!silent) {
@@ -2082,18 +2018,18 @@ ${convertToGlobalComponent(content, componentName)}
         }
         return;
       }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('project-thumbnails')
-        .getPublicUrl(fileName);
-
-      await (supabase
-        .from('projects' as any)
-        .update({ thumbnail_url: publicUrl })
-        .eq('id', project.id) as any);
-
-      setProject(prev => prev ? { ...prev, thumbnail_url: publicUrl } : prev);
-
+      const {
+        data: {
+          publicUrl
+        }
+      } = supabase.storage.from('project-thumbnails').getPublicUrl(fileName);
+      await (supabase.from('projects' as any).update({
+        thumbnail_url: publicUrl
+      }).eq('id', project.id) as any);
+      setProject(prev => prev ? {
+        ...prev,
+        thumbnail_url: publicUrl
+      } : prev);
       if (!silent) {
         toast.dismiss();
         toast.success(isRTL ? 'تم حفظ الصورة المصغرة!' : 'Thumbnail saved!');
@@ -2106,9 +2042,10 @@ ${convertToGlobalComponent(content, componentName)}
       }
     }
   };
-
   const captureScreenshot = async () => {
-    await captureScreenshotInternal({ silent: false });
+    await captureScreenshotInternal({
+      silent: false
+    });
   };
 
   // Helper for delays
@@ -2126,40 +2063,36 @@ ${convertToGlobalComponent(content, componentName)}
   // Self-healing: Auto-fix the crash
   const handleAutoFix = () => {
     if (!crashReport) return;
-    
     const fixPrompt = `The preview crashed with this error: "${crashReport}". 
 Analyze the code, find the root cause (usually a missing import, undefined variable, or unavailable dependency like react-router-dom), and fix it immediately. 
 Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
-    
+
     // Clear error so we don't loop
     setCrashReport(null);
-    
+
     // Switch to Code mode and send fix request
     setLeftPanelMode('code');
     setChatInput(fixPrompt);
-    
+
     // Trigger submit after setting input
     setTimeout(() => {
       const form = document.querySelector('form');
       if (form) form.requestSubmit();
     }, 100);
   };
-
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.currentTarget.files;
     if (!files) return;
-    
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      
+
       // Handle PDF files - extract text and add as context
       if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
         try {
           // For PDFs, we'll read as data URL and add a special marker
           const reader = new FileReader();
-          reader.onload = async (event) => {
+          reader.onload = async event => {
             const dataUrl = event.target?.result as string;
-
             const svg = `
               <svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
                 <rect width="200" height="200" fill="#1e293b" rx="8"/>
@@ -2170,14 +2103,15 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
 
             // Avoid btoa() (breaks on non‑Latin1 characters). Use UTF‑8-safe SVG data URI.
             const pdfPreview = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-            
+
             // Store PDF data with special type marker
-            setAttachedImages(prev => [...prev, { 
-              file: new File([file], file.name, { type: 'application/pdf' }), 
+            setAttachedImages(prev => [...prev, {
+              file: new File([file], file.name, {
+                type: 'application/pdf'
+              }),
               preview: pdfPreview,
               pdfDataUrl: dataUrl // Store actual PDF data
             } as any]);
-            
             toast.success(isRTL ? `تم إضافة ${file.name}` : `Added ${file.name}`);
           };
           reader.readAsDataURL(file);
@@ -2187,118 +2121,118 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         }
         continue;
       }
-      
+
       // Handle image files
       if (!file.type.startsWith('image/')) continue;
-      
       const reader = new FileReader();
-      reader.onload = (event) => {
+      reader.onload = event => {
         const preview = event.target?.result as string;
-        setAttachedImages(prev => [...prev, { file, preview }]);
+        setAttachedImages(prev => [...prev, {
+          file,
+          preview
+        }]);
       };
       reader.readAsDataURL(file);
     }
-    
+
     // Reset input
     if (imageInputRef.current) {
       imageInputRef.current.value = '';
     }
   };
-
   const removeAttachedImage = (index: number) => {
     setAttachedImages(prev => prev.filter((_, i) => i !== index));
   };
-  
+
   // Handle stock photo selection
-  const handleStockPhotoSelect = (photo: { url: string; title: string }) => {
+  const handleStockPhotoSelect = (photo: {
+    url: string;
+    title: string;
+  }) => {
     // Create a File object from the URL
-    fetch(photo.url)
-      .then(res => res.blob())
-      .then(blob => {
-        const file = new File([blob], photo.title, { type: blob.type || 'image/jpeg' });
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const preview = event.target?.result as string;
-          setAttachedImages(prev => [...prev, { file, preview }]);
-        };
-        reader.readAsDataURL(file);
-      })
-      .catch(err => {
-        console.error('Error fetching stock photo:', err);
-        toast.error(isRTL ? 'فشل في تحميل الصورة' : 'Failed to load image');
+    fetch(photo.url).then(res => res.blob()).then(blob => {
+      const file = new File([blob], photo.title, {
+        type: blob.type || 'image/jpeg'
       });
+      const reader = new FileReader();
+      reader.onload = event => {
+        const preview = event.target?.result as string;
+        setAttachedImages(prev => [...prev, {
+          file,
+          preview
+        }]);
+      };
+      reader.readAsDataURL(file);
+    }).catch(err => {
+      console.error('Error fetching stock photo:', err);
+      toast.error(isRTL ? 'فشل في تحميل الصورة' : 'Failed to load image');
+    });
   };
-  
+
   // Open stock photo selector with search term and optional initial tab
   const openStockPhotoSelector = (term: string = '', initialTab: 'stock' | 'user' = 'stock') => {
     setPhotoSearchTerm(term);
     setPhotoSelectorInitialTab(initialTab);
     setShowStockPhotoSelector(true);
   };
-
   const handlePaste = async (e: ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
-
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       if (item.kind === 'file' && item.type.startsWith('image/')) {
         const file = item.getAsFile();
         if (!file) continue;
-
         const reader = new FileReader();
-        reader.onload = (event) => {
+        reader.onload = event => {
           const preview = event.target?.result as string;
-          setAttachedImages(prev => [...prev, { file, preview }]);
+          setAttachedImages(prev => [...prev, {
+            file,
+            preview
+          }]);
         };
         reader.readAsDataURL(file);
       }
     }
   };
-
   const handleChatSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim() && attachedImages.length === 0 || aiEditing) return;
-    
     const userMessage = chatInput.trim();
     setChatInput('');
-    
+
     // Check if the user is asking for love photos or specific photo types
     const lovePhotoRegex = /\b(love|heart|romance|romantic|valentine)\s+photos?\b/i;
     const photoRequestRegex = /\b(\w+)\s+photos?\b/i;
     const myPhotosRegex = /\b(my|uploaded|user)\s+photos?\b/i;
-    
+
     // Check for "my photos" request
     if (myPhotosRegex.test(userMessage)) {
       // Check if user has uploaded photos
       try {
-        const { success, count } = await FreepikService.checkUserUploads(user?.id || '');
-        
+        const {
+          success,
+          count
+        } = await FreepikService.checkUserUploads(user?.id || '');
         if (success && count > 0) {
           // User has photos, open selector with user tab active
           openStockPhotoSelector('', 'user');
           return;
         } else {
           // No user photos found, add assistant message explaining this
-          const noPhotosMsg = isRTL 
-            ? 'لم يتم العثور على صور مرفوعة. يرجى تحميل الصور أولاً.' 
-            : 'No uploaded photos found. Please upload photos first.';
-          
+          const noPhotosMsg = isRTL ? 'لم يتم العثور على صور مرفوعة. يرجى تحميل الصور أولاً.' : 'No uploaded photos found. Please upload photos first.';
           setChatMessages(prev => [...prev, {
             id: `assistant-${Date.now()}`,
             role: 'assistant',
             content: noPhotosMsg
           }]);
-          
+
           // Save to DB
-          await supabase
-            .from('project_chat_messages' as any)
-            .insert({ 
-              project_id: id, 
-              role: 'assistant', 
-              content: noPhotosMsg
-            } as any);
-          
+          await supabase.from('project_chat_messages' as any).insert({
+            project_id: id,
+            role: 'assistant',
+            content: noPhotosMsg
+          } as any);
           return;
         }
       } catch (err) {
@@ -2316,23 +2250,32 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         return;
       }
     }
-    
     setAiEditing(true);
-    
+
     // Set initial progress steps based on mode
     if (leftPanelMode === 'code') {
-      setGenerationSteps([
-        { label: isRTL ? 'تحليل الطلب...' : 'Analyzing request...', status: 'loading' },
-        { label: isRTL ? 'تخطيط التغييرات...' : 'Planning changes...', status: 'pending' },
-        { label: isRTL ? 'تطبيق التعديلات...' : 'Applying edits...', status: 'pending' },
-      ]);
+      setGenerationSteps([{
+        label: isRTL ? 'تحليل الطلب...' : 'Analyzing request...',
+        status: 'loading'
+      }, {
+        label: isRTL ? 'تخطيط التغييرات...' : 'Planning changes...',
+        status: 'pending'
+      }, {
+        label: isRTL ? 'تطبيق التعديلات...' : 'Applying edits...',
+        status: 'pending'
+      }]);
     } else {
       // Chat mode - different steps for Q&A
-      setGenerationSteps([
-        { label: isRTL ? 'قراءة المشروع...' : 'Reading project...', status: 'loading' },
-        { label: isRTL ? 'التفكير...' : 'Thinking...', status: 'pending' },
-        { label: isRTL ? 'صياغة الإجابة...' : 'Formulating answer...', status: 'pending' },
-      ]);
+      setGenerationSteps([{
+        label: isRTL ? 'قراءة المشروع...' : 'Reading project...',
+        status: 'loading'
+      }, {
+        label: isRTL ? 'التفكير...' : 'Thinking...',
+        status: 'pending'
+      }, {
+        label: isRTL ? 'صياغة الإجابة...' : 'Formulating answer...',
+        status: 'pending'
+      }]);
     }
 
     // Save user message to DB
@@ -2346,27 +2289,27 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       }
       return img.preview;
     }) : [];
-    
+
     // Store attachment count in content as metadata marker for persistence
     // Format: [ATTACHMENTS:N] at the start of content (hidden in display)
     const attachmentMarker = userImages.length > 0 ? `[ATTACHMENTS:${userImages.length}]` : '';
     const contentToStore = attachmentMarker + userMessage;
-    
-    const { data: userMsg, error: msgError } = await supabase
-      .from('project_chat_messages' as any)
-      .insert({ 
-        project_id: id, 
-        role: 'user', 
-        content: contentToStore
-      } as any)
-      .select()
-      .single();
-    
+    const {
+      data: userMsg,
+      error: msgError
+    } = await supabase.from('project_chat_messages' as any).insert({
+      project_id: id,
+      role: 'user',
+      content: contentToStore
+    } as any).select().single();
     if (msgError) console.error('Error saving user message:', msgError);
-    
+
     // Add to local state (with images for display)
     if (userMsg) {
-      setChatMessages(prev => [...prev, { ...(userMsg as object), images: userImages } as any]);
+      setChatMessages(prev => [...prev, {
+        ...(userMsg as object),
+        images: userImages
+      } as any]);
     } else {
       // Fallback local state if DB insert fails
       setChatMessages(prev => [...prev, {
@@ -2376,33 +2319,36 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         images: userImages
       }]);
     }
-    
     try {
       // Small delay to show first step
       await delay(800);
       // Step 1 complete, Step 2 loading
-      setGenerationSteps(prev => prev.map((s, i) => 
-        i === 0 ? { ...s, status: 'completed' } : 
-        i === 1 ? { ...s, status: 'loading' } : s
-      ));
-
+      setGenerationSteps(prev => prev.map((s, i) => i === 0 ? {
+        ...s,
+        status: 'completed'
+      } : i === 1 ? {
+        ...s,
+        status: 'loading'
+      } : s));
       let assistantMsg: string;
       let snapshotToSave: any = null;
 
       // IMPORTANT: Save snapshot of CURRENT state BEFORE applying changes (for revert)
-      const beforeSnapshot: Record<string, string> = Object.keys(generatedFiles).length > 0 ? { ...generatedFiles } : {};
-
+      const beforeSnapshot: Record<string, string> = Object.keys(generatedFiles).length > 0 ? {
+        ...generatedFiles
+      } : {};
       if (leftPanelMode === 'chat') {
         // Chat mode: Smart AI that answers questions OR returns plans for code changes
         // Use userImages captured earlier (before clearing)
         setAttachedImages([]); // Clear after capturing
 
         // CRITICAL: Always send the LATEST code to the AI (merge generatedFiles with current editor content)
-        const latestFiles = { ...generatedFiles };
+        const latestFiles = {
+          ...generatedFiles
+        };
         if (codeContent) {
           latestFiles['/App.js'] = codeContent;
         }
-
         const response = await supabase.functions.invoke('projects-generate', {
           body: {
             mode: 'chat',
@@ -2411,20 +2357,24 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
             currentFiles: latestFiles,
             images: userImages.length > 0 ? userImages : undefined,
             uploadedAssets: uploadedAssets.length > 0 ? uploadedAssets : undefined,
-            backendContext: backendContext || undefined,
-          },
+            backendContext: backendContext || undefined
+          }
         });
-
         if (response.error || !response.data?.ok) {
           throw new Error(response.data?.error || 'Failed to get response');
         }
 
         // Step 2 complete, Step 3 loading
-        setGenerationSteps(prev => prev.map((s, i) => 
-          i === 0 ? { ...s, status: 'completed' } : 
-          i === 1 ? { ...s, status: 'completed' } : 
-          i === 2 ? { ...s, status: 'loading' } : s
-        ));
+        setGenerationSteps(prev => prev.map((s, i) => i === 0 ? {
+          ...s,
+          status: 'completed'
+        } : i === 1 ? {
+          ...s,
+          status: 'completed'
+        } : i === 2 ? {
+          ...s,
+          status: 'loading'
+        } : s));
         await delay(250);
 
         // Smart response: either a plan (JSON), asset_picker, or regular message
@@ -2438,7 +2388,10 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
           // AI answered a question - show regular message
           assistantMsg = response.data.message || (isRTL ? 'لم أتمكن من الإجابة.' : 'Could not generate a response.');
         }
-        setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
+        setGenerationSteps(prev => prev.map(s => ({
+          ...s,
+          status: 'completed'
+        })));
         await delay(250);
       } else {
         // Code mode: Option A job flow (start -> poll -> get_files)
@@ -2446,7 +2399,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
 
         // Capture images BEFORE clearing (same as chat mode)
         const codeImages = userImages.length > 0 ? userImages : undefined;
-        
+
         // Clear attached images in Code mode too
         if (attachedImages.length > 0) {
           setAttachedImages([]);
@@ -2456,36 +2409,38 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         // show asset picker instead of running edit immediately
         const photoKeywords = /\b(my photo|my image|uploaded image|صورتي|الصورة)\b/i;
         const hasSpecificFile = uploadedAssets.some(a => userMessage.includes(a.filename));
-        
         if (uploadedAssets.length >= 2 && photoKeywords.test(userMessage) && !hasSpecificFile) {
           // Build asset picker response manually and skip edit
           assistantMsg = JSON.stringify({
             type: 'asset_picker',
             message: isRTL ? 'أي صورة تريد استخدامها؟' : 'Which image would you like me to use?',
             originalRequest: userMessage,
-            assets: uploadedAssets.map(a => ({ filename: a.filename, url: a.url, file_type: a.file_type }))
+            assets: uploadedAssets.map(a => ({
+              filename: a.filename,
+              url: a.url,
+              file_type: a.file_type
+            }))
           });
-          
-          setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
+          setGenerationSteps(prev => prev.map(s => ({
+            ...s,
+            status: 'completed'
+          })));
           await delay(250);
-          
+
           // Save assistant message to DB
-          const { data: assistantMsgData, error: assistError } = await supabase
-            .from('project_chat_messages' as any)
-            .insert({ 
-              project_id: id, 
-              role: 'assistant', 
-              content: assistantMsg,
-              snapshot: null
-            } as any)
-            .select()
-            .single();
-          
+          const {
+            data: assistantMsgData,
+            error: assistError
+          } = await supabase.from('project_chat_messages' as any).insert({
+            project_id: id,
+            role: 'assistant',
+            content: assistantMsg,
+            snapshot: null
+          } as any).select().single();
           if (assistError) console.error('Error saving assistant message:', assistError);
           if (assistantMsgData) {
             setChatMessages(prev => [...prev, assistantMsgData as any]);
           }
-          
           setAiEditing(false);
           setGenerationSteps([]);
           return; // Exit early - don't run edit
@@ -2499,38 +2454,40 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
             mode: 'agent',
             prompt: userMessage,
             userInstructions: userInstructions,
-            images: codeImages, // NOW SENDING IMAGES TO AI
+            images: codeImages,
+            // NOW SENDING IMAGES TO AI
             uploadedAssets: uploadedAssets.length > 0 ? uploadedAssets : undefined,
-            backendContext: backendContext || undefined,
-          },
+            backendContext: backendContext || undefined
+          }
         });
-
         if (startRes.error) {
           throw new Error(startRes.error.message || 'Failed to start agent');
         }
 
         // AGENT MODE: Returns results directly (no job polling needed!)
         const agentResult = startRes.data;
-        
         if (agentResult?.mode === 'agent' && agentResult?.result) {
           // Agent mode completed synchronously - load updated files
-          setGenerationSteps(prev => prev.map((s, i) => 
-            i === 0 ? { ...s, status: 'completed' } : 
-            i === 1 ? { ...s, status: 'completed' } : 
-            i === 2 ? { ...s, status: 'loading' } : s
-          ));
+          setGenerationSteps(prev => prev.map((s, i) => i === 0 ? {
+            ...s,
+            status: 'completed'
+          } : i === 1 ? {
+            ...s,
+            status: 'completed'
+          } : i === 2 ? {
+            ...s,
+            status: 'loading'
+          } : s));
           await delay(250);
-
           const newFiles = await loadFilesFromDb(id);
           const newCode = newFiles["/App.js"] || Object.values(newFiles)[0] || "";
-
           snapshotToSave = beforeSnapshot;
           setGeneratedFiles(newFiles);
           setCodeContent(newCode);
 
           // Get files changed from agent result
           const changedFilesList: string[] = agentResult.result.filesChanged || [];
-          
+
           // If no files reported, compare with snapshot
           if (changedFilesList.length === 0) {
             for (const [path, content] of Object.entries(newFiles)) {
@@ -2540,9 +2497,8 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
               }
             }
           }
-          
           const summaryText = agentResult.result.summary || (isRTL ? 'تم تطبيق التعديلات!' : 'Changes applied!');
-          
+
           // Store as structured JSON so the UI can parse it properly
           assistantMsg = JSON.stringify({
             type: 'execution_result',
@@ -2550,29 +2506,32 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
             summary: summaryText,
             files: changedFilesList.length > 0 ? changedFilesList : ['/App.js']
           });
-          
-          setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
+          setGenerationSteps(prev => prev.map(s => ({
+            ...s,
+            status: 'completed'
+          })));
           await delay(250);
         } else {
           // Fallback: If there's a jobId, use the old polling method
           const jobId = agentResult?.jobId as string | undefined;
           if (!jobId) throw new Error('Agent mode failed - no result returned');
-
-          setGenerationSteps(prev => prev.map((s, i) => 
-            i === 0 ? { ...s, status: 'completed' } : 
-            i === 1 ? { ...s, status: 'completed' } : 
-            i === 2 ? { ...s, status: 'loading' } : s
-          ));
+          setGenerationSteps(prev => prev.map((s, i) => i === 0 ? {
+            ...s,
+            status: 'completed'
+          } : i === 1 ? {
+            ...s,
+            status: 'completed'
+          } : i === 2 ? {
+            ...s,
+            status: 'loading'
+          } : s));
           await delay(250);
-
           const job = await pollJobUntilDone(jobId);
           const newFiles = await loadFilesFromDb(id);
           const newCode = newFiles["/App.js"] || Object.values(newFiles)[0] || "";
-
           snapshotToSave = beforeSnapshot;
           setGeneratedFiles(newFiles);
           setCodeContent(newCode);
-
           const changedFilesList: string[] = [];
           for (const [path, content] of Object.entries(newFiles)) {
             const oldContent = beforeSnapshot[path];
@@ -2580,36 +2539,33 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
               changedFilesList.push(path);
             }
           }
-          
           const summaryText = job.result_summary || (isRTL ? 'تم تطبيق التعديلات!' : 'Changes applied!');
-          
           assistantMsg = JSON.stringify({
             type: 'execution_result',
             title: isRTL ? 'تم التطبيق' : 'Applied',
             summary: summaryText,
             files: changedFilesList.length > 0 ? changedFilesList : ['/App.js']
           });
-          
-          setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
+          setGenerationSteps(prev => prev.map(s => ({
+            ...s,
+            status: 'completed'
+          })));
           await delay(250);
         }
       }
 
       // Save assistant message to DB with snapshot
-      const { data: assistantMsgData, error: assistError } = await supabase
-        .from('project_chat_messages' as any)
-        .insert({ 
-          project_id: id, 
-          role: 'assistant', 
-          content: assistantMsg,
-          snapshot: snapshotToSave 
-        } as any)
-        .select()
-        .single();
-
+      const {
+        data: assistantMsgData,
+        error: assistError
+      } = await supabase.from('project_chat_messages' as any).insert({
+        project_id: id,
+        role: 'assistant',
+        content: assistantMsg,
+        snapshot: snapshotToSave
+      } as any).select().single();
       if (assistError) console.error('Error saving assistant message:', assistError);
-      if (assistantMsgData) setChatMessages(prev => [...prev, assistantMsgData as any]);
-      else {
+      if (assistantMsgData) setChatMessages(prev => [...prev, assistantMsgData as any]);else {
         setChatMessages(prev => [...prev, {
           id: `edit-${Date.now()}`,
           role: 'assistant',
@@ -2621,106 +2577,82 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       // Generate dynamic suggestions based on what was just done - ALWAYS parse the message content
       const generateContextualSuggestions = (msg: string): string[] => {
         const msgLower = msg.toLowerCase();
-        
+
         // Parse the AI response to find what was changed and suggest relevant follow-ups
         if (msgLower.includes('gradient') || msgLower.includes('color') || msgLower.includes('لون')) {
-          return [
-            isRTL ? 'أضف تأثير ظل' : 'Add shadow effect',
-            isRTL ? 'غيّر الخط' : 'Change the font'
-          ];
+          return [isRTL ? 'أضف تأثير ظل' : 'Add shadow effect', isRTL ? 'غيّر الخط' : 'Change the font'];
         }
         if (msgLower.includes('title') || msgLower.includes('heading') || msgLower.includes('عنوان')) {
-          return [
-            isRTL ? 'غيّر حجم العنوان' : 'Change title size',
-            isRTL ? 'أضف عنوان فرعي' : 'Add a subtitle'
-          ];
+          return [isRTL ? 'غيّر حجم العنوان' : 'Change title size', isRTL ? 'أضف عنوان فرعي' : 'Add a subtitle'];
         }
         if (msgLower.includes('button') || msgLower.includes('زر')) {
-          return [
-            isRTL ? 'أضف تأثير hover' : 'Add hover effect',
-            isRTL ? 'غيّر حجم الزر' : 'Resize the button'
-          ];
+          return [isRTL ? 'أضف تأثير hover' : 'Add hover effect', isRTL ? 'غيّر حجم الزر' : 'Resize the button'];
         }
         if (msgLower.includes('section') || msgLower.includes('قسم')) {
-          return [
-            isRTL ? 'أضف قسم آخر' : 'Add another section',
-            isRTL ? 'حسّن التباعد' : 'Improve spacing'
-          ];
+          return [isRTL ? 'أضف قسم آخر' : 'Add another section', isRTL ? 'حسّن التباعد' : 'Improve spacing'];
         }
         if (msgLower.includes('image') || msgLower.includes('صورة') || msgLower.includes('photo')) {
-          return [
-            isRTL ? 'أضف صورة أخرى' : 'Add another image',
-            isRTL ? 'غيّر حجم الصورة' : 'Resize the image'
-          ];
+          return [isRTL ? 'أضف صورة أخرى' : 'Add another image', isRTL ? 'غيّر حجم الصورة' : 'Resize the image'];
         }
         if (msgLower.includes('fix') || msgLower.includes('error') || msgLower.includes('إصلاح') || msgLower.includes('bug')) {
-          return [
-            isRTL ? 'تحقق من الأخطاء الأخرى' : 'Check for other issues',
-            isRTL ? 'حسّن الأداء' : 'Improve performance'
-          ];
+          return [isRTL ? 'تحقق من الأخطاء الأخرى' : 'Check for other issues', isRTL ? 'حسّن الأداء' : 'Improve performance'];
         }
         if (msgLower.includes('font') || msgLower.includes('text') || msgLower.includes('خط')) {
-          return [
-            isRTL ? 'غيّر اللون' : 'Change the color',
-            isRTL ? 'أضف تأثير' : 'Add an effect'
-          ];
+          return [isRTL ? 'غيّر اللون' : 'Change the color', isRTL ? 'أضف تأثير' : 'Add an effect'];
         }
         if (msgLower.includes('animation') || msgLower.includes('effect') || msgLower.includes('تأثير')) {
-          return [
-            isRTL ? 'أضف تأثير آخر' : 'Add another effect',
-            isRTL ? 'غيّر السرعة' : 'Change the speed'
-          ];
+          return [isRTL ? 'أضف تأثير آخر' : 'Add another effect', isRTL ? 'غيّر السرعة' : 'Change the speed'];
         }
         if (msgLower.includes('layout') || msgLower.includes('تخطيط') || msgLower.includes('spacing')) {
-          return [
-            isRTL ? 'حسّن التباعد' : 'Improve spacing',
-            isRTL ? 'غيّر المحاذاة' : 'Change alignment'
-          ];
+          return [isRTL ? 'حسّن التباعد' : 'Improve spacing', isRTL ? 'غيّر المحاذاة' : 'Change alignment'];
         }
-        
+
         // Default suggestions
-        return [
-          isRTL ? 'أضف ميزة جديدة' : 'Add a new feature',
-          isRTL ? 'حسّن التصميم' : 'Improve the design'
-        ];
+        return [isRTL ? 'أضف ميزة جديدة' : 'Add a new feature', isRTL ? 'حسّن التصميم' : 'Improve the design'];
       };
-      
       setDynamicSuggestions(generateContextualSuggestions(assistantMsg));
     } catch (err: any) {
       console.error('AI error:', err);
       const errorMsg = isRTL ? 'عذرًا، حدث خطأ. حاول مرة أخرى.' : 'Sorry, an error occurred. Please try again.';
-      setChatMessages(prev => [...prev, { 
+      setChatMessages(prev => [...prev, {
         id: `error-${Date.now()}`,
-        role: 'assistant', 
-        content: errorMsg 
+        role: 'assistant',
+        content: errorMsg
       }]);
       toast.error(err.message || (isRTL ? 'حدث خطأ' : 'An error occurred'));
     } finally {
       setAiEditing(false);
     }
   };
-
   const getDeviceWidth = () => {
     switch (deviceView) {
-      case 'mobile': return '375px';
-      case 'tablet': return '768px';
-      case 'desktop': return '100%';
+      case 'mobile':
+        return '375px';
+      case 'tablet':
+        return '768px';
+      case 'desktop':
+        return '100%';
     }
   };
-
-  const deviceOptions = [
-    { id: 'desktop' as DeviceView, icon: Monitor, label: isRTL ? 'سطح المكتب' : 'Desktop' },
-    { id: 'tablet' as DeviceView, icon: Tablet, label: isRTL ? 'تابلت' : 'Tablet' },
-    { id: 'mobile' as DeviceView, icon: Smartphone, label: isRTL ? 'موبايل' : 'Mobile' },
-  ];
+  const deviceOptions = [{
+    id: 'desktop' as DeviceView,
+    icon: Monitor,
+    label: isRTL ? 'سطح المكتب' : 'Desktop'
+  }, {
+    id: 'tablet' as DeviceView,
+    icon: Tablet,
+    label: isRTL ? 'تابلت' : 'Tablet'
+  }, {
+    id: 'mobile' as DeviceView,
+    icon: Smartphone,
+    label: isRTL ? 'موبايل' : 'Mobile'
+  }];
 
   // Only show loading spinner if NOT generating - during generation we show the full UI
   if (loading && !isGenerating) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
+    return <div className="flex items-center justify-center min-h-[60vh]">
         <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
-      </div>
-    );
+      </div>;
   }
 
   // During generation, use a placeholder project if not loaded yet
@@ -2733,63 +2665,34 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
     status: 'generating',
     published_url: null,
     created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
   } : null);
-
   if (!displayProject) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh]">
+    return <div className="flex flex-col items-center justify-center min-h-[60vh]">
         <p className="text-muted-foreground">{isRTL ? 'المشروع غير موجود' : 'Project not found'}</p>
         <Button variant="link" onClick={() => navigate('/projects')}>
           {isRTL ? 'العودة للمشاريع' : 'Back to Projects'}
         </Button>
-      </div>
-    );
+      </div>;
   }
-
-  return (
-    <div className={cn("flex flex-col h-[calc(100vh-64px)] bg-background overflow-hidden", isRTL && "rtl")}>
+  return <div className={cn("flex flex-col h-[calc(100vh-64px)] bg-background overflow-hidden", isRTL && "rtl")}>
 
       {/* Server Tab Content */}
-      {mainTab === 'server' ? (
-        <div className="flex-1 min-h-0 overflow-hidden">
+      {mainTab === 'server' ? <div className="flex-1 min-h-0 overflow-hidden">
           <BackendDashboard projectId={id || ''} isRTL={isRTL} onBack={() => setMainTab('builder')} />
-        </div>
-      ) : (
-      <>
+        </div> : <>
       {/* Builder Tab Content - Mobile Chat/Preview Toggle - STICKY */}
       <div className="md:hidden px-4 py-2 bg-background/95 dark:bg-[#0c0f14]/95 backdrop-blur-sm border-b border-border/40 shrink-0 sticky top-0 z-20">
-        <div className="relative flex p-1 bg-muted/30 dark:bg-white/5 rounded-2xl border border-border/50">
+        <div className="relative flex p-1 bg-muted/30 dark:bg-white/5 rounded-2xl border border-border/50 border-solid shadow-sm border-[#052a8f]">
           {/* Animated sliding background pill */}
-          <div 
-            className={cn(
-              "absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white dark:bg-zinc-800 rounded-xl shadow-lg transition-all duration-300 ease-out z-0",
-              mobileTab === 'chat' ? "left-1" : "left-[calc(50%+1px)]"
-            )}
-          />
+          <div className={cn("absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white dark:bg-zinc-800 rounded-xl shadow-lg transition-all duration-300 ease-out z-0", mobileTab === 'chat' ? "left-1" : "left-[calc(50%+1px)]")} />
           
-          <button
-            onClick={() => setMobileTab('chat')}
-            className={cn(
-              "flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold transition-all relative z-10",
-              mobileTab === 'chat' 
-                ? "text-indigo-600 dark:text-indigo-400" 
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
+          <button onClick={() => setMobileTab('chat')} className={cn("flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold transition-all relative z-10", mobileTab === 'chat' ? "text-indigo-600 dark:text-indigo-400" : "text-muted-foreground hover:text-foreground")}>
             <MessageSquare className={cn("h-4 w-4 transition-transform duration-300", mobileTab === 'chat' && "scale-110")} />
             {isRTL ? 'دردشة' : 'Chat'}
           </button>
           
-          <button
-            onClick={() => setMobileTab('preview')}
-            className={cn(
-              "flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold transition-all relative z-10",
-              mobileTab === 'preview' 
-                ? "text-indigo-600 dark:text-indigo-400" 
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
+          <button onClick={() => setMobileTab('preview')} className={cn("flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold transition-all relative z-10", mobileTab === 'preview' ? "text-indigo-600 dark:text-indigo-400" : "text-muted-foreground hover:text-foreground")}>
             <Monitor className={cn("h-4 w-4 transition-transform duration-300", mobileTab === 'preview' && "scale-110")} />
             {isRTL ? 'معاينة' : 'Preview'}
           </button>
@@ -2799,86 +2702,53 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       {/* Main Studio Content */}
       <div className="flex-1 min-h-0 flex overflow-hidden relative">
         {/* Left Panel - Cascade-style Control Center */}
-        <div className={cn(
-          "flex flex-col border-r transition-all duration-300 relative",
-          "bg-background dark:bg-[#0c0f14]",
-          "md:w-[420px] lg:w-[480px] shrink-0",
-          mobileTab === 'preview' ? "hidden md:flex" : "flex w-full",
-          "h-full overflow-hidden"
-        )}>
+        <div className={cn("flex flex-col border-r transition-all duration-300 relative", "bg-background dark:bg-[#0c0f14]", "md:w-[420px] lg:w-[480px] shrink-0", mobileTab === 'preview' ? "hidden md:flex" : "flex w-full", "h-full overflow-hidden")}>
           {/* Mode Toggle: Chat / Code / Server - FIXED at top */}
           <div className="flex items-center justify-between border-b border-border/50 dark:border-white/10 px-3 py-0 h-[56px] shrink-0 absolute top-0 left-0 right-0 z-[100] bg-background dark:bg-[#0c0f14]">
             <div className="flex items-center gap-2">
               {/* Back Button */}
-              <button
-                onClick={() => navigate('/projects')}
-                className="p-1.5 rounded-lg bg-gradient-to-br from-blue-500/20 via-blue-400/20 to-blue-300/20 border border-blue-500/30 hover:border-blue-500/50 hover:from-blue-500/30 hover:via-blue-400/30 hover:to-blue-300/30 transition-all active:scale-95 group"
-                title={isRTL ? 'رجوع' : 'Back'}
-              >
+              <button onClick={() => navigate('/projects')} className="p-1.5 rounded-lg bg-gradient-to-br from-blue-500/20 via-blue-400/20 to-blue-300/20 border border-blue-500/30 hover:border-blue-500/50 hover:from-blue-500/30 hover:via-blue-400/30 hover:to-blue-300/30 transition-all active:scale-95 group" title={isRTL ? 'رجوع' : 'Back'}>
                 <ArrowLeft className="h-4 w-4 text-blue-500 group-hover:text-blue-400 transition-colors" />
               </button>
               
               {/* Brain Icon - Opens Instructions Drawer */}
-              <button
-                onClick={() => {
-                  setTempInstructions(userInstructions);
-                  setInstructionsDrawerOpen(true);
-                }}
-                className="p-1.5 rounded-lg bg-gradient-to-br from-purple-500/20 via-pink-500/20 to-orange-500/20 border border-purple-500/30 hover:border-purple-500/50 hover:from-purple-500/30 hover:via-pink-500/30 hover:to-orange-500/30 transition-all active:scale-95 group"
-                title={isRTL ? 'تعليمات المشروع' : 'Project Instructions'}
-              >
+              <button onClick={() => {
+                setTempInstructions(userInstructions);
+                setInstructionsDrawerOpen(true);
+              }} className="p-1.5 rounded-lg bg-gradient-to-br from-purple-500/20 via-pink-500/20 to-orange-500/20 border border-purple-500/30 hover:border-purple-500/50 hover:from-purple-500/30 hover:via-pink-500/30 hover:to-orange-500/30 transition-all active:scale-95 group" title={isRTL ? 'تعليمات المشروع' : 'Project Instructions'}>
                 <Brain className="h-4 w-4 text-purple-500 group-hover:text-purple-400 transition-colors" />
               </button>
 
               <div className="flex bg-muted/50 dark:bg-white/5 rounded-lg p-0.5">
-                <button
-                  onClick={() => { setMainTab('builder'); setLeftPanelMode('chat'); }}
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
-                    mainTab === 'builder' && leftPanelMode === 'chat' 
-                      ? "bg-emerald-500 text-white shadow-sm" 
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                  title={isRTL ? 'وضع المحادثة' : 'Chat mode'}
-                >
+                <button onClick={() => {
+                  setMainTab('builder');
+                  setLeftPanelMode('chat');
+                }} className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all", mainTab === 'builder' && leftPanelMode === 'chat' ? "bg-emerald-500 text-white shadow-sm" : "text-muted-foreground hover:text-foreground")} title={isRTL ? 'وضع المحادثة' : 'Chat mode'}>
                   <MessageSquare className="h-3.5 w-3.5" />
                   {isRTL ? 'محادثة' : 'Chat'}
                 </button>
-                <button
-                  onClick={() => { setMainTab('builder'); setLeftPanelMode('code'); }}
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
-                    mainTab === 'builder' && leftPanelMode === 'code' 
-                      ? "bg-blue-600 text-white shadow-sm" 
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                  title={isRTL ? 'وضع الكود' : 'Code mode'}
-                >
+                <button onClick={() => {
+                  setMainTab('builder');
+                  setLeftPanelMode('code');
+                }} className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all", mainTab === 'builder' && leftPanelMode === 'code' ? "bg-blue-600 text-white shadow-sm" : "text-muted-foreground hover:text-foreground")} title={isRTL ? 'وضع الكود' : 'Code mode'}>
                   <Code2 className="h-3.5 w-3.5" />
                   {isRTL ? 'كود' : 'Code'}
                 </button>
-                <button
-                  onClick={() => setMainTab('server')}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all text-muted-foreground hover:text-foreground"
-                  title={isRTL ? 'السيرفر' : 'Server'}
-                >
+                <button onClick={() => setMainTab('server')} className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all text-muted-foreground hover:text-foreground" title={isRTL ? 'السيرفر' : 'Server'}>
                   <Server className="h-3.5 w-3.5" />
                   {isRTL ? 'سيرفر' : 'Server'}
                 </button>
               </div>
             </div>
             
-            {mainTab === 'builder' && leftPanelMode === 'code' && (
-              <Button size="sm" variant="ghost" onClick={saveCode} disabled={saving} className="h-7 text-[10px] uppercase font-bold tracking-tight">
+            {mainTab === 'builder' && leftPanelMode === 'code' && <Button size="sm" variant="ghost" onClick={saveCode} disabled={saving} className="h-7 text-[10px] uppercase font-bold tracking-tight">
                 {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3 mr-1" />}
                 {isRTL ? 'حفظ' : 'Save'}
-              </Button>
-            )}
+              </Button>}
           </div>
 
           {/* Generated Files - Compact at top */}
-          {false && Object.keys(generatedFiles).length > 0 && leftPanelMode === 'chat' && (
-            <div className="border-b border-border/50 dark:border-white/10 px-3 py-2 shrink-0">
+          {false && Object.keys(generatedFiles).length > 0 && leftPanelMode === 'chat' && <div className="border-b border-border/50 dark:border-white/10 px-3 py-2 shrink-0">
               <div className="flex items-center gap-1.5 mb-1.5">
                 <FileCode className="h-3 w-3 text-indigo-500" />
                 <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
@@ -2889,127 +2759,122 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                 </span>
               </div>
               <div className="flex flex-wrap gap-1">
-                {Object.keys(generatedFiles).slice(0, 6).map((filePath) => (
-                  <button 
-                    key={filePath}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded transition-colors text-[10px] bg-indigo-500/10 dark:bg-indigo-500/5 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20"
-                    onClick={() => setRightPanelMode('code')}
-                  >
+                {Object.keys(generatedFiles).slice(0, 6).map(filePath => <button key={filePath} className="flex items-center gap-1 px-2 py-0.5 rounded transition-colors text-[10px] bg-indigo-500/10 dark:bg-indigo-500/5 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20" onClick={() => setRightPanelMode('code')}>
                     <Check className="h-2.5 w-2.5" />
                     {filePath.replace(/^\//, '').split('/').pop()}
-                  </button>
-                ))}
-                {Object.keys(generatedFiles).length > 6 && (
-                  <span className="text-[10px] text-muted-foreground px-2 py-0.5">
+                  </button>)}
+                {Object.keys(generatedFiles).length > 6 && <span className="text-[10px] text-muted-foreground px-2 py-0.5">
                     +{Object.keys(generatedFiles).length - 6} {isRTL ? 'أخرى' : 'more'}
-                  </span>
-                )}
+                  </span>}
               </div>
-            </div>
-          )}
+            </div>}
 
-          {(leftPanelMode === 'chat' || leftPanelMode === 'code') && (
-            <>
+          {(leftPanelMode === 'chat' || leftPanelMode === 'code') && <>
               {/* Chat Messages Area - Clean bubbles, no avatars - SCROLLABLE */}
               <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 pt-[72px] space-y-3 scrollbar-thin">
 
                 {/* Show More Button - at top if there are hidden messages */}
-                {chatMessages.length > visibleMessagesCount && (
-                  <button
-                    onClick={() => setVisibleMessagesCount(prev => prev + MESSAGES_PER_PAGE)}
-                    className="w-full py-2 px-4 mb-2 flex items-center justify-center gap-2 text-[11px] font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 dark:bg-indigo-500/5 border border-indigo-500/20 rounded-lg hover:bg-indigo-500/20 transition-all"
-                  >
+                {chatMessages.length > visibleMessagesCount && <button onClick={() => setVisibleMessagesCount(prev => prev + MESSAGES_PER_PAGE)} className="w-full py-2 px-4 mb-2 flex items-center justify-center gap-2 text-[11px] font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 dark:bg-indigo-500/5 border border-indigo-500/20 rounded-lg hover:bg-indigo-500/20 transition-all">
                     <ChevronUp className="h-3.5 w-3.5" />
                     {isRTL ? `عرض ${Math.min(MESSAGES_PER_PAGE, chatMessages.length - visibleMessagesCount)} رسائل أقدم` : `Show ${Math.min(MESSAGES_PER_PAGE, chatMessages.length - visibleMessagesCount)} older messages`}
-                  </button>
-                )}
+                  </button>}
                 
                 {/* Only show the last N messages (paginated from the end) */}
                 {chatMessages.slice(-visibleMessagesCount).map((msg, i) => {
-                  // PLAN DETECTION: Try to parse as structured JSON plan
-                  let parsedPlan: { 
-                    title?: string; 
-                    file?: string;
+                // PLAN DETECTION: Try to parse as structured JSON plan
+                let parsedPlan: {
+                  title?: string;
+                  file?: string;
+                  line?: number;
+                  steps?: Array<{
+                    title: string;
+                    current?: string;
+                    changeTo?: string;
+                  }>;
+                  codeChanges?: Array<{
+                    file: string;
                     line?: number;
-                    steps?: Array<{ title: string; current?: string; changeTo?: string }>;
-                    codeChanges?: Array<{ file: string; line?: number; code: string }>;
-                  } | null = null;
-                  let isPlanCard = false;
-                  
-                  // ASSET PICKER DETECTION
-                  let assetPicker: {
-                    type: string;
-                    message: string;
-                    originalRequest: string;
-                    assets: Array<{ filename: string; url: string; file_type: string }>;
-                  } | null = null;
-                  
-                  if (msg.role === 'assistant') {
-                    // Try to extract JSON plan from content (may be mixed with text)
-                    const content = msg.content;
-                    
-                    // Method 1: Try direct JSON parse
-                    try {
-                      const parsed = JSON.parse(content);
-                      if (parsed.type === 'asset_picker' && parsed.assets) {
-                        assetPicker = parsed;
-                      } else if (parsed.type === 'plan' || (parsed.title && (parsed.steps || parsed.codeChanges))) {
-                        parsedPlan = parsed;
-                        isPlanCard = true;
+                    code: string;
+                  }>;
+                } | null = null;
+                let isPlanCard = false;
+
+                // ASSET PICKER DETECTION
+                let assetPicker: {
+                  type: string;
+                  message: string;
+                  originalRequest: string;
+                  assets: Array<{
+                    filename: string;
+                    url: string;
+                    file_type: string;
+                  }>;
+                } | null = null;
+                if (msg.role === 'assistant') {
+                  // Try to extract JSON plan from content (may be mixed with text)
+                  const content = msg.content;
+
+                  // Method 1: Try direct JSON parse
+                  try {
+                    const parsed = JSON.parse(content);
+                    if (parsed.type === 'asset_picker' && parsed.assets) {
+                      assetPicker = parsed;
+                    } else if (parsed.type === 'plan' || parsed.title && (parsed.steps || parsed.codeChanges)) {
+                      parsedPlan = parsed;
+                      isPlanCard = true;
+                    }
+                  } catch {
+                    // Method 2: Extract JSON object from mixed content
+                    // First check for asset_picker
+                    const assetPickerMatch = content.match(/\{[\s\S]*"type"\s*:\s*"asset_picker"[\s\S]*\}/);
+                    if (assetPickerMatch) {
+                      try {
+                        const extracted = JSON.parse(assetPickerMatch[0]);
+                        if (extracted.type === 'asset_picker' && extracted.assets) {
+                          assetPicker = extracted;
+                        }
+                      } catch {
+                        // Not valid JSON
                       }
-                    } catch {
-                      // Method 2: Extract JSON object from mixed content
-                      // First check for asset_picker
-                      const assetPickerMatch = content.match(/\{[\s\S]*"type"\s*:\s*"asset_picker"[\s\S]*\}/);
-                      if (assetPickerMatch) {
+                    }
+
+                    // Then check for plan
+                    if (!assetPicker) {
+                      const jsonMatch = content.match(/\{[\s\S]*"type"\s*:\s*"plan"[\s\S]*\}/);
+                      if (jsonMatch) {
                         try {
-                          const extracted = JSON.parse(assetPickerMatch[0]);
-                          if (extracted.type === 'asset_picker' && extracted.assets) {
-                            assetPicker = extracted;
+                          const extracted = JSON.parse(jsonMatch[0]);
+                          if (extracted.title && (extracted.steps || extracted.codeChanges)) {
+                            parsedPlan = extracted;
+                            isPlanCard = true;
                           }
                         } catch {
-                          // Not valid JSON
+                          // Still not valid JSON
                         }
                       }
-                      
-                      // Then check for plan
-                      if (!assetPicker) {
-                        const jsonMatch = content.match(/\{[\s\S]*"type"\s*:\s*"plan"[\s\S]*\}/);
-                        if (jsonMatch) {
+
+                      // Method 3: Look for any JSON with title + steps/codeChanges
+                      if (!isPlanCard) {
+                        const anyJsonMatch = content.match(/\{[\s\S]*"title"[\s\S]*("steps"|"codeChanges")[\s\S]*\}/);
+                        if (anyJsonMatch) {
                           try {
-                            const extracted = JSON.parse(jsonMatch[0]);
+                            const extracted = JSON.parse(anyJsonMatch[0]);
                             if (extracted.title && (extracted.steps || extracted.codeChanges)) {
                               parsedPlan = extracted;
                               isPlanCard = true;
                             }
                           } catch {
-                            // Still not valid JSON
-                          }
-                        }
-                        
-                        // Method 3: Look for any JSON with title + steps/codeChanges
-                        if (!isPlanCard) {
-                          const anyJsonMatch = content.match(/\{[\s\S]*"title"[\s\S]*("steps"|"codeChanges")[\s\S]*\}/);
-                          if (anyJsonMatch) {
-                            try {
-                              const extracted = JSON.parse(anyJsonMatch[0]);
-                              if (extracted.title && (extracted.steps || extracted.codeChanges)) {
-                                parsedPlan = extracted;
-                                isPlanCard = true;
-                              }
-                            } catch {
-                              // Not valid JSON
-                            }
+                            // Not valid JSON
                           }
                         }
                       }
                     }
                   }
-                  
-                  // ASSET PICKER CARD UI (Interactive selection grid)
-                  if (assetPicker && assetPicker.assets?.length > 0) {
-                    return (
-                      <div key={i} className="flex flex-col items-start w-full animate-in fade-in slide-in-from-bottom-1 duration-300">
+                }
+
+                // ASSET PICKER CARD UI (Interactive selection grid)
+                if (assetPicker && assetPicker.assets?.length > 0) {
+                  return <div key={i} className="flex flex-col items-start w-full animate-in fade-in slide-in-from-bottom-1 duration-300">
                         <div className="w-full bg-gradient-to-br from-indigo-500/10 to-purple-500/5 border border-indigo-500/30 rounded-xl overflow-hidden backdrop-blur-sm">
                           {/* Header */}
                           <div className="px-4 py-3 border-b border-indigo-500/20 flex items-center gap-2">
@@ -3029,157 +2894,113 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                           {/* Asset Grid */}
                           <div className="p-4 grid grid-cols-3 gap-3">
                             {assetPicker.assets.map((asset, assetIdx) => {
-                              const isImage = asset.file_type?.startsWith('image/') || 
-                                /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(asset.filename);
-                              
-                              return (
-                                <button
-                                  key={assetIdx}
-                                  onClick={async () => {
-                                    // Send a follow-up message with the selected asset
-                                    const selectionMsg = `Use ${asset.filename} (${asset.url}) for: ${assetPicker.originalRequest || 'my request'}`;
-                                    
-                                    // Add user message
-                                    const { data: userMsgData } = await supabase
-                                      .from('project_chat_messages' as any)
-                                      .insert({ 
-                                        project_id: id, 
-                                        role: 'user', 
-                                        content: selectionMsg 
-                                      } as any)
-                                      .select()
-                                      .single();
-                                    
-                                    if (userMsgData) {
-                                      setChatMessages(prev => [...prev, userMsgData as any]);
-                                    }
-                                    
-                                    // Now trigger the chat/edit flow with the specific file
-                                    setChatInput('');
-                                    setAiEditing(true);
-                                    
-                                    try {
-                                      // Using AGENT mode for targeted edits
-                                      const response = await supabase.functions.invoke('projects-generate', {
-                                        body: {
-                                          action: 'start',
-                                          projectId: id,
-                                          mode: 'agent',
-                                          prompt: selectionMsg,
-                                          currentFiles: generatedFiles,
-                                          uploadedAssets,
-                                          backendContext,
-                                        },
-                                      });
-                                      
-                                      if (response.error) throw new Error(response.error.message);
-                                      
-                                      // AGENT MODE: Returns results directly
-                                      const agentResult = response.data;
-                                      
-                                      if (agentResult?.mode === 'agent' && agentResult?.result) {
-                                        // Agent completed synchronously
-                                        const newFiles = await loadFilesFromDb(id!);
-                                        
-                                        setGeneratedFiles(newFiles);
-                                        setCodeContent(newFiles["/App.js"] || Object.values(newFiles)[0] || "");
-                                        setSandpackKey(prev => prev + 1);
-                                        
-                                        // Add success message
-                                        const successMsg = isRTL 
-                                          ? `✓ تم استخدام ${asset.filename} بنجاح!`
-                                          : `✓ Successfully used ${asset.filename}!`;
-                                        
-                                        const { data: aiMsgData } = await supabase
-                                          .from('project_chat_messages' as any)
-                                          .insert({ 
-                                            project_id: id, 
-                                            role: 'assistant', 
-                                            content: successMsg,
-                                            snapshot: newFiles
-                                          } as any)
-                                          .select()
-                                          .single();
-                                        
-                                        if (aiMsgData) {
-                                          setChatMessages(prev => [...prev, aiMsgData as any]);
-                                        }
-                                        
-                                        toast.success(isRTL ? 'تم تطبيق الصورة!' : 'Image applied!');
-                                      } else if (agentResult?.jobId) {
-                                        // Fallback: job-based polling
-                                        const job = await pollJobUntilDone(agentResult.jobId);
-                                        const newFiles = await loadFilesFromDb(id!);
-                                        
-                                        setGeneratedFiles(newFiles);
-                                        setCodeContent(newFiles["/App.js"] || Object.values(newFiles)[0] || "");
-                                        setSandpackKey(prev => prev + 1);
-                                        
-                                        const successMsg = isRTL 
-                                          ? `✓ تم استخدام ${asset.filename} بنجاح!`
-                                          : `✓ Successfully used ${asset.filename}!`;
-                                        
-                                        const { data: aiMsgData } = await supabase
-                                          .from('project_chat_messages' as any)
-                                          .insert({ 
-                                            project_id: id, 
-                                            role: 'assistant', 
-                                            content: successMsg,
-                                            snapshot: newFiles
-                                          } as any)
-                                          .select()
-                                          .single();
-                                        
-                                        if (aiMsgData) {
-                                          setChatMessages(prev => [...prev, aiMsgData as any]);
-                                        }
-                                        
-                                        toast.success(isRTL ? 'تم تطبيق الصورة!' : 'Image applied!');
-                                      }
-                                    } catch (err: any) {
-                                      console.error('Asset selection error:', err);
-                                      toast.error(isRTL ? 'فشل في تطبيق الصورة' : 'Failed to apply image');
-                                    } finally {
-                                      setAiEditing(false);
-                                    }
-                                  }}
-                                  disabled={aiEditing}
-                                  className="flex flex-col items-center gap-2 p-3 rounded-xl bg-white/5 dark:bg-zinc-900/50 border border-white/10 hover:border-indigo-500/50 hover:bg-indigo-500/10 transition-all duration-200 group disabled:opacity-50"
-                                >
+                          const isImage = asset.file_type?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(asset.filename);
+                          return <button key={assetIdx} onClick={async () => {
+                            // Send a follow-up message with the selected asset
+                            const selectionMsg = `Use ${asset.filename} (${asset.url}) for: ${assetPicker.originalRequest || 'my request'}`;
+
+                            // Add user message
+                            const {
+                              data: userMsgData
+                            } = await supabase.from('project_chat_messages' as any).insert({
+                              project_id: id,
+                              role: 'user',
+                              content: selectionMsg
+                            } as any).select().single();
+                            if (userMsgData) {
+                              setChatMessages(prev => [...prev, userMsgData as any]);
+                            }
+
+                            // Now trigger the chat/edit flow with the specific file
+                            setChatInput('');
+                            setAiEditing(true);
+                            try {
+                              // Using AGENT mode for targeted edits
+                              const response = await supabase.functions.invoke('projects-generate', {
+                                body: {
+                                  action: 'start',
+                                  projectId: id,
+                                  mode: 'agent',
+                                  prompt: selectionMsg,
+                                  currentFiles: generatedFiles,
+                                  uploadedAssets,
+                                  backendContext
+                                }
+                              });
+                              if (response.error) throw new Error(response.error.message);
+
+                              // AGENT MODE: Returns results directly
+                              const agentResult = response.data;
+                              if (agentResult?.mode === 'agent' && agentResult?.result) {
+                                // Agent completed synchronously
+                                const newFiles = await loadFilesFromDb(id!);
+                                setGeneratedFiles(newFiles);
+                                setCodeContent(newFiles["/App.js"] || Object.values(newFiles)[0] || "");
+                                setSandpackKey(prev => prev + 1);
+
+                                // Add success message
+                                const successMsg = isRTL ? `✓ تم استخدام ${asset.filename} بنجاح!` : `✓ Successfully used ${asset.filename}!`;
+                                const {
+                                  data: aiMsgData
+                                } = await supabase.from('project_chat_messages' as any).insert({
+                                  project_id: id,
+                                  role: 'assistant',
+                                  content: successMsg,
+                                  snapshot: newFiles
+                                } as any).select().single();
+                                if (aiMsgData) {
+                                  setChatMessages(prev => [...prev, aiMsgData as any]);
+                                }
+                                toast.success(isRTL ? 'تم تطبيق الصورة!' : 'Image applied!');
+                              } else if (agentResult?.jobId) {
+                                // Fallback: job-based polling
+                                const job = await pollJobUntilDone(agentResult.jobId);
+                                const newFiles = await loadFilesFromDb(id!);
+                                setGeneratedFiles(newFiles);
+                                setCodeContent(newFiles["/App.js"] || Object.values(newFiles)[0] || "");
+                                setSandpackKey(prev => prev + 1);
+                                const successMsg = isRTL ? `✓ تم استخدام ${asset.filename} بنجاح!` : `✓ Successfully used ${asset.filename}!`;
+                                const {
+                                  data: aiMsgData
+                                } = await supabase.from('project_chat_messages' as any).insert({
+                                  project_id: id,
+                                  role: 'assistant',
+                                  content: successMsg,
+                                  snapshot: newFiles
+                                } as any).select().single();
+                                if (aiMsgData) {
+                                  setChatMessages(prev => [...prev, aiMsgData as any]);
+                                }
+                                toast.success(isRTL ? 'تم تطبيق الصورة!' : 'Image applied!');
+                              }
+                            } catch (err: any) {
+                              console.error('Asset selection error:', err);
+                              toast.error(isRTL ? 'فشل في تطبيق الصورة' : 'Failed to apply image');
+                            } finally {
+                              setAiEditing(false);
+                            }
+                          }} disabled={aiEditing} className="flex flex-col items-center gap-2 p-3 rounded-xl bg-white/5 dark:bg-zinc-900/50 border border-white/10 hover:border-indigo-500/50 hover:bg-indigo-500/10 transition-all duration-200 group disabled:opacity-50">
                                   {/* Thumbnail */}
-                                  {isImage ? (
-                                    <div className="w-16 h-16 rounded-lg overflow-hidden bg-zinc-800">
-                                      <img 
-                                        src={asset.url} 
-                                        alt={asset.filename}
-                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                                      />
-                                    </div>
-                                  ) : (
-                                    <div className="w-16 h-16 rounded-lg bg-zinc-800 flex items-center justify-center">
+                                  {isImage ? <div className="w-16 h-16 rounded-lg overflow-hidden bg-zinc-800">
+                                      <img src={asset.url} alt={asset.filename} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
+                                    </div> : <div className="w-16 h-16 rounded-lg bg-zinc-800 flex items-center justify-center">
                                       <FileCode className="h-6 w-6 text-zinc-500" />
-                                    </div>
-                                  )}
+                                    </div>}
                                   
                                   {/* Filename */}
                                   <span className="text-[11px] text-foreground/70 text-center truncate max-w-full group-hover:text-indigo-400 transition-colors">
-                                    {asset.filename.length > 12 
-                                      ? asset.filename.substring(0, 10) + '...' 
-                                      : asset.filename}
+                                    {asset.filename.length > 12 ? asset.filename.substring(0, 10) + '...' : asset.filename}
                                   </span>
-                                </button>
-                              );
-                            })}
+                                </button>;
+                        })}
                           </div>
                         </div>
-                      </div>
-                    );
-                  }
-                  
-                  // PLAN CARD UI (Lovable-style - clean, minimal, professional)
-                  if (isPlanCard && parsedPlan) {
-                    return (
-                      <div key={i} className="flex flex-col items-start w-full">
+                      </div>;
+                }
+
+                // PLAN CARD UI (Lovable-style - clean, minimal, professional)
+                if (isPlanCard && parsedPlan) {
+                  return <div key={i} className="flex flex-col items-start w-full">
                         <div className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg overflow-hidden">
                           {/* Plan Header */}
                           <div className="px-4 py-2.5 border-b border-[#2a2a2a]">
@@ -3194,21 +3015,17 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                             </h3>
                             
                             {/* File Reference */}
-                            {parsedPlan.file && (
-                              <p className="text-[13px] text-zinc-400">
+                            {parsedPlan.file && <p className="text-[13px] text-zinc-400">
                                 <span className="font-medium text-zinc-300">Changes to</span>{' '}
                                 <code className="text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded font-mono text-xs">
                                   {parsedPlan.file}
                                 </code>
                                 {parsedPlan.line && <span className="text-zinc-500"> :</span>}
-                              </p>
-                            )}
+                              </p>}
                             
                             {/* Steps */}
-                            {parsedPlan.steps && parsedPlan.steps.length > 0 && (
-                              <div className="space-y-3">
-                                {parsedPlan.steps.map((step, stepIdx) => (
-                                  <div key={stepIdx}>
+                            {parsedPlan.steps && parsedPlan.steps.length > 0 && <div className="space-y-3">
+                                {parsedPlan.steps.map((step, stepIdx) => <div key={stepIdx}>
                                     {/* Step Title */}
                                     <h4 className="text-[13px] font-semibold text-white mb-1.5">
                                       {stepIdx + 1}. {step.title}
@@ -3216,47 +3033,34 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                                     
                                     {/* Current / Change To */}
                                     <ul className="space-y-1 ml-3">
-                                      {step.current && (
-                                        <li className="text-[13px] text-zinc-400 flex items-center gap-2">
+                                      {step.current && <li className="text-[13px] text-zinc-400 flex items-center gap-2">
                                           <span className="text-zinc-600">•</span>
                                           <span>Current:</span>
                                           <code className="text-zinc-300 bg-zinc-800 px-1.5 py-0.5 rounded font-mono text-xs">
                                             {step.current}
                                           </code>
-                                        </li>
-                                      )}
-                                      {step.changeTo && (
-                                        <li className="text-[13px] text-zinc-400 flex items-center gap-2">
+                                        </li>}
+                                      {step.changeTo && <li className="text-[13px] text-zinc-400 flex items-center gap-2">
                                           <span className="text-zinc-600">•</span>
                                           <span>Change to:</span>
                                           <code className="text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded font-mono text-xs">
                                             {step.changeTo}
                                           </code>
-                                        </li>
-                                      )}
+                                        </li>}
                                     </ul>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
+                                  </div>)}
+                              </div>}
                             
                             {/* Code Changes */}
-                            {parsedPlan.codeChanges && parsedPlan.codeChanges.length > 0 && (
-                              <div className="space-y-2">
+                            {parsedPlan.codeChanges && parsedPlan.codeChanges.length > 0 && <div className="space-y-2">
                                 <h4 className="text-[13px] font-semibold text-white">Code Changes:</h4>
-                                {parsedPlan.codeChanges.map((change, changeIdx) => (
-                                  <div key={changeIdx} className="bg-[#0d0d0d] border border-[#252525] rounded-lg overflow-hidden">
+                                {parsedPlan.codeChanges.map((change, changeIdx) => <div key={changeIdx} className="bg-[#0d0d0d] border border-[#252525] rounded-lg overflow-hidden">
                                     {/* File header */}
                                     <div className="px-3 py-1.5 bg-[#151515] border-b border-[#252525] flex items-center justify-between">
                                       <span className="text-[11px] text-zinc-500 font-mono">
                                         // {change.file}{change.line ? ` (line ${change.line})` : ''}
                                       </span>
-                                      <button 
-                                        onClick={() => navigator.clipboard.writeText(change.code)}
-                                        className="text-zinc-600 hover:text-zinc-400 transition-colors"
-                                        title="Copy code"
-                                        aria-label="Copy code"
-                                      >
+                                      <button onClick={() => navigator.clipboard.writeText(change.code)} className="text-zinc-600 hover:text-zinc-400 transition-colors" title="Copy code" aria-label="Copy code">
                                         <Copy className="h-3 w-3" />
                                       </button>
                                     </div>
@@ -3264,155 +3068,145 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                                     <pre className="px-3 py-2.5 text-[12px] font-mono text-emerald-400 overflow-x-auto whitespace-pre-wrap">
                                       {change.code}
                                     </pre>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
+                                  </div>)}
+                              </div>}
                           </div>
                           
                           {/* Action Button */}
                           <div className="px-4 py-3 border-t border-[#2a2a2a]">
-                            <button
-                              onClick={async () => {
-                                // Switch to Code mode immediately
-                                setLeftPanelMode('code');
-                                
-                                setAiEditing(true);
-                                setGenerationSteps([
-                                  { label: isRTL ? 'تنفيذ الخطة...' : 'Applying changes...', status: 'loading' },
-                                  { label: isRTL ? 'كتابة الكود...' : 'Writing code...', status: 'pending' },
-                                  { label: isRTL ? 'حفظ الملفات...' : 'Saving files...', status: 'pending' },
-                                ]);
-                                
-                                try {
-                                  const response = await supabase.functions.invoke('projects-generate', {
-                                    body: {
-                                      action: 'start',
-                                      projectId: id,
-                                      mode: 'execute',
-                                      planToExecute: msg.content,
-                                      userInstructions: userInstructions,
-                                    },
-                                  });
-                                  
-                                  if (response.error) throw new Error(response.error.message);
-                                  
-                                  const jobId = response.data?.jobId;
-                                  if (jobId) {
-                                    setGenerationSteps(prev => prev.map((s, idx) => 
-                                      idx === 0 ? { ...s, status: 'completed' } : 
-                                      idx === 1 ? { ...s, status: 'loading' } : s
-                                    ));
-                                    
-                                    const job = await pollJobUntilDone(jobId);
-                                    const newFiles = await loadFilesFromDb(id!);
-                                    
-                                    setGenerationSteps(prev => prev.map((s, idx) => 
-                                      idx <= 1 ? { ...s, status: 'completed' } : 
-                                      idx === 2 ? { ...s, status: 'loading' } : s
-                                    ));
-                                    
-                                    setGeneratedFiles(newFiles);
-                                    setCodeContent(newFiles["/App.js"] || Object.values(newFiles)[0] || "");
-                                    
-                                    // Build Lovable-style response with plan summary
-                                    const planTitle = parsedPlan.title || 'Changes';
-                                    const changedFiles = parsedPlan.codeChanges?.map((c: any) => c.file).filter(Boolean) || [parsedPlan.file].filter(Boolean);
-                                    const uniqueChangedFiles = [...new Set(changedFiles)];
-                                    const stepsSummary = parsedPlan.steps?.map((s: any) => s.title).join('. ') || '';
-                                    
-                                    // Create a structured Lovable-style message
-                                    const successMsg = JSON.stringify({
-                                      type: 'execution_result',
-                                      title: planTitle,
-                                      summary: stepsSummary || (isRTL ? 'تم تطبيق التغييرات بنجاح' : 'Successfully applied the requested changes'),
-                                      files: uniqueChangedFiles
-                                    });
-                                    
-                                    const { data: msgData } = await supabase
-                                      .from('project_chat_messages' as any)
-                                      .insert({ 
-                                        project_id: id, 
-                                        role: 'assistant', 
-                                        content: successMsg,
-                                        snapshot: newFiles 
-                                      } as any)
-                                      .select()
-                                      .single();
-                                    
-                                    if (msgData) setChatMessages(prev => [...prev, msgData as any]);
-                                    toast.success(isRTL ? 'تم تنفيذ الخطة بنجاح!' : 'Plan executed successfully!');
-                                  }
-                                  
-                                  setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
-                                } catch (err: any) {
-                                  console.error('Execute plan error:', err);
-                                  toast.error(isRTL ? 'فشل في تنفيذ الخطة' : 'Failed to apply changes');
-                                  setGenerationSteps([]);
-                                } finally {
-                                  setAiEditing(false);
-                                }
-                              }}
-                              disabled={aiEditing}
-                              className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-zinc-100 text-black text-[13px] font-medium rounded-lg transition-colors disabled:opacity-50"
-                            >
+                            <button onClick={async () => {
+                          // Switch to Code mode immediately
+                          setLeftPanelMode('code');
+                          setAiEditing(true);
+                          setGenerationSteps([{
+                            label: isRTL ? 'تنفيذ الخطة...' : 'Applying changes...',
+                            status: 'loading'
+                          }, {
+                            label: isRTL ? 'كتابة الكود...' : 'Writing code...',
+                            status: 'pending'
+                          }, {
+                            label: isRTL ? 'حفظ الملفات...' : 'Saving files...',
+                            status: 'pending'
+                          }]);
+                          try {
+                            const response = await supabase.functions.invoke('projects-generate', {
+                              body: {
+                                action: 'start',
+                                projectId: id,
+                                mode: 'execute',
+                                planToExecute: msg.content,
+                                userInstructions: userInstructions
+                              }
+                            });
+                            if (response.error) throw new Error(response.error.message);
+                            const jobId = response.data?.jobId;
+                            if (jobId) {
+                              setGenerationSteps(prev => prev.map((s, idx) => idx === 0 ? {
+                                ...s,
+                                status: 'completed'
+                              } : idx === 1 ? {
+                                ...s,
+                                status: 'loading'
+                              } : s));
+                              const job = await pollJobUntilDone(jobId);
+                              const newFiles = await loadFilesFromDb(id!);
+                              setGenerationSteps(prev => prev.map((s, idx) => idx <= 1 ? {
+                                ...s,
+                                status: 'completed'
+                              } : idx === 2 ? {
+                                ...s,
+                                status: 'loading'
+                              } : s));
+                              setGeneratedFiles(newFiles);
+                              setCodeContent(newFiles["/App.js"] || Object.values(newFiles)[0] || "");
+
+                              // Build Lovable-style response with plan summary
+                              const planTitle = parsedPlan.title || 'Changes';
+                              const changedFiles = parsedPlan.codeChanges?.map((c: any) => c.file).filter(Boolean) || [parsedPlan.file].filter(Boolean);
+                              const uniqueChangedFiles = [...new Set(changedFiles)];
+                              const stepsSummary = parsedPlan.steps?.map((s: any) => s.title).join('. ') || '';
+
+                              // Create a structured Lovable-style message
+                              const successMsg = JSON.stringify({
+                                type: 'execution_result',
+                                title: planTitle,
+                                summary: stepsSummary || (isRTL ? 'تم تطبيق التغييرات بنجاح' : 'Successfully applied the requested changes'),
+                                files: uniqueChangedFiles
+                              });
+                              const {
+                                data: msgData
+                              } = await supabase.from('project_chat_messages' as any).insert({
+                                project_id: id,
+                                role: 'assistant',
+                                content: successMsg,
+                                snapshot: newFiles
+                              } as any).select().single();
+                              if (msgData) setChatMessages(prev => [...prev, msgData as any]);
+                              toast.success(isRTL ? 'تم تنفيذ الخطة بنجاح!' : 'Plan executed successfully!');
+                            }
+                            setGenerationSteps(prev => prev.map(s => ({
+                              ...s,
+                              status: 'completed'
+                            })));
+                          } catch (err: any) {
+                            console.error('Execute plan error:', err);
+                            toast.error(isRTL ? 'فشل في تنفيذ الخطة' : 'Failed to apply changes');
+                            setGenerationSteps([]);
+                          } finally {
+                            setAiEditing(false);
+                          }
+                        }} disabled={aiEditing} className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-zinc-100 text-black text-[13px] font-medium rounded-lg transition-colors disabled:opacity-50">
                               <Sparkles className="h-3.5 w-3.5" />
                               {isRTL ? 'تنفيذ الخطة' : 'Implement Plan'}
                             </button>
                           </div>
                         </div>
-                      </div>
-                    );
-                  }
-                  
-      // Regular message bubble with Markdown support (Lovable-style)
-                  const isAssistant = msg.role === 'assistant';
-                  
-                  // Helper to filter out plan JSON from display content
-                  let displayContent = msg.content;
-                  if (isAssistant && isPlanCard) {
-                    // Strip the JSON plan object from the chat bubble text so it doesn't look messy
-                    displayContent = msg.content.replace(/\{[\s\S]*"type"\s*:\s*"plan"[\s\S]*\}/g, '').trim();
-                    // If stripping left us with nothing, or just punctuation, use a default summary
-                    if (displayContent.length < 5) displayContent = isRTL ? 'إليك خطة العمل المقترحة:' : 'Here is the proposed plan:';
-                  }
+                      </div>;
+                }
 
-                  // EXECUTION RESPONSE FORMAT: Clean Lovable-style format
-                  // Detect structured execution_result OR verbose execution response
-                  let executionResult: { type: string; title: string; summary: string; files: string[] } | null = null;
-                  try {
-                    const parsed = JSON.parse(msg.content);
-                    if (parsed.type === 'execution_result') {
-                      executionResult = parsed;
-                    }
-                  } catch { /* not JSON */ }
-                  
-                  const isExecutionResponse = executionResult || (isAssistant && msg.content && msg.content.length > 150 && 
-                    (msg.content.includes('implement') || msg.content.includes('add') || msg.content.includes('update') || 
-                     msg.content.includes('تم') || msg.content.includes('أضفت') || msg.content.includes('عدلت')));
-                  
-                  if (isExecutionResponse && !isPlanCard) {
-                    // Use structured data if available, otherwise extract from verbose text
-                    let summary: string;
-                    let uniqueFiles: string[];
-                    
-                    if (executionResult) {
-                      summary = executionResult.summary;
-                      uniqueFiles = executionResult.files || [];
-                    } else {
-                      // Extract summary from verbose response - get first 2-3 sentences
-                      const sentences = msg.content.split(/[.!?]+/).filter((s: string) => s.trim().length > 0);
-                      summary = sentences.slice(0, 2).join('. ').trim() + (sentences.length > 2 ? '.' : '');
-                      // Extract files mentioned in the response
-                      const fileMatches = msg.content.match(/(?:\/\w+(?:\.tsx?|\.jsx?|\.css)?|App\.js|App\.tsx|index\.js)/g) || [];
-                      uniqueFiles = [...new Set(fileMatches)].slice(0, 3) as string[];
-                    }
-                    
-                    return (
-                      <div key={i} className={cn(
-                        "flex flex-col group animate-in fade-in slide-in-from-bottom-1 duration-300",
-                        "items-start w-full"
-                      )}>
+                // Regular message bubble with Markdown support (Lovable-style)
+                const isAssistant = msg.role === 'assistant';
+
+                // Helper to filter out plan JSON from display content
+                let displayContent = msg.content;
+                if (isAssistant && isPlanCard) {
+                  // Strip the JSON plan object from the chat bubble text so it doesn't look messy
+                  displayContent = msg.content.replace(/\{[\s\S]*"type"\s*:\s*"plan"[\s\S]*\}/g, '').trim();
+                  // If stripping left us with nothing, or just punctuation, use a default summary
+                  if (displayContent.length < 5) displayContent = isRTL ? 'إليك خطة العمل المقترحة:' : 'Here is the proposed plan:';
+                }
+
+                // EXECUTION RESPONSE FORMAT: Clean Lovable-style format
+                // Detect structured execution_result OR verbose execution response
+                let executionResult: {
+                  type: string;
+                  title: string;
+                  summary: string;
+                  files: string[];
+                } | null = null;
+                try {
+                  const parsed = JSON.parse(msg.content);
+                  if (parsed.type === 'execution_result') {
+                    executionResult = parsed;
+                  }
+                } catch {/* not JSON */}
+                const isExecutionResponse = executionResult || isAssistant && msg.content && msg.content.length > 150 && (msg.content.includes('implement') || msg.content.includes('add') || msg.content.includes('update') || msg.content.includes('تم') || msg.content.includes('أضفت') || msg.content.includes('عدلت'));
+                if (isExecutionResponse && !isPlanCard) {
+                  // Use structured data if available, otherwise extract from verbose text
+                  let summary: string;
+                  let uniqueFiles: string[];
+                  if (executionResult) {
+                    summary = executionResult.summary;
+                    uniqueFiles = executionResult.files || [];
+                  } else {
+                    // Extract summary from verbose response - get first 2-3 sentences
+                    const sentences = msg.content.split(/[.!?]+/).filter((s: string) => s.trim().length > 0);
+                    summary = sentences.slice(0, 2).join('. ').trim() + (sentences.length > 2 ? '.' : '');
+                    // Extract files mentioned in the response
+                    const fileMatches = msg.content.match(/(?:\/\w+(?:\.tsx?|\.jsx?|\.css)?|App\.js|App\.tsx|index\.js)/g) || [];
+                    uniqueFiles = [...new Set(fileMatches)].slice(0, 3) as string[];
+                  }
+                  return <div key={i} className={cn("flex flex-col group animate-in fade-in slide-in-from-bottom-1 duration-300", "items-start w-full")}>
                         <div className="w-full bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border border-indigo-500/30 rounded-lg overflow-hidden backdrop-blur-sm">
                           {/* Header with checkmark */}
                           <div className="px-4 py-3 border-b border-indigo-500/20 flex items-center gap-2">
@@ -3428,120 +3222,73 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                             </p>
                             
                             {/* Files edited section */}
-                            {uniqueFiles.length > 0 && (
-                              <div className="space-y-2">
+                            {uniqueFiles.length > 0 && <div className="space-y-2">
                                 <p className="text-[11px] text-foreground/60 font-semibold uppercase tracking-wide">
                                   {isRTL ? 'الملفات المعدلة' : 'Files Modified'}
                                 </p>
                                 <div className="space-y-1 ml-2">
-                                  {uniqueFiles.map((file, idx) => (
-                                    <div key={idx} className="flex items-center gap-2 text-[12px] text-foreground/70">
+                                  {uniqueFiles.map((file, idx) => <div key={idx} className="flex items-center gap-2 text-[12px] text-foreground/70">
                                       <FileCode className="h-3 w-3 text-indigo-500" />
                                       <code className="font-mono text-indigo-600 dark:text-indigo-400">{file}</code>
-                                    </div>
-                                  ))}
+                                    </div>)}
                                 </div>
-                              </div>
-                            )}
+                              </div>}
                           </div>
                         </div>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div key={i} className={cn(
-                      "flex flex-col group animate-in fade-in slide-in-from-bottom-1 duration-300",
-                      msg.role === 'user' ? "items-end" : "items-start"
-                    )}>
-                      <div className={cn(
-                        "max-w-[90%] px-4 py-3 rounded-2xl shadow-sm transition-all",
-                        msg.role === 'user' 
-                          ? "bg-indigo-600 text-white rounded-br-md text-[13px] leading-relaxed"
-                          : "bg-[#fafafa] dark:bg-[#1a1a1a] text-foreground rounded-bl-md border border-[#e5e5e5] dark:border-[#2a2a2a]"
-                      )}>
-                        {isAssistant ? (
-                          <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1.5 prose-headings:my-2 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-table:my-2 prose-pre:my-2 prose-code:text-[12px] prose-code:bg-zinc-100 dark:prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none text-[13px] leading-relaxed">
+                      </div>;
+                }
+                return <div key={i} className={cn("flex flex-col group animate-in fade-in slide-in-from-bottom-1 duration-300", msg.role === 'user' ? "items-end" : "items-start")}>
+                      <div className={cn("max-w-[90%] px-4 py-3 rounded-2xl shadow-sm transition-all", msg.role === 'user' ? "bg-indigo-600 text-white rounded-br-md text-[13px] leading-relaxed" : "bg-[#fafafa] dark:bg-[#1a1a1a] text-foreground rounded-bl-md border border-[#e5e5e5] dark:border-[#2a2a2a]")}>
+                        {isAssistant ? <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1.5 prose-headings:my-2 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-table:my-2 prose-pre:my-2 prose-code:text-[12px] prose-code:bg-zinc-100 dark:prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none text-[13px] leading-relaxed">
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>
                               {displayContent}
                             </ReactMarkdown>
-                          </div>
-                        ) : (
-                          <div className="space-y-2">
+                          </div> : <div className="space-y-2">
                             {/* Show attached images/PDFs if any */}
-                            {(msg as any).images && Array.isArray((msg as any).images) && (msg as any).images.length > 0 && (
-                              <div className="flex flex-wrap gap-2 mb-2">
+                            {(msg as any).images && Array.isArray((msg as any).images) && (msg as any).images.length > 0 && <div className="flex flex-wrap gap-2 mb-2">
                                 {(msg as any).images.map((imgSrc: string, imgIdx: number) => {
-                                  // Check if it's a PDF (has [PDF:filename] marker)
-                                  if (typeof imgSrc === 'string' && imgSrc.startsWith('[PDF:')) {
-                                    const endMarker = imgSrc.indexOf(']');
-                                    const pdfName = endMarker > 0 ? imgSrc.substring(5, endMarker) : 'PDF';
-                                    return (
-                                      <div 
-                                        key={imgIdx}
-                                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800 border border-indigo-500/30"
-                                      >
+                          // Check if it's a PDF (has [PDF:filename] marker)
+                          if (typeof imgSrc === 'string' && imgSrc.startsWith('[PDF:')) {
+                            const endMarker = imgSrc.indexOf(']');
+                            const pdfName = endMarker > 0 ? imgSrc.substring(5, endMarker) : 'PDF';
+                            return <div key={imgIdx} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800 border border-indigo-500/30">
                                         <span className="text-lg">📄</span>
                                         <span className="text-xs text-slate-300 max-w-[100px] truncate">{pdfName}</span>
-                                      </div>
-                                    );
-                                  }
-                                  // Regular image
-                                  return (
-                                    <img 
-                                      key={imgIdx}
-                                      src={imgSrc}
-                                      alt={`Attached ${imgIdx + 1}`}
-                                      className="max-w-[120px] max-h-[80px] rounded-lg object-cover border border-white/20"
-                                    />
-                                  );
-                                })}
-                              </div>
-                            )}
+                                      </div>;
+                          }
+                          // Regular image
+                          return <img key={imgIdx} src={imgSrc} alt={`Attached ${imgIdx + 1}`} className="max-w-[120px] max-h-[80px] rounded-lg object-cover border border-white/20" />;
+                        })}
+                              </div>}
                             {/* Show attachment indicator if no images but marker exists (after reload) */}
-                            {(!(msg as any).images || (msg as any).images.length === 0) && msg.content?.startsWith('[ATTACHMENTS:') && (
-                              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800/50 border border-indigo-500/20 mb-2">
+                            {(!(msg as any).images || (msg as any).images.length === 0) && msg.content?.startsWith('[ATTACHMENTS:') && <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800/50 border border-indigo-500/20 mb-2">
                                 <span className="text-sm">📎</span>
                                 <span className="text-xs text-slate-400">
                                   {(() => {
-                                    const match = msg.content.match(/^\[ATTACHMENTS:(\d+)\]/);
-                                    const count = match ? parseInt(match[1]) : 0;
-                                    return isRTL ? `${count} مرفق` : `${count} attachment${count > 1 ? 's' : ''} included`;
-                                  })()}
+                            const match = msg.content.match(/^\[ATTACHMENTS:(\d+)\]/);
+                            const count = match ? parseInt(match[1]) : 0;
+                            return isRTL ? `${count} مرفق` : `${count} attachment${count > 1 ? 's' : ''} included`;
+                          })()}
                                 </span>
-                              </div>
-                            )}
+                              </div>}
                             <div className="text-[13px] leading-relaxed">
                               {/* Strip attachment marker from display */}
                               {msg.content?.replace(/^\[ATTACHMENTS:\d+\]/, '')}
                             </div>
-                          </div>
-                        )}
+                          </div>}
                       </div>
                       
                       {/* Revert Button - Right below the AI message */}
-                      {msg.role === 'assistant' && msg.snapshot && (
-                        <button
-                          onClick={() => handleRevert(msg.id)}
-                          className="mt-1.5 flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium text-muted-foreground hover:text-indigo-500 hover:bg-indigo-500/10 transition-all active:scale-95"
-                          title={isRTL ? 'الرجوع لهذه النقطة' : 'Revert to this point'}
-                        >
+                      {msg.role === 'assistant' && msg.snapshot && <button onClick={() => handleRevert(msg.id)} className="mt-1.5 flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium text-muted-foreground hover:text-indigo-500 hover:bg-indigo-500/10 transition-all active:scale-95" title={isRTL ? 'الرجوع لهذه النقطة' : 'Revert to this point'}>
                           <RefreshCw className="h-3 w-3" />
                           {isRTL ? 'استعادة' : 'Restore'}
-                        </button>
-                      )}
+                        </button>}
                       
                       {/* Theme Info Card - Show AFTER user messages only, and keep it visible */}
-                      {msg.role === 'user' && creationPromptInfo && (
-                        <div className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg overflow-hidden mt-2">
+                      {msg.role === 'user' && creationPromptInfo && <div className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg overflow-hidden mt-2">
                           <div className="px-4 py-2.5 border-b border-[#2a2a2a] flex items-center justify-between">
                             <span className="text-[13px] text-zinc-500">{isRTL ? 'تم إرسال هذا للذكاء الاصطناعي' : 'Sent to AI'}</span>
-                            <button
-                              onClick={() => navigator.clipboard.writeText(creationPromptInfo.finalPrompt)}
-                              className="text-zinc-600 hover:text-zinc-400 transition-colors"
-                              title={isRTL ? 'نسخ الكل' : 'Copy all'}
-                              aria-label={isRTL ? 'نسخ الكل' : 'Copy all'}
-                            >
+                            <button onClick={() => navigator.clipboard.writeText(creationPromptInfo.finalPrompt)} className="text-zinc-600 hover:text-zinc-400 transition-colors" title={isRTL ? 'نسخ الكل' : 'Copy all'} aria-label={isRTL ? 'نسخ الكل' : 'Copy all'}>
                               <Copy className="h-3 w-3" />
                             </button>
                           </div>
@@ -3551,12 +3298,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                                 <span className="text-[11px] uppercase tracking-wider font-semibold text-zinc-500">
                                   {isRTL ? 'طلب المستخدم' : 'User Prompt'}
                                 </span>
-                                <button
-                                  onClick={() => navigator.clipboard.writeText(creationPromptInfo.userPrompt)}
-                                  className="text-zinc-600 hover:text-zinc-400 transition-colors"
-                                  title={isRTL ? 'نسخ' : 'Copy'}
-                                  aria-label={isRTL ? 'نسخ' : 'Copy'}
-                                >
+                                <button onClick={() => navigator.clipboard.writeText(creationPromptInfo.userPrompt)} className="text-zinc-600 hover:text-zinc-400 transition-colors" title={isRTL ? 'نسخ' : 'Copy'} aria-label={isRTL ? 'نسخ' : 'Copy'}>
                                   <Copy className="h-3 w-3" />
                                 </button>
                               </div>
@@ -3568,12 +3310,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                                 <span className="text-[11px] uppercase tracking-wider font-semibold text-zinc-500">
                                   {isRTL ? 'الثيم المختار (محقون)' : 'Selected Theme (Injected)'}
                                 </span>
-                                <button
-                                  onClick={() => navigator.clipboard.writeText(creationPromptInfo.themeInstructions || `THEME: ${creationPromptInfo.themeId}`)}
-                                  className="text-zinc-600 hover:text-zinc-400 transition-colors"
-                                  title={isRTL ? 'نسخ' : 'Copy'}
-                                  aria-label={isRTL ? 'نسخ' : 'Copy'}
-                                >
+                                <button onClick={() => navigator.clipboard.writeText(creationPromptInfo.themeInstructions || `THEME: ${creationPromptInfo.themeId}`)} className="text-zinc-600 hover:text-zinc-400 transition-colors" title={isRTL ? 'نسخ' : 'Copy'} aria-label={isRTL ? 'نسخ' : 'Copy'}>
                                   <Copy className="h-3 w-3" />
                                 </button>
                               </div>
@@ -3585,112 +3322,62 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                                 <span className="text-[11px] uppercase tracking-wider font-semibold text-zinc-500">
                                   {isRTL ? 'البرومبت النهائي' : 'Final Prompt'}
                                 </span>
-                                <button
-                                  onClick={() => navigator.clipboard.writeText(creationPromptInfo.finalPrompt)}
-                                  className="text-zinc-600 hover:text-zinc-400 transition-colors"
-                                  title={isRTL ? 'نسخ' : 'Copy'}
-                                  aria-label={isRTL ? 'نسخ' : 'Copy'}
-                                >
+                                <button onClick={() => navigator.clipboard.writeText(creationPromptInfo.finalPrompt)} className="text-zinc-600 hover:text-zinc-400 transition-colors" title={isRTL ? 'نسخ' : 'Copy'} aria-label={isRTL ? 'نسخ' : 'Copy'}>
                                   <Copy className="h-3 w-3" />
                                 </button>
                               </div>
                               <pre className="px-3 py-2 bg-[#0d0d0d] border border-[#252525] rounded-lg text-[12px] font-mono text-emerald-300 overflow-x-auto whitespace-pre-wrap">{creationPromptInfo.finalPrompt}</pre>
                             </div>
                           </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                        </div>}
+                    </div>;
+              })}
                   
                   {/* AI Working Indicator */}
-                  {(isGenerating || aiEditing) && (
-                    <div className="flex flex-col items-start animate-in fade-in slide-in-from-bottom-2 duration-300 relative z-[100]">
-                      <div 
-                        ref={thinkingBoxRef}
-                        className="bg-muted/60 dark:bg-zinc-900/80 border border-border/30 dark:border-white/10 rounded-2xl rounded-bl-md px-4 py-3 space-y-3 max-w-[95%] shadow-sm relative z-10 overflow-visible ring-1 ring-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.1)]"
-                      >
+                  {(isGenerating || aiEditing) && <div className="flex flex-col items-start animate-in fade-in slide-in-from-bottom-2 duration-300 relative z-[100]">
+                      <div ref={thinkingBoxRef} className="bg-muted/60 dark:bg-zinc-900/80 border border-border/30 dark:border-white/10 rounded-2xl rounded-bl-md px-4 py-3 space-y-3 max-w-[95%] shadow-sm relative z-10 overflow-visible ring-1 ring-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.1)]">
                         {/* Trace Flow Loader - Browser animation (Chat mode only) */}
-                        {leftPanelMode === 'chat' && (
-                          <div className="w-full h-[140px] rounded-lg overflow-hidden bg-zinc-950/50 mb-2">
+                        {leftPanelMode === 'chat' && <div className="w-full h-[140px] rounded-lg overflow-hidden bg-zinc-950/50 mb-2">
                             <TraceFlowLoader />
-                          </div>
-                        )}
+                          </div>}
 
                         {/* Header */}
                         <div className="flex items-center gap-2 relative z-20">
-                          <Sparkles className={cn(
-                            "h-4 w-4 animate-pulse",
-                            leftPanelMode === 'chat' ? "text-emerald-500" : "text-blue-500"
-                          )} />
+                          <Sparkles className={cn("h-4 w-4 animate-pulse", leftPanelMode === 'chat' ? "text-emerald-500" : "text-blue-500")} />
                           <p className="text-[13px] text-foreground font-medium">
-                            {isGenerating 
-                              ? (isRTL ? 'جاري إنشاء مشروعك...' : 'Building your project...') 
-                              : leftPanelMode === 'chat'
-                                ? (isRTL ? 'جاري التفكير...' : 'Thinking...')
-                                : (isRTL ? 'جاري تطبيق التعديلات...' : 'Applying your changes...')}
+                            {isGenerating ? isRTL ? 'جاري إنشاء مشروعك...' : 'Building your project...' : leftPanelMode === 'chat' ? isRTL ? 'جاري التفكير...' : 'Thinking...' : isRTL ? 'جاري تطبيق التعديلات...' : 'Applying your changes...'}
                           </p>
                         </div>
                         
-                        {isGenerating && (
-                          <p className="text-[11px] text-muted-foreground pl-6 animate-pulse">
+                        {isGenerating && <p className="text-[11px] text-muted-foreground pl-6 animate-pulse">
                             {isRTL ? 'قد يستغرق هذا ما يصل إلى 3 دقائق لضمان أفضل جودة' : 'This may take up to 3 minutes for premium quality'}
-                          </p>
-                        )}
+                          </p>}
                         
                         {/* Progress Steps */}
-                        {(isGenerating || aiEditing) && generationSteps.length > 0 && (
-                          <div className="space-y-1.5 pl-6">
-                            {generationSteps.map((step, idx) => (
-                              <div key={idx} className="flex items-center gap-2">
-                                {step.status === 'completed' ? (
-                                  <div className={cn(
-                                    "w-4 h-4 rounded-full flex items-center justify-center",
-                                    leftPanelMode === 'chat' ? "bg-emerald-500" : "bg-blue-500"
-                                  )}>
+                        {(isGenerating || aiEditing) && generationSteps.length > 0 && <div className="space-y-1.5 pl-6">
+                            {generationSteps.map((step, idx) => <div key={idx} className="flex items-center gap-2">
+                                {step.status === 'completed' ? <div className={cn("w-4 h-4 rounded-full flex items-center justify-center", leftPanelMode === 'chat' ? "bg-emerald-500" : "bg-blue-500")}>
                                     <Check className="h-2.5 w-2.5 text-white" />
-                                  </div>
-                                ) : step.status === 'loading' ? (
-                                  <div className={cn(
-                                    "w-5 h-5 rounded-full border-[3px] border-t-transparent animate-spin",
-                                    leftPanelMode === 'chat' ? "border-emerald-500" : "border-blue-500"
-                                  )} />
-                                ) : (
-                                  <div className="w-4 h-4 rounded-full bg-muted-foreground/30" />
-                                )}
-                                <span className={cn(
-                                  "text-[11px]",
-                                  step.status === 'completed' ? (leftPanelMode === 'chat' ? "text-emerald-500" : "text-blue-500") :
-                                  step.status === 'loading' ? "text-foreground font-medium" :
-                                  "text-muted-foreground"
-                                )}>
+                                  </div> : step.status === 'loading' ? <div className={cn("w-5 h-5 rounded-full border-[3px] border-t-transparent animate-spin", leftPanelMode === 'chat' ? "border-emerald-500" : "border-blue-500")} /> : <div className="w-4 h-4 rounded-full bg-muted-foreground/30" />}
+                                <span className={cn("text-[11px]", step.status === 'completed' ? leftPanelMode === 'chat' ? "text-emerald-500" : "text-blue-500" : step.status === 'loading' ? "text-foreground font-medium" : "text-muted-foreground")}>
                                   {step.label}
                                 </span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                              </div>)}
+                          </div>}
                         
-                        {(isGenerating || aiEditing) && generationSteps.length === 0 && (
-                          <div className="flex items-center gap-2 pl-6">
-                            <div className={cn(
-                              "w-5 h-5 border-[3px] border-t-transparent rounded-full animate-spin",
-                              leftPanelMode === 'chat' ? "border-emerald-500" : "border-blue-500"
-                            )} />
+                        {(isGenerating || aiEditing) && generationSteps.length === 0 && <div className="flex items-center gap-2 pl-6">
+                            <div className={cn("w-5 h-5 border-[3px] border-t-transparent rounded-full animate-spin", leftPanelMode === 'chat' ? "border-emerald-500" : "border-blue-500")} />
                             <span className="text-[11px] text-foreground">
                               {isRTL ? 'معالجة...' : 'Processing...'}
                             </span>
-                          </div>
-                        )}
+                          </div>}
                       </div>
-                    </div>
-                  )}
+                    </div>}
                   <div ref={chatEndRef} className="h-2" />
                 </div>
 
                 {/* Self-Healing: Runtime Error Alert */}
-                {crashReport && (
-                  <div className="mx-4 mb-2 p-3 bg-red-900/20 border border-red-500/40 rounded-xl flex items-center justify-between animate-in slide-in-from-bottom-2 duration-300">
+                {crashReport && <div className="mx-4 mb-2 p-3 bg-red-900/20 border border-red-500/40 rounded-xl flex items-center justify-between animate-in slide-in-from-bottom-2 duration-300">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="p-2 bg-red-500/20 rounded-full shrink-0">
                         <AlertTriangle className="w-4 h-4 text-red-400" />
@@ -3700,15 +3387,11 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                         <p className="text-[10px] text-red-300/70 truncate max-w-[200px]">{crashReport}</p>
                       </div>
                     </div>
-                    <button 
-                      onClick={handleAutoFix}
-                      className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-[11px] font-bold rounded-lg transition-colors flex items-center gap-1.5 shrink-0 active:scale-95"
-                    >
+                    <button onClick={handleAutoFix} className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-[11px] font-bold rounded-lg transition-colors flex items-center gap-1.5 shrink-0 active:scale-95">
                       <Wand2 className="w-3 h-3" />
                       {isRTL ? 'إصلاح تلقائي' : 'Auto-Fix'}
                     </button>
-                  </div>
-                )}
+                  </div>}
 
                 {/* Chat Input Area - FIXED at bottom */}
                 <div className="p-2 border-t border-border/30 dark:border-white/10 shrink-0 space-y-1.5 bg-background/95 dark:bg-[#0c0f14]/95 backdrop-blur-sm">
@@ -3716,182 +3399,89 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                   <div className="flex items-center gap-2 px-1">
                     <div className="flex flex-wrap gap-1.5 flex-1">
                       {/* Dynamic suggestions (2 chips) - update based on last AI response */}
-                      {(dynamicSuggestions.length > 0 
-                        ? dynamicSuggestions 
-                        : [
-                            isRTL ? 'أضف ميزة جديدة' : 'Add a new feature',
-                            isRTL ? 'حسّن التصميم' : 'Improve the design',
-                          ]
-                      ).slice(0, 2).map((suggestion, i) => (
-                        <button
-                          key={i}
-                          onClick={() => setChatInput(suggestion)}
-                          className={cn(
-                            "px-3 py-1 text-[11px] font-medium border rounded-full transition-all",
-                            "bg-indigo-500/10 dark:bg-indigo-500/5 border-indigo-500/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 hover:border-indigo-500/40"
-                          )}
-                        >
+                      {(dynamicSuggestions.length > 0 ? dynamicSuggestions : [isRTL ? 'أضف ميزة جديدة' : 'Add a new feature', isRTL ? 'حسّن التصميم' : 'Improve the design']).slice(0, 2).map((suggestion, i) => <button key={i} onClick={() => setChatInput(suggestion)} className={cn("px-3 py-1 text-[11px] font-medium border rounded-full transition-all", "bg-indigo-500/10 dark:bg-indigo-500/5 border-indigo-500/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 hover:border-indigo-500/40")}>
                           {suggestion}
-                        </button>
-                      ))}
+                        </button>)}
                     </div>
                     
                     {/* Jump to Bottom Button */}
-                    <button
-                      onClick={() => {
-                        if (chatContainerRef.current) {
-                          chatContainerRef.current.scrollTo({
-                            top: chatContainerRef.current.scrollHeight,
-                            behavior: 'smooth'
-                          });
-                        }
-                      }}
-                      className="p-2 rounded-full bg-indigo-500/10 dark:bg-indigo-500/20 border border-indigo-500/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 hover:border-indigo-500/50 transition-all active:scale-95 shrink-0"
-                      title={isRTL ? 'انتقل للأسفل' : 'Jump to bottom'}
-                    >
+                    <button onClick={() => {
+                  if (chatContainerRef.current) {
+                    chatContainerRef.current.scrollTo({
+                      top: chatContainerRef.current.scrollHeight,
+                      behavior: 'smooth'
+                    });
+                  }
+                }} className="p-2 rounded-full bg-indigo-500/10 dark:bg-indigo-500/20 border border-indigo-500/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 hover:border-indigo-500/50 transition-all active:scale-95 shrink-0" title={isRTL ? 'انتقل للأسفل' : 'Jump to bottom'}>
                       <ArrowDown className="h-4 w-4" />
                     </button>
                   </div>
                   
                   <div className="relative flex flex-col gap-2">
                     {/* Attached Images Preview */}
-                    {attachedImages.length > 0 && (
-                      <div className="flex flex-wrap gap-2 px-2">
-                        {attachedImages.map((img, idx) => (
-                          <div key={idx} className="relative group">
-                            <img 
-                              src={img.preview} 
-                              alt={`Attached ${idx + 1}`}
-                              className="h-16 w-16 rounded-lg object-cover border border-indigo-500/30 bg-muted"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => removeAttachedImage(idx)}
-                              className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                              title={isRTL ? 'إزالة' : 'Remove'}
-                            >
+                    {attachedImages.length > 0 && <div className="flex flex-wrap gap-2 px-2">
+                        {attachedImages.map((img, idx) => <div key={idx} className="relative group">
+                            <img src={img.preview} alt={`Attached ${idx + 1}`} className="h-16 w-16 rounded-lg object-cover border border-indigo-500/30 bg-muted" />
+                            <button type="button" onClick={() => removeAttachedImage(idx)} className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity" title={isRTL ? 'إزالة' : 'Remove'}>
                               <X className="h-3 w-3" />
                             </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                          </div>)}
+                      </div>}
 
-                    <form onSubmit={handleChatSubmit} className={cn(
-                      "flex items-end gap-2 bg-muted/30 dark:bg-white/5 border rounded-2xl p-1.5 transition-all",
-                      leftPanelMode === 'chat'
-                        ? "border-emerald-500/40 dark:border-emerald-500/30 focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500/20"
-                        : "border-blue-600/40 dark:border-blue-600/30 focus-within:border-blue-600 focus-within:ring-1 focus-within:ring-blue-600/20"
-                    )}>
-                      <Textarea
-                        value={chatInput}
-                        onChange={(e) => setChatInput(e.target.value)}
-                        placeholder={leftPanelMode === 'code' 
-                          ? (isRTL ? 'وضع الكود مفعل: لدي الصلاحية لتعديل ملفات المشروع مباشرة...' : 'Code Mode Active: I have permission to modify project files directly...') 
-                          : (isRTL ? 'اكتب رسالتك...' : 'Type your message...')}
-                        className={cn(
-                          "flex-1 min-h-[44px] max-h-[160px] bg-transparent border-0 focus-visible:ring-0 rounded-xl resize-none py-2.5 px-3 text-[13px] placeholder:opacity-60",
-                          aiEditing && "opacity-50 pointer-events-none"
-                        )}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            handleChatSubmit(e);
-                          }
-                        }}
-                        onPaste={(e) => handlePaste(e as any)}
-                      />
+                    <form onSubmit={handleChatSubmit} className={cn("flex items-end gap-2 bg-muted/30 dark:bg-white/5 border rounded-2xl p-1.5 transition-all", leftPanelMode === 'chat' ? "border-emerald-500/40 dark:border-emerald-500/30 focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500/20" : "border-blue-600/40 dark:border-blue-600/30 focus-within:border-blue-600 focus-within:ring-1 focus-within:ring-blue-600/20")}>
+                      <Textarea value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder={leftPanelMode === 'code' ? isRTL ? 'وضع الكود مفعل: لدي الصلاحية لتعديل ملفات المشروع مباشرة...' : 'Code Mode Active: I have permission to modify project files directly...' : isRTL ? 'اكتب رسالتك...' : 'Type your message...'} className={cn("flex-1 min-h-[44px] max-h-[160px] bg-transparent border-0 focus-visible:ring-0 rounded-xl resize-none py-2.5 px-3 text-[13px] placeholder:opacity-60", aiEditing && "opacity-50 pointer-events-none")} onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleChatSubmit(e);
+                    }
+                  }} onPaste={e => handlePaste(e as any)} />
                       
                       {/* Send Button with action buttons above */}
                       <div className="flex flex-col items-center gap-1 shrink-0">
                         {/* Action buttons - smaller, above send */}
                         <div className="flex flex-col gap-1">
                           {/* Upload Files Button (Images + PDFs) */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (imageInputRef.current) {
-                                imageInputRef.current.value = '';
-                                imageInputRef.current.click();
-                              }
-                            }}
-                            className={cn(
-                              "h-6 w-6 rounded-md border flex items-center justify-center transition-all active:scale-90",
-                              attachedImages.length > 0
-                                ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-500 hover:bg-indigo-500/30"
-                                : "bg-muted/50 dark:bg-white/5 border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted"
-                            )}
-                            title={isRTL ? 'رفع صور أو PDF' : 'Upload images or PDF'}
-                          >
+                          <button type="button" onClick={() => {
+                        if (imageInputRef.current) {
+                          imageInputRef.current.value = '';
+                          imageInputRef.current.click();
+                        }
+                      }} className={cn("h-6 w-6 rounded-md border flex items-center justify-center transition-all active:scale-90", attachedImages.length > 0 ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-500 hover:bg-indigo-500/30" : "bg-muted/50 dark:bg-white/5 border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted")} title={isRTL ? 'رفع صور أو PDF' : 'Upload images or PDF'}>
                             <Paperclip className="h-3 w-3" />
                           </button>
-                          <input
-                            ref={imageInputRef}
-                            type="file"
-                            accept="image/*,.pdf,application/pdf"
-                            multiple
-                            onChange={handleImageSelect}
-                            className="hidden"
-                            aria-label={isRTL ? 'رفع صور أو PDF' : 'Upload images or PDF'}
-                          />
+                          <input ref={imageInputRef} type="file" accept="image/*,.pdf,application/pdf" multiple onChange={handleImageSelect} className="hidden" aria-label={isRTL ? 'رفع صور أو PDF' : 'Upload images or PDF'} />
                           
                           {/* AMP Button - Amplify/Enhance prompt */}
-                          <button
-                            type="button"
-                            disabled={!chatInput.trim() || isAmplifying || aiEditing}
-                            onClick={async () => {
-                              if (!chatInput.trim()) return;
-                              setIsAmplifying(true);
-                              try {
-                                const response = await supabase.functions.invoke('projects-amp-prompt', {
-                                  body: { prompt: chatInput, mode: leftPanelMode }
-                                });
-                                if (response.data?.amplified) {
-                                  setChatInput(response.data.amplified);
-                                  toast.success(isRTL ? 'تم تحسين الطلب!' : 'Prompt amplified!');
-                                } else {
-                                  toast.error(isRTL ? 'فشل في التحسين' : 'Failed to amplify');
-                                }
-                              } catch (err) {
-                                console.error('AMP error:', err);
-                                toast.error(isRTL ? 'خطأ في التحسين' : 'Amplify error');
-                              } finally {
-                                setIsAmplifying(false);
-                              }
-                            }}
-                            className={cn(
-                              "h-6 w-6 rounded-md border flex items-center justify-center transition-all active:scale-90",
-                              chatInput.trim() && !isAmplifying
-                                ? "bg-gradient-to-br from-amber-500/20 to-orange-500/20 border-amber-500/40 text-amber-500 hover:from-amber-500/30 hover:to-orange-500/30"
-                                : "bg-muted/30 border-border/30 text-muted-foreground/50"
-                            )}
-                            title={isRTL ? 'تحسين الطلب' : 'Amplify prompt'}
-                          >
-                            {isAmplifying ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <Zap className="h-3 w-3" />
-                            )}
+                          <button type="button" disabled={!chatInput.trim() || isAmplifying || aiEditing} onClick={async () => {
+                        if (!chatInput.trim()) return;
+                        setIsAmplifying(true);
+                        try {
+                          const response = await supabase.functions.invoke('projects-amp-prompt', {
+                            body: {
+                              prompt: chatInput,
+                              mode: leftPanelMode
+                            }
+                          });
+                          if (response.data?.amplified) {
+                            setChatInput(response.data.amplified);
+                            toast.success(isRTL ? 'تم تحسين الطلب!' : 'Prompt amplified!');
+                          } else {
+                            toast.error(isRTL ? 'فشل في التحسين' : 'Failed to amplify');
+                          }
+                        } catch (err) {
+                          console.error('AMP error:', err);
+                          toast.error(isRTL ? 'خطأ في التحسين' : 'Amplify error');
+                        } finally {
+                          setIsAmplifying(false);
+                        }
+                      }} className={cn("h-6 w-6 rounded-md border flex items-center justify-center transition-all active:scale-90", chatInput.trim() && !isAmplifying ? "bg-gradient-to-br from-amber-500/20 to-orange-500/20 border-amber-500/40 text-amber-500 hover:from-amber-500/30 hover:to-orange-500/30" : "bg-muted/30 border-border/30 text-muted-foreground/50")} title={isRTL ? 'تحسين الطلب' : 'Amplify prompt'}>
+                            {isAmplifying ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
                           </button>
                         </div>
                         
                         {/* Send Button */}
-                        <Button 
-                          type="submit"
-                          disabled={!chatInput.trim() || aiEditing || isGenerating}
-                          size="icon"
-                          className={cn(
-                            "h-[40px] w-[40px] rounded-xl transition-all shrink-0 shadow-sm text-white",
-                            chatInput.trim() 
-                              ? (leftPanelMode === 'chat' ? "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20" : "bg-blue-600 hover:bg-blue-700 shadow-blue-600/20")
-                              : "bg-muted dark:bg-white/10 text-muted-foreground"
-                          )}
-                        >
-                          {aiEditing || isGenerating ? (
-                            <Loader2 className="h-5 w-5 animate-spin" />
-                          ) : (
-                            <Send className={cn("h-5 w-5", isRTL && "rotate-180")} />
-                          )}
+                        <Button type="submit" disabled={!chatInput.trim() || aiEditing || isGenerating} size="icon" className={cn("h-[40px] w-[40px] rounded-xl transition-all shrink-0 shadow-sm text-white", chatInput.trim() ? leftPanelMode === 'chat' ? "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20" : "bg-blue-600 hover:bg-blue-700 shadow-blue-600/20" : "bg-muted dark:bg-white/10 text-muted-foreground")}>
+                          {aiEditing || isGenerating ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className={cn("h-5 w-5", isRTL && "rotate-180")} />}
                         </Button>
                       </div>
                     </form>
@@ -3905,151 +3495,91 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                     </div>
                   </div>
                 </div>
-              </>
-            )}
+              </>}
           </div>
 
         {/* Right Panel - Studio Canvas */}
-        <div className={cn(
-          "flex-1 flex flex-col bg-[#0c0f14] relative",
-          mobileTab === 'chat' ? "hidden md:flex" : "flex w-full",
-          "h-full overflow-hidden"
-        )}>
+        <div className={cn("flex-1 flex flex-col bg-[#0c0f14] relative", mobileTab === 'chat' ? "hidden md:flex" : "flex w-full", "h-full overflow-hidden")}>
           {/* Project Info Bar - Back, Name, Status - FIXED at top */}
           <div className="flex items-center gap-3 px-4 py-0 h-[56px] bg-gradient-to-r from-zinc-900 to-zinc-900/90 border-b border-white/10 shrink-0 absolute top-0 left-0 right-0 z-[100]">
             {/* Back button - Enhanced */}
-            <button 
-              onClick={() => navigate('/projects')} 
-              className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-all shrink-0 group"
-              title={isRTL ? 'رجوع' : 'Back'}
-            >
+            <button onClick={() => navigate('/projects')} className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-all shrink-0 group" title={isRTL ? 'رجوع' : 'Back'}>
               <ArrowLeft className="h-4 w-4 group-hover:scale-110 transition-transform" />
             </button>
             
             {/* Project name - Editable with Edit/Save Toggle */}
             <div className="flex-1 min-w-0 flex items-center gap-2">
-              <input 
-                type="text"
-                disabled={!isEditingName}
-                value={isEditingName ? editedName : (project?.name || displayProject.name)}
-                onChange={(e) => {
-                  setEditedName(e.target.value);
-                }}
-                className={cn(
-                  "flex-1 min-w-0 text-base md:text-lg font-bold text-white placeholder-zinc-500 border-b-2 transition-colors px-1 py-1",
-                  isEditingName 
-                    ? "bg-transparent border-indigo-500 focus:border-indigo-500 focus:outline-none" 
-                    : "bg-transparent border-transparent cursor-default"
-                )}
-                placeholder={isRTL ? 'اسم المشروع' : 'Project name'}
-              />
-              <button
-                onClick={async () => {
-                  if (isEditingName) {
-                    // Save mode - save to database
-                    if (editedName.trim() && project) {
-                      try {
-                        setSaving(true);
-                        const { error } = await supabase
-                          .from('projects' as any)
-                          .update({ name: editedName.trim() })
-                          .eq('id', project.id);
-                        if (error) throw error;
-                        setProject(prev => prev ? { ...prev, name: editedName.trim() } : null);
-                        setIsEditingName(false);
-                        setEditedName('');
-                        toast.success(isRTL ? 'تم حفظ الاسم' : 'Name saved');
-                      } catch (err) {
-                        toast.error(isRTL ? 'خطأ في الحفظ' : 'Failed to save');
-                      } finally {
-                        setSaving(false);
-                      }
+              <input type="text" disabled={!isEditingName} value={isEditingName ? editedName : project?.name || displayProject.name} onChange={e => {
+                setEditedName(e.target.value);
+              }} className={cn("flex-1 min-w-0 text-base md:text-lg font-bold text-white placeholder-zinc-500 border-b-2 transition-colors px-1 py-1", isEditingName ? "bg-transparent border-indigo-500 focus:border-indigo-500 focus:outline-none" : "bg-transparent border-transparent cursor-default")} placeholder={isRTL ? 'اسم المشروع' : 'Project name'} />
+              <button onClick={async () => {
+                if (isEditingName) {
+                  // Save mode - save to database
+                  if (editedName.trim() && project) {
+                    try {
+                      setSaving(true);
+                      const {
+                        error
+                      } = await supabase.from('projects' as any).update({
+                        name: editedName.trim()
+                      }).eq('id', project.id);
+                      if (error) throw error;
+                      setProject(prev => prev ? {
+                        ...prev,
+                        name: editedName.trim()
+                      } : null);
+                      setIsEditingName(false);
+                      setEditedName('');
+                      toast.success(isRTL ? 'تم حفظ الاسم' : 'Name saved');
+                    } catch (err) {
+                      toast.error(isRTL ? 'خطأ في الحفظ' : 'Failed to save');
+                    } finally {
+                      setSaving(false);
                     }
-                  } else {
-                    // Edit mode - activate input
-                    setIsEditingName(true);
-                    setEditedName(project?.name || displayProject.name);
                   }
-                }}
-                disabled={saving}
-                className="p-1.5 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/20 rounded-lg transition-all shrink-0 disabled:opacity-50"
-                title={isEditingName ? (isRTL ? 'حفظ' : 'Save') : (isRTL ? 'تعديل' : 'Edit')}
-              >
-                {saving ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : isEditingName ? (
-                  <Check className="h-4 w-4" />
-                ) : (
-                  <Edit2 className="h-4 w-4" />
-                )}
+                } else {
+                  // Edit mode - activate input
+                  setIsEditingName(true);
+                  setEditedName(project?.name || displayProject.name);
+                }
+              }} disabled={saving} className="p-1.5 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/20 rounded-lg transition-all shrink-0 disabled:opacity-50" title={isEditingName ? isRTL ? 'حفظ' : 'Save' : isRTL ? 'تعديل' : 'Edit'}>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : isEditingName ? <Check className="h-4 w-4" /> : <Edit2 className="h-4 w-4" />}
               </button>
             </div>
             
             {/* Status Badge - Enhanced */}
-            <div className={cn(
-              "px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase tracking-wider shrink-0 backdrop-blur-sm border",
-              displayProject.status === 'published' 
-                ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30 shadow-lg shadow-emerald-500/10" 
-                : displayProject.status === 'generating'
-                ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/30 shadow-lg shadow-indigo-500/10 animate-pulse"
-                : "bg-amber-500/20 text-amber-300 border-amber-500/30 shadow-lg shadow-amber-500/10"
-            )}>
-              {displayProject.status === 'published' ? (isRTL ? 'منشور' : 'Live') : 
-               displayProject.status === 'generating' ? (isRTL ? 'بناء' : 'Building') :
-               (isRTL ? 'مسودة' : 'Draft')}
+            <div className={cn("px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase tracking-wider shrink-0 backdrop-blur-sm border", displayProject.status === 'published' ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30 shadow-lg shadow-emerald-500/10" : displayProject.status === 'generating' ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/30 shadow-lg shadow-indigo-500/10 animate-pulse" : "bg-amber-500/20 text-amber-300 border-amber-500/30 shadow-lg shadow-amber-500/10")}>
+              {displayProject.status === 'published' ? isRTL ? 'منشور' : 'Live' : displayProject.status === 'generating' ? isRTL ? 'بناء' : 'Building' : isRTL ? 'مسودة' : 'Draft'}
             </div>
           </div>
 
           {/* Preview/Code Content - Full Height with top padding for fixed header */}
           <div className="flex-1 sandpack-preview-container relative min-h-0 pt-[56px]">
-            <Suspense fallback={
-              <div className="w-full h-full flex items-center justify-center bg-zinc-950 text-white">
+            <Suspense fallback={<div className="w-full h-full flex items-center justify-center bg-zinc-950 text-white">
                 <Loader2 className="w-10 h-10 animate-spin text-indigo-500" />
-              </div>
-            }>
-              {(codeContent || Object.keys(generatedFiles).length > 0) ? (
-                <div className="w-full h-full flex items-center justify-center relative">
+              </div>}>
+              {codeContent || Object.keys(generatedFiles).length > 0 ? <div className="w-full h-full flex items-center justify-center relative">
                   <MatrixOverlay isVisible={aiEditing && leftPanelMode === 'code'} />
-                  <div className={cn(
-                    "h-full w-full transition-all flex flex-col",
-                    deviceView === 'desktop' && "max-w-full",
-                    deviceView === 'tablet' && "max-w-[768px]",
-                    deviceView === 'mobile' && "max-w-[390px]"
-                  )}>
-                    <SandpackStudio 
-                      key={`sandpack-studio-${sandpackKey}`}
-                      files={Object.keys(generatedFiles).length > 0 ? generatedFiles : { "/App.js": codeContent || "" }}
-                      onRuntimeError={handleRuntimeCrash}
-                      elementSelectMode={elementSelectMode}
-                      isLoading={isGenerating}
-                      deviceView={deviceView}
-                      onDeviceViewChange={setDeviceView}
-                      onRefresh={refreshPreview}
-                      onDownload={downloadProject}
-                      onPublish={openPublishModal}
-                      isPublishing={publishing}
-                      onElementSelect={(ref, elementInfo) => {
-                        if (elementInfo) setSelectedElementInfo(elementInfo);
-                        setChatInput(prev => prev + (prev ? ' ' : '') + ref + ' ');
-                        setElementSelectMode(false);
-                        toast.success(isRTL ? 'تم تحديد العنصر!' : 'Element selected!');
-                      }}
-                    />
+                  <div className={cn("h-full w-full transition-all flex flex-col", deviceView === 'desktop' && "max-w-full", deviceView === 'tablet' && "max-w-[768px]", deviceView === 'mobile' && "max-w-[390px]")}>
+                    <SandpackStudio key={`sandpack-studio-${sandpackKey}`} files={Object.keys(generatedFiles).length > 0 ? generatedFiles : {
+                    "/App.js": codeContent || ""
+                  }} onRuntimeError={handleRuntimeCrash} elementSelectMode={elementSelectMode} isLoading={isGenerating} deviceView={deviceView} onDeviceViewChange={setDeviceView} onRefresh={refreshPreview} onDownload={downloadProject} onPublish={openPublishModal} isPublishing={publishing} onElementSelect={(ref, elementInfo) => {
+                    if (elementInfo) setSelectedElementInfo(elementInfo);
+                    setChatInput(prev => prev + (prev ? ' ' : '') + ref + ' ');
+                    setElementSelectMode(false);
+                    toast.success(isRTL ? 'تم تحديد العنصر!' : 'Element selected!');
+                  }} />
                   </div>
-                </div>
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-zinc-950 text-white">
+                </div> : <div className="w-full h-full flex items-center justify-center bg-zinc-950 text-white">
                   <div className="text-center space-y-4">
                     <Sparkles className="w-10 h-10 text-amber-500 mx-auto animate-pulse" />
                     <p className="text-sm text-zinc-400">Enter a prompt to generate your project</p>
                   </div>
-                </div>
-              )}
+                </div>}
             </Suspense>
             
             {/* Selected Element Floating Bar */}
-            {selectedElementInfo && (
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-zinc-900 border border-indigo-500/50 p-3 rounded-xl shadow-2xl flex items-center gap-4 z-50 animate-in slide-in-from-bottom-5 max-w-md">
+            {selectedElementInfo && <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-zinc-900 border border-indigo-500/50 p-3 rounded-xl shadow-2xl flex items-center gap-4 z-50 animate-in slide-in-from-bottom-5 max-w-md">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-indigo-400 text-xs font-mono bg-indigo-500/20 px-2 py-0.5 rounded font-bold">
@@ -4061,42 +3591,19 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                     "{selectedElementInfo.innerText.substring(0, 40)}..."
                   </p>
                 </div>
-                <button 
-                  onClick={() => setSelectedElementInfo(null)}
-                  className="p-1.5 text-zinc-500 hover:text-white transition-colors"
-                  title={isRTL ? 'إغلاق' : 'Dismiss'}
-                >
+                <button onClick={() => setSelectedElementInfo(null)} className="p-1.5 text-zinc-500 hover:text-white transition-colors" title={isRTL ? 'إغلاق' : 'Dismiss'}>
                   <X className="w-4 h-4" />
                 </button>
-              </div>
-            )}
+              </div>}
           </div>
         </div>
       </div>
 
       {/* Instructions Drawer - Full Screen on Mobile */}
-      <div 
-        className={cn(
-          "fixed inset-0 z-[1000] transition-all duration-300",
-          instructionsDrawerOpen ? "visible" : "invisible"
-        )}
-      >
-        <div 
-          className={cn(
-            "absolute inset-0 bg-black/60 backdrop-blur-md transition-opacity duration-300",
-            instructionsDrawerOpen ? "opacity-100" : "opacity-0"
-          )}
-          onClick={() => setInstructionsDrawerOpen(false)}
-        />
+      <div className={cn("fixed inset-0 z-[1000] transition-all duration-300", instructionsDrawerOpen ? "visible" : "invisible")}>
+        <div className={cn("absolute inset-0 bg-black/60 backdrop-blur-md transition-opacity duration-300", instructionsDrawerOpen ? "opacity-100" : "opacity-0")} onClick={() => setInstructionsDrawerOpen(false)} />
         
-        <div 
-          className={cn(
-            "absolute inset-x-0 bottom-0 top-auto h-[85vh] md:inset-0 md:top-0 md:left-0 md:right-auto md:bottom-auto md:h-full md:w-full md:max-w-md",
-            "bg-background dark:bg-[#0c0f14] shadow-2xl transition-transform duration-300 ease-out flex flex-col rounded-t-3xl md:rounded-none",
-            "pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]",
-            instructionsDrawerOpen ? "translate-y-0 md:translate-x-0" : "translate-y-full md:translate-y-0 md:-translate-x-full"
-          )}
-        >
+        <div className={cn("absolute inset-x-0 bottom-0 top-auto h-[85vh] md:inset-0 md:top-0 md:left-0 md:right-auto md:bottom-auto md:h-full md:w-full md:max-w-md", "bg-background dark:bg-[#0c0f14] shadow-2xl transition-transform duration-300 ease-out flex flex-col rounded-t-3xl md:rounded-none", "pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]", instructionsDrawerOpen ? "translate-y-0 md:translate-x-0" : "translate-y-full md:translate-y-0 md:-translate-x-full")}>
           {/* Mobile drag handle */}
           <div className="md:hidden flex justify-center py-2 shrink-0">
             <div className="w-12 h-1.5 bg-muted-foreground/30 rounded-full" />
@@ -4117,18 +3624,13 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => setInstructionsDrawerOpen(false)}
-              className="p-2.5 rounded-xl bg-muted/50 dark:bg-white/10 hover:bg-muted dark:hover:bg-white/20 transition-colors"
-              title={isRTL ? 'إغلاق' : 'Close'}
-            >
+            <button onClick={() => setInstructionsDrawerOpen(false)} className="p-2.5 rounded-xl bg-muted/50 dark:bg-white/10 hover:bg-muted dark:hover:bg-white/20 transition-colors" title={isRTL ? 'إغلاق' : 'Close'}>
               <X className="h-5 w-5 text-muted-foreground" />
             </button>
           </div>
 
           {/* Theme Instructions Badge - shows if theme instructions are loaded */}
-          {tempInstructions && tempInstructions.includes('CUSTOM THEME INSTRUCTIONS:') && (
-            <div className="mx-4 mt-4 p-3 bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-orange-500/10 border border-purple-500/20 rounded-xl">
+          {tempInstructions && tempInstructions.includes('CUSTOM THEME INSTRUCTIONS:') && <div className="mx-4 mt-4 p-3 bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-orange-500/10 border border-purple-500/20 rounded-xl">
               <div className="flex items-center gap-2">
                 <Palette className="h-4 w-4 text-purple-500" />
                 <p className="text-xs text-purple-600 dark:text-purple-400 font-semibold">
@@ -4136,52 +3638,33 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                 </p>
               </div>
               <p className="text-[10px] text-muted-foreground mt-1">
-                {isRTL 
-                  ? 'تعليمات الثيم المخصصة ستُطبق على جميع التعديلات.'
-                  : 'Custom theme instructions will be applied to all edits.'}
+                {isRTL ? 'تعليمات الثيم المخصصة ستُطبق على جميع التعديلات.' : 'Custom theme instructions will be applied to all edits.'}
               </p>
-            </div>
-          )}
+            </div>}
 
           {/* Tip Box */}
           <div className="mx-4 mt-4 p-3 bg-indigo-500/10 dark:bg-indigo-500/5 border border-indigo-500/20 rounded-xl">
             <p className="text-xs text-indigo-600 dark:text-indigo-400">
               <span className="font-bold">💡 {isRTL ? 'نصيحة:' : 'Tip:'}</span>{' '}
-              {isRTL 
-                ? 'أضف تعليمات مثل "استخدم ألوان داكنة" أو "اجعل التصميم بسيط" لتوجيه الذكاء الاصطناعي.'
-                : 'Add instructions like "Use dark colors" or "Keep the design minimal" to guide the AI.'}
+              {isRTL ? 'أضف تعليمات مثل "استخدم ألوان داكنة" أو "اجعل التصميم بسيط" لتوجيه الذكاء الاصطناعي.' : 'Add instructions like "Use dark colors" or "Keep the design minimal" to guide the AI.'}
             </p>
           </div>
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto p-4 min-h-0">
-            <Textarea
-              value={tempInstructions}
-              onChange={(e) => setTempInstructions(e.target.value)}
-              placeholder={isRTL 
-                ? 'مثال:\n- استخدم ألوان زاهية\n- اجعل الأزرار كبيرة\n- أضف رسوم متحركة...' 
-                : 'Example:\n- Use vibrant colors\n- Make buttons large\n- Add smooth animations...'}
-              className="min-h-[180px] w-full bg-muted/30 dark:bg-white/5 border-border/50 dark:border-white/10 text-sm resize-none focus-visible:ring-purple-500/50 rounded-xl placeholder:text-muted-foreground/50"
-            />
+            <Textarea value={tempInstructions} onChange={e => setTempInstructions(e.target.value)} placeholder={isRTL ? 'مثال:\n- استخدم ألوان زاهية\n- اجعل الأزرار كبيرة\n- أضف رسوم متحركة...' : 'Example:\n- Use vibrant colors\n- Make buttons large\n- Add smooth animations...'} className="min-h-[180px] w-full bg-muted/30 dark:bg-white/5 border-border/50 dark:border-white/10 text-sm resize-none focus-visible:ring-purple-500/50 rounded-xl placeholder:text-muted-foreground/50" />
           </div>
 
           {/* Footer */}
           <div className="flex items-center justify-center gap-3 px-4 py-4 border-t border-border/50 dark:border-white/10 shrink-0 bg-muted/20 dark:bg-white/5">
-            <Button 
-              variant="outline" 
-              onClick={() => setInstructionsDrawerOpen(false)} 
-              className="flex-1 h-12 text-muted-foreground border-border/50 dark:border-white/10 rounded-xl font-medium"
-            >
+            <Button variant="outline" onClick={() => setInstructionsDrawerOpen(false)} className="flex-1 h-12 text-muted-foreground border-border/50 dark:border-white/10 rounded-xl font-medium">
               {isRTL ? 'إلغاء' : 'Cancel'}
             </Button>
-            <Button
-              onClick={() => {
-                setUserInstructions(tempInstructions);
-                setInstructionsDrawerOpen(false);
-                toast.success(isRTL ? 'تم حفظ التعليمات!' : 'Instructions saved!');
-              }}
-              className="flex-1 h-12 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl"
-            >
+            <Button onClick={() => {
+              setUserInstructions(tempInstructions);
+              setInstructionsDrawerOpen(false);
+              toast.success(isRTL ? 'تم حفظ التعليمات!' : 'Instructions saved!');
+            }} className="flex-1 h-12 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl">
               {isRTL ? 'حفظ التعليمات' : 'Save Instructions'}
             </Button>
           </div>
@@ -4189,8 +3672,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       </div>
 
       {/* Publish Modal */}
-      {showPublishModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      {showPublishModal && <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 max-w-md w-full p-6 space-y-5">
             {/* Header */}
             <div className="text-center">
@@ -4198,16 +3680,10 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                 <ExternalLink className="h-7 w-7 text-white" />
               </div>
               <h2 className="text-xl font-bold text-zinc-900 dark:text-white">
-                {project?.subdomain 
-                  ? (isRTL ? 'تحديث المشروع' : 'Update Project')
-                  : (isRTL ? 'نشر المشروع' : 'Publish Project')
-                }
+                {project?.subdomain ? isRTL ? 'تحديث المشروع' : 'Update Project' : isRTL ? 'نشر المشروع' : 'Publish Project'}
               </h2>
               <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-                {project?.subdomain 
-                  ? (isRTL ? 'سيتم تحديث موقعك الحالي' : 'Your existing site will be updated')
-                  : (isRTL ? 'اختر اسم موقعك الفريد' : 'Choose your unique site name')
-                }
+                {project?.subdomain ? isRTL ? 'سيتم تحديث موقعك الحالي' : 'Your existing site will be updated' : isRTL ? 'اختر اسم موقعك الفريد' : 'Choose your unique site name'}
               </p>
             </div>
 
@@ -4215,125 +3691,65 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
             <div>
               <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 block mb-2">
                 {isRTL ? 'اسم الموقع' : 'Site Name'}
-                {project?.subdomain && (
-                  <span className="text-amber-600 dark:text-amber-400 ml-2">
+                {project?.subdomain && <span className="text-amber-600 dark:text-amber-400 ml-2">
                     ({isRTL ? 'مُقفل' : 'Locked'})
-                  </span>
-                )}
+                  </span>}
               </label>
-              <div className={`flex items-center gap-0 rounded-xl border overflow-hidden ${
-                project?.subdomain 
-                  ? 'border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50' 
-                  : 'border-zinc-300 dark:border-zinc-700 focus-within:ring-2 focus-within:ring-indigo-500/50'
-              }`}>
-                <input
-                  type="text"
-                  value={subdomainInput}
-                  onChange={(e) => !project?.subdomain && handleSubdomainChange(e.target.value)}
-                  placeholder={isRTL ? 'my-app' : 'my-app'}
-                  className={`flex-1 px-4 py-3 text-base focus:outline-none ${
-                    project?.subdomain 
-                      ? 'bg-zinc-50 dark:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400 cursor-not-allowed' 
-                      : 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder:text-zinc-400'
-                  }`}
-                  autoFocus={!project?.subdomain}
-                  maxLength={30}
-                  readOnly={!!project?.subdomain}
-                  disabled={!!project?.subdomain}
-                />
+              <div className={`flex items-center gap-0 rounded-xl border overflow-hidden ${project?.subdomain ? 'border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50' : 'border-zinc-300 dark:border-zinc-700 focus-within:ring-2 focus-within:ring-indigo-500/50'}`}>
+                <input type="text" value={subdomainInput} onChange={e => !project?.subdomain && handleSubdomainChange(e.target.value)} placeholder={isRTL ? 'my-app' : 'my-app'} className={`flex-1 px-4 py-3 text-base focus:outline-none ${project?.subdomain ? 'bg-zinc-50 dark:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400 cursor-not-allowed' : 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder:text-zinc-400'}`} autoFocus={!project?.subdomain} maxLength={30} readOnly={!!project?.subdomain} disabled={!!project?.subdomain} />
                 <span className="px-3 py-3 bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 text-sm font-medium border-l border-zinc-300 dark:border-zinc-600">
                   .wakti.ai
                 </span>
               </div>
               
               {/* Locked notice for existing subdomain */}
-              {project?.subdomain && (
-                <div className="mt-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50">
+              {project?.subdomain && <div className="mt-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50">
                   <p className="text-xs text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
                     <Lock className="h-3 w-3 flex-shrink-0" />
-                    {isRTL 
-                      ? 'لا يمكن تغيير اسم الموقع بعد النشر الأول'
-                      : 'Site name cannot be changed after first publish'
-                    }
+                    {isRTL ? 'لا يمكن تغيير اسم الموقع بعد النشر الأول' : 'Site name cannot be changed after first publish'}
                   </p>
-                </div>
-              )}
+                </div>}
               
               {/* First-time warning */}
-              {!project?.subdomain && subdomainInput && !subdomainError && (
-                <div className="mt-2 p-2.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50">
+              {!project?.subdomain && subdomainInput && !subdomainError && <div className="mt-2 p-2.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50">
                   <p className="text-xs text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
                     <AlertTriangle className="h-3 w-3 flex-shrink-0" />
-                    {isRTL 
-                      ? 'تنبيه: لا يمكن تغيير اسم الموقع بعد النشر الأول'
-                      : 'Note: You can only choose the site name once. It cannot be changed later.'
-                    }
+                    {isRTL ? 'تنبيه: لا يمكن تغيير اسم الموقع بعد النشر الأول' : 'Note: You can only choose the site name once. It cannot be changed later.'}
                   </p>
-                </div>
-              )}
+                </div>}
               
               {/* Error message */}
-              {subdomainError && !project?.subdomain && (
-                <p className="text-xs text-red-500 mt-2 flex items-center gap-1">
+              {subdomainError && !project?.subdomain && <p className="text-xs text-red-500 mt-2 flex items-center gap-1">
                   <AlertTriangle className="h-3 w-3" />
                   {subdomainError}
-                </p>
-              )}
+                </p>}
               
               {/* Preview URL */}
-              {subdomainInput && !subdomainError && (
-                <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2">
+              {subdomainInput && !subdomainError && <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2">
                   {isRTL ? 'رابط موقعك: ' : 'Your site URL: '}
                   <span className="font-mono font-semibold">https://{subdomainInput}.wakti.ai</span>
-                </p>
-              )}
+                </p>}
             </div>
 
             {/* Actions */}
             <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => setShowPublishModal(false)}
-                disabled={publishing}
-                className="flex-1 px-4 py-3 rounded-xl border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors font-medium disabled:opacity-50"
-              >
+              <button onClick={() => setShowPublishModal(false)} disabled={publishing} className="flex-1 px-4 py-3 rounded-xl border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors font-medium disabled:opacity-50">
                 {isRTL ? 'إلغاء' : 'Cancel'}
               </button>
-              <button
-                onClick={publishProject}
-                disabled={publishing || checkingSubdomain || !!subdomainError || !subdomainInput}
-                className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:from-zinc-400 disabled:to-zinc-500 disabled:cursor-not-allowed text-white transition-colors font-semibold flex items-center justify-center gap-2"
-              >
-                {publishing || checkingSubdomain ? (
-                  <>
+              <button onClick={publishProject} disabled={publishing || checkingSubdomain || !!subdomainError || !subdomainInput} className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:from-zinc-400 disabled:to-zinc-500 disabled:cursor-not-allowed text-white transition-colors font-semibold flex items-center justify-center gap-2">
+                {publishing || checkingSubdomain ? <>
                     <Loader2 className="h-4 w-4 animate-spin" />
                     {isRTL ? 'جاري النشر...' : 'Publishing...'}
-                  </>
-                ) : (
-                  <>
+                  </> : <>
                     <ExternalLink className="h-4 w-4" />
-                    {project?.subdomain 
-                      ? (isRTL ? 'تحديث' : 'Update')
-                      : (isRTL ? 'نشر' : 'Publish')
-                    }
-                  </>
-                )}
+                    {project?.subdomain ? isRTL ? 'تحديث' : 'Update' : isRTL ? 'نشر' : 'Publish'}
+                  </>}
               </button>
             </div>
           </div>
-        </div>
-      )}
+        </div>}
       {/* Stock Photo Selector Modal */}
-      {showStockPhotoSelector && (
-        <StockPhotoSelector
-          userId={user?.id || ''}
-          onSelectPhoto={handleStockPhotoSelect}
-          onClose={() => setShowStockPhotoSelector(false)}
-          searchTerm={photoSearchTerm}
-          initialTab={photoSelectorInitialTab}
-        />
-      )}
-      </>
-      )}
-    </div>
-  );
+      {showStockPhotoSelector && <StockPhotoSelector userId={user?.id || ''} onSelectPhoto={handleStockPhotoSelect} onClose={() => setShowStockPhotoSelector(false)} searchTerm={photoSearchTerm} initialTab={photoSelectorInitialTab} />}
+      </>}
+    </div>;
 }
