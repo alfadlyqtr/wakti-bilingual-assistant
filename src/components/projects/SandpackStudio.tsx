@@ -17,7 +17,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { clsx } from "clsx";
-import { INSPECTOR_SCRIPT } from "@/utils/visualInspector";
+import { WAKTI_INSPECTOR_COMPONENT } from "@/utils/waktiInspectorComponent";
 import sandpackI18nBundle from "@/assets/sandpack-i18n-bundle.mjs?raw";
 
 // --- 1. CUSTOM FILE EXPLORER (The Google Look) ---
@@ -291,15 +291,21 @@ export default function SandpackStudio({
     formattedFiles[fixedPath] = content;
   });
   
-  // Add index.js entry point if not present (React 18 style)
-  if (!formattedFiles["/index.js"]) {
-    formattedFiles["/index.js"] = `import React from "react";
+  // ALWAYS inject our custom index.js with the WaktiInspector component
+  // This ensures the inspector runs inside the Sandpack iframe as a React component
+  formattedFiles["/index.js"] = `import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 
+${WAKTI_INSPECTOR_COMPONENT}
+
 const root = createRoot(document.getElementById("root"));
-root.render(<App />);`;
-  }
+root.render(
+  <>
+    <App />
+    <WaktiInspector />
+  </>
+);`;
   
   // Add styles.css if not present
   if (!formattedFiles["/styles.css"]) {
@@ -343,8 +349,7 @@ export * from './bundle.js';`;
 export { LanguageDetector as default } from '../i18next/bundle.js';`;
   }
   
-  // Always set index.html with the Visual Inspector script injected
-  // Inject into BOTH /public/index.html (CRA style) and /index.html (Vite style) to cover all bases
+  // Set index.html (no script injection needed - inspector is now a React component)
   const indexHtmlContent = `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -356,7 +361,6 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
   </head>
   <body>
     <div id="root"></div>
-    <script>${INSPECTOR_SCRIPT}<\/script>
   </body>
 </html>`;
   
