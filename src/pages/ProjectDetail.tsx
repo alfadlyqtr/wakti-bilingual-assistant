@@ -2364,13 +2364,13 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
     setChatInput('');
     
     // Check if the user is asking for love photos or specific photo types
-    const lovePhotoRegex = /\b(love|heart|romance|romantic|valentine)\s+photos?\b/i;
-    const photoRequestRegex = /\b(\w+)\s+photos?\b/i;
-    const myPhotosRegex = /\b(my|uploaded|user)\s+photos?\b/i;
+    const lovePhotoRegex = /\b(love|heart|romance|romantic|valentine)\s+(photos?|images?|pictures?)\b/i;
+    const photoRequestRegex = /\b(\w+)\s+(photos?|images?|pictures?)\b/i;
+    const myPhotosRegex = /\b(my|uploaded|user)\s+(photos?|images?|pictures?)\b/i;
     
-    // Enhanced patterns to catch more image change requests
-    const imagesOfPattern = /\b(images?|photos?|pictures?)\s+(of|about|for|with)\s+(.+?)(?:\.|$|\s+(?:and|or|please|thanks))/i;
-    const changeToImagePattern = /\b(change|replace|swap|switch|update|use)\s+(?:them|it|the\s+\w+)?\s*(?:to|with|into)\s+(?:images?\s+of\s+)?(.+?)(?:\.|$|\s+(?:and|or|please|thanks))/i;
+    // Enhanced patterns to catch more image change requests - fixed capture groups
+    const imagesOfPattern = /\b(images?|photos?|pictures?)\s+(?:of|about|for|with)\s+(.+?)(?:\.|$|\s+(?:and|or|please|thanks|in|on))/i;
+    const changeToPattern = /\b(?:change|replace|swap|switch|update|use)\s+(?:them|it|the\s+\w+|these|those)?\s*(?:to|with|into|for)\s+(.+?)(?:\.|$|\s+(?:and|or|please|thanks))/i;
     
     // Check for "my photos" request
     if (myPhotosRegex.test(userMessage)) {
@@ -2417,21 +2417,21 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
     // Check for "images of X" pattern (e.g., "images of hearts")
     else {
       const imagesOfMatch = userMessage.match(imagesOfPattern);
-      if (imagesOfMatch && imagesOfMatch[3]) {
-        const searchTerm = imagesOfMatch[3].trim().replace(/[.!?]+$/, '').split(/\s+/).slice(0, 3).join(' ');
+      if (imagesOfMatch && imagesOfMatch[2]) {
+        const searchTerm = imagesOfMatch[2].trim().replace(/[.!?]+$/, '').split(/\s+/).slice(0, 3).join(' ');
         if (searchTerm && searchTerm.length > 1) {
           openStockPhotoSelector(searchTerm);
           return;
         }
       }
       
-      // Check for "change to X" or "replace with X" pattern (e.g., "change them to hearts")
-      const changeMatch = userMessage.match(changeToImagePattern);
-      if (changeMatch && changeMatch[2]) {
-        // Check if this is likely an image change request (mentions image-related words nearby)
-        const hasImageContext = /\b(image|photo|picture|carousel|gallery|banner|background|slider)\b/i.test(userMessage);
+      // Check for "change to X" pattern (e.g., "change them to hearts") - fixed capture group
+      const changeMatch = userMessage.match(changeToPattern);
+      if (changeMatch && changeMatch[1]) {
+        // Check if this is likely an image change request (mentions image-related words nearby, including plurals)
+        const hasImageContext = /\b(images?|photos?|pictures?|carousel|gallery|banner|background|slider)\b/i.test(userMessage);
         if (hasImageContext) {
-          const searchTerm = changeMatch[2].trim().replace(/[.!?]+$/, '').split(/\s+/).slice(0, 3).join(' ');
+          const searchTerm = changeMatch[1].trim().replace(/[.!?]+$/, '').replace(/\s*(images?|photos?|pictures?)\s*/gi, '').split(/\s+/).slice(0, 3).join(' ');
           if (searchTerm && searchTerm.length > 1) {
             openStockPhotoSelector(searchTerm);
             return;

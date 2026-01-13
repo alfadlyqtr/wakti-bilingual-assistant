@@ -21,6 +21,7 @@ interface QuickActionButtonsProps {
 }
 
 // Generate context-aware actions based on AI response content
+// Returns EMPTY array if no strong match found (no static fallback)
 const generateActionsFromResponse = (content: string): QuickAction[] => {
   const actions: QuickAction[] = [];
   const lowerContent = content.toLowerCase();
@@ -34,7 +35,7 @@ const generateActionsFromResponse = (content: string): QuickAction[] => {
   }
 
   // Form-related actions
-  if (lowerContent.includes('form') || lowerContent.includes('input') || lowerContent.includes('field')) {
+  if (lowerContent.includes('form') || lowerContent.includes('input') || lowerContent.includes('field') || lowerContent.includes('submit')) {
     actions.push(
       { id: 'validation', label: 'Add Validation', labelAr: 'إضافة تحقق', icon: <Shield className="w-3.5 h-3.5" />, prompt: 'Add form validation with error messages and success states', category: 'security' },
       { id: 'submit-animation', label: 'Add Submit Animation', labelAr: 'إضافة حركة الإرسال', icon: <Sparkles className="w-3.5 h-3.5" />, prompt: 'Add loading spinner and success animation on form submit', category: 'design' }
@@ -42,47 +43,54 @@ const generateActionsFromResponse = (content: string): QuickAction[] => {
   }
 
   // List/Table-related actions
-  if (lowerContent.includes('list') || lowerContent.includes('table') || lowerContent.includes('data') || lowerContent.includes('items')) {
+  if (lowerContent.includes('list') || lowerContent.includes('table') || lowerContent.includes('items') || lowerContent.includes('grid')) {
     actions.push(
       { id: 'filtering', label: 'Add Filtering', labelAr: 'إضافة تصفية', icon: <Zap className="w-3.5 h-3.5" />, prompt: 'Add filtering options to filter the data', category: 'features' },
-      { id: 'sorting', label: 'Add Sorting', labelAr: 'إضافة ترتيب', icon: <Zap className="w-3.5 h-3.5" />, prompt: 'Add sorting functionality to the list/table', category: 'features' },
-      { id: 'pagination', label: 'Add Pagination', labelAr: 'إضافة ترقيم', icon: <Zap className="w-3.5 h-3.5" />, prompt: 'Add pagination with page numbers and navigation', category: 'features' }
+      { id: 'sorting', label: 'Add Sorting', labelAr: 'إضافة ترتيب', icon: <Zap className="w-3.5 h-3.5" />, prompt: 'Add sorting functionality to the list/table', category: 'features' }
     );
   }
 
-  // Component/UI-related actions
-  if (lowerContent.includes('component') || lowerContent.includes('card') || lowerContent.includes('button') || lowerContent.includes('ui')) {
+  // Image/Carousel-related actions
+  if (lowerContent.includes('image') || lowerContent.includes('carousel') || lowerContent.includes('gallery') || lowerContent.includes('photo') || lowerContent.includes('slider')) {
     actions.push(
-      { id: 'animations', label: 'Add Animations', labelAr: 'إضافة حركات', icon: <Sparkles className="w-3.5 h-3.5" />, prompt: 'Add smooth entrance and hover animations using framer-motion', category: 'design' },
-      { id: 'responsive', label: 'Make Responsive', labelAr: 'جعله متجاوب', icon: <Smartphone className="w-3.5 h-3.5" />, prompt: 'Ensure the component is fully responsive on all screen sizes', category: 'mobile' }
+      { id: 'change-images', label: 'Change Images', labelAr: 'تغيير الصور', icon: <Palette className="w-3.5 h-3.5" />, prompt: 'Change the images to different ones', category: 'design' },
+      { id: 'add-lightbox', label: 'Add Lightbox', labelAr: 'إضافة عرض مكبر', icon: <Zap className="w-3.5 h-3.5" />, prompt: 'Add lightbox popup when clicking on images', category: 'features' }
+    );
+  }
+
+  // Button-related actions
+  if (lowerContent.includes('button') || lowerContent.includes('cta') || lowerContent.includes('click')) {
+    actions.push(
+      { id: 'hover-effect', label: 'Add Hover Effect', labelAr: 'إضافة تأثير hover', icon: <Sparkles className="w-3.5 h-3.5" />, prompt: 'Add smooth hover effect and transition to the button', category: 'design' },
+      { id: 'icon', label: 'Add Icon', labelAr: 'إضافة أيقونة', icon: <Plus className="w-3.5 h-3.5" />, prompt: 'Add an appropriate icon to the button', category: 'design' }
     );
   }
 
   // Backend/API-related actions
-  if (lowerContent.includes('backend') || lowerContent.includes('api') || lowerContent.includes('database') || lowerContent.includes('supabase')) {
+  if (lowerContent.includes('backend') || lowerContent.includes('api') || lowerContent.includes('database') || lowerContent.includes('supabase') || lowerContent.includes('fetch')) {
     actions.push(
-      { id: 'auth', label: 'Add Authentication', labelAr: 'إضافة مصادقة', icon: <Shield className="w-3.5 h-3.5" />, prompt: 'Add user authentication to protect this feature', category: 'security' },
-      { id: 'error-handling', label: 'Add Error Handling', labelAr: 'إضافة معالجة الأخطاء', icon: <Shield className="w-3.5 h-3.5" />, prompt: 'Add proper error handling with user-friendly error messages', category: 'security' }
+      { id: 'error-handling', label: 'Add Error Handling', labelAr: 'إضافة معالجة الأخطاء', icon: <Shield className="w-3.5 h-3.5" />, prompt: 'Add proper error handling with user-friendly error messages', category: 'security' },
+      { id: 'loading-state', label: 'Add Loading State', labelAr: 'إضافة حالة التحميل', icon: <Zap className="w-3.5 h-3.5" />, prompt: 'Add loading spinner while data is being fetched', category: 'features' }
     );
   }
 
-  // Style-related actions
-  if (lowerContent.includes('style') || lowerContent.includes('css') || lowerContent.includes('design') || lowerContent.includes('color')) {
+  // Hero/Banner-related actions
+  if (lowerContent.includes('hero') || lowerContent.includes('banner') || lowerContent.includes('landing')) {
     actions.push(
-      { id: 'dark-mode', label: 'Add Dark Mode', labelAr: 'إضافة الوضع الداكن', icon: <Palette className="w-3.5 h-3.5" />, prompt: 'Add dark mode support with theme toggle', category: 'design' },
-      { id: 'spacing', label: 'Improve Spacing', labelAr: 'تحسين المسافات', icon: <Palette className="w-3.5 h-3.5" />, prompt: 'Improve spacing and visual hierarchy', category: 'design' }
+      { id: 'animate-hero', label: 'Animate Hero', labelAr: 'تحريك البانر', icon: <Sparkles className="w-3.5 h-3.5" />, prompt: 'Add entrance animations to the hero section', category: 'design' },
+      { id: 'parallax', label: 'Add Parallax', labelAr: 'إضافة تأثير Parallax', icon: <Zap className="w-3.5 h-3.5" />, prompt: 'Add parallax scrolling effect to the hero section', category: 'features' }
     );
   }
 
-  // Default fallback actions if nothing matched
-  if (actions.length === 0) {
+  // Card-related actions  
+  if (lowerContent.includes('card') || lowerContent.includes('tile') || lowerContent.includes('box')) {
     actions.push(
-      { id: 'animations', label: 'Add Animations', labelAr: 'إضافة حركات', icon: <Sparkles className="w-3.5 h-3.5" />, prompt: 'Add smooth animations to enhance the user experience', category: 'design' },
-      { id: 'responsive', label: 'Make Responsive', labelAr: 'جعله متجاوب', icon: <Smartphone className="w-3.5 h-3.5" />, prompt: 'Ensure everything is fully responsive on mobile devices', category: 'mobile' },
-      { id: 'improve', label: 'Improve Design', labelAr: 'تحسين التصميم', icon: <Palette className="w-3.5 h-3.5" />, prompt: 'Improve the overall visual design and polish', category: 'design' }
+      { id: 'hover-lift', label: 'Add Hover Lift', labelAr: 'إضافة رفع عند التحويم', icon: <Sparkles className="w-3.5 h-3.5" />, prompt: 'Add lift/scale effect on card hover', category: 'design' },
+      { id: 'shadow', label: 'Add Shadow', labelAr: 'إضافة ظل', icon: <Palette className="w-3.5 h-3.5" />, prompt: 'Add elegant shadow to the card', category: 'design' }
     );
   }
 
+  // NO STATIC FALLBACK - only return actions if there's context
   // Limit to 4 actions max
   return actions.slice(0, 4);
 };
