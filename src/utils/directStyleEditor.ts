@@ -21,6 +21,7 @@ interface StyleChanges {
   color?: string;
   bgColor?: string;
   fontSize?: string;
+  fontFamily?: string;
 }
 
 /**
@@ -96,7 +97,7 @@ function findElementInCode(
  */
 function updateOpeningTagStyles(
   openingTag: string,
-  styles: { color?: string; backgroundColor?: string; fontSize?: string }
+  styles: { color?: string; backgroundColor?: string; fontSize?: string; fontFamily?: string }
 ): string {
   // Check if element already has a style prop
   const styleMatch = openingTag.match(/style=\{\{([^}]*)\}\}/);
@@ -129,6 +130,14 @@ function updateOpeningTagStyles(
       }
     }
     
+    if (styles.fontFamily) {
+      if (existingStyles.includes('fontFamily:')) {
+        existingStyles = existingStyles.replace(/fontFamily:\s*['"][^'"]*['"]/g, `fontFamily: '${styles.fontFamily}'`);
+      } else {
+        existingStyles = `${existingStyles}, fontFamily: '${styles.fontFamily}'`;
+      }
+    }
+    
     return openingTag.replace(/style=\{\{[^}]*\}\}/, `style={{${existingStyles}}}`);
   } else {
     // Element has no style prop - add one before the closing >
@@ -136,6 +145,7 @@ function updateOpeningTagStyles(
     if (styles.color) styleObj.push(`color: '${styles.color}'`);
     if (styles.backgroundColor) styleObj.push(`backgroundColor: '${styles.backgroundColor}'`);
     if (styles.fontSize) styleObj.push(`fontSize: '${styles.fontSize}'`);
+    if (styles.fontFamily) styleObj.push(`fontFamily: '${styles.fontFamily}'`);
     
     const styleString = `style={{ ${styleObj.join(', ')} }}`;
     
@@ -183,7 +193,7 @@ export function applyDirectEdits(
   }
   
   // Handle style changes
-  const hasStyleChanges = changes.color || changes.bgColor || changes.fontSize;
+  const hasStyleChanges = changes.color || changes.bgColor || changes.fontSize || changes.fontFamily;
   
   if (hasStyleChanges) {
     const found = findElementInCode(modifiedCode, element);
@@ -192,7 +202,8 @@ export function applyDirectEdits(
       const newOpeningTag = updateOpeningTagStyles(found.openingTag, {
         color: changes.color,
         backgroundColor: changes.bgColor !== 'transparent' ? changes.bgColor : undefined,
-        fontSize: changes.fontSize
+        fontSize: changes.fontSize,
+        fontFamily: changes.fontFamily
       });
       
       // Replace old opening tag with new one
@@ -202,6 +213,7 @@ export function applyDirectEdits(
       if (changes.color) appliedChanges.push('color');
       if (changes.bgColor && changes.bgColor !== 'transparent') appliedChanges.push('background');
       if (changes.fontSize) appliedChanges.push('font size');
+      if (changes.fontFamily) appliedChanges.push('font');
     } else {
       // Fallback: If we can't find the element precisely, try a simpler approach
       // Look for the opening tag pattern and add/modify style there
@@ -218,13 +230,15 @@ export function applyDirectEdits(
           const newOpeningTag = updateOpeningTagStyles(openingTagPart + '>', {
             color: changes.color,
             backgroundColor: changes.bgColor !== 'transparent' ? changes.bgColor : undefined,
-            fontSize: changes.fontSize
+            fontSize: changes.fontSize,
+            fontFamily: changes.fontFamily
           });
           
           modifiedCode = modifiedCode.replace(match[0], newOpeningTag.slice(0, -1) + `>${element.innerText}`);
           if (changes.color) appliedChanges.push('color');
           if (changes.bgColor && changes.bgColor !== 'transparent') appliedChanges.push('background');
           if (changes.fontSize) appliedChanges.push('font size');
+          if (changes.fontFamily) appliedChanges.push('font');
         }
       }
     }
