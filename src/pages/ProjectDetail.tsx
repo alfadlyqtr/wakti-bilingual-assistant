@@ -4000,8 +4000,8 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
             </div>
           </div>
 
-          {/* Preview/Code Content - Full Height with top padding for fixed header */}
-          <div className="flex-1 sandpack-preview-container relative min-h-0 pt-[56px]">
+          {/* Preview/Code Content - Full Height with top padding for fixed header - ONLY IFRAME SCROLLS */}
+          <div className="flex-1 sandpack-preview-container relative min-h-0 pt-[56px] overflow-hidden">
             <Suspense fallback={
               <div className="w-full h-full flex items-center justify-center bg-zinc-950 text-white">
                 <Loader2 className="w-10 h-10 animate-spin text-indigo-500" />
@@ -4011,7 +4011,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                 <div className="w-full h-full flex items-center justify-center relative">
                   <MatrixOverlay isVisible={aiEditing && leftPanelMode === 'code'} />
                   <div className={cn(
-                    "h-full w-full transition-all flex flex-col",
+                    "h-full w-full transition-all flex flex-col overflow-hidden",
                     deviceView === 'desktop' && "max-w-full",
                     deviceView === 'tablet' && "max-w-[768px]",
                     deviceView === 'mobile' && "max-w-[390px]"
