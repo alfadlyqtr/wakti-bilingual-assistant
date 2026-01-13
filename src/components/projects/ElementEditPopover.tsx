@@ -39,6 +39,59 @@ const isTextElement = (tagName: string) => {
   return textTags.includes(tagName.toLowerCase());
 };
 
+// Helper to check if element is an image
+const isImageElement = (tagName: string, className: string = '') => {
+  const imageTags = ['img', 'svg', 'picture', 'video'];
+  const hasImageClass = /\b(image|img|photo|picture|thumbnail|avatar|banner|hero|bg|background)\b/i.test(className);
+  return imageTags.includes(tagName.toLowerCase()) || hasImageClass;
+};
+
+// Helper to get context-aware quick prompts based on element type
+const getContextAwarePrompts = (element: SelectedElementInfo, isRTL: boolean): string[] => {
+  const tag = element.tagName.toLowerCase();
+  const className = element.className || '';
+  
+  // Image elements
+  if (isImageElement(tag, className)) {
+    return isRTL 
+      ? ['غير الصورة', 'أضف تأثير hover', 'اجعلها دائرية', 'أضف ظل']
+      : ['Change the image', 'Add hover effect', 'Make it rounded', 'Add shadow'];
+  }
+  
+  // Button elements
+  if (tag === 'button' || tag === 'a' || className.includes('btn') || className.includes('button')) {
+    return isRTL
+      ? ['أضف تأثير hover', 'اجعله gradient', 'أضف أيقونة', 'غير الشكل']
+      : ['Add hover effect', 'Make it gradient', 'Add an icon', 'Change shape'];
+  }
+  
+  // Heading elements
+  if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tag)) {
+    return isRTL
+      ? ['اجعله أكبر', 'أضف gradient للنص', 'أضف أيقونة', 'غير المحاذاة']
+      : ['Make it bigger', 'Add text gradient', 'Add an icon', 'Change alignment'];
+  }
+  
+  // Container/div elements
+  if (tag === 'div' || tag === 'section' || tag === 'article') {
+    return isRTL
+      ? ['غير الخلفية', 'أضف حدود', 'أضف ظل', 'أضف تأثير حركة']
+      : ['Change background', 'Add border', 'Add shadow', 'Add animation'];
+  }
+  
+  // Input elements
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') {
+    return isRTL
+      ? ['غير الستايل', 'أضف أيقونة', 'أضف تأثير focus', 'اجعله أكبر']
+      : ['Change style', 'Add icon', 'Add focus effect', 'Make it bigger'];
+  }
+  
+  // Default prompts
+  return isRTL 
+    ? ['اجعله أكبر', 'أضف تأثير hover', 'أضف أيقونة', 'اجعله gradient']
+    : ['Make it bigger', 'Add hover effect', 'Add an icon', 'Make it gradient'];
+};
+
 // Helper to parse font size (e.g., "16px" -> 16)
 const parseFontSize = (size: string): number => {
   const match = size?.match(/(\d+)/);
@@ -362,14 +415,9 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
                   }
                 </p>
                 
-                {/* Quick prompts */}
+                {/* Context-aware quick prompts based on element type */}
                 <div className="flex flex-wrap gap-2">
-                  {[
-                    isRTL ? 'اجعله أكبر' : 'Make it bigger',
-                    isRTL ? 'أضف تأثير hover' : 'Add hover effect',
-                    isRTL ? 'أضف أيقونة' : 'Add an icon',
-                    isRTL ? 'اجعله gradient' : 'Make it gradient'
-                  ].map((quick) => (
+                  {getContextAwarePrompts(element, isRTL).map((quick) => (
                     <button
                       key={quick}
                       onClick={() => setAiPrompt(quick)}

@@ -2368,6 +2368,10 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
     const photoRequestRegex = /\b(\w+)\s+photos?\b/i;
     const myPhotosRegex = /\b(my|uploaded|user)\s+photos?\b/i;
     
+    // Enhanced patterns to catch more image change requests
+    const imagesOfPattern = /\b(images?|photos?|pictures?)\s+(of|about|for|with)\s+(.+?)(?:\.|$|\s+(?:and|or|please|thanks))/i;
+    const changeToImagePattern = /\b(change|replace|swap|switch|update|use)\s+(?:them|it|the\s+\w+)?\s*(?:to|with|into)\s+(?:images?\s+of\s+)?(.+?)(?:\.|$|\s+(?:and|or|please|thanks))/i;
+    
     // Check for "my photos" request
     if (myPhotosRegex.test(userMessage)) {
       // Check if user has uploaded photos
@@ -2409,9 +2413,35 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
     else if (lovePhotoRegex.test(userMessage)) {
       openStockPhotoSelector('love');
       return;
-    } else {
+    } 
+    // Check for "images of X" pattern (e.g., "images of hearts")
+    else {
+      const imagesOfMatch = userMessage.match(imagesOfPattern);
+      if (imagesOfMatch && imagesOfMatch[3]) {
+        const searchTerm = imagesOfMatch[3].trim().replace(/[.!?]+$/, '').split(/\s+/).slice(0, 3).join(' ');
+        if (searchTerm && searchTerm.length > 1) {
+          openStockPhotoSelector(searchTerm);
+          return;
+        }
+      }
+      
+      // Check for "change to X" or "replace with X" pattern (e.g., "change them to hearts")
+      const changeMatch = userMessage.match(changeToImagePattern);
+      if (changeMatch && changeMatch[2]) {
+        // Check if this is likely an image change request (mentions image-related words nearby)
+        const hasImageContext = /\b(image|photo|picture|carousel|gallery|banner|background|slider)\b/i.test(userMessage);
+        if (hasImageContext) {
+          const searchTerm = changeMatch[2].trim().replace(/[.!?]+$/, '').split(/\s+/).slice(0, 3).join(' ');
+          if (searchTerm && searchTerm.length > 1) {
+            openStockPhotoSelector(searchTerm);
+            return;
+          }
+        }
+      }
+      
+      // Original simple pattern: "heart photos", "nature photos", etc.
       const photoMatch = userMessage.match(photoRequestRegex);
-      if (photoMatch && photoMatch[1] && !['use', 'upload', 'select', 'choose', 'find', 'get', 'show', 'display', 'add'].includes(photoMatch[1].toLowerCase())) {
+      if (photoMatch && photoMatch[1] && !['use', 'upload', 'select', 'choose', 'find', 'get', 'show', 'display', 'add', 'the', 'my', 'your'].includes(photoMatch[1].toLowerCase())) {
         openStockPhotoSelector(photoMatch[1]);
         return;
       }
