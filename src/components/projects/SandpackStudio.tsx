@@ -75,6 +75,67 @@ interface SelectedElementInfo {
   };
 }
 
+// --- 3. INSPECTABLE PREVIEW COMPONENT ---
+// Uses useSandpack() to properly communicate with the iframe via Sandpack's client API
+const InspectablePreview = ({ 
+  elementSelectMode, 
+  onElementSelect 
+}: { 
+  elementSelectMode?: boolean;
+  onElementSelect?: (elementRef: string, elementInfo?: SelectedElementInfo) => void;
+}) => {
+  const { sandpack } = useSandpack();
+  const prevModeRef = useRef(elementSelectMode);
+
+  // Send inspect mode toggle to ALL active sandpack clients
+  useEffect(() => {
+    if (prevModeRef.current !== elementSelectMode) {
+      prevModeRef.current = elementSelectMode;
+      
+      // Use Sandpack's official API to access clients
+      Object.values(sandpack.clients).forEach((client: any) => {
+        if (client.iframe?.contentWindow) {
+          console.log('[InspectablePreview] Sending WAKTI_TOGGLE_INSPECT:', elementSelectMode);
+          client.iframe.contentWindow.postMessage({
+            type: 'WAKTI_TOGGLE_INSPECT',
+            enabled: elementSelectMode
+          }, '*');
+        }
+      });
+    }
+  }, [elementSelectMode, sandpack.clients]);
+
+  // Listen for element selection from iframe
+  useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data.type === 'WAKTI_ELEMENT_SELECTED' && e.data.payload) {
+        console.log('[InspectablePreview] Element selected:', e.data.payload);
+        const info = e.data.payload as SelectedElementInfo;
+        let ref = `the ${info.tagName}`;
+        if (info.innerText) {
+          ref += ` "${info.innerText.substring(0, 40)}${info.innerText.length > 40 ? '...' : ''}"`;
+        }
+        if (info.className) {
+          const firstClass = info.className.split(' ').filter(Boolean)[0];
+          if (firstClass) ref += ` (.${firstClass})`;
+        }
+        onElementSelect?.(ref, info);
+      }
+    };
+    
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [onElementSelect]);
+
+  return (
+    <SandpackPreview 
+      showNavigator={false} 
+      showOpenInCodeSandbox={false} 
+      style={{ height: '100%' }} 
+    />
+  );
+};
+
 // --- 4. MAIN STUDIO COMPONENT ---
 interface SandpackStudioProps {
   files: Record<string, string>;
@@ -125,39 +186,7 @@ export default function SandpackStudio({
     return true;
   }, [files]);
 
-  // Listen for element selection messages from the iframe
-  useEffect(() => {
-    const handleMessage = (e: MessageEvent) => {
-      if (e.data.type === 'WAKTI_ELEMENT_SELECTED' && e.data.payload) {
-        const info = e.data.payload as SelectedElementInfo;
-        setSelectedElement(info);
-        
-        // Build a natural language reference
-        let ref = `the ${info.tagName}`;
-        if (info.innerText) ref += ` "${info.innerText.substring(0, 40)}${info.innerText.length > 40 ? '...' : ''}"`;
-        if (info.className) {
-          const firstClass = info.className.split(' ').filter(Boolean)[0];
-          if (firstClass) ref += ` (.${firstClass})`;
-        }
-        
-        onElementSelect?.(ref, info);
-      }
-    };
-    
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [onElementSelect]);
-
-  // Toggle inspect mode in iframe when elementSelectMode changes
-  useEffect(() => {
-    const iframe = document.querySelector('.sp-preview-iframe') as HTMLIFrameElement;
-    if (iframe?.contentWindow) {
-      iframe.contentWindow.postMessage({ 
-        type: 'WAKTI_TOGGLE_INSPECT', 
-        enabled: elementSelectMode 
-      }, '*');
-    }
-  }, [elementSelectMode]);
+  // Element selection is now handled by InspectablePreview component
 
   // Fix files for Sandpack - ensure proper React 18 entry point
   const formattedFiles: Record<string, string> = {};
@@ -520,10 +549,9 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                   </div>
                 )}
 
-                <SandpackPreview 
-                  showNavigator={false} 
-                  showOpenInCodeSandbox={false} 
-                  style={{ height: '100%' }} 
+                <InspectablePreview 
+                  elementSelectMode={elementSelectMode}
+                  onElementSelect={onElementSelect}
                 />
 
                 {/* Visual Mode Indicator */}
