@@ -76,7 +76,7 @@ interface SelectedElementInfo {
 }
 
 // --- 3. INSPECTABLE PREVIEW COMPONENT ---
-// Uses useSandpack() to properly communicate with the iframe via Sandpack's client API
+// Uses SandpackPreview ref to directly access the iframe for reliable postMessage communication
 const InspectablePreview = ({ 
   elementSelectMode, 
   onElementSelect 
@@ -85,29 +85,74 @@ const InspectablePreview = ({
   onElementSelect?: (elementRef: string, elementInfo?: SelectedElementInfo) => void;
 }) => {
   const { sandpack } = useSandpack();
-  const prevModeRef = useRef(elementSelectMode);
+  const previewRef = useRef<{ clientId: string; getClient: () => any } | null>(null);
+  const [inspectorReady, setInspectorReady] = useState(false);
+  const retryRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Send inspect mode toggle to ALL active sandpack clients
-  useEffect(() => {
-    if (prevModeRef.current !== elementSelectMode) {
-      prevModeRef.current = elementSelectMode;
-      
-      // Use Sandpack's official API to access clients
-      Object.values(sandpack.clients).forEach((client: any) => {
-        if (client.iframe?.contentWindow) {
-          console.log('[InspectablePreview] Sending WAKTI_TOGGLE_INSPECT:', elementSelectMode);
-          client.iframe.contentWindow.postMessage({
-            type: 'WAKTI_TOGGLE_INSPECT',
-            enabled: elementSelectMode
-          }, '*');
-        }
-      });
+  // Send inspect mode toggle with retry logic
+  const sendToggleMessage = (enabled: boolean) => {
+    // Clear any pending retry
+    if (retryRef.current) {
+      clearTimeout(retryRef.current);
+      retryRef.current = null;
     }
-  }, [elementSelectMode, sandpack.clients]);
 
-  // Listen for element selection from iframe
+    const attemptSend = (attemptsLeft: number) => {
+      // Method 1: Try via previewRef (most reliable)
+      const client = previewRef.current?.getClient?.();
+      const iframeWindow = client?.iframe?.contentWindow;
+      
+      if (iframeWindow) {
+        console.log('[InspectablePreview] Sending WAKTI_TOGGLE_INSPECT via ref:', enabled);
+        iframeWindow.postMessage({ type: 'WAKTI_TOGGLE_INSPECT', enabled }, '*');
+        return;
+      }
+
+      // Method 2: Fallback to sandpack.clients
+      const clients = Object.values(sandpack.clients);
+      for (const c of clients) {
+        const anyClient = c as any;
+        if (anyClient.iframe?.contentWindow) {
+          console.log('[InspectablePreview] Sending WAKTI_TOGGLE_INSPECT via client:', enabled);
+          anyClient.iframe.contentWindow.postMessage({ type: 'WAKTI_TOGGLE_INSPECT', enabled }, '*');
+          return;
+        }
+      }
+
+      // Method 3: Try to find iframe directly in DOM
+      const sandpackIframe = document.querySelector('.sp-preview-container iframe') as HTMLIFrameElement;
+      if (sandpackIframe?.contentWindow) {
+        console.log('[InspectablePreview] Sending WAKTI_TOGGLE_INSPECT via DOM:', enabled);
+        sandpackIframe.contentWindow.postMessage({ type: 'WAKTI_TOGGLE_INSPECT', enabled }, '*');
+        return;
+      }
+
+      // Retry if we have attempts left
+      if (attemptsLeft > 0) {
+        console.log('[InspectablePreview] Iframe not ready, retrying...', attemptsLeft);
+        retryRef.current = setTimeout(() => attemptSend(attemptsLeft - 1), 200);
+      } else {
+        console.warn('[InspectablePreview] Could not find iframe after retries');
+      }
+    };
+
+    attemptSend(15); // Try up to 15 times (3 seconds total)
+  };
+
+  // Listen for inspector ready and element selection
   useEffect(() => {
     const handleMessage = (e: MessageEvent) => {
+      // Inspector loaded confirmation
+      if (e.data.type === 'WAKTI_INSPECTOR_READY') {
+        console.log('[InspectablePreview] Inspector ready received');
+        setInspectorReady(true);
+        // If inspect mode is already on, re-send the toggle
+        if (elementSelectMode) {
+          sendToggleMessage(true);
+        }
+      }
+
+      // Element selected
       if (e.data.type === 'WAKTI_ELEMENT_SELECTED' && e.data.payload) {
         console.log('[InspectablePreview] Element selected:', e.data.payload);
         const info = e.data.payload as SelectedElementInfo;
@@ -124,11 +169,27 @@ const InspectablePreview = ({
     };
     
     window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [onElementSelect]);
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      if (retryRef.current) clearTimeout(retryRef.current);
+    };
+  }, [onElementSelect, elementSelectMode]);
+
+  // Send toggle when mode changes
+  useEffect(() => {
+    sendToggleMessage(!!elementSelectMode);
+  }, [elementSelectMode]);
+
+  // Reset inspector ready state when sandpack restarts
+  useEffect(() => {
+    if (sandpack.status === 'initial' || sandpack.status === 'idle') {
+      setInspectorReady(false);
+    }
+  }, [sandpack.status]);
 
   return (
     <SandpackPreview 
+      ref={previewRef as any}
       showNavigator={false} 
       showOpenInCodeSandbox={false} 
       style={{ height: '100%' }} 
@@ -554,9 +615,9 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                   onElementSelect={onElementSelect}
                 />
 
-                {/* Visual Mode Indicator */}
+{/* Visual Mode Indicator - pointer-events-none so it doesn't block clicks */}
                 {elementSelectMode && (
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-4 py-2 rounded-full text-[10px] md:text-xs font-medium shadow-lg flex items-center gap-2 animate-pulse z-50 whitespace-nowrap">
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-4 py-2 rounded-full text-[10px] md:text-xs font-medium shadow-lg flex items-center gap-2 animate-pulse z-50 whitespace-nowrap pointer-events-none">
                     <MousePointer2 className="w-3.5 h-3.5" />
                     Click to select
                   </div>
