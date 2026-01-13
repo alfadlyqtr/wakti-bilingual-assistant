@@ -6,6 +6,10 @@ export const INSPECTOR_SCRIPT = `
   let isInspectMode = false;
   let selectedElement = null;
 
+  // ========== HANDSHAKE: Notify parent that inspector is loaded ==========
+  window.parent.postMessage({ type: 'WAKTI_INSPECTOR_READY' }, '*');
+  console.log('[Wakti Inspector] Ready signal sent to parent');
+
   // 1. Create the Highlighting Overlay Box
   const overlay = document.createElement('div');
   overlay.id = 'wakti-inspector-overlay';
@@ -43,10 +47,15 @@ export const INSPECTOR_SCRIPT = `
   window.addEventListener('message', (event) => {
     if (event.data.type === 'WAKTI_TOGGLE_INSPECT') {
       isInspectMode = event.data.enabled;
+      console.log('[Wakti Inspector] Inspect mode:', isInspectMode);
       if (!isInspectMode) {
         overlay.style.display = 'none';
         selectedElement = null;
       }
+    }
+    // Ping/pong for debugging connection
+    if (event.data.type === 'WAKTI_INSPECTOR_PING') {
+      window.parent.postMessage({ type: 'WAKTI_INSPECTOR_PONG' }, '*');
     }
   });
 
@@ -131,6 +140,8 @@ export const INSPECTOR_SCRIPT = `
         fontSize: getComputedStyle(target).fontSize,
       }
     };
+
+    console.log('[Wakti Inspector] Element selected:', elementInfo.tagName);
 
     // Send to Parent (Wakti)
     window.parent.postMessage({ 
