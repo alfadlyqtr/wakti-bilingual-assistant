@@ -4247,7 +4247,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
           </div>
 
           {/* Preview/Code Content - Full Height with top padding for fixed header - ONLY IFRAME SCROLLS */}
-          <div className="flex-1 min-h-0 sandpack-preview-container relative pt-[72px] pb-1 overflow-hidden">
+          <div className="flex-1 min-h-0 sandpack-preview-container relative pt-[80px] pb-1 overflow-hidden">
             <Suspense fallback={
               <div className="w-full h-full flex items-center justify-center bg-zinc-950 text-white">
                 <Loader2 className="w-10 h-10 animate-spin text-indigo-500" />
