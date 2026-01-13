@@ -1,5 +1,6 @@
 // WaktiInspector - A React component that runs INSIDE the Sandpack preview
 // This is injected into the index.js entry point so it executes in the iframe
+// ROBUST VERSION - with immediate ready signal and simplified event handling
 
 export const WAKTI_INSPECTOR_COMPONENT = `
 // ========== WAKTI INSPECTOR COMPONENT ==========
@@ -7,74 +8,88 @@ export const WAKTI_INSPECTOR_COMPONENT = `
 function WaktiInspector() {
   const [isInspectMode, setIsInspectMode] = React.useState(false);
   const overlayRef = React.useRef(null);
-  const labelRef = React.useRef(null);
+  const currentTargetRef = React.useRef(null);
 
+  // Create overlay on mount and send READY signal immediately
   React.useEffect(() => {
-    // Create overlay element
+    console.log('[WaktiInspector] Initializing...');
+    
+    // Create overlay element for highlighting
     const overlay = document.createElement('div');
     overlay.id = 'wakti-inspector-overlay';
-    overlay.style.cssText = \`
-      position: fixed;
-      border: 2px solid #6366f1;
-      background-color: rgba(99, 102, 241, 0.1);
-      z-index: 999999;
-      pointer-events: none;
-      display: none;
-      transition: all 0.05s ease;
-      border-radius: 4px;
-    \`;
+    Object.assign(overlay.style, {
+      position: 'fixed',
+      border: '2px solid #6366f1',
+      backgroundColor: 'rgba(99, 102, 241, 0.15)',
+      zIndex: '999999',
+      pointerEvents: 'none',
+      display: 'none',
+      transition: 'all 0.08s ease-out',
+      borderRadius: '4px',
+      boxShadow: '0 0 0 2000px rgba(0, 0, 0, 0.1)'
+    });
     
-    const label = document.createElement('span');
-    label.style.cssText = \`
-      position: absolute;
-      top: -22px;
-      left: -2px;
-      background-color: #6366f1;
-      color: white;
-      padding: 2px 8px;
-      font-size: 10px;
-      border-radius: 4px 4px 0 0;
-      font-family: ui-monospace, monospace;
-      font-weight: 600;
-      white-space: nowrap;
-    \`;
+    // Add label
+    const label = document.createElement('div');
+    Object.assign(label.style, {
+      position: 'absolute',
+      top: '-24px',
+      left: '-2px',
+      backgroundColor: '#6366f1',
+      color: 'white',
+      padding: '3px 10px',
+      fontSize: '11px',
+      borderRadius: '4px 4px 0 0',
+      fontFamily: 'ui-monospace, monospace',
+      fontWeight: '600',
+      whiteSpace: 'nowrap',
+      letterSpacing: '0.5px'
+    });
+    label.id = 'wakti-inspector-label';
     overlay.appendChild(label);
     document.body.appendChild(overlay);
-    
-    overlayRef.current = overlay;
-    labelRef.current = label;
+    overlayRef.current = { overlay, label };
 
-    // Send READY signal to parent
-    window.parent.postMessage({ type: 'WAKTI_INSPECTOR_READY' }, '*');
-    console.log('[WaktiInspector] Component mounted, READY sent');
+    // Send READY signal immediately and repeatedly to ensure parent receives it
+    const sendReady = () => {
+      window.parent.postMessage({ type: 'WAKTI_INSPECTOR_READY' }, '*');
+      console.log('[WaktiInspector] READY signal sent');
+    };
+    
+    // Send immediately
+    sendReady();
+    // Send again after a short delay (in case parent isn't ready)
+    setTimeout(sendReady, 100);
+    setTimeout(sendReady, 500);
+    setTimeout(sendReady, 1000);
 
     return () => {
-      if (overlay.parentNode) {
-        overlay.parentNode.removeChild(overlay);
-      }
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
     };
   }, []);
 
-  // Listen for toggle messages from parent
+  // Listen for messages from parent
   React.useEffect(() => {
     const handleMessage = (event) => {
-      if (event.data.type === 'WAKTI_TOGGLE_INSPECT') {
-        const enabled = event.data.enabled;
+      const { type, enabled } = event.data || {};
+      
+      if (type === 'WAKTI_TOGGLE_INSPECT') {
+        console.log('[WaktiInspector] Toggle inspect mode:', enabled);
         setIsInspectMode(enabled);
-        console.log('[WaktiInspector] Inspect mode:', enabled);
         
-        // Send acknowledgment
+        // Acknowledge the mode change
         window.parent.postMessage({ 
           type: 'WAKTI_INSPECT_MODE_CHANGED', 
           payload: { enabled } 
         }, '*');
         
+        // Hide overlay when mode is disabled
         if (!enabled && overlayRef.current) {
-          overlayRef.current.style.display = 'none';
+          overlayRef.current.overlay.style.display = 'none';
         }
       }
       
-      if (event.data.type === 'WAKTI_INSPECTOR_PING') {
+      if (type === 'WAKTI_INSPECTOR_PING') {
         window.parent.postMessage({ type: 'WAKTI_INSPECTOR_PONG' }, '*');
       }
     };
@@ -83,84 +98,129 @@ function WaktiInspector() {
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  // Mouse tracking for hover highlight
+  // Handle mouse events when in inspect mode
   React.useEffect(() => {
-    if (!isInspectMode) return;
+    if (!isInspectMode || !overlayRef.current) return;
     
-    const overlay = overlayRef.current;
-    const label = labelRef.current;
-    if (!overlay || !label) return;
-
-    const handleMouseMove = (e) => {
-      const target = e.target;
-      if (!target || target === overlay || target === document.body || target === document.documentElement) {
+    const { overlay, label } = overlayRef.current;
+    
+    const updateOverlay = (target) => {
+      if (!target || target === overlay || target.id === 'wakti-inspector-overlay' || target.id === 'wakti-inspector-label') {
         overlay.style.display = 'none';
         return;
       }
-
-      const rect = target.getBoundingClientRect();
-      overlay.style.display = 'block';
-      overlay.style.top = rect.top + 'px';
-      overlay.style.left = rect.left + 'px';
-      overlay.style.width = rect.width + 'px';
-      overlay.style.height = rect.height + 'px';
       
+      // Skip html, body, and root elements
+      if (target === document.body || target === document.documentElement || target.id === 'root') {
+        overlay.style.display = 'none';
+        return;
+      }
+      
+      const rect = target.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) {
+        overlay.style.display = 'none';
+        return;
+      }
+      
+      currentTargetRef.current = target;
+      
+      Object.assign(overlay.style, {
+        display: 'block',
+        top: rect.top + 'px',
+        left: rect.left + 'px',
+        width: rect.width + 'px',
+        height: rect.height + 'px'
+      });
+      
+      // Build label text
       let labelText = target.tagName.toLowerCase();
       if (target.className && typeof target.className === 'string') {
-        const firstClass = target.className.split(' ').filter(c => c && !c.includes('wakti'))[0];
-        if (firstClass) labelText += '.' + firstClass;
+        const cleanClasses = target.className.split(' ').filter(c => c && !c.includes('wakti'));
+        if (cleanClasses[0]) labelText += '.' + cleanClasses[0];
       }
-      label.innerText = labelText;
+      if (target.id) labelText = '#' + target.id;
+      label.textContent = labelText;
     };
 
-    const handleMouseLeave = () => {
-      overlay.style.display = 'none';
+    const handleMouseMove = (e) => {
+      updateOverlay(e.target);
+    };
+
+    const handleMouseOut = (e) => {
+      if (!e.relatedTarget || e.relatedTarget === document.body) {
+        overlay.style.display = 'none';
+      }
     };
 
     const handleClick = (e) => {
+      const target = e.target;
+      if (!target || target === overlay || target.id === 'wakti-inspector-overlay') return;
+      
       e.preventDefault();
       e.stopPropagation();
+      e.stopImmediatePropagation();
 
-      const target = e.target;
-      if (!target || target === overlay) return;
+      // Gather element info
+      const rect = target.getBoundingClientRect();
+      const computedStyle = window.getComputedStyle(target);
       
       const elementInfo = {
         tagName: target.tagName.toLowerCase(),
         className: target.className || '',
         id: target.id || '',
-        innerText: (target.innerText || '').trim().substring(0, 100),
+        innerText: (target.innerText || '').trim().substring(0, 150),
         openingTag: target.outerHTML.split('>')[0] + '>',
         computedStyle: {
-          color: getComputedStyle(target).color,
-          backgroundColor: getComputedStyle(target).backgroundColor,
-          fontSize: getComputedStyle(target).fontSize,
-        }
+          color: computedStyle.color,
+          backgroundColor: computedStyle.backgroundColor,
+          fontSize: computedStyle.fontSize
+        },
+        rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height }
       };
 
-      console.log('[WaktiInspector] Element selected:', elementInfo.tagName);
+      console.log('[WaktiInspector] Element selected:', elementInfo.tagName, elementInfo.innerText.substring(0, 30));
+      
+      // Send to parent
       window.parent.postMessage({ 
         type: 'WAKTI_ELEMENT_SELECTED', 
         payload: elementInfo 
       }, '*');
       
-      // Flash effect
-      overlay.style.backgroundColor = 'rgba(99, 102, 241, 0.3)';
+      // Visual feedback - flash the overlay
+      overlay.style.backgroundColor = 'rgba(99, 102, 241, 0.4)';
+      overlay.style.borderColor = '#818cf8';
       setTimeout(() => {
-        overlay.style.backgroundColor = 'rgba(99, 102, 241, 0.1)';
-      }, 200);
+        overlay.style.backgroundColor = 'rgba(99, 102, 241, 0.15)';
+        overlay.style.borderColor = '#6366f1';
+      }, 150);
     };
 
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseleave', handleMouseLeave);
+    // Use capture phase for reliable event handling
+    document.addEventListener('mousemove', handleMouseMove, true);
+    document.addEventListener('mouseout', handleMouseOut, true);
     document.addEventListener('click', handleClick, true);
+    
+    // Also prevent default on mousedown to avoid text selection while inspecting
+    const handleMouseDown = (e) => {
+      if (isInspectMode) {
+        e.preventDefault();
+      }
+    };
+    document.addEventListener('mousedown', handleMouseDown, true);
+
+    // Set cursor style
+    document.body.style.cursor = 'crosshair';
 
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseleave', handleMouseLeave);
+      document.removeEventListener('mousemove', handleMouseMove, true);
+      document.removeEventListener('mouseout', handleMouseOut, true);
       document.removeEventListener('click', handleClick, true);
+      document.removeEventListener('mousedown', handleMouseDown, true);
+      document.body.style.cursor = '';
+      overlay.style.display = 'none';
     };
   }, [isInspectMode]);
 
-  return null; // Invisible component
+  return null;
 }
 `;
