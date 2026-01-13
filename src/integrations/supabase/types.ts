@@ -2089,6 +2089,50 @@ export type Database = {
           },
         ]
       }
+      project_ai_preferences: {
+        Row: {
+          auto_approve_migrations: boolean | null
+          created_at: string | null
+          id: string
+          preferred_auth_method: string | null
+          preferred_layout_style: string | null
+          project_id: string | null
+          skip_clarifying_questions: boolean | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          auto_approve_migrations?: boolean | null
+          created_at?: string | null
+          id?: string
+          preferred_auth_method?: string | null
+          preferred_layout_style?: string | null
+          project_id?: string | null
+          skip_clarifying_questions?: boolean | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          auto_approve_migrations?: boolean | null
+          created_at?: string | null
+          id?: string
+          preferred_auth_method?: string | null
+          preferred_layout_style?: string | null
+          project_id?: string | null
+          skip_clarifying_questions?: boolean | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_ai_preferences_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_backends: {
         Row: {
           allowed_origins: string[] | null
