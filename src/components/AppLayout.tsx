@@ -585,6 +585,19 @@ export function AppLayout({ children }: AppLayoutProps) {
     }
   }, [location.pathname]);
 
+  // Tag body when on project detail page to lock outer scrolling
+  React.useEffect(() => {
+    const isProjectDetailPage = location.pathname.startsWith('/projects/') && location.pathname.length > 11;
+    if (isProjectDetailPage) {
+      document.body.classList.add('project-detail-page');
+    } else {
+      document.body.classList.remove('project-detail-page');
+    }
+    return () => {
+      document.body.classList.remove('project-detail-page');
+    };
+  }, [location.pathname]);
+
   React.useEffect(() => {
     document.body.style.pointerEvents = '';
     document.body.removeAttribute('data-scroll-locked');

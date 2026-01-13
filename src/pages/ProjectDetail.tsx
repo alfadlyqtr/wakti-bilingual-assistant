@@ -2895,7 +2895,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
   }
 
   return (
-    <div className={cn("flex flex-col h-[100dvh] bg-background overflow-hidden", isRTL && "rtl")}>
+    <div className={cn("fixed inset-0 flex flex-col bg-background overflow-hidden z-10", isRTL && "rtl")}>
 
       {/* Server Tab Content */}
       {mainTab === 'server' ? (
