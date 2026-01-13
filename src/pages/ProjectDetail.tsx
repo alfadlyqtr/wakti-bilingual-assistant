@@ -2963,13 +2963,6 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                 </button>
               </div>
             </div>
-            
-            {mainTab === 'builder' && leftPanelMode === 'code' && (
-              <Button size="sm" variant="ghost" onClick={saveCode} disabled={saving} className="h-7 text-[10px] uppercase font-bold tracking-tight">
-                {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3 mr-1" />}
-                {isRTL ? 'حفظ' : 'Save'}
-              </Button>
-            )}
           </div>
 
           {/* Generated Files - Compact at top */}
