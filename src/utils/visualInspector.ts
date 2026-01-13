@@ -20,7 +20,7 @@ export const INSPECTOR_SCRIPT = `
     z-index: 999999;
     pointer-events: none;
     display: none;
-    transition: all 0.1s ease;
+    transition: all 0.05s ease;
     border-radius: 4px;
   \`;
   
@@ -48,6 +48,13 @@ export const INSPECTOR_SCRIPT = `
     if (event.data.type === 'WAKTI_TOGGLE_INSPECT') {
       isInspectMode = event.data.enabled;
       console.log('[Wakti Inspector] Inspect mode:', isInspectMode);
+      
+      // Send acknowledgment back to parent
+      window.parent.postMessage({ 
+        type: 'WAKTI_INSPECT_MODE_CHANGED', 
+        payload: { enabled: isInspectMode } 
+      }, '*');
+      
       if (!isInspectMode) {
         overlay.style.display = 'none';
         selectedElement = null;

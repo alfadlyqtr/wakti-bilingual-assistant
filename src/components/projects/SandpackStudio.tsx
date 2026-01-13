@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { 
   SandpackProvider, 
   SandpackLayout, 
@@ -87,43 +87,49 @@ const InspectablePreview = ({
   const { sandpack } = useSandpack();
   const previewRef = useRef<{ clientId: string; getClient: () => any } | null>(null);
   const [inspectorReady, setInspectorReady] = useState(false);
+  const [modeAckReceived, setModeAckReceived] = useState(false);
   const retryRef = useRef<NodeJS.Timeout | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+
+  // Find the iframe in the DOM (fallback method)
+  const findIframe = useCallback((): HTMLIFrameElement | null => {
+    // Method 1: Via previewRef
+    const client = previewRef.current?.getClient?.();
+    if (client?.iframe) {
+      return client.iframe;
+    }
+    
+    // Method 2: Via sandpack.clients
+    const clients = Object.values(sandpack.clients);
+    for (const c of clients) {
+      const anyClient = c as any;
+      if (anyClient.iframe) {
+        return anyClient.iframe;
+      }
+    }
+    
+    // Method 3: Direct DOM query
+    const iframe = document.querySelector('.sp-preview-container iframe') as HTMLIFrameElement;
+    return iframe || null;
+  }, [sandpack.clients]);
 
   // Send inspect mode toggle with retry logic
-  const sendToggleMessage = (enabled: boolean) => {
+  const sendToggleMessage = useCallback((enabled: boolean) => {
     // Clear any pending retry
     if (retryRef.current) {
       clearTimeout(retryRef.current);
       retryRef.current = null;
     }
+    
+    setModeAckReceived(false);
 
     const attemptSend = (attemptsLeft: number) => {
-      // Method 1: Try via previewRef (most reliable)
-      const client = previewRef.current?.getClient?.();
-      const iframeWindow = client?.iframe?.contentWindow;
+      const iframe = findIframe();
       
-      if (iframeWindow) {
-        console.log('[InspectablePreview] Sending WAKTI_TOGGLE_INSPECT via ref:', enabled);
-        iframeWindow.postMessage({ type: 'WAKTI_TOGGLE_INSPECT', enabled }, '*');
-        return;
-      }
-
-      // Method 2: Fallback to sandpack.clients
-      const clients = Object.values(sandpack.clients);
-      for (const c of clients) {
-        const anyClient = c as any;
-        if (anyClient.iframe?.contentWindow) {
-          console.log('[InspectablePreview] Sending WAKTI_TOGGLE_INSPECT via client:', enabled);
-          anyClient.iframe.contentWindow.postMessage({ type: 'WAKTI_TOGGLE_INSPECT', enabled }, '*');
-          return;
-        }
-      }
-
-      // Method 3: Try to find iframe directly in DOM
-      const sandpackIframe = document.querySelector('.sp-preview-container iframe') as HTMLIFrameElement;
-      if (sandpackIframe?.contentWindow) {
-        console.log('[InspectablePreview] Sending WAKTI_TOGGLE_INSPECT via DOM:', enabled);
-        sandpackIframe.contentWindow.postMessage({ type: 'WAKTI_TOGGLE_INSPECT', enabled }, '*');
+      if (iframe?.contentWindow) {
+        console.log('[InspectablePreview] Sending WAKTI_TOGGLE_INSPECT:', enabled);
+        iframe.contentWindow.postMessage({ type: 'WAKTI_TOGGLE_INSPECT', enabled }, '*');
+        iframeRef.current = iframe;
         return;
       }
 
@@ -137,9 +143,9 @@ const InspectablePreview = ({
     };
 
     attemptSend(15); // Try up to 15 times (3 seconds total)
-  };
+  }, [findIframe]);
 
-  // Listen for inspector ready and element selection
+  // Listen for inspector ready, mode ack, and element selection
   useEffect(() => {
     const handleMessage = (e: MessageEvent) => {
       // Inspector loaded confirmation
@@ -150,6 +156,17 @@ const InspectablePreview = ({
         if (elementSelectMode) {
           sendToggleMessage(true);
         }
+      }
+
+      // Mode change acknowledgment
+      if (e.data.type === 'WAKTI_INSPECT_MODE_CHANGED') {
+        console.log('[InspectablePreview] Mode ACK received:', e.data.payload);
+        setModeAckReceived(true);
+      }
+
+      // Pong response for debugging
+      if (e.data.type === 'WAKTI_INSPECTOR_PONG') {
+        console.log('[InspectablePreview] Pong received - connection confirmed');
       }
 
       // Element selected
@@ -173,25 +190,40 @@ const InspectablePreview = ({
       window.removeEventListener('message', handleMessage);
       if (retryRef.current) clearTimeout(retryRef.current);
     };
-  }, [onElementSelect, elementSelectMode]);
+  }, [onElementSelect, elementSelectMode, sendToggleMessage]);
 
   // Send toggle when mode changes
   useEffect(() => {
     sendToggleMessage(!!elementSelectMode);
-  }, [elementSelectMode]);
+  }, [elementSelectMode, sendToggleMessage]);
 
   // Reset inspector ready state when sandpack restarts
   useEffect(() => {
     if (sandpack.status === 'initial' || sandpack.status === 'idle') {
       setInspectorReady(false);
+      setModeAckReceived(false);
     }
   }, [sandpack.status]);
+
+  // Debug: Log status when mode is enabled but not working
+  useEffect(() => {
+    if (elementSelectMode && !modeAckReceived) {
+      const timeout = setTimeout(() => {
+        if (!modeAckReceived) {
+          console.warn('[InspectablePreview] Visual Edit mode enabled but no ACK received after 3s');
+          console.log('[InspectablePreview] Status - inspectorReady:', inspectorReady, 'modeAckReceived:', modeAckReceived);
+        }
+      }, 3000);
+      return () => clearTimeout(timeout);
+    }
+  }, [elementSelectMode, modeAckReceived, inspectorReady]);
 
   return (
     <SandpackPreview 
       ref={previewRef as any}
       showNavigator={false} 
-      showOpenInCodeSandbox={false} 
+      showOpenInCodeSandbox={false}
+      showSandpackErrorOverlay={false}
       style={{ height: '100%' }} 
     />
   );
@@ -312,7 +344,8 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
   }
   
   // Always set index.html with the Visual Inspector script injected
-  formattedFiles["/public/index.html"] = `<!DOCTYPE html>
+  // Inject into BOTH /public/index.html (CRA style) and /index.html (Vite style) to cover all bases
+  const indexHtmlContent = `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8">
@@ -326,6 +359,9 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
     <script>${INSPECTOR_SCRIPT}<\/script>
   </body>
 </html>`;
+  
+  formattedFiles["/public/index.html"] = indexHtmlContent;
+  formattedFiles["/index.html"] = indexHtmlContent;
   
   console.log('[SandpackStudio] Files:', Object.keys(formattedFiles));
 
