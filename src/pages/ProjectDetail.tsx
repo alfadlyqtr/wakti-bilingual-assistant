@@ -2895,7 +2895,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
   }
 
   return (
-    <div className={cn("h-full w-full flex flex-col bg-background overflow-hidden", isRTL && "rtl")}>
+    <div className={cn("h-full w-full flex flex-col bg-background overflow-hidden pt-[var(--app-header-h)] md:pt-0", isRTL && "rtl")}>
 
       {/* Server Tab Content */}
       {mainTab === 'server' ? (
@@ -2944,7 +2944,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       </div>
 
       {/* Main Studio Content */}
-      <div className="flex-1 min-h-0 flex overflow-hidden relative h-[calc(100dvh-48px)] md:h-full">
+      <div className="flex-1 min-h-0 flex overflow-hidden relative">
         {/* Left Panel - Cascade-style Control Center */}
         <div className={cn(
           "flex flex-col border-r transition-all duration-300 relative",

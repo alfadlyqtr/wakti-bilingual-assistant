@@ -62,7 +62,8 @@
   body.project-detail-page {
     overflow: hidden !important;
   }
-  /* Ensure AppLayout main content area fills but doesn't overflow on project detail page */
+
+  /* Desktop/tablet layouts use .app-main; keep it locked */
   body.project-detail-page .app-main {
     overflow: hidden !important;
     height: 100% !important;
@@ -72,6 +73,20 @@
     height: 100% !important;
     max-height: 100% !important;
     overflow: hidden !important;
+  }
+
+  /* Mobile layout uses plain <main>. On this page we manage header spacing inside ProjectDetail. */
+  @media (max-width: 767px) {
+    body.project-detail-page main {
+      padding-top: 0 !important;
+      padding-bottom: 0 !important;
+      height: 100dvh !important;
+      overflow: hidden !important;
+    }
+    body.project-detail-page main > * {
+      height: 100% !important;
+      overflow: hidden !important;
+    }
   }
 
   /* Hide scrollbar on the actual scroll container */
