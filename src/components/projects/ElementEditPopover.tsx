@@ -341,11 +341,11 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
                 </Select>
               </div>
 
-              {/* Apply Button */}
+              {/* Apply Button - Direct edits are FREE */}
               <Button
                 onClick={handleApplyDirectEdits}
                 disabled={!Object.values(modified).some(Boolean)}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white mt-2"
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white mt-3"
               >
                 <Check className="h-4 w-4 mr-2" />
                 {isRTL ? 'تطبيق التغييرات' : 'Apply Changes'}
