@@ -3619,18 +3619,6 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                           {isRTL ? 'استعادة' : 'Restore'}
                         </button>
                       )}
-
-                      {/* Quick Action Buttons - After AI responses */}
-                      {msg.role === 'assistant' && !aiEditing && (
-                        <QuickActionButtons
-                          responseContent={msg.content}
-                          onActionClick={(prompt) => {
-                            setChatInput(prompt);
-                          }}
-                          isRTL={isRTL}
-                          className="mt-2"
-                        />
-                      )}
                       
                       {/* Theme Info Card - Show AFTER user messages only, and keep it visible */}
                       {msg.role === 'user' && creationPromptInfo && (
@@ -3866,25 +3854,53 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
 
                 {/* Chat Input Area - FIXED at bottom */}
                 <div className="p-2 border-t border-border/30 dark:border-white/10 shrink-0 space-y-1.5 bg-background/95 dark:bg-[#0c0f14]/95 backdrop-blur-sm">
-                  {/* Inline Suggestions + Jump to Bottom Button */}
+                  {/* Context-Aware Quick Action Buttons + Jump to Bottom */}
                   <div className="flex items-center gap-2 px-1">
                     <div className="flex flex-wrap gap-2 flex-1">
-                      {/* Dynamic suggestions - Lovable style dark chips */}
-                      {(dynamicSuggestions.length > 0 
-                        ? dynamicSuggestions 
-                        : [
-                            isRTL ? 'أضف ميزة جديدة' : 'Add a new feature',
-                            isRTL ? 'حسّن التصميم' : 'Improve the design',
-                          ]
-                      ).slice(0, 3).map((suggestion, i) => (
-                        <button
-                          key={i}
-                          onClick={() => setChatInput(suggestion)}
-                          className="px-4 py-2 text-xs font-medium bg-zinc-800 dark:bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg transition-all border border-zinc-700 hover:border-zinc-600"
-                        >
-                          {suggestion}
-                        </button>
-                      ))}
+                      {/* Get last AI message for context */}
+                      {(() => {
+                        const lastAiMessage = [...chatMessages].reverse().find(m => m.role === 'assistant');
+                        const lastContent = lastAiMessage?.content || '';
+                        
+                        // Generate context-aware suggestions
+                        const getSuggestions = () => {
+                          const lowerContent = lastContent.toLowerCase();
+                          const suggestions: Array<{label: string; labelAr: string; prompt: string}> = [];
+                          
+                          if (lowerContent.includes('form') || lowerContent.includes('input')) {
+                            suggestions.push({ label: 'Add validation', labelAr: 'إضافة تحقق', prompt: 'Add form validation with error messages' });
+                          }
+                          if (lowerContent.includes('list') || lowerContent.includes('table') || lowerContent.includes('data')) {
+                            suggestions.push({ label: 'Add filtering', labelAr: 'إضافة تصفية', prompt: 'Add filtering and sorting to the data' });
+                          }
+                          if (lowerContent.includes('button') || lowerContent.includes('component') || lowerContent.includes('card')) {
+                            suggestions.push({ label: 'Add animations', labelAr: 'إضافة حركات', prompt: 'Add smooth animations using framer-motion' });
+                          }
+                          if (lowerContent.includes('api') || lowerContent.includes('backend') || lowerContent.includes('database')) {
+                            suggestions.push({ label: 'Add error handling', labelAr: 'معالجة الأخطاء', prompt: 'Add proper error handling with user-friendly messages' });
+                          }
+                          
+                          // Default suggestions if no context match
+                          if (suggestions.length === 0) {
+                            suggestions.push(
+                              { label: 'Add a new feature', labelAr: 'أضف ميزة جديدة', prompt: 'Add a new feature to enhance the functionality' },
+                              { label: 'Improve the design', labelAr: 'حسّن التصميم', prompt: 'Improve the visual design and user experience' }
+                            );
+                          }
+                          
+                          return suggestions.slice(0, 2);
+                        };
+                        
+                        return getSuggestions().map((suggestion, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setChatInput(suggestion.prompt)}
+                            className="px-4 py-2 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-all shadow-sm"
+                          >
+                            {isRTL ? suggestion.labelAr : suggestion.label}
+                          </button>
+                        ));
+                      })()}
                     </div>
                     
                     {/* Jump to Bottom Button */}
