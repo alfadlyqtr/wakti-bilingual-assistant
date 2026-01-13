@@ -3908,21 +3908,44 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                       })()}
                     </div>
                     
-                    {/* Jump to Bottom Button */}
-                    <button
-                      onClick={() => {
-                        if (chatContainerRef.current) {
-                          chatContainerRef.current.scrollTo({
-                            top: chatContainerRef.current.scrollHeight,
-                            behavior: 'smooth'
-                          });
-                        }
-                      }}
-                      className="p-2 rounded-full bg-indigo-500/10 dark:bg-indigo-500/20 border border-indigo-500/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 hover:border-indigo-500/50 transition-all active:scale-95 shrink-0"
-                      title={isRTL ? 'انتقل للأسفل' : 'Jump to bottom'}
-                    >
-                      <ArrowDown className="h-4 w-4" />
-                    </button>
+                    {/* Action buttons row */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      {/* Visual Edits Button */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setElementSelectMode(!elementSelectMode);
+                          if (!elementSelectMode) {
+                            toast.info(isRTL ? 'انقر على أي عنصر في المعاينة لتحريره' : 'Click any element in preview to edit it');
+                          }
+                        }}
+                        className={cn(
+                          "p-2 rounded-full border flex items-center justify-center transition-all active:scale-95",
+                          elementSelectMode
+                            ? "bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/30"
+                            : "bg-indigo-500/10 dark:bg-indigo-500/20 border-indigo-500/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 hover:border-indigo-500/50"
+                        )}
+                        title={isRTL ? 'تحريرات مرئية' : 'Visual edits'}
+                      >
+                        <MousePointer2 className="h-4 w-4" />
+                      </button>
+                      
+                      {/* Jump to Bottom Button */}
+                      <button
+                        onClick={() => {
+                          if (chatContainerRef.current) {
+                            chatContainerRef.current.scrollTo({
+                              top: chatContainerRef.current.scrollHeight,
+                              behavior: 'smooth'
+                            });
+                          }
+                        }}
+                        className="p-2 rounded-full bg-indigo-500/10 dark:bg-indigo-500/20 border border-indigo-500/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 hover:border-indigo-500/50 transition-all active:scale-95 shrink-0"
+                        title={isRTL ? 'انتقل للأسفل' : 'Jump to bottom'}
+                      >
+                        <ArrowDown className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                   
                   <div className="relative flex flex-col gap-2">
@@ -4044,26 +4067,6 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                             ) : (
                               <Zap className="h-3 w-3" />
                             )}
-                          </button>
-                          
-                          {/* Visual Edits Button */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setElementSelectMode(!elementSelectMode);
-                              if (!elementSelectMode) {
-                                toast.info(isRTL ? 'انقر على أي عنصر في المعاينة لتحريره' : 'Click any element in preview to edit it');
-                              }
-                            }}
-                            className={cn(
-                              "h-6 w-6 rounded-md border flex items-center justify-center transition-all active:scale-90",
-                              elementSelectMode
-                                ? "bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/30"
-                                : "bg-muted/50 dark:bg-white/5 border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted"
-                            )}
-                            title={isRTL ? 'تحريرات مرئية' : 'Visual edits'}
-                          >
-                            <MousePointer2 className="h-3 w-3" />
                           </button>
                         </div>
                         
