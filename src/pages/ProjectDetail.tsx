@@ -185,6 +185,7 @@ export default function ProjectDetail() {
   const [showStockPhotoSelector, setShowStockPhotoSelector] = useState(false);
   const [photoSearchTerm, setPhotoSearchTerm] = useState('');
   const [photoSelectorInitialTab, setPhotoSelectorInitialTab] = useState<'stock' | 'user'>('stock');
+  const [photoSelectorMultiSelect, setPhotoSelectorMultiSelect] = useState(false);
   
   // Pending element image edit (for AI Edit image requests)
   const [pendingElementImageEdit, setPendingElementImageEdit] = useState<{
@@ -2329,11 +2330,27 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       });
   };
   
-  // Open stock photo selector with search term and optional initial tab
-  const openStockPhotoSelector = (term: string = '', initialTab: 'stock' | 'user' = 'stock') => {
-    setPhotoSearchTerm(term);
+  // Open stock photo selector - always starts fresh (empty search)
+  const openStockPhotoSelector = (initialTab: 'stock' | 'user' = 'stock', multiSelect: boolean = true) => {
+    setPhotoSearchTerm(''); // Always empty - user types their own search
     setPhotoSelectorInitialTab(initialTab);
+    setPhotoSelectorMultiSelect(multiSelect);
     setShowStockPhotoSelector(true);
+  };
+  
+  // Handler for multi-select photos
+  const handleStockPhotosSelect = (photos: { url: string; title: string }[]) => {
+    if (photos.length === 0) return;
+    
+    // Create message with all selected photos
+    const photoUrls = photos.map(p => p.url);
+    const photoMessage = language === 'ar' 
+      ? `تم اختيار ${photos.length} صور:\n${photoUrls.join('\n')}`
+      : `Selected ${photos.length} photos:\n${photoUrls.join('\n')}`;
+    
+    // Add to chat or handle as needed
+    console.log('Multiple photos selected:', photos);
+    toast.success(language === 'ar' ? `تم اختيار ${photos.length} صور` : `${photos.length} photos selected`);
   };
 
   const handlePaste = async (e: ClipboardEvent) => {
@@ -2380,7 +2397,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         
         if (success && count > 0) {
           // User has photos, open selector with user tab active
-          openStockPhotoSelector('', 'user');
+          openStockPhotoSelector('user', true);
           return;
         } else {
           // No user photos found, add assistant message explaining this
@@ -2409,40 +2426,39 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         console.error('Error checking user photos:', err);
       }
     }
-    // Check for love photos or other specific photo requests
+    // Check for love photos or other specific photo requests - open selector fresh
     else if (lovePhotoRegex.test(userMessage)) {
-      openStockPhotoSelector('love');
+      openStockPhotoSelector('stock', true);
       return;
     } 
-    // Check for "images of X" pattern (e.g., "images of hearts")
+    // Check for "images of X" pattern - open selector fresh, user searches manually
     else {
       const imagesOfMatch = userMessage.match(imagesOfPattern);
       if (imagesOfMatch && imagesOfMatch[2]) {
         const searchTerm = imagesOfMatch[2].trim().replace(/[.!?]+$/, '').split(/\s+/).slice(0, 3).join(' ');
         if (searchTerm && searchTerm.length > 1) {
-          openStockPhotoSelector(searchTerm);
+          openStockPhotoSelector('stock', true);
           return;
         }
       }
       
-      // Check for "change to X" pattern (e.g., "change them to hearts") - fixed capture group
+      // Check for "change to X" pattern - open selector fresh
       const changeMatch = userMessage.match(changeToPattern);
       if (changeMatch && changeMatch[1]) {
-        // Check if this is likely an image change request (mentions image-related words nearby, including plurals)
         const hasImageContext = /\b(images?|photos?|pictures?|carousel|gallery|banner|background|slider)\b/i.test(userMessage);
         if (hasImageContext) {
           const searchTerm = changeMatch[1].trim().replace(/[.!?]+$/, '').replace(/\s*(images?|photos?|pictures?)\s*/gi, '').split(/\s+/).slice(0, 3).join(' ');
           if (searchTerm && searchTerm.length > 1) {
-            openStockPhotoSelector(searchTerm);
+            openStockPhotoSelector('stock', true);
             return;
           }
         }
       }
       
-      // Original simple pattern: "heart photos", "nature photos", etc.
+      // Original simple pattern: "heart photos", "nature photos", etc. - open selector fresh
       const photoMatch = userMessage.match(photoRequestRegex);
       if (photoMatch && photoMatch[1] && !['use', 'upload', 'select', 'choose', 'find', 'get', 'show', 'display', 'add', 'the', 'my', 'your'].includes(photoMatch[1].toLowerCase())) {
-        openStockPhotoSelector(photoMatch[1]);
+        openStockPhotoSelector('stock', true);
         return;
       }
     }
@@ -4597,6 +4613,8 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
           userId={user?.id || ''}
           projectId={id}
           onSelectPhoto={handleStockPhotoSelect}
+          onSelectPhotos={handleStockPhotosSelect}
+          multiSelect={photoSelectorMultiSelect}
           onClose={() => setShowStockPhotoSelector(false)}
           searchTerm={photoSearchTerm}
           initialTab={photoSelectorInitialTab}
@@ -4734,8 +4752,9 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                 elementInfo: selectedElementInfo,
                 originalPrompt: prompt
               });
-              setPhotoSearchTerm(searchTerm);
+              setPhotoSearchTerm(''); // Start fresh - user searches manually
               setPhotoSelectorInitialTab('stock');
+              setPhotoSelectorMultiSelect(false); // Single select for element replacement
               setShowStockPhotoSelector(true);
               setShowElementEditPopover(false);
               // Don't clear selectedElementInfo yet - we need it for the image replacement
