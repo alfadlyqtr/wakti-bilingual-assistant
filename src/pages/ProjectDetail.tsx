@@ -4159,7 +4159,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         <div className={cn(
           "flex-1 flex flex-col bg-[#0c0f14] relative",
           mobileTab === 'chat' ? "hidden md:flex" : "flex w-full",
-          "h-full max-h-full overflow-hidden"
+          "h-[calc(100vh-120px)] md:h-full max-h-full overflow-hidden"
         )}>
           {/* Project Info Bar - Back, Name, Status - FIXED at top */}
           <div className="flex items-center gap-3 px-4 py-0 h-[56px] bg-gradient-to-r from-zinc-900 to-zinc-900/90 border-b border-white/10 shrink-0 absolute top-0 left-0 right-0 z-[100]">
@@ -4247,7 +4247,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
           </div>
 
           {/* Preview/Code Content - Full Height with top padding for fixed header - ONLY IFRAME SCROLLS */}
-          <div className="flex-1 min-h-0 sandpack-preview-container relative pt-[112px] pb-1 overflow-hidden">
+          <div className="flex-1 min-h-0 sandpack-preview-container relative pt-[70px] md:pt-[112px] pb-0 overflow-hidden">
             <Suspense fallback={
               <div className="w-full h-full flex items-center justify-center bg-zinc-950 text-white">
                 <Loader2 className="w-10 h-10 animate-spin text-indigo-500" />
