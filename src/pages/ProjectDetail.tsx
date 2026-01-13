@@ -64,6 +64,7 @@ import { FreepikService } from '@/services/FreepikService';
 import { QuickActionButtons } from '@/components/projects/QuickActionButtons';
 import { ClarifyingQuestionsModal, ClarifyingQuestion } from '@/components/projects/ClarifyingQuestionsModal';
 import { MigrationApprovalDialog } from '@/components/projects/MigrationApprovalDialog';
+import { ElementEditPopover } from '@/components/projects/ElementEditPopover';
 
 interface Project {
   id: string;
@@ -279,7 +280,15 @@ export default function ProjectDetail() {
     id: string;
     innerText: string;
     openingTag: string;
+    computedStyle?: {
+      color: string;
+      backgroundColor: string;
+      fontSize: string;
+    };
   } | null>(null);
+  
+  // Visual Edit Popover state
+  const [showElementEditPopover, setShowElementEditPopover] = useState(false);
   
   // Force Sandpack re-render key (incremented on revert)
   const [sandpackKey, setSandpackKey] = useState(0);
@@ -4040,6 +4049,26 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                               <Zap className="h-3 w-3" />
                             )}
                           </button>
+                          
+                          {/* Visual Edits Button */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setElementSelectMode(!elementSelectMode);
+                              if (!elementSelectMode) {
+                                toast.info(isRTL ? 'انقر على أي عنصر في المعاينة لتحريره' : 'Click any element in preview to edit it');
+                              }
+                            }}
+                            className={cn(
+                              "h-6 w-6 rounded-md border flex items-center justify-center transition-all active:scale-90",
+                              elementSelectMode
+                                ? "bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/30"
+                                : "bg-muted/50 dark:bg-white/5 border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted"
+                            )}
+                            title={isRTL ? 'تحريرات مرئية' : 'Visual edits'}
+                          >
+                            <MousePointer2 className="h-3 w-3" />
+                          </button>
                         </div>
                         
                         {/* Send Button */}
@@ -4196,10 +4225,11 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                       onPublish={openPublishModal}
                       isPublishing={publishing}
                       onElementSelect={(ref, elementInfo) => {
-                        if (elementInfo) setSelectedElementInfo(elementInfo);
-                        setChatInput(prev => prev + (prev ? ' ' : '') + ref + ' ');
+                        if (elementInfo) {
+                          setSelectedElementInfo(elementInfo);
+                          setShowElementEditPopover(true); // Show edit popover immediately
+                        }
                         setElementSelectMode(false);
-                        toast.success(isRTL ? 'تم تحديد العنصر!' : 'Element selected!');
                       }}
                     />
                   </div>
@@ -4214,8 +4244,24 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
               )}
             </Suspense>
             
-            {/* Selected Element Floating Bar */}
-            {selectedElementInfo && (
+            {/* Visual Edit Mode Active Banner */}
+            {elementSelectMode && (
+              <div className="absolute top-[56px] left-0 right-0 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-4 py-2.5 text-sm flex items-center justify-between z-50 shadow-lg">
+                <span className="flex items-center gap-2 font-medium">
+                  <MousePointer2 className="h-4 w-4 animate-pulse" />
+                  {isRTL ? 'وضع التحرير المرئي - انقر على عنصر لتحريره' : 'Visual Edit Mode - Click an element to edit'}
+                </span>
+                <button 
+                  onClick={() => setElementSelectMode(false)}
+                  className="text-white/80 hover:text-white p-1 hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+            
+            {/* Selected Element Floating Bar - Only show when not in popover mode */}
+            {selectedElementInfo && !showElementEditPopover && (
               <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-zinc-900 border border-indigo-500/50 p-3 rounded-xl shadow-2xl flex items-center gap-4 z-50 animate-in slide-in-from-bottom-5 max-w-md">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -4228,6 +4274,12 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                     "{selectedElementInfo.innerText.substring(0, 40)}..."
                   </p>
                 </div>
+                <button 
+                  onClick={() => setShowElementEditPopover(true)}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg transition-colors"
+                >
+                  {isRTL ? 'تحرير' : 'Edit'}
+                </button>
                 <button 
                   onClick={() => setSelectedElementInfo(null)}
                   className="p-1.5 text-zinc-500 hover:text-white transition-colors"
@@ -4545,6 +4597,56 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         onAlwaysAllowChange={(value) => setAlwaysAllowMigrations(value)}
         isRTL={isRTL}
       />
+
+      {/* Element Edit Popover - Visual Edits */}
+      {showElementEditPopover && selectedElementInfo && (
+        <ElementEditPopover
+          element={selectedElementInfo}
+          onClose={() => {
+            setShowElementEditPopover(false);
+            setSelectedElementInfo(null);
+          }}
+          onDirectEdit={(changes) => {
+            // Apply direct edits to the code
+            let code = generatedFiles['/App.js'] || '';
+            
+            // Simple text replacement
+            if (changes.text && selectedElementInfo.innerText) {
+              code = code.replace(selectedElementInfo.innerText, changes.text);
+            }
+            
+            // For colors and styles, we need to use AI to properly update the code
+            // since direct style changes are complex
+            if (changes.color || changes.bgColor || changes.fontSize) {
+              const styleChanges: string[] = [];
+              if (changes.color) styleChanges.push(`text color to ${changes.color}`);
+              if (changes.bgColor && changes.bgColor !== 'transparent') styleChanges.push(`background color to ${changes.bgColor}`);
+              if (changes.fontSize) styleChanges.push(`font size to ${changes.fontSize}`);
+              
+              const prompt = `For the ${selectedElementInfo.tagName} element containing "${selectedElementInfo.innerText.substring(0, 30)}...", change: ${styleChanges.join(', ')}`;
+              setChatInput(prompt);
+              toast.info(isRTL ? 'تم إضافة الطلب - اضغط إرسال' : 'Prompt added - press send');
+            } else if (changes.text) {
+              setGeneratedFiles(prev => ({
+                ...prev,
+                '/App.js': code
+              }));
+              toast.success(isRTL ? 'تم تحديث النص!' : 'Text updated!');
+            }
+            
+            setShowElementEditPopover(false);
+            setSelectedElementInfo(null);
+          }}
+          onAIEdit={(prompt) => {
+            // Build context-aware prompt
+            const contextPrompt = `For the ${selectedElementInfo.tagName} element ${selectedElementInfo.className ? `with class "${selectedElementInfo.className.split(' ')[0]}"` : ''} containing "${selectedElementInfo.innerText.substring(0, 50)}...": ${prompt}`;
+            setChatInput(contextPrompt);
+            setShowElementEditPopover(false);
+            setSelectedElementInfo(null);
+          }}
+          isRTL={isRTL}
+        />
+      )}
       </>
       )}
     </div>
