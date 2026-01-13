@@ -2944,14 +2944,14 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       </div>
 
       {/* Main Studio Content */}
-      <div className="flex-1 min-h-0 flex overflow-hidden relative">
+      <div className="flex-1 min-h-0 flex overflow-hidden relative h-[calc(100dvh-48px)] md:h-full">
         {/* Left Panel - Cascade-style Control Center */}
         <div className={cn(
           "flex flex-col border-r transition-all duration-300 relative",
           "bg-background dark:bg-[#0c0f14]",
           "md:w-[420px] lg:w-[480px] shrink-0",
           mobileTab === 'preview' ? "hidden md:flex" : "flex w-full",
-          "h-[calc(100vh-140px)] md:h-full max-h-full overflow-hidden"
+          "h-full max-h-full overflow-hidden"
         )}>
           {/* Mode Toggle: Chat / Code / Server - FIXED at top */}
           <div className="flex items-center justify-between border-b border-border/50 dark:border-white/10 px-3 py-0 h-[56px] shrink-0 absolute top-0 left-0 right-0 z-[100] bg-background dark:bg-[#0c0f14]">
@@ -4159,7 +4159,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         <div className={cn(
           "flex-1 flex flex-col bg-[#0c0f14] relative",
           mobileTab === 'chat' ? "hidden md:flex" : "flex w-full",
-          "h-[calc(100vh-120px)] md:h-full max-h-full overflow-hidden"
+          "h-full max-h-full overflow-hidden"
         )}>
           {/* Project Info Bar - Back, Name, Status - FIXED at top */}
           <div className="flex items-center gap-3 px-4 py-0 h-[56px] bg-gradient-to-r from-zinc-900 to-zinc-900/90 border-b border-white/10 shrink-0 absolute top-0 left-0 right-0 z-[100]">
