@@ -2896,8 +2896,12 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
 
   return (
     <div className={cn(
-      "h-full w-full flex flex-col bg-background overflow-hidden",
-      isRTL && "rtl"
+      "fixed flex flex-col bg-background overflow-hidden z-10",
+      // On desktop: account for sidebar (left) - positioned right of sidebar
+      "md:left-[68px] md:right-0 md:top-[64px] md:bottom-0",
+      // On mobile: full screen (no sidebar visible)
+      "left-0 right-0 top-0 bottom-0 md:inset-auto",
+      isRTL && "rtl md:left-0 md:right-[68px]"
     )}>
 
       {/* Server Tab Content */}
