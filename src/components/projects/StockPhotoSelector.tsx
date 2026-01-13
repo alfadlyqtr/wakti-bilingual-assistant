@@ -13,6 +13,8 @@ interface StockPhotoSelectorProps {
   userId: string;
   projectId?: string;
   onSelectPhoto: (photo: { url: string; title: string }) => void;
+  onSelectPhotos?: (photos: { url: string; title: string }[]) => void; // Multi-select
+  multiSelect?: boolean;
   onClose: () => void;
   searchTerm?: string;
   initialTab?: 'stock' | 'user';
@@ -29,7 +31,9 @@ interface BackendPhoto {
 export function StockPhotoSelector({ 
   userId, 
   projectId,
-  onSelectPhoto, 
+  onSelectPhoto,
+  onSelectPhotos,
+  multiSelect = false,
   onClose, 
   searchTerm = '', 
   initialTab = 'stock' 
@@ -43,6 +47,7 @@ export function StockPhotoSelector({
   const [backendPhotos, setBackendPhotos] = useState<BackendPhoto[]>([]);
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<{ url: string; title: string } | null>(null);
+  const [selectedPhotos, setSelectedPhotos] = useState<{ url: string; title: string }[]>([]); // Multi-select
   const [orientation, setOrientation] = useState<'all' | 'landscape' | 'portrait' | 'square'>('all');
   const [contentType, setContentType] = useState<'all' | 'photo' | 'vector'>('photo');
   const [page, setPage] = useState(1);
@@ -78,9 +83,9 @@ export function StockPhotoSelector({
       // Fetch from project_uploads table (backend uploads)
       const { data, error } = await supabase
         .from('project_uploads')
-        .select('id, filename, storage_path, file_type')
+        .select('id, filename, storage_path, file_type, user_id')
         .eq('project_id', projectId)
-        .order('created_at', { ascending: false });
+        .order('uploaded_at', { ascending: false });
 
       if (error) {
         console.error('Error loading backend photos:', error);
@@ -184,11 +189,36 @@ export function StockPhotoSelector({
   };
 
   const handleSelectPhoto = (photo: { url: string; title: string }) => {
-    setSelectedPhoto(photo);
+    if (multiSelect) {
+      setSelectedPhotos(prev => {
+        const exists = prev.some(p => p.url === photo.url);
+        if (exists) {
+          return prev.filter(p => p.url !== photo.url);
+        }
+        return [...prev, photo];
+      });
+    } else {
+      setSelectedPhoto(photo);
+    }
+  };
+
+  const isPhotoSelected = (url: string) => {
+    if (multiSelect) {
+      return selectedPhotos.some(p => p.url === url);
+    }
+    return selectedPhoto?.url === url;
   };
 
   const handleConfirmSelection = () => {
-    if (selectedPhoto) {
+    if (multiSelect && selectedPhotos.length > 0) {
+      if (onSelectPhotos) {
+        onSelectPhotos(selectedPhotos);
+      } else {
+        // Fallback - send first photo
+        onSelectPhoto(selectedPhotos[0]);
+      }
+      onClose();
+    } else if (selectedPhoto) {
       onSelectPhoto(selectedPhoto);
       onClose();
     }
@@ -225,9 +255,17 @@ export function StockPhotoSelector({
           continue;
         }
 
+        // Get the current user ID first to construct the correct path
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          toast.error(isRTL ? 'يرجى تسجيل الدخول' : 'Please log in');
+          continue;
+        }
+
         const timestamp = Date.now();
         const safeFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const storagePath = `${projectId}/${timestamp}_${safeFilename}`;
+        // Path format: {userId}/{projectId}/{timestamp}_{filename}
+        const storagePath = `${user.id}/${projectId}/${timestamp}-${safeFilename}`;
 
         // Upload to storage
         const { error: uploadError } = await supabase.storage
@@ -243,14 +281,7 @@ export function StockPhotoSelector({
           continue;
         }
 
-        // Get the current user ID for user_id
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          toast.error(isRTL ? 'يرجى تسجيل الدخول' : 'Please log in');
-          continue;
-        }
-
-        // Save to database
+        // Save to database (user is already defined above)
         const { error: dbError } = await supabase
           .from('project_uploads')
           .insert({
@@ -392,7 +423,7 @@ export function StockPhotoSelector({
                       key={photo.id}
                       className={cn(
                         "relative aspect-square rounded-lg overflow-hidden border cursor-pointer hover:opacity-90 transition-all",
-                        selectedPhoto?.url === photo.image.source.url && "ring-2 ring-primary"
+                        isPhotoSelected(photo.image.source.url) && "ring-2 ring-primary"
                       )}
                       onClick={() => handleSelectPhoto({
                         url: photo.image.source.url,
@@ -404,7 +435,7 @@ export function StockPhotoSelector({
                         alt={photo.title}
                         className="w-full h-full object-cover"
                       />
-                      {selectedPhoto?.url === photo.image.source.url && (
+                      {isPhotoSelected(photo.image.source.url) && (
                         <div className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 bg-primary text-primary-foreground rounded-full p-0.5 sm:p-1">
                           <Check className="h-3 w-3 sm:h-4 sm:w-4" />
                         </div>
@@ -487,7 +518,7 @@ export function StockPhotoSelector({
                       key={photo.id}
                       className={cn(
                         "relative aspect-square rounded-lg overflow-hidden border cursor-pointer hover:opacity-90 transition-all",
-                        selectedPhoto?.url === photo.url && "ring-2 ring-primary"
+                        isPhotoSelected(photo.url) && "ring-2 ring-primary"
                       )}
                       onClick={() => handleSelectPhoto({
                         url: photo.url,
@@ -499,7 +530,7 @@ export function StockPhotoSelector({
                         alt={photo.filename}
                         className="w-full h-full object-cover"
                       />
-                      {selectedPhoto?.url === photo.url && (
+                      {isPhotoSelected(photo.url) && (
                         <div className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 bg-primary text-primary-foreground rounded-full p-0.5 sm:p-1">
                           <Check className="h-3 w-3 sm:h-4 sm:w-4" />
                         </div>
@@ -552,17 +583,27 @@ export function StockPhotoSelector({
         </Tabs>
         
         {/* Footer Actions */}
-        <div className="p-3 sm:p-4 border-t flex justify-end gap-2 shrink-0">
-          <Button variant="outline" onClick={onClose} className="h-10 sm:h-11 text-sm">
-            {isRTL ? 'إلغاء' : 'Cancel'}
-          </Button>
-          <Button 
-            onClick={handleConfirmSelection}
-            disabled={!selectedPhoto}
-            className="h-10 sm:h-11 text-sm"
-          >
-            {isRTL ? 'اختيار' : 'Select'}
-          </Button>
+        <div className="p-3 sm:p-4 border-t flex items-center justify-between shrink-0">
+          {/* Selection counter for multi-select */}
+          <div className="text-xs sm:text-sm text-muted-foreground">
+            {multiSelect && selectedPhotos.length > 0 && (
+              <span>{isRTL ? `${selectedPhotos.length} صور مختارة` : `${selectedPhotos.length} selected`}</span>
+            )}
+          </div>
+          
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose} className="h-10 sm:h-11 text-sm">
+              {isRTL ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button 
+              onClick={handleConfirmSelection}
+              disabled={multiSelect ? selectedPhotos.length === 0 : !selectedPhoto}
+              className="h-10 sm:h-11 text-sm"
+            >
+              {isRTL ? 'اختيار' : 'Select'}
+              {multiSelect && selectedPhotos.length > 0 && ` (${selectedPhotos.length})`}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
