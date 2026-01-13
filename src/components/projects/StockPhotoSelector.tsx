@@ -3,7 +3,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { FreepikService, FreepikResource } from '@/services/FreepikService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, Search, X, Image, Check, Upload, Filter, Camera } from 'lucide-react';
+import { Loader2, Search, X, Image, Check, Upload, Camera } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -318,34 +318,40 @@ export function StockPhotoSelector({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-6">
       <div 
         className={cn(
-          "bg-background rounded-t-2xl sm:rounded-lg shadow-lg w-full flex flex-col",
-          "max-h-[85vh] sm:max-h-[90vh]",
-          "sm:max-w-3xl"
+          "bg-background rounded-2xl shadow-2xl w-full flex flex-col border border-border/50",
+          "max-h-[90vh] sm:max-h-[85vh]",
+          "max-w-[95vw] sm:max-w-2xl md:max-w-3xl",
+          "animate-in fade-in-0 zoom-in-95 duration-200"
         )}
         dir={isRTL ? 'rtl' : 'ltr'}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between p-3 sm:p-4 border-b shrink-0">
-          <h2 className="text-lg sm:text-xl font-semibold">
+        {/* Header - Cleaner design */}
+        <div className="flex items-center justify-between px-4 py-3 sm:px-5 sm:py-4 border-b border-border/50 shrink-0 bg-muted/30">
+          <h2 className="text-base sm:text-lg font-semibold text-foreground">
             {isRTL ? 'اختيار صورة' : 'Select Photo'}
+            {multiSelect && (
+              <span className="text-xs sm:text-sm font-normal text-muted-foreground ml-2">
+                {isRTL ? '(اختيار متعدد)' : '(Multi-select)'}
+              </span>
+            )}
           </h2>
-          <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 sm:h-9 sm:w-9">
-            <X className="h-4 w-4 sm:h-5 sm:w-5" />
+          <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 rounded-full hover:bg-muted">
+            <X className="h-4 w-4" />
           </Button>
         </div>
         
         <Tabs defaultValue="stock" value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col min-h-0">
-          <div className="px-3 sm:px-4 pt-2 shrink-0">
-            <TabsList className="w-full h-10 sm:h-11">
-              <TabsTrigger value="stock" className="flex-1 text-xs sm:text-sm gap-1.5 sm:gap-2">
-                <Image className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+          <div className="px-4 sm:px-5 py-3 shrink-0">
+            <TabsList className="w-full h-10 bg-muted/50 rounded-xl p-1">
+              <TabsTrigger value="stock" className="flex-1 text-xs sm:text-sm gap-1.5 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                <Image className="h-3.5 w-3.5" />
                 {isRTL ? 'صور مخزنة' : 'Stock Photos'}
               </TabsTrigger>
-              <TabsTrigger value="user" className="flex-1 text-xs sm:text-sm gap-1.5 sm:gap-2">
-                <Upload className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <TabsTrigger value="user" className="flex-1 text-xs sm:text-sm gap-1.5 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                <Upload className="h-3.5 w-3.5" />
                 {isRTL ? 'صوري' : 'My Photos'}
               </TabsTrigger>
             </TabsList>
@@ -353,19 +359,20 @@ export function StockPhotoSelector({
           
           {/* Stock Photos Tab */}
           <TabsContent value="stock" className="flex-1 flex flex-col min-h-0 mt-0">
-            {/* Search & Filters - Mobile optimized */}
-            <div className="p-3 sm:p-4 border-b shrink-0 space-y-2 sm:space-y-3">
+            {/* Search & Filters - Compact mobile design */}
+            <div className="px-4 sm:px-5 py-3 border-b border-border/50 shrink-0 space-y-2">
               <div className="flex gap-2">
-                <div className="flex-1">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder={isRTL ? 'البحث عن الصور...' : 'Search photos...'}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                    className="h-10 sm:h-11 text-sm"
+                    className="h-10 pl-9 text-sm rounded-xl bg-muted/30 border-border/50"
                   />
                 </div>
-                <Button onClick={handleSearch} disabled={isSearching} className="h-10 w-10 sm:h-11 sm:w-11 p-0">
+                <Button onClick={handleSearch} disabled={isSearching} className="h-10 w-10 rounded-xl shrink-0">
                   {isSearching ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
@@ -374,56 +381,47 @@ export function StockPhotoSelector({
                 </Button>
               </div>
               
-              {/* Filters - Horizontal scroll on mobile */}
-              <div className="flex items-center gap-2 sm:gap-4 overflow-x-auto pb-1 scrollbar-none">
-                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                  <Filter className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
-                  <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
-                    {isRTL ? 'الاتجاه:' : 'Orientation:'}
-                  </span>
-                  <select
-                    className="text-xs sm:text-sm bg-background border rounded-md px-2 py-1.5"
-                    value={orientation}
-                    onChange={(e) => setOrientation(e.target.value as any)}
-                  >
-                    <option value="all">{isRTL ? 'الكل' : 'All'}</option>
-                    <option value="landscape">{isRTL ? 'أفقي' : 'Landscape'}</option>
-                    <option value="portrait">{isRTL ? 'عمودي' : 'Portrait'}</option>
-                    <option value="square">{isRTL ? 'مربع' : 'Square'}</option>
-                  </select>
-                </div>
+              {/* Filters - Compact chips */}
+              <div className="flex items-center gap-2 overflow-x-auto scrollbar-none">
+                <select
+                  className="text-xs bg-muted/50 border border-border/50 rounded-lg px-2.5 py-1.5 appearance-none cursor-pointer shrink-0"
+                  value={orientation}
+                  onChange={(e) => setOrientation(e.target.value as any)}
+                >
+                  <option value="all">{isRTL ? 'كل الاتجاهات' : 'All orientations'}</option>
+                  <option value="landscape">{isRTL ? 'أفقي' : 'Landscape'}</option>
+                  <option value="portrait">{isRTL ? 'عمودي' : 'Portrait'}</option>
+                  <option value="square">{isRTL ? 'مربع' : 'Square'}</option>
+                </select>
                 
-                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                  <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
-                    {isRTL ? 'النوع:' : 'Type:'}
-                  </span>
-                  <select
-                    className="text-xs sm:text-sm bg-background border rounded-md px-2 py-1.5"
-                    value={contentType}
-                    onChange={(e) => setContentType(e.target.value as any)}
-                  >
-                    <option value="all">{isRTL ? 'الكل' : 'All'}</option>
-                    <option value="photo">{isRTL ? 'صورة' : 'Photo'}</option>
-                    <option value="vector">{isRTL ? 'فيكتور' : 'Vector'}</option>
-                  </select>
-                </div>
+                <select
+                  className="text-xs bg-muted/50 border border-border/50 rounded-lg px-2.5 py-1.5 appearance-none cursor-pointer shrink-0"
+                  value={contentType}
+                  onChange={(e) => setContentType(e.target.value as any)}
+                >
+                  <option value="photo">{isRTL ? 'صورة' : 'Photo'}</option>
+                  <option value="vector">{isRTL ? 'فيكتور' : 'Vector'}</option>
+                  <option value="all">{isRTL ? 'الكل' : 'All types'}</option>
+                </select>
               </div>
             </div>
             
             {/* Photos Grid - Scrollable */}
             <div className="flex-1 overflow-y-auto p-3 sm:p-4 min-h-0">
               {isSearching ? (
-                <div className="flex items-center justify-center h-48 sm:h-64">
-                  <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-primary" />
+                <div className="flex items-center justify-center h-40">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
               ) : stockPhotos.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4">
+                <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 gap-1.5 sm:gap-2">
                   {stockPhotos.map((photo) => (
                     <div 
                       key={photo.id}
                       className={cn(
-                        "relative aspect-square rounded-lg overflow-hidden border cursor-pointer hover:opacity-90 transition-all",
-                        isPhotoSelected(photo.image.source.url) && "ring-2 ring-primary"
+                        "relative aspect-square rounded-lg overflow-hidden cursor-pointer group transition-all",
+                        isPhotoSelected(photo.image.source.url) 
+                          ? "ring-2 ring-primary ring-offset-2 ring-offset-background" 
+                          : "hover:ring-2 hover:ring-muted-foreground/30"
                       )}
                       onClick={() => handleSelectPhoto({
                         url: photo.image.source.url,
@@ -433,54 +431,56 @@ export function StockPhotoSelector({
                       <img 
                         src={photo.image.source.url} 
                         alt={photo.title}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover transition-transform group-hover:scale-105"
                       />
                       {isPhotoSelected(photo.image.source.url) && (
-                        <div className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 bg-primary text-primary-foreground rounded-full p-0.5 sm:p-1">
-                          <Check className="h-3 w-3 sm:h-4 sm:w-4" />
+                        <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                          <div className="bg-primary text-primary-foreground rounded-full p-1">
+                            <Check className="h-4 w-4" />
+                          </div>
                         </div>
                       )}
                     </div>
                   ))}
                 </div>
               ) : searchQuery ? (
-                <div className="flex flex-col items-center justify-center h-48 sm:h-64 text-center px-4">
-                  <Image className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mb-3 sm:mb-4" />
-                  <p className="text-sm sm:text-base text-muted-foreground">
-                    {isRTL ? 'لم يتم العثور على صور. جرب كلمات بحث مختلفة.' : 'No photos found. Try different search terms.'}
+                <div className="flex flex-col items-center justify-center h-40 text-center px-4">
+                  <Image className="h-10 w-10 text-muted-foreground/50 mb-3" />
+                  <p className="text-sm text-muted-foreground">
+                    {isRTL ? 'لم يتم العثور على صور' : 'No photos found'}
                   </p>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center h-48 sm:h-64 text-center px-4">
-                  <Search className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mb-3 sm:mb-4" />
-                  <p className="text-sm sm:text-base text-muted-foreground">
-                    {isRTL ? 'ابحث عن صور من مكتبة Freepik' : 'Search for photos from the Freepik library'}
+                <div className="flex flex-col items-center justify-center h-40 text-center px-4">
+                  <Search className="h-10 w-10 text-muted-foreground/50 mb-3" />
+                  <p className="text-sm text-muted-foreground">
+                    {isRTL ? 'ابحث عن صور' : 'Search for photos'}
                   </p>
                 </div>
               )}
             </div>
             
-            {/* Pagination */}
+            {/* Pagination - Compact */}
             {stockPhotos.length > 0 && (
-              <div className="p-3 sm:p-4 border-t flex items-center justify-between shrink-0">
+              <div className="px-4 py-2 border-t border-border/50 flex items-center justify-center gap-3 shrink-0 bg-muted/20">
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
                   onClick={() => handlePageChange(page - 1)}
                   disabled={page === 1}
-                  className="text-xs sm:text-sm h-8 sm:h-9"
+                  className="text-xs h-7 px-2"
                 >
                   {isRTL ? 'السابق' : 'Previous'}
                 </Button>
-                <span className="text-xs sm:text-sm">
-                  {isRTL ? `${page} / ${totalPages}` : `${page} / ${totalPages}`}
+                <span className="text-xs text-muted-foreground font-medium">
+                  {page} / {totalPages}
                 </span>
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
                   onClick={() => handlePageChange(page + 1)}
                   disabled={page === totalPages}
-                  className="text-xs sm:text-sm h-8 sm:h-9"
+                  className="text-xs h-7 px-2"
                 >
                   {isRTL ? 'التالي' : 'Next'}
                 </Button>
@@ -503,22 +503,24 @@ export function StockPhotoSelector({
             {/* Photos Grid - Scrollable */}
             <div className="flex-1 overflow-y-auto p-3 sm:p-4 min-h-0">
               {isLoadingPhotos || isUploading ? (
-                <div className="flex flex-col items-center justify-center h-48 sm:h-64">
-                  <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-primary" />
-                  <p className="text-xs sm:text-sm text-muted-foreground mt-2">
+                <div className="flex flex-col items-center justify-center h-40">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  <p className="text-xs text-muted-foreground mt-2">
                     {isUploading 
-                      ? (isRTL ? 'جاري رفع الصورة...' : 'Uploading photo...') 
+                      ? (isRTL ? 'جاري رفع الصورة...' : 'Uploading...') 
                       : (isRTL ? 'جاري التحميل...' : 'Loading...')}
                   </p>
                 </div>
               ) : backendPhotos.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4">
+                <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 gap-1.5 sm:gap-2">
                   {backendPhotos.map((photo) => (
                     <div 
                       key={photo.id}
                       className={cn(
-                        "relative aspect-square rounded-lg overflow-hidden border cursor-pointer hover:opacity-90 transition-all",
-                        isPhotoSelected(photo.url) && "ring-2 ring-primary"
+                        "relative aspect-square rounded-lg overflow-hidden cursor-pointer group transition-all",
+                        isPhotoSelected(photo.url) 
+                          ? "ring-2 ring-primary ring-offset-2 ring-offset-background" 
+                          : "hover:ring-2 hover:ring-muted-foreground/30"
                       )}
                       onClick={() => handleSelectPhoto({
                         url: photo.url,
@@ -528,11 +530,13 @@ export function StockPhotoSelector({
                       <img 
                         src={photo.url} 
                         alt={photo.filename}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover transition-transform group-hover:scale-105"
                       />
                       {isPhotoSelected(photo.url) && (
-                        <div className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 bg-primary text-primary-foreground rounded-full p-0.5 sm:p-1">
-                          <Check className="h-3 w-3 sm:h-4 sm:w-4" />
+                        <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                          <div className="bg-primary text-primary-foreground rounded-full p-1">
+                            <Check className="h-4 w-4" />
+                          </div>
                         </div>
                       )}
                     </div>
@@ -541,40 +545,41 @@ export function StockPhotoSelector({
                   {/* Upload More Button in Grid */}
                   <button
                     onClick={handleUploadClick}
-                    className="aspect-square rounded-lg border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex flex-col items-center justify-center gap-2 transition-colors"
+                    className="aspect-square rounded-lg border-2 border-dashed border-muted-foreground/20 hover:border-primary/50 hover:bg-muted/30 flex flex-col items-center justify-center gap-1 transition-all"
                   >
-                    <Upload className="h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">
-                      {isRTL ? 'رفع المزيد' : 'Upload More'}
+                    <Upload className="h-5 w-5 text-muted-foreground" />
+                    <span className="text-[10px] text-muted-foreground">
+                      {isRTL ? 'رفع' : 'Upload'}
                     </span>
                   </button>
                 </div>
               ) : noPhotosFound ? (
-                <div className="flex flex-col items-center justify-center h-48 sm:h-64 text-center px-4">
-                  <Upload className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mb-3 sm:mb-4" />
-                  <p className="text-sm sm:text-base text-muted-foreground mb-4">
-                    {isRTL ? 'لم يتم العثور على صور مرفوعة. يرجى تحميل الصور.' : 'No uploaded photos found. Please upload photos.'}
+                <div className="flex flex-col items-center justify-center h-40 text-center px-4">
+                  <Upload className="h-10 w-10 text-muted-foreground/50 mb-3" />
+                  <p className="text-sm text-muted-foreground mb-3">
+                    {isRTL ? 'لا توجد صور مرفوعة' : 'No uploaded photos'}
                   </p>
                   <Button 
                     onClick={handleUploadClick}
-                    className="gap-2"
+                    size="sm"
+                    className="gap-2 rounded-lg"
                   >
                     <Camera className="h-4 w-4" />
                     {isRTL ? 'رفع صور' : 'Upload Photos'}
                   </Button>
                 </div>
               ) : !projectId ? (
-                <div className="flex flex-col items-center justify-center h-48 sm:h-64 text-center px-4">
-                  <Image className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mb-3 sm:mb-4" />
-                  <p className="text-sm sm:text-base text-muted-foreground">
-                    {isRTL ? 'يرجى تفعيل الخادم أولاً' : 'Please enable the backend first'}
+                <div className="flex flex-col items-center justify-center h-40 text-center px-4">
+                  <Image className="h-10 w-10 text-muted-foreground/50 mb-3" />
+                  <p className="text-sm text-muted-foreground">
+                    {isRTL ? 'يرجى تفعيل الخادم' : 'Enable backend first'}
                   </p>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center h-48 sm:h-64 text-center">
-                  <Loader2 className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mb-3 sm:mb-4 animate-spin" />
-                  <p className="text-sm sm:text-base text-muted-foreground">
-                    {isRTL ? 'جاري التحقق من الصور...' : 'Checking for photos...'}
+                <div className="flex flex-col items-center justify-center h-40 text-center">
+                  <Loader2 className="h-6 w-6 text-muted-foreground animate-spin mb-2" />
+                  <p className="text-sm text-muted-foreground">
+                    {isRTL ? 'جاري التحميل...' : 'Loading...'}
                   </p>
                 </div>
               )}
@@ -582,26 +587,32 @@ export function StockPhotoSelector({
           </TabsContent>
         </Tabs>
         
-        {/* Footer Actions */}
-        <div className="p-3 sm:p-4 border-t flex items-center justify-between shrink-0">
-          {/* Selection counter for multi-select */}
-          <div className="text-xs sm:text-sm text-muted-foreground">
-            {multiSelect && selectedPhotos.length > 0 && (
-              <span>{isRTL ? `${selectedPhotos.length} صور مختارة` : `${selectedPhotos.length} selected`}</span>
+        {/* Footer Actions - Clean */}
+        <div className="px-4 py-3 sm:px-5 sm:py-4 border-t border-border/50 flex items-center justify-between shrink-0 bg-muted/20">
+          {/* Selection counter */}
+          <div className="text-xs text-muted-foreground">
+            {(multiSelect ? selectedPhotos.length > 0 : selectedPhoto) && (
+              <span className="flex items-center gap-1.5">
+                <Check className="h-3 w-3 text-primary" />
+                {multiSelect 
+                  ? (isRTL ? `${selectedPhotos.length} مختارة` : `${selectedPhotos.length} selected`)
+                  : (isRTL ? '1 مختارة' : '1 selected')
+                }
+              </span>
             )}
           </div>
           
           <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose} className="h-10 sm:h-11 text-sm">
+            <Button variant="ghost" onClick={onClose} className="h-9 text-sm rounded-lg">
               {isRTL ? 'إلغاء' : 'Cancel'}
             </Button>
             <Button 
               onClick={handleConfirmSelection}
               disabled={multiSelect ? selectedPhotos.length === 0 : !selectedPhoto}
-              className="h-10 sm:h-11 text-sm"
+              className="h-9 text-sm rounded-lg px-4"
             >
               {isRTL ? 'اختيار' : 'Select'}
-              {multiSelect && selectedPhotos.length > 0 && ` (${selectedPhotos.length})`}
+              {multiSelect && selectedPhotos.length > 1 && ` (${selectedPhotos.length})`}
             </Button>
           </div>
         </div>
