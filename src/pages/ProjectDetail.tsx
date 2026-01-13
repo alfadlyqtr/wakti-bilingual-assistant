@@ -3337,15 +3337,15 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                   // PLAN CARD UI (Lovable-style - clean, minimal, professional)
                   if (isPlanCard && parsedPlan) {
                     return (
-                      <div key={i} className="flex flex-col items-start w-full">
-                        <div className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg overflow-hidden">
+                      <div key={i} className="flex flex-col items-start w-full max-w-full overflow-hidden">
+                        <div className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg overflow-hidden max-w-full">
                           {/* Plan Header */}
                           <div className="px-4 py-2.5 border-b border-[#2a2a2a]">
                             <span className="text-[13px] text-zinc-500">Plan</span>
                           </div>
                           
                           {/* Plan Content */}
-                          <div className="px-4 py-4 space-y-4">
+                          <div className="px-4 py-4 space-y-4 overflow-hidden max-w-full">
                             {/* Title */}
                             <h3 className="text-[15px] font-semibold text-white">
                               Plan: {parsedPlan.title}
@@ -3353,9 +3353,9 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                             
                             {/* File Reference */}
                             {parsedPlan.file && (
-                              <p className="text-[13px] text-zinc-400">
+                              <p className="text-[13px] text-zinc-400 break-words">
                                 <span className="font-medium text-zinc-300">Changes to</span>{' '}
-                                <code className="text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded font-mono text-xs">
+                                <code className="text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded font-mono text-xs break-all inline-block max-w-full">
                                   {parsedPlan.file}
                                 </code>
                                 {parsedPlan.line && <span className="text-zinc-500"> :</span>}
@@ -3375,19 +3375,19 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                                     {/* Current / Change To */}
                                     <ul className="space-y-1 ml-3">
                                       {step.current && (
-                                        <li className="text-[13px] text-zinc-400 flex items-center gap-2">
-                                          <span className="text-zinc-600">•</span>
-                                          <span>Current:</span>
-                                          <code className="text-zinc-300 bg-zinc-800 px-1.5 py-0.5 rounded font-mono text-xs">
+                                        <li className="text-[13px] text-zinc-400 flex flex-wrap items-start gap-1.5">
+                                          <span className="text-zinc-600 shrink-0">•</span>
+                                          <span className="shrink-0">Current:</span>
+                                          <code className="text-zinc-300 bg-zinc-800 px-1.5 py-0.5 rounded font-mono text-xs break-all max-w-full">
                                             {step.current}
                                           </code>
                                         </li>
                                       )}
                                       {step.changeTo && (
-                                        <li className="text-[13px] text-zinc-400 flex items-center gap-2">
-                                          <span className="text-zinc-600">•</span>
-                                          <span>Change to:</span>
-                                          <code className="text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded font-mono text-xs">
+                                        <li className="text-[13px] text-zinc-400 flex flex-wrap items-start gap-1.5">
+                                          <span className="text-zinc-600 shrink-0">•</span>
+                                          <span className="shrink-0">Change to:</span>
+                                          <code className="text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded font-mono text-xs break-all max-w-full">
                                             {step.changeTo}
                                           </code>
                                         </li>
@@ -3400,18 +3400,18 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                             
                             {/* Code Changes */}
                             {parsedPlan.codeChanges && parsedPlan.codeChanges.length > 0 && (
-                              <div className="space-y-2">
+                              <div className="space-y-2 overflow-hidden max-w-full">
                                 <h4 className="text-[13px] font-semibold text-white">Code Changes:</h4>
                                 {parsedPlan.codeChanges.map((change, changeIdx) => (
-                                  <div key={changeIdx} className="bg-[#0d0d0d] border border-[#252525] rounded-lg overflow-hidden">
+                                  <div key={changeIdx} className="bg-[#0d0d0d] border border-[#252525] rounded-lg overflow-hidden max-w-full">
                                     {/* File header */}
-                                    <div className="px-3 py-1.5 bg-[#151515] border-b border-[#252525] flex items-center justify-between">
-                                      <span className="text-[11px] text-zinc-500 font-mono">
+                                    <div className="px-3 py-1.5 bg-[#151515] border-b border-[#252525] flex items-center justify-between gap-2 min-w-0">
+                                      <span className="text-[11px] text-zinc-500 font-mono truncate min-w-0 flex-1">
                                         // {change.file}{change.line ? ` (line ${change.line})` : ''}
                                       </span>
                                       <button 
                                         onClick={() => navigator.clipboard.writeText(change.code)}
-                                        className="text-zinc-600 hover:text-zinc-400 transition-colors"
+                                        className="text-zinc-600 hover:text-zinc-400 transition-colors shrink-0"
                                         title="Copy code"
                                         aria-label="Copy code"
                                       >
@@ -3419,7 +3419,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                                       </button>
                                     </div>
                                     {/* Code */}
-                                    <pre className="px-3 py-2.5 text-[12px] font-mono text-emerald-400 overflow-x-auto whitespace-pre-wrap">
+                                    <pre className="px-3 py-2.5 text-[12px] font-mono text-emerald-400 overflow-x-auto whitespace-pre-wrap break-words max-w-full">
                                       {change.code}
                                     </pre>
                                   </div>
