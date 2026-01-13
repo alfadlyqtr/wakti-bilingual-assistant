@@ -2895,7 +2895,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
   }
 
   return (
-    <div className={cn("flex flex-col h-[calc(100vh-64px)] bg-background overflow-hidden max-h-[calc(100vh-64px)]", isRTL && "rtl")}>
+    <div className={cn("flex flex-col h-[100dvh] bg-background overflow-hidden", isRTL && "rtl")}>
 
       {/* Server Tab Content */}
       {mainTab === 'server' ? (
@@ -4595,6 +4595,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       {showStockPhotoSelector && (
         <StockPhotoSelector
           userId={user?.id || ''}
+          projectId={id}
           onSelectPhoto={handleStockPhotoSelect}
           onClose={() => setShowStockPhotoSelector(false)}
           searchTerm={photoSearchTerm}
