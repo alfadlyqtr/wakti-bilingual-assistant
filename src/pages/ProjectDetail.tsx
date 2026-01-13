@@ -4244,16 +4244,16 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
               )}
             </Suspense>
             
-            {/* Visual Edit Mode Active Banner */}
+            {/* Visual Edit Mode Active Banner - pointer-events-none except close button */}
             {elementSelectMode && (
-              <div className="absolute top-[56px] left-0 right-0 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-4 py-2.5 text-sm flex items-center justify-between z-50 shadow-lg">
+              <div className="absolute top-[56px] left-0 right-0 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-4 py-2.5 text-sm flex items-center justify-between z-50 shadow-lg pointer-events-none">
                 <span className="flex items-center gap-2 font-medium">
                   <MousePointer2 className="h-4 w-4 animate-pulse" />
                   {isRTL ? 'وضع التحرير المرئي - انقر على عنصر لتحريره' : 'Visual Edit Mode - Click an element to edit'}
                 </span>
                 <button 
                   onClick={() => setElementSelectMode(false)}
-                  className="text-white/80 hover:text-white p-1 hover:bg-white/10 rounded-lg transition-colors"
+                  className="text-white/80 hover:text-white p-1 hover:bg-white/10 rounded-lg transition-colors pointer-events-auto"
                 >
                   <X className="h-4 w-4" />
                 </button>
