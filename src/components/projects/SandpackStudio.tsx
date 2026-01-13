@@ -562,7 +562,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
       }}
       style={{ height: '100%', width: '100%' }}
     >
-      <div className="h-full w-full flex flex-col bg-[#0c0f14] border border-white/10 rounded-xl overflow-hidden shadow-2xl min-h-[500px] md:min-h-0">
+      <div className="h-full w-full flex flex-col bg-[#0c0f14] border border-white/10 rounded-xl overflow-hidden shadow-2xl">
         {/* HEADER - STICKY */}
         <Header />
 
