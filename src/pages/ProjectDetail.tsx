@@ -3927,7 +3927,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                         )}
                         title={isRTL ? 'تحريرات مرئية' : 'Visual edits'}
                       >
-                        <MousePointer2 className="h-4 w-4" />
+                        <Wand2 className="h-4 w-4" />
                       </button>
                       
                       {/* Jump to Bottom Button */}
