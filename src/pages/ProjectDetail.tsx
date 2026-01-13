@@ -2951,7 +2951,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
           "bg-background dark:bg-[#0c0f14]",
           "md:w-[420px] lg:w-[480px] shrink-0",
           mobileTab === 'preview' ? "hidden md:flex" : "flex w-full",
-          "h-full max-h-full overflow-hidden"
+          "h-[calc(100vh-140px)] md:h-full max-h-full overflow-hidden"
         )}>
           {/* Mode Toggle: Chat / Code / Server - FIXED at top */}
           <div className="flex items-center justify-between border-b border-border/50 dark:border-white/10 px-3 py-0 h-[56px] shrink-0 absolute top-0 left-0 right-0 z-[100] bg-background dark:bg-[#0c0f14]">
@@ -3051,7 +3051,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
           {(leftPanelMode === 'chat' || leftPanelMode === 'code') && (
             <>
               {/* Chat Messages Area - Clean bubbles, no avatars - SCROLLABLE */}
-              <div ref={chatContainerRef} className="flex-1 min-h-0 overflow-y-auto p-4 pt-[72px] space-y-3 scrollbar-thin">
+              <div ref={chatContainerRef} className="flex-1 min-h-0 overflow-y-auto p-4 pt-[64px] md:pt-[72px] space-y-3 scrollbar-thin">
 
                 {/* Show More Button - at top if there are hidden messages */}
                 {chatMessages.length > visibleMessagesCount && (
