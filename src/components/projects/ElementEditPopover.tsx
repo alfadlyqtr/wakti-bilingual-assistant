@@ -4,6 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface SelectedElementInfo {
   tagName: string;
@@ -21,7 +28,7 @@ interface SelectedElementInfo {
 interface ElementEditPopoverProps {
   element: SelectedElementInfo;
   onClose: () => void;
-  onDirectEdit: (changes: { text?: string; color?: string; bgColor?: string; fontSize?: string }) => void;
+  onDirectEdit: (changes: { text?: string; color?: string; bgColor?: string; fontSize?: string; fontFamily?: string }) => void;
   onAIEdit: (prompt: string) => void;
   isRTL?: boolean;
 }
@@ -44,6 +51,21 @@ const colorPresets = [
   '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280'
 ];
 
+// Font family presets (Google Fonts compatible)
+const fontPresets = [
+  { value: 'inherit', label: 'Default' },
+  { value: 'Inter, sans-serif', label: 'Inter' },
+  { value: 'Roboto, sans-serif', label: 'Roboto' },
+  { value: 'Poppins, sans-serif', label: 'Poppins' },
+  { value: 'Playfair Display, serif', label: 'Playfair' },
+  { value: 'Montserrat, sans-serif', label: 'Montserrat' },
+  { value: 'Open Sans, sans-serif', label: 'Open Sans' },
+  { value: 'Lato, sans-serif', label: 'Lato' },
+  { value: 'Cairo, sans-serif', label: 'Cairo (Arabic)' },
+  { value: 'Tajawal, sans-serif', label: 'Tajawal (Arabic)' },
+  { value: 'monospace', label: 'Monospace' },
+];
+
 export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
   element,
   onClose,
@@ -56,6 +78,7 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
   const [editedColor, setEditedColor] = useState(element.computedStyle?.color || '#ffffff');
   const [editedBgColor, setEditedBgColor] = useState(element.computedStyle?.backgroundColor || 'transparent');
   const [editedFontSize, setEditedFontSize] = useState(parseFontSize(element.computedStyle?.fontSize || '16px'));
+  const [editedFontFamily, setEditedFontFamily] = useState('inherit');
   const [aiPrompt, setAiPrompt] = useState('');
   const [activeTab, setActiveTab] = useState<'direct' | 'ai'>('direct');
   
@@ -64,13 +87,14 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
     text: false,
     color: false,
     bgColor: false,
-    fontSize: false
+    fontSize: false,
+    fontFamily: false
   });
 
   const showTextEdit = isTextElement(element.tagName) && element.innerText.trim().length > 0;
 
   const handleApplyDirectEdits = () => {
-    const changes: { text?: string; color?: string; bgColor?: string; fontSize?: string } = {};
+    const changes: { text?: string; color?: string; bgColor?: string; fontSize?: string; fontFamily?: string } = {};
     
     if (modified.text && editedText !== element.innerText) {
       changes.text = editedText;
@@ -83,6 +107,9 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
     }
     if (modified.fontSize) {
       changes.fontSize = `${editedFontSize}px`;
+    }
+    if (modified.fontFamily && editedFontFamily !== 'inherit') {
+      changes.fontFamily = editedFontFamily;
     }
     
     if (Object.keys(changes).length > 0) {
@@ -283,6 +310,37 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
                 />
               </div>
 
+              {/* Font Family */}
+              <div className="space-y-2">
+                <label className="text-xs text-zinc-400 flex items-center gap-1.5">
+                  <Type className="h-3 w-3" />
+                  {isRTL ? 'نوع الخط' : 'Font Type'}
+                </label>
+                <Select
+                  value={editedFontFamily}
+                  onValueChange={(val) => {
+                    setEditedFontFamily(val);
+                    setModified(m => ({ ...m, fontFamily: true }));
+                  }}
+                >
+                  <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
+                    <SelectValue placeholder={isRTL ? 'اختر الخط' : 'Select font'} />
+                  </SelectTrigger>
+                  <SelectContent className="bg-zinc-800 border-zinc-700">
+                    {fontPresets.map((font) => (
+                      <SelectItem 
+                        key={font.value} 
+                        value={font.value}
+                        className="text-white hover:bg-zinc-700"
+                        style={{ fontFamily: font.value !== 'inherit' ? font.value : undefined }}
+                      >
+                        {font.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               {/* Apply Button */}
               <Button
                 onClick={handleApplyDirectEdits}
@@ -292,10 +350,6 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
                 <Check className="h-4 w-4 mr-2" />
                 {isRTL ? 'تطبيق التغييرات' : 'Apply Changes'}
               </Button>
-              
-              <p className="text-[10px] text-center text-zinc-500">
-                {isRTL ? 'التعديلات المباشرة لا تستهلك رصيد' : 'Direct edits don\'t use credits'}
-              </p>
             </>
           ) : (
             <>
