@@ -25,70 +25,77 @@ interface StyleChanges {
 }
 
 /**
- * Find an element in JSX code by matching its tag, text content, or class
+ * Find an element in JSX code by matching its tag, text content, or class.
+ * NOTE: DOM tagName may come from components like framer-motion (e.g. <motion.h1> renders <h1>),
+ * so we try multiple JSX tag candidates.
  */
 function findElementInCode(
   code: string,
   element: ElementInfo
 ): { fullMatch: string; openingTag: string; startIndex: number; endIndex: number } | null {
   const { tagName, innerText, className } = element;
-  
-  // Strategy 1: Find by tag + exact text content (for simple elements)
+
+  const tagCandidates = [tagName, `motion.${tagName}`];
+
+  const escapeTagForRegex = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  // Strategy 1: Find by tag + exact text content
   if (innerText && innerText.length > 0 && innerText.length < 200) {
     const escapedText = innerText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    
-    // Match self-closing or regular elements with this text
-    // Pattern: <tagName ...>text</tagName>
-    const textPatterns = [
-      // Simple case: <tag>text</tag>
-      new RegExp(`(<${tagName}[^>]*>)\\s*${escapedText}\\s*</${tagName}>`, 'g'),
-      // With nested tags: <tag><span>text</span></tag> - less reliable
-    ];
-    
-    for (const pattern of textPatterns) {
+
+    for (const cand of tagCandidates) {
+      const t = escapeTagForRegex(cand);
+      const pattern = new RegExp(`(<${t}[^>]*>)\\s*${escapedText}\\s*</${t}>`, 'g');
+
       let match;
       while ((match = pattern.exec(code)) !== null) {
         return {
           fullMatch: match[0],
           openingTag: match[1],
           startIndex: match.index,
-          endIndex: match.index + match[0].length
+          endIndex: match.index + match[0].length,
         };
       }
     }
   }
-  
-  // Strategy 2: Find by tag + className (more reliable for styled elements)
+
+  // Strategy 2: Find by tag + className (first class)
   if (className) {
-    const firstClass = className.split(' ').filter(c => c && !c.includes('hover:'))[0];
+    const firstClass = className.split(' ').filter((c) => c && !c.includes('hover:'))[0];
     if (firstClass) {
       const escapedClass = firstClass.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      // Match className="..." or className={'...'} containing our class
-      const classPattern = new RegExp(
-        `<${tagName}[^>]*className=["'{][^"'}]*${escapedClass}[^"'}]*["'}][^>]*>`,
-        'g'
-      );
-      
-      const match = classPattern.exec(code);
-      if (match) {
-        // Find the closing tag
-        const afterOpening = code.slice(match.index + match[0].length);
-        const closingPattern = new RegExp(`</${tagName}>`);
-        const closingMatch = closingPattern.exec(afterOpening);
-        
-        if (closingMatch) {
-          const fullMatch = code.slice(match.index, match.index + match[0].length + closingMatch.index + closingMatch[0].length);
-          return {
-            fullMatch,
-            openingTag: match[0],
-            startIndex: match.index,
-            endIndex: match.index + fullMatch.length
-          };
+
+      for (const cand of tagCandidates) {
+        const t = escapeTagForRegex(cand);
+        const classPattern = new RegExp(
+          `<${t}[^>]*className=["'{][^"'}]*${escapedClass}[^"'}]*["'}][^>]*>`,
+          'g'
+        );
+
+        const match = classPattern.exec(code);
+        if (match) {
+          const afterOpening = code.slice(match.index + match[0].length);
+          const closingPattern = new RegExp(`</${t}>`);
+          const closingMatch = closingPattern.exec(afterOpening);
+
+          if (closingMatch) {
+            const fullMatch = code.slice(
+              match.index,
+              match.index + match[0].length + closingMatch.index + closingMatch[0].length
+            );
+
+            return {
+              fullMatch,
+              openingTag: match[0],
+              startIndex: match.index,
+              endIndex: match.index + fullMatch.length,
+            };
+          }
         }
       }
     }
   }
-  
+
   return null;
 }
 
@@ -222,23 +229,29 @@ export function applyDirectEdits(
       // If text was provided, try to find element by its text content
       if (element.innerText) {
         const escapedText = element.innerText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const simplePattern = new RegExp(`(<${element.tagName}[^>]*)>\\s*${escapedText}`, 'g');
-        const match = simplePattern.exec(modifiedCode);
-        
-        if (match) {
-          const openingTagPart = match[1];
-          const newOpeningTag = updateOpeningTagStyles(openingTagPart + '>', {
-            color: changes.color,
-            backgroundColor: changes.bgColor !== 'transparent' ? changes.bgColor : undefined,
-            fontSize: changes.fontSize,
-            fontFamily: changes.fontFamily
-          });
-          
-          modifiedCode = modifiedCode.replace(match[0], newOpeningTag.slice(0, -1) + `>${element.innerText}`);
-          if (changes.color) appliedChanges.push('color');
-          if (changes.bgColor && changes.bgColor !== 'transparent') appliedChanges.push('background');
-          if (changes.fontSize) appliedChanges.push('font size');
-          if (changes.fontFamily) appliedChanges.push('font');
+        const tagCandidates = [element.tagName, `motion.${element.tagName}`];
+
+        for (const cand of tagCandidates) {
+          const t = cand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const simplePattern = new RegExp(`(<${t}[^>]*)>\\s*${escapedText}`, 'g');
+          const match = simplePattern.exec(modifiedCode);
+
+          if (match) {
+            const openingTagPart = match[1];
+            const newOpeningTag = updateOpeningTagStyles(openingTagPart + '>', {
+              color: changes.color,
+              backgroundColor: changes.bgColor !== 'transparent' ? changes.bgColor : undefined,
+              fontSize: changes.fontSize,
+              fontFamily: changes.fontFamily,
+            });
+
+            modifiedCode = modifiedCode.replace(match[0], newOpeningTag.slice(0, -1) + `>${element.innerText}`);
+            if (changes.color) appliedChanges.push('color');
+            if (changes.bgColor && changes.bgColor !== 'transparent') appliedChanges.push('background');
+            if (changes.fontSize) appliedChanges.push('font size');
+            if (changes.fontFamily) appliedChanges.push('font');
+            break;
+          }
         }
       }
     }

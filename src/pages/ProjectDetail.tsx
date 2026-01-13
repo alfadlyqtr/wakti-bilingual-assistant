@@ -4639,20 +4639,13 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                 }
               }
             } else {
-              // Direct edit failed - for complex cases, still allow AI fallback
-              if ((changes.color || changes.bgColor || changes.fontSize || changes.fontFamily) && !changes.text) {
-                const styleChanges: string[] = [];
-                if (changes.color) styleChanges.push(`text color to ${changes.color}`);
-                if (changes.bgColor && changes.bgColor !== 'transparent') styleChanges.push(`background color to ${changes.bgColor}`);
-                if (changes.fontSize) styleChanges.push(`font size to ${changes.fontSize}`);
-                if (changes.fontFamily) styleChanges.push(`font family to ${changes.fontFamily}`);
-                
-                const prompt = `For the ${selectedElementInfo.tagName} element containing "${selectedElementInfo.innerText.substring(0, 30)}...", change: ${styleChanges.join(', ')}`;
-                setChatInput(prompt);
-                toast.info(isRTL ? 'تم إضافة الطلب - اضغط إرسال' : 'Prompt added - press send');
-              } else {
-                toast.warning(isRTL ? 'لم يتم تطبيق أي تغييرات' : 'No changes were applied');
-              }
+              // Direct edit failed: do NOT auto-generate an AI prompt.
+              // Direct edits must remain credit-free; users can explicitly choose the AI tab if needed.
+              toast.error(
+                isRTL
+                  ? 'تعذر تطبيق التعديل مباشرة. استخدم "تعديل بالذكاء الاصطناعي" إذا لزم الأمر.'
+                  : 'Could not apply this direct edit. Use "Edit with AI" if needed.'
+              );
             }
             
             setShowElementEditPopover(false);
