@@ -261,7 +261,7 @@ export function applyDirectEdits(
     return {
       success: true,
       code: modifiedCode,
-      message: `Applied: ${appliedChanges.join(', ')}`
+      message: appliedChanges.join(', ')
     };
   }
   

@@ -4623,7 +4623,13 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                   ...prev,
                   '/App.js': result.code
                 }));
-                toast.success(isRTL ? `تم التطبيق: ${result.message}` : `Applied: ${result.message}`);
+                // IMPORTANT: keep editor content in sync; Save button uses codeContent
+                setCodeContent(result.code);
+                toast.success(
+                  isRTL
+                    ? `تم التطبيق: ${result.message} (غير محفوظ بعد)`
+                    : `Applied: ${result.message} (not saved yet)`
+                );
               } else {
                 // JSX validation failed - shouldn't happen but fallback to simple text replace
                 console.warn('[Visual Edits] JSX validation failed, trying simple replace');
@@ -4640,11 +4646,10 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
               }
             } else {
               // Direct edit failed: do NOT auto-generate an AI prompt.
-              // Direct edits must remain credit-free; users can explicitly choose the AI tab if needed.
               toast.error(
                 isRTL
-                  ? 'تعذر تطبيق التعديل مباشرة. استخدم "تعديل بالذكاء الاصطناعي" إذا لزم الأمر.'
-                  : 'Could not apply this direct edit. Use "Edit with AI" if needed.'
+                  ? 'تعذر تطبيق التعديل مباشرة. جرّب اختيار عنصر آخر أو استخدم "تعديل بالذكاء الاصطناعي".'
+                  : 'Could not apply this direct edit. Try selecting a different element or use "Edit with AI".'
               );
             }
             
