@@ -185,6 +185,12 @@ export default function ProjectDetail() {
   const [showStockPhotoSelector, setShowStockPhotoSelector] = useState(false);
   const [photoSearchTerm, setPhotoSearchTerm] = useState('');
   const [photoSelectorInitialTab, setPhotoSelectorInitialTab] = useState<'stock' | 'user'>('stock');
+  
+  // Pending element image edit (for AI Edit image requests)
+  const [pendingElementImageEdit, setPendingElementImageEdit] = useState<{
+    elementInfo: typeof selectedElementInfo;
+    originalPrompt: string;
+  } | null>(null);
 
   // Clarifying questions modal state
   const [showClarifyingQuestions, setShowClarifyingQuestions] = useState(false);
@@ -2290,7 +2296,22 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
   
   // Handle stock photo selection
   const handleStockPhotoSelect = (photo: { url: string; title: string }) => {
-    // Create a File object from the URL
+    // Check if this is for an element image edit (from AI Edit)
+    if (pendingElementImageEdit) {
+      const { elementInfo, originalPrompt } = pendingElementImageEdit;
+      
+      // Build a context-aware prompt that includes the selected image URL
+      const contextPrompt = `For the ${elementInfo?.tagName} element ${elementInfo?.className ? `with class "${elementInfo.className.split(' ')[0]}"` : ''}: Replace the image with this URL: ${photo.url}. Original request: ${originalPrompt}`;
+      
+      setChatInput(contextPrompt);
+      setPendingElementImageEdit(null);
+      setSelectedElementInfo(null);
+      
+      toast.success(isRTL ? 'تم اختيار الصورة - اضغط إرسال للتطبيق' : 'Image selected - press send to apply');
+      return;
+    }
+    
+    // Default behavior: attach image to chat
     fetch(photo.url)
       .then(res => res.blob())
       .then(blob => {
@@ -4653,7 +4674,44 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
             setSelectedElementInfo(null);
           }}
           onAIEdit={(prompt) => {
-            // Build context-aware prompt
+            // Detect image-related requests
+            const imageKeywords = /\b(image|photo|picture|background|img|صورة|صور|خلفية)\b/i;
+            const changeToPattern = /\b(change|replace|swap|switch|update|set|make|add|use|غير|غيّر|بدل|استبدل|استخدم)\b.*?\b(to|with|of|into|as|إلى|ب)\b\s*(.+)/i;
+            const imageOfPattern = /\b(image|photo|picture|صورة|صور)\s*(of|about|for|عن|من)\s*(.+)/i;
+            
+            const isImageRequest = imageKeywords.test(prompt);
+            const changeMatch = prompt.match(changeToPattern);
+            const imageOfMatch = prompt.match(imageOfPattern);
+            
+            // Extract search term from the prompt
+            let searchTerm = '';
+            if (changeMatch && changeMatch[3]) {
+              searchTerm = changeMatch[3].trim().replace(/[.!?]+$/, '');
+            } else if (imageOfMatch && imageOfMatch[3]) {
+              searchTerm = imageOfMatch[3].trim().replace(/[.!?]+$/, '');
+            } else if (isImageRequest) {
+              // Try to extract subject from prompt
+              const words = prompt.split(/\s+/).filter(w => 
+                !['change', 'replace', 'image', 'photo', 'picture', 'to', 'with', 'the', 'a', 'an', 'of', 'add', 'use', 'set', 'make'].includes(w.toLowerCase())
+              );
+              searchTerm = words.slice(0, 3).join(' ');
+            }
+            
+            if (isImageRequest && searchTerm) {
+              // Store the element info and open Freepik selector
+              setPendingElementImageEdit({
+                elementInfo: selectedElementInfo,
+                originalPrompt: prompt
+              });
+              setPhotoSearchTerm(searchTerm);
+              setPhotoSelectorInitialTab('stock');
+              setShowStockPhotoSelector(true);
+              setShowElementEditPopover(false);
+              // Don't clear selectedElementInfo yet - we need it for the image replacement
+              return;
+            }
+            
+            // Non-image request: proceed with AI edit as before
             const contextPrompt = `For the ${selectedElementInfo.tagName} element ${selectedElementInfo.className ? `with class "${selectedElementInfo.className.split(' ')[0]}"` : ''} containing "${selectedElementInfo.innerText.substring(0, 50)}...": ${prompt}`;
             setChatInput(contextPrompt);
             setShowElementEditPopover(false);
