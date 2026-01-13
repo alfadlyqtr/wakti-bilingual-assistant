@@ -41,7 +41,7 @@ const CATEGORY_META: Record<SuggestionCategory, { icon: string; color: string }>
 const SUGGESTION_POOL: SmartSuggestion[] = [
   // Design
   { id: 'dark-mode', label: 'Add Dark Mode', labelAr: 'إضافة الوضع الداكن', prompt: 'Add dark mode support with a theme toggle', category: 'design', priority: 8 },
-  { id: 'animations', label: 'Add Animations', labelAr: 'إضافة حركات', prompt: 'Add smooth entrance animations using framer-motion', category: 'design', priority: 7 },
+  { id: 'animations', label: 'Add Animations', labelAr: 'إضافة حركات', prompt: 'Add smooth entrance animations using framer-motion', category: 'design', priority: 3 },
   { id: 'improve-spacing', label: 'Improve Spacing', labelAr: 'تحسين المسافات', prompt: 'Improve the spacing and visual hierarchy throughout the app', category: 'design', priority: 5 },
   { id: 'typography', label: 'Improve Typography', labelAr: 'تحسين الخطوط', prompt: 'Improve typography with better font sizes and weights', category: 'design', priority: 4 },
   { id: 'color-scheme', label: 'Enhance Colors', labelAr: 'تحسين الألوان', prompt: 'Enhance the color scheme for better visual appeal', category: 'design', priority: 4 },
@@ -190,11 +190,10 @@ export function generateSmartSuggestions(
  * Get initial suggestions for a new/empty project
  */
 export function getInitialSuggestions(): SmartSuggestion[] {
+  // Only return truly essential initial suggestions - NO static "animations"
   return [
     SUGGESTION_POOL.find(s => s.id === 'responsive')!,
-    SUGGESTION_POOL.find(s => s.id === 'animations')!,
     SUGGESTION_POOL.find(s => s.id === 'dark-mode')!,
-    SUGGESTION_POOL.find(s => s.id === 'auth')!,
   ].filter(Boolean);
 }
 

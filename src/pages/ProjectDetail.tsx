@@ -2895,7 +2895,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
   }
 
   return (
-    <div className={cn("flex flex-col h-[calc(100vh-64px)] bg-background overflow-hidden", isRTL && "rtl")}>
+    <div className={cn("flex flex-col h-[calc(100vh-64px)] bg-background overflow-hidden max-h-[calc(100vh-64px)]", isRTL && "rtl")}>
 
       {/* Server Tab Content */}
       {mainTab === 'server' ? (
@@ -2904,8 +2904,8 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         </div>
       ) : (
       <>
-      {/* Builder Tab Content - Mobile Chat/Preview Toggle - STICKY */}
-      <div className="md:hidden px-4 py-2 bg-background/95 dark:bg-[#0c0f14]/95 backdrop-blur-sm border-b border-border/40 shrink-0 sticky top-0 z-20">
+      {/* Builder Tab Content - Mobile Chat/Preview Toggle - FIXED at top, NO scroll */}
+      <div className="md:hidden px-4 py-2 bg-background/95 dark:bg-[#0c0f14]/95 backdrop-blur-sm border-b border-border/40 shrink-0 z-20">
         <div className="relative flex p-1 bg-muted/30 dark:bg-white/5 rounded-2xl border border-border/50">
           {/* Animated sliding background pill */}
           <div 
@@ -3929,20 +3929,20 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                           if (lowerContent.includes('list') || lowerContent.includes('table') || lowerContent.includes('data')) {
                             suggestions.push({ label: 'Add filtering', labelAr: 'إضافة تصفية', prompt: 'Add filtering and sorting to the data' });
                           }
-                          if (lowerContent.includes('button') || lowerContent.includes('component') || lowerContent.includes('card')) {
-                            suggestions.push({ label: 'Add animations', labelAr: 'إضافة حركات', prompt: 'Add smooth animations using framer-motion' });
+                          if (lowerContent.includes('button') || lowerContent.includes('cta')) {
+                            suggestions.push({ label: 'Add hover effect', labelAr: 'إضافة تأثير', prompt: 'Add smooth hover effect to the button' });
+                          }
+                          if (lowerContent.includes('card') || lowerContent.includes('component')) {
+                            suggestions.push({ label: 'Add shadow', labelAr: 'إضافة ظل', prompt: 'Add elegant shadow and hover lift effect' });
+                          }
+                          if (lowerContent.includes('image') || lowerContent.includes('carousel') || lowerContent.includes('gallery')) {
+                            suggestions.push({ label: 'Change images', labelAr: 'تغيير الصور', prompt: 'Change the images to different ones' });
                           }
                           if (lowerContent.includes('api') || lowerContent.includes('backend') || lowerContent.includes('database')) {
                             suggestions.push({ label: 'Add error handling', labelAr: 'معالجة الأخطاء', prompt: 'Add proper error handling with user-friendly messages' });
                           }
                           
-                          // Default suggestions if no context match
-                          if (suggestions.length === 0) {
-                            suggestions.push(
-                              { label: 'Add a new feature', labelAr: 'أضف ميزة جديدة', prompt: 'Add a new feature to enhance the functionality' },
-                              { label: 'Improve the design', labelAr: 'حسّن التصميم', prompt: 'Improve the visual design and user experience' }
-                            );
-                          }
+                          // NO static fallback - only show suggestions when context matches
                           
                           return suggestions.slice(0, 2);
                         };
