@@ -2800,7 +2800,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
   }
 
   return (
-    <div className={cn("flex flex-col h-[calc(100vh-64px)] bg-background overflow-hidden", isRTL && "rtl")}>
+    <div className={cn("flex flex-col h-[calc(100vh-64px)] bg-background overflow-hidden fixed inset-0 top-[64px]", isRTL && "rtl")}>
 
       {/* Server Tab Content */}
       {mainTab === 'server' ? (
@@ -2856,7 +2856,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
           "bg-background dark:bg-[#0c0f14]",
           "md:w-[420px] lg:w-[480px] shrink-0",
           mobileTab === 'preview' ? "hidden md:flex" : "flex w-full",
-          "h-full overflow-hidden"
+          "h-full max-h-full overflow-hidden"
         )}>
           {/* Mode Toggle: Chat / Code / Server - FIXED at top */}
           <div className="flex items-center justify-between border-b border-border/50 dark:border-white/10 px-3 py-0 h-[56px] shrink-0 absolute top-0 left-0 right-0 z-[100] bg-background dark:bg-[#0c0f14]">
@@ -2963,7 +2963,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
           {(leftPanelMode === 'chat' || leftPanelMode === 'code') && (
             <>
               {/* Chat Messages Area - Clean bubbles, no avatars - SCROLLABLE */}
-              <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 pt-[72px] space-y-3 scrollbar-thin">
+              <div ref={chatContainerRef} className="flex-1 min-h-0 overflow-y-auto p-4 pt-[72px] space-y-3 scrollbar-thin">
 
                 {/* Show More Button - at top if there are hidden messages */}
                 {chatMessages.length > visibleMessagesCount && (
@@ -4020,7 +4020,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         <div className={cn(
           "flex-1 flex flex-col bg-[#0c0f14] relative",
           mobileTab === 'chat' ? "hidden md:flex" : "flex w-full",
-          "h-full overflow-hidden"
+          "h-full max-h-full overflow-hidden"
         )}>
           {/* Project Info Bar - Back, Name, Status - FIXED at top */}
           <div className="flex items-center gap-3 px-4 py-0 h-[56px] bg-gradient-to-r from-zinc-900 to-zinc-900/90 border-b border-white/10 shrink-0 absolute top-0 left-0 right-0 z-[100]">
@@ -4108,7 +4108,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
           </div>
 
           {/* Preview/Code Content - Full Height with top padding for fixed header - ONLY IFRAME SCROLLS */}
-          <div className="flex-1 sandpack-preview-container relative min-h-0 pt-[56px] overflow-hidden">
+          <div className="flex-1 min-h-0 sandpack-preview-container relative pt-[56px] overflow-hidden">
             <Suspense fallback={
               <div className="w-full h-full flex items-center justify-center bg-zinc-950 text-white">
                 <Loader2 className="w-10 h-10 animate-spin text-indigo-500" />
