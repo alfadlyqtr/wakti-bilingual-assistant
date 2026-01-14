@@ -2603,6 +2603,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
 
     // Special case: Carousel image replacement flow
     if (isChangingCarouselImages) {
+      console.log('[Carousel] handleStockPhotosSelect called with', photos.length, 'photos');
       setIsChangingCarouselImages(false);
       
       const loadingToast = toast.loading(
@@ -2610,7 +2611,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       );
 
       try {
-        // Import all images to storage in parallel
+        // Import all images to storage in parallel (skips if already stored)
         const storedUrls = await Promise.all(
           photos.map(p => importExternalImage(p.url, p.title))
         );
@@ -2622,7 +2623,6 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         
         if (success) {
           setGeneratedFiles(updatedFiles);
-          setCodeContent(updatedFiles['/App.js'] || '');
           toast.success(
             language === 'ar' 
               ? `تم تحديث ${storedUrls.length} صور في الكاروسيل` 
@@ -2634,14 +2634,10 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
             ? `قم بتحديث روابط الصور في الكاروسيل/المعرض إلى هذه الروابط بالضبط:\n${storedUrls.join('\n')}`
             : `Update the carousel/gallery slide sources to exactly these URLs:\n${storedUrls.join('\n')}`;
           
-          // Direct submit without DOM hacks - just set and trigger
           setChatInput(promptText);
-          // Use requestAnimationFrame to ensure state is applied
           requestAnimationFrame(() => {
             const formEl = document.querySelector('form[class*="chat"]') as HTMLFormElement;
-            if (formEl) {
-              formEl.requestSubmit?.();
-            }
+            if (formEl) formEl.requestSubmit?.();
           });
         }
       } catch (err) {
@@ -2799,9 +2795,27 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       const changeMatch = userMessage.match(changeToPattern);
       if (changeMatch && changeMatch[1]) {
         const hasImageContext = /\b(images?|photos?|pictures?|carousel|gallery|banner|background|slider)\b/i.test(userMessage);
+
+        // If user explicitly clicked/used a "Change images" action, treat it as carousel/gallery replacement mode
+        const explicitChangeImages = /^(change\s+(?:the\s+)?images?)(?:\s+to\s+different\s+ones)?$/i.test(userMessage)
+          || /^(?:غير|تغيير)\s*الصور$/i.test(userMessage);
+
+        if (explicitChangeImages) {
+          setIsChangingCarouselImages(true);
+          openStockPhotoSelector('stock', true);
+          return;
+        }
+
         if (hasImageContext) {
-          const searchTerm = changeMatch[1].trim().replace(/[.!?]+$/, '').replace(/\s*(images?|photos?|pictures?)\s*/gi, '').split(/\s+/).slice(0, 3).join(' ');
+          const searchTerm = changeMatch[1]
+            .trim()
+            .replace(/[.!?]+$/, '')
+            .replace(/\s*(images?|photos?|pictures?)\s*/gi, '')
+            .split(/\s+/)
+            .slice(0, 3)
+            .join(' ');
           if (searchTerm && searchTerm.length > 1) {
+            // This is a generic request to find images (attach to chat), not a carousel replacement
             openStockPhotoSelector('stock', true);
             return;
           }
