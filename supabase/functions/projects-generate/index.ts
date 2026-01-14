@@ -1705,8 +1705,30 @@ User: "What does useState do?" → Answer the question
 `
         : '';
 
+      // Build enhanced prompt for attached images
+      const attachedImagesContext = hasImages ? `
+🖼️ ATTACHED IMAGES HANDLING (CRITICAL):
+The user has attached ${(images as unknown as string[]).length} image(s) directly to this message.
+
+RULES FOR ATTACHED IMAGES:
+1. These images are ready to use in the code - they have permanent URLs
+2. If user says "use this as background" → Set the attached image as CSS background
+3. If user says "create a carousel/gallery/slider" → Use ALL attached images in a carousel
+4. If user says "add to hero/banner" → Use the attached image in the hero section
+5. If user says "use as logo/icon" → Use as an <img> tag with appropriate sizing
+6. NEVER ask "which image?" when images are already attached - just USE them
+
+Attached Image URLs (use these directly):
+${(images as unknown as string[]).filter((img: string) => !img.startsWith('[PDF:')).map((img: string, i: number) => `${i + 1}. ${img.startsWith('http') ? img : '[base64-image-' + (i + 1) + ']'}`).join('\n')}
+
+Example usage:
+- Background: style={{ backgroundImage: \`url(${"${imageUrl}"})\` }}
+- Carousel: const images = [${(images as unknown as string[]).filter((img: string) => !img.startsWith('[PDF:') && img.startsWith('http')).map((url: string) => `"${url}"`).join(', ')}];
+- Single image: <img src="${(images as unknown as string[])[0]?.startsWith('http') ? (images as unknown as string[])[0] : 'IMAGE_URL'}" alt="..." />
+` : '';
+
       const chatSystemPrompt = `You are a helpful AI assistant for a React code editor. You help users with their projects.
-${assetPickerPriorityStr}${hasImages ? '\n🖼️ SCREENSHOT ANALYSIS MODE: The user has attached screenshot(s). Analyze them carefully and implement what you see or what the user asks based on the visual.\n' : ''}
+${assetPickerPriorityStr}${attachedImagesContext}${hasImages && !attachedImagesContext.includes('ATTACHED') ? '\n🖼️ SCREENSHOT ANALYSIS MODE: The user has attached screenshot(s). Analyze them carefully and implement what you see or what the user asks based on the visual.\n' : ''}
 🚨 PRIORITY 2 - CODE CHANGE DETECTION (Only if asset_picker doesn't apply):
 
 IS IT A CODE CHANGE REQUEST? Check for these keywords:
@@ -1715,6 +1737,7 @@ IS IT A CODE CHANGE REQUEST? Check for these keywords:
 - "أصلح", "غير", "أضف", "احذف", "عدل", "اجعل", "لا يعمل", "مشكلة"
 - Any request implying the user wants you to DO something to the code
 - If user attached a screenshot, they likely want you to recreate or modify based on it
+- If user attached images + gave instructions, they want those images USED in the code
 
 IF YES → Return ONLY JSON (no text before or after)
 IF NO (pure question like "what does X do?") → Return markdown
