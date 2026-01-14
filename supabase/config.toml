@@ -118,6 +118,9 @@ verify_jwt = false
 [functions.projects-publish]
 verify_jwt = false
 
+[functions.import-external-image]
+verify_jwt = false
+
 [functions.project-backend-api]
 verify_jwt = false
 

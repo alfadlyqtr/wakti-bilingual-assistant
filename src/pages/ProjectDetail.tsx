@@ -2296,81 +2296,184 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
     setAttachedImages(prev => prev.filter((_, i) => i !== index));
   };
   
+  // Helper: Find and replace image URL across ALL generatedFiles (not just App.js)
+  const replaceImageInAllFiles = (
+    files: Record<string, string>,
+    elementInfo: { openingTag?: string; className?: string; tagName?: string } | null,
+    newUrl: string
+  ): { success: boolean; updatedFiles: Record<string, string>; targetFile: string | null } => {
+    if (!elementInfo) return { success: false, updatedFiles: files, targetFile: null };
+    
+    const className = elementInfo.className?.split(' ')[0] || '';
+    const tag = elementInfo.tagName?.toLowerCase() || '';
+    
+    // Extract old src from opening tag
+    let oldSrc = '';
+    if (elementInfo.openingTag) {
+      const srcMatch = elementInfo.openingTag.match(/src=["']([^"']+)["']/);
+      if (srcMatch) oldSrc = srcMatch[1];
+    }
+    
+    // Priority order of files to check
+    const fileKeys = Object.keys(files).sort((a, b) => {
+      // Prioritize files likely to contain component code
+      const priorityPatterns = [/carousel/i, /slider/i, /image/i, /gallery/i, /hero/i, /banner/i];
+      const aScore = priorityPatterns.some(p => p.test(a)) ? 0 : 1;
+      const bScore = priorityPatterns.some(p => p.test(b)) ? 0 : 1;
+      return aScore - bScore;
+    });
+    
+    // Strategy 1: Find file containing the exact oldSrc
+    if (oldSrc) {
+      for (const filePath of fileKeys) {
+        const content = files[filePath];
+        if (!content || typeof content !== 'string') continue;
+        
+        if (content.includes(oldSrc)) {
+          const escapedSrc = oldSrc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const srcPattern = new RegExp(`(["'])${escapedSrc}\\1`, 'g');
+          const newContent = content.replace(srcPattern, `$1${newUrl}$1`);
+          
+          if (newContent !== content) {
+            console.log(`Image replaced in ${filePath} using oldSrc match`);
+            return { 
+              success: true, 
+              updatedFiles: { ...files, [filePath]: newContent },
+              targetFile: filePath
+            };
+          }
+        }
+      }
+    }
+    
+    // Strategy 2: Match by className across all files
+    if (className) {
+      const escapedClass = className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const patterns = [
+        new RegExp(`(<img[^>]*?src=)(["'])([^"']+)(\\2)([^>]*?(?:className|class)=["'][^"']*${escapedClass}[^"']*["'])`, 'g'),
+        new RegExp(`(<img[^>]*?(?:className|class)=["'][^"']*${escapedClass}[^"']*["'][^>]*?src=)(["'])([^"']+)(\\2)`, 'g')
+      ];
+      
+      for (const filePath of fileKeys) {
+        const content = files[filePath];
+        if (!content || typeof content !== 'string') continue;
+        
+        for (const pattern of patterns) {
+          let replaced = false;
+          const newContent = content.replace(pattern, (match, ...groups) => {
+            replaced = true;
+            if (groups.length === 5) {
+              return `${groups[0]}${groups[1]}${newUrl}${groups[3]}${groups[4]}`;
+            } else {
+              return `${groups[0]}${groups[1]}${newUrl}${groups[3]}`;
+            }
+          });
+          
+          if (replaced) {
+            console.log(`Image replaced in ${filePath} using className match`);
+            return { 
+              success: true, 
+              updatedFiles: { ...files, [filePath]: newContent },
+              targetFile: filePath
+            };
+          }
+        }
+      }
+    }
+    
+    // Strategy 3: Single img tag replacement (last resort)
+    if (tag === 'img') {
+      for (const filePath of fileKeys) {
+        const content = files[filePath];
+        if (!content || typeof content !== 'string') continue;
+        
+        const imgCount = (content.match(/<img\s/g) || []).length;
+        if (imgCount === 1) {
+          const singleImgPattern = /(<img[^>]*?src=)(["'])([^"']+)(\2)/;
+          const newContent = content.replace(singleImgPattern, `$1$2${newUrl}$4`);
+          
+          if (newContent !== content) {
+            console.log(`Image replaced in ${filePath} using single img match`);
+            return { 
+              success: true, 
+              updatedFiles: { ...files, [filePath]: newContent },
+              targetFile: filePath
+            };
+          }
+        }
+      }
+    }
+    
+    return { success: false, updatedFiles: files, targetFile: null };
+  };
+
+  // Helper: Import external image to Supabase storage
+  const importExternalImage = async (sourceUrl: string, filenameHint?: string): Promise<string> => {
+    if (!id) return sourceUrl;
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('import-external-image', {
+        body: { projectId: id, sourceUrl, filenameHint },
+      });
+      
+      if (error) {
+        console.warn('Failed to import image to storage:', error);
+        return sourceUrl; // Fallback to original URL
+      }
+      
+      if (data?.url) {
+        console.log('Image imported to storage:', data.url);
+        return data.url;
+      }
+      
+      if (data?.fallbackUrl) {
+        return data.fallbackUrl;
+      }
+      
+      return sourceUrl;
+    } catch (err) {
+      console.warn('Import error:', err);
+      return sourceUrl;
+    }
+  };
+
   // Handle stock photo selection
-  const handleStockPhotoSelect = (photo: { url: string; title: string }) => {
+  const handleStockPhotoSelect = async (photo: { url: string; title: string }) => {
     // Check if this is for an element image edit (from Image tab or AI Edit)
     if (pendingElementImageEdit) {
       const { elementInfo } = pendingElementImageEdit;
-      const currentCode = generatedFiles['/App.js'] || '';
-      const className = elementInfo?.className?.split(' ')[0];
-      const tag = elementInfo?.tagName?.toLowerCase() || '';
       
-      // Try multiple direct replacement strategies
-      let newCode = currentCode;
-      let replaced = false;
+      // Show loading toast
+      const loadingToast = toast.loading(isRTL ? 'جاري استيراد الصورة...' : 'Importing image...');
       
-      // Strategy 1: Find img element with matching class (handles both className and class)
-      if (className && !replaced) {
-        const escapedClass = className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        // Match img with src before or after className
-        const patterns = [
-          new RegExp(`(<img[^>]*?src=)(["'])([^"']+)(\\2)([^>]*?(?:className|class)=["'][^"']*${escapedClass}[^"']*["'])`, 'g'),
-          new RegExp(`(<img[^>]*?(?:className|class)=["'][^"']*${escapedClass}[^"']*["'][^>]*?src=)(["'])([^"']+)(\\2)`, 'g')
-        ];
+      try {
+        // Import the image to Supabase storage first
+        const storedUrl = await importExternalImage(photo.url, photo.title);
         
-        for (const pattern of patterns) {
-          if (!replaced) {
-            const testCode = newCode.replace(pattern, (match, ...groups) => {
-              replaced = true;
-              // Reconstruct based on which pattern matched
-              if (groups.length === 5) {
-                // src before className pattern
-                return `${groups[0]}${groups[1]}${photo.url}${groups[3]}${groups[4]}`;
-              } else {
-                // className before src pattern
-                return `${groups[0]}${groups[1]}${photo.url}${groups[3]}`;
-              }
-            });
-            if (replaced) newCode = testCode;
+        // Now replace in code across ALL files
+        const { success, updatedFiles, targetFile } = replaceImageInAllFiles(
+          generatedFiles,
+          elementInfo,
+          storedUrl
+        );
+        
+        toast.dismiss(loadingToast);
+        
+        if (success && targetFile) {
+          setGeneratedFiles(updatedFiles);
+          // Update codeContent if the target file is the current active file
+          if (targetFile === '/App.js' || Object.keys(updatedFiles).length === 1) {
+            setCodeContent(updatedFiles[targetFile] || updatedFiles['/App.js'] || '');
           }
+          toast.success(isRTL ? 'تم تحديث الصورة!' : 'Image updated!');
+        } else {
+          toast.error(isRTL ? 'تعذر تحديد موقع الصورة في الكود' : 'Could not locate image source in code');
+          console.warn('Image replacement failed for element:', elementInfo);
         }
-      }
-      
-      // Strategy 2: Match by existing src URL from opening tag
-      if (!replaced && elementInfo?.openingTag) {
-        const srcMatch = elementInfo.openingTag.match(/src=["']([^"']+)["']/);
-        if (srcMatch) {
-          const oldSrc = srcMatch[1];
-          const escapedSrc = oldSrc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const srcPattern = new RegExp(`(src=["'])${escapedSrc}(["'])`, 'g');
-          const testCode = newCode.replace(srcPattern, `$1${photo.url}$2`);
-          if (testCode !== newCode) {
-            newCode = testCode;
-            replaced = true;
-          }
-        }
-      }
-      
-      // Strategy 3: Find any img with similar structure (last resort for single images)
-      if (!replaced && tag === 'img') {
-        // Count img tags - only do single replacement if there's just one
-        const imgCount = (currentCode.match(/<img\s/g) || []).length;
-        if (imgCount === 1) {
-          const singleImgPattern = /(<img[^>]*?src=)(["'])([^"']+)(\2)/;
-          newCode = newCode.replace(singleImgPattern, `$1$2${photo.url}$4`);
-          replaced = newCode !== currentCode;
-        }
-      }
-      
-      // Always apply the replacement (no fallback to AI prompt which causes reopening bug)
-      if (replaced) {
-        setGeneratedFiles(prev => ({ ...prev, '/App.js': newCode }));
-        setCodeContent(newCode);
-        toast.success(isRTL ? 'تم تحديث الصورة!' : 'Image updated!');
-      } else {
-        // Show error instead of fallback prompt (which causes the reopening bug)
-        toast.error(isRTL ? 'تعذر استبدال الصورة تلقائياً' : 'Could not auto-replace image');
-        console.warn('Image replacement failed for element:', elementInfo);
+      } catch (err) {
+        toast.dismiss(loadingToast);
+        toast.error(isRTL ? 'فشل في استيراد الصورة' : 'Failed to import image');
+        console.error('Error importing image:', err);
       }
       
       setPendingElementImageEdit(null);
@@ -2405,6 +2508,56 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
     setShowStockPhotoSelector(true);
   };
   
+  // Helper: Replace carousel/slider image array directly in code
+  const replaceCarouselImagesInFiles = (
+    files: Record<string, string>,
+    newUrls: string[]
+  ): { success: boolean; updatedFiles: Record<string, string> } => {
+    // Look for image array patterns in files
+    const arrayPatterns = [
+      // const images = ["url1", "url2"]
+      /(const\s+(?:images?|photos?|slides?|pictures?)\s*=\s*)\[([\s\S]*?)\]/gi,
+      // images: ["url1", "url2"]
+      /((?:images?|photos?|slides?|pictures?|items?)\s*:\s*)\[([\s\S]*?)\]/gi,
+    ];
+    
+    const fileKeys = Object.keys(files).sort((a, b) => {
+      // Prioritize component files likely to contain carousel
+      const priorityPatterns = [/carousel/i, /slider/i, /embla/i, /swiper/i, /gallery/i];
+      const aScore = priorityPatterns.some(p => p.test(a)) ? 0 : 1;
+      const bScore = priorityPatterns.some(p => p.test(b)) ? 0 : 1;
+      return aScore - bScore;
+    });
+    
+    for (const filePath of fileKeys) {
+      const content = files[filePath];
+      if (!content || typeof content !== 'string') continue;
+      
+      for (const pattern of arrayPatterns) {
+        // Reset regex lastIndex
+        pattern.lastIndex = 0;
+        
+        const match = pattern.exec(content);
+        if (match && match[2]) {
+          // Check if array contains URL-like strings
+          const arrayContent = match[2];
+          if (arrayContent.includes('http') || arrayContent.includes('/') || arrayContent.includes('.jpg') || arrayContent.includes('.png')) {
+            // Build new array string
+            const newArrayContent = newUrls.map(url => `\n    "${url}"`).join(',') + '\n  ';
+            const newContent = content.replace(match[0], `${match[1]}[${newArrayContent}]`);
+            
+            if (newContent !== content) {
+              console.log(`Carousel images replaced in ${filePath}`);
+              return { success: true, updatedFiles: { ...files, [filePath]: newContent } };
+            }
+          }
+        }
+      }
+    }
+    
+    return { success: false, updatedFiles: files };
+  };
+
   // Handler for multi-select photos
   const handleStockPhotosSelect = async (photos: { url: string; title: string }[]) => {
     if (photos.length === 0) return;
@@ -2415,30 +2568,55 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       return;
     }
 
-    // Special case: Carousel image replacement flow.
-    // IMPORTANT: We send URLs (not fetched blobs) to avoid CORS failures that can drop the selection down to 1.
-    // Also avoid wording like "X images" which triggers the auto image-picker regex in handleChatSubmit.
+    // Special case: Carousel image replacement flow
     if (isChangingCarouselImages) {
-      const urls = photos.map(p => p.url).filter(Boolean);
       setIsChangingCarouselImages(false);
+      
+      const loadingToast = toast.loading(
+        language === 'ar' ? 'جاري استيراد الصور...' : 'Importing images...'
+      );
 
-      const promptText = language === 'ar'
-        ? `اضبط روابط شرائح الكاروسيل إلى:\n${urls.join('\n')}`
-        : `Set the carousel slide URLs to:\n${urls.join('\n')}`;
-
-      setChatInput(promptText);
-
-      // Ensure input state is applied, then submit the chat form.
-      setTimeout(() => {
-        const formElement = document.querySelector('form[class*="rounded-2xl"]') as HTMLFormElement | null;
-        if (!formElement) return;
-        (formElement as any).requestSubmit?.();
-        if (!(formElement as any).requestSubmit) {
-          const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
-          formElement.dispatchEvent(submitEvent);
+      try {
+        // Import all images to storage in parallel
+        const storedUrls = await Promise.all(
+          photos.map(p => importExternalImage(p.url, p.title))
+        );
+        
+        // Try direct code replacement first
+        const { success, updatedFiles } = replaceCarouselImagesInFiles(generatedFiles, storedUrls);
+        
+        toast.dismiss(loadingToast);
+        
+        if (success) {
+          setGeneratedFiles(updatedFiles);
+          setCodeContent(updatedFiles['/App.js'] || '');
+          toast.success(
+            language === 'ar' 
+              ? `تم تحديث ${storedUrls.length} صور في الكاروسيل` 
+              : `Updated ${storedUrls.length} carousel images`
+          );
+        } else {
+          // Fallback: Use AI prompt (but with stored URLs and safe wording)
+          const promptText = language === 'ar'
+            ? `قم بتحديث روابط الصور في الكاروسيل/المعرض إلى هذه الروابط بالضبط:\n${storedUrls.join('\n')}`
+            : `Update the carousel/gallery slide sources to exactly these URLs:\n${storedUrls.join('\n')}`;
+          
+          // Direct submit without DOM hacks - just set and trigger
+          setChatInput(promptText);
+          // Use requestAnimationFrame to ensure state is applied
+          requestAnimationFrame(() => {
+            const formEl = document.querySelector('form[class*="chat"]') as HTMLFormElement;
+            if (formEl) {
+              formEl.requestSubmit?.();
+            }
+          });
         }
-      }, 50);
-
+      } catch (err) {
+        toast.dismiss(loadingToast);
+        toast.error(language === 'ar' ? 'فشل في استيراد الصور' : 'Failed to import images');
+        console.error('Carousel import error:', err);
+      }
+      
       return;
     }
 
