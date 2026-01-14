@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import { MessageSquare, Bot, User, Calendar, Clock, CheckCircle, Loader2, Volume2, Copy, VolumeX, ExternalLink, Play, Pause, RotateCcw, Globe, Reply } from 'lucide-react';
+import { MessageSquare, Bot, User, Calendar, Clock, CheckCircle, Loader2, Volume2, Copy, VolumeX, ExternalLink, Play, Pause, RotateCcw, Globe, Reply, FileCode, AlertCircle } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { AIMessage } from '@/services/WaktiAIV2Service';
 import { TaskConfirmationCard } from './TaskConfirmationCard';
@@ -13,10 +13,14 @@ import { ImageModal } from './ImageModal';
 import { YouTubePreview } from './YouTubePreview';
 import { StudyModeMessage } from './StudyModeMessage';
 import { SearchResultActions } from './SearchResultActions';
+import { ToolUsageIndicator } from './ToolUsageIndicator';
+import { ErrorExplanationCard } from './ErrorExplanationCard';
+import { MessageTimestamp } from './MessageTimestamp';
+import EnhancedQuickActions from './EnhancedQuickActions';
 import { supabase } from '@/integrations/supabase/client';
 import { getSelectedVoices } from './TalkBackSettings';
 import { useNavigate } from 'react-router-dom';
-// Removed useMobileKeyboard - no longer needed
+import { toast } from 'sonner';
 
 type SearchSource = { url: string; title: string };
 
@@ -1950,11 +1954,16 @@ export function ChatMessages({
                           : 'bg-primary text-primary-foreground')
                       : `bg-gradient-to-r from-blue-50 to-purple-50 dark:from-slate-800 dark:to-slate-900 text-gray-900 dark:text-gray-100 border-2 ${getAssistantBubbleClasses(message)}`
                   }`}>
-                    {/* FIXED: Mode Badge with proper logic */}
-                    <div className="flex items-center gap-2 mb-2">
+                    {/* FIXED: Mode Badge with proper logic + Timestamp */}
+                    <div className="flex items-center justify-between gap-2 mb-2">
                       <Badge variant="secondary" className="px-2 py-1 text-xs font-medium leading-none whitespace-nowrap align-middle">
                         {getMessageBadge(message, activeTrigger)}
                       </Badge>
+                      {/* Message Timestamp */}
+                      <MessageTimestamp 
+                        timestamp={message.timestamp || new Date()} 
+                        className={message.role === 'user' ? 'text-white/60' : ''}
+                      />
                     </div>
                     
                     <div className={`text-sm leading-relaxed break-words ${message.role === 'user' ? (language === 'ar' ? 'text-right' : 'text-left') : 'text-left'}`}>
@@ -2121,6 +2130,54 @@ export function ChatMessages({
                           </div>
                         ))}
                       </div>
+                    )}
+                    
+                    {/* Tool Usage Indicator for AI messages */}
+                    {message.role === 'assistant' && (message as any)?.metadata?.toolsUsed && (
+                      <ToolUsageIndicator
+                        toolsUsed={(message as any).metadata.toolsUsed}
+                        thinkingDuration={(message as any).metadata.thinkingDuration}
+                        isComplete={!(message as any).metadata.loading}
+                        toolCalls={(message as any).metadata.toolCalls || []}
+                      />
+                    )}
+
+                    {/* Error Explanation Card for error messages */}
+                    {message.role === 'assistant' && (message as any)?.metadata?.error && (
+                      <ErrorExplanationCard
+                        title={(message as any).metadata.errorTitle || 'Something went wrong'}
+                        titleAr={(message as any).metadata.errorTitleAr || 'حدث خطأ ما'}
+                        message={(message as any).metadata.errorMessage || message.content}
+                        messageAr={(message as any).metadata.errorMessageAr}
+                        severity={(message as any).metadata.errorSeverity || 'error'}
+                        technicalDetails={(message as any).metadata.technicalDetails}
+                        suggestedAction={(message as any).metadata.suggestedAction}
+                        suggestedActionAr={(message as any).metadata.suggestedActionAr}
+                        onRetry={(message as any).metadata.onRetry}
+                        className="mt-2"
+                      />
+                    )}
+
+                    {/* Enhanced Quick Actions for AI messages */}
+                    {message.role === 'assistant' && message.content && !((message as any)?.metadata?.loading) && (
+                      <EnhancedQuickActions
+                        responseContent={message.content}
+                        onActionClick={(prompt) => {
+                          // Dispatch event to send the quick action prompt
+                          window.dispatchEvent(new CustomEvent('wakti-quick-prompt', { 
+                            detail: { prompt } 
+                          }));
+                        }}
+                        isRTL={language === 'ar'}
+                        messageContext={{
+                          intent: message.intent,
+                          hasImage: !!(message as any)?.imageUrl,
+                          hasBrowsing: !!(message as any)?.browsingData || message.browsingUsed,
+                          hasError: !!(message as any)?.metadata?.error,
+                          isTask: message.intent === 'task',
+                          isReminder: message.intent === 'reminder',
+                        }}
+                      />
                     )}
                     
                     {/* Mini Buttons Bar - Hidden for YouTube assistant previews */}
