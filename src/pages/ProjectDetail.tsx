@@ -2342,91 +2342,90 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
   // Handler for multi-select photos
   const handleStockPhotosSelect = async (photos: { url: string; title: string }[]) => {
     if (photos.length === 0) return;
-    
+
     // Check if this is for an element image edit (single photo case)
     if (pendingElementImageEdit && photos.length === 1) {
       handleStockPhotoSelect(photos[0]);
       return;
     }
-    
-    // Show loading toast
+
+    // Special case: Carousel image replacement flow.
+    // IMPORTANT: We send URLs (not fetched blobs) to avoid CORS failures that can drop the selection down to 1.
+    // Also avoid wording like "X images" which triggers the auto image-picker regex in handleChatSubmit.
+    if (isChangingCarouselImages) {
+      const urls = photos.map(p => p.url).filter(Boolean);
+      setIsChangingCarouselImages(false);
+
+      const promptText = language === 'ar'
+        ? `اضبط روابط شرائح الكاروسيل إلى:\n${urls.join('\n')}`
+        : `Set the carousel slide URLs to:\n${urls.join('\n')}`;
+
+      setChatInput(promptText);
+
+      // Ensure input state is applied, then submit the chat form.
+      setTimeout(() => {
+        const formElement = document.querySelector('form[class*="rounded-2xl"]') as HTMLFormElement | null;
+        if (!formElement) return;
+        (formElement as any).requestSubmit?.();
+        if (!(formElement as any).requestSubmit) {
+          const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+          formElement.dispatchEvent(submitEvent);
+        }
+      }, 50);
+
+      return;
+    }
+
+    // Default behavior: fetch selected photos and attach them to chat
     const photoCount = photos.length;
     const loadingToast = toast.loading(
-      language === 'ar' 
-        ? `جاري تحميل ${photoCount} ${photoCount === 1 ? 'صورة' : 'صور'}...` 
+      language === 'ar'
+        ? `جاري تحميل ${photoCount} ${photoCount === 1 ? 'صورة' : 'صور'}...`
         : `Loading ${photoCount} ${photoCount === 1 ? 'photo' : 'photos'}...`
     );
-    
+
     try {
       // Fetch and attach all photos
       const newAttachments: { file: File; preview: string }[] = [];
-      
+
       for (const photo of photos) {
         try {
           const response = await fetch(photo.url);
           const blob = await response.blob();
-          const file = new File([blob], photo.title || `photo-${Date.now()}.jpg`, { 
-            type: blob.type || 'image/jpeg' 
+          const file = new File([blob], photo.title || `photo-${Date.now()}.jpg`, {
+            type: blob.type || 'image/jpeg'
           });
-          
+
           // Convert to base64 for preview
           const preview = await new Promise<string>((resolve) => {
             const reader = new FileReader();
             reader.onload = (e) => resolve(e.target?.result as string);
             reader.readAsDataURL(file);
           });
-          
+
           newAttachments.push({ file, preview });
         } catch (err) {
           console.error(`Failed to fetch photo: ${photo.title}`, err);
         }
       }
-      
-      // Add all photos to attached images
+
       if (newAttachments.length > 0) {
         setAttachedImages(prev => [...prev, ...newAttachments]);
         toast.dismiss(loadingToast);
-        
-        // If we're changing carousel images, auto-send the prompt
-        if (isChangingCarouselImages) {
-          setIsChangingCarouselImages(false);
-          const promptText = language === 'ar' 
-            ? 'استبدل صور الكاروسيل بهذه الصور المختارة'
-            : 'Replace the carousel images with these selected photos';
-          
-          setChatInput(promptText);
-          // Use setTimeout to ensure attachments and input are set, then submit
-          setTimeout(() => {
-            // Create and dispatch a synthetic form submit event
-            const formElement = document.querySelector('form[class*="rounded-2xl"]');
-            if (formElement) {
-              const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
-              formElement.dispatchEvent(submitEvent);
-            }
-          }, 150);
-        } else {
-          const successCount = newAttachments.length;
-          toast.success(
-            language === 'ar' 
-              ? `تم إرفاق ${successCount} ${successCount === 1 ? 'صورة' : 'صور'}` 
-              : `${successCount} ${successCount === 1 ? 'photo' : 'photos'} attached`
-          );
-        }
+
+        const successCount = newAttachments.length;
+        toast.success(
+          language === 'ar'
+            ? `تم إرفاق ${successCount} ${successCount === 1 ? 'صورة' : 'صور'}`
+            : `${successCount} ${successCount === 1 ? 'photo' : 'photos'} attached`
+        );
       } else {
         toast.dismiss(loadingToast);
-        toast.error(
-          language === 'ar' 
-            ? 'فشل في تحميل الصور' 
-            : 'Failed to load photos'
-        );
+        toast.error(language === 'ar' ? 'فشل في تحميل الصور' : 'Failed to load photos');
       }
     } catch (err) {
       toast.dismiss(loadingToast);
-      toast.error(
-        language === 'ar' 
-          ? 'حدث خطأ أثناء تحميل الصور' 
-          : 'Error loading photos'
-      );
+      toast.error(language === 'ar' ? 'حدث خطأ أثناء تحميل الصور' : 'Error loading photos');
     }
   };
 
