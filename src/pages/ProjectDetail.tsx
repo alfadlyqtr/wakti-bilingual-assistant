@@ -2742,6 +2742,12 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
     const userMessage = chatInput.trim();
     setChatInput('');
     
+    // CRITICAL FIX: If images are already attached, skip ALL photo selector patterns
+    // and proceed directly to AI submission - prevents the selector from reopening in a loop
+    const hasAttachedImages = attachedImages.length > 0;
+    
+    // Only check photo patterns if NO images are currently attached
+    if (!hasAttachedImages) {
     // Check if the user is asking for love photos or specific photo types
     const lovePhotoRegex = /\b(love|heart|romance|romantic|valentine)\s+(photos?|images?|pictures?)\b/i;
     const photoRequestRegex = /\b(\w+)\s+(photos?|images?|pictures?)\b/i;
@@ -2842,6 +2848,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         return;
       }
     }
+    } // End of: if (!hasAttachedImages) - skip photo patterns when images already attached
     
     setAiEditing(true);
     setThinkingStartTime(Date.now());
