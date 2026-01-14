@@ -4264,16 +4264,41 @@ Fix the issue in the code and ensure it works correctly.`;
                         )}
                       </div>
                       
-                      {/* Revert Button - Right below the AI message */}
-                      {msg.role === 'assistant' && msg.snapshot && (
-                        <button
-                          onClick={() => handleRevert(msg.id)}
-                          className="mt-1.5 flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium text-muted-foreground hover:text-indigo-500 hover:bg-indigo-500/10 transition-all active:scale-95"
-                          title={isRTL ? 'الرجوع لهذه النقطة' : 'Revert to this point'}
-                        >
-                          <RefreshCw className="h-3 w-3" />
-                          {isRTL ? 'استعادة' : 'Restore'}
-                        </button>
+                      {/* Revert Button - Right below the AI message for execution results */}
+                      {msg.role === 'assistant' && (
+                        (() => {
+                          // Check if this is an execution result message (has snapshot OR is execution_result type)
+                          let isExecutionResult = false;
+                          try {
+                            const parsed = JSON.parse(msg.content);
+                            isExecutionResult = parsed?.type === 'execution_result';
+                          } catch { /* not JSON */ }
+                          
+                          const hasSnapshot = msg.snapshot && Object.keys(msg.snapshot).length > 0;
+                          
+                          if (hasSnapshot || isExecutionResult) {
+                            return (
+                              <button
+                                onClick={() => handleRevert(msg.id)}
+                                disabled={!hasSnapshot}
+                                className={cn(
+                                  "mt-1.5 flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-all active:scale-95",
+                                  hasSnapshot 
+                                    ? "text-muted-foreground hover:text-indigo-500 hover:bg-indigo-500/10"
+                                    : "text-muted-foreground/50 cursor-not-allowed"
+                                )}
+                                title={hasSnapshot 
+                                  ? (isRTL ? 'الرجوع لهذه النقطة' : 'Revert to this point')
+                                  : (isRTL ? 'لا توجد نقطة استعادة' : 'No restore point available')
+                                }
+                              >
+                                <RefreshCw className="h-3 w-3" />
+                                {isRTL ? 'استعادة' : 'Restore'}
+                              </button>
+                            );
+                          }
+                          return null;
+                        })()
                       )}
                       
                       {/* Theme Info Card - Show AFTER user messages only, and keep it visible */}
