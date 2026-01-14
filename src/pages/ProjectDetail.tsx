@@ -4274,6 +4274,15 @@ Fix the issue in the code and ensure it works correctly.`;
                                     const changedFiles = parsedPlan.codeChanges?.map((c: any) => c.file).filter(Boolean) || [parsedPlan.file].filter(Boolean);
                                     const uniqueChangedFiles = [...new Set(changedFiles)];
                                     const stepsSummary = parsedPlan.steps?.map((s: any) => s.title).join('. ') || '';
+
+                                    // Update edited files tracking + tool usage for the indicator
+                                    const filesForTracking = uniqueChangedFiles.length > 0 ? uniqueChangedFiles : ['/App.js'];
+                                    setEditedFilesTracking(filesForTracking.map((filePath, idx) => ({
+                                      id: `file-${idx}-${Date.now()}`,
+                                      fileName: String(filePath).replace(/^\//, ''),
+                                      status: 'edited' as const,
+                                    })));
+                                    setToolsUsedCount(prev => prev + (filesForTracking.length || 1));
                                     
                                     // Create a structured Lovable-style message
                                     const successMsg = JSON.stringify({
@@ -4819,6 +4828,25 @@ Fix the issue in the code and ensure it works correctly.`;
                       </div>
                     </div>
                   )}
+
+                  {/* Persist ToolUsageIndicator after completion (so it doesn't disappear) */}
+                  {!aiEditing && !isGenerating && (lastThinkingDuration || toolsUsedCount > 0 || editedFilesTracking.length > 0) && (
+                    <div className="flex flex-col items-start w-full max-w-full">
+                      <ToolUsageIndicator
+                        toolsUsed={toolsUsedCount}
+                        toolCalls={editedFilesTracking.map(f => ({
+                          id: f.id,
+                          name: f.fileName,
+                          nameAr: f.fileName,
+                          icon: undefined,
+                          status: 'completed' as const,
+                        }))}
+                        thinkingDuration={lastThinkingDuration || undefined}
+                        isComplete={true}
+                      />
+                    </div>
+                  )}
+
                   <div ref={chatEndRef} className="h-2" />
                 </div>
 
