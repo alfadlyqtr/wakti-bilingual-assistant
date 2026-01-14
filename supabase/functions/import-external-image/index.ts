@@ -6,6 +6,17 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Simple hash function for source URL to create a consistent identifier
+function hashSourceUrl(url: string): string {
+  let hash = 0;
+  for (let i = 0; i < url.length; i++) {
+    const char = url.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash).toString(36);
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -50,6 +61,41 @@ serve(async (req) => {
 
     console.log(`Importing image for project ${projectId} from ${sourceUrl}`);
 
+    // Generate a hash of the source URL for deduplication
+    const urlHash = hashSourceUrl(sourceUrl);
+    
+    // Check if this exact source URL was already imported for this project
+    // Look for files in the imported folder with matching hash
+    const importedPrefix = `${user.id}/${projectId}/imported/`;
+    const { data: existingFiles, error: listError } = await supabase.storage
+      .from('project-uploads')
+      .list(importedPrefix, { limit: 500 });
+    
+    if (!listError && existingFiles) {
+      // Look for a file with matching hash in its name
+      const matchingFile = existingFiles.find(f => f.name.includes(`-${urlHash}.`));
+      if (matchingFile) {
+        const existingPath = `${importedPrefix}${matchingFile.name}`;
+        const { data: urlData } = supabase.storage
+          .from('project-uploads')
+          .getPublicUrl(existingPath);
+        
+        console.log(`Image already imported (hash: ${urlHash}), returning existing:`, urlData?.publicUrl);
+        
+        return new Response(JSON.stringify({
+          success: true,
+          url: urlData?.publicUrl,
+          storagePath: existingPath,
+          filename: matchingFile.name,
+          originalUrl: sourceUrl,
+          cached: true, // Flag to indicate this was a cached result
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     // Fetch the external image
     let imageResponse: Response;
     try {
@@ -83,12 +129,10 @@ serve(async (req) => {
     else if (contentType.includes('gif')) ext = 'gif';
     else if (contentType.includes('svg')) ext = 'svg';
 
-    // Generate unique filename
-    const timestamp = Date.now();
-    const uuid = crypto.randomUUID().slice(0, 8);
+    // Generate filename with URL hash for future deduplication lookups
     const safeHint = filenameHint?.replace(/[^a-zA-Z0-9-_]/g, '_').slice(0, 30) || 'imported';
-    const filename = `${safeHint}-${uuid}.${ext}`;
-    const storagePath = `${user.id}/${projectId}/imported/${timestamp}-${filename}`;
+    const filename = `${safeHint}-${urlHash}.${ext}`;
+    const storagePath = `${user.id}/${projectId}/imported/${filename}`;
 
     console.log(`Uploading to storage path: ${storagePath}`);
 
@@ -98,7 +142,7 @@ serve(async (req) => {
       .upload(storagePath, imageBlob, {
         contentType,
         cacheControl: '3600',
-        upsert: false,
+        upsert: true, // Use upsert to handle race conditions
       });
 
     if (uploadError) {
@@ -119,21 +163,30 @@ serve(async (req) => {
 
     const publicUrl = urlData?.publicUrl;
 
-    // Record in database
-    const { error: dbError } = await supabase
+    // Check if already recorded in database (by storage_path)
+    const { data: existingRecord } = await supabase
       .from('project_uploads')
-      .insert({
-        project_id: projectId,
-        user_id: user.id,
-        filename: filename,
-        storage_path: storagePath,
-        file_type: contentType,
-        size_bytes: imageBlob.size,
-      });
+      .select('id')
+      .eq('storage_path', storagePath)
+      .single();
 
-    if (dbError) {
-      console.error('DB error:', dbError);
-      // Still return success with URL since upload worked
+    if (!existingRecord) {
+      // Record in database only if not already exists
+      const { error: dbError } = await supabase
+        .from('project_uploads')
+        .insert({
+          project_id: projectId,
+          user_id: user.id,
+          filename: filename,
+          storage_path: storagePath,
+          file_type: contentType,
+          size_bytes: imageBlob.size,
+        });
+
+      if (dbError) {
+        console.error('DB error:', dbError);
+        // Still return success with URL since upload worked
+      }
     }
 
     console.log(`Successfully imported image: ${publicUrl}`);
