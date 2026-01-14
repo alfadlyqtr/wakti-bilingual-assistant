@@ -1942,8 +1942,19 @@ export function ChatMessages({
           {/* Welcome Message */}
           {renderWelcomeMessage()}
           
-          {/* Chat Messages with FIXED badge logic and enhanced video display */}
-          {sessionMessages.map((message, index) => (
+          {/* Chat Messages with Lovable-style UI */}
+          {sessionMessages.map((message, index) => {
+            const isAssistant = message.role === 'assistant';
+            const metadata = (message as any)?.metadata || {};
+            const hasToolsUsed = metadata.toolsUsed && metadata.toolsUsed > 0;
+            const thinkingDuration = metadata.thinkingDuration;
+            const isLoading = metadata.loading;
+            const hasError = metadata.error;
+            const isApplied = metadata.applied || (metadata.filesModified && metadata.filesModified.length > 0);
+            const filesModified = metadata.filesModified || [];
+            const tasks = metadata.tasks || [];
+            
+            return (
               <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} group`}>
                 <div className="flex w-full min-w-0">
                   
@@ -1959,12 +1970,83 @@ export function ChatMessages({
                       <Badge variant="secondary" className="px-2 py-1 text-xs font-medium leading-none whitespace-nowrap align-middle">
                         {getMessageBadge(message, activeTrigger)}
                       </Badge>
-                      {/* Message Timestamp */}
+                      {/* Message Timestamp - Always Visible */}
                       <MessageTimestamp 
                         timestamp={message.timestamp || new Date()} 
-                        className={message.role === 'user' ? 'text-white/60' : ''}
+                        className={message.role === 'user' ? 'text-white/70 text-[10px]' : 'text-muted-foreground text-[10px]'}
                       />
                     </div>
+                    
+                    {/* Thinking Duration Badge - Lovable Style */}
+                    {isAssistant && thinkingDuration && thinkingDuration > 0 && (
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-xs">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                          {language === 'ar' ? `فكّر لـ ${thinkingDuration.toFixed(0)} ث` : `Thought for ${thinkingDuration.toFixed(0)}s`}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Applied/Status Indicator - Lovable Style */}
+                    {isAssistant && isApplied && !isLoading && (
+                      <div className="mb-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                        <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
+                          <CheckCircle className="h-4 w-4" />
+                          <span className="text-sm font-medium">{language === 'ar' ? 'تم التطبيق' : 'Applied'}</span>
+                        </div>
+                        {message.content && (
+                          <p className="mt-1 text-xs text-green-600 dark:text-green-300">{message.content.substring(0, 150)}{message.content.length > 150 ? '...' : ''}</p>
+                        )}
+                        {filesModified.length > 0 && (
+                          <div className="mt-2">
+                            <p className="text-[10px] uppercase tracking-wider text-green-600/70 dark:text-green-400/70 mb-1">
+                              {language === 'ar' ? 'الملفات المعدلة' : 'FILES MODIFIED'}
+                            </p>
+                            {filesModified.map((file: string, idx: number) => (
+                              <button
+                                key={idx}
+                                onClick={() => {
+                                  navigate(`?view=code&file=${encodeURIComponent(file)}`);
+                                  toast.success(language === 'ar' ? 'جاري فتح الملف...' : 'Opening file...');
+                                }}
+                                className="flex items-center gap-1.5 text-xs text-primary hover:underline cursor-pointer"
+                              >
+                                <FileCode className="h-3 w-3" />
+                                {file}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* Tasks Panel - Lovable Style */}
+                    {isAssistant && tasks.length > 0 && (
+                      <div className="mb-3 p-3 rounded-lg bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-semibold text-foreground">{language === 'ar' ? 'المهام' : 'Tasks'}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {tasks.filter((t: any) => t.status === 'done').length}/{tasks.length}
+                          </span>
+                        </div>
+                        <div className="space-y-1.5">
+                          {tasks.map((task: any, idx: number) => (
+                            <div key={idx} className="flex items-center gap-2 text-xs">
+                              {task.status === 'done' ? (
+                                <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+                              ) : task.status === 'running' ? (
+                                <Loader2 className="h-3.5 w-3.5 text-primary animate-spin" />
+                              ) : (
+                                <div className="h-3.5 w-3.5 rounded-full border border-muted-foreground/40" />
+                              )}
+                              <span className={task.status === 'done' ? 'text-muted-foreground' : 'text-foreground'}>
+                                {task.name}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     
                     <div className={`text-sm leading-relaxed break-words ${message.role === 'user' ? (language === 'ar' ? 'text-right' : 'text-left') : 'text-left'}`}>
                       {(() => {
@@ -2132,34 +2214,34 @@ export function ChatMessages({
                       </div>
                     )}
                     
-                    {/* Tool Usage Indicator for AI messages */}
-                    {message.role === 'assistant' && (message as any)?.metadata?.toolsUsed && (
+                    {/* Tool Usage Indicator - Lovable Style */}
+                    {message.role === 'assistant' && (hasToolsUsed || thinkingDuration) && (
                       <ToolUsageIndicator
-                        toolsUsed={(message as any).metadata.toolsUsed}
-                        thinkingDuration={(message as any).metadata.thinkingDuration}
-                        isComplete={!(message as any).metadata.loading}
-                        toolCalls={(message as any).metadata.toolCalls || []}
+                        toolsUsed={metadata.toolsUsed || 0}
+                        thinkingDuration={thinkingDuration}
+                        isComplete={!isLoading}
+                        toolCalls={metadata.toolCalls || []}
                       />
                     )}
 
                     {/* Error Explanation Card for error messages */}
-                    {message.role === 'assistant' && (message as any)?.metadata?.error && (
+                    {message.role === 'assistant' && hasError && (
                       <ErrorExplanationCard
-                        title={(message as any).metadata.errorTitle || 'Something went wrong'}
-                        titleAr={(message as any).metadata.errorTitleAr || 'حدث خطأ ما'}
-                        message={(message as any).metadata.errorMessage || message.content}
-                        messageAr={(message as any).metadata.errorMessageAr}
-                        severity={(message as any).metadata.errorSeverity || 'error'}
-                        technicalDetails={(message as any).metadata.technicalDetails}
-                        suggestedAction={(message as any).metadata.suggestedAction}
-                        suggestedActionAr={(message as any).metadata.suggestedActionAr}
-                        onRetry={(message as any).metadata.onRetry}
+                        title={metadata.errorTitle || 'Something went wrong'}
+                        titleAr={metadata.errorTitleAr || 'حدث خطأ ما'}
+                        message={metadata.errorMessage || message.content}
+                        messageAr={metadata.errorMessageAr}
+                        severity={metadata.errorSeverity || 'error'}
+                        technicalDetails={metadata.technicalDetails}
+                        suggestedAction={metadata.suggestedAction}
+                        suggestedActionAr={metadata.suggestedActionAr}
+                        onRetry={metadata.onRetry}
                         className="mt-2"
                       />
                     )}
 
                     {/* Enhanced Quick Actions for AI messages */}
-                    {message.role === 'assistant' && message.content && !((message as any)?.metadata?.loading) && (
+                    {message.role === 'assistant' && message.content && !isLoading && (
                       <EnhancedQuickActions
                         responseContent={message.content}
                         onActionClick={(prompt) => {
@@ -2173,37 +2255,41 @@ export function ChatMessages({
                           intent: message.intent,
                           hasImage: !!(message as any)?.imageUrl,
                           hasBrowsing: !!(message as any)?.browsingData || message.browsingUsed,
-                          hasError: !!(message as any)?.metadata?.error,
+                          hasError: hasError,
                           isTask: message.intent === 'task',
                           isReminder: message.intent === 'reminder',
                         }}
                       />
                     )}
                     
-                    {/* Mini Buttons Bar - Hidden for YouTube assistant previews */}
+                    {/* Mini Buttons Bar - Always visible Copy + TTS */}
                     {(() => {
-                      const isAssistantYouTube = message.role === 'assistant' && ((message as any)?.metadata?.youtube || (message as any)?.metadata?.youtubeError);
+                      const isAssistantYouTube = message.role === 'assistant' && (metadata.youtube || metadata.youtubeError);
                       if (isAssistantYouTube) return null;
                       return (
-                        <div className="flex items-center justify-between mt-2">
+                        <div className="flex items-center justify-between mt-3 pt-2 border-t border-border/30">
                           <div className="flex gap-1">
-                            {/* Copy Button */}
+                            {/* Copy Button - More Visible */}
                             <button
-                              onClick={() => navigator.clipboard.writeText(message.content)}
-                              className="p-2 rounded-md hover:bg-background/80 transition-colors"
+                              onClick={() => {
+                                navigator.clipboard.writeText(message.content);
+                                toast.success(language === 'ar' ? 'تم النسخ!' : 'Copied!');
+                              }}
+                              className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
                               title={language === 'ar' ? 'نسخ النص' : 'Copy text'}
                             >
-                              <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                              <Copy className="h-3.5 w-3.5" />
+                              <span className="hidden sm:inline">{language === 'ar' ? 'نسخ' : 'Copy'}</span>
                             </button>
                             
                             {/* Reply Button (assistant only) */}
                             {message.role === 'assistant' && onReplyToMessage && (
                               <button
                                 onClick={() => onReplyToMessage(message.id, message.content)}
-                                className="p-2 rounded-md hover:bg-background/80 transition-colors"
+                                className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
                                 title={language === 'ar' ? 'رد على هذه الرسالة' : 'Reply to this message'}
                               >
-                                <Reply className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                                <Reply className="h-3.5 w-3.5" />
                               </button>
                             )}
                             
@@ -2212,7 +2298,7 @@ export function ChatMessages({
                               <button
                                 onPointerUp={() => handleSpeak(message.content, message.id)}
                                 style={{ touchAction: 'manipulation' }}
-                                className={`p-2 rounded-md transition-colors ${speakingMessageId === message.id || fadeOutId === message.id ? 'text-green-500 bg-green-500/10 shadow-[0_0_8px_rgba(34,197,94,0.7)]' : 'hover:bg-background/80'}`}
+                                className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-colors ${speakingMessageId === message.id || fadeOutId === message.id ? 'text-green-500 bg-green-500/10 shadow-[0_0_8px_rgba(34,197,94,0.7)]' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}
                                 title={speakingMessageId === message.id 
                                   ? (language === 'ar' ? 'إيقاف الصوت' : 'Stop audio')
                                   : (language === 'ar' ? 'تشغيل الصوت' : 'Play audio')
@@ -2222,14 +2308,14 @@ export function ChatMessages({
                                   <span className="text-[10px] text-muted-foreground mr-1 align-middle">{progressMap.get(message.id)}%</span>
                                 ) : null}
                                 {speakingMessageId === message.id ? (
-                                  <Volume2 className="h-4 w-4 animate-pulse" />
+                                  <Volume2 className="h-3.5 w-3.5 animate-pulse" />
                                 ) : fetchingIds.has(message.id) ? (
                                   <div className="flex items-center gap-1">
                                     <span className="text-[10px] text-muted-foreground">{progressMap.get(message.id)}%</span>
-                                    <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" />
+                                    <Loader2 className="h-3.5 w-3.5 text-muted-foreground animate-spin" />
                                   </div>
                                 ) : (
-                                  <Volume2 className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                                  <Volume2 className="h-3.5 w-3.5" />
                                 )}
                               </button>
                             )}
@@ -2281,8 +2367,8 @@ export function ChatMessages({
                   </div>
                 </div>
               </div>
-           ))}
-          
+            );
+          })}
           
           {/* ENHANCED TASK CONFIRMATION DISPLAY WITH DEBUG LOGGING */}
           {showTaskConfirmation && (pendingTaskData || pendingReminderData) && (
