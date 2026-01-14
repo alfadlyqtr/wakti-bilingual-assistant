@@ -3105,16 +3105,21 @@ Fix the issue in the code and ensure it works correctly.`;
     // AND we're not coming from the "Auto-Generate" selection
     if (!hasAttachedImages && !isAIGeneratingImages && !skipImageDialogRef.current) {
       // Patterns that indicate user wants to work with images
+      // IMPORTANT: Exclude questions (show me, what, which) and style changes (shadow, effect, color)
+      const isQuestionAboutImages = /\b(show|what|which|list|tell|see|display)\s+(me\s+)?(the\s+)?(images?|photos?|pictures?)/i.test(userMessage);
+      const isStyleChange = /\b(shadow|effect|animation|color|border|style|size|opacity|blur|gradient|round|filter)/i.test(userMessage);
+      
       const imageRelatedPatterns = [
-        /\b(carousel|gallery|slider|slideshow)\b.*\b(with|using|of|for)?\s*\d*\s*(images?|photos?|pictures?)?/i,
-        /\b(images?|photos?|pictures?)\s+(of|about|for|with)\s+/i,
-        /\b(add|create|make|build|insert)\s+.*(carousel|gallery|slider|background|banner|hero)/i,
-        /\b(change|replace|swap|update)\s+.*\b(images?|photos?|pictures?)\b/i,
+        /\b(add|insert|put|place|use)\s+\d+\s*(images?|photos?|pictures?)/i,
+        /\b(add|insert|put|place)\s+(new\s+)?(images?|photos?|pictures?)\s+(to|in|for)/i,
+        /\b(change|replace|swap|update)\s+(the\s+)?(images?|photos?|pictures?)\s+(to|with|in)/i,
+        /\b(create|make|build)\s+.*(carousel|gallery|slider)\s+with\s+(images?|photos?|pictures?)/i,
         /\b(love|heart|romance|nature|business|food|travel|technology|abstract)\s+(photos?|images?|pictures?)\b/i,
-        /\b\d+\s*(images?|photos?|pictures?)\b/i,
       ];
       
-      const needsImageSourceConfirmation = imageRelatedPatterns.some(pattern => pattern.test(userMessage));
+      // Only trigger image picker if it's clearly an image ADD/CHANGE request, not a question or style change
+      const needsImageSourceConfirmation = !isQuestionAboutImages && !isStyleChange && 
+        imageRelatedPatterns.some(pattern => pattern.test(userMessage));
       
       if (needsImageSourceConfirmation) {
         // Add inline chat message with image source buttons (Lovable style)
@@ -4471,7 +4476,7 @@ Fix the issue in the code and ensure it works correctly.`;
                         </div>
                         
                         {isAssistant ? (
-                          <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1.5 prose-headings:my-2 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-table:my-2 prose-pre:my-2 prose-code:text-[12px] prose-code:bg-zinc-100 dark:prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none text-[13px] leading-relaxed">
+                          <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1.5 prose-headings:my-2 prose-headings:font-semibold prose-h1:text-lg prose-h2:text-base prose-h3:text-sm prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-table:my-3 prose-table:border-collapse prose-table:w-full prose-th:bg-muted/50 prose-th:px-3 prose-th:py-2 prose-th:text-left prose-th:text-xs prose-th:font-semibold prose-th:border prose-th:border-border prose-td:px-3 prose-td:py-2 prose-td:text-xs prose-td:border prose-td:border-border prose-pre:my-2 prose-pre:bg-zinc-900 prose-pre:rounded-lg prose-pre:overflow-x-auto prose-code:text-[12px] prose-code:bg-zinc-100 dark:prose-code:bg-zinc-800 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none prose-pre:prose-code:bg-transparent prose-pre:prose-code:p-0 prose-blockquote:border-l-primary prose-blockquote:bg-muted/30 prose-blockquote:py-1 prose-blockquote:px-3 prose-blockquote:rounded-r prose-a:text-primary prose-a:no-underline hover:prose-a:underline text-[13px] leading-relaxed">
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>
                               {displayContent}
                             </ReactMarkdown>
