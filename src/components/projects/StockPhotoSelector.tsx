@@ -3,7 +3,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { FreepikService, FreepikResource } from '@/services/FreepikService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, Search, X, Image, Check, Upload, Filter, Camera } from 'lucide-react';
+import { Loader2, Search, X, Image, Check, Upload, Filter, Camera, Grid2X2, Grid3X3, LayoutGrid } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -27,6 +27,8 @@ interface BackendPhoto {
   storage_path: string;
   file_type: string | null;
 }
+
+type GridSize = 'small' | 'medium' | 'large';
 
 export function StockPhotoSelector({ 
   userId, 
@@ -54,7 +56,18 @@ export function StockPhotoSelector({
   const [totalPages, setTotalPages] = useState(1);
   const [noPhotosFound, setNoPhotosFound] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [gridSize, setGridSize] = useState<GridSize>('medium');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Grid size classes
+  const gridClasses: Record<GridSize, string> = {
+    small: 'grid-cols-4 gap-2',
+    medium: 'grid-cols-2 gap-3',
+    large: 'grid-cols-1 gap-4'
+  };
+
+  // Selection count for display
+  const selectionCount = multiSelect ? selectedPhotos.length : (selectedPhoto ? 1 : 0);
 
   // Load backend photos on mount
   useEffect(() => {
@@ -372,40 +385,82 @@ export function StockPhotoSelector({
                 </Button>
               </div>
               
-              {/* Filters - Horizontal scroll on mobile */}
-              <div className="flex items-center gap-2 sm:gap-4 overflow-x-auto pb-1 scrollbar-none">
-                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                  <Filter className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
-                  <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
-                    {isRTL ? 'الاتجاه:' : 'Orientation:'}
-                  </span>
-                  <select
-                    className="text-xs sm:text-sm bg-background border rounded-md px-2 py-1.5"
-                    value={orientation}
-                    onChange={(e) => setOrientation(e.target.value as any)}
-                  >
-                    <option value="all">{isRTL ? 'الكل' : 'All'}</option>
-                    <option value="landscape">{isRTL ? 'أفقي' : 'Landscape'}</option>
-                    <option value="portrait">{isRTL ? 'عمودي' : 'Portrait'}</option>
-                    <option value="square">{isRTL ? 'مربع' : 'Square'}</option>
-                  </select>
+              {/* Filters and View Toggle */}
+              <div className="flex items-center justify-between gap-2 pb-1">
+                {/* Filters - Horizontal scroll on mobile */}
+                <div className="flex items-center gap-2 sm:gap-4 overflow-x-auto scrollbar-none">
+                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                    <Filter className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+                    <select
+                      className="text-xs sm:text-sm bg-background border rounded-md px-2 py-1.5"
+                      value={orientation}
+                      onChange={(e) => setOrientation(e.target.value as any)}
+                    >
+                      <option value="all">{isRTL ? 'الكل' : 'All'}</option>
+                      <option value="landscape">{isRTL ? 'أفقي' : 'Landscape'}</option>
+                      <option value="portrait">{isRTL ? 'عمودي' : 'Portrait'}</option>
+                      <option value="square">{isRTL ? 'مربع' : 'Square'}</option>
+                    </select>
+                  </div>
+                  
+                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                    <select
+                      className="text-xs sm:text-sm bg-background border rounded-md px-2 py-1.5"
+                      value={contentType}
+                      onChange={(e) => setContentType(e.target.value as any)}
+                    >
+                      <option value="all">{isRTL ? 'الكل' : 'All'}</option>
+                      <option value="photo">{isRTL ? 'صورة' : 'Photo'}</option>
+                      <option value="vector">{isRTL ? 'فيكتور' : 'Vector'}</option>
+                    </select>
+                  </div>
                 </div>
-                
-                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                  <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
-                    {isRTL ? 'النوع:' : 'Type:'}
-                  </span>
-                  <select
-                    className="text-xs sm:text-sm bg-background border rounded-md px-2 py-1.5"
-                    value={contentType}
-                    onChange={(e) => setContentType(e.target.value as any)}
+
+                {/* View Size Toggle */}
+                <div className="flex items-center gap-1 shrink-0 border rounded-lg p-0.5 bg-muted/30">
+                  <button
+                    onClick={() => setGridSize('small')}
+                    className={cn(
+                      "p-1.5 rounded-md transition-colors",
+                      gridSize === 'small' ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                    )}
+                    title={isRTL ? 'صغير' : 'Small'}
                   >
-                    <option value="all">{isRTL ? 'الكل' : 'All'}</option>
-                    <option value="photo">{isRTL ? 'صورة' : 'Photo'}</option>
-                    <option value="vector">{isRTL ? 'فيكتور' : 'Vector'}</option>
-                  </select>
+                    <Grid3X3 className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => setGridSize('medium')}
+                    className={cn(
+                      "p-1.5 rounded-md transition-colors",
+                      gridSize === 'medium' ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                    )}
+                    title={isRTL ? 'متوسط' : 'Medium'}
+                  >
+                    <Grid2X2 className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => setGridSize('large')}
+                    className={cn(
+                      "p-1.5 rounded-md transition-colors",
+                      gridSize === 'large' ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                    )}
+                    title={isRTL ? 'كبير' : 'Large'}
+                  >
+                    <LayoutGrid className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
+
+              {/* Selection Counter */}
+              {multiSelect && selectionCount > 0 && (
+                <div className="flex items-center justify-center py-1">
+                  <span className="text-xs sm:text-sm font-medium text-primary bg-primary/10 px-3 py-1 rounded-full">
+                    {isRTL 
+                      ? `${selectionCount} ${selectionCount === 1 ? 'صورة مختارة' : 'صور مختارة'}`
+                      : `${selectionCount} ${selectionCount === 1 ? 'photo' : 'photos'} selected`}
+                  </span>
+                </div>
+              )}
             </div>
             
             {/* Photos Grid - Scrollable */}
@@ -415,14 +470,15 @@ export function StockPhotoSelector({
                   <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-primary" />
                 </div>
               ) : stockPhotos.length > 0 ? (
-                <div className="grid grid-cols-2 gap-3">
+                <div className={cn("grid", gridClasses[gridSize])}>
                   {stockPhotos.map((photo) => (
                     <div 
                       key={photo.id}
                       className={cn(
-                        "relative aspect-square rounded-xl overflow-hidden cursor-pointer transition-all active:scale-[0.98]",
+                        "relative overflow-hidden cursor-pointer transition-all active:scale-[0.98]",
+                        gridSize === 'large' ? "aspect-video rounded-xl" : "aspect-square rounded-lg",
                         isPhotoSelected(photo.image.source.url) 
-                          ? "ring-3 ring-primary ring-offset-2 ring-offset-background" 
+                          ? "ring-2 ring-primary ring-offset-1 ring-offset-background" 
                           : "border border-border/50"
                       )}
                       onClick={() => handleSelectPhoto({
@@ -441,8 +497,17 @@ export function StockPhotoSelector({
                       )}
                       {/* Checkmark badge */}
                       {isPhotoSelected(photo.image.source.url) && (
-                        <div className="absolute top-2 right-2 bg-primary text-primary-foreground rounded-full p-1.5 shadow-lg">
-                          <Check className="h-4 w-4" strokeWidth={3} />
+                        <div className={cn(
+                          "absolute bg-primary text-primary-foreground rounded-full shadow-lg",
+                          gridSize === 'small' ? "top-1 right-1 p-0.5" : "top-2 right-2 p-1.5"
+                        )}>
+                          <Check className={gridSize === 'small' ? "h-3 w-3" : "h-4 w-4"} strokeWidth={3} />
+                        </div>
+                      )}
+                      {/* Title on large view */}
+                      {gridSize === 'large' && (
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3">
+                          <p className="text-white text-sm font-medium truncate">{photo.title}</p>
                         </div>
                       )}
                     </div>
@@ -517,14 +582,15 @@ export function StockPhotoSelector({
                   </p>
                 </div>
               ) : backendPhotos.length > 0 ? (
-                <div className="grid grid-cols-2 gap-3">
+                <div className={cn("grid", gridClasses[gridSize])}>
                   {backendPhotos.map((photo) => (
                     <div 
                       key={photo.id}
                       className={cn(
-                        "relative aspect-square rounded-xl overflow-hidden cursor-pointer transition-all active:scale-[0.98]",
+                        "relative overflow-hidden cursor-pointer transition-all active:scale-[0.98]",
+                        gridSize === 'large' ? "aspect-video rounded-xl" : "aspect-square rounded-lg",
                         isPhotoSelected(photo.url) 
-                          ? "ring-3 ring-primary ring-offset-2 ring-offset-background" 
+                          ? "ring-2 ring-primary ring-offset-1 ring-offset-background" 
                           : "border border-border/50"
                       )}
                       onClick={() => handleSelectPhoto({
@@ -543,8 +609,17 @@ export function StockPhotoSelector({
                       )}
                       {/* Checkmark badge */}
                       {isPhotoSelected(photo.url) && (
-                        <div className="absolute top-2 right-2 bg-primary text-primary-foreground rounded-full p-1.5 shadow-lg">
-                          <Check className="h-4 w-4" strokeWidth={3} />
+                        <div className={cn(
+                          "absolute bg-primary text-primary-foreground rounded-full shadow-lg",
+                          gridSize === 'small' ? "top-1 right-1 p-0.5" : "top-2 right-2 p-1.5"
+                        )}>
+                          <Check className={gridSize === 'small' ? "h-3 w-3" : "h-4 w-4"} strokeWidth={3} />
+                        </div>
+                      )}
+                      {/* Filename on large view */}
+                      {gridSize === 'large' && (
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3">
+                          <p className="text-white text-sm font-medium truncate">{photo.filename}</p>
                         </div>
                       )}
                     </div>
@@ -553,12 +628,17 @@ export function StockPhotoSelector({
                   {/* Upload More Button in Grid */}
                   <button
                     onClick={handleUploadClick}
-                    className="aspect-square rounded-lg border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex flex-col items-center justify-center gap-2 transition-colors"
+                    className={cn(
+                      "border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex flex-col items-center justify-center gap-2 transition-colors",
+                      gridSize === 'large' ? "aspect-video rounded-xl" : "aspect-square rounded-lg"
+                    )}
                   >
-                    <Upload className="h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">
-                      {isRTL ? 'رفع المزيد' : 'Upload More'}
-                    </span>
+                    <Upload className={gridSize === 'small' ? "h-4 w-4 text-muted-foreground" : "h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground"} />
+                    {gridSize !== 'small' && (
+                      <span className="text-xs text-muted-foreground">
+                        {isRTL ? 'رفع المزيد' : 'Upload More'}
+                      </span>
+                    )}
                   </button>
                 </div>
               ) : noPhotosFound ? (
