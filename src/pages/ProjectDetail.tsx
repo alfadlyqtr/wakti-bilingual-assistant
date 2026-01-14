@@ -3217,20 +3217,39 @@ Fix the issue in the code and ensure it works correctly.`;
     // Capture images BEFORE clearing them (for AI, not DB - DB has no images column)
     // Capture images and PDFs BEFORE clearing them
     // For PDFs, we send the actual data URL, not the preview SVG
-    // AUTO-UPLOAD: Upload attached images to storage to get permanent URLs
+    
+    // SMART UPLOAD: Only save to storage if image will actually be USED in the project
+    // Don't save for "inspiration only" requests (colors, style reference, etc.)
+    const isInspirationOnly = /\b(color|colors|colour|colours|palette|scheme|inspiration|inspired|match|style|reference|للإلهام|الألوان|لون|ألوان)\s*(only|for|from)?/i.test(userMessage) ||
+      /\b(use|get|extract)\s+(the\s+)?(colors?|colours?|palette)\s*(from|of|only)?/i.test(userMessage) ||
+      /\b(for\s+)?(inspiration|reference)\s*only/i.test(userMessage);
+    
     let userImages: string[] = [];
     if (attachedImages.length > 0) {
-      // Auto-upload images to get permanent URLs (not base64)
-      const uploadedUrls = await uploadAttachedImagesToStorage(attachedImages);
-      userImages = uploadedUrls.map((url, idx) => {
-        const img = attachedImages[idx];
-        if (img?.pdfDataUrl) {
-          // For PDFs, return the actual PDF data with a prefix marker
-          return `[PDF:${img.file.name}]${img.pdfDataUrl}`;
-        }
-        // Return the permanent URL (or base64 fallback)
-        return url;
-      });
+      if (isInspirationOnly) {
+        // DON'T upload to storage - just send base64 to AI for analysis
+        // This saves storage space and keeps uploads clean
+        console.log('[Smart Upload] Inspiration-only detected, using base64 instead of storage');
+        userImages = attachedImages.map((img, idx) => {
+          if (img?.pdfDataUrl) {
+            return `[PDF:${img.file.name}]${img.pdfDataUrl}`;
+          }
+          // Return base64 preview (no storage upload)
+          return img.preview;
+        });
+      } else {
+        // Auto-upload images to get permanent URLs (for use in the project)
+        const uploadedUrls = await uploadAttachedImagesToStorage(attachedImages);
+        userImages = uploadedUrls.map((url, idx) => {
+          const img = attachedImages[idx];
+          if (img?.pdfDataUrl) {
+            // For PDFs, return the actual PDF data with a prefix marker
+            return `[PDF:${img.file.name}]${img.pdfDataUrl}`;
+          }
+          // Return the permanent URL (or base64 fallback)
+          return url;
+        });
+      }
     }
     
     // Store attachment count in content as metadata marker for persistence
