@@ -1758,21 +1758,34 @@ User: "What does useState do?" → Answer the question
 🖼️ ATTACHED IMAGES HANDLING (CRITICAL):
 The user has attached ${(images as unknown as string[]).length} image(s) directly to this message.
 
-RULES FOR ATTACHED IMAGES:
-1. These images are ready to use in the code - they have permanent URLs
-2. If user says "use this as background" → Set the attached image as CSS background
-3. If user says "create a carousel/gallery/slider" → Use ALL attached images in a carousel
-4. If user says "add to hero/banner" → Use the attached image in the hero section
-5. If user says "use as logo/icon" → Use as an <img> tag with appropriate sizing
-6. NEVER ask "which image?" when images are already attached - just USE them
+🎨 COLOR/STYLE INSPIRATION MODE (CHECK FIRST!):
+If user says ANY of these phrases, ONLY extract colors/style - do NOT embed the image:
+- "use colors for inspiration", "colors only", "color palette", "color scheme"
+- "inspired by", "get colors from", "match the colors", "use these colors"
+- "للإلهام", "استخدم الألوان", "لون فقط", "الألوان"
+- "style inspiration", "design inspiration"
 
-Attached Image URLs (use these directly):
+When in COLOR INSPIRATION mode:
+1. Analyze the image to identify dominant colors (e.g., "#AF1E2D red", "#192168 navy blue")
+2. Apply those EXACT colors to the design using CSS variables or inline styles
+3. DO NOT use the image URL anywhere in the code
+4. DO NOT embed or display the image
+5. ONLY update color values to match what you see in the image
+
+Example: User uploads Montreal Canadiens logo + says "use colors for inspiration"
+→ Extract: primary red (#AF1E2D), navy blue (#192168), white (#FFFFFF)
+→ Apply these colors to backgrounds, text, buttons, etc.
+→ NEVER add the logo image to the code
+
+RULES FOR DIRECT IMAGE USE (only if NOT inspiration mode):
+1. If user says "use this as background" → Set the attached image as CSS background
+2. If user says "create a carousel/gallery/slider" → Use ALL attached images in a carousel
+3. If user says "add to hero/banner" → Use the attached image in the hero section
+4. If user says "use as logo/icon" → Use as an <img> tag with appropriate sizing
+5. NEVER ask "which image?" when images are already attached - just USE them
+
+Attached Image URLs (use ONLY if NOT inspiration mode):
 ${(images as unknown as string[]).filter((img: string) => !img.startsWith('[PDF:')).map((img: string, i: number) => `${i + 1}. ${img.startsWith('http') ? img : '[base64-image-' + (i + 1) + ']'}`).join('\n')}
-
-Example usage:
-- Background: style={{ backgroundImage: \`url(${"${imageUrl}"})\` }}
-- Carousel: const images = [${(images as unknown as string[]).filter((img: string) => !img.startsWith('[PDF:') && img.startsWith('http')).map((url: string) => `"${url}"`).join(', ')}];
-- Single image: <img src="${(images as unknown as string[])[0]?.startsWith('http') ? (images as unknown as string[])[0] : 'IMAGE_URL'}" alt="..." />
 ` : '';
 
       const chatSystemPrompt = `You are a helpful AI assistant for a React code editor. You help users with their projects.
