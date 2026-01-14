@@ -187,6 +187,7 @@ export default function ProjectDetail() {
   const [photoSelectorInitialTab, setPhotoSelectorInitialTab] = useState<'stock' | 'user'>('stock');
   const [photoSelectorMultiSelect, setPhotoSelectorMultiSelect] = useState(false);
   const [isChangingCarouselImages, setIsChangingCarouselImages] = useState(false);
+  const [savedPromptForPhotos, setSavedPromptForPhotos] = useState('');
   
   // Pending element image edit (for AI Edit image requests)
   const [pendingElementImageEdit, setPendingElementImageEdit] = useState<{
@@ -2534,7 +2535,12 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
   };
   
   // Open stock photo selector - always starts fresh (empty search)
-  const openStockPhotoSelector = (initialTab: 'stock' | 'user' = 'stock', multiSelect: boolean = true) => {
+  // Now also saves the current prompt so it can be restored after photo selection
+  const openStockPhotoSelector = (initialTab: 'stock' | 'user' = 'stock', multiSelect: boolean = true, promptToSave?: string) => {
+    // Save the prompt if provided (from handleChatSubmit when photo request detected)
+    if (promptToSave) {
+      setSavedPromptForPhotos(promptToSave);
+    }
     setPhotoSearchTerm(''); // Always empty - user types their own search
     setPhotoSelectorInitialTab(initialTab);
     setPhotoSelectorMultiSelect(multiSelect);
@@ -2684,6 +2690,13 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
 
       if (newAttachments.length > 0) {
         setAttachedImages(prev => [...prev, ...newAttachments]);
+        
+        // Restore the saved prompt if there was one
+        if (savedPromptForPhotos) {
+          setChatInput(savedPromptForPhotos);
+          setSavedPromptForPhotos(''); // Clear after restoring
+        }
+        
         toast.dismiss(loadingToast);
 
         const successCount = newAttachments.length;
@@ -2746,7 +2759,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
         
         if (success && count > 0) {
           // User has photos, open selector with user tab active
-          openStockPhotoSelector('user', true);
+          openStockPhotoSelector('user', true, userMessage);
           return;
         } else {
           // No user photos found, add assistant message explaining this
@@ -2777,16 +2790,16 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
     }
     // Check for love photos or other specific photo requests - open selector fresh
     else if (lovePhotoRegex.test(userMessage)) {
-      openStockPhotoSelector('stock', true);
+      openStockPhotoSelector('stock', true, userMessage);
       return;
-    } 
+    }
     // Check for "images of X" pattern - open selector fresh, user searches manually
     else {
       const imagesOfMatch = userMessage.match(imagesOfPattern);
       if (imagesOfMatch && imagesOfMatch[2]) {
         const searchTerm = imagesOfMatch[2].trim().replace(/[.!?]+$/, '').split(/\s+/).slice(0, 3).join(' ');
         if (searchTerm && searchTerm.length > 1) {
-          openStockPhotoSelector('stock', true);
+          openStockPhotoSelector('stock', true, userMessage);
           return;
         }
       }
@@ -2802,7 +2815,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
 
         if (explicitChangeImages) {
           setIsChangingCarouselImages(true);
-          openStockPhotoSelector('stock', true);
+          openStockPhotoSelector('stock', true, userMessage);
           return;
         }
 
@@ -2816,7 +2829,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
             .join(' ');
           if (searchTerm && searchTerm.length > 1) {
             // This is a generic request to find images (attach to chat), not a carousel replacement
-            openStockPhotoSelector('stock', true);
+            openStockPhotoSelector('stock', true, userMessage);
             return;
           }
         }
@@ -2825,7 +2838,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       // Original simple pattern: "heart photos", "nature photos", etc. - open selector fresh
       const photoMatch = userMessage.match(photoRequestRegex);
       if (photoMatch && photoMatch[1] && !['use', 'upload', 'select', 'choose', 'find', 'get', 'show', 'display', 'add', 'the', 'my', 'your'].includes(photoMatch[1].toLowerCase())) {
-        openStockPhotoSelector('stock', true);
+        openStockPhotoSelector('stock', true, userMessage);
         return;
       }
     }
