@@ -52,22 +52,59 @@ interface StyleChanges {
 }
 
 /**
- * Find an element in JSX code by matching its tag, text content, or class.
+ * Find an element in JSX code by matching its tag, text content, class, or src.
  * NOTE: DOM tagName may come from components like framer-motion (e.g. <motion.h1> renders <h1>),
  * so we try multiple JSX tag candidates.
+ * 
+ * Enhanced to support:
+ * - Self-closing tags (<img>, <input>, <br>, etc.)
+ * - Matching by src attribute for images
+ * - More specific className matching
  */
 function findElementInCode(
   code: string,
   element: ElementInfo
 ): { fullMatch: string; openingTag: string; startIndex: number; endIndex: number } | null {
-  const { tagName, innerText, className } = element;
+  const { tagName, innerText, className, openingTag: elementOpeningTag } = element;
 
   const tagCandidates = [tagName, `motion.${tagName}`];
-
   const escapeTagForRegex = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  
+  // Self-closing tags that don't have closing tags
+  const selfClosingTags = ['img', 'input', 'br', 'hr', 'meta', 'link', 'area', 'base', 'col', 'embed', 'param', 'source', 'track', 'wbr'];
+  const isSelfClosing = selfClosingTags.includes(tagName.toLowerCase());
 
-  // Strategy 1: Find by tag + exact text content
-  if (innerText && innerText.length > 0 && innerText.length < 200) {
+  // Strategy 0: For images, try to match by src attribute (most reliable for imgs)
+  if (tagName.toLowerCase() === 'img' && elementOpeningTag) {
+    // Extract src from the opening tag we have
+    const srcMatch = elementOpeningTag.match(/src=["']([^"']+)["']/);
+    if (srcMatch) {
+      const srcValue = srcMatch[1];
+      // Only use if src is specific enough (not a placeholder/variable)
+      if (srcValue.length > 10 && !srcValue.startsWith('{')) {
+        const escapedSrc = srcValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        
+        for (const cand of tagCandidates) {
+          const t = escapeTagForRegex(cand);
+          // Match img with this specific src (handles both <img ... /> and <img ... >)
+          const srcPattern = new RegExp(`<${t}[^>]*src=["']${escapedSrc}["'][^>]*(?:\\/>|>)`, 'g');
+          
+          const match = srcPattern.exec(code);
+          if (match) {
+            return {
+              fullMatch: match[0],
+              openingTag: match[0],
+              startIndex: match.index,
+              endIndex: match.index + match[0].length,
+            };
+          }
+        }
+      }
+    }
+  }
+
+  // Strategy 1: Find by tag + exact text content (for non-self-closing tags)
+  if (!isSelfClosing && innerText && innerText.length > 0 && innerText.length < 200) {
     const escapedText = innerText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
     for (const cand of tagCandidates) {
@@ -86,39 +123,95 @@ function findElementInCode(
     }
   }
 
-  // Strategy 2: Find by tag + className (first class)
+  // Strategy 2: Find by tag + className (prefer unique/specific classes)
   if (className) {
-    const firstClass = className.split(' ').filter((c) => c && !c.includes('hover:'))[0];
-    if (firstClass) {
-      const escapedClass = firstClass.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Filter out generic Tailwind utility classes for better matching
+    const genericClasses = ['w-full', 'h-full', 'flex', 'block', 'hidden', 'relative', 'absolute', 'p-', 'm-', 'text-', 'bg-'];
+    const classes = className.split(' ').filter((c) => c && !c.includes('hover:') && !c.includes(':'));
+    
+    // Try to find a more specific class first
+    const specificClass = classes.find(c => {
+      const isGeneric = genericClasses.some(g => c === g || (g.endsWith('-') && c.startsWith(g)));
+      return !isGeneric && c.length > 4;
+    });
+    
+    const classToMatch = specificClass || classes[0];
+    
+    if (classToMatch) {
+      const escapedClass = classToMatch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
       for (const cand of tagCandidates) {
         const t = escapeTagForRegex(cand);
-        const classPattern = new RegExp(
-          `<${t}[^>]*className=["'{][^"'}]*${escapedClass}[^"'}]*["'}][^>]*>`,
-          'g'
-        );
-
-        const match = classPattern.exec(code);
-        if (match) {
-          const afterOpening = code.slice(match.index + match[0].length);
-          const closingPattern = new RegExp(`</${t}>`);
-          const closingMatch = closingPattern.exec(afterOpening);
-
-          if (closingMatch) {
-            const fullMatch = code.slice(
-              match.index,
-              match.index + match[0].length + closingMatch.index + closingMatch[0].length
-            );
-
+        
+        if (isSelfClosing) {
+          // For self-closing tags, match the whole tag including />
+          const selfClosingPattern = new RegExp(
+            `<${t}[^>]*className=["'{][^"'}]*${escapedClass}[^"'}]*["'}][^>]*(?:\\/>|>)`,
+            'g'
+          );
+          
+          const match = selfClosingPattern.exec(code);
+          if (match) {
             return {
-              fullMatch,
+              fullMatch: match[0],
               openingTag: match[0],
               startIndex: match.index,
-              endIndex: match.index + fullMatch.length,
+              endIndex: match.index + match[0].length,
             };
           }
+        } else {
+          // For regular tags, find opening and closing
+          const classPattern = new RegExp(
+            `<${t}[^>]*className=["'{][^"'}]*${escapedClass}[^"'}]*["'}][^>]*>`,
+            'g'
+          );
+
+          const match = classPattern.exec(code);
+          if (match) {
+            const afterOpening = code.slice(match.index + match[0].length);
+            const closingPattern = new RegExp(`</${t}>`);
+            const closingMatch = closingPattern.exec(afterOpening);
+
+            if (closingMatch) {
+              const fullMatch = code.slice(
+                match.index,
+                match.index + match[0].length + closingMatch.index + closingMatch[0].length
+              );
+
+              return {
+                fullMatch,
+                openingTag: match[0],
+                startIndex: match.index,
+                endIndex: match.index + fullMatch.length,
+              };
+            }
+          }
         }
+      }
+    }
+  }
+
+  // Strategy 3: For self-closing tags, try matching by tag alone if there's only one
+  if (isSelfClosing) {
+    for (const cand of tagCandidates) {
+      const t = escapeTagForRegex(cand);
+      const allMatches: RegExpExecArray[] = [];
+      const tagPattern = new RegExp(`<${t}[^>]*(?:\\/>|>)`, 'g');
+      
+      let m;
+      while ((m = tagPattern.exec(code)) !== null) {
+        allMatches.push(m);
+      }
+      
+      // If only one match, use it
+      if (allMatches.length === 1) {
+        const match = allMatches[0];
+        return {
+          fullMatch: match[0],
+          openingTag: match[0],
+          startIndex: match.index,
+          endIndex: match.index + match[0].length,
+        };
       }
     }
   }
@@ -267,10 +360,41 @@ export function applyDirectEdits(
       // Fallback: If we can't find the element precisely, try a simpler approach
       console.warn('[directStyleEditor] Could not find element precisely, trying fallback');
       
-      // If text was provided, try to find element by its text content
-      if (element.innerText) {
+      const tagCandidates = [element.tagName, `motion.${element.tagName}`];
+      const selfClosingTags = ['img', 'input', 'br', 'hr', 'meta', 'link', 'area', 'base', 'col', 'embed', 'param', 'source', 'track', 'wbr'];
+      const isSelfClosing = selfClosingTags.includes(element.tagName.toLowerCase());
+      
+      // For self-closing tags, try matching by the opening tag we have
+      if (isSelfClosing && element.openingTag) {
+        // Extract a unique identifier from the opening tag (like src for images)
+        const srcMatch = element.openingTag.match(/src=["']([^"']+)["']/);
+        if (srcMatch) {
+          const escapedSrc = srcMatch[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          
+          for (const cand of tagCandidates) {
+            const t = cand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const pattern = new RegExp(`(<${t}[^>]*src=["']${escapedSrc}["'][^>]*)(\\/?>)`, 'g');
+            const match = pattern.exec(modifiedCode);
+            
+            if (match) {
+              const openingTagPart = match[1];
+              const closing = match[2];
+              const newOpeningTag = updateOpeningTagStyles(openingTagPart + closing, styleUpdates);
+              
+              modifiedCode = modifiedCode.replace(match[0], newOpeningTag);
+              
+              // Track applied changes
+              Object.keys(styleUpdates).forEach(key => {
+                if (!appliedChanges.includes(key)) appliedChanges.push(key);
+              });
+              break;
+            }
+          }
+        }
+      }
+      // For non-self-closing tags, try to find element by its text content
+      else if (element.innerText) {
         const escapedText = element.innerText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const tagCandidates = [element.tagName, `motion.${element.tagName}`];
 
         for (const cand of tagCandidates) {
           const t = cand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
