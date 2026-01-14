@@ -539,7 +539,7 @@ export default function ProjectDetail() {
         .from('project_collections')
         .select('data')
         .eq('project_id', id)
-        .eq('collection_name', 'services')
+        .eq('collection_name', 'booking_services')
         .limit(10);
       
       const services = (servicesData || []).map((s: any) => ({
@@ -3618,7 +3618,7 @@ Fix the issue in the code and ensure it works correctly.`;
       {/* Server Tab Content */}
       {mainTab === 'server' ? (
         <div className="flex-1 min-h-0 overflow-hidden">
-          <BackendDashboard projectId={id || ''} isRTL={isRTL} onBack={() => setMainTab('builder')} />
+          <BackendDashboard projectId={id || ''} isRTL={isRTL} onBack={() => { setMainTab('builder'); fetchBackendContext(); }} />
         </div>
       ) : (
       <>

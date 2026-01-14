@@ -218,7 +218,7 @@ export function BackendShopTab({ orders, inventory, projectId, isRTL, onRefresh 
   const handleDeleteProduct = async (productId: string) => {
     try {
       const { error } = await supabase
-        .from('project_inventory')
+        .from('project_collections')
         .delete()
         .eq('id', productId);
       if (error) throw error;
