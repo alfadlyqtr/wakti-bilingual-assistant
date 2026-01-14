@@ -59,6 +59,19 @@ interface BackendContext {
   formSubmissionsCount: number;
   uploadsCount: number;
   siteUsersCount: number;
+  // E-commerce data
+  products?: Array<{ name: string; price: number; image?: string; category?: string }>;
+  productsCount?: number;
+  ordersCount?: number;
+  hasShopSetup?: boolean;
+  // Booking data  
+  services?: Array<{ name: string; duration: number; price: number }>;
+  servicesCount?: number;
+  bookingsCount?: number;
+  hasBookingsSetup?: boolean;
+  // Chat & Comments
+  chatRoomsCount?: number;
+  commentsCount?: number;
 }
 
 // Debug context from the AI Coder debug system
@@ -490,10 +503,13 @@ ${uploadedAssets.map(a => `- **${a.filename}** (${a.file_type || 'file'}): ${a.u
 When user says "my photo", "my image", "uploaded image", "profile picture", use the appropriate URL from above.\n`
     : '';
 
-  // Build backend context section
+  // Build backend context section - EXPANDED for full AI coder awareness
   const backendContextStr = backendContext?.enabled ? `
 
 🗄️ PROJECT BACKEND (ENABLED):
+API: https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
+
+=== DATA OVERVIEW ===
 - Collections: ${backendContext.collections.length > 0 
   ? backendContext.collections.map(c => `${c.name}(${c.itemCount})`).join(', ') 
   : 'None'}
@@ -501,8 +517,40 @@ When user says "my photo", "my image", "uploaded image", "profile picture", use 
 - Uploads: ${backendContext.uploadsCount} files
 - Users: ${backendContext.siteUsersCount} registered
 
-API: https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
-Use { projectId, action: 'collection/{name}', data: {...} } for data operations.
+${backendContext.hasShopSetup ? `=== E-COMMERCE (ACTIVE) ===
+Products: ${backendContext.productsCount || 0} items${backendContext.products && backendContext.products.length > 0 ? `
+Sample products: ${backendContext.products.slice(0, 5).map(p => `${p.name} ($${p.price})`).join(', ')}` : ''}
+Orders: ${backendContext.ordersCount || 0}
+API Actions:
+- GET products: { projectId, action: 'collection/products' }
+- Add to cart: { projectId, action: 'cart/add', data: { productId, quantity, sessionId } }
+- Create order: { projectId, action: 'order/create', data: { items, customer, total } }
+` : `=== E-COMMERCE (NOT SET UP) ===
+No products added yet. If user wants a shop, generate code with placeholders and tell them to add products in Backend → Shop → Inventory.
+`}
+
+${backendContext.hasBookingsSetup ? `=== BOOKINGS (ACTIVE) ===
+Services: ${backendContext.servicesCount || 0}${backendContext.services && backendContext.services.length > 0 ? `
+Available: ${backendContext.services.slice(0, 5).map(s => `${s.name} (${s.duration}min, $${s.price})`).join(', ')}` : ''}
+Bookings: ${backendContext.bookingsCount || 0}
+API Actions:
+- GET services: { projectId, action: 'collection/services' }
+- Check availability: { projectId, action: 'booking/get-available-slots', data: { serviceId, date } }
+- Create booking: { projectId, action: 'booking/create', data: { serviceId, date, time, customer } }
+` : `=== BOOKINGS (NOT SET UP) ===
+No services added yet. If user wants appointments, generate code with placeholders and tell them to add services in Backend → Bookings → Services.
+`}
+
+${(backendContext.chatRoomsCount || 0) > 0 || (backendContext.commentsCount || 0) > 0 ? `=== SOCIAL FEATURES ===
+Chat Rooms: ${backendContext.chatRoomsCount || 0}
+Comments: ${backendContext.commentsCount || 0}
+` : ''}
+
+IMPORTANT FOR AI CODER:
+1. If user wants dynamic content (products, services), fetch from API - don't hardcode
+2. If backend data is empty, generate attractive placeholders with CTAs like "Add your products in the Backend dashboard"
+3. Use proper loading states while fetching data
+4. Handle empty states gracefully with helpful guidance
 ` : '';
 
   const userMessage = `CURRENT CODEBASE:
