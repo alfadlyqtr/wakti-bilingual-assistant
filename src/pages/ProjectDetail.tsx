@@ -4368,6 +4368,37 @@ Fix the issue in the code and ensure it works correctly.`;
                           ? "bg-indigo-600 text-white rounded-br-md text-[13px] leading-relaxed"
                           : "bg-[#fafafa] dark:bg-[#1a1a1a] text-foreground rounded-bl-md border border-[#e5e5e5] dark:border-[#2a2a2a]"
                       )}>
+                        {/* Timestamp - Lovable Style */}
+                        <div className={cn(
+                          "flex items-center justify-between mb-2 text-[10px]",
+                          msg.role === 'user' ? "text-white/60" : "text-muted-foreground"
+                        )}>
+                          <span>
+                            {(msg as any).timestamp ? new Date((msg as any).timestamp).toLocaleTimeString(isRTL ? 'ar-SA' : 'en-US', { 
+                              hour: '2-digit', 
+                              minute: '2-digit',
+                              hour12: false 
+                            }) : new Date().toLocaleTimeString(isRTL ? 'ar-SA' : 'en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                          </span>
+                          {/* Copy button - inline with timestamp */}
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(msg.content || '');
+                              toast.success(isRTL ? 'تم النسخ!' : 'Copied!');
+                            }}
+                            className={cn(
+                              "flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors",
+                              msg.role === 'user' 
+                                ? "hover:bg-white/10 text-white/60 hover:text-white"
+                                : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
+                            )}
+                            title={isRTL ? 'نسخ' : 'Copy'}
+                          >
+                            <Copy className="h-3 w-3" />
+                            <span className="hidden sm:inline">{isRTL ? 'نسخ' : 'Copy'}</span>
+                          </button>
+                        </div>
+                        
                         {isAssistant ? (
                           <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1.5 prose-headings:my-2 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-table:my-2 prose-pre:my-2 prose-code:text-[12px] prose-code:bg-zinc-100 dark:prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none text-[13px] leading-relaxed">
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>

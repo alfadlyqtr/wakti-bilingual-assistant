@@ -13,10 +13,8 @@ import { ImageModal } from './ImageModal';
 import { YouTubePreview } from './YouTubePreview';
 import { StudyModeMessage } from './StudyModeMessage';
 import { SearchResultActions } from './SearchResultActions';
-import { ToolUsageIndicator } from './ToolUsageIndicator';
-import { ErrorExplanationCard } from './ErrorExplanationCard';
-import { MessageTimestamp } from './MessageTimestamp';
-import EnhancedQuickActions from './EnhancedQuickActions';
+// Note: ToolUsageIndicator, ErrorExplanationCard, MessageTimestamp, EnhancedQuickActions
+// are for WAKTI AI Coder (ProjectDetail.tsx), not for the main WAKTI AI assistant
 import { supabase } from '@/integrations/supabase/client';
 import { getSelectedVoices } from './TalkBackSettings';
 import { useNavigate } from 'react-router-dom';
@@ -1965,88 +1963,12 @@ export function ChatMessages({
                           : 'bg-primary text-primary-foreground')
                       : `bg-gradient-to-r from-blue-50 to-purple-50 dark:from-slate-800 dark:to-slate-900 text-gray-900 dark:text-gray-100 border-2 ${getAssistantBubbleClasses(message)}`
                   }`}>
-                    {/* FIXED: Mode Badge with proper logic + Timestamp */}
-                    <div className="flex items-center justify-between gap-2 mb-2">
+                    {/* Mode Badge with proper logic */}
+                    <div className="flex items-center gap-2 mb-2">
                       <Badge variant="secondary" className="px-2 py-1 text-xs font-medium leading-none whitespace-nowrap align-middle">
                         {getMessageBadge(message, activeTrigger)}
                       </Badge>
-                      {/* Message Timestamp - Always Visible */}
-                      <MessageTimestamp 
-                        timestamp={message.timestamp || new Date()} 
-                        className={message.role === 'user' ? 'text-white/70 text-[10px]' : 'text-muted-foreground text-[10px]'}
-                      />
                     </div>
-                    
-                    {/* Thinking Duration Badge - Lovable Style */}
-                    {isAssistant && thinkingDuration && thinkingDuration > 0 && (
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-xs">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                          {language === 'ar' ? `فكّر لـ ${thinkingDuration.toFixed(0)} ث` : `Thought for ${thinkingDuration.toFixed(0)}s`}
-                        </span>
-                      </div>
-                    )}
-                    
-                    {/* Applied/Status Indicator - Lovable Style */}
-                    {isAssistant && isApplied && !isLoading && (
-                      <div className="mb-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-                        <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
-                          <CheckCircle className="h-4 w-4" />
-                          <span className="text-sm font-medium">{language === 'ar' ? 'تم التطبيق' : 'Applied'}</span>
-                        </div>
-                        {message.content && (
-                          <p className="mt-1 text-xs text-green-600 dark:text-green-300">{message.content.substring(0, 150)}{message.content.length > 150 ? '...' : ''}</p>
-                        )}
-                        {filesModified.length > 0 && (
-                          <div className="mt-2">
-                            <p className="text-[10px] uppercase tracking-wider text-green-600/70 dark:text-green-400/70 mb-1">
-                              {language === 'ar' ? 'الملفات المعدلة' : 'FILES MODIFIED'}
-                            </p>
-                            {filesModified.map((file: string, idx: number) => (
-                              <button
-                                key={idx}
-                                onClick={() => {
-                                  navigate(`?view=code&file=${encodeURIComponent(file)}`);
-                                  toast.success(language === 'ar' ? 'جاري فتح الملف...' : 'Opening file...');
-                                }}
-                                className="flex items-center gap-1.5 text-xs text-primary hover:underline cursor-pointer"
-                              >
-                                <FileCode className="h-3 w-3" />
-                                {file}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    
-                    {/* Tasks Panel - Lovable Style */}
-                    {isAssistant && tasks.length > 0 && (
-                      <div className="mb-3 p-3 rounded-lg bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-semibold text-foreground">{language === 'ar' ? 'المهام' : 'Tasks'}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {tasks.filter((t: any) => t.status === 'done').length}/{tasks.length}
-                          </span>
-                        </div>
-                        <div className="space-y-1.5">
-                          {tasks.map((task: any, idx: number) => (
-                            <div key={idx} className="flex items-center gap-2 text-xs">
-                              {task.status === 'done' ? (
-                                <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-                              ) : task.status === 'running' ? (
-                                <Loader2 className="h-3.5 w-3.5 text-primary animate-spin" />
-                              ) : (
-                                <div className="h-3.5 w-3.5 rounded-full border border-muted-foreground/40" />
-                              )}
-                              <span className={task.status === 'done' ? 'text-muted-foreground' : 'text-foreground'}>
-                                {task.name}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                     
                     <div className={`text-sm leading-relaxed break-words ${message.role === 'user' ? (language === 'ar' ? 'text-right' : 'text-left') : 'text-left'}`}>
                       {(() => {
@@ -2214,53 +2136,7 @@ export function ChatMessages({
                       </div>
                     )}
                     
-                    {/* Tool Usage Indicator - Lovable Style */}
-                    {message.role === 'assistant' && (hasToolsUsed || thinkingDuration) && (
-                      <ToolUsageIndicator
-                        toolsUsed={metadata.toolsUsed || 0}
-                        thinkingDuration={thinkingDuration}
-                        isComplete={!isLoading}
-                        toolCalls={metadata.toolCalls || []}
-                      />
-                    )}
-
-                    {/* Error Explanation Card for error messages */}
-                    {message.role === 'assistant' && hasError && (
-                      <ErrorExplanationCard
-                        title={metadata.errorTitle || 'Something went wrong'}
-                        titleAr={metadata.errorTitleAr || 'حدث خطأ ما'}
-                        message={metadata.errorMessage || message.content}
-                        messageAr={metadata.errorMessageAr}
-                        severity={metadata.errorSeverity || 'error'}
-                        technicalDetails={metadata.technicalDetails}
-                        suggestedAction={metadata.suggestedAction}
-                        suggestedActionAr={metadata.suggestedActionAr}
-                        onRetry={metadata.onRetry}
-                        className="mt-2"
-                      />
-                    )}
-
-                    {/* Enhanced Quick Actions for AI messages */}
-                    {message.role === 'assistant' && message.content && !isLoading && (
-                      <EnhancedQuickActions
-                        responseContent={message.content}
-                        onActionClick={(prompt) => {
-                          // Dispatch event to send the quick action prompt
-                          window.dispatchEvent(new CustomEvent('wakti-quick-prompt', { 
-                            detail: { prompt } 
-                          }));
-                        }}
-                        isRTL={language === 'ar'}
-                        messageContext={{
-                          intent: message.intent,
-                          hasImage: !!(message as any)?.imageUrl,
-                          hasBrowsing: !!(message as any)?.browsingData || message.browsingUsed,
-                          hasError: hasError,
-                          isTask: message.intent === 'task',
-                          isReminder: message.intent === 'reminder',
-                        }}
-                      />
-                    )}
+                    {/* Note: ToolUsageIndicator, ErrorExplanationCard, EnhancedQuickActions are for WAKTI AI Coder */}
                     
                     {/* Mini Buttons Bar - Always visible Copy + TTS */}
                     {(() => {
