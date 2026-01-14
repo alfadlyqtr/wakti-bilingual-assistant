@@ -3484,6 +3484,9 @@ Fix the issue in the code and ensure it works correctly.`;
             files: changedFilesList.length > 0 ? changedFilesList : ['/App.js']
           });
           
+          // Update tool usage count for Lovable-style indicator (polling path)
+          setToolsUsedCount(prev => prev + (changedFilesList.length || 1));
+          
           setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
           await delay(250);
         }
