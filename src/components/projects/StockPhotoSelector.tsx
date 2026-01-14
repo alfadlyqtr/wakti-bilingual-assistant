@@ -50,6 +50,8 @@ export function StockPhotoSelector({
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<{ url: string; title: string } | null>(null);
   const [selectedPhotos, setSelectedPhotos] = useState<{ url: string; title: string }[]>([]); // Multi-select
+  // Allow user to switch between single/multi inside the modal (defaults to prop)
+  const [multiSelectEnabled, setMultiSelectEnabled] = useState<boolean>(multiSelect);
   const [orientation, setOrientation] = useState<'all' | 'landscape' | 'portrait' | 'square'>('all');
   const [contentType, setContentType] = useState<'all' | 'photo' | 'vector'>('photo');
   const [page, setPage] = useState(1);
@@ -76,7 +78,7 @@ export function StockPhotoSelector({
   };
 
   // Selection count for display
-  const selectionCount = multiSelect ? selectedPhotos.length : (selectedPhoto ? 1 : 0);
+  const selectionCount = multiSelectEnabled ? selectedPhotos.length : (selectedPhoto ? 1 : 0);
 
   // Load backend photos on mount
   useEffect(() => {
@@ -212,7 +214,7 @@ export function StockPhotoSelector({
   };
 
   const handleSelectPhoto = (photo: { url: string; title: string }) => {
-    if (multiSelect) {
+    if (multiSelectEnabled) {
       setSelectedPhotos(prev => {
         const exists = prev.some(p => p.url === photo.url);
         if (exists) {
@@ -226,14 +228,14 @@ export function StockPhotoSelector({
   };
 
   const isPhotoSelected = (url: string) => {
-    if (multiSelect) {
+    if (multiSelectEnabled) {
       return selectedPhotos.some(p => p.url === url);
     }
     return selectedPhoto?.url === url;
   };
 
   const handleConfirmSelection = () => {
-    if (multiSelect && selectedPhotos.length > 0) {
+    if (multiSelectEnabled && selectedPhotos.length > 0) {
       if (onSelectPhotos) {
         onSelectPhotos(selectedPhotos);
       } else {
@@ -352,12 +354,40 @@ export function StockPhotoSelector({
       >
         {/* Header - Safe area aware */}
         <div className="flex items-center justify-between p-4 border-b shrink-0 pt-[max(1rem,env(safe-area-inset-top))]">
-          <h2 className="text-lg font-semibold">
-            {multiSelect 
-              ? (isRTL ? 'اختيار صور متعددة' : 'Select Multiple Photos')
-              : (isRTL ? 'اختيار صورة' : 'Select Photo')
-            }
-          </h2>
+          <div className="flex items-center gap-3 min-w-0">
+            <h2 className="text-lg font-semibold truncate">
+              {multiSelectEnabled 
+                ? (isRTL ? 'اختيار صور متعددة' : 'Select Multiple Photos')
+                : (isRTL ? 'اختيار صورة' : 'Select Photo')
+              }
+            </h2>
+            <button
+              type="button"
+              onClick={() => {
+                const next = !multiSelectEnabled;
+                setMultiSelectEnabled(next);
+                if (next) {
+                  // single -> multi
+                  if (selectedPhoto) {
+                    setSelectedPhotos([selectedPhoto]);
+                    setSelectedPhoto(null);
+                  }
+                } else {
+                  // multi -> single
+                  setSelectedPhoto(selectedPhoto || selectedPhotos[0] || null);
+                  setSelectedPhotos([]);
+                }
+              }}
+              className={cn(
+                "text-xs px-2.5 py-1 rounded-full border",
+                multiSelectEnabled
+                  ? "bg-primary text-primary-foreground border-primary/30"
+                  : "bg-muted/30 text-muted-foreground border-border"
+              )}
+            >
+              {isRTL ? (multiSelectEnabled ? 'متعدد' : 'فردي') : (multiSelectEnabled ? 'Multi' : 'Single')}
+            </button>
+          </div>
           <Button variant="ghost" size="icon" onClick={onClose} className="h-10 w-10 rounded-full">
             <X className="h-5 w-5" />
           </Button>
@@ -467,7 +497,7 @@ export function StockPhotoSelector({
               </div>
 
               {/* Selection Counter */}
-              {multiSelect && selectionCount > 0 && (
+              {multiSelectEnabled && selectionCount > 0 && (
                 <div className="flex items-center justify-center py-1">
                   <span className="text-xs sm:text-sm font-medium text-primary bg-primary/10 px-3 py-1 rounded-full">
                     {isRTL 
@@ -691,7 +721,7 @@ export function StockPhotoSelector({
         
         {/* Footer Actions - Safe area aware */}
         <div className="p-4 border-t shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))] bg-background">
-          {multiSelect ? (
+          {multiSelectEnabled ? (
             <div className="flex flex-col gap-3">
               {/* Selection counter - always visible with status */}
               <div className="text-center text-sm font-medium">
