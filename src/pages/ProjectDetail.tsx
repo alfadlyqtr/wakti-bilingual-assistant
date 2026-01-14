@@ -59,6 +59,8 @@ import { TraceFlowLoader } from '@/components/projects/TraceFlowLoader';
 import { BackendDashboard } from '@/components/projects/backend/BackendDashboard';
 import { StockPhotoSelector } from '@/components/projects/StockPhotoSelector';
 import { ImageSourceButtons, ImageSourceChoice } from '@/components/projects/ImageSourceButtons';
+import { BookingFormWizard, BookingFormConfig, BookingService } from '@/components/projects/BookingFormWizard';
+import { ContactFormWizard, ContactFormConfig } from '@/components/projects/ContactFormWizard';
 import { FreepikService } from '@/services/FreepikService';
 
 // Lovable-style components
@@ -229,6 +231,11 @@ export default function ProjectDetail() {
     elementInfo: typeof selectedElementInfo;
     originalPrompt: string;
   } | null>(null);
+
+  // Booking/Contact Form Wizard state
+  const [showBookingWizard, setShowBookingWizard] = useState(false);
+  const [showContactWizard, setShowContactWizard] = useState(false);
+  const [pendingFormPrompt, setPendingFormPrompt] = useState('');
 
   // Clarifying questions modal state
   const [showClarifyingQuestions, setShowClarifyingQuestions] = useState(false);
@@ -3112,6 +3119,52 @@ Fix the issue in the code and ensure it works correctly.`;
     // Only check photo patterns if NO images are currently attached
     // AND we're not coming from the "Auto-Generate" selection
     if (!hasAttachedImages && !isAIGeneratingImages && !skipImageDialogRef.current) {
+      // BOOKING FORM DETECTION - Show wizard instead of direct AI call
+      const bookingFormPatterns = /\b(add|create|build|make|need).*(booking|appointment|schedule|reservation)\s*(form|page|system)?/i;
+      if (bookingFormPatterns.test(userMessage)) {
+        setPendingFormPrompt(userMessage);
+        setShowBookingWizard(true);
+        
+        setChatMessages(prev => [...prev, {
+          id: `user-${Date.now()}`,
+          role: 'user',
+          content: userMessage
+        }]);
+        
+        setChatMessages(prev => [...prev, {
+          id: `booking-wizard-${Date.now()}`,
+          role: 'assistant',
+          content: JSON.stringify({
+            type: 'booking_form_wizard',
+            prompt: userMessage
+          })
+        }]);
+        return;
+      }
+      
+      // CONTACT FORM DETECTION - Show wizard instead of direct AI call
+      const contactFormPatterns = /\b(add|create|build|make|need).*(contact|inquiry|message|feedback)\s*(form|page)?/i;
+      if (contactFormPatterns.test(userMessage)) {
+        setPendingFormPrompt(userMessage);
+        setShowContactWizard(true);
+        
+        setChatMessages(prev => [...prev, {
+          id: `user-${Date.now()}`,
+          role: 'user',
+          content: userMessage
+        }]);
+        
+        setChatMessages(prev => [...prev, {
+          id: `contact-wizard-${Date.now()}`,
+          role: 'assistant',
+          content: JSON.stringify({
+            type: 'contact_form_wizard',
+            prompt: userMessage
+          })
+        }]);
+        return;
+      }
+      
       // Patterns that indicate user wants to work with images
       // IMPORTANT: Exclude questions (show me, what, which) and style changes (shadow, effect, color)
       const isQuestionAboutImages = /\b(show|what|which|list|tell|see|display)\s+(me\s+)?(the\s+)?(images?|photos?|pictures?)/i.test(userMessage);
@@ -3906,6 +3959,10 @@ Fix the issue in the code and ensure it works correctly.`;
                       const parsed = JSON.parse(content);
                       if (parsed.type === 'image_source_picker' && parsed.prompt) {
                         imageSourcePicker = parsed;
+                      } else if (parsed.type === 'booking_form_wizard' && parsed.prompt) {
+                        // Handled separately below
+                      } else if (parsed.type === 'contact_form_wizard' && parsed.prompt) {
+                        // Handled separately below
                       } else if (parsed.type === 'asset_picker' && parsed.assets) {
                         assetPicker = parsed;
                       } else if (parsed.type === 'plan' || (parsed.title && (parsed.steps || parsed.codeChanges))) {
@@ -4142,6 +4199,75 @@ Fix the issue in the code and ensure it works correctly.`;
                           onSelect={(choice) => {
                             handleImageSourceSelect(choice);
                             // Remove this message from chat after selection
+                            setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                          }}
+                        />
+                      </div>
+                    );
+                  }
+                  
+                  // BOOKING FORM WIZARD - Inline wizard in chat
+                  let bookingWizardData: { type: string; prompt: string } | null = null;
+                  try {
+                    const parsed = JSON.parse(msg.content);
+                    if (parsed.type === 'booking_form_wizard') bookingWizardData = parsed;
+                  } catch {}
+                  
+                  if (bookingWizardData && showBookingWizard) {
+                    const services: BookingService[] = (backendContext?.services || []).map((s, idx) => ({
+                      id: `service-${idx}`,
+                      name: s.name,
+                      duration: s.duration,
+                      price: s.price
+                    }));
+                    
+                    return (
+                      <div key={i} className="flex flex-col items-start w-full animate-in fade-in slide-in-from-bottom-1 duration-300">
+                        <BookingFormWizard
+                          services={services}
+                          originalPrompt={pendingFormPrompt}
+                          onComplete={(config, structuredPrompt) => {
+                            setShowBookingWizard(false);
+                            setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            setChatInput(structuredPrompt);
+                            // Auto-submit after a brief delay
+                            setTimeout(() => {
+                              const form = document.querySelector('form');
+                              if (form) form.dispatchEvent(new Event('submit', { bubbles: true }));
+                            }, 100);
+                          }}
+                          onCancel={() => {
+                            setShowBookingWizard(false);
+                            setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                          }}
+                        />
+                      </div>
+                    );
+                  }
+                  
+                  // CONTACT FORM WIZARD - Inline wizard in chat
+                  let contactWizardData: { type: string; prompt: string } | null = null;
+                  try {
+                    const parsed = JSON.parse(msg.content);
+                    if (parsed.type === 'contact_form_wizard') contactWizardData = parsed;
+                  } catch {}
+                  
+                  if (contactWizardData && showContactWizard) {
+                    return (
+                      <div key={i} className="flex flex-col items-start w-full animate-in fade-in slide-in-from-bottom-1 duration-300">
+                        <ContactFormWizard
+                          originalPrompt={pendingFormPrompt}
+                          onComplete={(config, structuredPrompt) => {
+                            setShowContactWizard(false);
+                            setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            setChatInput(structuredPrompt);
+                            setTimeout(() => {
+                              const form = document.querySelector('form');
+                              if (form) form.dispatchEvent(new Event('submit', { bubbles: true }));
+                            }, 100);
+                          }}
+                          onCancel={() => {
+                            setShowContactWizard(false);
                             setChatMessages(prev => prev.filter(m => m.id !== msg.id));
                           }}
                         />
