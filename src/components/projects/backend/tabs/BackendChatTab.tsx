@@ -24,7 +24,7 @@ interface BackendChatTabProps {
 interface Message {
   id: string;
   content: string;
-  role: 'user' | 'owner';
+  role: string;
   created_at: string;
   sender_id?: string;
 }
@@ -56,7 +56,13 @@ export function BackendChatTab({ rooms, projectId, isRTL, onRefresh }: BackendCh
         .order('created_at', { ascending: true });
       
       if (error) throw error;
-      setMessages(data || []);
+      setMessages((data || []).map(m => ({
+        id: m.id,
+        content: m.content,
+        role: m.role,
+        created_at: m.created_at,
+        sender_id: m.sender_id || undefined
+      })));
     } catch (err) {
       toast.error(t('Failed to load messages', 'فشل تحميل الرسائل'));
     } finally {

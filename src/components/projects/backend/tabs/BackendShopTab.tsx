@@ -184,28 +184,23 @@ export function BackendShopTab({ orders, inventory, projectId, isRTL, onRefresh 
       const productData = { ...product };
       delete productData.id;
       
+      // Store products in project_collections instead of project_inventory
       if (editingProduct?.id) {
         const { error } = await supabase
-          .from('project_inventory')
-          .update({ 
-            data: productData as unknown as Record<string, unknown>,
-            item_name: product.name,
-            quantity: product.stock_quantity,
-            updated_at: new Date().toISOString()
-          })
+          .from('project_collections')
+          .update({ data: JSON.parse(JSON.stringify(productData)) })
           .eq('id', editingProduct.id);
         if (error) throw error;
         toast.success(t('Product updated', 'تم تحديث المنتج'));
       } else {
         const user = await supabase.auth.getUser();
         const { error } = await supabase
-          .from('project_inventory')
+          .from('project_collections')
           .insert([{
             project_id: projectId,
-            owner_id: user.data.user?.id || '',
-            item_name: product.name,
-            quantity: product.stock_quantity,
-            data: productData as unknown as Record<string, unknown>
+            user_id: user.data.user?.id || '',
+            collection_name: 'products',
+            data: JSON.parse(JSON.stringify(productData))
           }]);
         if (error) throw error;
         toast.success(t('Product added', 'تمت إضافة المنتج'));
@@ -240,7 +235,7 @@ export function BackendShopTab({ orders, inventory, projectId, isRTL, onRefresh 
       if (category.id) {
         const { error } = await supabase
           .from('project_collections')
-          .update({ data: category as unknown as Record<string, unknown> })
+          .update({ data: JSON.parse(JSON.stringify(category)) })
           .eq('id', category.id);
         if (error) throw error;
       } else {
@@ -249,9 +244,9 @@ export function BackendShopTab({ orders, inventory, projectId, isRTL, onRefresh 
           .from('project_collections')
           .insert([{
             project_id: projectId,
-            owner_id: user.data.user?.id || '',
+            user_id: user.data.user?.id || '',
             collection_name: 'categories',
-            data: category as unknown as Record<string, unknown>
+            data: JSON.parse(JSON.stringify(category))
           }]);
         if (error) throw error;
       }
@@ -271,7 +266,7 @@ export function BackendShopTab({ orders, inventory, projectId, isRTL, onRefresh 
       if (discount.id) {
         const { error } = await supabase
           .from('project_collections')
-          .update({ data: discount as unknown as Record<string, unknown> })
+          .update({ data: JSON.parse(JSON.stringify(discount)) })
           .eq('id', discount.id);
         if (error) throw error;
       } else {
@@ -280,9 +275,9 @@ export function BackendShopTab({ orders, inventory, projectId, isRTL, onRefresh 
           .from('project_collections')
           .insert([{
             project_id: projectId,
-            owner_id: user.data.user?.id || '',
+            user_id: user.data.user?.id || '',
             collection_name: 'discounts',
-            data: { ...discount, used_count: 0 } as unknown as Record<string, unknown>
+            data: JSON.parse(JSON.stringify({ ...discount, used_count: 0 }))
           }]);
         if (error) throw error;
       }
@@ -304,12 +299,12 @@ export function BackendShopTab({ orders, inventory, projectId, isRTL, onRefresh 
         .select('id')
         .eq('project_id', projectId)
         .eq('collection_name', 'shop_settings')
-        .single();
+        .maybeSingle();
       
       if (existing) {
         await supabase
           .from('project_collections')
-          .update({ data: settings as unknown as Record<string, unknown> })
+          .update({ data: JSON.parse(JSON.stringify(settings)) })
           .eq('id', existing.id);
       } else {
         const user = await supabase.auth.getUser();
@@ -317,9 +312,9 @@ export function BackendShopTab({ orders, inventory, projectId, isRTL, onRefresh 
           .from('project_collections')
           .insert([{
             project_id: projectId,
-            owner_id: user.data.user?.id || '',
+            user_id: user.data.user?.id || '',
             collection_name: 'shop_settings',
-            data: settings as unknown as Record<string, unknown>
+            data: JSON.parse(JSON.stringify(settings))
           }]);
       }
       toast.success(t('Settings saved', 'تم حفظ الإعدادات'));

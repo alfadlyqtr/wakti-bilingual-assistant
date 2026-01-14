@@ -107,7 +107,7 @@ export function BackendBookingsTab({ bookings, projectId, isRTL, onRefresh }: Ba
       .select('*')
       .eq('project_id', projectId)
       .eq('collection_name', 'booking_services');
-    setServices((data || []).map(d => ({ id: d.id, ...d.data })));
+    setServices((data || []).map(d => ({ id: d.id, ...(typeof d.data === 'object' && d.data !== null ? d.data as Record<string, unknown> : {}) })) as Service[]);
   };
 
   const fetchSettings = async () => {
@@ -116,11 +116,11 @@ export function BackendBookingsTab({ bookings, projectId, isRTL, onRefresh }: Ba
       .select('*')
       .eq('project_id', projectId)
       .eq('collection_name', 'booking_settings')
-      .single();
-    if (data?.data) {
+      .maybeSingle();
+    if (data?.data && typeof data.data === 'object') {
       setSettings({
         ...settings,
-        ...(data.data as any)
+        ...(data.data as Record<string, unknown>)
       });
     }
   };
@@ -159,19 +159,20 @@ export function BackendBookingsTab({ bookings, projectId, isRTL, onRefresh }: Ba
       if (editingService?.id) {
         const { error } = await supabase
           .from('project_collections')
-          .update({ data: serviceData })
+          .update({ data: JSON.parse(JSON.stringify(serviceData)) })
           .eq('id', editingService.id);
         if (error) throw error;
         toast.success(t('Service updated', 'تم تحديث الخدمة'));
       } else {
+        const user = await supabase.auth.getUser();
         const { error } = await supabase
           .from('project_collections')
-          .insert({
+          .insert([{
             project_id: projectId,
-            owner_id: (await supabase.auth.getUser()).data.user?.id,
+            user_id: user.data.user?.id || '',
             collection_name: 'booking_services',
-            data: serviceData
-          });
+            data: JSON.parse(JSON.stringify(serviceData))
+          }]);
         if (error) throw error;
         toast.success(t('Service added', 'تمت إضافة الخدمة'));
       }
@@ -207,22 +208,23 @@ export function BackendBookingsTab({ bookings, projectId, isRTL, onRefresh }: Ba
         .select('id')
         .eq('project_id', projectId)
         .eq('collection_name', 'booking_settings')
-        .single();
+        .maybeSingle();
       
       if (existing) {
         await supabase
           .from('project_collections')
-          .update({ data: settings })
+          .update({ data: JSON.parse(JSON.stringify(settings)) })
           .eq('id', existing.id);
       } else {
+        const user = await supabase.auth.getUser();
         await supabase
           .from('project_collections')
-          .insert({
+          .insert([{
             project_id: projectId,
-            owner_id: (await supabase.auth.getUser()).data.user?.id,
+            user_id: user.data.user?.id || '',
             collection_name: 'booking_settings',
-            data: settings
-          });
+            data: JSON.parse(JSON.stringify(settings))
+          }]);
       }
       toast.success(t('Settings saved', 'تم حفظ الإعدادات'));
     } catch (err) {
