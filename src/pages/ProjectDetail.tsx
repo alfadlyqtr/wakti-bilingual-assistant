@@ -58,6 +58,7 @@ import { MatrixOverlay } from '@/components/projects/MatrixOverlay';
 import { TraceFlowLoader } from '@/components/projects/TraceFlowLoader';
 import { BackendDashboard } from '@/components/projects/backend/BackendDashboard';
 import { StockPhotoSelector } from '@/components/projects/StockPhotoSelector';
+import { ImageSourceDialog, ImageSourceChoice } from '@/components/projects/ImageSourceDialog';
 import { FreepikService } from '@/services/FreepikService';
 
 // Lovable-style components
@@ -190,6 +191,11 @@ export default function ProjectDetail() {
   const [savedPromptForPhotos, setSavedPromptForPhotos] = useState('');
   const [photoSelectorShowOnlyUserPhotos, setPhotoSelectorShowOnlyUserPhotos] = useState(false);
   const [isUploadingAttachedImages, setIsUploadingAttachedImages] = useState(false);
+  
+  // Image Source Dialog state - shown when AI detects image-related requests
+  const [showImageSourceDialog, setShowImageSourceDialog] = useState(false);
+  const [pendingImagePrompt, setPendingImagePrompt] = useState('');
+  const [isAIGeneratingImages, setIsAIGeneratingImages] = useState(false);
   
   // Pending element image edit (for AI Edit image requests)
   const [pendingElementImageEdit, setPendingElementImageEdit] = useState<{
@@ -2628,6 +2634,64 @@ Fix the issue in the code and ensure it works correctly.`;
     setShowStockPhotoSelector(true);
   };
 
+  // Handle Image Source Dialog selection
+  // Ref to track if we're skipping image dialog (for auto-generate flow)
+  const skipImageDialogRef = useRef(false);
+  
+  const handleImageSourceSelect = async (choice: ImageSourceChoice) => {
+    setShowImageSourceDialog(false);
+    const prompt = pendingImagePrompt;
+    setPendingImagePrompt('');
+    
+    switch (choice) {
+      case 'stock':
+        // Open stock photo selector
+        openStockPhotoSelector('stock', true, prompt);
+        break;
+        
+      case 'uploads':
+        // Open user uploads tab
+        openStockPhotoSelector('user', true, prompt, { showOnlyUserPhotos: true });
+        break;
+        
+      case 'generate':
+        // Let AI generate images - set flag to skip dialog and re-submit
+        skipImageDialogRef.current = true;
+        setIsAIGeneratingImages(true);
+        setChatInput(prompt);
+        
+        // Use requestAnimationFrame to ensure state is updated before submit
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            const formEl = document.querySelector('form') as HTMLFormElement;
+            if (formEl) {
+              formEl.requestSubmit?.();
+            }
+            setTimeout(() => {
+              skipImageDialogRef.current = false;
+              setIsAIGeneratingImages(false);
+            }, 500);
+          });
+        });
+        break;
+        
+      case 'urls':
+        // Ask user to provide URLs - add a helper message
+        const urlPromptMsg = isRTL 
+          ? `✏️ يرجى لصق روابط الصور:\n\n_طلبك: "${prompt}"_`
+          : `✏️ Please paste image URLs:\n\n_Your request: "${prompt}"_`;
+        
+        setChatMessages(prev => [...prev, {
+          id: `assistant-${Date.now()}`,
+          role: 'assistant',
+          content: urlPromptMsg
+        }]);
+        
+        setSavedPromptForPhotos(prompt);
+        break;
+    }
+  };
+
   // Upload attached images to storage and return public URLs
   const uploadAttachedImagesToStorage = async (images: Array<{ file: File; preview: string; pdfDataUrl?: string }>): Promise<string[]> => {
     if (!id || !user?.id) return images.map(i => i.preview); // Fallback to base64
@@ -2911,114 +2975,68 @@ Fix the issue in the code and ensure it works correctly.`;
     }
     
     // Only check photo patterns if NO images are currently attached
-    if (!hasAttachedImages) {
-    // Check if the user is asking for love photos or specific photo types
-    const lovePhotoRegex = /\b(love|heart|romance|romantic|valentine)\s+(photos?|images?|pictures?)\b/i;
-    const photoRequestRegex = /\b(\w+)\s+(photos?|images?|pictures?)\b/i;
-    const myPhotosOnlyRegex = /\b(use|show|get|open|فتح)\s+(my|uploaded|user|صوري)\s*(photos?|images?|pictures?|صور)?\s*(only)?/i;
-    const myPhotosRegex = /\b(my|uploaded|user)\s+(photos?|images?|pictures?)\b/i;
-    
-    // Enhanced patterns to catch more image change requests - fixed capture groups
-    const imagesOfPattern = /\b(images?|photos?|pictures?)\s+(?:of|about|for|with)\s+(.+?)(?:\.|$|\s+(?:and|or|please|thanks|in|on))/i;
-    const changeToPattern = /\b(?:change|replace|swap|switch|update|use)\s+(?:them|it|the\s+\w+|these|those)?\s*(?:to|with|into|for)\s+(.+?)(?:\.|$|\s+(?:and|or|please|thanks))/i;
-    
-    // Check for "my photos only" request (open selector with only My Photos tab)
-    if (myPhotosOnlyRegex.test(userMessage)) {
-      openStockPhotoSelector('user', true, userMessage, { showOnlyUserPhotos: true });
-      return;
-    }
-    
-    // Check for "my photos" request
-    if (myPhotosRegex.test(userMessage)) {
-      // Check if user has uploaded photos
-      try {
-        const { success, count } = await FreepikService.checkUserUploads(user?.id || '');
-        
-        if (success && count > 0) {
-          // User has photos, open selector with user tab active
-          openStockPhotoSelector('user', true, userMessage);
-          return;
-        } else {
-          // No user photos found, add assistant message explaining this
-          const noPhotosMsg = isRTL 
-            ? 'لم يتم العثور على صور مرفوعة. يرجى تحميل الصور أولاً.' 
-            : 'No uploaded photos found. Please upload photos first.';
-          
-          setChatMessages(prev => [...prev, {
-            id: `assistant-${Date.now()}`,
-            role: 'assistant',
-            content: noPhotosMsg
-          }]);
-          
-          // Save to DB
-          await supabase
-            .from('project_chat_messages' as any)
-            .insert({ 
-              project_id: id, 
-              role: 'assistant', 
-              content: noPhotosMsg
-            } as any);
-          
-          return;
-        }
-      } catch (err) {
-        console.error('Error checking user photos:', err);
-      }
-    }
-    // Check for love photos or other specific photo requests - open selector fresh
-    else if (lovePhotoRegex.test(userMessage)) {
-      openStockPhotoSelector('stock', true, userMessage);
-      return;
-    }
-    // Check for "images of X" pattern - open selector fresh, user searches manually
-    else {
-      const imagesOfMatch = userMessage.match(imagesOfPattern);
-      if (imagesOfMatch && imagesOfMatch[2]) {
-        const searchTerm = imagesOfMatch[2].trim().replace(/[.!?]+$/, '').split(/\s+/).slice(0, 3).join(' ');
-        if (searchTerm && searchTerm.length > 1) {
-          openStockPhotoSelector('stock', true, userMessage);
-          return;
-        }
-      }
+    // AND we're not coming from the "Auto-Generate" selection
+    if (!hasAttachedImages && !isAIGeneratingImages && !skipImageDialogRef.current) {
+      // Patterns that indicate user wants to work with images
+      const imageRelatedPatterns = [
+        /\b(carousel|gallery|slider|slideshow)\b.*\b(with|using|of|for)?\s*\d*\s*(images?|photos?|pictures?)?/i,
+        /\b(images?|photos?|pictures?)\s+(of|about|for|with)\s+/i,
+        /\b(add|create|make|build|insert)\s+.*(carousel|gallery|slider|background|banner|hero)/i,
+        /\b(change|replace|swap|update)\s+.*\b(images?|photos?|pictures?)\b/i,
+        /\b(love|heart|romance|nature|business|food|travel|technology|abstract)\s+(photos?|images?|pictures?)\b/i,
+        /\b\d+\s*(images?|photos?|pictures?)\b/i,
+      ];
       
-      // Check for "change to X" pattern - open selector fresh
-      const changeMatch = userMessage.match(changeToPattern);
-      if (changeMatch && changeMatch[1]) {
-        const hasImageContext = /\b(images?|photos?|pictures?|carousel|gallery|banner|background|slider)\b/i.test(userMessage);
-
-        // If user explicitly clicked/used a "Change images" action, treat it as carousel/gallery replacement mode
-        const explicitChangeImages = /^(change\s+(?:the\s+)?images?)(?:\s+to\s+different\s+ones)?$/i.test(userMessage)
-          || /^(?:غير|تغيير)\s*الصور$/i.test(userMessage);
-
-        if (explicitChangeImages) {
-          setIsChangingCarouselImages(true);
-          openStockPhotoSelector('stock', true, userMessage);
-          return;
-        }
-
-        if (hasImageContext) {
-          const searchTerm = changeMatch[1]
-            .trim()
-            .replace(/[.!?]+$/, '')
-            .replace(/\s*(images?|photos?|pictures?)\s*/gi, '')
-            .split(/\s+/)
-            .slice(0, 3)
-            .join(' ');
-          if (searchTerm && searchTerm.length > 1) {
-            // This is a generic request to find images (attach to chat), not a carousel replacement
-            openStockPhotoSelector('stock', true, userMessage);
-            return;
-          }
-        }
-      }
+      const needsImageSourceConfirmation = imageRelatedPatterns.some(pattern => pattern.test(userMessage));
       
-      // Original simple pattern: "heart photos", "nature photos", etc. - open selector fresh
-      const photoMatch = userMessage.match(photoRequestRegex);
-      if (photoMatch && photoMatch[1] && !['use', 'upload', 'select', 'choose', 'find', 'get', 'show', 'display', 'add', 'the', 'my', 'your'].includes(photoMatch[1].toLowerCase())) {
-        openStockPhotoSelector('stock', true, userMessage);
+      if (needsImageSourceConfirmation) {
+        // Show the Image Source Dialog instead of auto-opening stock photos
+        setPendingImagePrompt(userMessage);
+        setShowImageSourceDialog(true);
         return;
       }
-    }
+      
+      // Explicit "my photos" request - still skip dialog and go directly to uploads
+      const myPhotosOnlyRegex = /\b(use|show|get|open|فتح)\s+(my|uploaded|user|صوري)\s*(photos?|images?|pictures?|صور)?\s*(only)?/i;
+      const myPhotosRegex = /\b(my|uploaded|user)\s+(photos?|images?|pictures?)\b/i;
+      
+      if (myPhotosOnlyRegex.test(userMessage)) {
+        openStockPhotoSelector('user', true, userMessage, { showOnlyUserPhotos: true });
+        return;
+      }
+      
+      if (myPhotosRegex.test(userMessage)) {
+        try {
+          const { success, count } = await FreepikService.checkUserUploads(user?.id || '');
+          
+          if (success && count > 0) {
+            openStockPhotoSelector('user', true, userMessage);
+            return;
+          } else {
+            const noPhotosMsg = isRTL 
+              ? 'لم يتم العثور على صور مرفوعة. يرجى تحميل الصور أولاً.' 
+              : 'No uploaded photos found. Please upload photos first.';
+            
+            setChatMessages(prev => [...prev, {
+              id: `assistant-${Date.now()}`,
+              role: 'assistant',
+              content: noPhotosMsg
+            }]);
+            
+            await supabase
+              .from('project_chat_messages' as any)
+              .insert({ 
+                project_id: id, 
+                role: 'assistant', 
+                content: noPhotosMsg
+              } as any);
+            
+            return;
+          }
+        } catch (err) {
+          console.error('Error checking user photos:', err);
+        }
+      }
     } // End of: if (!hasAttachedImages) - skip photo patterns when images already attached
     
     setAiEditing(true);
@@ -5269,6 +5287,15 @@ Fix the issue in the code and ensure it works correctly.`;
           showOnlyUserPhotos={photoSelectorShowOnlyUserPhotos}
         />
       )}
+
+      {/* Image Source Confirmation Dialog */}
+      <ImageSourceDialog
+        open={showImageSourceDialog}
+        onOpenChange={setShowImageSourceDialog}
+        onSelect={handleImageSourceSelect}
+        prompt={pendingImagePrompt}
+        isGenerating={isAIGeneratingImages}
+      />
 
       {/* Clarifying Questions Modal */}
       <ClarifyingQuestionsModal
