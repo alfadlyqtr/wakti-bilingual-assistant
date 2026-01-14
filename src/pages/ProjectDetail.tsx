@@ -186,6 +186,7 @@ export default function ProjectDetail() {
   const [photoSearchTerm, setPhotoSearchTerm] = useState('');
   const [photoSelectorInitialTab, setPhotoSelectorInitialTab] = useState<'stock' | 'user'>('stock');
   const [photoSelectorMultiSelect, setPhotoSelectorMultiSelect] = useState(false);
+  const [isChangingCarouselImages, setIsChangingCarouselImages] = useState(false);
   
   // Pending element image edit (for AI Edit image requests)
   const [pendingElementImageEdit, setPendingElementImageEdit] = useState<{
@@ -2385,12 +2386,32 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       if (newAttachments.length > 0) {
         setAttachedImages(prev => [...prev, ...newAttachments]);
         toast.dismiss(loadingToast);
-        const successCount = newAttachments.length;
-        toast.success(
-          language === 'ar' 
-            ? `تم إرفاق ${successCount} ${successCount === 1 ? 'صورة' : 'صور'}` 
-            : `${successCount} ${successCount === 1 ? 'photo' : 'photos'} attached`
-        );
+        
+        // If we're changing carousel images, auto-send the prompt
+        if (isChangingCarouselImages) {
+          setIsChangingCarouselImages(false);
+          const promptText = language === 'ar' 
+            ? 'استبدل صور الكاروسيل بهذه الصور المختارة'
+            : 'Replace the carousel images with these selected photos';
+          
+          setChatInput(promptText);
+          // Use setTimeout to ensure attachments and input are set, then submit
+          setTimeout(() => {
+            // Create and dispatch a synthetic form submit event
+            const formElement = document.querySelector('form[class*="rounded-2xl"]');
+            if (formElement) {
+              const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+              formElement.dispatchEvent(submitEvent);
+            }
+          }, 150);
+        } else {
+          const successCount = newAttachments.length;
+          toast.success(
+            language === 'ar' 
+              ? `تم إرفاق ${successCount} ${successCount === 1 ? 'صورة' : 'صور'}` 
+              : `${successCount} ${successCount === 1 ? 'photo' : 'photos'} attached`
+          );
+        }
       } else {
         toast.dismiss(loadingToast);
         toast.error(
@@ -4022,7 +4043,15 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                         return getSuggestions().map((suggestion, i) => (
                           <button
                             key={i}
-                            onClick={() => setChatInput(suggestion.prompt)}
+                            onClick={() => {
+                              // Check if this is a "Change images" suggestion for carousel
+                              if (suggestion.prompt.includes('Change the images') || suggestion.prompt.includes('غير الصور')) {
+                                setIsChangingCarouselImages(true);
+                                openStockPhotoSelector('stock', true);
+                              } else {
+                                setChatInput(suggestion.prompt);
+                              }
+                            }}
                             className="px-4 py-2 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-all shadow-sm"
                           >
                             {isRTL ? suggestion.labelAr : suggestion.label}
@@ -4037,8 +4066,14 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                       <button
                         type="button"
                         onClick={() => {
-                          setElementSelectMode(!elementSelectMode);
-                          if (!elementSelectMode) {
+                          const newMode = !elementSelectMode;
+                          setElementSelectMode(newMode);
+                          if (newMode) {
+                            // Auto-switch to preview on mobile when enabling Visual Editor
+                            // Mobile is defined as < 768px (md breakpoint)
+                            if (window.innerWidth < 768 && mobileTab !== 'preview') {
+                              setMobileTab('preview');
+                            }
                             toast.info(isRTL ? 'انقر على أي عنصر في المعاينة لتحريره' : 'Click any element in preview to edit it');
                           }
                         }}

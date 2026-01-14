@@ -335,7 +335,7 @@ export function StockPhotoSelector({
           </Button>
         </div>
         
-        <Tabs defaultValue="stock" value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col min-h-0">
+        <Tabs defaultValue="stock" value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <div className="px-3 sm:px-4 pt-2 shrink-0">
             <TabsList className="w-full h-10 sm:h-11">
               <TabsTrigger value="stock" className="flex-1 text-xs sm:text-sm gap-1.5 sm:gap-2">
@@ -350,7 +350,7 @@ export function StockPhotoSelector({
           </div>
           
           {/* Stock Photos Tab */}
-          <TabsContent value="stock" className="flex-1 flex flex-col min-h-0 mt-0">
+          <TabsContent value="stock" className="flex-1 flex flex-col min-h-0 mt-0 overflow-hidden">
             {/* Search & Filters - Mobile optimized */}
             <div className="p-3 sm:p-4 border-b shrink-0 space-y-2 sm:space-y-3">
               <div className="flex gap-2">
@@ -494,7 +494,7 @@ export function StockPhotoSelector({
           </TabsContent>
           
           {/* My Photos Tab */}
-          <TabsContent value="user" className="flex-1 flex flex-col min-h-0 mt-0">
+          <TabsContent value="user" className="flex-1 flex flex-col min-h-0 mt-0 overflow-hidden">
             {/* Hidden file input */}
             <input
               ref={fileInputRef}
