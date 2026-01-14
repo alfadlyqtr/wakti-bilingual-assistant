@@ -2407,9 +2407,23 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
     return { success: false, updatedFiles: files, targetFile: null };
   };
 
-  // Helper: Import external image to Supabase storage
+  // Helper: Check if URL is already from Supabase storage
+  const isSupabaseStorageUrl = (url: string): boolean => {
+    // Match Supabase storage URLs (both signed and public)
+    return url.includes('supabase.co/storage') || 
+           url.includes('/storage/v1/object/') ||
+           url.includes('project-uploads');
+  };
+
+  // Helper: Import external image to Supabase storage (skips if already stored)
   const importExternalImage = async (sourceUrl: string, filenameHint?: string): Promise<string> => {
     if (!id) return sourceUrl;
+    
+    // Skip import if already a Supabase storage URL
+    if (isSupabaseStorageUrl(sourceUrl)) {
+      console.log('Image already in Supabase storage, using directly:', sourceUrl);
+      return sourceUrl;
+    }
     
     try {
       const { data, error } = await supabase.functions.invoke('import-external-image', {
@@ -2447,7 +2461,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       const loadingToast = toast.loading(isRTL ? 'جاري استيراد الصورة...' : 'Importing image...');
       
       try {
-        // Import the image to Supabase storage first
+        // Import the image to Supabase storage first (skips if already stored)
         const storedUrl = await importExternalImage(photo.url, photo.title);
         
         // Now replace in code across ALL files
@@ -2467,8 +2481,27 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
           }
           toast.success(isRTL ? 'تم تحديث الصورة!' : 'Image updated!');
         } else {
-          toast.error(isRTL ? 'تعذر تحديد موقع الصورة في الكود' : 'Could not locate image source in code');
-          console.warn('Image replacement failed for element:', elementInfo);
+          // Fallback: Use AI prompt with the stored URL
+          const contextInfo = elementInfo?.className 
+            ? `the ${elementInfo.tagName} element with class "${elementInfo.className.split(' ')[0]}"`
+            : elementInfo?.tagName 
+              ? `the ${elementInfo.tagName} element`
+              : 'the selected image';
+          
+          const promptText = isRTL
+            ? `قم بتحديث صورة ${contextInfo} إلى هذا الرابط: ${storedUrl}`
+            : `Update the image source for ${contextInfo} to this URL: ${storedUrl}`;
+          
+          setChatInput(promptText);
+          toast.info(isRTL ? 'جاري تطبيق التغيير...' : 'Applying change...');
+          
+          // Auto-submit with slight delay
+          requestAnimationFrame(() => {
+            const formEl = document.querySelector('form[class*="chat"]') as HTMLFormElement;
+            if (formEl) {
+              formEl.requestSubmit?.();
+            }
+          });
         }
       } catch (err) {
         toast.dismiss(loadingToast);
@@ -5112,13 +5145,25 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
             setSelectedElementInfo(null);
           }}
           onImageChange={() => {
-            // Open stock photo selector for single image replacement
-            setPendingElementImageEdit({
-              elementInfo: selectedElementInfo,
-              originalPrompt: 'Replace image'
-            });
+            // Detect if this is a carousel/gallery (multi-image) context
+            const className = selectedElementInfo?.className || '';
+            const openingTag = selectedElementInfo?.openingTag || '';
+            const isMultiImageContext = /carousel|slider|swiper|slick|embla|gallery|grid.*image|photo.*grid/i.test(className + ' ' + openingTag);
+            
+            if (isMultiImageContext) {
+              // Carousel/Gallery: enable multi-select
+              setIsChangingCarouselImages(true);
+              setPhotoSelectorMultiSelect(true);
+            } else {
+              // Single image replacement
+              setPendingElementImageEdit({
+                elementInfo: selectedElementInfo,
+                originalPrompt: 'Replace image'
+              });
+              setPhotoSelectorMultiSelect(false);
+            }
+            
             setPhotoSelectorInitialTab('stock');
-            setPhotoSelectorMultiSelect(false); // Single select for element replacement
             setShowStockPhotoSelector(true);
             setShowElementEditPopover(false);
             // Don't clear selectedElementInfo - we need it for the image replacement
