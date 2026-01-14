@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Type, Palette, AlignLeft, Wand2, Check, ChevronRight } from 'lucide-react';
+import { X, Type, Palette, AlignLeft, Wand2, Check, ChevronRight, Image as ImageIcon, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
@@ -28,8 +28,9 @@ interface SelectedElementInfo {
 interface ElementEditPopoverProps {
   element: SelectedElementInfo;
   onClose: () => void;
-  onDirectEdit: (changes: { text?: string; color?: string; bgColor?: string; fontSize?: string; fontFamily?: string }) => void;
+  onDirectEdit: (changes: { text?: string; color?: string; bgColor?: string; fontSize?: string; fontFamily?: string; imageUrl?: string }) => void;
   onAIEdit: (prompt: string) => void;
+  onImageChange?: () => void; // Opens stock photo selector
   isRTL?: boolean;
 }
 
@@ -175,6 +176,7 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
   onClose,
   onDirectEdit,
   onAIEdit,
+  onImageChange,
   isRTL = false
 }) => {
   // Local state for edits
@@ -184,7 +186,13 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
   const [editedFontSize, setEditedFontSize] = useState(parseFontSize(element.computedStyle?.fontSize || '16px'));
   const [editedFontFamily, setEditedFontFamily] = useState('inherit');
   const [aiPrompt, setAiPrompt] = useState('');
-  const [activeTab, setActiveTab] = useState<'direct' | 'ai'>('direct');
+  const [imageUrl, setImageUrl] = useState('');
+  
+  // Determine if this is an image element
+  const isImage = isImageElement(element.tagName, element.className);
+  
+  // Default to 'image' tab if it's an image element, otherwise 'direct'
+  const [activeTab, setActiveTab] = useState<'direct' | 'image' | 'ai'>(isImage ? 'image' : 'direct');
   
   // Track which fields have been modified
   const [modified, setModified] = useState({
@@ -278,6 +286,23 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
           >
             {isRTL ? 'تعديل مباشر' : 'Direct Edit'}
           </button>
+          
+          {/* Image Tab - Only show for image elements */}
+          {isImage && (
+            <button
+              onClick={() => setActiveTab('image')}
+              className={cn(
+                "flex-1 py-2.5 text-xs font-medium transition-colors flex items-center justify-center gap-1.5",
+                activeTab === 'image' 
+                  ? "text-white bg-zinc-800/50 border-b-2 border-emerald-500"
+                  : "text-zinc-500 hover:text-zinc-300"
+              )}
+            >
+              <ImageIcon className="h-3 w-3" />
+              {isRTL ? 'صورة' : 'Image'}
+            </button>
+          )}
+          
           <button
             onClick={() => setActiveTab('ai')}
             className={cn(
@@ -288,7 +313,7 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
             )}
           >
             <Wand2 className="h-3 w-3" />
-            {isRTL ? 'تعديل بالذكاء الاصطناعي' : 'Edit with AI'}
+            {isRTL ? 'AI' : 'AI'}
           </button>
         </div>
 
@@ -454,6 +479,67 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
                 <Check className="h-4 w-4 mr-2" />
                 {isRTL ? 'تطبيق التغييرات' : 'Apply Changes'}
               </Button>
+            </>
+          ) : activeTab === 'image' ? (
+            <>
+              {/* Image Tab Content */}
+              <div className="space-y-4">
+                <p className="text-xs text-zinc-400 text-center">
+                  {isRTL ? 'اختر مصدر الصورة الجديدة' : 'Choose a new image source'}
+                </p>
+                
+                {/* Choose from Library Button */}
+                <Button
+                  onClick={() => onImageChange?.()}
+                  className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white"
+                >
+                  <ImageIcon className="h-4 w-4 mr-2" />
+                  {isRTL ? 'اختر من المكتبة' : 'Choose from Library'}
+                </Button>
+                
+                {/* OR divider */}
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t border-zinc-700" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-zinc-900 px-2 text-zinc-500">
+                      {isRTL ? 'أو' : 'or'}
+                    </span>
+                  </div>
+                </div>
+                
+                {/* Direct URL Input */}
+                <div className="space-y-2">
+                  <label className="text-xs text-zinc-400 flex items-center gap-1.5">
+                    <Link2 className="h-3 w-3" />
+                    {isRTL ? 'رابط الصورة' : 'Image URL'}
+                  </label>
+                  <Input
+                    placeholder={isRTL ? 'الصق رابط الصورة...' : 'Paste image URL...'}
+                    value={imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                    className="bg-zinc-800 border-zinc-700 text-white text-sm"
+                  />
+                  <Button
+                    onClick={() => {
+                      if (imageUrl.trim()) {
+                        onDirectEdit({ imageUrl: imageUrl.trim() });
+                        onClose();
+                      }
+                    }}
+                    disabled={!imageUrl.trim()}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
+                  >
+                    <Check className="h-4 w-4 mr-2" />
+                    {isRTL ? 'تطبيق الرابط' : 'Apply URL'}
+                  </Button>
+                </div>
+                
+                <p className="text-[10px] text-center text-emerald-500/80 pt-2">
+                  ✓ {isRTL ? 'تغيير الصورة مجاني - بدون AI' : 'Image change is FREE - No AI needed'}
+                </p>
+              </div>
             </>
           ) : (
             <>

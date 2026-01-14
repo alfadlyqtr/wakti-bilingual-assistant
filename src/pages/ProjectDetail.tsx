@@ -2298,18 +2298,55 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
   
   // Handle stock photo selection
   const handleStockPhotoSelect = (photo: { url: string; title: string }) => {
-    // Check if this is for an element image edit (from AI Edit)
+    // Check if this is for an element image edit (from Image tab or AI Edit)
     if (pendingElementImageEdit) {
-      const { elementInfo, originalPrompt } = pendingElementImageEdit;
+      const { elementInfo } = pendingElementImageEdit;
+      const currentCode = generatedFiles['/App.js'] || '';
+      const className = elementInfo?.className?.split(' ')[0];
+      const tag = elementInfo?.tagName?.toLowerCase() || '';
       
-      // Build a context-aware prompt that includes the selected image URL
-      const contextPrompt = `For the ${elementInfo?.tagName} element ${elementInfo?.className ? `with class "${elementInfo.className.split(' ')[0]}"` : ''}: Replace the image with this URL: ${photo.url}. Original request: ${originalPrompt}`;
+      // Try direct replacement first
+      let newCode = currentCode;
+      let replaced = false;
       
-      setChatInput(contextPrompt);
+      // Try to find img element with matching class
+      if (className) {
+        const imgClassPattern = new RegExp(
+          `(<img[^>]*?(?:className|class)=["'][^"']*${className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^"']*["'][^>]*?src=)(["'])([^"']+)(\\2)`,
+          'g'
+        );
+        newCode = newCode.replace(imgClassPattern, (match, prefix, quote, oldUrl, endQuote) => {
+          replaced = true;
+          return `${prefix}${quote}${photo.url}${endQuote}`;
+        });
+      }
+      
+      // Fallback: try simple img src replacement based on opening tag
+      if (!replaced && tag === 'img' && elementInfo?.openingTag) {
+        const srcMatch = elementInfo.openingTag.match(/src=["']([^"']+)["']/);
+        if (srcMatch) {
+          const oldSrc = srcMatch[1];
+          newCode = newCode.replace(
+            new RegExp(`src=["']${oldSrc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`, 'g'),
+            `src="${photo.url}"`
+          );
+          replaced = newCode !== currentCode;
+        }
+      }
+      
+      if (replaced) {
+        setGeneratedFiles(prev => ({ ...prev, '/App.js': newCode }));
+        setCodeContent(newCode);
+        toast.success(isRTL ? 'تم تحديث الصورة!' : 'Image updated!');
+      } else {
+        // Fallback to AI if direct replacement fails
+        const contextPrompt = `For the ${elementInfo?.tagName} element ${elementInfo?.className ? `with class "${elementInfo.className.split(' ')[0]}"` : ''}: Replace the image with this URL: ${photo.url}`;
+        setChatInput(contextPrompt);
+        toast.info(isRTL ? 'اضغط إرسال للتطبيق' : 'Press send to apply');
+      }
+      
       setPendingElementImageEdit(null);
       setSelectedElementInfo(null);
-      
-      toast.success(isRTL ? 'تم اختيار الصورة - اضغط إرسال للتطبيق' : 'Image selected - press send to apply');
       return;
     }
     
@@ -4766,6 +4803,61 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
             setSelectedElementInfo(null);
           }}
           onDirectEdit={(changes) => {
+            // Handle direct image URL change - NO AI needed!
+            if (changes.imageUrl) {
+              const currentCode = generatedFiles['/App.js'] || '';
+              const className = selectedElementInfo.className?.split(' ')[0];
+              const tag = selectedElementInfo.tagName.toLowerCase();
+              
+              // Pattern to find and replace img src
+              let newCode = currentCode;
+              let replaced = false;
+              
+              // Try to find img element with matching class
+              if (className) {
+                const imgClassPattern = new RegExp(
+                  `(<img[^>]*?(?:className|class)=["'][^"']*${className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^"']*["'][^>]*?src=)(["'])([^"']+)(\\2)`,
+                  'g'
+                );
+                newCode = newCode.replace(imgClassPattern, (match, prefix, quote, oldUrl, endQuote) => {
+                  replaced = true;
+                  return `${prefix}${quote}${changes.imageUrl}${endQuote}`;
+                });
+              }
+              
+              // Fallback: try simple img src replacement based on context
+              if (!replaced && tag === 'img') {
+                // If we have the opening tag, try to find it
+                const openingTag = selectedElementInfo.openingTag;
+                if (openingTag && openingTag.includes('src=')) {
+                  const srcMatch = openingTag.match(/src=["']([^"']+)["']/);
+                  if (srcMatch) {
+                    const oldSrc = srcMatch[1];
+                    newCode = newCode.replace(
+                      new RegExp(`src=["']${oldSrc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`, 'g'),
+                      `src="${changes.imageUrl}"`
+                    );
+                    replaced = newCode !== currentCode;
+                  }
+                }
+              }
+              
+              if (replaced) {
+                setGeneratedFiles(prev => ({ ...prev, '/App.js': newCode }));
+                setCodeContent(newCode);
+                toast.success(isRTL ? 'تم تحديث الصورة!' : 'Image updated!');
+              } else {
+                // Fallback: send to AI if direct replacement fails
+                const contextPrompt = `Change the image src in the ${selectedElementInfo.tagName} element${className ? ` with class "${className}"` : ''} to: ${changes.imageUrl}`;
+                setChatInput(contextPrompt);
+                toast.info(isRTL ? 'اضغط إرسال للتطبيق' : 'Press send to apply');
+              }
+              
+              setShowElementEditPopover(false);
+              setSelectedElementInfo(null);
+              return;
+            }
+            
             // Apply direct edits to the code - NO AI PROMPTS, NO CREDITS!
             const currentCode = generatedFiles['/App.js'] || '';
             
@@ -4811,6 +4903,18 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
             
             setShowElementEditPopover(false);
             setSelectedElementInfo(null);
+          }}
+          onImageChange={() => {
+            // Open stock photo selector for single image replacement
+            setPendingElementImageEdit({
+              elementInfo: selectedElementInfo,
+              originalPrompt: 'Replace image'
+            });
+            setPhotoSelectorInitialTab('stock');
+            setPhotoSelectorMultiSelect(false); // Single select for element replacement
+            setShowStockPhotoSelector(true);
+            setShowElementEditPopover(false);
+            // Don't clear selectedElementInfo - we need it for the image replacement
           }}
           onAIEdit={(prompt) => {
             // Detect image-related requests
