@@ -66,6 +66,8 @@ import { QuickActionButtons } from '@/components/projects/QuickActionButtons';
 import { ClarifyingQuestionsModal, ClarifyingQuestion } from '@/components/projects/ClarifyingQuestionsModal';
 import { MigrationApprovalDialog } from '@/components/projects/MigrationApprovalDialog';
 import { ElementEditPopover } from '@/components/projects/ElementEditPopover';
+import { ToolUsageIndicator } from '@/components/wakti-ai-v2/ToolUsageIndicator';
+import { ErrorExplanationCard } from '@/components/wakti-ai-v2/ErrorExplanationCard';
 
 // Direct style editor for FREE visual edits (no AI prompts needed)
 import { applyDirectEdits, validateJSX } from '@/utils/directStyleEditor';
@@ -117,7 +119,7 @@ type DeviceView = 'desktop' | 'tablet' | 'mobile';
 type LeftPanelMode = 'chat' | 'code';
 type MainTab = 'builder' | 'server';
 
-// Lovable-style Thinking Timer Component
+// Lovable-style Thinking Timer Component - Amber/Gold badge style
 const ThinkingTimerDisplay: React.FC<{ startTime: number; isRTL: boolean }> = ({ startTime, isRTL }) => {
   const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
 
@@ -136,9 +138,17 @@ const ThinkingTimerDisplay: React.FC<{ startTime: number; isRTL: boolean }> = ({
   const label = isRTL ? `فكّر لمدة ${elapsedSeconds} ث` : `Thought for ${elapsedSeconds}s`;
 
   return (
-    <div className={`flex items-center gap-2 text-sm text-muted-foreground mb-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
-      <Lightbulb className="h-4 w-4 text-yellow-500" />
-      <span>{label}</span>
+    <div className={cn(
+      "flex items-center gap-2 mb-3 px-3 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 animate-in fade-in slide-in-from-left-2 duration-500 shadow-sm",
+      isRTL ? "flex-row-reverse" : ""
+    )}>
+      <div className="relative">
+        <div className="absolute inset-0 bg-amber-500/40 rounded-full animate-ping" />
+        <Lightbulb className="h-3.5 w-3.5 text-amber-500 relative z-10" />
+      </div>
+      <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+        {label}
+      </span>
     </div>
   );
 };
@@ -181,6 +191,21 @@ export default function ProjectDetail() {
   const [thinkingStartTime, setThinkingStartTime] = useState<number | null>(null);
   const [editedFilesTracking, setEditedFilesTracking] = useState<Array<{ id: string; fileName: string; status: 'editing' | 'edited' }>>([]);
   const [showAllEditedFiles, setShowAllEditedFiles] = useState(false);
+  
+  // Tool Usage Indicator state - only use toolsUsedCount, toolCalls with icons are generated inline
+  const [toolsUsedCount, setToolsUsedCount] = useState(0);
+  
+  // Error Explanation state
+  const [aiError, setAiError] = useState<{
+    title: string;
+    titleAr?: string;
+    message: string;
+    messageAr?: string;
+    severity: 'error' | 'warning' | 'info';
+    technicalDetails?: string;
+    suggestedAction?: string;
+    suggestedActionAr?: string;
+  } | null>(null);
   
   // Stock photo selector state
   const [showStockPhotoSelector, setShowStockPhotoSelector] = useState(false);
@@ -3160,6 +3185,8 @@ Fix the issue in the code and ensure it works correctly.`;
     setAiEditing(true);
     setThinkingStartTime(Date.now());
     setEditedFilesTracking([]); // Reset edited files
+    setToolsUsedCount(0); // Reset tool count for new request
+    setAiError(null); // Clear any previous errors
     // Set initial progress steps based on mode
     if (leftPanelMode === 'code') {
       setGenerationSteps([
@@ -3408,6 +3435,9 @@ Fix the issue in the code and ensure it works correctly.`;
             files: changedFilesList.length > 0 ? changedFilesList : ['/App.js']
           });
           
+          // Update tool usage count for Lovable-style indicator
+          setToolsUsedCount(prev => prev + (changedFilesList.length || 1));
+          
           setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
           await delay(250);
         } else {
@@ -3552,13 +3582,27 @@ Fix the issue in the code and ensure it works correctly.`;
       setDynamicSuggestions(generateContextualSuggestions(assistantMsg));
     } catch (err: any) {
       console.error('AI error:', err);
+      const errorMessage = err.message || (isRTL ? 'حدث خطأ' : 'An error occurred');
+      
+      // Set error explanation card
+      setAiError({
+        title: 'AI Request Failed',
+        titleAr: 'فشل طلب الذكاء الاصطناعي',
+        message: 'The AI couldn\'t complete your request. This may be due to a temporary service issue or a complex request.',
+        messageAr: 'تعذر على الذكاء الاصطناعي إكمال طلبك. قد يكون ذلك بسبب مشكلة مؤقتة في الخدمة أو طلب معقد.',
+        severity: 'error',
+        technicalDetails: errorMessage,
+        suggestedAction: 'Try rephrasing your request or wait a moment and try again.',
+        suggestedActionAr: 'حاول إعادة صياغة طلبك أو انتظر لحظة وحاول مرة أخرى.',
+      });
+      
       const errorMsg = isRTL ? 'عذرًا، حدث خطأ. حاول مرة أخرى.' : 'Sorry, an error occurred. Please try again.';
       setChatMessages(prev => [...prev, { 
         id: `error-${Date.now()}`,
         role: 'assistant', 
         content: errorMsg 
       }]);
-      toast.error(err.message || (isRTL ? 'حدث خطأ' : 'An error occurred'));
+      toast.error(errorMessage);
     } finally {
       setAiEditing(false);
       setThinkingStartTime(null);
@@ -4233,6 +4277,20 @@ Fix the issue in the code and ensure it works correctly.`;
                                   setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
                                 } catch (err: any) {
                                   console.error('Execute plan error:', err);
+                                  const errorMessage = err.message || (isRTL ? 'فشل غير معروف' : 'Unknown failure');
+                                  
+                                  // Set error explanation card
+                                  setAiError({
+                                    title: 'Plan Execution Failed',
+                                    titleAr: 'فشل تنفيذ الخطة',
+                                    message: 'The plan couldn\'t be applied to your code. There may be a conflict or syntax issue.',
+                                    messageAr: 'تعذر تطبيق الخطة على الكود الخاص بك. قد يكون هناك تعارض أو مشكلة في الصياغة.',
+                                    severity: 'error',
+                                    technicalDetails: errorMessage,
+                                    suggestedAction: 'Review the plan and try again, or ask the AI to modify the approach.',
+                                    suggestedActionAr: 'راجع الخطة وحاول مرة أخرى، أو اطلب من الذكاء الاصطناعي تعديل النهج.',
+                                  });
+                                  
                                   toast.error(isRTL ? 'فشل في تنفيذ الخطة' : 'Failed to apply changes');
                                   setGenerationSteps([]);
                                 } finally {
@@ -4647,7 +4705,16 @@ Fix the issue in the code and ensure it works correctly.`;
                           </div>
                         )}
                         
-                        {(isGenerating || aiEditing) && generationSteps.length === 0 && (
+                        {/* Tool Usage Indicator - Lovable Style */}
+                        {toolsUsedCount > 0 && (
+                          <ToolUsageIndicator
+                            toolsUsed={toolsUsedCount}
+                            thinkingDuration={thinkingStartTime ? Math.floor((Date.now() - thinkingStartTime) / 1000) : undefined}
+                            isComplete={!aiEditing && !isGenerating}
+                          />
+                        )}
+                        
+                        {(isGenerating || aiEditing) && generationSteps.length === 0 && toolsUsedCount === 0 && (
                           <div className="flex items-center gap-2">
                             <div className={cn(
                               "w-5 h-5 border-2 border-t-transparent rounded-full animate-spin",
@@ -4704,6 +4771,31 @@ Fix the issue in the code and ensure it works correctly.`;
                   )}
                   <div ref={chatEndRef} className="h-2" />
                 </div>
+
+                {/* AI Error Explanation Card - Lovable Style */}
+                {aiError && (
+                  <div className="mx-3 mb-2">
+                    <ErrorExplanationCard
+                      title={aiError.title}
+                      titleAr={aiError.titleAr}
+                      message={aiError.message}
+                      messageAr={aiError.messageAr}
+                      severity={aiError.severity}
+                      technicalDetails={aiError.technicalDetails}
+                      suggestedAction={aiError.suggestedAction}
+                      suggestedActionAr={aiError.suggestedActionAr}
+                      onRetry={() => {
+                        setAiError(null);
+                        // Re-send last user message
+                        const lastUserMsg = [...chatMessages].reverse().find(m => m.role === 'user');
+                        if (lastUserMsg) {
+                          setChatInput(lastUserMsg.content || '');
+                        }
+                      }}
+                      onDismiss={() => setAiError(null)}
+                    />
+                  </div>
+                )}
 
                 {/* Self-Healing: Smart Auto-Fix Error Banner */}
                 {crashReport && (
