@@ -258,13 +258,26 @@ export default function ProjectDetail() {
   // Uploaded assets from backend (for AI context)
   const [uploadedAssets, setUploadedAssets] = useState<Array<{ filename: string; url: string; file_type: string | null }>>([]);
   
-  // Backend context for AI coder awareness
+  // Backend context for AI coder awareness - EXPANDED for full backend integration
   const [backendContext, setBackendContext] = useState<{
     enabled: boolean;
     collections: Array<{ name: string; itemCount: number; schema?: any }>;
     formSubmissionsCount: number;
     uploadsCount: number;
     siteUsersCount: number;
+    // NEW: E-commerce data
+    products: Array<{ name: string; price: number; image?: string; category?: string }>;
+    productsCount: number;
+    ordersCount: number;
+    hasShopSetup: boolean;
+    // NEW: Booking data  
+    services: Array<{ name: string; duration: number; price: number }>;
+    servicesCount: number;
+    bookingsCount: number;
+    hasBookingsSetup: boolean;
+    // NEW: Chat & Comments
+    chatRoomsCount: number;
+    commentsCount: number;
   } | null>(null);
   
   // Self-healing: Runtime error detection with smart auto-fix
@@ -435,7 +448,7 @@ export default function ProjectDetail() {
     }
   };
 
-  // Fetch backend context for AI coder awareness
+  // Fetch backend context for AI coder awareness - EXPANDED with shop, bookings, chat
   const fetchBackendContext = async () => {
     if (!id) return;
     try {
@@ -446,15 +459,33 @@ export default function ProjectDetail() {
         .eq('project_id', id)
         .maybeSingle();
       
+      const defaultContext = {
+        enabled: false,
+        collections: [],
+        formSubmissionsCount: 0,
+        uploadsCount: 0,
+        siteUsersCount: 0,
+        products: [],
+        productsCount: 0,
+        ordersCount: 0,
+        hasShopSetup: false,
+        services: [],
+        servicesCount: 0,
+        bookingsCount: 0,
+        hasBookingsSetup: false,
+        chatRoomsCount: 0,
+        commentsCount: 0,
+      };
+      
       if (!backendData?.enabled) {
-        setBackendContext({ enabled: false, collections: [], formSubmissionsCount: 0, uploadsCount: 0, siteUsersCount: 0 });
+        setBackendContext(defaultContext);
         return;
       }
 
       // Fetch collections with counts
       const { data: collectionsData } = await supabase
         .from('project_collections')
-        .select('collection_name')
+        .select('collection_name, data')
         .eq('project_id', id);
       
       const collectionCounts: Record<string, number> = {};
@@ -482,15 +513,85 @@ export default function ProjectDetail() {
         .select('*', { count: 'exact', head: true })
         .eq('project_id', id);
 
+      // NEW: Fetch products (from inventory collection)
+      const { data: productsData } = await supabase
+        .from('project_collections')
+        .select('data')
+        .eq('project_id', id)
+        .eq('collection_name', 'products')
+        .limit(10);
+      
+      const products = (productsData || []).map((p: any) => ({
+        name: p.data?.name || p.data?.title || 'Unnamed Product',
+        price: p.data?.price || 0,
+        image: p.data?.image || p.data?.imageUrl,
+        category: p.data?.category,
+      }));
+
+      // NEW: Fetch orders count
+      const { count: ordersCount } = await supabase
+        .from('project_orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', id);
+
+      // NEW: Fetch services (from services collection or bookings setup)
+      const { data: servicesData } = await supabase
+        .from('project_collections')
+        .select('data')
+        .eq('project_id', id)
+        .eq('collection_name', 'services')
+        .limit(10);
+      
+      const services = (servicesData || []).map((s: any) => ({
+        name: s.data?.name || s.data?.title || 'Unnamed Service',
+        duration: s.data?.duration || 30,
+        price: s.data?.price || 0,
+      }));
+
+      // NEW: Fetch bookings count
+      const { count: bookingsCount } = await supabase
+        .from('project_bookings')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', id);
+
+      // NEW: Fetch chat rooms count
+      const { count: chatRoomsCount } = await supabase
+        .from('project_chat_rooms')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', id);
+
+      // NEW: Fetch comments count
+      const { count: commentsCount } = await supabase
+        .from('project_comments')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', id);
+
       setBackendContext({
         enabled: true,
         collections,
         formSubmissionsCount: formSubmissionsCount || 0,
         uploadsCount: uploadsCount || 0,
-        siteUsersCount: siteUsersCount || 0
+        siteUsersCount: siteUsersCount || 0,
+        products,
+        productsCount: products.length,
+        ordersCount: ordersCount || 0,
+        hasShopSetup: products.length > 0,
+        services,
+        servicesCount: services.length,
+        bookingsCount: bookingsCount || 0,
+        hasBookingsSetup: services.length > 0,
+        chatRoomsCount: chatRoomsCount || 0,
+        commentsCount: commentsCount || 0,
       });
       
-      console.log('[ProjectDetail] Backend context loaded:', { enabled: true, collections: collections.length, formSubmissionsCount, uploadsCount, siteUsersCount });
+      console.log('[ProjectDetail] Backend context loaded:', { 
+        enabled: true, 
+        collections: collections.length, 
+        products: products.length,
+        services: services.length,
+        ordersCount,
+        bookingsCount,
+      });
     } catch (err) {
       console.error('Exception fetching backend context:', err);
     }
