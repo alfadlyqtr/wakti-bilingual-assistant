@@ -4194,6 +4194,8 @@ Fix the issue in the code and ensure it works correctly.`;
                       uniqueFiles = [...new Set(fileMatches)].slice(0, 3) as string[];
                     }
                     
+                    const hasSnapshotForApplied = msg.snapshot && Object.keys(msg.snapshot).length > 0;
+                    
                     return (
                       <div key={i} className={cn(
                         "flex flex-col group animate-in fade-in slide-in-from-bottom-1 duration-300",
@@ -4231,6 +4233,25 @@ Fix the issue in the code and ensure it works correctly.`;
                             )}
                           </div>
                         </div>
+                        
+                        {/* Restore Button for Applied messages */}
+                        <button
+                          onClick={() => handleRevert(msg.id)}
+                          disabled={!hasSnapshotForApplied}
+                          className={cn(
+                            "mt-1.5 flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-all active:scale-95",
+                            hasSnapshotForApplied 
+                              ? "text-muted-foreground hover:text-indigo-500 hover:bg-indigo-500/10"
+                              : "text-muted-foreground/50 cursor-not-allowed"
+                          )}
+                          title={hasSnapshotForApplied 
+                            ? (isRTL ? 'الرجوع لهذه النقطة' : 'Revert to this point')
+                            : (isRTL ? 'لا توجد نقطة استعادة' : 'No restore point available')
+                          }
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                          {isRTL ? 'استعادة' : 'Restore'}
+                        </button>
                       </div>
                     );
                   }
