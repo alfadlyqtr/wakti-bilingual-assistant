@@ -132,22 +132,20 @@ export function StockPhotoSelector({
         return;
       }
 
-      // Get signed URLs for each image
-      const photosWithUrls = await Promise.all(
-        imageFiles.map(async (file) => {
-          const { data: urlData } = await supabase.storage
-            .from('project-uploads')
-            .createSignedUrl(file.storage_path, 3600); // 1 hour expiry
-          
-          return {
-            id: file.id,
-            filename: file.filename,
-            url: urlData?.signedUrl || '',
-            storage_path: file.storage_path,
-            file_type: file.file_type
-          };
-        })
-      );
+      // Get public URLs for each image (stable for inserting into code)
+      const photosWithUrls = imageFiles.map((file) => {
+        const { data: urlData } = supabase.storage
+          .from('project-uploads')
+          .getPublicUrl(file.storage_path);
+
+        return {
+          id: file.id,
+          filename: file.filename,
+          url: urlData?.publicUrl || '',
+          storage_path: file.storage_path,
+          file_type: file.file_type
+        };
+      });
 
       const validPhotos = photosWithUrls.filter(p => p.url);
       setBackendPhotos(validPhotos);
@@ -235,15 +233,25 @@ export function StockPhotoSelector({
   };
 
   const handleConfirmSelection = () => {
-    if (multiSelectEnabled && selectedPhotos.length > 0) {
+    // If parent expects multi-select, always return an array (even if user toggled Single)
+    if (multiSelect) {
+      const photosToSend = selectedPhotos.length > 0
+        ? selectedPhotos
+        : (selectedPhoto ? [selectedPhoto] : []);
+
+      if (photosToSend.length === 0) return;
+
       if (onSelectPhotos) {
-        onSelectPhotos(selectedPhotos);
+        onSelectPhotos(photosToSend);
       } else {
-        // Fallback - send first photo
-        onSelectPhoto(selectedPhotos[0]);
+        onSelectPhoto(photosToSend[0]);
       }
       onClose();
-    } else if (selectedPhoto) {
+      return;
+    }
+
+    // Single-select mode
+    if (selectedPhoto) {
       onSelectPhoto(selectedPhoto);
       onClose();
     }
