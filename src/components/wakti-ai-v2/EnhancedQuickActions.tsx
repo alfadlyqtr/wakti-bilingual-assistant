@@ -164,15 +164,16 @@ const generateActionsFromResponse = (content: string, context?: QuickActionButto
   return uniqueActions;
 };
 
+// Lovable-style solid button colors
 const categoryColors: Record<string, string> = {
-  design: 'bg-purple-500/10 text-purple-400 border-purple-500/20 hover:bg-purple-500/20',
-  features: 'bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20',
-  security: 'bg-green-500/10 text-green-400 border-green-500/20 hover:bg-green-500/20',
-  mobile: 'bg-orange-500/10 text-orange-400 border-orange-500/20 hover:bg-orange-500/20',
-  backend: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20 hover:bg-cyan-500/20',
-  content: 'bg-pink-500/10 text-pink-400 border-pink-500/20 hover:bg-pink-500/20',
-  ai: 'bg-violet-500/10 text-violet-400 border-violet-500/20 hover:bg-violet-500/20',
-  media: 'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20',
+  design: 'bg-purple-600 hover:bg-purple-700 text-white border-purple-600',
+  features: 'bg-primary hover:bg-primary/90 text-primary-foreground border-primary',
+  security: 'bg-green-600 hover:bg-green-700 text-white border-green-600',
+  mobile: 'bg-orange-600 hover:bg-orange-700 text-white border-orange-600',
+  backend: 'bg-cyan-600 hover:bg-cyan-700 text-white border-cyan-600',
+  content: 'bg-pink-600 hover:bg-pink-700 text-white border-pink-600',
+  ai: 'bg-violet-600 hover:bg-violet-700 text-white border-violet-600',
+  media: 'bg-amber-600 hover:bg-amber-700 text-white border-amber-600',
 };
 
 export const QuickActionButtons: React.FC<QuickActionButtonsProps> = ({
@@ -197,20 +198,20 @@ export const QuickActionButtons: React.FC<QuickActionButtonsProps> = ({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.2, duration: 0.3 }}
-      className={`flex flex-wrap gap-2 mt-3 pt-3 border-t border-border/50 ${isRTL ? 'flex-row-reverse' : ''} ${className}`}
+      className={`flex flex-wrap gap-2 mt-3 ${isRTL ? 'flex-row-reverse' : ''} ${className}`}
     >
       {actions.map((action, index) => (
         <motion.div
           key={action.id}
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.1 * index, duration: 0.2 }}
+          transition={{ delay: 0.05 * index, duration: 0.15 }}
         >
           <Button
-            variant="outline"
+            variant="default"
             size="sm"
             onClick={() => onActionClick(action.prompt)}
-            className={`h-8 text-xs font-medium border transition-all duration-200 ${categoryColors[action.category]}`}
+            className={`h-8 px-3 text-xs font-medium rounded-full shadow-sm transition-all duration-200 ${categoryColors[action.category]}`}
           >
             {action.icon}
             <span className={`${isArabic ? 'mr-1.5' : 'ml-1.5'}`}>
