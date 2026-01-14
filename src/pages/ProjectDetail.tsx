@@ -2305,48 +2305,77 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
       const className = elementInfo?.className?.split(' ')[0];
       const tag = elementInfo?.tagName?.toLowerCase() || '';
       
-      // Try direct replacement first
+      // Try multiple direct replacement strategies
       let newCode = currentCode;
       let replaced = false;
       
-      // Try to find img element with matching class
-      if (className) {
-        const imgClassPattern = new RegExp(
-          `(<img[^>]*?(?:className|class)=["'][^"']*${className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^"']*["'][^>]*?src=)(["'])([^"']+)(\\2)`,
-          'g'
-        );
-        newCode = newCode.replace(imgClassPattern, (match, prefix, quote, oldUrl, endQuote) => {
-          replaced = true;
-          return `${prefix}${quote}${photo.url}${endQuote}`;
-        });
+      // Strategy 1: Find img element with matching class (handles both className and class)
+      if (className && !replaced) {
+        const escapedClass = className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Match img with src before or after className
+        const patterns = [
+          new RegExp(`(<img[^>]*?src=)(["'])([^"']+)(\\2)([^>]*?(?:className|class)=["'][^"']*${escapedClass}[^"']*["'])`, 'g'),
+          new RegExp(`(<img[^>]*?(?:className|class)=["'][^"']*${escapedClass}[^"']*["'][^>]*?src=)(["'])([^"']+)(\\2)`, 'g')
+        ];
+        
+        for (const pattern of patterns) {
+          if (!replaced) {
+            const testCode = newCode.replace(pattern, (match, ...groups) => {
+              replaced = true;
+              // Reconstruct based on which pattern matched
+              if (groups.length === 5) {
+                // src before className pattern
+                return `${groups[0]}${groups[1]}${photo.url}${groups[3]}${groups[4]}`;
+              } else {
+                // className before src pattern
+                return `${groups[0]}${groups[1]}${photo.url}${groups[3]}`;
+              }
+            });
+            if (replaced) newCode = testCode;
+          }
+        }
       }
       
-      // Fallback: try simple img src replacement based on opening tag
-      if (!replaced && tag === 'img' && elementInfo?.openingTag) {
+      // Strategy 2: Match by existing src URL from opening tag
+      if (!replaced && elementInfo?.openingTag) {
         const srcMatch = elementInfo.openingTag.match(/src=["']([^"']+)["']/);
         if (srcMatch) {
           const oldSrc = srcMatch[1];
-          newCode = newCode.replace(
-            new RegExp(`src=["']${oldSrc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`, 'g'),
-            `src="${photo.url}"`
-          );
+          const escapedSrc = oldSrc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const srcPattern = new RegExp(`(src=["'])${escapedSrc}(["'])`, 'g');
+          const testCode = newCode.replace(srcPattern, `$1${photo.url}$2`);
+          if (testCode !== newCode) {
+            newCode = testCode;
+            replaced = true;
+          }
+        }
+      }
+      
+      // Strategy 3: Find any img with similar structure (last resort for single images)
+      if (!replaced && tag === 'img') {
+        // Count img tags - only do single replacement if there's just one
+        const imgCount = (currentCode.match(/<img\s/g) || []).length;
+        if (imgCount === 1) {
+          const singleImgPattern = /(<img[^>]*?src=)(["'])([^"']+)(\2)/;
+          newCode = newCode.replace(singleImgPattern, `$1$2${photo.url}$4`);
           replaced = newCode !== currentCode;
         }
       }
       
+      // Always apply the replacement (no fallback to AI prompt which causes reopening bug)
       if (replaced) {
         setGeneratedFiles(prev => ({ ...prev, '/App.js': newCode }));
         setCodeContent(newCode);
         toast.success(isRTL ? 'تم تحديث الصورة!' : 'Image updated!');
       } else {
-        // Fallback to AI if direct replacement fails
-        const contextPrompt = `For the ${elementInfo?.tagName} element ${elementInfo?.className ? `with class "${elementInfo.className.split(' ')[0]}"` : ''}: Replace the image with this URL: ${photo.url}`;
-        setChatInput(contextPrompt);
-        toast.info(isRTL ? 'اضغط إرسال للتطبيق' : 'Press send to apply');
+        // Show error instead of fallback prompt (which causes the reopening bug)
+        toast.error(isRTL ? 'تعذر استبدال الصورة تلقائياً' : 'Could not auto-replace image');
+        console.warn('Image replacement failed for element:', elementInfo);
       }
       
       setPendingElementImageEdit(null);
       setSelectedElementInfo(null);
+      setShowStockPhotoSelector(false);
       return;
     }
     
