@@ -192,8 +192,9 @@ export default function ProjectDetail() {
   const [editedFilesTracking, setEditedFilesTracking] = useState<Array<{ id: string; fileName: string; status: 'editing' | 'edited' }>>([]);
   const [showAllEditedFiles, setShowAllEditedFiles] = useState(false);
   
-  // Tool Usage Indicator state - only use toolsUsedCount, toolCalls with icons are generated inline
+  // Tool Usage Indicator state
   const [toolsUsedCount, setToolsUsedCount] = useState(0);
+  const [lastThinkingDuration, setLastThinkingDuration] = useState<number | null>(null); // Persist after completion
   
   // Error Explanation state
   const [aiError, setAiError] = useState<{
@@ -3186,6 +3187,7 @@ Fix the issue in the code and ensure it works correctly.`;
     setThinkingStartTime(Date.now());
     setEditedFilesTracking([]); // Reset edited files
     setToolsUsedCount(0); // Reset tool count for new request
+    setLastThinkingDuration(null); // Reset last thinking duration
     setAiError(null); // Clear any previous errors
     // Set initial progress steps based on mode
     if (leftPanelMode === 'code') {
@@ -3607,6 +3609,10 @@ Fix the issue in the code and ensure it works correctly.`;
       }]);
       toast.error(errorMessage);
     } finally {
+      // Save final thinking duration before clearing
+      if (thinkingStartTime) {
+        setLastThinkingDuration(Math.floor((Date.now() - thinkingStartTime) / 1000));
+      }
       setAiEditing(false);
       setThinkingStartTime(null);
     }
@@ -4297,6 +4303,10 @@ Fix the issue in the code and ensure it works correctly.`;
                                   toast.error(isRTL ? 'فشل في تنفيذ الخطة' : 'Failed to apply changes');
                                   setGenerationSteps([]);
                                 } finally {
+                                  // Save final thinking duration before clearing
+                                  if (thinkingStartTime) {
+                                    setLastThinkingDuration(Math.floor((Date.now() - thinkingStartTime) / 1000));
+                                  }
                                   setAiEditing(false);
                                   setThinkingStartTime(null);
                                 }
@@ -4712,7 +4722,14 @@ Fix the issue in the code and ensure it works correctly.`;
                         {toolsUsedCount > 0 && (
                           <ToolUsageIndicator
                             toolsUsed={toolsUsedCount}
-                            thinkingDuration={thinkingStartTime ? Math.floor((Date.now() - thinkingStartTime) / 1000) : undefined}
+                            toolCalls={editedFilesTracking.map(f => ({
+                              id: f.id,
+                              name: f.fileName,
+                              nameAr: f.fileName,
+                              icon: undefined,
+                              status: f.status === 'edited' ? 'completed' as const : 'running' as const
+                            }))}
+                            thinkingDuration={thinkingStartTime ? Math.floor((Date.now() - thinkingStartTime) / 1000) : lastThinkingDuration || undefined}
                             isComplete={!aiEditing && !isGenerating}
                           />
                         )}
