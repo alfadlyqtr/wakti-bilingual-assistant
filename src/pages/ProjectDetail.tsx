@@ -4981,7 +4981,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
           projectId={id}
           onSelectPhoto={handleStockPhotoSelect}
           onSelectPhotos={handleStockPhotosSelect}
-          multiSelect={photoSelectorMultiSelect}
+          multiSelect={photoSelectorMultiSelect || isChangingCarouselImages}
           onClose={() => setShowStockPhotoSelector(false)}
           searchTerm={photoSearchTerm}
           initialTab={photoSelectorInitialTab}
