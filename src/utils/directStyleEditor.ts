@@ -4,7 +4,7 @@
  * 
  * Supports:
  * - Text content changes
- * - Inline style changes (color, backgroundColor, fontSize)
+ * - Inline style changes (color, backgroundColor, fontSize, fontFamily, and many more)
  * - Works with both existing style props and adding new ones
  */
 
@@ -22,6 +22,33 @@ interface StyleChanges {
   bgColor?: string;
   fontSize?: string;
   fontFamily?: string;
+  // Additional CSS properties
+  margin?: string;
+  padding?: string;
+  gap?: string;
+  flexDirection?: string;
+  alignItems?: string;
+  justifyContent?: string;
+  border?: string;
+  borderWidth?: string;
+  borderStyle?: string;
+  borderColor?: string;
+  borderRadius?: string;
+  boxShadow?: string;
+  opacity?: string;
+  width?: string;
+  height?: string;
+  minWidth?: string;
+  minHeight?: string;
+  maxWidth?: string;
+  maxHeight?: string;
+  display?: string;
+  textAlign?: string;
+  fontWeight?: string;
+  letterSpacing?: string;
+  lineHeight?: string;
+  textTransform?: string;
+  textDecoration?: string;
 }
 
 /**
@@ -101,11 +128,19 @@ function findElementInCode(
 
 /**
  * Add or update inline style on an element's opening tag
+ * Now supports all CSS properties passed in
  */
 function updateOpeningTagStyles(
   openingTag: string,
-  styles: { color?: string; backgroundColor?: string; fontSize?: string; fontFamily?: string }
+  styles: Record<string, string | undefined>
 ): string {
+  // Filter out undefined/null/empty values
+  const validStyles = Object.entries(styles).filter(([_, v]) => v && v !== 'inherit' && v !== 'none' && v !== 'transparent');
+  
+  if (validStyles.length === 0) {
+    return openingTag;
+  }
+
   // Check if element already has a style prop
   const styleMatch = openingTag.match(/style=\{\{([^}]*)\}\}/);
   
@@ -113,47 +148,21 @@ function updateOpeningTagStyles(
     // Element has existing style - merge our changes
     let existingStyles = styleMatch[1];
     
-    if (styles.color) {
-      if (existingStyles.includes('color:')) {
-        existingStyles = existingStyles.replace(/color:\s*['"][^'"]*['"]/g, `color: '${styles.color}'`);
+    for (const [prop, value] of validStyles) {
+      if (!value) continue;
+      
+      const propRegex = new RegExp(`${prop}:\\s*['"][^'"]*['"]`, 'g');
+      if (existingStyles.match(propRegex)) {
+        existingStyles = existingStyles.replace(propRegex, `${prop}: '${value}'`);
       } else {
-        existingStyles = `color: '${styles.color}', ${existingStyles}`;
-      }
-    }
-    
-    if (styles.backgroundColor) {
-      if (existingStyles.includes('backgroundColor:')) {
-        existingStyles = existingStyles.replace(/backgroundColor:\s*['"][^'"]*['"]/g, `backgroundColor: '${styles.backgroundColor}'`);
-      } else {
-        existingStyles = `${existingStyles}, backgroundColor: '${styles.backgroundColor}'`;
-      }
-    }
-    
-    if (styles.fontSize) {
-      if (existingStyles.includes('fontSize:')) {
-        existingStyles = existingStyles.replace(/fontSize:\s*['"][^'"]*['"]/g, `fontSize: '${styles.fontSize}'`);
-      } else {
-        existingStyles = `${existingStyles}, fontSize: '${styles.fontSize}'`;
-      }
-    }
-    
-    if (styles.fontFamily) {
-      if (existingStyles.includes('fontFamily:')) {
-        existingStyles = existingStyles.replace(/fontFamily:\s*['"][^'"]*['"]/g, `fontFamily: '${styles.fontFamily}'`);
-      } else {
-        existingStyles = `${existingStyles}, fontFamily: '${styles.fontFamily}'`;
+        existingStyles = `${prop}: '${value}', ${existingStyles}`;
       }
     }
     
     return openingTag.replace(/style=\{\{[^}]*\}\}/, `style={{${existingStyles}}}`);
   } else {
     // Element has no style prop - add one before the closing >
-    const styleObj: string[] = [];
-    if (styles.color) styleObj.push(`color: '${styles.color}'`);
-    if (styles.backgroundColor) styleObj.push(`backgroundColor: '${styles.backgroundColor}'`);
-    if (styles.fontSize) styleObj.push(`fontSize: '${styles.fontSize}'`);
-    if (styles.fontFamily) styleObj.push(`fontFamily: '${styles.fontFamily}'`);
-    
+    const styleObj = validStyles.map(([prop, value]) => `${prop}: '${value}'`);
     const styleString = `style={{ ${styleObj.join(', ')} }}`;
     
     // Insert before the closing >
@@ -199,31 +208,63 @@ export function applyDirectEdits(
     }
   }
   
-  // Handle style changes
-  const hasStyleChanges = changes.color || changes.bgColor || changes.fontSize || changes.fontFamily;
+  // Build style changes object with proper CSS property names
+  const styleUpdates: Record<string, string | undefined> = {};
+  
+  if (changes.color) styleUpdates.color = changes.color;
+  if (changes.bgColor && changes.bgColor !== 'transparent' && changes.bgColor !== 'inherit') {
+    styleUpdates.backgroundColor = changes.bgColor;
+  }
+  if (changes.fontSize) styleUpdates.fontSize = changes.fontSize;
+  if (changes.fontFamily && changes.fontFamily !== 'inherit') styleUpdates.fontFamily = changes.fontFamily;
+  if (changes.margin) styleUpdates.margin = changes.margin;
+  if (changes.padding) styleUpdates.padding = changes.padding;
+  if (changes.gap) styleUpdates.gap = changes.gap;
+  if (changes.flexDirection) styleUpdates.flexDirection = changes.flexDirection;
+  if (changes.alignItems) styleUpdates.alignItems = changes.alignItems;
+  if (changes.justifyContent) styleUpdates.justifyContent = changes.justifyContent;
+  if (changes.border) styleUpdates.border = changes.border;
+  if (changes.borderRadius && changes.borderRadius !== '0') styleUpdates.borderRadius = changes.borderRadius;
+  if (changes.boxShadow && changes.boxShadow !== 'none') styleUpdates.boxShadow = changes.boxShadow;
+  if (changes.opacity && changes.opacity !== '1') styleUpdates.opacity = changes.opacity;
+  if (changes.width) styleUpdates.width = changes.width;
+  if (changes.height) styleUpdates.height = changes.height;
+  if (changes.display) styleUpdates.display = changes.display;
+  if (changes.textAlign) styleUpdates.textAlign = changes.textAlign;
+  if (changes.fontWeight) styleUpdates.fontWeight = changes.fontWeight;
+  if (changes.letterSpacing) styleUpdates.letterSpacing = changes.letterSpacing;
+  if (changes.lineHeight) styleUpdates.lineHeight = changes.lineHeight;
+  if (changes.textTransform) styleUpdates.textTransform = changes.textTransform;
+  if (changes.textDecoration) styleUpdates.textDecoration = changes.textDecoration;
+  
+  const hasStyleChanges = Object.keys(styleUpdates).length > 0;
   
   if (hasStyleChanges) {
     const found = findElementInCode(modifiedCode, element);
     
     if (found) {
-      const newOpeningTag = updateOpeningTagStyles(found.openingTag, {
-        color: changes.color,
-        backgroundColor: changes.bgColor !== 'transparent' ? changes.bgColor : undefined,
-        fontSize: changes.fontSize,
-        fontFamily: changes.fontFamily
-      });
+      const newOpeningTag = updateOpeningTagStyles(found.openingTag, styleUpdates);
       
       // Replace old opening tag with new one
       const newFullMatch = found.fullMatch.replace(found.openingTag, newOpeningTag);
       modifiedCode = modifiedCode.slice(0, found.startIndex) + newFullMatch + modifiedCode.slice(found.endIndex);
       
-      if (changes.color) appliedChanges.push('color');
-      if (changes.bgColor && changes.bgColor !== 'transparent') appliedChanges.push('background');
-      if (changes.fontSize) appliedChanges.push('font size');
-      if (changes.fontFamily) appliedChanges.push('font');
+      // Track what was applied
+      if (styleUpdates.color) appliedChanges.push('color');
+      if (styleUpdates.backgroundColor) appliedChanges.push('background');
+      if (styleUpdates.fontSize) appliedChanges.push('font size');
+      if (styleUpdates.fontFamily) appliedChanges.push('font');
+      if (styleUpdates.margin) appliedChanges.push('margin');
+      if (styleUpdates.padding) appliedChanges.push('padding');
+      if (styleUpdates.gap) appliedChanges.push('gap');
+      if (styleUpdates.flexDirection) appliedChanges.push('direction');
+      if (styleUpdates.alignItems) appliedChanges.push('alignment');
+      if (styleUpdates.border) appliedChanges.push('border');
+      if (styleUpdates.borderRadius) appliedChanges.push('radius');
+      if (styleUpdates.boxShadow) appliedChanges.push('shadow');
+      if (styleUpdates.opacity) appliedChanges.push('opacity');
     } else {
       // Fallback: If we can't find the element precisely, try a simpler approach
-      // Look for the opening tag pattern and add/modify style there
       console.warn('[directStyleEditor] Could not find element precisely, trying fallback');
       
       // If text was provided, try to find element by its text content
@@ -238,18 +279,14 @@ export function applyDirectEdits(
 
           if (match) {
             const openingTagPart = match[1];
-            const newOpeningTag = updateOpeningTagStyles(openingTagPart + '>', {
-              color: changes.color,
-              backgroundColor: changes.bgColor !== 'transparent' ? changes.bgColor : undefined,
-              fontSize: changes.fontSize,
-              fontFamily: changes.fontFamily,
-            });
+            const newOpeningTag = updateOpeningTagStyles(openingTagPart + '>', styleUpdates);
 
             modifiedCode = modifiedCode.replace(match[0], newOpeningTag.slice(0, -1) + `>${element.innerText}`);
-            if (changes.color) appliedChanges.push('color');
-            if (changes.bgColor && changes.bgColor !== 'transparent') appliedChanges.push('background');
-            if (changes.fontSize) appliedChanges.push('font size');
-            if (changes.fontFamily) appliedChanges.push('font');
+            
+            // Track applied changes
+            Object.keys(styleUpdates).forEach(key => {
+              if (!appliedChanges.includes(key)) appliedChanges.push(key);
+            });
             break;
           }
         }
