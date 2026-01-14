@@ -18,6 +18,7 @@ interface StockPhotoSelectorProps {
   onClose: () => void;
   searchTerm?: string;
   initialTab?: 'stock' | 'user';
+  showOnlyUserPhotos?: boolean; // Hide stock photos tab entirely
 }
 
 interface BackendPhoto {
@@ -38,11 +39,13 @@ export function StockPhotoSelector({
   multiSelect = false,
   onClose, 
   searchTerm = '', 
-  initialTab = 'stock' 
+  initialTab = 'stock',
+  showOnlyUserPhotos = false
 }: StockPhotoSelectorProps) {
   const { language } = useTheme();
   const isRTL = language === 'ar';
-  const [activeTab, setActiveTab] = useState<'stock' | 'user'>(initialTab);
+  // If showOnlyUserPhotos, force user tab
+  const [activeTab, setActiveTab] = useState<'stock' | 'user'>(showOnlyUserPhotos ? 'user' : initialTab);
   const [searchQuery, setSearchQuery] = useState(''); // Always start empty - user must type search
   const [isSearching, setIsSearching] = useState(false);
   const [stockPhotos, setStockPhotos] = useState<FreepikResource[]>([]);
@@ -401,9 +404,9 @@ export function StockPhotoSelector({
           </Button>
         </div>
         
-        <Tabs defaultValue="stock" value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <Tabs defaultValue={showOnlyUserPhotos ? 'user' : 'stock'} value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <div className="px-3 sm:px-4 pt-2 shrink-0">
-            <TabsList className="w-full h-10 sm:h-11">
+            <TabsList className={cn("w-full h-10 sm:h-11", showOnlyUserPhotos && "hidden")}>
               <TabsTrigger value="stock" className="flex-1 text-xs sm:text-sm gap-1.5 sm:gap-2">
                 <Image className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 {isRTL ? 'صور مخزنة' : 'Stock Photos'}
@@ -413,6 +416,11 @@ export function StockPhotoSelector({
                 {isRTL ? 'صوري' : 'My Photos'}
               </TabsTrigger>
             </TabsList>
+            {showOnlyUserPhotos && (
+              <div className="text-sm text-muted-foreground py-2 text-center">
+                {isRTL ? 'اختر من صورك المرفوعة' : 'Select from your uploaded photos'}
+              </div>
+            )}
           </div>
           
           {/* Stock Photos Tab */}

@@ -188,6 +188,8 @@ export default function ProjectDetail() {
   const [photoSelectorMultiSelect, setPhotoSelectorMultiSelect] = useState(false);
   const [isChangingCarouselImages, setIsChangingCarouselImages] = useState(false);
   const [savedPromptForPhotos, setSavedPromptForPhotos] = useState('');
+  const [photoSelectorShowOnlyUserPhotos, setPhotoSelectorShowOnlyUserPhotos] = useState(false);
+  const [isUploadingAttachedImages, setIsUploadingAttachedImages] = useState(false);
   
   // Pending element image edit (for AI Edit image requests)
   const [pendingElementImageEdit, setPendingElementImageEdit] = useState<{
@@ -2614,7 +2616,7 @@ Fix the issue in the code and ensure it works correctly.`;
   
   // Open stock photo selector - always starts fresh (empty search)
   // Now also saves the current prompt so it can be restored after photo selection
-  const openStockPhotoSelector = (initialTab: 'stock' | 'user' = 'stock', multiSelect: boolean = true, promptToSave?: string) => {
+  const openStockPhotoSelector = (initialTab: 'stock' | 'user' = 'stock', multiSelect: boolean = true, promptToSave?: string, options?: { showOnlyUserPhotos?: boolean }) => {
     // Save the prompt if provided (from handleChatSubmit when photo request detected)
     if (promptToSave) {
       setSavedPromptForPhotos(promptToSave);
@@ -2622,7 +2624,71 @@ Fix the issue in the code and ensure it works correctly.`;
     setPhotoSearchTerm(''); // Always empty - user types their own search
     setPhotoSelectorInitialTab(initialTab);
     setPhotoSelectorMultiSelect(multiSelect);
+    setPhotoSelectorShowOnlyUserPhotos(options?.showOnlyUserPhotos ?? false);
     setShowStockPhotoSelector(true);
+  };
+
+  // Upload attached images to storage and return public URLs
+  const uploadAttachedImagesToStorage = async (images: Array<{ file: File; preview: string; pdfDataUrl?: string }>): Promise<string[]> => {
+    if (!id || !user?.id) return images.map(i => i.preview); // Fallback to base64
+    
+    setIsUploadingAttachedImages(true);
+    const uploadedUrls: string[] = [];
+    
+    try {
+      for (const img of images) {
+        // Skip PDFs for now - keep as base64
+        if (img.pdfDataUrl || img.file.type.includes('pdf')) {
+          uploadedUrls.push(img.pdfDataUrl || img.preview);
+          continue;
+        }
+        
+        try {
+          const timestamp = Date.now();
+          const safeFilename = img.file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+          const storagePath = `${user.id}/${id}/chat-${timestamp}-${safeFilename}`;
+          
+          // Upload to storage
+          const { error: uploadError, data } = await supabase.storage
+            .from('project-uploads')
+            .upload(storagePath, img.file, { cacheControl: '3600', upsert: false });
+          
+          if (uploadError) {
+            console.error('Upload error:', uploadError);
+            uploadedUrls.push(img.preview); // Fallback
+            continue;
+          }
+          
+          // Get public URL
+          const { data: urlData } = supabase.storage.from('project-uploads').getPublicUrl(storagePath);
+          const publicUrl = urlData?.publicUrl;
+          
+          if (publicUrl) {
+            // Save to project_uploads table for "My Photos"
+            await supabase.from('project_uploads').insert({
+              project_id: id,
+              user_id: user.id,
+              filename: safeFilename,
+              storage_path: storagePath,
+              file_type: img.file.type,
+              size_bytes: img.file.size
+            });
+            
+            uploadedUrls.push(publicUrl);
+            console.log('[Auto-Upload] Uploaded image:', publicUrl);
+          } else {
+            uploadedUrls.push(img.preview); // Fallback
+          }
+        } catch (err) {
+          console.error('Auto-upload error:', err);
+          uploadedUrls.push(img.preview); // Fallback
+        }
+      }
+    } finally {
+      setIsUploadingAttachedImages(false);
+    }
+    
+    return uploadedUrls;
   };
   
   // Helper: Replace carousel/slider image array directly in code
@@ -2824,16 +2890,43 @@ Fix the issue in the code and ensure it works correctly.`;
     // and proceed directly to AI submission - prevents the selector from reopening in a loop
     const hasAttachedImages = attachedImages.length > 0;
     
+    // Smart intent detection patterns
+    const useAttachedPattern = /\b(use|insert|add|put|place|استخدم|ضع|أضف)\s+(this|these|the|attached|this|those|هذه|هذا|المرفقة?)\s*(image|photo|picture|صور)?/i;
+    const askAboutImagesPattern = /^(what|how|why|when|can|does|is|are|ما|كيف|لماذا|متى|هل)\b.*\b(image|photo|picture|صور)/i;
+    
+    // If images are attached AND user is giving instructions (not asking a question), skip photo picker entirely
+    if (hasAttachedImages) {
+      const isQuestion = askAboutImagesPattern.test(userMessage);
+      const isUsingAttached = useAttachedPattern.test(userMessage) || 
+                              userMessage.includes('carousel') || 
+                              userMessage.includes('gallery') ||
+                              userMessage.includes('slider') ||
+                              userMessage.includes('background');
+      
+      if (!isQuestion || isUsingAttached) {
+        // User has images AND wants to use them - proceed directly to AI
+        console.log('[Smart Image] User has attached images, skipping photo picker');
+        // Don't return - let it fall through to AI submission
+      }
+    }
+    
     // Only check photo patterns if NO images are currently attached
     if (!hasAttachedImages) {
     // Check if the user is asking for love photos or specific photo types
     const lovePhotoRegex = /\b(love|heart|romance|romantic|valentine)\s+(photos?|images?|pictures?)\b/i;
     const photoRequestRegex = /\b(\w+)\s+(photos?|images?|pictures?)\b/i;
+    const myPhotosOnlyRegex = /\b(use|show|get|open|فتح)\s+(my|uploaded|user|صوري)\s*(photos?|images?|pictures?|صور)?\s*(only)?/i;
     const myPhotosRegex = /\b(my|uploaded|user)\s+(photos?|images?|pictures?)\b/i;
     
     // Enhanced patterns to catch more image change requests - fixed capture groups
     const imagesOfPattern = /\b(images?|photos?|pictures?)\s+(?:of|about|for|with)\s+(.+?)(?:\.|$|\s+(?:and|or|please|thanks|in|on))/i;
     const changeToPattern = /\b(?:change|replace|swap|switch|update|use)\s+(?:them|it|the\s+\w+|these|those)?\s*(?:to|with|into|for)\s+(.+?)(?:\.|$|\s+(?:and|or|please|thanks))/i;
+    
+    // Check for "my photos only" request (open selector with only My Photos tab)
+    if (myPhotosOnlyRegex.test(userMessage)) {
+      openStockPhotoSelector('user', true, userMessage, { showOnlyUserPhotos: true });
+      return;
+    }
     
     // Check for "my photos" request
     if (myPhotosRegex.test(userMessage)) {
@@ -2951,13 +3044,21 @@ Fix the issue in the code and ensure it works correctly.`;
     // Capture images BEFORE clearing them (for AI, not DB - DB has no images column)
     // Capture images and PDFs BEFORE clearing them
     // For PDFs, we send the actual data URL, not the preview SVG
-    const userImages = attachedImages.length > 0 ? attachedImages.map(img => {
-      if (img.pdfDataUrl) {
-        // For PDFs, return the actual PDF data with a prefix marker
-        return `[PDF:${img.file.name}]${img.pdfDataUrl}`;
-      }
-      return img.preview;
-    }) : [];
+    // AUTO-UPLOAD: Upload attached images to storage to get permanent URLs
+    let userImages: string[] = [];
+    if (attachedImages.length > 0) {
+      // Auto-upload images to get permanent URLs (not base64)
+      const uploadedUrls = await uploadAttachedImagesToStorage(attachedImages);
+      userImages = uploadedUrls.map((url, idx) => {
+        const img = attachedImages[idx];
+        if (img?.pdfDataUrl) {
+          // For PDFs, return the actual PDF data with a prefix marker
+          return `[PDF:${img.file.name}]${img.pdfDataUrl}`;
+        }
+        // Return the permanent URL (or base64 fallback)
+        return url;
+      });
+    }
     
     // Store attachment count in content as metadata marker for persistence
     // Format: [ATTACHMENTS:N] at the start of content (hidden in display)
@@ -4541,7 +4642,7 @@ Fix the issue in the code and ensure it works correctly.`;
                   <div className="relative flex flex-col gap-2">
                     {/* Attached Images Preview */}
                     {attachedImages.length > 0 && (
-                      <div className="flex flex-wrap gap-2 px-2">
+                      <div className="flex flex-wrap items-center gap-2 px-2">
                         {attachedImages.map((img, idx) => (
                           <div key={idx} className="relative group">
                             <img 
@@ -4559,6 +4660,30 @@ Fix the issue in the code and ensure it works correctly.`;
                             </button>
                           </div>
                         ))}
+                        {/* Smart "Images ready" indicator */}
+                        <div className={cn(
+                          "flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full transition-all",
+                          isUploadingAttachedImages 
+                            ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                            : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                        )}>
+                          {isUploadingAttachedImages ? (
+                            <>
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              <span>{isRTL ? 'جاري الرفع...' : 'Uploading...'}</span>
+                            </>
+                          ) : (
+                            <>
+                              <Check className="h-3 w-3" />
+                              <span>
+                                {attachedImages.length} {isRTL 
+                                  ? (attachedImages.length === 1 ? 'صورة جاهزة' : 'صور جاهزة') 
+                                  : (attachedImages.length === 1 ? 'image ready' : 'images ready')
+                                }
+                              </span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     )}
 
@@ -5141,6 +5266,7 @@ Fix the issue in the code and ensure it works correctly.`;
           onClose={() => setShowStockPhotoSelector(false)}
           searchTerm={photoSearchTerm}
           initialTab={photoSelectorInitialTab}
+          showOnlyUserPhotos={photoSelectorShowOnlyUserPhotos}
         />
       )}
 
