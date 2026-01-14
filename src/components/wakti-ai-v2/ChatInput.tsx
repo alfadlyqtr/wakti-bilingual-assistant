@@ -517,7 +517,18 @@ export function ChatInput({
     return () => window.removeEventListener('wakti-tts-autoplay-changed', handler as EventListener);
   }, []);
 
-  // Enhanced send message function with proper data conversion
+  // Listen for auto-submit events from quick action buttons
+  useEffect(() => {
+    const handleAutoSubmit = () => {
+      // Trigger send if there's content and we're not loading
+      if (message.trim().length > 0 && !isLoading) {
+        handleSendMessage();
+      }
+    };
+    window.addEventListener('wakti-auto-submit', handleAutoSubmit);
+    return () => window.removeEventListener('wakti-auto-submit', handleAutoSubmit);
+  }, [message, isLoading]);
+
   const handleSendMessage = async () => {
     if ((message.trim().length > 0 || uploadedFiles.length > 0) && !isLoading && !isUploading) {
       console.log('📤 SEND: Message being sent', { message: message.substring(0, 50), filesCount: uploadedFiles.length });
