@@ -58,7 +58,7 @@ import { MatrixOverlay } from '@/components/projects/MatrixOverlay';
 import { TraceFlowLoader } from '@/components/projects/TraceFlowLoader';
 import { BackendDashboard } from '@/components/projects/backend/BackendDashboard';
 import { StockPhotoSelector } from '@/components/projects/StockPhotoSelector';
-import { ImageSourceDialog, ImageSourceChoice } from '@/components/projects/ImageSourceDialog';
+import { ImageSourceButtons, ImageSourceChoice } from '@/components/projects/ImageSourceButtons';
 import { FreepikService } from '@/services/FreepikService';
 
 // Lovable-style components
@@ -2990,9 +2990,26 @@ Fix the issue in the code and ensure it works correctly.`;
       const needsImageSourceConfirmation = imageRelatedPatterns.some(pattern => pattern.test(userMessage));
       
       if (needsImageSourceConfirmation) {
-        // Show the Image Source Dialog instead of auto-opening stock photos
+        // Add inline chat message with image source buttons (Lovable style)
         setPendingImagePrompt(userMessage);
-        setShowImageSourceDialog(true);
+        setShowImageSourceDialog(true); // Used to track if buttons are active
+        
+        // Add user message first
+        setChatMessages(prev => [...prev, {
+          id: `user-${Date.now()}`,
+          role: 'user',
+          content: userMessage
+        }]);
+        
+        // Add assistant message with image source type
+        setChatMessages(prev => [...prev, {
+          id: `image-source-${Date.now()}`,
+          role: 'assistant',
+          content: JSON.stringify({
+            type: 'image_source_picker',
+            prompt: userMessage
+          })
+        }]);
         return;
       }
       
@@ -3684,6 +3701,12 @@ Fix the issue in the code and ensure it works correctly.`;
                     assets: Array<{ filename: string; url: string; file_type: string }>;
                   } | null = null;
                   
+                  // IMAGE SOURCE PICKER DETECTION
+                  let imageSourcePicker: {
+                    type: string;
+                    prompt: string;
+                  } | null = null;
+                  
                   if (msg.role === 'assistant') {
                     // Try to extract JSON plan from content (may be mixed with text)
                     const content = msg.content;
@@ -3691,7 +3714,9 @@ Fix the issue in the code and ensure it works correctly.`;
                     // Method 1: Try direct JSON parse
                     try {
                       const parsed = JSON.parse(content);
-                      if (parsed.type === 'asset_picker' && parsed.assets) {
+                      if (parsed.type === 'image_source_picker' && parsed.prompt) {
+                        imageSourcePicker = parsed;
+                      } else if (parsed.type === 'asset_picker' && parsed.assets) {
                         assetPicker = parsed;
                       } else if (parsed.type === 'plan' || (parsed.title && (parsed.steps || parsed.codeChanges))) {
                         parsedPlan = parsed;
@@ -3914,6 +3939,22 @@ Fix the issue in the code and ensure it works correctly.`;
                             })}
                           </div>
                         </div>
+                      </div>
+                    );
+                  }
+                  
+                  // IMAGE SOURCE PICKER - Inline buttons in chat (Lovable style)
+                  if (imageSourcePicker && showImageSourceDialog) {
+                    return (
+                      <div key={i} className="flex flex-col items-start w-full animate-in fade-in slide-in-from-bottom-1 duration-300">
+                        <ImageSourceButtons 
+                          prompt={imageSourcePicker.prompt}
+                          onSelect={(choice) => {
+                            handleImageSourceSelect(choice);
+                            // Remove this message from chat after selection
+                            setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                          }}
+                        />
                       </div>
                     );
                   }
@@ -5313,14 +5354,7 @@ Fix the issue in the code and ensure it works correctly.`;
         />
       )}
 
-      {/* Image Source Confirmation Dialog */}
-      <ImageSourceDialog
-        open={showImageSourceDialog}
-        onOpenChange={setShowImageSourceDialog}
-        onSelect={handleImageSourceSelect}
-        prompt={pendingImagePrompt}
-        isGenerating={isAIGeneratingImages}
-      />
+      {/* Image Source Buttons are now rendered inline in chat messages */}
 
       {/* Clarifying Questions Modal */}
       <ClarifyingQuestionsModal
