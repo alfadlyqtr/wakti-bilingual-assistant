@@ -56,8 +56,17 @@ export function StockPhotoSelector({
   const [totalPages, setTotalPages] = useState(1);
   const [noPhotosFound, setNoPhotosFound] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [gridSize, setGridSize] = useState<GridSize>('medium');
+  // Load gridSize from localStorage for persistence
+  const [gridSize, setGridSize] = useState<GridSize>(() => {
+    const stored = localStorage.getItem('stockPhotoSelectorGridSize');
+    return (stored === 'small' || stored === 'medium' || stored === 'large') ? stored : 'medium';
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Persist gridSize to localStorage
+  useEffect(() => {
+    localStorage.setItem('stockPhotoSelectorGridSize', gridSize);
+  }, [gridSize]);
 
   // Grid size classes
   const gridClasses: Record<GridSize, string> = {
@@ -149,7 +158,8 @@ export function StockPhotoSelector({
     }
   };
 
-  const handleSearch = async () => {
+  // Fixed: Accept explicit page parameter to avoid stale state issues
+  const handleSearch = async (pageToLoad: number = 1) => {
     if (!searchQuery.trim()) return;
     
     setIsSearching(true);
@@ -171,13 +181,17 @@ export function StockPhotoSelector({
       const result = await FreepikService.searchImages(
         searchQuery,
         filters,
-        page,
+        pageToLoad, // Use the passed parameter, not stale state
         12,
         language === 'ar' ? 'ar-SA' : 'en-US'
       );
       
       if (result.success && result.data) {
-        setStockPhotos(result.data.data || []);
+        // Dedupe results by photo ID to prevent duplicates
+        const uniquePhotos = result.data.data?.filter((photo, index, self) => 
+          index === self.findIndex(p => p.id === photo.id)
+        ) || [];
+        setStockPhotos(uniquePhotos);
         setTotalPages(result.data.meta.last_page || 1);
       } else {
         console.error('Failed to search photos:', result.error);
@@ -190,10 +204,11 @@ export function StockPhotoSelector({
     }
   };
 
+  // Fixed: Update state and pass new page directly to handleSearch
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > totalPages) return;
     setPage(newPage);
-    handleSearch();
+    handleSearch(newPage); // Pass explicit page to avoid stale state
   };
 
   const handleSelectPhoto = (photo: { url: string; title: string }) => {
@@ -372,11 +387,11 @@ export function StockPhotoSelector({
                     placeholder={isRTL ? 'البحث عن الصور...' : 'Search photos...'}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { setPage(1); handleSearch(1); } }}
                     className="h-10 sm:h-11 text-sm"
                   />
                 </div>
-                <Button onClick={handleSearch} disabled={isSearching} className="h-10 w-10 sm:h-11 sm:w-11 p-0">
+                <Button onClick={() => { setPage(1); handleSearch(1); }} disabled={isSearching} className="h-10 w-10 sm:h-11 sm:w-11 p-0">
                   {isSearching ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
