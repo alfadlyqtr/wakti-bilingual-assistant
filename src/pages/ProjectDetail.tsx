@@ -162,6 +162,7 @@ export default function ProjectDetail() {
   const isRTL = language === 'ar';
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const thinkingStartTimeRef = useRef<number | null>(null);
 
   const [project, setProject] = useState<Project | null>(null);
   const [files, setFiles] = useState<ProjectFile[]>([]);
@@ -3189,7 +3190,9 @@ Fix the issue in the code and ensure it works correctly.`;
     } // End of: if (!hasAttachedImages) - skip photo patterns when images already attached
     
     setAiEditing(true);
-    setThinkingStartTime(Date.now());
+    const thinkingStart = Date.now();
+    setThinkingStartTime(thinkingStart);
+    thinkingStartTimeRef.current = thinkingStart;
     setEditedFilesTracking([]); // Reset edited files
     setToolsUsedCount(0); // Reset tool count for new request
     setLastThinkingDuration(null); // Reset last thinking duration
@@ -3614,10 +3617,12 @@ Fix the issue in the code and ensure it works correctly.`;
       }]);
       toast.error(errorMessage);
     } finally {
-      // Save final thinking duration before clearing
-      if (thinkingStartTime) {
-        setLastThinkingDuration(Math.floor((Date.now() - thinkingStartTime) / 1000));
+      // Save final thinking duration before clearing (use ref to avoid stale state)
+      const start = thinkingStartTimeRef.current;
+      if (start) {
+        setLastThinkingDuration(Math.floor((Date.now() - start) / 1000));
       }
+      thinkingStartTimeRef.current = null;
       setAiEditing(false);
       setThinkingStartTime(null);
     }
@@ -4220,8 +4225,13 @@ Fix the issue in the code and ensure it works correctly.`;
                                 setLeftPanelMode('code');
                                 
                                 setAiEditing(true);
-                                setThinkingStartTime(Date.now());
+                                const thinkingStart = Date.now();
+                                setThinkingStartTime(thinkingStart);
+                                thinkingStartTimeRef.current = thinkingStart;
                                 setEditedFilesTracking([]);
+                                setToolsUsedCount(0);
+                                setLastThinkingDuration(null);
+                                setAiError(null);
                                 setGenerationSteps([
                                   { label: isRTL ? 'تنفيذ الخطة...' : 'Applying changes...', status: 'loading' },
                                   { label: isRTL ? 'كتابة الكود...' : 'Writing code...', status: 'pending' },
@@ -4308,10 +4318,12 @@ Fix the issue in the code and ensure it works correctly.`;
                                   toast.error(isRTL ? 'فشل في تنفيذ الخطة' : 'Failed to apply changes');
                                   setGenerationSteps([]);
                                 } finally {
-                                  // Save final thinking duration before clearing
-                                  if (thinkingStartTime) {
-                                    setLastThinkingDuration(Math.floor((Date.now() - thinkingStartTime) / 1000));
+                                  // Save final thinking duration before clearing (use ref to avoid stale state)
+                                  const start = thinkingStartTimeRef.current;
+                                  if (start) {
+                                    setLastThinkingDuration(Math.floor((Date.now() - start) / 1000));
                                   }
+                                  thinkingStartTimeRef.current = null;
                                   setAiEditing(false);
                                   setThinkingStartTime(null);
                                 }
@@ -4382,7 +4394,20 @@ Fix the issue in the code and ensure it works correctly.`;
                           {/* Header with checkmark */}
                           <div className="px-4 py-3 border-b border-indigo-500/20 flex items-center gap-2">
                             <Check className="h-4 w-4 text-emerald-500" />
-                            <span className="text-[13px] text-emerald-500 font-semibold">{isRTL ? 'تم التطبيق' : 'Applied'}</span>
+                            <span className="text-[13px] text-emerald-500 font-semibold flex-1">{isRTL ? 'تم التطبيق' : 'Applied'}</span>
+                            <button
+                              onClick={() => {
+                                const text = `${summary}${uniqueFiles.length ? `\n\nFiles:\n- ${uniqueFiles.join('\n- ')}` : ''}`;
+                                navigator.clipboard.writeText(text);
+                                toast.success(isRTL ? 'تم النسخ!' : 'Copied!');
+                              }}
+                              className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium text-muted-foreground hover:text-indigo-500 hover:bg-indigo-500/10 transition-all active:scale-95"
+                              title={isRTL ? 'نسخ' : 'Copy'}
+                              aria-label={isRTL ? 'نسخ' : 'Copy'}
+                            >
+                              <Copy className="h-3 w-3" />
+                              <span>{isRTL ? 'نسخ' : 'Copy'}</span>
+                            </button>
                           </div>
                           
                           {/* Summary Section */}
@@ -4724,7 +4749,7 @@ Fix the issue in the code and ensure it works correctly.`;
                         )}
                         
                         {/* Tool Usage Indicator - Lovable Style */}
-                        {toolsUsedCount > 0 && (
+                        {(toolsUsedCount > 0 || editedFilesTracking.length > 0) && (
                           <ToolUsageIndicator
                             toolsUsed={toolsUsedCount}
                             toolCalls={editedFilesTracking.map(f => ({
@@ -4893,60 +4918,36 @@ Fix the issue in the code and ensure it works correctly.`;
                   {/* Context-Aware Quick Action Buttons + Jump to Bottom */}
                   <div className="flex items-center gap-2 px-1">
                     <div className="flex flex-wrap gap-2 flex-1">
-                      {/* Get last AI message for context */}
                       {(() => {
                         const lastAiMessage = [...chatMessages].reverse().find(m => m.role === 'assistant');
-                        const lastContent = lastAiMessage?.content || '';
-                        
-                        // Generate context-aware suggestions
-                        const getSuggestions = () => {
-                          const lowerContent = lastContent.toLowerCase();
-                          const suggestions: Array<{label: string; labelAr: string; prompt: string}> = [];
-                          
-                          if (lowerContent.includes('form') || lowerContent.includes('input')) {
-                            suggestions.push({ label: 'Add validation', labelAr: 'إضافة تحقق', prompt: 'Add form validation with error messages' });
+                        const raw = lastAiMessage?.content || '';
+                        let responseContent = raw;
+                        try {
+                          const parsed = JSON.parse(raw);
+                          if (parsed?.type === 'execution_result' && typeof parsed.summary === 'string') {
+                            responseContent = parsed.summary;
                           }
-                          if (lowerContent.includes('list') || lowerContent.includes('table') || lowerContent.includes('data')) {
-                            suggestions.push({ label: 'Add filtering', labelAr: 'إضافة تصفية', prompt: 'Add filtering and sorting to the data' });
-                          }
-                          if (lowerContent.includes('button') || lowerContent.includes('cta')) {
-                            suggestions.push({ label: 'Add hover effect', labelAr: 'إضافة تأثير', prompt: 'Add smooth hover effect to the button' });
-                          }
-                          if (lowerContent.includes('card') || lowerContent.includes('component')) {
-                            suggestions.push({ label: 'Add shadow', labelAr: 'إضافة ظل', prompt: 'Add elegant shadow and hover lift effect' });
-                          }
-                          if (lowerContent.includes('image') || lowerContent.includes('carousel') || lowerContent.includes('gallery')) {
-                            suggestions.push({ label: 'Change images', labelAr: 'تغيير الصور', prompt: 'Change the images to different ones' });
-                          }
-                          if (lowerContent.includes('api') || lowerContent.includes('backend') || lowerContent.includes('database')) {
-                            suggestions.push({ label: 'Add error handling', labelAr: 'معالجة الأخطاء', prompt: 'Add proper error handling with user-friendly messages' });
-                          }
-                          
-                          // NO static fallback - only show suggestions when context matches
-                          
-                          return suggestions.slice(0, 2);
-                        };
-                        
-                        return getSuggestions().map((suggestion, i) => (
-                          <button
-                            key={i}
-                            onClick={() => {
-                              // Check if this is a "Change images" suggestion for carousel
-                              if (suggestion.prompt.includes('Change the images') || suggestion.prompt.includes('غير الصور')) {
+                        } catch {
+                          // not JSON
+                        }
+
+                        return (
+                          <QuickActionButtons
+                            responseContent={responseContent}
+                            isRTL={isRTL}
+                            onActionClick={(prompt) => {
+                              if (prompt.includes('Change the images') || prompt.includes('غير الصور')) {
                                 setIsChangingCarouselImages(true);
                                 openStockPhotoSelector('stock', true);
                               } else {
-                                setChatInput(suggestion.prompt);
+                                setChatInput(prompt);
                               }
                             }}
-                            className="px-4 py-2 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-all shadow-sm"
-                          >
-                            {isRTL ? suggestion.labelAr : suggestion.label}
-                          </button>
-                        ));
+                          />
+                        );
                       })()}
                     </div>
-                    
+
                     {/* Action buttons row */}
                     <div className="flex items-center gap-2 shrink-0">
                       {/* Visual Edits Button */}
