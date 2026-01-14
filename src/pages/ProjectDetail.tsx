@@ -259,8 +259,11 @@ export default function ProjectDetail() {
     siteUsersCount: number;
   } | null>(null);
   
-  // Self-healing: Runtime error detection
+  // Self-healing: Runtime error detection with smart auto-fix
   const [crashReport, setCrashReport] = useState<string | null>(null);
+  const [autoFixCountdown, setAutoFixCountdown] = useState<number | null>(null);
+  const autoFixTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const autoFixTriggeredRef = useRef<boolean>(false);
 
   // Pagination for chat messages - show last N messages, then "Show More"
   const MESSAGES_PER_PAGE = 10;
@@ -2203,34 +2206,109 @@ ${convertToGlobalComponent(content, componentName)}
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
   // Self-healing: Handle runtime crash detection from Sandpack
-  const handleRuntimeCrash = (errorMsg: string) => {
-    // Only set if we haven't already noticed it (prevent loops)
-    if (crashReport !== errorMsg) {
-      setCrashReport(errorMsg);
-      toast.error(isRTL ? 'تم اكتشاف خطأ في المعاينة' : 'Preview error detected');
+  const handleRuntimeCrash = useCallback((errorMsg: string) => {
+    // Skip if already processing or same error
+    if (autoFixTriggeredRef.current || crashReport === errorMsg) return;
+    
+    // Skip if currently generating (AI is working)
+    if (isGenerating) return;
+    
+    setCrashReport(errorMsg);
+    
+    // Start auto-fix countdown (3 seconds)
+    setAutoFixCountdown(3);
+    
+    // Clear any existing timer
+    if (autoFixTimerRef.current) {
+      clearInterval(autoFixTimerRef.current);
     }
-  };
+    
+    // Countdown timer
+    let count = 3;
+    autoFixTimerRef.current = setInterval(() => {
+      count--;
+      if (count <= 0) {
+        clearInterval(autoFixTimerRef.current!);
+        autoFixTimerRef.current = null;
+        setAutoFixCountdown(null);
+        // Auto-trigger fix
+        triggerAutoFix(errorMsg);
+      } else {
+        setAutoFixCountdown(count);
+      }
+    }, 1000);
+  }, [crashReport, isGenerating]);
+  
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoFixTimerRef.current) {
+        clearInterval(autoFixTimerRef.current);
+      }
+    };
+  }, []);
 
-  // Self-healing: Auto-fix the crash
-  const handleAutoFix = () => {
-    if (!crashReport) return;
+  // Self-healing: Auto-fix the crash (can be triggered automatically or manually)
+  const triggerAutoFix = useCallback((errorToFix?: string) => {
+    const error = errorToFix || crashReport;
+    if (!error) return;
     
-    const fixPrompt = `The preview crashed with this error: "${crashReport}". 
-Analyze the code, find the root cause (usually a missing import, undefined variable, or unavailable dependency like react-router-dom), and fix it immediately. 
-Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
+    // Mark as triggered to prevent loops
+    autoFixTriggeredRef.current = true;
     
-    // Clear error so we don't loop
+    // Clear countdown
+    if (autoFixTimerRef.current) {
+      clearInterval(autoFixTimerRef.current);
+      autoFixTimerRef.current = null;
+    }
+    setAutoFixCountdown(null);
+    
+    // Smart fix prompt with context
+    const fixPrompt = `🔧 **AUTO-FIX REQUESTED**
+
+The preview encountered an error:
+\`\`\`
+${error}
+\`\`\`
+
+Please analyze and fix this error. Common causes include:
+- Missing imports or dependencies
+- Undefined variables or functions
+- Invalid JSX syntax
+- Type errors
+
+Fix the issue in the code and ensure it works correctly.`;
+    
+    // Clear error state
     setCrashReport(null);
     
-    // Switch to Code mode and send fix request
-    setLeftPanelMode('code');
+    // Send fix request
     setChatInput(fixPrompt);
     
-    // Trigger submit after setting input
+    // Trigger submit
     setTimeout(() => {
       const form = document.querySelector('form');
       if (form) form.requestSubmit();
+      // Reset trigger flag after a delay to allow new errors
+      setTimeout(() => {
+        autoFixTriggeredRef.current = false;
+      }, 5000);
     }, 100);
+  }, [crashReport]);
+
+  // Manual auto-fix handler (for button click)
+  const handleAutoFix = () => {
+    triggerAutoFix();
+  };
+  
+  // Cancel auto-fix countdown
+  const cancelAutoFix = () => {
+    if (autoFixTimerRef.current) {
+      clearInterval(autoFixTimerRef.current);
+      autoFixTimerRef.current = null;
+    }
+    setAutoFixCountdown(null);
+    setCrashReport(null);
   };
 
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -4289,25 +4367,69 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
                   <div ref={chatEndRef} className="h-2" />
                 </div>
 
-                {/* Self-Healing: Runtime Error Alert */}
+                {/* Self-Healing: Smart Auto-Fix Error Banner */}
                 {crashReport && (
-                  <div className="mx-4 mb-2 p-3 bg-red-900/20 border border-red-500/40 rounded-xl flex items-center justify-between animate-in slide-in-from-bottom-2 duration-300">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="p-2 bg-red-500/20 rounded-full shrink-0">
-                        <AlertTriangle className="w-4 h-4 text-red-400" />
+                  <div className="mx-3 mb-2 overflow-hidden rounded-xl border border-red-500/30 bg-gradient-to-r from-red-950/80 via-red-900/60 to-red-950/80 backdrop-blur-sm shadow-lg shadow-red-500/10 animate-in slide-in-from-bottom-3 duration-300">
+                    {/* Progress bar for auto-fix countdown */}
+                    {autoFixCountdown !== null && (
+                      <div className="h-1 bg-red-950">
+                        <div 
+                          className="h-full bg-gradient-to-r from-amber-500 to-red-500 transition-all duration-1000 ease-linear"
+                          style={{ width: `${(autoFixCountdown / 3) * 100}%` }}
+                        />
                       </div>
-                      <div className="min-w-0">
-                        <h4 className="text-xs font-semibold text-red-200">{isRTL ? 'تم اكتشاف خطأ' : 'Runtime Error Detected'}</h4>
-                        <p className="text-[10px] text-red-300/70 truncate max-w-[200px]">{crashReport}</p>
+                    )}
+                    
+                    <div className="p-3 flex items-center gap-3">
+                      {/* Animated error icon */}
+                      <div className="relative shrink-0">
+                        <div className="absolute inset-0 bg-red-500/30 rounded-full animate-ping" />
+                        <div className="relative p-2 bg-gradient-to-br from-red-500/20 to-red-600/20 rounded-full border border-red-500/30">
+                          <AlertTriangle className="w-4 h-4 text-red-400" />
+                        </div>
+                      </div>
+                      
+                      {/* Error info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-semibold text-red-100">
+                            {isRTL ? 'تم اكتشاف خطأ' : 'Error Detected'}
+                          </h4>
+                          {autoFixCountdown !== null && (
+                            <span className="px-2 py-0.5 bg-amber-500/20 border border-amber-500/30 rounded-full text-[10px] font-medium text-amber-300">
+                              {isRTL ? `إصلاح تلقائي في ${autoFixCountdown}` : `Auto-fixing in ${autoFixCountdown}s`}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-red-300/80 truncate mt-0.5 font-mono">
+                          {crashReport.length > 60 ? crashReport.substring(0, 60) + '...' : crashReport}
+                        </p>
+                      </div>
+                      
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {/* Cancel button */}
+                        <button 
+                          onClick={cancelAutoFix}
+                          className="p-2 text-red-400/70 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
+                          title={isRTL ? 'إلغاء' : 'Dismiss'}
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                        
+                        {/* Fix Now button */}
+                        <button 
+                          onClick={handleAutoFix}
+                          className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white text-xs font-bold rounded-lg transition-all duration-200 flex items-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95"
+                        >
+                          <Wand2 className="w-3.5 h-3.5" />
+                          {autoFixCountdown !== null 
+                            ? (isRTL ? 'إصلاح الآن' : 'Fix Now') 
+                            : (isRTL ? 'إصلاح تلقائي' : 'Auto-Fix')
+                          }
+                        </button>
                       </div>
                     </div>
-                    <button 
-                      onClick={handleAutoFix}
-                      className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-[11px] font-bold rounded-lg transition-colors flex items-center gap-1.5 shrink-0 active:scale-95"
-                    >
-                      <Wand2 className="w-3 h-3" />
-                      {isRTL ? 'إصلاح تلقائي' : 'Auto-Fix'}
-                    </button>
                   </div>
                 )}
 

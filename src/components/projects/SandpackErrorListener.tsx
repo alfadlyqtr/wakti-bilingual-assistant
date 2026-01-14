@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { useSandpack } from "@codesandbox/sandpack-react";
 import { useDebugContextSafe } from "@/hooks/useDebugContext";
 
@@ -7,18 +7,36 @@ interface ErrorListenerProps {
 }
 
 // ============================================================================
-// ENHANCED SANDPACK ERROR LISTENER
+// ENHANCED SANDPACK ERROR LISTENER - SMART & PROACTIVE
 // Now captures:
 // - Bundler errors (missing deps, syntax errors)
 // - Runtime errors (component crashes, undefined errors)
 // - Console errors from the preview iframe
 // - React error boundaries (component stack)
+// - Proactive monitoring with debouncing
 // ============================================================================
 
 export const SandpackErrorListener = ({ onErrorDetected }: ErrorListenerProps) => {
   const { sandpack } = useSandpack();
   const lastErrorRef = useRef<string | null>(null);
+  const lastErrorTimeRef = useRef<number>(0);
   const debugContext = useDebugContextSafe();
+  const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Debounced error handler to prevent spam
+  const handleError = useCallback((errorMsg: string, source: string) => {
+    const now = Date.now();
+    // Debounce: ignore same error within 2 seconds
+    if (lastErrorRef.current === errorMsg && now - lastErrorTimeRef.current < 2000) {
+      return;
+    }
+    
+    lastErrorRef.current = errorMsg;
+    lastErrorTimeRef.current = now;
+    
+    console.log(`🔥 [SandpackErrorListener] Error from ${source}:`, errorMsg.substring(0, 100));
+    onErrorDetected(errorMsg);
+  }, [onErrorDetected]);
 
   // Listen for messages from the preview iframe (console errors, React errors)
   useEffect(() => {
@@ -36,9 +54,9 @@ export const SandpackErrorListener = ({ onErrorDetected }: ErrorListenerProps) =
           });
         }
         
-        // For errors, also trigger the legacy callback
+        // For errors, also trigger the callback
         if (method === 'error') {
-          onErrorDetected(message);
+          handleError(message, 'console');
         }
       }
       
@@ -56,9 +74,8 @@ export const SandpackErrorListener = ({ onErrorDetected }: ErrorListenerProps) =
           });
         }
         
-        // Also trigger the legacy callback
         if (message) {
-          onErrorDetected(message);
+          handleError(message, 'react-error');
         }
       }
       
@@ -80,18 +97,14 @@ export const SandpackErrorListener = ({ onErrorDetected }: ErrorListenerProps) =
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [onErrorDetected, debugContext]);
+  }, [handleError, debugContext]);
 
-  // Monitor Sandpack bundler/runtime status
+  // Monitor Sandpack bundler/runtime status - PROACTIVE checking
   useEffect(() => {
-    // Check for bundler-level errors (like missing dependencies)
-    // This catches errors like "Could not find dependency: 'react-router-dom'"
-    if (sandpack.status === 'idle' && sandpack.error) {
-      const errorMsg = sandpack.error.message || String(sandpack.error);
-      
-      // Only trigger if this is a new error (prevent loops)
-      if (lastErrorRef.current !== errorMsg) {
-        lastErrorRef.current = errorMsg;
+    const checkForErrors = () => {
+      // Check for bundler-level errors
+      if (sandpack.error) {
+        const errorMsg = sandpack.error.message || String(sandpack.error);
         
         // Determine error type
         let errorType: 'build' | 'syntax' | 'runtime' = 'runtime';
@@ -106,18 +119,15 @@ export const SandpackErrorListener = ({ onErrorDetected }: ErrorListenerProps) =
         let line: number | undefined;
         let column: number | undefined;
         
-        // Try to extract file path from error message
         const fileMatch = errorMsg.match(/(?:in|at)\s+([\/\w.-]+\.(?:js|jsx|ts|tsx))/i);
         if (fileMatch) file = fileMatch[1];
         
-        // Try to extract line number
         const lineMatch = errorMsg.match(/:(\d+)(?::(\d+))?/);
         if (lineMatch) {
           line = parseInt(lineMatch[1], 10);
           if (lineMatch[2]) column = parseInt(lineMatch[2], 10);
         }
         
-        // Capture to debug context if available
         if (debugContext) {
           debugContext.captureError({
             type: errorType,
@@ -145,24 +155,38 @@ export const SandpackErrorListener = ({ onErrorDetected }: ErrorListenerProps) =
           errorMsg.includes("Cannot read properties") ||
           errorMsg.includes("TypeError") ||
           errorMsg.includes("ReferenceError") ||
-          errorMsg.includes("SyntaxError")
+          errorMsg.includes("SyntaxError") ||
+          errorMsg.includes("Error:") ||
+          errorMsg.includes("failed to compile")
         ) {
-          console.log("🔥 WAKTI DETECTED CRASH:", errorMsg);
-          onErrorDetected(errorMsg);
+          handleError(errorMsg, 'sandpack-bundler');
         }
       }
-    }
-    
-    // Clear last error when status becomes running (successful)
-    if (sandpack.status === 'running') {
+    };
+
+    // Check immediately
+    checkForErrors();
+
+    // Also set up interval for proactive checking (every 500ms)
+    checkIntervalRef.current = setInterval(checkForErrors, 500);
+
+    return () => {
+      if (checkIntervalRef.current) {
+        clearInterval(checkIntervalRef.current);
+      }
+    };
+  }, [sandpack.status, sandpack.error, handleError, debugContext]);
+
+  // Clear last error when status becomes running (successful)
+  useEffect(() => {
+    if (sandpack.status === 'running' && !sandpack.error) {
       lastErrorRef.current = null;
       
-      // If we have a debug context, mark that the preview is now healthy
       if (debugContext?.session?.status === 'auto-fixing') {
         console.log('[SandpackErrorListener] Preview now running - fix may have worked!');
       }
     }
-  }, [sandpack.status, sandpack.error, onErrorDetected, debugContext]);
+  }, [sandpack.status, sandpack.error, debugContext]);
 
   return null; // This component is invisible
 };
