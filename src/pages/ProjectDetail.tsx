@@ -5173,11 +5173,27 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
             const imageKeywords = /\b(image|photo|picture|background|img|صورة|صور|خلفية)\b/i;
             const changeToPattern = /\b(change|replace|swap|switch|update|set|make|add|use|غير|غيّر|بدل|استبدل|استخدم)\b.*?\b(to|with|of|into|as|إلى|ب)\b\s*(.+)/i;
             const imageOfPattern = /\b(image|photo|picture|صورة|صور)\s*(of|about|for|عن|من)\s*(.+)/i;
-            
+
             const isImageRequest = imageKeywords.test(prompt);
             const changeMatch = prompt.match(changeToPattern);
             const imageOfMatch = prompt.match(imageOfPattern);
-            
+
+            // If user is editing a carousel/gallery and asks to change images (plural), enable multi-select
+            const selClass = selectedElementInfo?.className || '';
+            const selTag = selectedElementInfo?.openingTag || '';
+            const isMultiImageContext = /carousel|slider|swiper|slick|embla|gallery|grid.*image|photo.*grid/i.test(selClass + ' ' + selTag);
+            const wantsMultiFromPrompt = /\b(images|photos|pictures|slides)\b/i.test(prompt) || /(?:غير\s*الصور|تغيير\s*الصور|صور)/i.test(prompt);
+
+            if (isMultiImageContext && wantsMultiFromPrompt) {
+              setIsChangingCarouselImages(true);
+              setPhotoSearchTerm(''); // Start fresh - user searches manually
+              setPhotoSelectorInitialTab('stock');
+              setPhotoSelectorMultiSelect(true);
+              setShowStockPhotoSelector(true);
+              setShowElementEditPopover(false);
+              return;
+            }
+
             // Extract search term from the prompt
             let searchTerm = '';
             if (changeMatch && changeMatch[3]) {
@@ -5191,9 +5207,9 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
               );
               searchTerm = words.slice(0, 3).join(' ');
             }
-            
+
             if (isImageRequest && searchTerm) {
-              // Store the element info and open Freepik selector
+              // Store the element info and open Freepik selector (single-image replacement)
               setPendingElementImageEdit({
                 elementInfo: selectedElementInfo,
                 originalPrompt: prompt
@@ -5206,7 +5222,7 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
               // Don't clear selectedElementInfo yet - we need it for the image replacement
               return;
             }
-            
+
             // Non-image request: proceed with AI edit as before
             const contextPrompt = `For the ${selectedElementInfo.tagName} element ${selectedElementInfo.className ? `with class "${selectedElementInfo.className.split(' ')[0]}"` : ''} containing "${selectedElementInfo.innerText.substring(0, 50)}...": ${prompt}`;
             setChatInput(contextPrompt);
