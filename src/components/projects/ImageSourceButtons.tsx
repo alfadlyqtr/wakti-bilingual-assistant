@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
-import { Image, FolderOpen, Wand2, Link } from 'lucide-react';
+import { Image, FolderOpen, Wand2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type ImageSourceChoice = 'stock' | 'uploads' | 'generate' | 'urls';
@@ -15,6 +15,7 @@ export function ImageSourceButtons({ onSelect, prompt }: ImageSourceButtonsProps
   const { language } = useTheme();
   const isRTL = language === 'ar';
 
+  // Removed "Provide URLs" option - users can just paste URLs directly in chat
   const options: {
     id: ImageSourceChoice;
     icon: React.ReactNode;
@@ -42,13 +43,6 @@ export function ImageSourceButtons({ onSelect, prompt }: ImageSourceButtonsProps
       emoji: '🤖',
       title: 'Auto-Generate',
       titleAr: 'إنشاء تلقائي',
-    },
-    {
-      id: 'urls',
-      icon: <Link className="w-4 h-4" />,
-      emoji: '✏️',
-      title: 'Provide URLs',
-      titleAr: 'روابط',
     },
   ];
 
