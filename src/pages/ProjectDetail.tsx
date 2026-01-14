@@ -2339,18 +2339,74 @@ Remember: Do NOT use react-router-dom - use state-based navigation instead.`;
   };
   
   // Handler for multi-select photos
-  const handleStockPhotosSelect = (photos: { url: string; title: string }[]) => {
+  const handleStockPhotosSelect = async (photos: { url: string; title: string }[]) => {
     if (photos.length === 0) return;
     
-    // Create message with all selected photos
-    const photoUrls = photos.map(p => p.url);
-    const photoMessage = language === 'ar' 
-      ? `تم اختيار ${photos.length} صور:\n${photoUrls.join('\n')}`
-      : `Selected ${photos.length} photos:\n${photoUrls.join('\n')}`;
+    // Check if this is for an element image edit (single photo case)
+    if (pendingElementImageEdit && photos.length === 1) {
+      handleStockPhotoSelect(photos[0]);
+      return;
+    }
     
-    // Add to chat or handle as needed
-    console.log('Multiple photos selected:', photos);
-    toast.success(language === 'ar' ? `تم اختيار ${photos.length} صور` : `${photos.length} photos selected`);
+    // Show loading toast
+    const photoCount = photos.length;
+    const loadingToast = toast.loading(
+      language === 'ar' 
+        ? `جاري تحميل ${photoCount} ${photoCount === 1 ? 'صورة' : 'صور'}...` 
+        : `Loading ${photoCount} ${photoCount === 1 ? 'photo' : 'photos'}...`
+    );
+    
+    try {
+      // Fetch and attach all photos
+      const newAttachments: { file: File; preview: string }[] = [];
+      
+      for (const photo of photos) {
+        try {
+          const response = await fetch(photo.url);
+          const blob = await response.blob();
+          const file = new File([blob], photo.title || `photo-${Date.now()}.jpg`, { 
+            type: blob.type || 'image/jpeg' 
+          });
+          
+          // Convert to base64 for preview
+          const preview = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target?.result as string);
+            reader.readAsDataURL(file);
+          });
+          
+          newAttachments.push({ file, preview });
+        } catch (err) {
+          console.error(`Failed to fetch photo: ${photo.title}`, err);
+        }
+      }
+      
+      // Add all photos to attached images
+      if (newAttachments.length > 0) {
+        setAttachedImages(prev => [...prev, ...newAttachments]);
+        toast.dismiss(loadingToast);
+        const successCount = newAttachments.length;
+        toast.success(
+          language === 'ar' 
+            ? `تم إرفاق ${successCount} ${successCount === 1 ? 'صورة' : 'صور'}` 
+            : `${successCount} ${successCount === 1 ? 'photo' : 'photos'} attached`
+        );
+      } else {
+        toast.dismiss(loadingToast);
+        toast.error(
+          language === 'ar' 
+            ? 'فشل في تحميل الصور' 
+            : 'Failed to load photos'
+        );
+      }
+    } catch (err) {
+      toast.dismiss(loadingToast);
+      toast.error(
+        language === 'ar' 
+          ? 'حدث خطأ أثناء تحميل الصور' 
+          : 'Error loading photos'
+      );
+    }
   };
 
   const handlePaste = async (e: ClipboardEvent) => {

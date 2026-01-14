@@ -598,12 +598,20 @@ export function StockPhotoSelector({
         <div className="p-4 border-t shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))] bg-background">
           {multiSelect ? (
             <div className="flex flex-col gap-3">
-              {/* Selection counter */}
-              {selectedPhotos.length > 0 && (
-                <div className="text-center text-sm font-medium text-primary">
-                  {isRTL ? `${selectedPhotos.length} صور مختارة` : `${selectedPhotos.length} photo${selectedPhotos.length > 1 ? 's' : ''} selected`}
-                </div>
-              )}
+              {/* Selection counter - always visible with status */}
+              <div className="text-center text-sm font-medium">
+                {selectedPhotos.length > 0 ? (
+                  <span className="text-primary">
+                    {isRTL 
+                      ? `${selectedPhotos.length} ${selectedPhotos.length === 1 ? 'صورة مختارة' : 'صور مختارة'}` 
+                      : `${selectedPhotos.length} ${selectedPhotos.length === 1 ? 'photo' : 'photos'} selected`}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">
+                    {isRTL ? 'لم يتم اختيار أي صور' : 'No photos selected'}
+                  </span>
+                )}
+              </div>
               {/* Full-width buttons for mobile */}
               <div className="flex gap-3">
                 <Button 
