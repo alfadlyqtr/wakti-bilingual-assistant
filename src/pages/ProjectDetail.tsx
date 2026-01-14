@@ -1370,7 +1370,7 @@ export default function ProjectDetail() {
       setPublishing(true);
       
       // Build the files to publish from generatedFiles (multi-file project)
-      const projectFiles: Record<string, string> = 
+      let projectFiles: Record<string, string> = 
         Object.keys(generatedFiles).length > 0 
           ? { ...generatedFiles } 
           : { "/App.js": codeContent };
@@ -1379,6 +1379,13 @@ export default function ProjectDetail() {
       if (codeContent) {
         projectFiles["/App.js"] = codeContent;
       }
+      
+      // CRITICAL: Replace {{PROJECT_ID}} placeholder with actual project ID
+      // This ensures forms work correctly on published sites
+      for (const [path, content] of Object.entries(projectFiles)) {
+        projectFiles[path] = content.replace(/\{\{PROJECT_ID\}\}/g, id || '');
+      }
+      console.log('[Publish] Replaced PROJECT_ID placeholders in', Object.keys(projectFiles).length, 'files');
 
       const finalSubdomain = subdomainInput.toLowerCase();
 
