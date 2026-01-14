@@ -74,6 +74,27 @@ const WaktiAIV2 = () => {
     };
   }, []);
 
+  // Listen for quick action prompts from EnhancedQuickActions component
+  useEffect(() => {
+    const handleQuickActionPrompt = (event: CustomEvent) => {
+      const prompt = event.detail?.prompt;
+      if (prompt && typeof prompt === 'string' && !isLoading) {
+        // Set the message and trigger send
+        setMessage(prompt);
+        // Auto-send after a brief delay to allow state update
+        setTimeout(() => {
+          const submitEvent = new CustomEvent('wakti-auto-submit');
+          window.dispatchEvent(submitEvent);
+        }, 100);
+      }
+    };
+
+    window.addEventListener('wakti-quick-prompt', handleQuickActionPrompt as EventListener);
+    return () => {
+      window.removeEventListener('wakti-quick-prompt', handleQuickActionPrompt as EventListener);
+    };
+  }, [isLoading]);
+
   const handleRefreshConversations = useCallback(() => {
     const archived = EnhancedFrontendMemory.loadArchivedConversations();
     setArchivedConversations(Array.isArray(archived) ? archived : []);
@@ -303,6 +324,35 @@ const WaktiAIV2 = () => {
     const assistantMessageId = `assistant-${Date.now()}`;
     // Detect YouTube-prefixed query to style the loading bubble correctly
     const isYouTubeQuery = (typeof messageContent === 'string') && /^(?:\s*yt:\s*|\s*yt\s+)/i.test(messageContent);
+    
+    // Track start time for thinking duration calculation
+    const startTime = Date.now();
+    
+    // Map trigger to expected tool calls for ToolUsageIndicator
+    const getInitialToolCalls = () => {
+      const baseTool = { id: `tool-${Date.now()}`, status: 'running' as const, duration: 0 };
+      switch (trigger) {
+        case 'search':
+          return [
+            { ...baseTool, id: `tool-1`, name: 'Web Search', icon: 'globe' },
+            { ...baseTool, id: `tool-2`, name: 'AI Analysis', icon: 'brain', status: 'pending' as const }
+          ];
+        case 'image':
+          return [
+            { ...baseTool, id: `tool-1`, name: 'Image Generation', icon: 'image' }
+          ];
+        case 'vision':
+          return [
+            { ...baseTool, id: `tool-1`, name: 'Vision Analysis', icon: 'eye' },
+            { ...baseTool, id: `tool-2`, name: 'AI Processing', icon: 'brain', status: 'pending' as const }
+          ];
+        default:
+          return [
+            { ...baseTool, id: `tool-1`, name: 'AI Processing', icon: 'brain' }
+          ];
+      }
+    };
+    
     const assistantPlaceholder: AIMessage = {
       id: assistantMessageId,
       role: 'assistant',
@@ -311,6 +361,9 @@ const WaktiAIV2 = () => {
       intent: trigger,
       metadata: {
         loading: true,
+        startTime,
+        toolsUsed: getInitialToolCalls().length,
+        toolCalls: getInitialToolCalls(),
         ...(trigger === 'image' ? { loadingStage: 'generating', progress: 0 } : {}),
         ...(trigger === 'search' && isYouTubeQuery ? { youtubeLoading: true } : {})
       },
@@ -372,10 +425,21 @@ const WaktiAIV2 = () => {
 
         const responseAny = response as any;
         const resolvedImageUrl = responseAny?.imageUrl || responseAny?.url || responseAny?.image_url || responseAny?.imageURL;
+        const endTime = Date.now();
+        const thinkingDuration = Math.round((endTime - startTime) / 1000);
+        
         const finalAssistantMessage: AIMessage = {
           ...assistantPlaceholder,
           content: response.response,
-          metadata: { loading: false, ...response.metadata },
+          metadata: { 
+            loading: false, 
+            ...response.metadata,
+            thinkingDuration,
+            toolsUsed: 1,
+            toolCalls: [
+              { id: 'img-1', name: 'Image Generation', icon: 'image', status: 'completed', duration: thinkingDuration }
+            ]
+          },
           intent: trigger,
           ...(resolvedImageUrl ? { imageUrl: resolvedImageUrl } : {})
         };
@@ -415,10 +479,22 @@ const WaktiAIV2 = () => {
           effectiveChatSubmode // Pass chatSubmode for Study mode support in Vision
         );
 
+        const visionEndTime = Date.now();
+        const visionThinkingDuration = Math.round((visionEndTime - startTime) / 1000);
+        
         const finalAssistantMessage: AIMessage = {
           ...assistantPlaceholder,
           content: streamedResp?.response ?? streamed,
-          metadata: { loading: false, ...streamMeta },
+          metadata: { 
+            loading: false, 
+            ...streamMeta,
+            thinkingDuration: visionThinkingDuration,
+            toolsUsed: 2,
+            toolCalls: [
+              { id: 'vision-1', name: 'Vision Analysis', icon: 'eye', status: 'completed', duration: Math.round(visionThinkingDuration * 0.6) },
+              { id: 'vision-2', name: 'AI Processing', icon: 'brain', status: 'completed', duration: Math.round(visionThinkingDuration * 0.4) }
+            ]
+          },
           intent: trigger,
         };
 
@@ -450,10 +526,22 @@ const WaktiAIV2 = () => {
             controller.signal
           );
 
+          const ytEndTime = Date.now();
+          const ytThinkingDuration = Math.round((ytEndTime - startTime) / 1000);
+          
           const finalAssistantMessage: AIMessage = {
             ...assistantPlaceholder,
             content: (response as any)?.response || '',
-            metadata: { loading: false, ...(response as any)?.metadata },
+            metadata: { 
+              loading: false, 
+              ...(response as any)?.metadata,
+              thinkingDuration: ytThinkingDuration,
+              toolsUsed: 2,
+              toolCalls: [
+                { id: 'yt-1', name: 'YouTube Search', icon: 'video', status: 'completed', duration: Math.round(ytThinkingDuration * 0.6) },
+                { id: 'yt-2', name: 'AI Analysis', icon: 'brain', status: 'completed', duration: Math.round(ytThinkingDuration * 0.4) }
+              ]
+            },
             intent: trigger,
           };
 
@@ -491,10 +579,34 @@ const WaktiAIV2 = () => {
           chatSubmodeParam || 'chat' // Pass chatSubmode for Study mode support
         );
 
+        const streamEndTime = Date.now();
+        const streamThinkingDuration = Math.round((streamEndTime - startTime) / 1000);
+        
+        // Determine tool calls based on trigger
+        const getCompletedToolCalls = () => {
+          switch (trigger) {
+            case 'search':
+              return [
+                { id: 'search-1', name: 'Web Search', icon: 'globe', status: 'completed' as const, duration: Math.round(streamThinkingDuration * 0.5) },
+                { id: 'search-2', name: 'AI Analysis', icon: 'brain', status: 'completed' as const, duration: Math.round(streamThinkingDuration * 0.5) }
+              ];
+            default:
+              return [
+                { id: 'chat-1', name: 'AI Processing', icon: 'brain', status: 'completed' as const, duration: streamThinkingDuration }
+              ];
+          }
+        };
+        
         const finalAssistantMessage: AIMessage = {
           ...assistantPlaceholder,
           content: streamedResp?.response ?? streamed,
-          metadata: { loading: false, ...streamMeta },
+          metadata: { 
+            loading: false, 
+            ...streamMeta,
+            thinkingDuration: streamThinkingDuration,
+            toolsUsed: getCompletedToolCalls().length,
+            toolCalls: getCompletedToolCalls()
+          },
           intent: trigger,
         };
 
@@ -507,18 +619,36 @@ const WaktiAIV2 = () => {
 
     } catch (error: any) {
       console.error('Error sending message:', error);
+      const errorEndTime = Date.now();
       // If we already streamed some content (e.g., fallback provider succeeded), keep it.
       setSessionMessages(prev => {
         const hadStream = !!prev.find(m => m.id === assistantMessageId)?.content;
+        const placeholderMsg = prev.find(m => m.id === assistantMessageId);
+        const errorStartTime = (placeholderMsg?.metadata as any)?.startTime || errorEndTime;
+        const thinkingDuration = Math.round((errorEndTime - errorStartTime) / 1000);
+        
         const finalMessages = prev.map(m => {
           if (m.id !== assistantMessageId) return m;
           if (hadStream) {
-            return { ...m, metadata: { ...(m.metadata || {}), loading: false } };
+            return { ...m, metadata: { ...(m.metadata || {}), loading: false, thinkingDuration } };
           }
           return {
             ...m,
-            content: 'Sorry, I encountered an error. Please try again.',
-            metadata: { loading: false, error: true },
+            content: language === 'ar' ? 'عذراً، حدث خطأ. يرجى المحاولة مرة أخرى.' : 'Sorry, I encountered an error. Please try again.',
+            metadata: { 
+              loading: false, 
+              error: true,
+              errorTitle: language === 'ar' ? 'فشل الطلب' : 'Request Failed',
+              errorTitleAr: 'فشل الطلب',
+              errorMessage: error?.message || (language === 'ar' ? 'حدث خطأ غير متوقع' : 'An unexpected error occurred'),
+              errorMessageAr: error?.message || 'حدث خطأ غير متوقع',
+              errorSeverity: 'error',
+              suggestedAction: language === 'ar' ? 'حاول مرة أخرى أو أعد صياغة سؤالك' : 'Try again or rephrase your question',
+              suggestedActionAr: 'حاول مرة أخرى أو أعد صياغة سؤالك',
+              thinkingDuration,
+              toolsUsed: 1,
+              toolCalls: [{ id: 'error-1', name: 'AI Processing', icon: 'brain', status: 'completed', duration: thinkingDuration }]
+            },
           };
         });
         EnhancedFrontendMemory.saveActiveConversation(finalMessages, convId);
