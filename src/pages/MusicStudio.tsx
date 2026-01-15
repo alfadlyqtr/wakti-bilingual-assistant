@@ -98,86 +98,12 @@ interface SavedVideo {
 }
 
 function VideoPlayer({ url, language }: { url: string; language: string }) {
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-    let objectUrl: string | null = null;
-    const controller = new AbortController();
-    const isBlob = url.startsWith('blob:') || url.startsWith('data:');
-    const isSupabaseStorage = url.includes('/storage/v1/') || url.includes('supabase.co/storage');
-    const shouldFetch = !isBlob && isSupabaseStorage;
-
-    if (!shouldFetch) {
-      setBlobUrl(null);
-      setError(null);
-      setLoading(false);
-      return () => {
-        mounted = false;
-        controller.abort();
-        if (objectUrl) URL.revokeObjectURL(objectUrl);
-      };
-    }
-
-    const fetchVideo = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const response = await fetch(url, { signal: controller.signal });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const blob = await response.blob();
-        const headerType = response.headers.get('content-type') || '';
-        const mime = blob.type || headerType || 'video/mp4';
-        const videoBlob = new Blob([blob], { type: mime });
-        objectUrl = URL.createObjectURL(videoBlob);
-        if (mounted) {
-          setBlobUrl(objectUrl);
-          setLoading(false);
-        }
-      } catch (err) {
-        if ((err as any)?.name === 'AbortError') return;
-        console.error('Video fetch error:', err);
-        if (mounted) {
-          setError(language === 'ar' ? 'فشل تحميل الفيديو' : 'Failed to load video');
-          setLoading(false);
-        }
-      }
-    };
-
-    fetchVideo();
-    return () => {
-      mounted = false;
-      controller.abort();
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [language, url]);
-
-  if (loading) {
-    return (
-      <div className="px-3 pb-3">
-        <div className="w-full h-48 bg-black rounded-lg flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-white" />
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="px-3 pb-3">
-        <div className="w-full h-48 bg-black rounded-lg flex items-center justify-center text-white text-sm">
-          {error}
-        </div>
-      </div>
-    );
-  }
-
+  // Use URL directly - no fetch needed for public Supabase storage URLs
+  // Fetching causes CORS/COEP issues on iPhone Safari
   return (
     <div className="px-3 pb-3">
       <video
-        src={blobUrl || url}
+        src={url}
         controls
         autoPlay
         playsInline

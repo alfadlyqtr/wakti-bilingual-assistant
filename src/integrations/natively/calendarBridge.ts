@@ -190,30 +190,33 @@ export function createCalendarEvent(
   }
 
   try {
-    // SDK expects ALL STRING parameters - no nulls allowed per docs
-    // Format: "2025-07-10 14:00:00.000" for dates
-    const startDateStr = formatDateForNatively(startDate);
-    const endDateStr = formatDateForNatively(endDate);
+    // Prepare string parameters
     const timezoneStr = timezone?.trim() || 'UTC';
-    // calendarId MUST be a string - use empty string if not provided (SDK requires it)
     const calendarIdStr = calendarId?.trim() || '';
     const descriptionStr = description?.trim() || '';
+    
+    // Format dates as strings in Natively expected format: "2025-07-10 14:00:00.000"
+    const startDateStr = formatDateForNatively(startDate);
+    const endDateStr = formatDateForNatively(endDate);
 
     console.log('[NativelyCalendar] ===== CREATE EVENT DEBUG =====');
-    console.log('[NativelyCalendar] title:', title, '| type:', typeof title);
-    console.log('[NativelyCalendar] endDate:', endDateStr, '| type:', typeof endDateStr);
-    console.log('[NativelyCalendar] startDate:', startDateStr, '| type:', typeof startDateStr);
-    console.log('[NativelyCalendar] timezone:', timezoneStr, '| type:', typeof timezoneStr);
-    console.log('[NativelyCalendar] calendarId:', calendarIdStr, '| type:', typeof calendarIdStr, '| length:', calendarIdStr.length);
-    console.log('[NativelyCalendar] description:', descriptionStr, '| type:', typeof descriptionStr);
+    console.log('[NativelyCalendar] title:', title);
+    console.log('[NativelyCalendar] startDate (Date):', startDate);
+    console.log('[NativelyCalendar] startDate (string):', startDateStr);
+    console.log('[NativelyCalendar] endDate (Date):', endDate);
+    console.log('[NativelyCalendar] endDate (string):', endDateStr);
+    console.log('[NativelyCalendar] timezone:', timezoneStr);
+    console.log('[NativelyCalendar] calendarId:', calendarIdStr);
+    console.log('[NativelyCalendar] description:', descriptionStr);
     console.log('[NativelyCalendar] ==============================');
 
     // SDK signature from docs: createCalendarEvent(title, endDate, startDate, timezone, calendarId, description, callback)
-    // ALL params must be strings - no null/undefined
+    // Docs show string dates, but SDK might expect Date objects - try passing Date objects
+    // If that fails, the SDK will call toISOString() on them which should work
     cal.createCalendarEvent(
       title,
-      endDateStr,
-      startDateStr,
+      endDate,      // Pass Date object - SDK may call toISOString() internally
+      startDate,    // Pass Date object - SDK may call toISOString() internally
       timezoneStr,
       calendarIdStr,
       descriptionStr,
