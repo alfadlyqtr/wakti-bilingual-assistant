@@ -391,28 +391,34 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     }
     
     // First, retrieve available calendars from the device
-    const calendarId = await new Promise<string | null>((resolve) => {
+    const calendarResult = await new Promise<{ calendarId: string | null; error: string | null }>((resolve) => {
       retrieveCalendars((result) => {
-        console.log('[CalendarSync] Retrieved calendars:', result);
+        console.log('[CalendarSync] Retrieved calendars result:', result);
         if (result.status === 'SUCCESS' && result.data && result.data.length > 0) {
           // Use the first available calendar
-          resolve(result.data[0].id);
+          resolve({ calendarId: result.data[0].id, error: null });
+        } else if (result.status === 'SUCCESS' && result.data && result.data.length === 0) {
+          // Success but no calendars - try with empty string (SDK might use default)
+          console.log('[CalendarSync] No calendars returned, will try with empty calendarId');
+          resolve({ calendarId: '', error: null });
         } else {
-          console.warn('[CalendarSync] No calendars available or failed to retrieve:', result.error);
-          resolve(null);
+          console.warn('[CalendarSync] Failed to retrieve calendars:', result.error);
+          resolve({ calendarId: null, error: result.error || 'Unknown error' });
         }
       });
     });
     
-    console.log('[CalendarSync] Using calendar ID:', calendarId);
+    const calendarId = calendarResult.calendarId;
+    console.log('[CalendarSync] Using calendar ID:', calendarId, '| Error:', calendarResult.error);
     
-    // If no calendar access, show error and stop
-    if (!calendarId) {
+    // If calendar retrieval completely failed (not just empty), show error
+    if (calendarId === null) {
       setIsSyncing(false);
+      const errorDetail = calendarResult.error || '';
       toast.error(
         language === 'ar' 
-          ? 'لا يمكن الوصول إلى التقويم. يرجى السماح بالوصول في الإعدادات → الخصوصية → التقويمات → Wakti' 
-          : 'Cannot access calendar. Please allow access in Settings → Privacy → Calendars → Wakti'
+          ? `لا يمكن الوصول إلى التقويم: ${errorDetail}. يرجى السماح بالوصول في الإعدادات → الخصوصية → التقويمات → Wakti` 
+          : `Cannot access calendar: ${errorDetail}. Please allow access in Settings → Privacy → Calendars → Wakti`
       );
       return;
     }

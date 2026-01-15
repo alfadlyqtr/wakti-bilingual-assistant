@@ -63,25 +63,14 @@ export default function VideoShare() {
 
         setVideo(data as VideoData);
 
-        // Get video URL from storage
-        // Important: app runs with COEP/COI (for FFmpeg/SharedArrayBuffer), which blocks
-        // direct cross-origin media loading. Fetch as blob and use a local object URL.
+        // Get video URL from storage (bucket is public, use public URL for best compatibility)
         if (data.storage_path) {
-          const { data: urlData } = await supabase.storage
+          const { data: urlData } = supabase.storage
             .from('videos')
-            .createSignedUrl(data.storage_path, 3600); // 1 hour expiry
+            .getPublicUrl(data.storage_path);
 
-          if (urlData?.signedUrl) {
-            try {
-              const resp = await fetch(urlData.signedUrl);
-              if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-              const blob = await resp.blob();
-              const objUrl = URL.createObjectURL(blob);
-              setVideoUrl(objUrl);
-            } catch (e) {
-              console.error('Video fetch error:', e);
-              setVideoUrl(urlData.signedUrl);
-            }
+          if (urlData?.publicUrl) {
+            setVideoUrl(urlData.publicUrl);
           }
         } else if (data.video_url) {
           setVideoUrl(data.video_url);

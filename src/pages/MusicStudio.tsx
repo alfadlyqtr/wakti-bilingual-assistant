@@ -218,28 +218,16 @@ function SavedVideosTab({ onCreate }: { onCreate: () => void }) {
           let thumbnailSignedUrl: string | null = null;
 
           if (v.storage_path) {
-            const { data: urlData, error: urlErr } = await supabase.storage.from('videos').createSignedUrl(v.storage_path, 3600);
-            if (urlErr) {
-              console.error('[MusicStudio] Signed URL error:', urlErr);
-              const { data: pubData } = supabase.storage.from('videos').getPublicUrl(v.storage_path);
-              signedUrl = pubData?.publicUrl || null;
-            } else {
-              signedUrl = urlData?.signedUrl || null;
-            }
+            const { data: pubData } = supabase.storage.from('videos').getPublicUrl(v.storage_path);
+            signedUrl = pubData?.publicUrl || null;
           } else if (v.video_url) {
             signedUrl = v.video_url;
           }
 
           if ((v as any).thumbnail_url) {
             const thumbPath = (v as any).thumbnail_url as string;
-            const { data: tSigned, error: tErr } = await supabase.storage.from('videos').createSignedUrl(thumbPath, 3600);
-            if (tErr) {
-              console.error('[MusicStudio] Thumbnail signed URL error:', tErr);
-              const { data: tUrl } = supabase.storage.from('videos').getPublicUrl(thumbPath);
-              thumbnailSignedUrl = tUrl?.publicUrl || null;
-            } else {
-              thumbnailSignedUrl = tSigned?.signedUrl || null;
-            }
+            const { data: tUrl } = supabase.storage.from('videos').getPublicUrl(thumbPath);
+            thumbnailSignedUrl = tUrl?.publicUrl || null;
           }
 
           return { ...v, signedUrl, thumbnailSignedUrl, source: 'user' };

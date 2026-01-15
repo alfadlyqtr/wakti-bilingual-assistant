@@ -3313,6 +3313,101 @@ ${fixInstructions}
   // Ref to store wizard prompt for direct submission
   const wizardPromptRef = useRef<string | null>(null);
 
+  const getBackendAnswer = (
+    message: string,
+    context: typeof backendContext,
+    isRTL: boolean
+  ): string | null => {
+    if (!context) return null;
+    if (!context.enabled) {
+      return isRTL
+        ? 'لوحة الخلفية غير مفعّلة لهذا المشروع بعد.'
+        : 'The backend is not enabled for this project yet.';
+    }
+
+    const text = message.toLowerCase();
+    const asksCount = /(how many|count|عدد|كم)/i.test(message);
+
+    const listNames = (items: Array<{ name: string }>) =>
+      items.length > 0
+        ? items.map(item => item.name).slice(0, 6).join(', ')
+        : isRTL
+          ? 'لا توجد عناصر بعد.'
+          : 'No items yet.';
+
+    if (/(products?|منتجات)/i.test(message)) {
+      if (asksCount) {
+        return isRTL
+          ? `لديك ${context.productsCount} منتجًا.`
+          : `You have ${context.productsCount} products.`;
+      }
+      return isRTL
+        ? `المنتجات الحالية: ${listNames(context.products)}.`
+        : `Current products: ${listNames(context.products)}.`;
+    }
+
+    if (/(services?|خدمات)/i.test(message)) {
+      if (asksCount) {
+        return isRTL
+          ? `لديك ${context.servicesCount} خدمة.`
+          : `You have ${context.servicesCount} services.`;
+      }
+      return isRTL
+        ? `الخدمات الحالية: ${listNames(context.services)}.`
+        : `Current services: ${listNames(context.services)}.`;
+    }
+
+    if (/(orders?|طلبات)/i.test(message)) {
+      return isRTL
+        ? `لديك ${context.ordersCount} طلبًا.`
+        : `You have ${context.ordersCount} orders.`;
+    }
+
+    if (/(bookings?|حجوزات)/i.test(message)) {
+      return isRTL
+        ? `لديك ${context.bookingsCount} حجزًا.`
+        : `You have ${context.bookingsCount} bookings.`;
+    }
+
+    if (/(uploads?|ملفات|مرفوعات)/i.test(message)) {
+      return isRTL
+        ? `لديك ${context.uploadsCount} ملفًا مرفوعًا.`
+        : `You have ${context.uploadsCount} uploads.`;
+    }
+
+    if (/(forms?|submissions?|نماذج|إرسالات)/i.test(message)) {
+      return isRTL
+        ? `لديك ${context.formSubmissionsCount} إرسالًا للنماذج.`
+        : `You have ${context.formSubmissionsCount} form submissions.`;
+    }
+
+    if (/(users?|عملاء|مستخدمين)/i.test(message)) {
+      return isRTL
+        ? `لديك ${context.siteUsersCount} مستخدمًا في الموقع.`
+        : `You have ${context.siteUsersCount} site users.`;
+    }
+
+    if (/(collections?|مجموعات|داتا|بيانات)/i.test(message)) {
+      return isRTL
+        ? `عدد المجموعات: ${context.collections.length}.`
+        : `Collections count: ${context.collections.length}.`;
+    }
+
+    if (/(chat rooms?|غرف المحادثة)/i.test(message)) {
+      return isRTL
+        ? `لديك ${context.chatRoomsCount} غرفة محادثة.`
+        : `You have ${context.chatRoomsCount} chat rooms.`;
+    }
+
+    if (/(comments?|تعليقات)/i.test(message)) {
+      return isRTL
+        ? `لديك ${context.commentsCount} تعليقًا.`
+        : `You have ${context.commentsCount} comments.`;
+    }
+
+    return null;
+  };
+
   const handleChatSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -3429,6 +3524,52 @@ ${fixInstructions}
             id: `contact-wizard-${Date.now()}`,
             role: 'assistant',
             content: contactWizardContent
+          }]);
+        }
+        return;
+      }
+    }
+
+    const isBackendQuestion = /\b(how many|count|what|which|list|كم|عدد|ما|كم عدد)\b/i.test(userMessage) &&
+      /(products?|services?|orders?|bookings?|uploads?|forms?|submissions?|users?|collections?|data|chat rooms?|comments?|منتجات|خدمات|طلبات|حجوزات|مرفوعات|نماذج|إرسالات|مستخدمين|مجموعات|بيانات|تعليقات|غرف المحادثة)/i.test(userMessage);
+
+    if (!attachedImages.length && isBackendQuestion) {
+      const freshContext = backendContext || await fetchBackendContext();
+      const backendAnswer = getBackendAnswer(userMessage, freshContext, isRTL);
+      if (backendAnswer) {
+        if (!skipUserMessageSave) {
+          const { data: userMsg, error: msgError } = await supabase
+            .from('project_chat_messages' as any)
+            .insert({ project_id: id, role: 'user', content: userMessage } as any)
+            .select()
+            .single();
+
+          if (msgError) console.error('Error saving user message:', msgError);
+          if (userMsg) {
+            setChatMessages(prev => [...prev, userMsg as any]);
+          } else {
+            setChatMessages(prev => [...prev, {
+              id: `user-${Date.now()}`,
+              role: 'user',
+              content: userMessage
+            }]);
+          }
+        }
+
+        const { data: assistantMsgData, error: assistError } = await supabase
+          .from('project_chat_messages' as any)
+          .insert({ project_id: id, role: 'assistant', content: backendAnswer } as any)
+          .select()
+          .single();
+
+        if (assistError) console.error('Error saving assistant message:', assistError);
+        if (assistantMsgData) {
+          setChatMessages(prev => [...prev, assistantMsgData as any]);
+        } else {
+          setChatMessages(prev => [...prev, {
+            id: `assistant-${Date.now()}`,
+            role: 'assistant',
+            content: backendAnswer
           }]);
         }
         return;
