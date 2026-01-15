@@ -129,6 +129,9 @@ export function retrieveCalendars(callback: (result: RetrieveCalendarsResult) =>
         calendars = [{ id: String(resp.data.id) }];
       } else if (typeof resp?.data === 'string' && resp.data.length > 0) {
         calendars = [{ id: resp.data }];
+      } else if (resp?.data && typeof resp.data === 'object') {
+        const ids = Object.keys(resp.data).filter((key) => key && key.length > 0);
+        calendars = ids.map((id) => ({ id }));
       } else if (resp?.id) {
         calendars = [{ id: String(resp.id) }];
       } else if (Array.isArray(resp)) {
