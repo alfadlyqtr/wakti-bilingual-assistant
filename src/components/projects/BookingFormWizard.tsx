@@ -51,6 +51,7 @@ interface BookingFormWizardProps {
   services: BookingService[];
   onComplete: (config: BookingFormConfig, structuredPrompt: string) => void;
   onCancel: () => void;
+  onSkipWizard: () => void; // Let AI handle it directly
   originalPrompt: string;
 }
 
@@ -64,7 +65,7 @@ const DEFAULT_FIELDS: FormField[] = [
   { id: 'notes', name: 'notes', type: 'textarea', required: false, label: 'Notes', labelAr: 'ملاحظات' },
 ];
 
-export function BookingFormWizard({ services, onComplete, onCancel, originalPrompt }: BookingFormWizardProps) {
+export function BookingFormWizard({ services, onComplete, onCancel, onSkipWizard, originalPrompt }: BookingFormWizardProps) {
   const { language } = useTheme();
   const isRTL = language === 'ar';
   
@@ -401,15 +402,29 @@ Original request: ${originalPrompt}`;
       
       {/* Navigation */}
       <div className="flex items-center justify-between pt-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => step === (services.length > 0 ? 1 : 1) ? onCancel() : setStep(s => s - 1)}
-          className="text-xs"
-        >
-          {isRTL ? <ChevronRight className="h-4 w-4 mr-1" /> : <ChevronLeft className="h-4 w-4 mr-1" />}
-          {step === (services.length > 0 ? 1 : 1) ? (isRTL ? 'إلغاء' : 'Cancel') : (isRTL ? 'السابق' : 'Back')}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => step === (services.length > 0 ? 1 : 1) ? onCancel() : setStep(s => s - 1)}
+            className="text-xs"
+          >
+            {isRTL ? <ChevronRight className="h-4 w-4 mr-1" /> : <ChevronLeft className="h-4 w-4 mr-1" />}
+            {step === (services.length > 0 ? 1 : 1) ? (isRTL ? 'إلغاء' : 'Cancel') : (isRTL ? 'السابق' : 'Back')}
+          </Button>
+          
+          {step === (services.length > 0 ? 1 : 1) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onSkipWizard}
+              className="text-xs border-dashed"
+            >
+              <Sparkles className="h-3 w-3 mr-1" />
+              {isRTL ? 'دع الذكاء يتولى' : 'Let AI Handle It'}
+            </Button>
+          )}
+        </div>
         
         {step < totalSteps ? (
           <Button

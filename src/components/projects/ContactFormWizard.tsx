@@ -57,6 +57,7 @@ export interface ContactFormConfig {
 interface ContactFormWizardProps {
   onComplete: (config: ContactFormConfig, structuredPrompt: string) => void;
   onCancel: () => void;
+  onSkipWizard: () => void; // Let AI handle it directly
   originalPrompt: string;
 }
 
@@ -86,7 +87,7 @@ const COLOR_SCHEMES = [
   { id: 'slate', color: 'bg-slate-600', label: 'Slate' },
 ];
 
-export function ContactFormWizard({ onComplete, onCancel, originalPrompt }: ContactFormWizardProps) {
+export function ContactFormWizard({ onComplete, onCancel, onSkipWizard, originalPrompt }: ContactFormWizardProps) {
   const { language } = useTheme();
   const isRTL = language === 'ar';
   
@@ -607,15 +608,29 @@ Original request: ${originalPrompt}`;
       
       {/* Navigation */}
       <div className="flex items-center justify-between pt-3 border-t border-border/30">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => step === 1 ? onCancel() : setStep(s => s - 1)}
-          className="text-xs h-9"
-        >
-          {isRTL ? <ChevronRight className="h-4 w-4 mr-1" /> : <ChevronLeft className="h-4 w-4 mr-1" />}
-          {step === 1 ? (isRTL ? 'إلغاء' : 'Cancel') : (isRTL ? 'السابق' : 'Back')}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => step === 1 ? onCancel() : setStep(s => s - 1)}
+            className="text-xs h-9"
+          >
+            {isRTL ? <ChevronRight className="h-4 w-4 mr-1" /> : <ChevronLeft className="h-4 w-4 mr-1" />}
+            {step === 1 ? (isRTL ? 'إلغاء' : 'Cancel') : (isRTL ? 'السابق' : 'Back')}
+          </Button>
+          
+          {step === 1 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onSkipWizard}
+              className="text-xs h-9 border-dashed"
+            >
+              <Sparkles className="h-3 w-3 mr-1.5" />
+              {isRTL ? 'دع الذكاء يتولى' : 'Let AI Handle It'}
+            </Button>
+          )}
+        </div>
         
         {step < totalSteps ? (
           <Button
