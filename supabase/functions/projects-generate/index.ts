@@ -2338,15 +2338,71 @@ The user attached a screenshot. I analyzed it and found these text anchors:
         if (tc.tool === 'write_file' && tc.result?.success && tc.result?.path) {
           filesChanged.push(tc.result.path);
         }
+        if (tc.tool === 'search_replace' && tc.result?.success && tc.result?.path) {
+          filesChanged.push(tc.result.path);
+        }
+        if (tc.tool === 'insert_code' && tc.result?.success && tc.result?.path) {
+          filesChanged.push(tc.result.path);
+        }
         if (tc.tool === 'delete_file' && tc.result?.success && tc.result?.deletedPath) {
           filesChanged.push(`(deleted) ${tc.result.deletedPath}`);
         }
       });
       
+      // ========================================================================
+      // SAFETY NET: Check for missing referenced files and auto-generate them
+      // This catches cases where AI creates imports but forgets to create files
+      // ========================================================================
+      if (filesChanged.length > 0) {
+        console.log(`[Agent Mode] Checking for missing referenced files...`);
+        
+        // Get current project files after agent changes
+        const { data: currentRows } = await supabase
+          .from('project_files')
+          .select('path, content')
+          .eq('project_id', projectId);
+        
+        const currentFiles: Record<string, string> = {};
+        for (const row of currentRows || []) {
+          currentFiles[normalizeFilePath(row.path)] = row.content;
+        }
+        
+        // Find missing files
+        const missing = findMissingReferencedFiles({ changedFiles: currentFiles, existingFiles: {} });
+        
+        if (missing.length > 0) {
+          console.log(`[Agent Mode] SAFETY NET: Found ${missing.length} missing files: ${missing.join(', ')}`);
+          
+          try {
+            // Auto-generate missing files using GPT-4.1-mini
+            const generatedMissing = await callGPT41MiniMissingFiles(missing, currentFiles, {}, prompt);
+            
+            // Write the generated files
+            for (const [path, content] of Object.entries(generatedMissing)) {
+              const normalizedPath = normalizeFilePath(path);
+              const { error: writeErr } = await supabase
+                .from('project_files')
+                .upsert({
+                  project_id: projectId,
+                  path: normalizedPath,
+                  content: content
+                }, { onConflict: 'project_id,path' });
+              
+              if (!writeErr) {
+                filesChanged.push(normalizedPath);
+                console.log(`[Agent Mode] SAFETY NET: Created missing file: ${normalizedPath}`);
+              }
+            }
+          } catch (genErr) {
+            console.error(`[Agent Mode] SAFETY NET: Failed to generate missing files:`, genErr);
+          }
+        }
+      }
+      
       const result: AgentResult = {
         success: true,
         summary: taskCompleteResult?.summary || `Agent completed after ${toolCallsLog.length} tool calls`,
-        filesChanged: taskCompleteResult?.filesChanged || filesChanged,
+        filesChanged: taskCompleteResult?.filesChanged || [...new Set(filesChanged)],
         iterations: Math.ceil(toolCallsLog.length / 2),
         toolCalls: toolCallsLog
       };

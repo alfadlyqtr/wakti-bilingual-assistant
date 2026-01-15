@@ -36,6 +36,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import VideoEditorPro from '@/components/video-maker/VideoEditorPro';
+import AIVideomaker from '@/components/video-maker/AIVideomaker';
 import { useLocation } from 'react-router-dom';
 
 // Helper function to download audio files on mobile
@@ -469,6 +470,7 @@ export default function MusicStudio() {
   const [mainTab, setMainTab] = useState<'music' | 'video'>('music');
   const [musicSubTab, setMusicSubTab] = useState<'compose' | 'editor'>('compose');
   const [videoSubTab, setVideoSubTab] = useState<VideoSubTab>('create');
+  const [videoMode, setVideoMode] = useState<'maker' | 'ai'>('maker');
   const location = useLocation();
 
   useEffect(() => {
@@ -535,15 +537,30 @@ export default function MusicStudio() {
             <div />
           </div>
           <nav className="flex gap-2 border-b border-border pb-2">
-            <Button variant={videoSubTab === 'create' ? 'default' : 'outline'} size="sm" onClick={() => setVideoSubTab('create')}>
-              {language === 'ar' ? 'إنشاء' : 'Create'}
+            <Button variant={videoMode === 'maker' ? 'default' : 'outline'} size="sm" onClick={() => setVideoMode('maker')}>
+              {language === 'ar' ? 'صانع الفيديو' : 'Videomaker'}
             </Button>
-            <Button variant={videoSubTab === 'saved' ? 'default' : 'outline'} size="sm" onClick={() => setVideoSubTab('saved')}>
-              {language === 'ar' ? 'المحفوظات' : 'Saved'}
+            <Button variant={videoMode === 'ai' ? 'default' : 'outline'} size="sm" onClick={() => setVideoMode('ai')}>
+              {language === 'ar' ? 'صانع الفيديو بالذكاء' : 'AI Videomaker'}
             </Button>
           </nav>
 
-          {videoSubTab === 'create' ? <VideoEditorPro /> : <SavedVideosTab onCreate={() => setVideoSubTab('create')} />}
+          {videoMode === 'maker' ? (
+            <>
+              <nav className="flex gap-2 border-b border-border pb-2">
+                <Button variant={videoSubTab === 'create' ? 'default' : 'outline'} size="sm" onClick={() => setVideoSubTab('create')}>
+                  {language === 'ar' ? 'إنشاء' : 'Create'}
+                </Button>
+                <Button variant={videoSubTab === 'saved' ? 'default' : 'outline'} size="sm" onClick={() => setVideoSubTab('saved')}>
+                  {language === 'ar' ? 'المحفوظات' : 'Saved'}
+                </Button>
+              </nav>
+
+              {videoSubTab === 'create' ? <VideoEditorPro /> : <SavedVideosTab onCreate={() => setVideoSubTab('create')} />}
+            </>
+          ) : (
+            <AIVideomaker />
+          )}
         </>
       )}
     </div>
