@@ -37,7 +37,6 @@ import {
 } from 'lucide-react';
 import VideoEditorPro from '@/components/video-maker/VideoEditorPro';
 import AIVideomaker from '@/components/video-maker/AIVideomaker';
-import MyAIVideosTab from '@/components/video-maker/MyAIVideosTab';
 import { useLocation } from 'react-router-dom';
 
 // Helper function to download audio files on mobile
@@ -83,12 +82,11 @@ const handleDownload = async (url: string, filename: string) => {
   }
 };
 
-type VideoSubTab = 'create' | 'saved';
-
 interface SavedVideo {
   id: string;
   title: string | null;
   thumbnail_url?: string | null;
+  video_url?: string | null;
   storage_path: string | null;
   duration_seconds: number | null;
   is_public: boolean;
@@ -470,8 +468,7 @@ export default function MusicStudio() {
   const { language } = useTheme();
   const [mainTab, setMainTab] = useState<'music' | 'video'>('music');
   const [musicSubTab, setMusicSubTab] = useState<'compose' | 'editor'>('compose');
-  const [videoSubTab, setVideoSubTab] = useState<VideoSubTab>('create');
-  const [videoMode, setVideoMode] = useState<'maker' | 'ai' | 'ai-saved'>('maker');
+  const [videoMode, setVideoMode] = useState<'maker' | 'ai' | 'saved'>('maker');
   const location = useLocation();
 
   useEffect(() => {
@@ -544,28 +541,17 @@ export default function MusicStudio() {
             <Button variant={videoMode === 'ai' ? 'default' : 'outline'} size="sm" onClick={() => setVideoMode('ai')}>
               {language === 'ar' ? 'صانع الفيديو بالذكاء' : 'AI Videomaker'}
             </Button>
-            <Button variant={videoMode === 'ai-saved' ? 'default' : 'outline'} size="sm" onClick={() => setVideoMode('ai-saved')}>
-              {language === 'ar' ? 'فيديوهاتي AI' : 'My AI Videos'}
+            <Button variant={videoMode === 'saved' ? 'default' : 'outline'} size="sm" onClick={() => setVideoMode('saved')}>
+              {language === 'ar' ? 'المحفوظات' : 'Saved'}
             </Button>
           </nav>
 
           {videoMode === 'maker' ? (
-            <>
-              <nav className="flex gap-2 border-b border-border pb-2">
-                <Button variant={videoSubTab === 'create' ? 'default' : 'outline'} size="sm" onClick={() => setVideoSubTab('create')}>
-                  {language === 'ar' ? 'إنشاء' : 'Create'}
-                </Button>
-                <Button variant={videoSubTab === 'saved' ? 'default' : 'outline'} size="sm" onClick={() => setVideoSubTab('saved')}>
-                  {language === 'ar' ? 'المحفوظات' : 'Saved'}
-                </Button>
-              </nav>
-
-              {videoSubTab === 'create' ? <VideoEditorPro /> : <SavedVideosTab onCreate={() => setVideoSubTab('create')} />}
-            </>
+            <VideoEditorPro />
           ) : videoMode === 'ai' ? (
-            <AIVideomaker onSaveSuccess={() => setVideoMode('ai-saved')} />
+            <AIVideomaker onSaveSuccess={() => setVideoMode('saved')} />
           ) : (
-            <MyAIVideosTab onCreate={() => setVideoMode('ai')} />
+            <SavedVideosTab onCreate={() => setVideoMode('maker')} />
           )}
         </>
       )}
