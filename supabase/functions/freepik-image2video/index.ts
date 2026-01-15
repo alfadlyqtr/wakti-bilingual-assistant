@@ -167,7 +167,13 @@ serve(async (req) => {
       }
 
       const status = await getTaskStatus(task_id);
-      if (increment_usage && (status.status === "COMPLETED" || status.status === "completed")) {
+      if (
+        increment_usage &&
+        (status.status === "COMPLETED" ||
+          status.status === "completed" ||
+          status.status === "SUCCEEDED" ||
+          status.status === "succeeded")
+      ) {
         const { error: usageError } = await supabase.rpc("increment_ai_video_usage", {
           p_user_id: user.id,
         });

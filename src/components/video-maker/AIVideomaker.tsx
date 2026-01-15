@@ -212,7 +212,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       const status = data?.data?.status?.toLowerCase();
       console.log('[AIVideomaker] Poll status:', status);
 
-      if (status === 'completed' || status === 'succeed') {
+      if (status === 'completed' || status === 'succeed' || status === 'succeeded') {
         // Done!
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
         usageIncrementedRef.current = true;
@@ -435,49 +435,6 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
               </div>
             </div>
           </div>
-
-          {showLatestVideo && (
-            <div className="rounded-2xl overflow-hidden border border-border bg-gradient-to-b from-primary/5 to-transparent">
-              <div className="relative bg-black">
-                <video
-                  src={latestVideo?.video_url || undefined}
-                  controls
-                  playsInline
-                  className="w-full aspect-[9/16] max-h-[60vh] object-contain"
-                />
-                <div className="absolute top-3 left-3 px-3 py-1.5 rounded-full bg-primary text-white text-xs font-bold shadow-lg">
-                  {language === 'ar' ? 'آخر فيديو' : 'Latest Video'}
-                </div>
-              </div>
-              <div className="p-4 space-y-3">
-                <p className="text-center text-sm font-medium text-primary">
-                  {language === 'ar' ? 'هذا آخر فيديو محفوظ' : 'This is your latest saved video'}
-                </p>
-                <div className="grid grid-cols-3 gap-2">
-                  <Button className="h-11 flex-col gap-1 rounded-xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300" disabled>
-                    <Check className="h-5 w-5" />
-                    <span className="text-[10px] font-medium">
-                      {language === 'ar' ? 'محفوظ' : 'Saved'}
-                    </span>
-                  </Button>
-                  <Button
-                    className="h-11 flex-col gap-1 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 text-blue-700 dark:text-blue-300"
-                    onClick={handleDownloadLatest}
-                  >
-                    <Download className="h-5 w-5" />
-                    <span className="text-[10px] font-medium">{language === 'ar' ? 'تحميل' : 'Download'}</span>
-                  </Button>
-                  <Button
-                    className="h-11 flex-col gap-1 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-700 dark:text-purple-300"
-                    onClick={() => onSaveSuccess?.()}
-                  >
-                    <FolderOpen className="h-5 w-5" />
-                    <span className="text-[10px] font-medium">{language === 'ar' ? 'المحفوظات' : 'Saved'}</span>
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Unified content area */}
           <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-4">
@@ -724,6 +681,49 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                   <RefreshCw className="h-4 w-4 mr-2" />
                   {language === 'ar' ? 'إنشاء فيديو جديد' : 'Create Another Video'}
                 </Button>
+              </div>
+            </div>
+          )}
+
+          {showLatestVideo && (
+            <div className="rounded-2xl overflow-hidden border border-border bg-gradient-to-b from-primary/5 to-transparent">
+              <div className="relative bg-black">
+                <video
+                  src={latestVideo?.video_url || undefined}
+                  controls
+                  playsInline
+                  className="w-full aspect-[9/16] max-h-[60vh] object-contain"
+                />
+                <div className="absolute top-3 left-3 px-3 py-1.5 rounded-full bg-primary text-white text-xs font-bold shadow-lg">
+                  {language === 'ar' ? 'آخر فيديو' : 'Latest Video'}
+                </div>
+              </div>
+              <div className="p-4 space-y-3">
+                <p className="text-center text-sm font-medium text-primary">
+                  {language === 'ar' ? 'هذا آخر فيديو محفوظ' : 'This is your latest saved video'}
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  <Button className="h-11 flex-col gap-1 rounded-xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300" disabled>
+                    <Check className="h-5 w-5" />
+                    <span className="text-[10px] font-medium">
+                      {language === 'ar' ? 'محفوظ' : 'Saved'}
+                    </span>
+                  </Button>
+                  <Button
+                    className="h-11 flex-col gap-1 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 text-blue-700 dark:text-blue-300"
+                    onClick={handleDownloadLatest}
+                  >
+                    <Download className="h-5 w-5" />
+                    <span className="text-[10px] font-medium">{language === 'ar' ? 'تحميل' : 'Download'}</span>
+                  </Button>
+                  <Button
+                    className="h-11 flex-col gap-1 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-700 dark:text-purple-300"
+                    onClick={() => onSaveSuccess?.()}
+                  >
+                    <FolderOpen className="h-5 w-5" />
+                    <span className="text-[10px] font-medium">{language === 'ar' ? 'المحفوظات' : 'Saved'}</span>
+                  </Button>
+                </div>
               </div>
             </div>
           )}

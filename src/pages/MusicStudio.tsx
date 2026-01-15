@@ -105,6 +105,20 @@ function VideoPlayer({ url, language }: { url: string; language: string }) {
     let mounted = true;
     let objectUrl: string | null = null;
     const controller = new AbortController();
+    const isBlob = url.startsWith('blob:') || url.startsWith('data:');
+    const isSupabaseStorage = url.includes('/storage/v1/') || url.includes('supabase.co/storage');
+    const shouldFetch = !isBlob && isSupabaseStorage;
+
+    if (!shouldFetch) {
+      setBlobUrl(null);
+      setError(null);
+      setLoading(false);
+      return () => {
+        mounted = false;
+        controller.abort();
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+      };
+    }
 
     const fetchVideo = async () => {
       try {
@@ -130,6 +144,7 @@ function VideoPlayer({ url, language }: { url: string; language: string }) {
         }
       }
     };
+
     fetchVideo();
     return () => {
       mounted = false;

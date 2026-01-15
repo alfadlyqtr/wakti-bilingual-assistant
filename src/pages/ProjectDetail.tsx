@@ -574,7 +574,7 @@ export default function ProjectDetail() {
 
   // Fetch backend context for AI coder awareness - EXPANDED with shop, bookings, chat
   const fetchBackendContext = async () => {
-    if (!id) return;
+    if (!id) return null;
     try {
       // Check if backend is enabled
       const { data: backendData } = await supabase
@@ -603,7 +603,7 @@ export default function ProjectDetail() {
       
       if (!backendData?.enabled) {
         setBackendContext(defaultContext);
-        return;
+        return defaultContext;
       }
 
       // Fetch collections with counts
@@ -690,7 +690,7 @@ export default function ProjectDetail() {
         .select('*', { count: 'exact', head: true })
         .eq('project_id', id);
 
-      setBackendContext({
+      const nextContext = {
         enabled: true,
         collections,
         formSubmissionsCount: formSubmissionsCount || 0,
@@ -706,7 +706,8 @@ export default function ProjectDetail() {
         hasBookingsSetup: services.length > 0,
         chatRoomsCount: chatRoomsCount || 0,
         commentsCount: commentsCount || 0,
-      });
+      };
+      setBackendContext(nextContext);
       
       console.log('[ProjectDetail] Backend context loaded:', { 
         enabled: true, 
@@ -716,8 +717,10 @@ export default function ProjectDetail() {
         ordersCount,
         bookingsCount,
       });
+      return nextContext;
     } catch (err) {
       console.error('Exception fetching backend context:', err);
+      return null;
     }
   };
 
@@ -877,6 +880,8 @@ export default function ProjectDetail() {
       // Step 3: Generating
       setGenerationSteps(prev => prev.map((s, i) => i === 1 ? { ...s, status: 'completed' } : i === 2 ? { ...s, status: 'loading' } : s));
 
+      const backendContextForCreate = backendContext || await fetchBackendContext();
+
       // Option A: start job then poll
       const startRes = await supabase.functions.invoke('projects-generate', {
         body: {
@@ -887,6 +892,7 @@ export default function ProjectDetail() {
           theme,
           assets,
           userInstructions: customThemeInstructions,
+          backendContext: backendContextForCreate || undefined,
         },
       });
 
@@ -917,10 +923,29 @@ export default function ProjectDetail() {
       setGeneratedFiles(generatedFilesData);
       setCodeContent(generatedCode);
 
+      const backendCtaLines: string[] = [];
+      if (backendContextForCreate?.enabled) {
+        if (!backendContextForCreate.hasShopSetup) {
+          backendCtaLines.push(
+            isRTL
+              ? 'لا توجد منتجات بعد — أضف أول منتج من لوحة الخلفية ← المتجر ← المخزون.'
+              : 'No products yet — add your first product in Backend → Shop → Inventory.'
+          );
+        }
+        if (!backendContextForCreate.hasBookingsSetup) {
+          backendCtaLines.push(
+            isRTL
+              ? 'لا توجد خدمات بعد — أضف خدماتك من لوحة الخلفية ← الحجوزات ← الخدمات.'
+              : 'No services yet — add your services in Backend → Bookings → Services.'
+          );
+        }
+      }
+      const backendCta = backendCtaLines.length > 0 ? `\n\n${backendCtaLines.join('\n')}` : '';
+
       // Save assistant message to DB with snapshot (remind user to save thumbnail)
       const assistantMsg = isRTL 
-        ? 'لقد انتهيت من بناء مشروعك! ألقِ نظرة على المعاينة. 📸 اضغط على زر "حفظ صورة" لحفظ صورة مصغرة.' 
-        : "I've finished building your project! Take a look at the preview. 📸 Click 'Save Thumbnail' to save a thumbnail.";
+        ? `لقد انتهيت من بناء مشروعك! ألقِ نظرة على المعاينة. 📸 اضغط على زر "حفظ صورة" لحفظ صورة مصغرة.${backendCta}` 
+        : `I've finished building your project! Take a look at the preview. 📸 Click 'Save Thumbnail' to save a thumbnail.${backendCta}`;
       const { data: assistantMsgData, error: assistError } = await supabase
         .from('project_chat_messages' as any)
         .insert({ 

@@ -126,33 +126,33 @@ export function createCalendarEvent(
   }
 
   try {
-    const normalizedTimezone = timezone?.trim() ? timezone : 'UTC';
+    // SDK expects ALL STRING parameters - no nulls allowed per docs
+    // Format: "2025-07-10 14:00:00.000" for dates
     const startDateStr = formatDateForNatively(startDate);
     const endDateStr = formatDateForNatively(endDate);
-    const calendarIdParam = calendarId && calendarId.trim() ? calendarId : null;
-    const descriptionParam = description && description.trim() ? description : null;
+    const timezoneStr = timezone?.trim() || 'UTC';
+    // calendarId MUST be a string - use empty string if not provided (SDK requires it)
+    const calendarIdStr = calendarId?.trim() || '';
+    const descriptionStr = description?.trim() || '';
 
-    console.log('[NativelyCalendar] createCalendarEvent params:', {
-      title,
-      endDate: endDateStr,
-      startDate: startDateStr,
-      timezone: normalizedTimezone,
-      calendarId: calendarIdParam,
-      description: descriptionParam,
-      startDateIsDate: startDate instanceof Date,
-      endDateIsDate: endDate instanceof Date,
-      startDateType: typeof startDate,
-      endDateType: typeof endDate
-    });
+    console.log('[NativelyCalendar] ===== CREATE EVENT DEBUG =====');
+    console.log('[NativelyCalendar] title:', title, '| type:', typeof title);
+    console.log('[NativelyCalendar] endDate:', endDateStr, '| type:', typeof endDateStr);
+    console.log('[NativelyCalendar] startDate:', startDateStr, '| type:', typeof startDateStr);
+    console.log('[NativelyCalendar] timezone:', timezoneStr, '| type:', typeof timezoneStr);
+    console.log('[NativelyCalendar] calendarId:', calendarIdStr, '| type:', typeof calendarIdStr, '| length:', calendarIdStr.length);
+    console.log('[NativelyCalendar] description:', descriptionStr, '| type:', typeof descriptionStr);
+    console.log('[NativelyCalendar] ==============================');
 
-    // SDK signature: createCalendarEvent(title, endDate, startDate, timezone, calendarId, description, callback)
+    // SDK signature from docs: createCalendarEvent(title, endDate, startDate, timezone, calendarId, description, callback)
+    // ALL params must be strings - no null/undefined
     cal.createCalendarEvent(
       title,
       endDateStr,
       startDateStr,
-      normalizedTimezone,
-      calendarIdParam,
-      descriptionParam,
+      timezoneStr,
+      calendarIdStr,
+      descriptionStr,
       (resp: any) => {
         console.log('[NativelyCalendar] createCalendarEvent response:', JSON.stringify(resp));
         if (resp?.status === 'SUCCESS' || resp?.data?.id) {
