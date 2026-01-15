@@ -471,10 +471,27 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
           continue;
         }
         
-        const startDateObj = entryDate;
-        const endDateObj = addHours(entryDate, 1);
+        // Clone the date to avoid mutation issues
+        const startDateObj = new Date(entryDate.getTime());
+        const endDateObj = addHours(new Date(entryDate.getTime()), 1);
         
-        console.log('[CalendarSync] Creating event:', { title: entry.title, startDate: startDateObj.toISOString(), endDate: endDateObj.toISOString(), timezone, calendarId, rawDate: entry.date });
+        // Safe logging - don't call toISOString if date is invalid
+        const safeISOString = (d: Date) => {
+          try {
+            return d instanceof Date && !isNaN(d.getTime()) ? d.toISOString() : 'INVALID_DATE';
+          } catch {
+            return 'ERROR';
+          }
+        };
+        
+        console.log('[CalendarSync] Creating event:', { 
+          title: entry.title, 
+          startDate: safeISOString(startDateObj), 
+          endDate: safeISOString(endDateObj), 
+          timezone, 
+          calendarId, 
+          rawDate: entry.date 
+        });
         
         await new Promise<void>((resolve) => {
           createCalendarEvent(
