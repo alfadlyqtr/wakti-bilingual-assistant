@@ -266,18 +266,6 @@ const WaktiAIV2 = () => {
     abortControllerRef.current = controller;
     lastTriggerRef.current = trigger;
     
-    // OPTION C FIX: Safety timeout to prevent stuck loading state on mobile
-    // Clear any existing timeout first
-    if (safetyTimeoutRef.current) {
-      clearTimeout(safetyTimeoutRef.current);
-    }
-    safetyTimeoutRef.current = setTimeout(() => {
-      if (isLoading) {
-        console.warn('⏱️ SAFETY TIMEOUT: Forcing isLoading=false after 10s (mobile network issue?)');
-        setIsLoading(false);
-      }
-    }, 10000);
-
     let convId = currentConversationId;
     if (!convId) {
       convId = EnhancedFrontendMemory.startNewConversation([], null);
