@@ -146,13 +146,10 @@ export default function VideoShare() {
               controls
               autoPlay={false}
               playsInline
-              crossOrigin="anonymous"
               preload="auto"
               className="w-full h-full object-contain"
               poster={video.thumbnail_url || undefined}
-            >
-              <source src={videoUrl} type="video/mp4" />
-            </video>
+            />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
               <p className="text-white/60">
@@ -161,6 +158,16 @@ export default function VideoShare() {
             </div>
           )}
         </div>
+
+        {videoUrl && (
+          <div className="flex justify-end">
+            <a href={videoUrl} download target="_blank" rel="noreferrer">
+              <Button size="sm" variant="outline">
+                {language === 'ar' ? 'تحميل الفيديو' : 'Download Video'}
+              </Button>
+            </a>
+          </div>
+        )}
 
         {/* Wakti branding */}
         <Card className="p-4 enhanced-card">

@@ -40,9 +40,7 @@ import {
   isNativeCalendarAvailable,
   createCalendarEvent,
   retrieveCalendars,
-  getUserTimezone,
-  isNativelyConsoleAvailable,
-  openNativelyConsole
+  getUserTimezone
 } from "@/integrations/natively/calendarBridge";
 import { AppleLogo } from "./AppleLogo";
 import { Button } from "@/components/ui/button";
@@ -350,15 +348,6 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
   const syncToPhoneCalendar = useCallback(async () => {
     if (!nativeCalendarAvailable) {
       toast.error(language === 'ar' ? 'مزامنة التقويم متاحة فقط في التطبيق' : 'Calendar sync is only available in the app');
-      return;
-    }
-
-    if (isNativelyConsoleAvailable()) {
-      const w = window as any;
-      if (!w.__waktiNativelyConsoleOpened) {
-        w.__waktiNativelyConsoleOpened = true;
-        openNativelyConsole();
-      }
     }
     
     setIsSyncing(true);

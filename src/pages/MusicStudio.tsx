@@ -98,21 +98,24 @@ interface SavedVideo {
 }
 
 function VideoPlayer({ url, language }: { url: string; language: string }) {
-  // Use URL directly - no fetch needed for public Supabase storage URLs
-  // crossOrigin="anonymous" required for iOS Safari to play cross-origin videos
+  // Use URL directly - avoid crossOrigin which can block playback on wakti.qa
   return (
-    <div className="px-3 pb-3">
+    <div className="px-3 pb-3 space-y-2">
       <video
         src={url}
         controls
         autoPlay
         playsInline
-        crossOrigin="anonymous"
         preload="auto"
         className="w-full max-h-[60vh] rounded-lg bg-black object-contain"
-      >
-        <source src={url} type="video/mp4" />
-      </video>
+      />
+      <div className="flex justify-end">
+        <a href={url} download target="_blank" rel="noreferrer">
+          <Button size="sm" variant="outline">
+            {language === 'ar' ? 'تحميل الفيديو' : 'Download Video'}
+          </Button>
+        </a>
+      </div>
     </div>
   );
 }
