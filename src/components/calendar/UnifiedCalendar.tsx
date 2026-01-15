@@ -40,7 +40,6 @@ import {
   isNativeCalendarAvailable,
   createCalendarEvent,
   retrieveCalendars,
-  formatDateForNatively,
   getUserTimezone
 } from "@/integrations/natively/calendarBridge";
 import { AppleLogo } from "./AppleLogo";
@@ -415,16 +414,16 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
           continue;
         }
         
-        const startDate = formatDateForNatively(entryDate);
-        const endDate = formatDateForNatively(addHours(entryDate, 1));
+        const startDateObj = entryDate;
+        const endDateObj = addHours(entryDate, 1);
         
-        console.log('[CalendarSync] Creating event:', { title: entry.title, startDate, endDate, timezone, calendarId, rawDate: entry.date });
+        console.log('[CalendarSync] Creating event:', { title: entry.title, startDate: startDateObj.toISOString(), endDate: endDateObj.toISOString(), timezone, calendarId, rawDate: entry.date });
         
         await new Promise<void>((resolve) => {
           createCalendarEvent(
             entry.title,
-            startDate,
-            endDate,
+            startDateObj,
+            endDateObj,
             timezone,
             calendarId,
             entry.description || null,

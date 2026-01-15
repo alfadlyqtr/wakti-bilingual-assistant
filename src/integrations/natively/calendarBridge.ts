@@ -86,8 +86,8 @@ export function retrieveCalendars(callback: (result: RetrieveCalendarsResult) =>
 /**
  * Create an event in the device calendar
  * @param title Event title (required)
- * @param startDate ISO 8601 format e.g. "2025-07-10 14:00:00.000"
- * @param endDate ISO 8601 format e.g. "2025-07-10 15:00:00.000"
+ * @param startDate Date object for event start
+ * @param endDate Date object for event end
  * @param timezone ISO 8601 timezone e.g. "Asia/Riyadh"
  * @param calendarId Optional calendar ID (if not provided, uses default)
  * @param description Optional event description
@@ -95,8 +95,8 @@ export function retrieveCalendars(callback: (result: RetrieveCalendarsResult) =>
  */
 export function createCalendarEvent(
   title: string,
-  startDate: string,
-  endDate: string,
+  startDate: Date,
+  endDate: Date,
   timezone: string,
   calendarId: string | null,
   description: string | null,
@@ -115,14 +115,24 @@ export function createCalendarEvent(
     return;
   }
 
+  // Validate dates are actual Date objects
+  if (!(startDate instanceof Date) || !(endDate instanceof Date)) {
+    console.warn('[NativelyCalendar] startDate and endDate must be Date objects');
+    callback({ status: 'FAILED', error: 'Invalid date objects' });
+    return;
+  }
+
   try {
-    console.log('[NativelyCalendar] Creating event:', { title, startDate, endDate, timezone, calendarId, description });
+    // Format dates as ISO 8601 strings for the SDK
+    const startDateStr = formatDateForNatively(startDate);
+    const endDateStr = formatDateForNatively(endDate);
+    
+    console.log('[NativelyCalendar] Creating event:', { title, startDate: startDateStr, endDate: endDateStr, timezone, calendarId, description });
     // Note: Natively SDK signature is (title, endDate, startDate, timezone, calendarId, description, callback)
-    // If calendarId is null/empty, pass null to let SDK use default calendar
     cal.createCalendarEvent(
       title,
-      endDate,
-      startDate,
+      endDateStr,
+      startDateStr,
       timezone,
       calendarId || null,
       description || null,
@@ -134,8 +144,8 @@ export function createCalendarEvent(
             data: {
               id: resp.data?.id || '',
               title: resp.data?.title || title,
-              start: resp.data?.start || startDate,
-              end: resp.data?.end || endDate
+              start: resp.data?.start || startDateStr,
+              end: resp.data?.end || endDateStr
             }
           });
         } else {
