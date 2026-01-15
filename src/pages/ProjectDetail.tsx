@@ -4440,10 +4440,16 @@ Fix the issue in the code and ensure it works correctly.`;
                                     })));
                                     setToolsUsedCount(prev => prev + (filesForTracking.length || 1));
                                     
-                                    // Create a structured Lovable-style message
+                                    // Create a structured Lovable-style message with conversational response
+                                    // Generate a friendly conversational response based on what was done
+                                    const friendlyResponse = isRTL 
+                                      ? `تم! ${planTitle ? `قمت بـ ${planTitle.toLowerCase()}` : 'تم تطبيق التغييرات المطلوبة'}. ${stepsSummary ? stepsSummary : 'تم تحديث الكود بنجاح.'}`
+                                      : `Done! ${planTitle ? `I've ${planTitle.toLowerCase().replace(/^add\s+/i, 'added ').replace(/^remove\s+/i, 'removed ').replace(/^update\s+/i, 'updated ').replace(/^create\s+/i, 'created ').replace(/^fix\s+/i, 'fixed ')}` : 'I\'ve applied the requested changes'}. ${stepsSummary ? stepsSummary : 'The code has been updated successfully.'}`;
+                                    
                                     const successMsg = JSON.stringify({
                                       type: 'execution_result',
                                       title: planTitle,
+                                      response: friendlyResponse,
                                       summary: stepsSummary || (isRTL ? 'تم تطبيق التغييرات بنجاح' : 'Successfully applied the requested changes'),
                                       files: uniqueChangedFiles
                                     });
@@ -4519,7 +4525,7 @@ Fix the issue in the code and ensure it works correctly.`;
 
                   // EXECUTION RESPONSE FORMAT: Clean Lovable-style format
                   // Detect structured execution_result OR verbose execution response
-                  let executionResult: { type: string; title: string; summary: string; files: string[] } | null = null;
+                  let executionResult: { type: string; title: string; response?: string; summary: string; files: string[] } | null = null;
                   try {
                     const parsed = JSON.parse(msg.content);
                     if (parsed.type === 'execution_result') {
@@ -4575,12 +4581,21 @@ Fix the issue in the code and ensure it works correctly.`;
                             </button>
                           </div>
                           
-                          {/* Summary Section */}
+                          {/* Response Section - Conversational message like Lovable */}
                           <div className="px-4 py-3 space-y-3">
-                            {/* Main summary */}
-                            <p className="text-[13px] text-foreground/85 leading-relaxed">
-                              {summary}
-                            </p>
+                            {/* Friendly conversational response */}
+                            {executionResult?.response && (
+                              <p className="text-[14px] text-foreground font-medium leading-relaxed">
+                                {executionResult.response}
+                              </p>
+                            )}
+                            
+                            {/* Technical summary - smaller, secondary */}
+                            {summary && (!executionResult?.response || summary !== executionResult.response) && (
+                              <p className="text-[12px] text-foreground/60 leading-relaxed">
+                                {summary}
+                              </p>
+                            )}
                             
                             {/* Files edited section */}
                             {uniqueFiles.length > 0 && (
