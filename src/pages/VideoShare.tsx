@@ -146,9 +146,13 @@ export default function VideoShare() {
               controls
               autoPlay={false}
               playsInline
+              crossOrigin="anonymous"
+              preload="auto"
               className="w-full h-full object-contain"
               poster={video.thumbnail_url || undefined}
-            />
+            >
+              <source src={videoUrl} type="video/mp4" />
+            </video>
           ) : (
             <div className="w-full h-full flex items-center justify-center">
               <p className="text-white/60">

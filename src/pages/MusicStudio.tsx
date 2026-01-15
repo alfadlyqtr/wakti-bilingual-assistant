@@ -99,7 +99,7 @@ interface SavedVideo {
 
 function VideoPlayer({ url, language }: { url: string; language: string }) {
   // Use URL directly - no fetch needed for public Supabase storage URLs
-  // Fetching causes CORS/COEP issues on iPhone Safari
+  // crossOrigin="anonymous" required for iOS Safari to play cross-origin videos
   return (
     <div className="px-3 pb-3">
       <video
@@ -107,8 +107,12 @@ function VideoPlayer({ url, language }: { url: string; language: string }) {
         controls
         autoPlay
         playsInline
+        crossOrigin="anonymous"
+        preload="auto"
         className="w-full max-h-[60vh] rounded-lg bg-black object-contain"
-      />
+      >
+        <source src={url} type="video/mp4" />
+      </video>
     </div>
   );
 }
