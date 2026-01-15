@@ -63,14 +63,27 @@ export default function VideoShare() {
 
         setVideo(data as VideoData);
 
-        // Get video URL from storage (bucket is public, use public URL for best compatibility)
+        // Fetch video as blob for guaranteed playback
         if (data.storage_path) {
           const { data: urlData } = supabase.storage
             .from('videos')
             .getPublicUrl(data.storage_path);
 
           if (urlData?.publicUrl) {
-            setVideoUrl(urlData.publicUrl);
+            try {
+              const res = await fetch(urlData.publicUrl, { mode: 'cors' });
+              if (res.ok) {
+                const blob = await res.blob();
+                const blobUrl = URL.createObjectURL(blob);
+                setVideoUrl(blobUrl);
+              } else {
+                // Fallback to direct URL if fetch fails
+                setVideoUrl(urlData.publicUrl);
+              }
+            } catch (e) {
+              console.error('[VideoShare] Fetch error:', e);
+              setVideoUrl(urlData.publicUrl);
+            }
           }
         } else if (data.video_url) {
           setVideoUrl(data.video_url);

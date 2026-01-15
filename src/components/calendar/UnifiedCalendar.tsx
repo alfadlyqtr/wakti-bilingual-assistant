@@ -386,13 +386,9 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
         if (result.status === 'SUCCESS' && result.data && result.data.length > 0) {
           // Use the first available calendar
           resolve({ calendarId: result.data[0].id, error: null });
-        } else if (result.status === 'SUCCESS' && result.data && result.data.length === 0) {
-          // Success but no calendars - try with empty string (SDK might use default)
-          console.log('[CalendarSync] No calendars returned, will try with empty calendarId');
-          resolve({ calendarId: '', error: null });
         } else {
           console.warn('[CalendarSync] Failed to retrieve calendars:', result.error);
-          resolve({ calendarId: null, error: result.error || 'Unknown error' });
+          resolve({ calendarId: null, error: result.error || 'No calendars available' });
         }
       });
     });
@@ -400,7 +396,7 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     const calendarId = calendarResult.calendarId;
     console.log('[CalendarSync] Using calendar ID:', calendarId, '| Error:', calendarResult.error);
     
-    // If calendar retrieval completely failed (not just empty), show error
+    // If calendar retrieval failed, show error
     if (calendarId === null) {
       setIsSyncing(false);
       const errorDetail = calendarResult.error || '';

@@ -98,11 +98,65 @@ interface SavedVideo {
 }
 
 function VideoPlayer({ url, language }: { url: string; language: string }) {
-  // Use URL directly - avoid crossOrigin which can block playback on wakti.qa
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchVideo = async () => {
+      setLoading(true);
+      setError(false);
+      try {
+        const res = await fetch(url, { mode: 'cors' });
+        if (!res.ok) throw new Error('Fetch failed');
+        const blob = await res.blob();
+        if (cancelled) return;
+        const objectUrl = URL.createObjectURL(blob);
+        setBlobUrl(objectUrl);
+      } catch (e) {
+        console.error('[VideoPlayer] Fetch error:', e);
+        if (!cancelled) setError(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetchVideo();
+    return () => {
+      cancelled = true;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [url]);
+
+  if (loading) {
+    return (
+      <div className="px-3 pb-3 flex items-center justify-center h-40">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
+  if (error || !blobUrl) {
+    return (
+      <div className="px-3 pb-3 space-y-2">
+        <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
+          <p>{language === 'ar' ? 'تعذر تحميل الفيديو' : 'Could not load video'}</p>
+        </div>
+        <div className="flex justify-center">
+          <a href={url} download target="_blank" rel="noreferrer">
+            <Button size="sm" variant="default">
+              {language === 'ar' ? 'تحميل الفيديو' : 'Download Video'}
+            </Button>
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="px-3 pb-3 space-y-2">
       <video
-        src={url}
+        src={blobUrl}
         controls
         autoPlay
         playsInline
