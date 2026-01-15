@@ -85,12 +85,15 @@ export function retrieveCalendars(callback: (result: RetrieveCalendarsResult) =>
 
 /**
  * Create an event in the device calendar
+ * SDK signature from docs: createCalendarEvent(title, endDate, startDate, timezone, calendarId, description, callback)
+ * All date strings must be ISO 8601 format: "2025-07-10 14:00:00.000"
+ * 
  * @param title Event title (required)
  * @param startDate Date object for event start
  * @param endDate Date object for event end
  * @param timezone ISO 8601 timezone e.g. "Asia/Riyadh"
- * @param calendarId Optional calendar ID (if not provided, uses default)
- * @param description Optional event description
+ * @param calendarId Calendar ID string (use empty string if not available)
+ * @param description Event description (use empty string if none)
  * @param callback Callback with result
  */
 export function createCalendarEvent(
@@ -123,19 +126,30 @@ export function createCalendarEvent(
   }
 
   try {
-    // Format dates as ISO 8601 strings for the SDK
-    const startDateStr = formatDateForNatively(startDate);
-    const endDateStr = formatDateForNatively(endDate);
+    // SDK expects strings for optional params - use empty string instead of null
+    const calIdStr = calendarId || '';
+    const descStr = description || '';
     
-    console.log('[NativelyCalendar] Creating event:', { title, startDate: startDateStr, endDate: endDateStr, timezone, calendarId, description });
-    // Note: Natively SDK signature is (title, endDate, startDate, timezone, calendarId, description, callback)
+    // Try passing Date objects directly - SDK might convert them internally
+    // The error "i.toISOString is not a function" suggests SDK expects Date objects
+    console.log('[NativelyCalendar] Creating event with Date objects:', { 
+      title, 
+      endDate: endDate.toISOString(), 
+      startDate: startDate.toISOString(), 
+      timezone, 
+      calendarId: calIdStr, 
+      description: descStr 
+    });
+    
+    // SDK signature: createCalendarEvent(title, endDate, startDate, timezone, calendarId, description, callback)
+    // Passing Date objects directly since SDK seems to call .toISOString() internally
     cal.createCalendarEvent(
       title,
-      endDateStr,
-      startDateStr,
+      endDate,
+      startDate,
       timezone,
-      calendarId || null,
-      description || null,
+      calIdStr,
+      descStr,
       (resp: any) => {
         console.log('[NativelyCalendar] createCalendarEvent response:', JSON.stringify(resp));
         if (resp?.status === 'SUCCESS' || resp?.data?.id) {
@@ -144,8 +158,8 @@ export function createCalendarEvent(
             data: {
               id: resp.data?.id || '',
               title: resp.data?.title || title,
-              start: resp.data?.start || startDateStr,
-              end: resp.data?.end || endDateStr
+              start: resp.data?.start || startDate.toISOString(),
+              end: resp.data?.end || endDate.toISOString()
             }
           });
         } else {

@@ -470,7 +470,7 @@ export default function MusicStudio() {
   const [mainTab, setMainTab] = useState<'music' | 'video'>('music');
   const [musicSubTab, setMusicSubTab] = useState<'compose' | 'editor'>('compose');
   const [videoSubTab, setVideoSubTab] = useState<VideoSubTab>('create');
-  const [videoMode, setVideoMode] = useState<'maker' | 'ai'>('maker');
+  const [videoMode, setVideoMode] = useState<'maker' | 'ai' | 'ai-saved'>('maker');
   const location = useLocation();
 
   useEffect(() => {
@@ -536,12 +536,15 @@ export default function MusicStudio() {
             <h1 className="text-xl md:text-2xl font-bold">{language === 'ar' ? 'صانع الفيديو' : 'Video Maker'}</h1>
             <div />
           </div>
-          <nav className="flex gap-2 border-b border-border pb-2">
+          <nav className="flex gap-2 border-b border-border pb-2 flex-wrap">
             <Button variant={videoMode === 'maker' ? 'default' : 'outline'} size="sm" onClick={() => setVideoMode('maker')}>
               {language === 'ar' ? 'صانع الفيديو' : 'Videomaker'}
             </Button>
             <Button variant={videoMode === 'ai' ? 'default' : 'outline'} size="sm" onClick={() => setVideoMode('ai')}>
               {language === 'ar' ? 'صانع الفيديو بالذكاء' : 'AI Videomaker'}
+            </Button>
+            <Button variant={videoMode === 'ai-saved' ? 'default' : 'outline'} size="sm" onClick={() => setVideoMode('ai-saved')}>
+              {language === 'ar' ? 'فيديوهاتي AI' : 'My AI Videos'}
             </Button>
           </nav>
 
@@ -558,8 +561,10 @@ export default function MusicStudio() {
 
               {videoSubTab === 'create' ? <VideoEditorPro /> : <SavedVideosTab onCreate={() => setVideoSubTab('create')} />}
             </>
-          ) : (
+          ) : videoMode === 'ai' ? (
             <AIVideomaker />
+          ) : (
+            <SavedVideosTab onCreate={() => setVideoMode('ai')} />
           )}
         </>
       )}
