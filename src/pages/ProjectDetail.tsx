@@ -3095,8 +3095,12 @@ Fix the issue in the code and ensure it works correctly.`;
     
     // ===== STEP 1: FORM WIZARD DETECTION (ALWAYS FIRST - before any image logic) =====
     // BOOKING FORM DETECTION - Show wizard instead of direct AI call
-    const bookingFormPatterns = /\b(add|create|build|make|need).*(booking|appointment|schedule|reservation)\s*(form|page|system)?/i;
-    if (bookingFormPatterns.test(userMessage)) {
+    // Broader pattern to catch more variations
+    const bookingFormPatterns = /\b(add|create|build|make|need|want|show|display).*(booking|appointment|schedule|reservation|calendar)\s*(form|page|system|popup|modal|button)?/i;
+    const bookingFormAltPatterns = /\b(booking|appointment|reservation|schedule)\s*(form|page|system|popup|modal)\b/i;
+    const hasBookingFormRequest = bookingFormPatterns.test(userMessage) || bookingFormAltPatterns.test(userMessage);
+    
+    if (hasBookingFormRequest) {
       setPendingFormPrompt(userMessage);
       setShowBookingWizard(true);
       
@@ -3118,8 +3122,12 @@ Fix the issue in the code and ensure it works correctly.`;
     }
     
     // CONTACT FORM DETECTION - Show wizard instead of direct AI call
-    const contactFormPatterns = /\b(add|create|build|make|need).*(contact|inquiry|message|feedback)\s*(form|page)?/i;
-    if (contactFormPatterns.test(userMessage)) {
+    // Broader pattern to catch more variations like "button with contact form", "popup contact", etc.
+    const contactFormPatterns = /\b(add|create|build|make|need|want|show|display|popup|pop.?up).*(contact|inquiry|message\s*me|feedback|get.?in.?touch)\s*(form|page|popup|modal|button)?/i;
+    const contactFormAltPatterns = /\b(contact|inquiry|message|feedback)\s*(form|page|popup|modal)\b/i;
+    const hasContactFormRequest = contactFormPatterns.test(userMessage) || contactFormAltPatterns.test(userMessage);
+    
+    if (hasContactFormRequest) {
       setPendingFormPrompt(userMessage);
       setShowContactWizard(true);
       
@@ -4260,6 +4268,31 @@ Fix the issue in the code and ensure it works correctly.`;
                             setShowBookingWizard(false);
                             setChatMessages(prev => prev.filter(m => m.id !== msg.id));
                           }}
+                          onSkipWizard={async () => {
+                            setShowBookingWizard(false);
+                            setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            
+                            // Use original prompt directly - let AI handle it
+                            const prompt = pendingFormPrompt || 'Create a booking form';
+                            setPendingFormPrompt('');
+                            
+                            setChatMessages(prev => [...prev, {
+                              id: `user-skip-${Date.now()}`,
+                              role: 'user',
+                              content: prompt
+                            }]);
+                            
+                            setChatInput(prompt);
+                            
+                            requestAnimationFrame(() => {
+                              requestAnimationFrame(() => {
+                                const form = document.querySelector('form[class*="flex items-end gap-2"]');
+                                if (form) {
+                                  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                                }
+                              });
+                            });
+                          }}
                         />
                       </div>
                     );
@@ -4306,6 +4339,31 @@ Fix the issue in the code and ensure it works correctly.`;
                           onCancel={() => {
                             setShowContactWizard(false);
                             setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                          }}
+                          onSkipWizard={async () => {
+                            setShowContactWizard(false);
+                            setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            
+                            // Use original prompt directly - let AI handle it
+                            const prompt = pendingFormPrompt || 'Create a contact form';
+                            setPendingFormPrompt('');
+                            
+                            setChatMessages(prev => [...prev, {
+                              id: `user-skip-${Date.now()}`,
+                              role: 'user',
+                              content: prompt
+                            }]);
+                            
+                            setChatInput(prompt);
+                            
+                            requestAnimationFrame(() => {
+                              requestAnimationFrame(() => {
+                                const form = document.querySelector('form[class*="flex items-end gap-2"]');
+                                if (form) {
+                                  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                                }
+                              });
+                            });
                           }}
                         />
                       </div>
