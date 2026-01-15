@@ -1867,6 +1867,11 @@ DO NOT extract project IDs from image URLs or storage paths! Always use exactly:
 3. **Create Item:** POST { projectId: '${projectId}', action: 'collection/{name}', data: {...} }
 4. **File Upload:** User can upload files via Backend Dashboard → Uploads tab
 
+**CRITICAL SAFETY RULES (MUST FOLLOW):**
+- ✅ Use ONLY this projectId: "${projectId}" (never hardcode any other ID)
+- ✅ If you add product creation, show a success CTA: "Manage stock in Backend → Shop → Inventory"
+- ✅ Use a safe API call (fetch or supabase.functions.invoke) with Content-Type: application/json
+
 When user asks to "add products", "create blog posts", "store data", etc., use the collection API.
 When user asks for "contact form", "newsletter", use the form submission API.
 ` : '';

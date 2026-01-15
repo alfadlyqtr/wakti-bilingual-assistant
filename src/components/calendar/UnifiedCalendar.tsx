@@ -395,7 +395,10 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
             if (createResult.status === 'SUCCESS' && createResult.id) {
               resolve({ calendarId: createResult.id, error: null });
             } else {
-              resolve({ calendarId: null, error: createResult.error || 'Unable to create Wakti calendar' });
+              resolve({
+                calendarId: result.data?.[0]?.id || null,
+                error: createResult.error || 'Unable to create Wakti calendar'
+              });
             }
           });
         } else if (result.status === 'SUCCESS') {
