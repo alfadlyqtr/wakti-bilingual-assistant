@@ -380,17 +380,16 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     }
     
     // First, retrieve available calendars from the device
-    const w = window as any;
-    if (!w.__waktiCalendarDebugPopupShown) {
-      w.__waktiCalendarDebugPopupShown = true;
-      w.__waktiCalendarDebugPopup = true;
-    }
     const calendarResult = await new Promise<{ calendarId: string | null; error: string | null }>((resolve) => {
       retrieveCalendars((result) => {
         console.log('[CalendarSync] Retrieved calendars result:', result);
         if (result.status === 'SUCCESS' && result.data && result.data.length > 0) {
-          // Use the first available calendar
-          resolve({ calendarId: result.data[0].id, error: null });
+          const preferredCalendar = result.data.find((calendar) => {
+            const name = calendar.name?.toLowerCase() || '';
+            return name.includes('wakti') || name === 'calendar' || name === 'default';
+          });
+          const selectedCalendar = preferredCalendar ?? result.data[0];
+          resolve({ calendarId: selectedCalendar.id, error: null });
         } else {
           console.warn('[CalendarSync] Failed to retrieve calendars:', result.error);
           resolve({ calendarId: null, error: result.error || 'No calendars available' });

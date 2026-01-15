@@ -1486,6 +1486,16 @@ serve(async (req) => {
         requestSubmode = chatSubmode;
 
         console.log(`🎯 REQUEST: trigger=${activeTrigger}, submode=${chatSubmode}, lang=${language}`);
+        console.log('📍 LOCATION PAYLOAD:', {
+          hasLocation: !!location,
+          source: location?.source,
+          latitude: location?.latitude,
+          longitude: location?.longitude,
+          city: location?.city,
+          country: location?.country,
+          accuracy: location?.accuracy,
+          timezone: clientTimezone,
+        });
 
         if (!message) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Message required' })}\n\n`));

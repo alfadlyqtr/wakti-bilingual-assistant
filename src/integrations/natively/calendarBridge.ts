@@ -6,6 +6,7 @@ declare global {
 
 export interface CalendarObject {
   id: string;
+  name?: string;
 }
 
 export interface CreateEventResult {
@@ -100,16 +101,6 @@ export function retrieveCalendars(callback: (result: RetrieveCalendarsResult) =>
       callbackFired = true;
       clearTimeout(timeoutId);
 
-      const debugPopupEnabled = Boolean((window as any).__waktiCalendarDebugPopup);
-      if (debugPopupEnabled) {
-        try {
-          (window as any).__waktiCalendarDebugPopup = false;
-          window.alert(`[Wakti Calendar Debug]\nretrieveCalendars response:\n${JSON.stringify(resp)}`);
-        } catch (popupErr) {
-          console.warn('[NativelyCalendar] Failed to show debug popup:', popupErr);
-        }
-      }
-      
       console.log('[NativelyCalendar] ===== RETRIEVE CALENDARS RESPONSE =====');
       console.log('[NativelyCalendar] Raw resp:', JSON.stringify(resp));
       console.log('[NativelyCalendar] resp type:', typeof resp);
@@ -124,19 +115,23 @@ export function retrieveCalendars(callback: (result: RetrieveCalendarsResult) =>
       
       // Try to extract calendars from response - check ALL possible locations
       if (Array.isArray(resp?.data)) {
-        calendars = resp.data.filter((c: any) => c?.id).map((c: any) => ({ id: String(c.id) }));
+        calendars = resp.data
+          .filter((c: any) => c?.id)
+          .map((c: any) => ({ id: String(c.id), name: c?.name ? String(c.name) : undefined }));
       } else if (resp?.data?.id) {
-        calendars = [{ id: String(resp.data.id) }];
+        calendars = [{ id: String(resp.data.id), name: resp.data?.name ? String(resp.data.name) : undefined }];
       } else if (typeof resp?.data === 'string' && resp.data.length > 0) {
         calendars = [{ id: resp.data }];
       } else if (resp?.data && typeof resp.data === 'object') {
         const ids = Object.keys(resp.data).filter((key) => key && key.length > 0);
-        calendars = ids.map((id) => ({ id }));
+        calendars = ids.map((id) => ({ id, name: typeof resp.data[id] === 'string' ? resp.data[id] : undefined }));
       } else if (resp?.id) {
         calendars = [{ id: String(resp.id) }];
       } else if (Array.isArray(resp)) {
         // Response itself might be the array
-        calendars = resp.filter((c: any) => c?.id).map((c: any) => ({ id: String(c.id) }));
+        calendars = resp
+          .filter((c: any) => c?.id)
+          .map((c: any) => ({ id: String(c.id), name: c?.name ? String(c.name) : undefined }));
       }
       
       console.log('[NativelyCalendar] Extracted calendars:', JSON.stringify(calendars));
