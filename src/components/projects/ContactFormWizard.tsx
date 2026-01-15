@@ -13,7 +13,11 @@ import {
   ListOrdered,
   Plus,
   Trash2,
-  GripVertical
+  GripVertical,
+  ArrowUp,
+  ArrowDown,
+  Columns,
+  Square
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -24,6 +28,7 @@ export interface ContactFormField {
   required: boolean;
   label: string;
   labelAr: string;
+  width?: 'full' | 'half'; // Column width
 }
 
 export interface ContactFormConfig {
@@ -43,11 +48,11 @@ interface ContactFormWizardProps {
 }
 
 const DEFAULT_FIELDS: ContactFormField[] = [
-  { id: 'name', name: 'name', type: 'text', required: true, label: 'Name', labelAr: 'الاسم' },
-  { id: 'email', name: 'email', type: 'email', required: true, label: 'Email', labelAr: 'البريد الإلكتروني' },
-  { id: 'phone', name: 'phone', type: 'tel', required: false, label: 'Phone', labelAr: 'الهاتف' },
-  { id: 'subject', name: 'subject', type: 'text', required: false, label: 'Subject', labelAr: 'الموضوع' },
-  { id: 'message', name: 'message', type: 'textarea', required: true, label: 'Message', labelAr: 'الرسالة' },
+  { id: 'name', name: 'name', type: 'text', required: true, label: 'Name', labelAr: 'الاسم', width: 'half' },
+  { id: 'email', name: 'email', type: 'email', required: true, label: 'Email', labelAr: 'البريد الإلكتروني', width: 'half' },
+  { id: 'phone', name: 'phone', type: 'tel', required: false, label: 'Phone', labelAr: 'الهاتف', width: 'half' },
+  { id: 'subject', name: 'subject', type: 'text', required: false, label: 'Subject', labelAr: 'الموضوع', width: 'half' },
+  { id: 'message', name: 'message', type: 'textarea', required: true, label: 'Message', labelAr: 'الرسالة', width: 'full' },
 ];
 
 export function ContactFormWizard({ onComplete, onCancel, originalPrompt }: ContactFormWizardProps) {
@@ -75,6 +80,26 @@ export function ContactFormWizard({ onComplete, onCancel, originalPrompt }: Cont
     ));
   };
 
+  const handleFieldWidthToggle = (fieldId: string) => {
+    setFields(prev => prev.map(f => 
+      f.id === fieldId ? { ...f, width: f.width === 'full' ? 'half' : 'full' } : f
+    ));
+  };
+
+  const handleMoveField = (fieldId: string, direction: 'up' | 'down') => {
+    setFields(prev => {
+      const index = prev.findIndex(f => f.id === fieldId);
+      if (index === -1) return prev;
+      if (direction === 'up' && index === 0) return prev;
+      if (direction === 'down' && index === prev.length - 1) return prev;
+      
+      const newFields = [...prev];
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      [newFields[index], newFields[targetIndex]] = [newFields[targetIndex], newFields[index]];
+      return newFields;
+    });
+  };
+
   const handleRemoveField = (fieldId: string) => {
     // Prevent removing core fields
     if (['name', 'email', 'message'].includes(fieldId)) return;
@@ -90,7 +115,8 @@ export function ContactFormWizard({ onComplete, onCancel, originalPrompt }: Cont
       type: 'text',
       required: false,
       label: newFieldName,
-      labelAr: newFieldName
+      labelAr: newFieldName,
+      width: 'full'
     }]);
     setNewFieldName('');
   };
@@ -106,13 +132,18 @@ export function ContactFormWizard({ onComplete, onCancel, originalPrompt }: Cont
       }
     };
 
-    // Build structured prompt
+    // Build structured prompt with layout info
     let prompt = `Build a contact form with these specifications:
 
 FORM STYLE: ${formStyle === 'single' ? 'Single page form' : formStyle === 'multi-step' ? 'Multi-step wizard' : 'Floating/modal form'}
 
-FIELDS (in order):
-${fields.map((f, i) => `${i + 1}. ${f.label} (${f.type}) - ${f.required ? 'required' : 'optional'}`).join('\n')}
+FIELDS (in order with layout):
+${fields.map((f, i) => `${i + 1}. ${f.label} (${f.type}) - ${f.required ? 'required' : 'optional'} - ${f.width === 'half' ? 'half width (2 columns)' : 'full width'}`).join('\n')}
+
+LAYOUT INSTRUCTIONS:
+- Fields marked as "half width" should appear side-by-side (2 per row)
+- Fields marked as "full width" should span the entire row
+- Use CSS grid or flexbox to achieve this layout
 
 DESIGN:
 - Border style: ${borderRadius}
@@ -153,8 +184,8 @@ Original request: ${originalPrompt}`;
                 className={cn(
                   "flex flex-col items-center gap-2 p-3 rounded-lg border transition-all",
                   formStyle === style.id
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-primary/50"
+                    ? "border-indigo-500 bg-indigo-500/10"
+                    : "border-border hover:border-indigo-500/50"
                 )}
               >
                 {style.icon}
@@ -168,7 +199,7 @@ Original request: ${originalPrompt}`;
       );
     }
 
-    // Step 2: Field Configuration
+    // Step 2: Field Configuration with reordering and width options
     if (step === 2) {
       return (
         <div className="space-y-4">
@@ -176,33 +207,91 @@ Original request: ${originalPrompt}`;
             {isRTL ? 'تكوين حقول النموذج' : 'Configure form fields'}
           </p>
           
-          <div className="space-y-2 max-h-48 overflow-y-auto">
-            {fields.map((field) => (
+          <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+            {fields.map((field, index) => (
               <div
                 key={field.id}
-                className="flex items-center gap-2 p-2 rounded-lg border border-border bg-background"
+                className="flex items-center gap-1.5 p-2 rounded-lg border border-border bg-background"
               >
-                <GripVertical className="h-4 w-4 text-muted-foreground" />
-                <span className="flex-1 text-sm">{isRTL ? field.labelAr : field.label}</span>
-                <span className="text-xs text-muted-foreground px-2 py-0.5 rounded bg-muted">
+                {/* Drag Handle */}
+                <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                
+                {/* Field Label */}
+                <span className="flex-1 text-sm font-medium truncate min-w-0">
+                  {isRTL ? field.labelAr : field.label}
+                </span>
+                
+                {/* Type Badge */}
+                <span className="text-[10px] text-muted-foreground px-1.5 py-0.5 rounded bg-muted flex-shrink-0">
                   {field.type}
                 </span>
-                <div className="flex items-center gap-1">
-                  <Label className="text-xs text-muted-foreground">
+                
+                {/* Required Toggle */}
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <Label className="text-[10px] text-muted-foreground">
                     {isRTL ? 'مطلوب' : 'Req'}
                   </Label>
                   <Switch
                     checked={field.required}
                     onCheckedChange={() => handleFieldToggle(field.id, 'required')}
                     disabled={['name', 'email', 'message'].includes(field.id)}
+                    className="scale-75"
                   />
                 </div>
+                
+                {/* Width Toggle - Half/Full */}
+                <button
+                  onClick={() => handleFieldWidthToggle(field.id)}
+                  className={cn(
+                    "p-1 rounded transition-colors flex-shrink-0",
+                    field.width === 'half' 
+                      ? "bg-indigo-500/20 text-indigo-500" 
+                      : "bg-muted text-muted-foreground hover:text-foreground"
+                  )}
+                  title={field.width === 'half' ? (isRTL ? 'نصف العرض' : 'Half width') : (isRTL ? 'العرض الكامل' : 'Full width')}
+                >
+                  {field.width === 'half' ? (
+                    <Columns className="h-3 w-3" />
+                  ) : (
+                    <Square className="h-3 w-3" />
+                  )}
+                </button>
+                
+                {/* Move Up/Down Buttons */}
+                <div className="flex flex-col gap-0.5 flex-shrink-0">
+                  <button
+                    onClick={() => handleMoveField(field.id, 'up')}
+                    disabled={index === 0}
+                    className={cn(
+                      "p-0.5 rounded transition-colors",
+                      index === 0 
+                        ? "text-muted-foreground/30 cursor-not-allowed" 
+                        : "text-muted-foreground hover:text-indigo-500 hover:bg-indigo-500/10"
+                    )}
+                  >
+                    <ArrowUp className="h-3 w-3" />
+                  </button>
+                  <button
+                    onClick={() => handleMoveField(field.id, 'down')}
+                    disabled={index === fields.length - 1}
+                    className={cn(
+                      "p-0.5 rounded transition-colors",
+                      index === fields.length - 1 
+                        ? "text-muted-foreground/30 cursor-not-allowed" 
+                        : "text-muted-foreground hover:text-indigo-500 hover:bg-indigo-500/10"
+                    )}
+                  >
+                    <ArrowDown className="h-3 w-3" />
+                  </button>
+                </div>
+                
+                {/* Delete Button */}
                 {!['name', 'email', 'message'].includes(field.id) && (
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => handleRemoveField(field.id)}
-                    className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                    className="h-6 w-6 p-0 text-destructive hover:text-destructive flex-shrink-0"
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>
@@ -211,6 +300,7 @@ Original request: ${originalPrompt}`;
             ))}
           </div>
           
+          {/* Add Field */}
           <div className="flex gap-2">
             <Input
               value={newFieldName}
@@ -222,6 +312,18 @@ Original request: ${originalPrompt}`;
             <Button size="sm" variant="outline" onClick={handleAddField} className="h-8">
               <Plus className="h-3 w-3" />
             </Button>
+          </div>
+          
+          {/* Layout Legend */}
+          <div className="flex items-center gap-4 text-[10px] text-muted-foreground pt-1">
+            <div className="flex items-center gap-1">
+              <Columns className="h-3 w-3 text-indigo-500" />
+              <span>{isRTL ? 'نصف العرض (حقلين بجانب بعض)' : 'Half = 2 fields side by side'}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Square className="h-3 w-3" />
+              <span>{isRTL ? 'العرض الكامل' : 'Full = spans entire row'}</span>
+            </div>
           </div>
         </div>
       );
@@ -247,8 +349,8 @@ Original request: ${originalPrompt}`;
                       "flex-1 py-2 text-xs font-medium border transition-all",
                       r === 'sharp' ? 'rounded-none' : r === 'pill' ? 'rounded-full' : 'rounded-lg',
                       borderRadius === r
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-primary/50"
+                        ? "border-indigo-500 bg-indigo-500/10"
+                        : "border-border hover:border-indigo-500/50"
                     )}
                   >
                     {r === 'rounded' ? (isRTL ? 'مدور' : 'Rounded') : 
@@ -276,10 +378,10 @@ Original request: ${originalPrompt}`;
   };
 
   return (
-    <div className="w-full space-y-4 p-4 bg-gradient-to-br from-emerald-500/5 to-teal-500/5 border border-emerald-500/20 rounded-xl" dir={isRTL ? 'rtl' : 'ltr'}>
+    <div className="w-full space-y-4 p-4 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border border-indigo-500/30 rounded-xl" dir={isRTL ? 'rtl' : 'ltr'}>
       {/* Header */}
       <div className="flex items-center gap-2">
-        <Mail className="h-5 w-5 text-emerald-500" />
+        <Mail className="h-5 w-5 text-indigo-500" />
         <h3 className="font-semibold text-sm">
           {isRTL ? '✉️ معالج نموذج الاتصال' : '✉️ Contact Form Wizard'}
         </h3>
@@ -292,7 +394,7 @@ Original request: ${originalPrompt}`;
             key={i}
             className={cn(
               "flex-1 h-1 rounded-full transition-all",
-              i + 1 <= step ? "bg-emerald-500" : "bg-muted"
+              i + 1 <= step ? "bg-indigo-500" : "bg-muted"
             )}
           />
         ))}
@@ -317,7 +419,7 @@ Original request: ${originalPrompt}`;
           <Button
             size="sm"
             onClick={() => setStep(s => s + 1)}
-            className="text-xs bg-emerald-600 hover:bg-emerald-700"
+            className="text-xs bg-indigo-600 hover:bg-indigo-700"
           >
             {isRTL ? 'التالي' : 'Next'}
             {isRTL ? <ChevronLeft className="h-4 w-4 ml-1" /> : <ChevronRight className="h-4 w-4 ml-1" />}
@@ -326,7 +428,7 @@ Original request: ${originalPrompt}`;
           <Button
             size="sm"
             onClick={handleComplete}
-            className="text-xs bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700"
+            className="text-xs bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
           >
             <Sparkles className="h-3 w-3 mr-1" />
             {isRTL ? 'إنشاء النموذج' : 'Generate Form'}
