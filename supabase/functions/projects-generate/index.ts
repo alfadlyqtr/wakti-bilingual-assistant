@@ -475,6 +475,13 @@ async function callGeminiPlanMode(
 5. Output ONLY valid JSON - no explanations, no markdown, no text before/after
 6. Every "current" value MUST exist in the provided files - verify by line number
 
+PRODUCT CREATION RULES (MANDATORY):
+- NEVER hardcode a projectId. Use the existing projectId variable in the file.
+- Use supabase.functions.invoke('project-backend-api', { body: { projectId, action: 'collection/products', data } }) or a fetch call with dynamic projectId.
+- Convert price to a number before sending.
+- Use toast for success/error (no alert()).
+- After success, add CTA text: "Manage stock in Backend → Shop → Inventory".
+
 OUTPUT FORMAT (STRICT JSON):
 {
   "title": "Brief description of the change",
