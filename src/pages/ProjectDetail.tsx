@@ -1074,6 +1074,16 @@ export default function ProjectDetail() {
         .single() as any);
 
       if (projectError) throw projectError;
+      
+      // CRITICAL: Verify ownership to prevent cross-user access
+      // RLS allows viewing published projects, but editing should be owner-only
+      if (projectData.user_id !== user?.id) {
+        console.error('Access denied: Project belongs to another user');
+        toast.error(isRTL ? 'ليس لديك صلاحية للوصول لهذا المشروع' : 'You do not have permission to access this project');
+        navigate('/projects');
+        return;
+      }
+      
       setProject(projectData);
 
       const { data: filesData, error: filesError } = await (supabase

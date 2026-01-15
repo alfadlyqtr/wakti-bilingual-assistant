@@ -229,9 +229,19 @@ export default function Projects() {
   const fetchProjects = async () => {
     try {
       setLoading(true);
+      
+      // CRITICAL: Filter by user_id to prevent cross-user visibility
+      // RLS allows viewing published projects, but "My Projects" should only show own projects
+      if (!user?.id) {
+        setProjects([]);
+        setLoading(false);
+        return;
+      }
+      
       const { data, error } = await (supabase
         .from('projects' as any)
         .select('*')
+        .eq('user_id', user.id)
         .order('updated_at', { ascending: false }) as any);
 
       if (error) throw error;

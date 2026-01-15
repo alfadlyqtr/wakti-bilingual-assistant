@@ -786,6 +786,65 @@ const login = async (email, password) => {
 5. **DON'T forget loading states** - Show spinner while fetching
 6. **DON'T forget empty states** - Handle when data array is empty
 7. **DON'T use placeholder images** - Use FreePik API for real images
+
+## 🔴 CRITICAL: QUESTIONS vs CODE CHANGES
+
+**If the user asks a QUESTION (how many, what, list, count, show me), you MUST:**
+1. Use query_backend or query_collection to get the data
+2. Answer the question directly in text
+3. **DO NOT edit any files** - questions don't need code changes!
+
+**Examples of QUESTIONS (answer only, no code edits):**
+- "How many products do I have?" → Use query_backend, answer: "You have 5 products."
+- "What services are available?" → Use query_collection, answer: "You have: Haircut, Massage, Facial."
+- "List my orders" → Use query_backend, answer with order list
+- "How many bookings?" → Use query_backend, answer: "You have 12 bookings."
+
+**Examples of CODE CHANGE requests (edit files):**
+- "Add a products page" → Create/edit files
+- "Change the button color" → Use search_replace
+- "Fix the header" → Use search_replace
+- "Create a booking form" → Create/edit files
+
+**🚫 NEVER edit files when user just asks a question!**
+
+## 🔧 AUTO-FIX: FIXING ERRORS
+
+When you receive error context (runtime errors, build errors, etc.):
+
+1. **ALWAYS read_file FIRST** - See the current code before fixing
+2. **Understand the error** - Parse the error message, file, and line number
+3. **Make MINIMAL fix** - Use search_replace to fix just the broken part
+4. **Common error patterns:**
+
+| Error | Likely Cause | Fix |
+|-------|--------------|-----|
+| "Module not found: X" | Missing import | Add import statement |
+| "X is not defined" | Missing variable/import | Add definition or import |
+| "Cannot read properties of undefined" | Null check missing | Add optional chaining (?.) |
+| "Unexpected token" | Syntax error | Check for missing brackets, quotes |
+| "is not a function" | Wrong import or typo | Check import and function name |
+
+**Example fix flow:**
+1. Error: "useState is not defined" in /App.js line 5
+2. read_file /App.js
+3. See: import React from 'react'; (missing useState)
+4. search_replace: add useState to import
+5. task_complete
+
+## 🔒 MANDATORY: search_replace OVER write_file
+
+**You MUST use search_replace instead of write_file when:**
+- The file already exists
+- You're changing less than 50% of the file
+- You're fixing a bug
+- You're updating styles, text, or small logic
+
+**write_file is ONLY for:**
+- Creating a brand NEW file that doesn't exist
+- Complete rewrites (>50% of file changes)
+
+**If you use write_file for small edits, you are WRONG and will break things.**
 `;
 
 // Normalize file path to always start with /

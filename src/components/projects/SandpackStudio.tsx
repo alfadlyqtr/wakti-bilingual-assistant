@@ -608,7 +608,59 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
           // Gaming/Graphics
           "chess.js": "^1.0.0-beta.6",
           "react-chessboard": "^4.7.3",
-          "pixi.js": "^8.10.2"
+          "pixi.js": "^8.10.2",
+          // Routing
+          "react-router-dom": "^6.22.0",
+          // HTTP/Data
+          "axios": "^1.6.7",
+          "swr": "^2.2.5",
+          // Utilities
+          "lodash": "^4.17.21",
+          "dayjs": "^1.11.10",
+          "moment": "^2.30.1",
+          // Additional Icons
+          "react-icons": "^5.0.1",
+          // Animation
+          "@react-spring/web": "^9.7.3",
+          // Toast/Notifications
+          "react-toastify": "^10.0.4",
+          "react-hot-toast": "^2.4.1",
+          // Modals/Dialogs
+          "react-modal": "^3.16.1",
+          // Select/Dropdowns
+          "react-select": "^5.8.0",
+          // Tables
+          "@tanstack/react-table": "^8.13.2",
+          // Virtualization
+          "react-window": "^1.8.10",
+          "react-virtualized": "^9.22.5",
+          // Media
+          "react-player": "^2.14.1",
+          // Markdown
+          "react-markdown": "^9.0.1",
+          "remark-gfm": "^4.0.0",
+          // Code Highlighting
+          "prismjs": "^1.29.0",
+          "react-syntax-highlighter": "^15.5.0",
+          // Supabase
+          "@supabase/supabase-js": "^2.39.7",
+          // Maps
+          "leaflet": "^1.9.4",
+          "react-leaflet": "^4.2.1",
+          // PDF
+          "@react-pdf/renderer": "^3.4.2",
+          // QR Code
+          "qrcode.react": "^3.1.0",
+          // Copy to Clipboard
+          "react-copy-to-clipboard": "^5.1.0",
+          // Masonry Layout
+          "react-masonry-css": "^1.0.16",
+          // Infinite Scroll
+          "react-infinite-scroll-component": "^6.1.0",
+          // Skeleton Loading
+          "react-loading-skeleton": "^3.4.0",
+          // Color Picker
+          "react-colorful": "^5.6.1"
         }
       }}
       style={{ height: '100%', width: '100%' }}
