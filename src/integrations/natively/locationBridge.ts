@@ -60,13 +60,23 @@ const LOCATION_CACHE_TTL = 5 * 60 * 1000; // 5 minutes for fresh location
 function getInstance(): NativelyLocationInstance | null {
   if (typeof window === 'undefined') return null;
   try {
-    const Ctor = window.NativelyLocation;
+    // Check if Natively SDK is loaded at all
+    const natively = (window as any).natively;
+    const isNativeApp = natively?.isNativeApp === true || natively?.isIOSApp === true || natively?.isAndroidApp === true;
+    console.log('[NativelyLocation] Checking SDK availability:', {
+      hasNatively: !!natively,
+      isNativeApp,
+      hasNativelyLocation: typeof (window as any).NativelyLocation !== 'undefined',
+      nativelyReady: (window as any).__nativelyReady,
+    });
+    
+    const Ctor = (window as any).NativelyLocation;
     if (!Ctor) {
-      console.log('[NativelyLocation] SDK not available (not in Natively app). window.NativelyLocation =', typeof window.NativelyLocation);
+      console.log('[NativelyLocation] NativelyLocation class not found on window');
       // Log what IS available on window for debugging
-      const nativelyKeys = Object.keys(window).filter(k => k.toLowerCase().includes('natively'));
+      const nativelyKeys = Object.keys(window).filter(k => k.toLowerCase().includes('natively') || k.toLowerCase().includes('native'));
       if (nativelyKeys.length > 0) {
-        console.log('[NativelyLocation] Found Natively-related keys on window:', nativelyKeys);
+        console.log('[NativelyLocation] Found Native-related keys on window:', nativelyKeys.slice(0, 20));
       }
       return null;
     }
@@ -269,19 +279,27 @@ export async function getNativeLocation(options?: {
 }
 
 /**
- * Browser geolocation fallback (for web testing)
+ * Browser geolocation fallback (works in Natively WebView too)
  */
 async function getBrowserLocation(timeoutMs: number): Promise<NativeLocationResult | null> {
+  console.log('[NativelyLocation] Trying browser geolocation fallback...');
+  
   if (typeof navigator === 'undefined' || !navigator.geolocation) {
+    console.log('[NativelyLocation] Browser geolocation not available');
     return null;
   }
 
   return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(null), timeoutMs);
+    const timer = setTimeout(() => {
+      console.log('[NativelyLocation] Browser geolocation timeout');
+      resolve(null);
+    }, timeoutMs);
 
+    console.log('[NativelyLocation] Calling navigator.geolocation.getCurrentPosition...');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         clearTimeout(timer);
+        console.log('[NativelyLocation] ✅ Browser geolocation success:', pos.coords.latitude, pos.coords.longitude);
         const result: NativeLocationResult = {
           latitude: pos.coords.latitude,
           longitude: pos.coords.longitude,
@@ -291,14 +309,15 @@ async function getBrowserLocation(timeoutMs: number): Promise<NativeLocationResu
         setCachedLocation(result);
         resolve(result);
       },
-      () => {
+      (err) => {
         clearTimeout(timer);
+        console.log('[NativelyLocation] ❌ Browser geolocation error:', err.code, err.message);
         resolve(null);
       },
       {
-        enableHighAccuracy: false,
+        enableHighAccuracy: true, // Request high accuracy since user granted permission
         timeout: timeoutMs,
-        maximumAge: LOCATION_CACHE_TTL,
+        maximumAge: 60000, // Accept cached position up to 1 minute old
       }
     );
   });

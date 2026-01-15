@@ -406,6 +406,17 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     
     console.log('[CalendarSync] Using calendar ID:', calendarId);
     
+    // If no calendar access, show error and stop
+    if (!calendarId) {
+      setIsSyncing(false);
+      toast.error(
+        language === 'ar' 
+          ? 'لا يمكن الوصول إلى التقويم. يرجى السماح بالوصول في الإعدادات → الخصوصية → التقويمات → Wakti' 
+          : 'Cannot access calendar. Please allow access in Settings → Privacy → Calendars → Wakti'
+      );
+      return;
+    }
+    
     let lastError = '';
     
     for (const entry of entriesToSync) {

@@ -112,11 +112,48 @@ serve(async (req) => {
       });
     }
 
+    let finalStoragePath = storagePath;
+    let finalContentType = contentType;
+
+    if (contentType.includes("webm")) {
+      const convertResponse = await fetch(`${supabaseUrl}/functions/v1/convert-webm-to-mp4`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${supabaseServiceKey}`,
+        },
+        body: JSON.stringify({ storagePath, bucket: VIDEOS_BUCKET }),
+      });
+
+      if (!convertResponse.ok) {
+        const errorText = await convertResponse.text();
+        return new Response(
+          JSON.stringify({ error: `Video conversion failed: ${errorText}` }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      const convertData = await convertResponse.json();
+      if (!convertData?.storagePath) {
+        return new Response(JSON.stringify({ error: "Video conversion returned no storage path" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      finalStoragePath = convertData.storagePath;
+      finalContentType = "video/mp4";
+      await supabase.storage.from(VIDEOS_BUCKET).remove([storagePath]);
+    }
+
     return new Response(
       JSON.stringify({
         ok: true,
-        storagePath,
-        contentType,
+        storagePath: finalStoragePath,
+        contentType: finalContentType,
         sizeBytes: videoBlob.size,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

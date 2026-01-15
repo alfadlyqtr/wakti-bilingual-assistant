@@ -282,7 +282,9 @@ class WaktiAIV2ServiceClass {
     // Try native location first (Natively SDK)
     // If forceFresh, request fresh location with skipCache
     try {
+      console.log('[WaktiAIV2Service] Attempting to get native location, forceFresh:', forceFresh);
       const nativeLoc = await getNativeLocation({ skipCache: forceFresh });
+      console.log('[WaktiAIV2Service] Native location result:', nativeLoc);
       if (nativeLoc && typeof nativeLoc.latitude === 'number' && typeof nativeLoc.longitude === 'number') {
         resolved = {
           ...resolved,
@@ -293,6 +295,9 @@ class WaktiAIV2ServiceClass {
           country: nativeLoc.country || resolved.country,
           source: 'native',
         };
+        console.log('[WaktiAIV2Service] ✅ Using native location:', resolved.latitude, resolved.longitude);
+      } else {
+        console.log('[WaktiAIV2Service] ⚠️ Native location returned null or invalid');
       }
     } catch (err) {
       console.warn('[WaktiAIV2Service] Native location error:', err);
@@ -761,6 +766,17 @@ class WaktiAIV2ServiceClass {
       }
       const location = await this.getUserLocation(userId, needsFreshLocation);
       const clientTimezone = location?.timezone || this.getClientTimezone();
+      
+      // DEBUG: Log what location data we're sending to the Edge Function
+      console.log('📍 LOCATION DEBUG:', {
+        hasLocation: !!location,
+        source: location?.source,
+        latitude: location?.latitude,
+        longitude: location?.longitude,
+        city: location?.city,
+        country: location?.country,
+        timezone: clientTimezone,
+      });
 
       // Enhanced message handling with 100-message memory window
       // CRITICAL: Strip large data to avoid huge request bodies that crash Edge Functions
