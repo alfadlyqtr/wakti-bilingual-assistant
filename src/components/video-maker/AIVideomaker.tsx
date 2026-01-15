@@ -112,37 +112,21 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
       if (error) throw error;
       const row = data?.[0];
-      if (row) {
+      if (row?.storage_path) {
         let signedUrl: string | null = null;
-        if (row.storage_path) {
-          const { data: urlData, error: urlErr } = await supabase.storage
-            .from('videos')
-            .createSignedUrl(row.storage_path, 3600);
-          if (urlErr) {
-            const { data: pubData } = supabase.storage.from('videos').getPublicUrl(row.storage_path);
-            signedUrl = pubData?.publicUrl || null;
-          } else {
-            signedUrl = urlData?.signedUrl || null;
-          }
+        const { data: urlData, error: urlErr } = await supabase.storage
+          .from('videos')
+          .createSignedUrl(row.storage_path, 3600);
+        if (urlErr) {
+          const { data: pubData } = supabase.storage.from('videos').getPublicUrl(row.storage_path);
+          signedUrl = pubData?.publicUrl || null;
+        } else {
+          signedUrl = urlData?.signedUrl || null;
         }
 
-        if (row.video_url || signedUrl) {
+        if (signedUrl) {
           setLatestVideo({ ...row, signedUrl });
-          return;
         }
-      }
-
-      const { data: aiData, error: aiError } = await (supabase as any)
-        .from('user_ai_videos')
-        .select('id, title, video_url, duration_seconds, created_at')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      if (aiError) throw aiError;
-      const aiRow = aiData?.[0];
-      if (aiRow?.video_url) {
-        setLatestVideo(aiRow);
       }
     } catch (e) {
       console.error('Failed to load latest video:', e);
@@ -379,20 +363,17 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     if (!generatedVideoUrl || !user || isSaved) return;
     setIsSaving(true);
     try {
-      const response = await fetch(generatedVideoUrl);
-      if (!response.ok) throw new Error('Failed to download video');
-      const blob = await response.blob();
-      const contentType = blob.type || 'video/mp4';
-      const isWebm = contentType.includes('webm');
-      const ext = isWebm ? 'webm' : 'mp4';
-      const fileName = `${user.id}/${Date.now()}.${ext}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage.from('videos').upload(fileName, blob, {
-        contentType,
-        cacheControl: '3600',
+      const { data: importData, error: importError } = await supabase.functions.invoke('import-external-video', {
+        body: {
+          sourceUrl: generatedVideoUrl,
+          filenameHint: prompt.trim().slice(0, 40) || 'ai-video',
+        },
       });
-      if (uploadError) throw uploadError;
-
-      const storagePath = uploadData?.path || fileName;
+      if (importError) throw importError;
+      const storagePath = importData?.storagePath as string | undefined;
+      if (!storagePath) {
+        throw new Error(importData?.error || 'Failed to save video');
+      }
 
       // Save into unified user_videos table
       const { error } = await (supabase as any).from('user_videos').insert({

@@ -62,10 +62,23 @@ function getInstance(): NativelyLocationInstance | null {
   try {
     const Ctor = window.NativelyLocation;
     if (!Ctor) {
-      console.log('[NativelyLocation] SDK not available (not in Natively app)');
+      console.log('[NativelyLocation] SDK not available (not in Natively app). window.NativelyLocation =', typeof window.NativelyLocation);
+      // Log what IS available on window for debugging
+      const nativelyKeys = Object.keys(window).filter(k => k.toLowerCase().includes('natively'));
+      if (nativelyKeys.length > 0) {
+        console.log('[NativelyLocation] Found Natively-related keys on window:', nativelyKeys);
+      }
       return null;
     }
-    return new Ctor();
+    console.log('[NativelyLocation] SDK found, creating instance...');
+    const instance = new Ctor();
+    console.log('[NativelyLocation] Instance created. Methods available:', {
+      hasCurrent: typeof instance.current === 'function',
+      hasStart: typeof instance.start === 'function',
+      hasStop: typeof instance.stop === 'function',
+      hasGetCurrentPosition: typeof instance.getCurrentPosition === 'function',
+    });
+    return instance;
   } catch (err) {
     console.warn('[NativelyLocation] Failed to create instance:', err);
     return null;

@@ -38,6 +38,8 @@ interface BackendDashboardProps {
   projectId: string;
   isRTL: boolean;
   onBack?: () => void;
+  initialTab?: string;
+  onTabChange?: (tabId: string) => void;
 }
 
 interface BackendStatus {
@@ -47,12 +49,13 @@ interface BackendStatus {
   allowed_origins: string[];
 }
 
-export function BackendDashboard({ projectId, isRTL, onBack }: BackendDashboardProps) {
+export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabChange }: BackendDashboardProps) {
   const [loading, setLoading] = useState(true);
   const [enabling, setEnabling] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [backendStatus, setBackendStatus] = useState<BackendStatus | null>(null);
-  const [activeTab, setActiveTab] = useState('uploads');
+  const resolveTab = (tab?: string) => (FEATURE_TABS.some(t => t.id === tab) ? tab! : 'uploads');
+  const [activeTab, setActiveTab] = useState(resolveTab(initialTab));
   
   // Data states
   const [submissions, setSubmissions] = useState<any[]>([]);
@@ -68,6 +71,17 @@ export function BackendDashboard({ projectId, isRTL, onBack }: BackendDashboardP
   const [chatRooms, setChatRooms] = useState<any[]>([]);
   const [comments, setComments] = useState<any[]>([]);
   const [showTabMenu, setShowTabMenu] = useState(false);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(resolveTab(initialTab));
+    }
+  }, [initialTab]);
+
+  const handleTabSelect = (tabId: string) => {
+    setActiveTab(tabId);
+    onTabChange?.(tabId);
+  };
 
   const fetchBackendStatus = async () => {
     try {
@@ -511,7 +525,7 @@ export function BackendDashboard({ projectId, isRTL, onBack }: BackendDashboardP
                     return (
                       <button
                         key={tab.id}
-                        onClick={() => { setActiveTab(tab.id); setShowTabMenu(false); }}
+                        onClick={() => { handleTabSelect(tab.id); setShowTabMenu(false); }}
                         className={cn(
                           "flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all active:scale-95",
                           isActive
@@ -546,7 +560,7 @@ export function BackendDashboard({ projectId, isRTL, onBack }: BackendDashboardP
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => handleTabSelect(tab.id)}
                   className={cn(
                     "flex flex-col items-center gap-1 p-2 rounded-lg text-xs font-medium transition-all active:scale-95",
                     isActive

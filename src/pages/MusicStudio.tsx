@@ -290,20 +290,17 @@ function SavedVideosTab({ onCreate }: { onCreate: () => void }) {
 
     setSavingLegacy((prev) => ({ ...prev, [v.id]: true }));
     try {
-      const response = await fetch(sourceUrl);
-      if (!response.ok) throw new Error('Failed to download video');
-      const blob = await response.blob();
-      const contentType = blob.type || 'video/mp4';
-      const isWebm = contentType.includes('webm');
-      const ext = isWebm ? 'webm' : 'mp4';
-      const fileName = `${user.id}/${Date.now()}-${v.id}.${ext}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage.from('videos').upload(fileName, blob, {
-        contentType,
-        cacheControl: '3600',
+      const { data: importData, error: importError } = await supabase.functions.invoke('import-external-video', {
+        body: {
+          sourceUrl,
+          filenameHint: v.title || 'legacy-video',
+        },
       });
-      if (uploadError) throw uploadError;
-
-      const storagePath = uploadData?.path || fileName;
+      if (importError) throw importError;
+      const storagePath = importData?.storagePath as string | undefined;
+      if (!storagePath) {
+        throw new Error(importData?.error || 'Failed to save video');
+      }
 
       if (v.source === 'ai') {
         const { error: insertError } = await (supabase as any).from('user_videos').insert({
@@ -391,15 +388,16 @@ function SavedVideosTab({ onCreate }: { onCreate: () => void }) {
   };
 
   const handleShareSavedVideo = async (v: SavedVideo) => {
-    const shareUrl = v.source === 'ai' ? (v.video_url || v.signedUrl || '') : `${window.location.origin}/video/${v.id}`;
-    if (!shareUrl) {
-      toast.error(language === 'ar' ? 'تعذر مشاركة الفيديو' : 'Unable to share video');
+    if (!v.storage_path || v.source === 'ai') {
+      toast.error(language === 'ar' ? 'احفظ الفيديو للتشغيل أولاً' : 'Save for playback first');
       return;
     }
-    if (!v.is_public && v.source !== 'ai') {
+    if (!v.is_public) {
       toast.error(language === 'ar' ? 'اجعل الفيديو عاماً أولاً' : 'Make the video public first');
       return;
     }
+
+    const shareUrl = `${window.location.origin}/video/${v.id}`;
 
     try {
       if (navigator.share) {

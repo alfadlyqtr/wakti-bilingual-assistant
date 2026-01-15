@@ -203,3 +203,32 @@ export function getUserTimezone(): string {
     return 'UTC';
   }
 }
+
+/**
+ * Check if the Natively debug console is available
+ */
+export function isNativelyConsoleAvailable(): boolean {
+  try {
+    return Boolean((window as any)?.natively?.openConsole);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Open the Natively debug console (native app only)
+ */
+export function openNativelyConsole(): boolean {
+  try {
+    const natively = (window as any)?.natively;
+    if (!natively?.openConsole) {
+      console.warn('[NativelyCalendar] openConsole not available');
+      return false;
+    }
+    natively.openConsole();
+    return true;
+  } catch (err) {
+    console.warn('[NativelyCalendar] Failed to open console:', err);
+    return false;
+  }
+}
