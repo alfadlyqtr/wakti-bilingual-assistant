@@ -191,18 +191,48 @@ export function BackendShopTab({ orders, inventory, projectId, isRTL, onRefresh 
           .update({ data: JSON.parse(JSON.stringify(productData)) })
           .eq('id', editingProduct.id);
         if (error) throw error;
+
+        const { error: inventoryError } = await supabase
+          .from('project_inventory')
+          .upsert({
+            project_id: projectId,
+            collection_item_id: editingProduct.id,
+            collection_name: 'products',
+            stock_quantity: productData.stock_quantity ?? 0,
+            low_stock_threshold: 5,
+            track_inventory: productData.track_inventory ?? true,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'project_id,collection_item_id' });
+        if (inventoryError) throw inventoryError;
+
         toast.success(t('Product updated', 'تم تحديث المنتج'));
       } else {
         const user = await supabase.auth.getUser();
-        const { error } = await supabase
+        const { data: createdProduct, error } = await supabase
           .from('project_collections')
           .insert([{
             project_id: projectId,
             user_id: user.data.user?.id || '',
             collection_name: 'products',
             data: JSON.parse(JSON.stringify(productData))
-          }]);
+          }])
+          .select()
+          .single();
         if (error) throw error;
+
+        const { error: inventoryError } = await supabase
+          .from('project_inventory')
+          .upsert({
+            project_id: projectId,
+            collection_item_id: createdProduct?.id,
+            collection_name: 'products',
+            stock_quantity: productData.stock_quantity ?? 0,
+            low_stock_threshold: 5,
+            track_inventory: productData.track_inventory ?? true,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'project_id,collection_item_id' });
+        if (inventoryError) throw inventoryError;
+
         toast.success(t('Product added', 'تمت إضافة المنتج'));
       }
       setShowAddProduct(false);
@@ -222,6 +252,14 @@ export function BackendShopTab({ orders, inventory, projectId, isRTL, onRefresh 
         .delete()
         .eq('id', productId);
       if (error) throw error;
+
+      const { error: inventoryError } = await supabase
+        .from('project_inventory')
+        .delete()
+        .eq('project_id', projectId)
+        .eq('collection_item_id', productId);
+      if (inventoryError) throw inventoryError;
+
       toast.success(t('Product deleted', 'تم حذف المنتج'));
       onRefresh();
     } catch (err) {

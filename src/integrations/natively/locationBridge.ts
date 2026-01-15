@@ -57,6 +57,19 @@ export type LocationPermissionStatus = 'IN_USE' | 'ALWAYS' | 'DENIED' | 'UNKNOWN
 const LOCATION_CACHE_KEY = 'wakti_native_location_cache';
 const LOCATION_CACHE_TTL = 5 * 60 * 1000; // 5 minutes for fresh location
 
+function logNativelyRuntimeStatus(context: string): void {
+  if (typeof window === 'undefined') return;
+  const natively = (window as any).natively;
+  const isNativeApp = natively?.isNativeApp === true || natively?.isIOSApp === true || natively?.isAndroidApp === true;
+  console.log('[NativelyLocation] Runtime status:', {
+    context,
+    nativelyReady: (window as any).__nativelyReady,
+    hasNatively: !!natively,
+    isNativeApp,
+    hasNativelyLocation: typeof (window as any).NativelyLocation !== 'undefined',
+  });
+}
+
 function getInstance(): NativelyLocationInstance | null {
   if (typeof window === 'undefined') return null;
   try {
@@ -175,6 +188,8 @@ export async function getNativeLocation(options?: {
     fallbackToSettings = true,
     skipCache = false,
   } = options || {};
+
+  logNativelyRuntimeStatus('getNativeLocation');
 
   // Check cache first (unless skipCache)
   if (!skipCache) {

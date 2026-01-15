@@ -380,6 +380,11 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     }
     
     // First, retrieve available calendars from the device
+    const w = window as any;
+    if (!w.__waktiCalendarDebugPopupShown) {
+      w.__waktiCalendarDebugPopupShown = true;
+      w.__waktiCalendarDebugPopup = true;
+    }
     const calendarResult = await new Promise<{ calendarId: string | null; error: string | null }>((resolve) => {
       retrieveCalendars((result) => {
         console.log('[CalendarSync] Retrieved calendars result:', result);

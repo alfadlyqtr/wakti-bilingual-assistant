@@ -652,6 +652,13 @@ export default function ProjectDetail() {
         category: p.data?.category,
       }));
 
+      // Use inventory as source of truth for product count (matches backend UI)
+      const { count: inventoryCount } = await supabase
+        .from('project_inventory')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', id)
+        .eq('collection_name', 'products');
+
       // NEW: Fetch orders count
       const { count: ordersCount } = await supabase
         .from('project_orders')
@@ -697,9 +704,9 @@ export default function ProjectDetail() {
         uploadsCount: uploadsCount || 0,
         siteUsersCount: siteUsersCount || 0,
         products,
-        productsCount: products.length,
+        productsCount: inventoryCount ?? products.length,
         ordersCount: ordersCount || 0,
-        hasShopSetup: products.length > 0,
+        hasShopSetup: (inventoryCount ?? products.length) > 0,
         services,
         servicesCount: services.length,
         bookingsCount: bookingsCount || 0,

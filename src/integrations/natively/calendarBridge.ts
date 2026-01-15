@@ -99,6 +99,16 @@ export function retrieveCalendars(callback: (result: RetrieveCalendarsResult) =>
     cal.retrieveCalendars((resp: any) => {
       callbackFired = true;
       clearTimeout(timeoutId);
+
+      const debugPopupEnabled = Boolean((window as any).__waktiCalendarDebugPopup);
+      if (debugPopupEnabled) {
+        try {
+          (window as any).__waktiCalendarDebugPopup = false;
+          window.alert(`[Wakti Calendar Debug]\nretrieveCalendars response:\n${JSON.stringify(resp)}`);
+        } catch (popupErr) {
+          console.warn('[NativelyCalendar] Failed to show debug popup:', popupErr);
+        }
+      }
       
       console.log('[NativelyCalendar] ===== RETRIEVE CALENDARS RESPONSE =====');
       console.log('[NativelyCalendar] Raw resp:', JSON.stringify(resp));

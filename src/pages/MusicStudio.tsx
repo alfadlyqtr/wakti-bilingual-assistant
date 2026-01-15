@@ -97,7 +97,7 @@ interface SavedVideo {
   source?: 'user' | 'ai';
 }
 
-function VideoPlayer({ url, language }: { url: string; language: string }) {
+function VideoPlayer({ url, storagePath, language }: { url: string; storagePath?: string | null; language: string }) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -108,12 +108,24 @@ function VideoPlayer({ url, language }: { url: string; language: string }) {
       setLoading(true);
       setError(false);
       try {
-        const res = await fetch(url, { mode: 'cors' });
-        if (!res.ok) throw new Error('Fetch failed');
-        const blob = await res.blob();
-        if (cancelled) return;
-        const objectUrl = URL.createObjectURL(blob);
-        setBlobUrl(objectUrl);
+        // Use Supabase download method which handles CORS properly
+        if (storagePath) {
+          const { data, error: dlError } = await supabase.storage
+            .from('videos')
+            .download(storagePath);
+          if (dlError) throw dlError;
+          if (cancelled) return;
+          const objectUrl = URL.createObjectURL(data);
+          setBlobUrl(objectUrl);
+        } else {
+          // Fallback to direct fetch for external URLs
+          const res = await fetch(url);
+          if (!res.ok) throw new Error('Fetch failed');
+          const blob = await res.blob();
+          if (cancelled) return;
+          const objectUrl = URL.createObjectURL(blob);
+          setBlobUrl(objectUrl);
+        }
       } catch (e) {
         console.error('[VideoPlayer] Fetch error:', e);
         if (!cancelled) setError(true);
@@ -126,7 +138,31 @@ function VideoPlayer({ url, language }: { url: string; language: string }) {
       cancelled = true;
       if (blobUrl) URL.revokeObjectURL(blobUrl);
     };
-  }, [url]);
+  }, [url, storagePath]);
+
+  const handleDownload = async () => {
+    try {
+      if (storagePath) {
+        const { data, error: dlError } = await supabase.storage
+          .from('videos')
+          .download(storagePath);
+        if (dlError) throw dlError;
+        const downloadUrl = URL.createObjectURL(data);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = storagePath.split('/').pop() || 'video.mp4';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(downloadUrl);
+      } else {
+        window.open(url, '_blank');
+      }
+    } catch (e) {
+      console.error('[VideoPlayer] Download error:', e);
+      window.open(url, '_blank');
+    }
+  };
 
   if (loading) {
     return (
@@ -143,11 +179,9 @@ function VideoPlayer({ url, language }: { url: string; language: string }) {
           <p>{language === 'ar' ? 'تعذر تحميل الفيديو' : 'Could not load video'}</p>
         </div>
         <div className="flex justify-center">
-          <a href={url} download target="_blank" rel="noreferrer">
-            <Button size="sm" variant="default">
-              {language === 'ar' ? 'تحميل الفيديو' : 'Download Video'}
-            </Button>
-          </a>
+          <Button size="sm" variant="default" onClick={handleDownload}>
+            {language === 'ar' ? 'تحميل الفيديو' : 'Download Video'}
+          </Button>
         </div>
       </div>
     );
@@ -164,11 +198,9 @@ function VideoPlayer({ url, language }: { url: string; language: string }) {
         className="w-full max-h-[60vh] rounded-lg bg-black object-contain"
       />
       <div className="flex justify-end">
-        <a href={url} download target="_blank" rel="noreferrer">
-          <Button size="sm" variant="outline">
-            {language === 'ar' ? 'تحميل الفيديو' : 'Download Video'}
-          </Button>
-        </a>
+        <Button size="sm" variant="outline" onClick={handleDownload}>
+          {language === 'ar' ? 'تحميل الفيديو' : 'Download Video'}
+        </Button>
       </div>
     </div>
   );
@@ -541,7 +573,7 @@ function SavedVideosTab({ onCreate }: { onCreate: () => void }) {
                 </div>
               </div>
 
-              {activePreviewId === v.id && v.signedUrl && <VideoPlayer url={v.signedUrl} language={language} />}
+              {activePreviewId === v.id && v.signedUrl && <VideoPlayer url={v.signedUrl} storagePath={v.storage_path} language={language} />}
             </Card>
           ))}
         </div>

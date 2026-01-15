@@ -63,25 +63,22 @@ export default function VideoShare() {
 
         setVideo(data as VideoData);
 
-        // Fetch video as blob for guaranteed playback
+        // Use Supabase download method for guaranteed playback (handles CORS)
         if (data.storage_path) {
-          const { data: urlData } = supabase.storage
-            .from('videos')
-            .getPublicUrl(data.storage_path);
-
-          if (urlData?.publicUrl) {
-            try {
-              const res = await fetch(urlData.publicUrl, { mode: 'cors' });
-              if (res.ok) {
-                const blob = await res.blob();
-                const blobUrl = URL.createObjectURL(blob);
-                setVideoUrl(blobUrl);
-              } else {
-                // Fallback to direct URL if fetch fails
-                setVideoUrl(urlData.publicUrl);
-              }
-            } catch (e) {
-              console.error('[VideoShare] Fetch error:', e);
+          try {
+            const { data: blobData, error: dlError } = await supabase.storage
+              .from('videos')
+              .download(data.storage_path);
+            if (dlError) throw dlError;
+            const blobUrl = URL.createObjectURL(blobData);
+            setVideoUrl(blobUrl);
+          } catch (e) {
+            console.error('[VideoShare] Download error:', e);
+            // Fallback to public URL
+            const { data: urlData } = supabase.storage
+              .from('videos')
+              .getPublicUrl(data.storage_path);
+            if (urlData?.publicUrl) {
               setVideoUrl(urlData.publicUrl);
             }
           }
@@ -172,13 +169,33 @@ export default function VideoShare() {
           )}
         </div>
 
-        {videoUrl && (
+        {video?.storage_path && (
           <div className="flex justify-end">
-            <a href={videoUrl} download target="_blank" rel="noreferrer">
-              <Button size="sm" variant="outline">
-                {language === 'ar' ? 'تحميل الفيديو' : 'Download Video'}
-              </Button>
-            </a>
+            <Button 
+              size="sm" 
+              variant="outline"
+              onClick={async () => {
+                try {
+                  const { data, error } = await supabase.storage
+                    .from('videos')
+                    .download(video.storage_path!);
+                  if (error) throw error;
+                  const downloadUrl = URL.createObjectURL(data);
+                  const a = document.createElement('a');
+                  a.href = downloadUrl;
+                  a.download = video.storage_path!.split('/').pop() || 'video.mp4';
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(downloadUrl);
+                } catch (e) {
+                  console.error('[VideoShare] Download error:', e);
+                  toast.error(language === 'ar' ? 'فشل التحميل' : 'Download failed');
+                }
+              }}
+            >
+              {language === 'ar' ? 'تحميل الفيديو' : 'Download Video'}
+            </Button>
           </div>
         )}
 
