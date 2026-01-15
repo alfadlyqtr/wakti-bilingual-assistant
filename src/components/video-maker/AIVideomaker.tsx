@@ -285,14 +285,15 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     if (!generatedVideoUrl || !user || isSaved) return;
     setIsSaving(true);
     try {
-      // Insert into user_ai_videos table
-      const { error } = await (supabase as any).from('user_ai_videos').insert({
+      // Save into unified user_videos table
+      const { error } = await (supabase as any).from('user_videos').insert({
         user_id: user.id,
         title: prompt.trim().slice(0, 100) || 'AI Video',
-        source_image_url: imagePreview,
+        description: prompt.trim() || null,
         video_url: generatedVideoUrl,
-        prompt: prompt.trim() || null,
         duration_seconds: 5,
+        aspect_ratio: '9:16',
+        style_template: 'ai',
         is_public: false,
       });
 

@@ -93,6 +93,7 @@ interface SavedVideo {
   created_at: string;
   signedUrl?: string | null;
   thumbnailSignedUrl?: string | null;
+  source?: 'user' | 'ai';
 }
 
 function VideoPlayer({ url, language }: { url: string; language: string }) {
@@ -187,7 +188,7 @@ function SavedVideosTab({ onCreate }: { onCreate: () => void }) {
     try {
       const { data, error } = await (supabase as any)
         .from('user_videos')
-        .select('id, title, thumbnail_url, storage_path, duration_seconds, is_public, created_at')
+        .select('id, title, thumbnail_url, storage_path, duration_seconds, is_public, created_at, video_url')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
@@ -208,6 +209,8 @@ function SavedVideosTab({ onCreate }: { onCreate: () => void }) {
             } else {
               signedUrl = urlData?.signedUrl || null;
             }
+          } else if (v.video_url) {
+            signedUrl = v.video_url;
           }
 
           if ((v as any).thumbnail_url) {
@@ -222,11 +225,36 @@ function SavedVideosTab({ onCreate }: { onCreate: () => void }) {
             }
           }
 
-          return { ...v, signedUrl, thumbnailSignedUrl };
+          return { ...v, signedUrl, thumbnailSignedUrl, source: 'user' };
         })
       );
 
-      setSavedVideos(withUrls);
+      const { data: aiData, error: aiError } = await (supabase as any)
+        .from('user_ai_videos')
+        .select('id, title, video_url, source_image_url, duration_seconds, is_public, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (aiError) throw aiError;
+
+      const aiVideos: SavedVideo[] = (aiData || []).map((v: any) => ({
+        id: v.id,
+        title: v.title || null,
+        video_url: v.video_url || null,
+        storage_path: null,
+        duration_seconds: v.duration_seconds || 5,
+        is_public: !!v.is_public,
+        created_at: v.created_at,
+        signedUrl: v.video_url || null,
+        thumbnailSignedUrl: v.source_image_url || null,
+        source: 'ai',
+      }));
+
+      const merged = [...withUrls, ...aiVideos].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+
+      setSavedVideos(merged);
     } catch (e) {
       console.error('Failed to load saved videos:', e);
       toast.error(language === 'ar' ? 'فشل تحميل الفيديوهات' : 'Failed to load videos');
@@ -250,13 +278,14 @@ function SavedVideosTab({ onCreate }: { onCreate: () => void }) {
     if (!user || !pendingDeleteVideo) return;
     const v = pendingDeleteVideo;
     try {
-      if (v.storage_path) {
+      if (v.source !== 'ai' && v.storage_path) {
         await supabase.storage.from('videos').remove([v.storage_path]);
       }
-      if ((v as any).thumbnail_url) {
+      if (v.source !== 'ai' && (v as any).thumbnail_url) {
         await supabase.storage.from('videos').remove([(v as any).thumbnail_url]);
       }
-      await (supabase as any).from('user_videos').delete().eq('id', v.id).eq('user_id', user.id);
+      const deleteTable = v.source === 'ai' ? 'user_ai_videos' : 'user_videos';
+      await (supabase as any).from(deleteTable).delete().eq('id', v.id).eq('user_id', user.id);
 
       setSavedVideos((prev) => prev.filter((x) => x.id !== v.id));
       if (activePreviewId === v.id) setActivePreviewId(null);
@@ -276,8 +305,12 @@ function SavedVideosTab({ onCreate }: { onCreate: () => void }) {
   };
 
   const handleShareSavedVideo = async (v: SavedVideo) => {
-    const shareUrl = `${window.location.origin}/video/${v.id}`;
-    if (!v.is_public) {
+    const shareUrl = v.source === 'ai' ? (v.video_url || v.signedUrl || '') : `${window.location.origin}/video/${v.id}`;
+    if (!shareUrl) {
+      toast.error(language === 'ar' ? 'تعذر مشاركة الفيديو' : 'Unable to share video');
+      return;
+    }
+    if (!v.is_public && v.source !== 'ai') {
       toast.error(language === 'ar' ? 'اجعل الفيديو عاماً أولاً' : 'Make the video public first');
       return;
     }
@@ -296,7 +329,8 @@ function SavedVideosTab({ onCreate }: { onCreate: () => void }) {
     if (!user) return;
     try {
       const next = !v.is_public;
-      const { error } = await (supabase as any).from('user_videos').update({ is_public: next }).eq('id', v.id).eq('user_id', user.id);
+      const updateTable = v.source === 'ai' ? 'user_ai_videos' : 'user_videos';
+      const { error } = await (supabase as any).from(updateTable).update({ is_public: next }).eq('id', v.id).eq('user_id', user.id);
       if (error) throw error;
       setSavedVideos((prev) => prev.map((x) => (x.id === v.id ? { ...x, is_public: next } : x)));
       toast.success(
