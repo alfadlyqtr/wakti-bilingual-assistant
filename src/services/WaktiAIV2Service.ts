@@ -760,7 +760,7 @@ class WaktiAIV2ServiceClass {
 
       // Load user location (country, city) to include in metadata
       // If query contains "near me", weather, or traffic patterns, force fresh location
-      const needsFreshLocation = queryNeedsFreshLocation(message);
+      const needsFreshLocation = activeTrigger === 'search' || queryNeedsFreshLocation(message);
       if (needsFreshLocation) {
         console.log(`📍 LOCATION: Query needs fresh location - "${message.substring(0, 50)}..."`);
       }
