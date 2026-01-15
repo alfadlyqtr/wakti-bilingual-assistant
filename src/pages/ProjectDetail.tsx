@@ -70,6 +70,7 @@ import { MigrationApprovalDialog } from '@/components/projects/MigrationApproval
 import { ElementEditPopover } from '@/components/projects/ElementEditPopover';
 import { ToolUsageIndicator } from '@/components/wakti-ai-v2/ToolUsageIndicator';
 import { ErrorExplanationCard } from '@/components/wakti-ai-v2/ErrorExplanationCard';
+import { AutoFixCard, parseAutoFixMessage } from '@/components/projects/AutoFixCard';
 
 // Direct style editor for FREE visual edits (no AI prompts needed)
 import { applyDirectEdits, validateJSX } from '@/utils/directStyleEditor';
@@ -4715,10 +4716,27 @@ Fix the issue in the code and ensure it works correctly.`;
                                 </span>
                               </div>
                             )}
-                            <div className="text-[13px] leading-relaxed">
-                              {/* Strip attachment marker from display */}
-                              {msg.content?.replace(/^\[ATTACHMENTS:\d+\]/, '')}
-                            </div>
+                            {/* Check if this is an auto-fix request message */}
+                            {(() => {
+                              const cleanedContent = msg.content?.replace(/^\[ATTACHMENTS:\d+\]/, '') || '';
+                              const { isAutoFix, errorMessage } = parseAutoFixMessage(cleanedContent);
+                              
+                              if (isAutoFix) {
+                                return (
+                                  <AutoFixCard
+                                    errorMessage={errorMessage}
+                                    language={isRTL ? 'ar' : 'en'}
+                                    className="w-full max-w-[320px]"
+                                  />
+                                );
+                              }
+                              
+                              return (
+                                <div className="text-[13px] leading-relaxed">
+                                  {cleanedContent}
+                                </div>
+                              );
+                            })()}
                           </div>
                         )}
                       </div>
