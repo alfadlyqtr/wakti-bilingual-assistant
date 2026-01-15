@@ -185,10 +185,20 @@ export async function getNativeLocation(options?: {
     }
   }
 
+  // Try browser geolocation FIRST since iOS permission is granted at OS level
+  // This works in Natively WebView when user has granted location permission
+  console.log('[NativelyLocation] Trying browser geolocation first (iOS permission granted)...');
+  const browserLoc = await getBrowserLocation(timeoutMs);
+  if (browserLoc) {
+    console.log('[NativelyLocation] ✅ Got location from browser API:', browserLoc);
+    return browserLoc;
+  }
+  
+  // Fallback to Natively SDK if browser didn't work
   const instance = getInstance();
   if (!instance) {
-    console.log('[NativelyLocation] SDK not available, trying browser fallback');
-    return getBrowserLocation(timeoutMs);
+    console.log('[NativelyLocation] Both browser and Natively SDK failed');
+    return null;
   }
 
   return new Promise((resolve) => {

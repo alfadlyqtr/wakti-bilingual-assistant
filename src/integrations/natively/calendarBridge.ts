@@ -63,17 +63,44 @@ export function retrieveCalendars(callback: (result: RetrieveCalendarsResult) =>
   }
 
   try {
+    console.log('[NativelyCalendar] Calling retrieveCalendars...');
     cal.retrieveCalendars((resp: any) => {
-      console.log('[NativelyCalendar] retrieveCalendars response:', JSON.stringify(resp));
-      if (resp?.status === 'SUCCESS' || resp?.data) {
+      console.log('[NativelyCalendar] ===== RETRIEVE CALENDARS DEBUG =====');
+      console.log('[NativelyCalendar] Raw resp:', resp);
+      console.log('[NativelyCalendar] resp type:', typeof resp);
+      console.log('[NativelyCalendar] resp.status:', resp?.status);
+      console.log('[NativelyCalendar] resp.data:', resp?.data);
+      console.log('[NativelyCalendar] resp.error:', resp?.error);
+      if (resp?.data && typeof resp.data === 'object') {
+        console.log('[NativelyCalendar] resp.data.id:', resp.data?.id);
+        console.log('[NativelyCalendar] Is resp.data array?:', Array.isArray(resp.data));
+      }
+      console.log('[NativelyCalendar] ====================================');
+      
+      // Handle both array format and single object format
+      // Docs show resp.data.id (singular), so it might be a single object not an array
+      if (resp?.status === 'SUCCESS') {
+        let calendars: CalendarObject[] = [];
+        if (Array.isArray(resp.data)) {
+          calendars = resp.data;
+        } else if (resp.data?.id) {
+          // Single calendar object
+          calendars = [{ id: resp.data.id }];
+        }
         callback({
           status: 'SUCCESS',
-          data: resp.data || []
+          data: calendars
+        });
+      } else if (resp?.data?.id) {
+        // Sometimes status might not be set but data exists
+        callback({
+          status: 'SUCCESS',
+          data: [{ id: resp.data.id }]
         });
       } else {
         callback({
           status: 'FAILED',
-          error: resp?.error || 'Failed to retrieve calendars'
+          error: resp?.error || resp?.message || 'Failed to retrieve calendars'
         });
       }
     });
