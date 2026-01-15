@@ -173,41 +173,74 @@ export function BookingFormWizard({ services, onComplete, onCancel, onSkipWizard
 
     // Build structured prompt
     const selectedServiceDetails = services.filter(s => selectedServices.includes(s.id));
+    const hasServices = selectedServiceDetails.length > 0;
+    const isMultiStep = formStyle === 'multi-step';
     
-    let prompt = `Build a beautiful booking form with these specifications:
+    let prompt = `Build a beautiful booking form with these EXACT specifications:
 
 `;
     
-    if (selectedServiceDetails.length > 0) {
-      prompt += `SERVICES TO INCLUDE:
+    // SERVICE SELECTION - be very explicit
+    if (hasServices) {
+      prompt += `SERVICES:
+Show a service selection step with these options (user can select multiple):
 ${selectedServiceDetails.map(s => `- ${s.name} (${s.duration} min, ${s.price} QAR)`).join('\n')}
 
 `;
     } else {
-      prompt += `SERVICES TO INCLUDE:
-- No preselected services (user can choose none or multiple at runtime)
+      prompt += `SERVICES:
+DO NOT include any service selection. No service picker, no service dropdown, no service step.
+The form should ONLY contain the fields listed below - nothing else.
 
 `;
     }
     
-    prompt += `FORM STYLE: ${formStyle === 'single' ? 'Single page form' : formStyle === 'multi-step' ? 'Multi-step wizard' : 'Sidebar with summary'}
+    // FORM STYLE - be very explicit about each style
+    if (isMultiStep) {
+      prompt += `FORM STYLE: Multi-step wizard
+CRITICAL MULTI-STEP RULES:
+- Show ONE field per step (each field gets its own page/step)
+- Show a progress bar at the top
+- Include Back/Next navigation buttons
+- Final step shows Submit button
+- Total steps = ${fields.length} (one per field)
 
-FIELDS (in order):
-${fields.map((f, i) => `${i + 1}. ${f.label} (${f.type}) - ${f.required ? 'required' : 'optional'}`).join('\n')}
+`;
+    } else if (formStyle === 'sidebar') {
+      prompt += `FORM STYLE: Sidebar layout
+CRITICAL SIDEBAR RULES:
+- Create a two-column layout (use CSS grid or flexbox)
+- LEFT SIDE (wider, ~60-70%): The form fields stacked vertically
+- RIGHT SIDE (narrower, ~30-40%): A sticky summary panel showing:
+  - Form title/header
+  - Live preview of entered values (update as user types)
+  - Selected options summary
+  - Submit button at bottom of sidebar
+- On mobile: Stack sidebar below form (responsive)
+- Sidebar should have a subtle background color to distinguish it
+
+`;
+    } else {
+      prompt += `FORM STYLE: Single page form (all fields visible at once on one page)
+
+`;
+    }
+
+    prompt += `FIELDS (in order):
+${fields.map((f, i) => `${i + 1}. ${f.label} (${f.type}) - ${f.required ? 'REQUIRED' : 'optional'}`).join('\n')}
 
 DESIGN:
 - Border style: ${borderRadius}
 - Color scheme: ${colorScheme} (use ${colorScheme}-500 for primary buttons and accents)
 - Submit button text: "${submitText}"
 - ${showLabels ? 'Show field labels above inputs' : 'Use placeholder-only design (no labels)'}
-- Service selection must be OPTIONAL and allow MULTI-SELECT
 - Add subtle hover effects and focus states
 - Use smooth transitions and modern styling
 
 Include:
 - Form validation with error messages
 - Loading state on submit button
-- Success message/toast after submission (use alert or simple state, no external toast library)
+- Success message after submission (use simple state, no external toast library)
 - Error handling with user-friendly messages
 
 CRITICAL - DO NOT:
@@ -215,6 +248,7 @@ CRITICAL - DO NOT:
 - Do NOT write any API keys or anon keys
 - Do NOT import from @supabase/supabase-js
 - Just create the UI form - backend integration will be added separately
+${!hasServices ? '- Do NOT add any service selection UI - the form has NO services' : ''}
 
 Original request: ${originalPrompt}`;
 

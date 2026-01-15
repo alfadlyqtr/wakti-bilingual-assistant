@@ -11,7 +11,8 @@ export enum EntryType {
   TASK = 'task',
   REMINDER = 'reminder',
   JOURNAL = 'journal',
-  PROJECT_BOOKING = 'project_booking'
+  PROJECT_BOOKING = 'project_booking',
+  PHONE_CALENDAR = 'phone_calendar'
 }
 
 export type CalendarView = 'month' | 'week' | 'year';

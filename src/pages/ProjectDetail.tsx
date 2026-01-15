@@ -45,7 +45,8 @@ import {
   Hammer,
   Lightbulb,
   Circle,
-  FileText
+  FileText,
+  Square
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -381,6 +382,33 @@ export default function ProjectDetail() {
   const [autoFixCountdown, setAutoFixCountdown] = useState<number | null>(null);
   const autoFixTimerRef = useRef<NodeJS.Timeout | null>(null);
   const autoFixTriggeredRef = useRef<boolean>(false);
+  const autoFixAttemptsRef = useRef<Map<string, number>>(new Map()); // Track fix attempts per error
+  
+  // Stop generation functionality
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const [isStopping, setIsStopping] = useState(false);
+  
+  const stopGeneration = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsStopping(true);
+    setAiEditing(false);
+    setIsGenerating(false);
+    setThinkingStartTime(null);
+    setGenerationSteps([]);
+    
+    // Add a message indicating generation was stopped
+    setChatMessages(prev => [...prev, {
+      id: `stopped-${Date.now()}`,
+      role: 'assistant',
+      content: isRTL ? '⏹️ تم إيقاف التوليد بواسطة المستخدم' : '⏹️ Generation stopped by user'
+    }]);
+    
+    // Reset stopping state after a moment
+    setTimeout(() => setIsStopping(false), 500);
+  }, [isRTL]);
 
   // Pagination for chat messages - show last N messages, then "Show More"
   const MESSAGES_PER_PAGE = 10;
@@ -2422,8 +2450,47 @@ ${convertToGlobalComponent(content, componentName)}
     // Skip if already processing or same error
     if (autoFixTriggeredRef.current || crashReport === errorMsg) return;
     
-    // Skip if currently generating (AI is working)
-    if (isGenerating) return;
+    // Normalize error for tracking (remove line numbers, timestamps, etc.)
+    const errorKey = errorMsg.replace(/:\d+:\d+/g, '').replace(/line \d+/gi, '').trim().substring(0, 200);
+    
+    // Check if we've already tried to fix this error too many times (max 2 attempts)
+    const attempts = autoFixAttemptsRef.current.get(errorKey) || 0;
+    if (attempts >= 2) {
+      console.log('[Auto-Fix] Max attempts reached for this error, stopping to prevent loop');
+      setCrashReport(errorMsg); // Still show the error but don't auto-fix
+      return;
+    }
+    
+    // If currently generating, queue the error to be processed after generation completes
+    if (isGenerating) {
+      // Store error and check again after a delay
+      setTimeout(() => {
+        if (!autoFixTriggeredRef.current && !isGenerating) {
+          const currentAttempts = autoFixAttemptsRef.current.get(errorKey) || 0;
+          if (currentAttempts >= 2) return; // Double-check attempts
+          
+          autoFixAttemptsRef.current.set(errorKey, currentAttempts + 1);
+          setCrashReport(errorMsg);
+          setAutoFixCountdown(3);
+          let count = 3;
+          autoFixTimerRef.current = setInterval(() => {
+            count--;
+            if (count <= 0) {
+              clearInterval(autoFixTimerRef.current!);
+              autoFixTimerRef.current = null;
+              setAutoFixCountdown(null);
+              triggerAutoFix(errorMsg);
+            } else {
+              setAutoFixCountdown(count);
+            }
+          }, 1000);
+        }
+      }, 2000); // Wait 2 seconds after generation might complete
+      return;
+    }
+    
+    // Track this fix attempt
+    autoFixAttemptsRef.current.set(errorKey, attempts + 1);
     
     setCrashReport(errorMsg);
     
@@ -2475,21 +2542,65 @@ ${convertToGlobalComponent(content, componentName)}
     }
     setAutoFixCountdown(null);
     
-    // Smart fix prompt with context
-    const fixPrompt = `🔧 **AUTO-FIX REQUESTED**
+    // Smart fix prompt with specific instructions based on error type
+    let fixInstructions = '';
+    
+    // Detect error type and provide specific fix instructions
+    if (error.includes('ModuleNotFoundError') || error.includes('Could not find module')) {
+      const moduleMatch = error.match(/['"]([^'"]+)['"]/);
+      const moduleName = moduleMatch ? moduleMatch[1] : 'the module';
+      fixInstructions = `
+**ERROR TYPE: Missing Module/File**
 
-The preview encountered an error:
+The file ${moduleName} doesn't exist or the import path is wrong.
+
+**FIX STEPS:**
+1. Check if the file exists - if not, CREATE it
+2. If the file exists, fix the import path (use correct relative path from App.js)
+3. Make sure the component is exported correctly (export default or named export)
+
+**IMPORTANT:** If you created a new component file, make sure it actually exists and has valid code.`;
+    } else if (error.includes('is not defined') || error.includes('ReferenceError')) {
+      const varMatch = error.match(/(\w+) is not defined/);
+      const varName = varMatch ? varMatch[1] : 'variable';
+      fixInstructions = `
+**ERROR TYPE: Undefined Variable/Function**
+
+${varName} is used but not defined or imported.
+
+**FIX STEPS:**
+1. If it's a React hook (useState, useEffect, etc.) - add: import { ${varName} } from 'react';
+2. If it's a component - import it from the correct file
+3. If it's a variable - define it before using it`;
+    } else if (error.includes('SyntaxError') || error.includes('Unexpected token')) {
+      fixInstructions = `
+**ERROR TYPE: Syntax Error**
+
+There's invalid JavaScript/JSX syntax.
+
+**FIX STEPS:**
+1. Check for missing closing brackets, braces, or parentheses
+2. Check for missing commas in objects/arrays
+3. Make sure JSX tags are properly closed
+4. Check for typos in keywords`;
+    } else {
+      fixInstructions = `
+**ERROR TYPE: Runtime Error**
+
+**FIX STEPS:**
+1. Read the error message carefully
+2. Find the exact line causing the issue
+3. Fix the root cause, not just the symptom`;
+    }
+    
+    const fixPrompt = `🔧 **AUTO-FIX: Fix this error NOW**
+
 \`\`\`
 ${error}
 \`\`\`
+${fixInstructions}
 
-Please analyze and fix this error. Common causes include:
-- Missing imports or dependencies
-- Undefined variables or functions
-- Invalid JSX syntax
-- Type errors
-
-Fix the issue in the code and ensure it works correctly.`;
+**ACTION REQUIRED:** Edit the file(s) to fix this error. Do NOT just explain - actually make the code changes.`;
     
     // Clear error state
     setCrashReport(null);
@@ -3147,12 +3258,21 @@ Fix the issue in the code and ensure it works correctly.`;
     }
   };
 
+  // Ref to store wizard prompt for direct submission
+  const wizardPromptRef = useRef<string | null>(null);
+
   const handleChatSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim() && attachedImages.length === 0 || aiEditing) return;
     
-    const userMessage = chatInput.trim();
-    setChatInput('');
+    // Check if there's a wizard prompt to use instead of chatInput
+    const wizardPrompt = wizardPromptRef.current;
+    wizardPromptRef.current = null; // Clear after reading
+    
+    const userMessage = wizardPrompt || chatInput.trim();
+    if (!userMessage && attachedImages.length === 0 || aiEditing) return;
+    
+    if (!wizardPrompt) setChatInput('');
+    
     const skipFormWizardDetection = skipFormWizardRef.current;
     skipFormWizardRef.current = false;
     const skipUserMessageSave = skipUserMessageSaveRef.current;
@@ -4383,17 +4503,15 @@ Fix the issue in the code and ensure it works correctly.`;
                               }]);
                             }
                             
-                            // Set chat input and trigger submit after state update
-                            setChatInput(structuredPrompt);
+                            // Use ref to pass prompt directly to handleChatSubmit (bypasses state async)
+                            wizardPromptRef.current = structuredPrompt;
                             
-                            // Use requestAnimationFrame to ensure state is updated before submit
+                            // Trigger form submit - handleChatSubmit will read from wizardPromptRef
                             requestAnimationFrame(() => {
-                              requestAnimationFrame(() => {
-                                const form = document.querySelector('form[class*="flex items-end gap-2"]');
-                                if (form) {
-                                  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-                                }
-                              });
+                              const form = document.querySelector('form[class*="flex items-end gap-2"]');
+                              if (form) {
+                                form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                              }
                             });
                           }}
                           onCancel={() => {
@@ -4409,15 +4527,13 @@ Fix the issue in the code and ensure it works correctly.`;
                             // Use original prompt directly - let AI handle it
                             const prompt = pendingFormPrompt || 'Create a booking form';
                             setPendingFormPrompt('');
-                            setChatInput(prompt);
+                            wizardPromptRef.current = prompt;
                             
                             requestAnimationFrame(() => {
-                              requestAnimationFrame(() => {
-                                const form = document.querySelector('form[class*="flex items-end gap-2"]');
-                                if (form) {
-                                  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-                                }
-                              });
+                              const form = document.querySelector('form[class*="flex items-end gap-2"]');
+                              if (form) {
+                                form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                              }
                             });
                           }}
                         />
@@ -4461,17 +4577,15 @@ Fix the issue in the code and ensure it works correctly.`;
                               }]);
                             }
                             
-                            // Set chat input and trigger submit after state update
-                            setChatInput(structuredPrompt);
+                            // Use ref to pass prompt directly to handleChatSubmit (bypasses state async)
+                            wizardPromptRef.current = structuredPrompt;
                             
-                            // Use requestAnimationFrame to ensure state is updated before submit
+                            // Trigger form submit - handleChatSubmit will read from wizardPromptRef
                             requestAnimationFrame(() => {
-                              requestAnimationFrame(() => {
-                                const form = document.querySelector('form[class*="flex items-end gap-2"]');
-                                if (form) {
-                                  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-                                }
-                              });
+                              const form = document.querySelector('form[class*="flex items-end gap-2"]');
+                              if (form) {
+                                form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                              }
                             });
                           }}
                           onCancel={() => {
@@ -4487,15 +4601,13 @@ Fix the issue in the code and ensure it works correctly.`;
                             // Use original prompt directly - let AI handle it
                             const prompt = pendingFormPrompt || 'Create a contact form';
                             setPendingFormPrompt('');
-                            setChatInput(prompt);
+                            wizardPromptRef.current = prompt;
                             
                             requestAnimationFrame(() => {
-                              requestAnimationFrame(() => {
-                                const form = document.querySelector('form[class*="flex items-end gap-2"]');
-                                if (form) {
-                                  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-                                }
-                              });
+                              const form = document.querySelector('form[class*="flex items-end gap-2"]');
+                              if (form) {
+                                form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                              }
                             });
                           }}
                         />
@@ -5592,19 +5704,23 @@ Fix the issue in the code and ensure it works correctly.`;
                         
                         {/* Send Button */}
                         <Button 
-                          type="submit"
+                          type={aiEditing || isGenerating ? "button" : "submit"}
                           data-chat-submit
-                          disabled={!chatInput.trim() || aiEditing || isGenerating}
+                          disabled={!chatInput.trim() && !aiEditing && !isGenerating}
+                          onClick={aiEditing || isGenerating ? stopGeneration : undefined}
                           size="icon"
                           className={cn(
                             "h-[40px] w-[40px] rounded-xl transition-all shrink-0 shadow-sm text-white",
-                            chatInput.trim() 
-                              ? (leftPanelMode === 'chat' ? "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20" : "bg-blue-600 hover:bg-blue-700 shadow-blue-600/20")
-                              : "bg-muted dark:bg-white/10 text-muted-foreground"
+                            aiEditing || isGenerating
+                              ? "bg-red-500 hover:bg-red-600 shadow-red-500/20"
+                              : chatInput.trim() 
+                                ? (leftPanelMode === 'chat' ? "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20" : "bg-blue-600 hover:bg-blue-700 shadow-blue-600/20")
+                                : "bg-muted dark:bg-white/10 text-muted-foreground"
                           )}
+                          title={aiEditing || isGenerating ? (isRTL ? 'إيقاف التوليد' : 'Stop generation') : (isRTL ? 'إرسال' : 'Send')}
                         >
                           {aiEditing || isGenerating ? (
-                            <Loader2 className="h-5 w-5 animate-spin" />
+                            <Square className="h-4 w-4 fill-current" />
                           ) : (
                             <Send className={cn("h-5 w-5", isRTL && "rotate-180")} />
                           )}

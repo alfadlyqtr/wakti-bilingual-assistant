@@ -23,6 +23,7 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { CalendarEntry, CalendarView, EntryType } from "@/utils/calendarUtils";
 import { Circle, CalendarCheck, CalendarHeart, CalendarPlus, NotebookPen } from "lucide-react";
+import { AppleLogo } from "./AppleLogo";
 
 interface CalendarGridProps {
   currentDate: Date;
@@ -94,14 +95,16 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
   // Count entries by type for a given date
   const getEntryCountByType = (date: Date) => {
     const entries = getEntriesForDate(date);
-    const counts = {
+    const counts: Record<string, number> = {
       [EntryType.EVENT]: 0,
       [EntryType.APPOINTMENT]: 0,
       [EntryType.MANUAL_NOTE]: 0,
       [EntryType.MAW3D_EVENT]: 0,
       [EntryType.TASK]: 0,
       [EntryType.REMINDER]: 0,
-      [EntryType.JOURNAL]: 0
+      [EntryType.JOURNAL]: 0,
+      [EntryType.PHONE_CALENDAR]: 0,
+      [EntryType.PROJECT_BOOKING]: 0
     };
     
     entries.forEach(entry => {
@@ -182,6 +185,12 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                     <div className="flex items-center">
                       <Circle className="h-2 w-2 fill-sky-500 text-sky-500" />
                       {entryCounts[EntryType.JOURNAL] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.JOURNAL]}</span>}
+                    </div>
+                  )}
+                  {entryCounts[EntryType.PHONE_CALENDAR] > 0 && (
+                    <div className="flex items-center">
+                      <AppleLogo size={12} className="text-black dark:text-white" />
+                      {entryCounts[EntryType.PHONE_CALENDAR] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.PHONE_CALENDAR]}</span>}
                     </div>
                   )}
                 </div>
@@ -301,6 +310,14 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                       <Circle className="h-3 w-3 fill-sky-500 text-sky-500" />
                       {entryCounts[EntryType.JOURNAL] > 1 && (
                         <span className="text-xs ml-0.5">{entryCounts[EntryType.JOURNAL]}</span>
+                      )}
+                    </div>
+                  )}
+                  {entryCounts[EntryType.PHONE_CALENDAR] > 0 && (
+                    <div className="flex items-center">
+                      <AppleLogo size={16} className="text-black dark:text-white" />
+                      {entryCounts[EntryType.PHONE_CALENDAR] > 1 && (
+                        <span className="text-xs ml-0.5">{entryCounts[EntryType.PHONE_CALENDAR]}</span>
                       )}
                     </div>
                   )}

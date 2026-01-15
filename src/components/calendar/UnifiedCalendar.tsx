@@ -39,9 +39,11 @@ import { Switch } from "@/components/ui/switch";
 import {
   isNativeCalendarAvailable,
   createCalendarEvent,
+  retrieveCalendars,
   formatDateForNatively,
   getUserTimezone
 } from "@/integrations/natively/calendarBridge";
+import { AppleLogo } from "./AppleLogo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
@@ -355,12 +357,41 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     let successCount = 0;
     let failCount = 0;
     
-    // Sync tasks, reminders, and maw3d events
+    // Sync tasks, reminders, maw3d events, and project bookings
     const entriesToSync = calendarEntries.filter(e => 
       e.type === EntryType.TASK || 
       e.type === EntryType.REMINDER || 
-      e.type === EntryType.MAW3D_EVENT
+      e.type === EntryType.MAW3D_EVENT ||
+      e.type === EntryType.PROJECT_BOOKING
     );
+    
+    console.log('[CalendarSync] Entries to sync:', entriesToSync.length, entriesToSync.map(e => ({ title: e.title, type: e.type, date: e.date })));
+    
+    if (entriesToSync.length === 0) {
+      setIsSyncing(false);
+      toast.info(
+        language === 'ar' 
+          ? 'لا توجد أحداث للمزامنة. أضف مهام أو تذكيرات أو مواعيد أولاً.' 
+          : 'No events to sync. Add tasks, reminders, or maw3d events first.'
+      );
+      return;
+    }
+    
+    // First, retrieve available calendars from the device
+    const calendarId = await new Promise<string | null>((resolve) => {
+      retrieveCalendars((result) => {
+        console.log('[CalendarSync] Retrieved calendars:', result);
+        if (result.status === 'SUCCESS' && result.data && result.data.length > 0) {
+          // Use the first available calendar
+          resolve(result.data[0].id);
+        } else {
+          console.warn('[CalendarSync] No calendars available or failed to retrieve:', result.error);
+          resolve(null);
+        }
+      });
+    });
+    
+    console.log('[CalendarSync] Using calendar ID:', calendarId);
     
     for (const entry of entriesToSync) {
       try {
@@ -372,15 +403,18 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
         const startDate = formatDateForNatively(entryDate);
         const endDate = formatDateForNatively(addHours(entryDate, 1));
         
+        console.log('[CalendarSync] Creating event:', { title: entry.title, startDate, endDate, timezone, calendarId });
+        
         await new Promise<void>((resolve) => {
           createCalendarEvent(
             entry.title,
             startDate,
             endDate,
             timezone,
-            null,
+            calendarId,
             entry.description || null,
             (result) => {
+              console.log('[CalendarSync] Create event result:', result);
               if (result.status === 'SUCCESS') {
                 successCount++;
               } else {
@@ -411,13 +445,6 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
         language === 'ar' 
           ? `فشل في مزامنة ${failCount} حدث` 
           : `Failed to sync ${failCount} events`
-      );
-    }
-    if (successCount === 0 && failCount === 0) {
-      toast.info(
-        language === 'ar' 
-          ? 'لا توجد أحداث للمزامنة' 
-          : 'No events to sync'
       );
     }
   }, [calendarEntries, nativeCalendarAvailable, language]);
@@ -526,7 +553,7 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
 
         {/* Updated Legend with proper color coding */}
         <div className="flex items-center justify-center">
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap justify-center">
             <div className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-full bg-purple-500"></div>
               <span>{language === 'ar' ? 'مواعيد' : 'Maw3d'}</span>
@@ -546,6 +573,10 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
             <div className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-full bg-sky-500"></div>
               <span>{language === 'ar' ? 'دفتر' : 'Journal'}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <AppleLogo size={12} className="text-black dark:text-white" />
+              <span>{language === 'ar' ? 'الهاتف' : 'Phone'}</span>
             </div>
           </div>
         </div>
