@@ -117,13 +117,15 @@ export function createCalendarEvent(
 
   try {
     console.log('[NativelyCalendar] Creating event:', { title, startDate, endDate, timezone, calendarId, description });
+    // Note: Natively SDK signature is (title, endDate, startDate, timezone, calendarId, description, callback)
+    // If calendarId is null/empty, pass null to let SDK use default calendar
     cal.createCalendarEvent(
       title,
       endDate,
       startDate,
       timezone,
-      calendarId || '',
-      description || '',
+      calendarId || null,
+      description || null,
       (resp: any) => {
         console.log('[NativelyCalendar] createCalendarEvent response:', JSON.stringify(resp));
         if (resp?.status === 'SUCCESS' || resp?.data?.id) {

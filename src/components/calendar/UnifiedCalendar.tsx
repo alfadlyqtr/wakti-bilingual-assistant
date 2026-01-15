@@ -395,15 +395,28 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     
     for (const entry of entriesToSync) {
       try {
-        const entryDate = new Date(entry.date);
+        // Parse date safely - handle both 'yyyy-MM-dd' and ISO formats
+        let entryDate: Date;
+        const datePart = entry.date.split('T')[0];
+        const [year, month, day] = datePart.split('-').map(Number);
+        entryDate = new Date(year, month - 1, day, 9, 0, 0); // Default to 9 AM if no time
+        
         if (entry.time) {
           const [hours, minutes] = entry.time.split(':').map(Number);
-          entryDate.setHours(hours || 0, minutes || 0, 0, 0);
+          entryDate.setHours(hours || 9, minutes || 0, 0, 0);
         }
+        
+        // Validate date
+        if (isNaN(entryDate.getTime())) {
+          console.error('[CalendarSync] Invalid date for entry:', entry.title, entry.date);
+          failCount++;
+          continue;
+        }
+        
         const startDate = formatDateForNatively(entryDate);
         const endDate = formatDateForNatively(addHours(entryDate, 1));
         
-        console.log('[CalendarSync] Creating event:', { title: entry.title, startDate, endDate, timezone, calendarId });
+        console.log('[CalendarSync] Creating event:', { title: entry.title, startDate, endDate, timezone, calendarId, rawDate: entry.date });
         
         await new Promise<void>((resolve) => {
           createCalendarEvent(
