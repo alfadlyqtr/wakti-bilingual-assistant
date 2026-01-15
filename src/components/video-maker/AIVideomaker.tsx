@@ -42,8 +42,10 @@ interface LatestVideo {
   id: string;
   title: string | null;
   video_url: string | null;
+  storage_path?: string | null;
   duration_seconds: number | null;
   created_at: string;
+  signedUrl?: string | null;
 }
 
 export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
@@ -103,17 +105,31 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     try {
       const { data, error } = await (supabase as any)
         .from('user_videos')
-        .select('id, title, video_url, duration_seconds, created_at')
+        .select('id, title, video_url, storage_path, duration_seconds, created_at')
         .eq('user_id', user.id)
-        .not('video_url', 'is', null)
         .order('created_at', { ascending: false })
         .limit(1);
 
       if (error) throw error;
       const row = data?.[0];
-      if (row?.video_url) {
-        setLatestVideo(row);
-        return;
+      if (row) {
+        let signedUrl: string | null = null;
+        if (row.storage_path) {
+          const { data: urlData, error: urlErr } = await supabase.storage
+            .from('videos')
+            .createSignedUrl(row.storage_path, 3600);
+          if (urlErr) {
+            const { data: pubData } = supabase.storage.from('videos').getPublicUrl(row.storage_path);
+            signedUrl = pubData?.publicUrl || null;
+          } else {
+            signedUrl = urlData?.signedUrl || null;
+          }
+        }
+
+        if (row.video_url || signedUrl) {
+          setLatestVideo({ ...row, signedUrl });
+          return;
+        }
       }
 
       const { data: aiData, error: aiError } = await (supabase as any)
@@ -171,9 +187,10 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   };
 
   const handleDownloadLatest = async () => {
-    if (!latestVideo?.video_url) return;
+    const downloadUrl = latestVideo?.signedUrl || latestVideo?.video_url;
+    if (!downloadUrl) return;
     try {
-      const response = await fetch(latestVideo.video_url);
+      const response = await fetch(downloadUrl);
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -185,7 +202,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       URL.revokeObjectURL(url);
     } catch (e) {
       console.error('Download failed:', e);
-      window.open(latestVideo.video_url, '_blank');
+      window.open(downloadUrl, '_blank');
     }
   };
 
@@ -362,12 +379,28 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     if (!generatedVideoUrl || !user || isSaved) return;
     setIsSaving(true);
     try {
+      const response = await fetch(generatedVideoUrl);
+      if (!response.ok) throw new Error('Failed to download video');
+      const blob = await response.blob();
+      const contentType = blob.type || 'video/mp4';
+      const isWebm = contentType.includes('webm');
+      const ext = isWebm ? 'webm' : 'mp4';
+      const fileName = `${user.id}/${Date.now()}.${ext}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage.from('videos').upload(fileName, blob, {
+        contentType,
+        cacheControl: '3600',
+      });
+      if (uploadError) throw uploadError;
+
+      const storagePath = uploadData?.path || fileName;
+
       // Save into unified user_videos table
       const { error } = await (supabase as any).from('user_videos').insert({
         user_id: user.id,
         title: prompt.trim().slice(0, 100) || 'AI Video',
         description: prompt.trim() || null,
-        video_url: generatedVideoUrl,
+        storage_path: storagePath,
+        video_url: null,
         duration_seconds: 5,
         aspect_ratio: '9:16',
         style_template: 'ai',
@@ -378,6 +411,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
       setIsSaved(true);
       toast.success(language === 'ar' ? 'تم الحفظ في فيديوهاتي!' : 'Saved to My Videos!');
+      await loadLatestVideo();
       // Navigate to My AI Videos tab after successful save
       if (onSaveSuccess) {
         setTimeout(() => onSaveSuccess(), 1000);
@@ -395,7 +429,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const limit = quota?.limit || 10;
   const limitReached = quota !== null && !quota.canGenerate;
   const canGenerate = imagePreview && !limitReached && !isGenerating && !loadingQuota;
-  const showLatestVideo = !generatedVideoUrl && !!latestVideo?.video_url;
+  const showLatestVideo = !generatedVideoUrl && !!(latestVideo?.signedUrl || latestVideo?.video_url);
 
   return (
     <div className="relative">
@@ -689,7 +723,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
             <div className="rounded-2xl overflow-hidden border border-border bg-gradient-to-b from-primary/5 to-transparent">
               <div className="relative bg-black">
                 <video
-                  src={latestVideo?.video_url || undefined}
+                  src={latestVideo?.signedUrl || latestVideo?.video_url || undefined}
                   controls
                   playsInline
                   className="w-full aspect-[9/16] max-h-[60vh] object-contain"

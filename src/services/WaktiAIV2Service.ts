@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { supabase, ensurePassport, getCurrentUserId } from '@/integrations/supabase/client';
-import { getNativeLocation } from '@/integrations/natively/locationBridge';
+import { getNativeLocation, queryNeedsFreshLocation, clearLocationCache } from '@/integrations/natively/locationBridge';
 
 export interface AIMessage {
   id: string;
@@ -235,28 +235,37 @@ class WaktiAIV2ServiceClass {
   }
 
   // Fetch user's location context once and cache (localStorage + memory)
-  private async getUserLocation(userId: string): Promise<UserLocationContext> {
+  // If forceFresh is true, skip cache and get fresh location (for "near me" queries)
+  private async getUserLocation(userId: string, forceFresh: boolean = false): Promise<UserLocationContext> {
     const now = Date.now();
-    if (this.locationCache && this.locationCache.updatedAt && now - this.locationCache.updatedAt < LOCATION_CACHE_TTL) {
-      return this.locationCache;
-    }
+    
+    // Skip cache if forceFresh is requested (e.g., "near me" queries)
+    if (!forceFresh) {
+      if (this.locationCache && this.locationCache.updatedAt && now - this.locationCache.updatedAt < LOCATION_CACHE_TTL) {
+        return this.locationCache;
+      }
 
-    // LocalStorage fallback with TTL validation
-    try {
-      const raw = localStorage.getItem('wakti_user_location');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === 'object') {
-          parsed.timezone = parsed.timezone || this.getClientTimezone();
-          parsed.updatedAt = parsed.updatedAt || now;
-          const isFresh = parsed.updatedAt && (now - parsed.updatedAt) < LOCATION_CACHE_TTL;
-          if (isFresh) {
-            this.locationCache = parsed;
-            return this.locationCache;
+      // LocalStorage fallback with TTL validation
+      try {
+        const raw = localStorage.getItem('wakti_user_location');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') {
+            parsed.timezone = parsed.timezone || this.getClientTimezone();
+            parsed.updatedAt = parsed.updatedAt || now;
+            const isFresh = parsed.updatedAt && (now - parsed.updatedAt) < LOCATION_CACHE_TTL;
+            if (isFresh) {
+              this.locationCache = parsed;
+              return this.locationCache;
+            }
           }
         }
-      }
-    } catch {}
+      } catch {}
+    } else {
+      console.log('[WaktiAIV2Service] Force fresh location requested (near me / weather / traffic query)');
+      // Clear the native location cache to force fresh fetch
+      clearLocationCache();
+    }
 
     const timezone = this.getClientTimezone();
     let resolved: UserLocationContext = {
@@ -271,8 +280,9 @@ class WaktiAIV2ServiceClass {
     };
 
     // Try native location first (Natively SDK)
+    // If forceFresh, request fresh location with skipCache
     try {
-      const nativeLoc = await getNativeLocation();
+      const nativeLoc = await getNativeLocation({ skipCache: forceFresh });
       if (nativeLoc && typeof nativeLoc.latitude === 'number' && typeof nativeLoc.longitude === 'number') {
         resolved = {
           ...resolved,
@@ -744,7 +754,12 @@ class WaktiAIV2ServiceClass {
       } catch {}
 
       // Load user location (country, city) to include in metadata
-      const location = await this.getUserLocation(userId);
+      // If query contains "near me", weather, or traffic patterns, force fresh location
+      const needsFreshLocation = queryNeedsFreshLocation(message);
+      if (needsFreshLocation) {
+        console.log(`📍 LOCATION: Query needs fresh location - "${message.substring(0, 50)}..."`);
+      }
+      const location = await this.getUserLocation(userId, needsFreshLocation);
       const clientTimezone = location?.timezone || this.getClientTimezone();
 
       // Enhanced message handling with 100-message memory window

@@ -1557,6 +1557,42 @@ serve(async (req) => {
           return `User Location (via IP): ${label}${ipGeo.timezone ? ` | Timezone: ${ipGeo.timezone}` : ''}`;
         })();
 
+        // Build full location context (for Chat + Search modes)
+        // Prioritize native location from client, fallback to IP geo
+        let fullLocationContext = '';
+        {
+          let userCity = location?.city || '';
+          let userCountry = location?.country || '';
+          const userLat = location?.latitude;
+          const userLng = location?.longitude;
+          
+          // Fallback to IP geo if native location missing city/country
+          if (!userCity && ipGeo?.city) userCity = ipGeo.city;
+          if (!userCountry && ipGeo?.country) userCountry = ipGeo.country;
+          
+          // Reverse geocode if we have coordinates but no city
+          if (userLat && userLng && !userCity) {
+            try {
+              const geocoded = await reverseGeocode(userLat, userLng);
+              if (geocoded.city) userCity = geocoded.city;
+              if (geocoded.country) userCountry = geocoded.country;
+            } catch {}
+          }
+          
+          if (userCity || userCountry || (userLat && userLng)) {
+            const parts: string[] = [];
+            if (userCity && userCountry) parts.push(`City: ${userCity}, ${userCountry}`);
+            else if (userCity) parts.push(`City: ${userCity}`);
+            else if (userCountry) parts.push(`Country: ${userCountry}`);
+            if (userLat && userLng) {
+              parts.push(`Coordinates: ${userLat.toFixed(4)}°N, ${userLng.toFixed(4)}°E`);
+            }
+            if (parts.length > 0) {
+              fullLocationContext = `USER LOCATION CONTEXT:\n${parts.join('\n')}`;
+            }
+          }
+        }
+
         // Chat mode: if the user is asking about WAKTI specifically, respond with the correct format + chip
         if (activeTrigger === 'chat' && chatSubmode === 'chat' && isWaktiInvolved(message)) {
           const userName = (personalTouch as { nickname?: string })?.nickname || '';
@@ -1612,7 +1648,7 @@ serve(async (req) => {
           chatSubmode
         );
 
-        const systemPrompt = `${stayHotSummary ? stayHotSummary + "\n\n" : ''}${ipLocationLine ? ipLocationLine + "\n\n" : ''}${systemPromptBase}`;
+        const systemPrompt = `${stayHotSummary ? stayHotSummary + "\n\n" : ''}${fullLocationContext ? fullLocationContext + "\n\n" : (ipLocationLine ? ipLocationLine + "\n\n" : '')}${systemPromptBase}`;
         
         const messages = [
           { role: 'system', content: systemPrompt }

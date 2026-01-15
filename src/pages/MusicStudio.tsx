@@ -33,6 +33,7 @@ import {
   Eye,
   EyeOff,
   Share2,
+  Save,
   AlertCircle,
 } from 'lucide-react';
 import VideoEditorPro from '@/components/video-maker/VideoEditorPro';
@@ -193,6 +194,7 @@ function SavedVideosTab({ onCreate }: { onCreate: () => void }) {
   const [savedVideos, setSavedVideos] = useState<SavedVideo[]>([]);
   const [loadingVideos, setLoadingVideos] = useState(false);
   const [activePreviewId, setActivePreviewId] = useState<string | null>(null);
+  const [savingLegacy, setSavingLegacy] = useState<Record<string, boolean>>({});
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [pendingDeleteVideo, setPendingDeleteVideo] = useState<SavedVideo | null>(null);
@@ -275,6 +277,75 @@ function SavedVideosTab({ onCreate }: { onCreate: () => void }) {
       toast.error(language === 'ar' ? 'فشل تحميل الفيديوهات' : 'Failed to load videos');
     } finally {
       setLoadingVideos(false);
+    }
+  };
+
+  const handleSaveLegacyVideo = async (v: SavedVideo) => {
+    if (!user) return;
+    const sourceUrl = v.signedUrl || v.video_url;
+    if (!sourceUrl) {
+      toast.error(language === 'ar' ? 'الرابط غير متاح' : 'Video URL unavailable');
+      return;
+    }
+
+    setSavingLegacy((prev) => ({ ...prev, [v.id]: true }));
+    try {
+      const response = await fetch(sourceUrl);
+      if (!response.ok) throw new Error('Failed to download video');
+      const blob = await response.blob();
+      const contentType = blob.type || 'video/mp4';
+      const isWebm = contentType.includes('webm');
+      const ext = isWebm ? 'webm' : 'mp4';
+      const fileName = `${user.id}/${Date.now()}-${v.id}.${ext}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage.from('videos').upload(fileName, blob, {
+        contentType,
+        cacheControl: '3600',
+      });
+      if (uploadError) throw uploadError;
+
+      const storagePath = uploadData?.path || fileName;
+
+      if (v.source === 'ai') {
+        const { error: insertError } = await (supabase as any).from('user_videos').insert({
+          user_id: user.id,
+          title: v.title || 'AI Video',
+          storage_path: storagePath,
+          video_url: null,
+          duration_seconds: v.duration_seconds || 5,
+          aspect_ratio: '9:16',
+          style_template: 'ai',
+          is_public: v.is_public,
+        });
+        if (insertError) throw insertError;
+
+        const { error: deleteError } = await (supabase as any)
+          .from('user_ai_videos')
+          .delete()
+          .eq('id', v.id)
+          .eq('user_id', user.id);
+        if (deleteError) {
+          console.warn('Failed to delete legacy AI row:', deleteError);
+        }
+      } else {
+        const { error: updateError } = await (supabase as any)
+          .from('user_videos')
+          .update({ storage_path: storagePath, video_url: null })
+          .eq('id', v.id)
+          .eq('user_id', user.id);
+        if (updateError) throw updateError;
+      }
+
+      toast.success(language === 'ar' ? 'تم حفظ الفيديو للتشغيل' : 'Video saved for playback');
+      await loadSavedVideos();
+    } catch (e) {
+      console.error('Legacy save failed:', e);
+      toast.error(language === 'ar' ? 'فشل حفظ الفيديو' : 'Failed to save video');
+    } finally {
+      setSavingLegacy((prev) => {
+        const next = { ...prev };
+        delete next[v.id];
+        return next;
+      });
     }
   };
 
@@ -462,7 +533,23 @@ function SavedVideosTab({ onCreate }: { onCreate: () => void }) {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 mt-2">
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    {(v.source === 'ai' || (!v.storage_path && v.video_url)) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-3"
+                        onClick={() => handleSaveLegacyVideo(v)}
+                        disabled={!!savingLegacy[v.id]}
+                        title={language === 'ar' ? 'حفظ للتشغيل' : 'Save for playback'}
+                      >
+                        {savingLegacy[v.id] ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Save className="h-3.5 w-3.5" />
+                        )}
+                      </Button>
+                    )}
                     <Button variant="outline" size="sm" className="h-8 px-3" onClick={() => handleTogglePublic(v)}>
                       {v.is_public ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                     </Button>

@@ -357,11 +357,15 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     let failCount = 0;
     
     // Sync tasks, reminders, maw3d events, and project bookings
+    // Filter to only include entries with valid date strings
     const entriesToSync = calendarEntries.filter(e => 
-      e.type === EntryType.TASK || 
-      e.type === EntryType.REMINDER || 
-      e.type === EntryType.MAW3D_EVENT ||
-      e.type === EntryType.PROJECT_BOOKING
+      (e.type === EntryType.TASK || 
+       e.type === EntryType.REMINDER || 
+       e.type === EntryType.MAW3D_EVENT ||
+       e.type === EntryType.PROJECT_BOOKING) &&
+      e.date && 
+      typeof e.date === 'string' &&
+      e.date.length >= 10 // At least 'yyyy-MM-dd'
     );
     
     console.log('[CalendarSync] Entries to sync:', entriesToSync.length, entriesToSync.map(e => ({ title: e.title, type: e.type, date: e.date })));
@@ -396,18 +400,44 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     
     for (const entry of entriesToSync) {
       try {
+        // Skip entries without a valid date string
+        if (!entry.date || typeof entry.date !== 'string') {
+          console.error('[CalendarSync] Entry missing date:', entry.title);
+          failCount++;
+          continue;
+        }
+        
         // Parse date safely - handle both 'yyyy-MM-dd' and ISO formats
         let entryDate: Date;
         const datePart = entry.date.split('T')[0];
-        const [year, month, day] = datePart.split('-').map(Number);
-        entryDate = new Date(year, month - 1, day, 9, 0, 0); // Default to 9 AM if no time
+        const dateParts = datePart.split('-');
         
-        if (entry.time) {
-          const [hours, minutes] = entry.time.split(':').map(Number);
-          entryDate.setHours(hours || 9, minutes || 0, 0, 0);
+        if (dateParts.length !== 3) {
+          console.error('[CalendarSync] Invalid date format for entry:', entry.title, entry.date);
+          failCount++;
+          continue;
         }
         
-        // Validate date
+        const [year, month, day] = dateParts.map(Number);
+        
+        // Validate parsed numbers
+        if (isNaN(year) || isNaN(month) || isNaN(day)) {
+          console.error('[CalendarSync] Could not parse date numbers for entry:', entry.title, entry.date);
+          failCount++;
+          continue;
+        }
+        
+        entryDate = new Date(year, month - 1, day, 9, 0, 0); // Default to 9 AM if no time
+        
+        if (entry.time && typeof entry.time === 'string') {
+          const timeParts = entry.time.split(':');
+          if (timeParts.length >= 2) {
+            const [hours, minutes] = timeParts.map(Number);
+            entryDate.setHours(isNaN(hours) ? 9 : hours, isNaN(minutes) ? 0 : minutes, 0, 0);
+          }
+        }
+        
+        // Validate date object is valid
         if (isNaN(entryDate.getTime())) {
           console.error('[CalendarSync] Invalid date for entry:', entry.title, entry.date);
           failCount++;
