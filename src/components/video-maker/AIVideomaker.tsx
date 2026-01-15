@@ -33,7 +33,11 @@ interface QuotaInfo {
   canGenerate: boolean;
 }
 
-export default function AIVideomaker() {
+interface AIVideomakerProps {
+  onSaveSuccess?: () => void;
+}
+
+export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const { language } = useTheme();
   const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -46,11 +50,14 @@ export default function AIVideomaker() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStatus, setGenerationStatus] = useState('');
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [taskId, setTaskId] = useState<string | null>(null);
   const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
   const [quota, setQuota] = useState<QuotaInfo | null>(null);
   const [loadingQuota, setLoadingQuota] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load quota on mount
   const loadQuota = useCallback(async () => {
@@ -112,6 +119,61 @@ export default function AIVideomaker() {
     }
   };
 
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Poll for task status
+  const pollTaskStatus = useCallback(async (tid: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('freepik-image2video', {
+        body: { mode: 'status', task_id: tid },
+      });
+
+      if (error) throw error;
+
+      const status = data?.data?.status?.toLowerCase();
+      console.log('[AIVideomaker] Poll status:', status);
+
+      if (status === 'completed' || status === 'succeed') {
+        // Done!
+        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+        // Video URL is in generated array, NOT video.url!
+        const videoUrl = data?.data?.generated?.[0] || data?.data?.video?.url;
+        if (videoUrl) {
+          setGeneratedVideoUrl(videoUrl);
+          setIsSaved(false);
+          setGenerationProgress(100);
+          setGenerationStatus(language === 'ar' ? 'تم!' : 'Done!');
+          toast.success(language === 'ar' ? 'تم إنشاء الفيديو!' : 'Video generated!');
+          await loadQuota();
+        } else {
+          throw new Error('Video URL not found');
+        }
+        setIsGenerating(false);
+        setTaskId(null);
+      } else if (status === 'failed' || status === 'error') {
+        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+        throw new Error(data?.data?.error || 'Video generation failed');
+      } else {
+        // Still processing - update progress
+        setGenerationProgress((prev) => Math.min(prev + 5, 90));
+      }
+    } catch (e: any) {
+      console.error('[AIVideomaker] Poll error:', e);
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      setIsGenerating(false);
+      setTaskId(null);
+      setGenerationProgress(0);
+      toast.error(e?.message || (language === 'ar' ? 'فشل إنشاء الفيديو' : 'Failed to generate video'));
+    }
+  }, [language, loadQuota]);
+
   const handleGenerate = async () => {
     if (!imagePreview || !user) return;
 
@@ -138,35 +200,47 @@ export default function AIVideomaker() {
     }
 
     setIsGenerating(true);
-    setGenerationStatus(language === 'ar' ? 'جاري إنشاء الفيديو...' : 'Creating video...');
+    setGenerationProgress(5);
+    setGenerationStatus(language === 'ar' ? 'جاري رفع الصورة...' : 'Uploading image...');
     setGeneratedVideoUrl(null);
 
     try {
+      // Start task in async mode
       const { data, error } = await supabase.functions.invoke('freepik-image2video', {
         body: {
           image: imagePreview,
           prompt: prompt.trim() || undefined,
           negative_prompt: negativePrompt.trim() || undefined,
+          mode: 'async',
         },
       });
 
       if (error) {
-        throw new Error(error.message || 'Failed to generate video');
+        throw new Error(error.message || 'Failed to start video generation');
       }
 
-      if (!data?.ok) {
-        throw new Error(data?.error || 'Video generation failed');
+      if (!data?.ok || !data?.task_id) {
+        throw new Error(data?.error || 'Failed to create video task');
       }
 
-      setGeneratedVideoUrl(data.videoUrl);
-      setIsSaved(false); // Reset saved state for new video
-      toast.success(language === 'ar' ? 'تم إنشاء الفيديو!' : 'Video generated!');
-      await loadQuota();
+      const tid = data.task_id;
+      setTaskId(tid);
+      setGenerationProgress(15);
+      setGenerationStatus(language === 'ar' ? 'جاري إنشاء الفيديو...' : 'Generating video...');
+
+      // Start polling every 5 seconds
+      pollIntervalRef.current = setInterval(() => {
+        pollTaskStatus(tid);
+      }, 5000);
+
+      // Also poll immediately after a short delay
+      setTimeout(() => pollTaskStatus(tid), 3000);
+
     } catch (e: any) {
       console.error('AI Video generation error:', e);
       toast.error(e?.message || (language === 'ar' ? 'فشل إنشاء الفيديو' : 'Failed to generate video'));
-    } finally {
       setIsGenerating(false);
+      setGenerationProgress(0);
       setGenerationStatus('');
     }
   };
@@ -226,6 +300,10 @@ export default function AIVideomaker() {
 
       setIsSaved(true);
       toast.success(language === 'ar' ? 'تم الحفظ في فيديوهاتي!' : 'Saved to My Videos!');
+      // Navigate to My AI Videos tab after successful save
+      if (onSaveSuccess) {
+        setTimeout(() => onSaveSuccess(), 1000);
+      }
     } catch (e: any) {
       console.error('Save failed:', e);
       toast.error(language === 'ar' ? 'فشل الحفظ' : 'Failed to save');
@@ -303,7 +381,7 @@ export default function AIVideomaker() {
                   </div>
                 </div>
               ) : (
-                <div className="relative group h-full min-h-[200px]">
+                <div className="relative h-full min-h-[200px]">
                   <div className="h-full rounded-2xl overflow-hidden bg-black/90 shadow-2xl shadow-black/50 ring-2 ring-primary/30">
                     <img
                       src={imagePreview}
@@ -311,25 +389,26 @@ export default function AIVideomaker() {
                       className="w-full h-full object-contain"
                     />
                   </div>
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl" />
-                  <div className="absolute bottom-2 left-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {/* Always visible X button */}
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-lg bg-red-500 hover:bg-red-600"
+                    onClick={clearImage}
+                    disabled={isGenerating}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                  {/* Change button at bottom */}
+                  <div className="absolute bottom-2 left-2 right-2">
                     <Button
                       variant="secondary"
                       size="sm"
-                      className="flex-1 h-8 text-xs bg-white/95 hover:bg-white text-black rounded-lg"
+                      className="w-full h-8 text-xs bg-white/90 hover:bg-white text-black rounded-lg shadow-lg"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={isGenerating}
                     >
-                      {language === 'ar' ? 'تغيير' : 'Change'}
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      className="h-8 w-8 p-0 rounded-lg"
-                      onClick={clearImage}
-                      disabled={isGenerating}
-                    >
-                      <X className="h-4 w-4" />
+                      {language === 'ar' ? 'تغيير الصورة' : 'Change Image'}
                     </Button>
                   </div>
                 </div>
@@ -418,6 +497,25 @@ export default function AIVideomaker() {
                 )}
               </Button>
 
+              {/* Progress bar during generation */}
+              {isGenerating && (
+                <div className="space-y-2">
+                  <div className="h-3 rounded-full bg-muted overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-[hsl(210,100%,65%)] via-[hsl(280,70%,65%)] to-[hsl(142,76%,55%)] transition-all duration-500 ease-out"
+                      style={{ width: `${generationProgress}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">{generationStatus}</span>
+                    <span className="font-medium text-primary">{generationProgress}%</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground/70 text-center">
+                    {language === 'ar' ? 'قد يستغرق الأمر 1-3 دقائق...' : 'This may take 1-3 minutes...'}
+                  </p>
+                </div>
+              )}
+
               {/* Status messages */}
               {!imagePreview && !isGenerating && !limitReached && (
                 <p className="text-center text-xs text-muted-foreground">
@@ -427,54 +525,83 @@ export default function AIVideomaker() {
             </div>
           </div>
 
-          {/* Generated video result */}
+          {/* Generated video result - Mobile optimized, full width */}
           {generatedVideoUrl && (
-            <div className="rounded-2xl overflow-hidden border-2 border-green-500/40 shadow-[0_0_40px_hsla(142,76%,55%,0.3)]">
-              <div className="p-3 bg-gradient-to-r from-green-500/15 to-emerald-500/15 border-b border-green-500/20 flex items-center justify-between flex-wrap gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-green-500/20">
-                    <Video className="h-4 w-4 text-green-600" />
-                  </div>
-                  <span className="font-semibold text-sm">
-                    {language === 'ar' ? '🎉 الفيديو جاهز!' : '🎉 Video Ready!'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className={`h-8 px-3 rounded-lg ${isSaved ? 'bg-green-500/20 text-green-600' : 'hover:bg-green-500/10'}`}
-                    onClick={handleSaveToMyVideos}
-                    disabled={isSaving || isSaved}
-                  >
-                    {isSaving ? (
-                      <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                    ) : isSaved ? (
-                      <Check className="h-4 w-4 mr-1.5" />
-                    ) : (
-                      <Save className="h-4 w-4 mr-1.5" />
-                    )}
-                    <span className="text-xs">{isSaved ? (language === 'ar' ? 'تم الحفظ' : 'Saved') : (language === 'ar' ? 'حفظ' : 'Save')}</span>
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-8 px-3 rounded-lg hover:bg-green-500/10" onClick={handleDownload}>
-                    <Download className="h-4 w-4 mr-1.5" />
-                    <span className="text-xs">{language === 'ar' ? 'تحميل' : 'Download'}</span>
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-8 px-3 rounded-lg hover:bg-green-500/10" onClick={handleShare}>
-                    <Share2 className="h-4 w-4 mr-1.5" />
-                    <span className="text-xs">{language === 'ar' ? 'مشاركة' : 'Share'}</span>
-                  </Button>
-                </div>
-              </div>
-              <div className="bg-black p-2">
+            <div className="rounded-2xl overflow-hidden border-2 border-green-500/50 shadow-[0_0_60px_hsla(142,76%,55%,0.4)] bg-gradient-to-b from-green-500/5 to-transparent">
+              {/* Video player - Full width, prominent */}
+              <div className="relative bg-black">
                 <video
                   src={generatedVideoUrl}
                   controls
                   autoPlay
                   loop
                   playsInline
-                  className="w-full max-h-[350px] object-contain rounded-lg"
+                  className="w-full aspect-[9/16] max-h-[70vh] object-contain"
                 />
+                {/* Floating badge */}
+                <div className="absolute top-3 left-3 px-3 py-1.5 rounded-full bg-green-500 text-white text-xs font-bold shadow-lg animate-pulse">
+                  {language === 'ar' ? '🎉 جاهز!' : '🎉 Ready!'}
+                </div>
+              </div>
+              
+              {/* Action buttons - Mobile friendly, large touch targets */}
+              <div className="p-4 space-y-3">
+                <p className="text-center text-sm font-medium text-green-600 dark:text-green-400">
+                  {language === 'ar' ? 'تم إنشاء الفيديو بنجاح!' : 'Video generated successfully!'}
+                </p>
+                
+                <div className="grid grid-cols-3 gap-2">
+                  <Button 
+                    className={`h-12 flex-col gap-1 rounded-xl ${
+                      isSaved 
+                        ? 'bg-green-500 hover:bg-green-600 text-white' 
+                        : 'bg-green-500/20 hover:bg-green-500/30 text-green-700 dark:text-green-300'
+                    }`}
+                    onClick={handleSaveToMyVideos}
+                    disabled={isSaving || isSaved}
+                  >
+                    {isSaving ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : isSaved ? (
+                      <Check className="h-5 w-5" />
+                    ) : (
+                      <Save className="h-5 w-5" />
+                    )}
+                    <span className="text-[10px] font-medium">
+                      {isSaved ? (language === 'ar' ? 'تم!' : 'Saved!') : (language === 'ar' ? 'حفظ' : 'Save')}
+                    </span>
+                  </Button>
+                  
+                  <Button 
+                    className="h-12 flex-col gap-1 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 text-blue-700 dark:text-blue-300"
+                    onClick={handleDownload}
+                  >
+                    <Download className="h-5 w-5" />
+                    <span className="text-[10px] font-medium">{language === 'ar' ? 'تحميل' : 'Download'}</span>
+                  </Button>
+                  
+                  <Button 
+                    className="h-12 flex-col gap-1 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-700 dark:text-purple-300"
+                    onClick={handleShare}
+                  >
+                    <Share2 className="h-5 w-5" />
+                    <span className="text-[10px] font-medium">{language === 'ar' ? 'مشاركة' : 'Share'}</span>
+                  </Button>
+                </div>
+                
+                {/* Create another button */}
+                <Button 
+                  variant="outline" 
+                  className="w-full h-10 rounded-xl text-sm"
+                  onClick={() => {
+                    setGeneratedVideoUrl(null);
+                    setIsSaved(false);
+                    clearImage();
+                  }}
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  {language === 'ar' ? 'إنشاء فيديو جديد' : 'Create Another Video'}
+                </Button>
               </div>
             </div>
           )}

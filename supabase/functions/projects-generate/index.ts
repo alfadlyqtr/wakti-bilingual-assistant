@@ -2240,7 +2240,8 @@ The user attached a screenshot. I analyzed it and found these text anchors:
       let taskCompleteResult: { summary: string; filesChanged: string[] } | null = null;
       
       for (let iteration = 0; iteration < maxIterations; iteration++) {
-        console.log(`[Agent Mode] Iteration ${iteration + 1}/${maxIterations}`);
+        console.log(`[Agent Mode] ========== ITERATION ${iteration + 1}/${maxIterations} ==========`);
+        console.log(`[Agent Mode] User prompt: ${prompt.substring(0, 500)}...`);
         
         // Call Gemini with tools
         // Using gemini-2.5-pro for EXCELLENT code quality in agent mode
@@ -2304,9 +2305,19 @@ The user attached a screenshot. I analyzed it and found these text anchors:
         
         for (const fc of functionCalls) {
           const { name, args } = fc.functionCall;
-          console.log(`[Agent Mode] Tool call: ${name}`, args);
+          
+          // ========================================================================
+          // DEEP LOGGING: Log every tool call with full details
+          // ========================================================================
+          console.log(`[Agent Mode] ========== TOOL CALL ==========`);
+          console.log(`[Agent Mode] Tool: ${name}`);
+          console.log(`[Agent Mode] Args: ${JSON.stringify(args, null, 2).substring(0, 2000)}`);
           
           const result = await executeToolCall(projectId, { name, arguments: args || {} }, agentDebugContext, supabase, userId);
+          
+          // Log the result
+          console.log(`[Agent Mode] Result: ${JSON.stringify(result, null, 2).substring(0, 1000)}`);
+          console.log(`[Agent Mode] ================================`);
           
           toolCallsLog.push({ tool: name, args, result });
           functionResponses.push({

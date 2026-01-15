@@ -224,6 +224,24 @@ export const AGENT_TOOLS = [
     }
   },
   {
+    name: "query_backend",
+    description: "Query ANY backend feature (bookings, orders, cart, chat, etc.). Use this to check what backend data exists before implementing features.",
+    parameters: {
+      type: "object",
+      properties: {
+        action: { 
+          type: "string", 
+          description: "Backend action like 'booking/list', 'order/list', 'chat/rooms', 'collection/products'. See BACKEND API docs for all actions." 
+        },
+        data: { 
+          type: "object", 
+          description: "Optional data for the query (e.g., { status: 'pending', limit: 10 })" 
+        }
+      },
+      required: ["action"]
+    }
+  },
+  {
     name: "get_project_info",
     description: "Get project metadata including backend status, available collections, and uploaded assets.",
     parameters: {
@@ -270,6 +288,20 @@ Before making ANY changes, you MUST follow this exact sequence:
 - Use read_file to see the CURRENT state of relevant files
 - Use list_files if you need to find where code lives
 - NEVER edit a file you haven't read first
+
+### STEP 2.5: ANALYZE ARCHITECTURE (Required for new features)
+When adding NEW PAGES or NEW FEATURES, you MUST check:
+1. **Does App.js use React Router?** Look for: BrowserRouter, Routes, Route imports
+2. **If NO routing exists:** You must ADD routing to App.js before creating page files
+3. **If routing exists:** Add your new Route to the existing Routes
+
+**CRITICAL:** Creating a page file WITHOUT adding a Route is USELESS - the page won't load!
+
+Example - If App.js has NO routing, you must:
+1. Add react-router-dom imports to App.js
+2. Wrap app in BrowserRouter
+3. Add Routes with Route for each page
+4. THEN create the page component files
 
 ### STEP 3: PLAN (Required)
 Before your FIRST edit, state your plan in this format:
@@ -419,6 +451,26 @@ You are in a sandbox. You CANNOT:
 
 The project backend API is: https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
 All requests must include: { projectId: "{{PROJECT_ID}}", action: "...", ...data }
+
+### 🎯 COMPLETE BACKEND FEATURES SUMMARY
+
+| Feature | Action Prefix | What It Does |
+|---------|---------------|--------------|
+| **Forms** | submit, subscribe | Contact forms, newsletter signups |
+| **Collections** | collection/* | CRUD for any data (products, posts, etc.) |
+| **Cart** | cart/* | Shopping cart (add, remove, update, clear) |
+| **Orders** | order/* | Create orders, list, update status |
+| **Inventory** | inventory/* | Stock tracking, low stock alerts |
+| **Bookings** | booking/* | Appointments with calendar sync |
+| **Site Auth** | auth/* | User accounts for the site (signup/login) |
+| **Chat** | chat/* | Real-time chat rooms and messages |
+| **Comments** | comments/* | Comments on any item type |
+| **Roles** | roles/* | User roles and permissions |
+| **Notifications** | notifications/* | Owner notifications |
+| **File Upload** | multipart/form-data | Upload files to storage |
+| **FreePik** | freepik/* | Stock images and videos |
+
+**⚠️ IMPORTANT:** When user asks for ANY of these features, implement them using the API below. Don't hardcode data - fetch from API!
 
 ### 📝 FORMS & COLLECTIONS (Basic)
 \`\`\`js
@@ -603,6 +655,137 @@ These tables support Supabase Realtime for live updates:
 - project_notifications (new notifications)
 
 Use supabase.channel().on('postgres_changes', ...) to subscribe.
+
+## 🛠️ IMPLEMENTATION PATTERNS (Copy-Paste Ready)
+
+### Pattern 1: Contact Form with Backend
+\`\`\`jsx
+const [formData, setFormData] = useState({ name: '', email: '', message: '' });
+const [status, setStatus] = useState('idle'); // idle, loading, success, error
+
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setStatus('loading');
+  try {
+    const res = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        projectId: '{{PROJECT_ID}}',
+        action: 'submit',
+        formName: 'contact',
+        data: formData
+      })
+    });
+    if (res.ok) setStatus('success');
+    else throw new Error('Failed');
+  } catch (err) {
+    setStatus('error');
+  }
+};
+\`\`\`
+
+### Pattern 2: Booking Form with Date/Time
+\`\`\`jsx
+const [booking, setBooking] = useState({ 
+  name: '', email: '', phone: '', 
+  service: '', date: '', time: '', notes: '' 
+});
+
+const handleBooking = async (e) => {
+  e.preventDefault();
+  const res = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      projectId: '{{PROJECT_ID}}',
+      action: 'booking/create',
+      data: {
+        serviceName: booking.service,
+        date: booking.date,
+        startTime: booking.time,
+        customerInfo: { name: booking.name, email: booking.email, phone: booking.phone },
+        notes: booking.notes
+      }
+    })
+  });
+  // Handle response...
+};
+\`\`\`
+
+### Pattern 3: Fetch Products from Collection
+\`\`\`jsx
+const [products, setProducts] = useState([]);
+const [loading, setLoading] = useState(true);
+
+useEffect(() => {
+  const fetchProducts = async () => {
+    const res = await fetch(
+      'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api' +
+      '?projectId={{PROJECT_ID}}&action=collection/products'
+    );
+    const data = await res.json();
+    setProducts(data.items || []);
+    setLoading(false);
+  };
+  fetchProducts();
+}, []);
+\`\`\`
+
+### Pattern 4: Shopping Cart
+\`\`\`jsx
+const [cart, setCart] = useState({ items: [] });
+const sessionId = localStorage.getItem('cartSession') || crypto.randomUUID();
+
+const addToCart = async (product) => {
+  localStorage.setItem('cartSession', sessionId);
+  const res = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      projectId: '{{PROJECT_ID}}',
+      action: 'cart/add',
+      data: { sessionId, item: { id: product.id, name: product.data.name, price: product.data.price, quantity: 1 } }
+    })
+  });
+  const data = await res.json();
+  setCart(data.cart);
+};
+\`\`\`
+
+### Pattern 5: Site User Login
+\`\`\`jsx
+const [user, setUser] = useState(null);
+const [token, setToken] = useState(localStorage.getItem('siteToken'));
+
+const login = async (email, password) => {
+  const res = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      projectId: '{{PROJECT_ID}}',
+      action: 'auth/login',
+      data: { email, password }
+    })
+  });
+  const data = await res.json();
+  if (data.token) {
+    localStorage.setItem('siteToken', data.token);
+    setToken(data.token);
+    setUser(data.user);
+  }
+};
+\`\`\`
+
+## ⚠️ COMMON MISTAKES TO AVOID
+
+1. **DON'T hardcode product data** - Always fetch from collection API
+2. **DON'T forget projectId** - Every API call needs it
+3. **DON'T use wrong action format** - It's "collection/products" not "products"
+4. **DON'T forget error handling** - Always wrap in try/catch
+5. **DON'T forget loading states** - Show spinner while fetching
+6. **DON'T forget empty states** - Handle when data array is empty
+7. **DON'T use placeholder images** - Use FreePik API for real images
 `;
 
 // Normalize file path to always start with /
@@ -707,24 +890,32 @@ export async function executeToolCall(
       const path = normalizeFilePath(args.path || "");
       const content = args.content || "";
       
+      console.log(`[Agent] write_file called: path=${path}, contentLength=${content.length}`);
+      
       if (!content.trim()) {
+        console.error(`[Agent] write_file REJECTED: empty content for ${path}`);
         return { error: "Cannot write empty file content" };
       }
       
       assertNoHtml(path, content);
       
-      const { error } = await supabase
+      console.log(`[Agent] write_file UPSERTING to DB: project_id=${projectId}, path=${path}`);
+      
+      const { data, error } = await supabase
         .from('project_files')
         .upsert({
           project_id: projectId,
           path: path,
           content: content
-        }, { onConflict: 'project_id,path' });
+        }, { onConflict: 'project_id,path' })
+        .select('id, path');
       
       if (error) {
-        console.error(`[Agent] write_file error:`, error);
+        console.error(`[Agent] write_file DB ERROR:`, error);
         return { error: `Failed to write file: ${error.message}` };
       }
+      
+      console.log(`[Agent] write_file SUCCESS: ${path} (${content.length} bytes), DB response:`, data);
       
       return { success: true, path, bytesWritten: content.length };
     }
@@ -751,7 +942,10 @@ export async function executeToolCall(
       const search = args.search || "";
       const replace = args.replace || "";
       
+      console.log(`[Agent] search_replace called: path=${path}, searchLen=${search.length}, replaceLen=${replace.length}`);
+      
       if (!search) {
+        console.error(`[Agent] search_replace REJECTED: empty search string`);
         return { error: "search_replace: 'search' parameter is required" };
       }
       
@@ -768,16 +962,18 @@ export async function executeToolCall(
         return { error: `Failed to read file: ${readError.message}` };
       }
       if (!data) {
+        console.error(`[Agent] search_replace FAILED: File not found: ${path}`);
         return { error: `File not found: ${path}` };
       }
       
       const currentContent = data.content;
+      console.log(`[Agent] search_replace: File ${path} has ${currentContent.length} chars`);
       
       // Check if search string exists in file
       if (!currentContent.includes(search)) {
         // Try to provide helpful feedback
         const searchPreview = search.substring(0, 100);
-        console.error(`[Agent] search_replace: Search string not found in ${path}`);
+        console.error(`[Agent] search_replace FAILED: Search string not found in ${path}`);
         console.error(`[Agent] Search preview: "${searchPreview}..."`);
         return { 
           error: `Search string not found in ${path}. Make sure you copied the exact code including whitespace. Search preview: "${searchPreview}..."`,
@@ -787,6 +983,7 @@ export async function executeToolCall(
       
       // Count occurrences
       const occurrences = currentContent.split(search).length - 1;
+      console.log(`[Agent] search_replace: Found ${occurrences} occurrence(s)`);
       if (occurrences > 1) {
         console.warn(`[Agent] search_replace: Found ${occurrences} occurrences, replacing first one`);
       }
@@ -946,6 +1143,59 @@ export async function executeToolCall(
         return { collection, data, count: Array.isArray(data) ? data.length : 0 };
       } catch (err: any) {
         return { error: `Failed to query collection: ${err.message}` };
+      }
+    }
+    
+    case "query_backend": {
+      // Query any backend feature (bookings, orders, cart, chat, etc.)
+      const action = args.action || "";
+      const queryData = args.data || {};
+      
+      if (!action) {
+        return { error: "Action is required (e.g., 'booking/list', 'order/list', 'chat/rooms')" };
+      }
+      
+      try {
+        const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+        
+        // For GET-style queries, use URL params
+        const isGetAction = action.includes('/list') || action.includes('/get') || action.includes('/check') || action.includes('/rooms') || action.includes('/messages');
+        
+        if (isGetAction && Object.keys(queryData).length === 0) {
+          const response = await fetch(
+            `${SUPABASE_URL}/functions/v1/project-backend-api?projectId=${projectId}&action=${action}`
+          );
+          
+          if (!response.ok) {
+            const errText = await response.text();
+            return { error: `Backend query failed: HTTP ${response.status} - ${errText}` };
+          }
+          
+          return await response.json();
+        }
+        
+        // For POST-style queries with data
+        const response = await fetch(
+          `${SUPABASE_URL}/functions/v1/project-backend-api`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              projectId,
+              action,
+              data: queryData
+            })
+          }
+        );
+        
+        if (!response.ok) {
+          const errText = await response.text();
+          return { error: `Backend query failed: HTTP ${response.status} - ${errText}` };
+        }
+        
+        return await response.json();
+      } catch (err: any) {
+        return { error: `Failed to query backend: ${err.message}` };
       }
     }
     

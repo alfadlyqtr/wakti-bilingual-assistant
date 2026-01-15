@@ -25,6 +25,7 @@ interface TaskStatusResponse {
   data: {
     task_id: string;
     status: string;
+    generated?: string[]; // Video URLs are in this array!
     video?: {
       url: string;
     };
@@ -97,10 +98,13 @@ async function pollUntilComplete(taskId: string): Promise<{ videoUrl: string } |
     console.log(`[freepik-image2video] Status: ${status.status}`);
 
     if (status.status === "COMPLETED" || status.status === "completed") {
-      if (status.video?.url) {
-        console.log("[freepik-image2video] Video ready:", status.video.url);
-        return { videoUrl: status.video.url };
+      // Video URL is in generated array, NOT video.url!
+      const videoUrl = status.generated?.[0] || status.video?.url;
+      if (videoUrl) {
+        console.log("[freepik-image2video] Video ready:", videoUrl);
+        return { videoUrl };
       }
+      console.error("[freepik-image2video] No video URL in response:", JSON.stringify(status));
       return { error: "Video completed but no URL returned" };
     }
 

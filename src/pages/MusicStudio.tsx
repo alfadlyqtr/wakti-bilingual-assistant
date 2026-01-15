@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import VideoEditorPro from '@/components/video-maker/VideoEditorPro';
 import AIVideomaker from '@/components/video-maker/AIVideomaker';
+import MyAIVideosTab from '@/components/video-maker/MyAIVideosTab';
 import { useLocation } from 'react-router-dom';
 
 // Helper function to download audio files on mobile
@@ -562,9 +563,9 @@ export default function MusicStudio() {
               {videoSubTab === 'create' ? <VideoEditorPro /> : <SavedVideosTab onCreate={() => setVideoSubTab('create')} />}
             </>
           ) : videoMode === 'ai' ? (
-            <AIVideomaker />
+            <AIVideomaker onSaveSuccess={() => setVideoMode('ai-saved')} />
           ) : (
-            <SavedVideosTab onCreate={() => setVideoMode('ai')} />
+            <MyAIVideosTab onCreate={() => setVideoMode('ai')} />
           )}
         </>
       )}
