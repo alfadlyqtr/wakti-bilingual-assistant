@@ -4230,15 +4230,31 @@ Fix the issue in the code and ensure it works correctly.`;
                         <BookingFormWizard
                           services={services}
                           originalPrompt={pendingFormPrompt}
-                          onComplete={(config, structuredPrompt) => {
+                          onComplete={async (config, structuredPrompt) => {
                             setShowBookingWizard(false);
                             setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            setPendingFormPrompt('');
+                            
+                            // Add user message first
+                            const userMsgId = `user-wizard-${Date.now()}`;
+                            setChatMessages(prev => [...prev, {
+                              id: userMsgId,
+                              role: 'user',
+                              content: structuredPrompt
+                            }]);
+                            
+                            // Set chat input and trigger submit after state update
                             setChatInput(structuredPrompt);
-                            // Auto-submit after a brief delay
-                            setTimeout(() => {
-                              const form = document.querySelector('form');
-                              if (form) form.dispatchEvent(new Event('submit', { bubbles: true }));
-                            }, 100);
+                            
+                            // Use requestAnimationFrame to ensure state is updated before submit
+                            requestAnimationFrame(() => {
+                              requestAnimationFrame(() => {
+                                const form = document.querySelector('form[class*="flex items-end gap-2"]');
+                                if (form) {
+                                  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                                }
+                              });
+                            });
                           }}
                           onCancel={() => {
                             setShowBookingWizard(false);
@@ -4261,14 +4277,31 @@ Fix the issue in the code and ensure it works correctly.`;
                       <div key={i} className="flex flex-col items-start w-full animate-in fade-in slide-in-from-bottom-1 duration-300">
                         <ContactFormWizard
                           originalPrompt={pendingFormPrompt}
-                          onComplete={(config, structuredPrompt) => {
+                          onComplete={async (config, structuredPrompt) => {
                             setShowContactWizard(false);
                             setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            setPendingFormPrompt('');
+                            
+                            // Add user message first
+                            const userMsgId = `user-wizard-${Date.now()}`;
+                            setChatMessages(prev => [...prev, {
+                              id: userMsgId,
+                              role: 'user',
+                              content: structuredPrompt
+                            }]);
+                            
+                            // Set chat input and trigger submit after state update
                             setChatInput(structuredPrompt);
-                            setTimeout(() => {
-                              const form = document.querySelector('form');
-                              if (form) form.dispatchEvent(new Event('submit', { bubbles: true }));
-                            }, 100);
+                            
+                            // Use requestAnimationFrame to ensure state is updated before submit
+                            requestAnimationFrame(() => {
+                              requestAnimationFrame(() => {
+                                const form = document.querySelector('form[class*="flex items-end gap-2"]');
+                                if (form) {
+                                  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                                }
+                              });
+                            });
                           }}
                           onCancel={() => {
                             setShowContactWizard(false);
@@ -5135,11 +5168,20 @@ Fix the issue in the code and ensure it works correctly.`;
                   <div className="flex items-center gap-2 px-1">
                     <div className="flex flex-wrap gap-2 flex-1">
                       {(() => {
+                        // Don't show quick actions during wizard display or AI editing
+                        if (showBookingWizard || showContactWizard || aiEditing) {
+                          return null;
+                        }
+                        
                         const lastAiMessage = [...chatMessages].reverse().find(m => m.role === 'assistant');
                         const raw = lastAiMessage?.content || '';
                         let responseContent = raw;
                         try {
                           const parsed = JSON.parse(raw);
+                          // Skip wizard messages - don't show chips for them
+                          if (parsed?.type === 'booking_form_wizard' || parsed?.type === 'contact_form_wizard') {
+                            return null;
+                          }
                           if (parsed?.type === 'execution_result' && typeof parsed.summary === 'string') {
                             responseContent = parsed.summary;
                           }
@@ -5265,6 +5307,7 @@ Fix the issue in the code and ensure it works correctly.`;
                         : "border-blue-600/40 dark:border-blue-600/30 focus-within:border-blue-600 focus-within:ring-1 focus-within:ring-blue-600/20"
                     )}>
                       <Textarea
+                        data-chat-input
                         value={chatInput}
                         onChange={(e) => setChatInput(e.target.value)}
                         placeholder={leftPanelMode === 'code' 
@@ -5359,6 +5402,7 @@ Fix the issue in the code and ensure it works correctly.`;
                         {/* Send Button */}
                         <Button 
                           type="submit"
+                          data-chat-submit
                           disabled={!chatInput.trim() || aiEditing || isGenerating}
                           size="icon"
                           className={cn(
