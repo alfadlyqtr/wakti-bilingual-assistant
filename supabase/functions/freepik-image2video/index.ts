@@ -158,7 +158,7 @@ serve(async (req) => {
 
     // Mode: 'create' to start task, 'status' to check status
     if (mode === "status") {
-      const { task_id } = body;
+      const { task_id, increment_usage } = body;
       if (!task_id) {
         return new Response(JSON.stringify({ error: "Missing task_id" }), {
           status: 400,
@@ -167,6 +167,15 @@ serve(async (req) => {
       }
 
       const status = await getTaskStatus(task_id);
+      if (increment_usage && (status.status === "COMPLETED" || status.status === "completed")) {
+        const { error: usageError } = await supabase.rpc("increment_ai_video_usage", {
+          p_user_id: user.id,
+        });
+        if (usageError) {
+          console.error("[freepik-image2video] Usage increment error (status):", usageError);
+        }
+      }
+
       return new Response(JSON.stringify({ ok: true, data: status }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

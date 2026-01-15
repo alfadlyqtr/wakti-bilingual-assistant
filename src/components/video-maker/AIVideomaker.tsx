@@ -24,6 +24,7 @@ import {
   Save,
   Check,
   Lock,
+  FolderOpen,
 } from 'lucide-react';
 
 interface QuotaInfo {
@@ -35,6 +36,14 @@ interface QuotaInfo {
 
 interface AIVideomakerProps {
   onSaveSuccess?: () => void;
+}
+
+interface LatestVideo {
+  id: string;
+  title: string | null;
+  video_url: string | null;
+  duration_seconds: number | null;
+  created_at: string;
 }
 
 export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
@@ -57,6 +66,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [loadingQuota, setLoadingQuota] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [latestVideo, setLatestVideo] = useState<LatestVideo | null>(null);
+  const pollInFlightRef = useRef(false);
+  const usageIncrementedRef = useRef(false);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load quota on mount
@@ -85,6 +97,45 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   useEffect(() => {
     loadQuota();
   }, [loadQuota]);
+
+  const loadLatestVideo = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data, error } = await (supabase as any)
+        .from('user_videos')
+        .select('id, title, video_url, duration_seconds, created_at')
+        .eq('user_id', user.id)
+        .not('video_url', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (error) throw error;
+      const row = data?.[0];
+      if (row?.video_url) {
+        setLatestVideo(row);
+        return;
+      }
+
+      const { data: aiData, error: aiError } = await (supabase as any)
+        .from('user_ai_videos')
+        .select('id, title, video_url, duration_seconds, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (aiError) throw aiError;
+      const aiRow = aiData?.[0];
+      if (aiRow?.video_url) {
+        setLatestVideo(aiRow);
+      }
+    } catch (e) {
+      console.error('Failed to load latest video:', e);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    loadLatestVideo();
+  }, [loadLatestVideo]);
 
   // Handle image upload
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -119,6 +170,25 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     }
   };
 
+  const handleDownloadLatest = async () => {
+    if (!latestVideo?.video_url) return;
+    try {
+      const response = await fetch(latestVideo.video_url);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `wakti-video-${Date.now()}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Download failed:', e);
+      window.open(latestVideo.video_url, '_blank');
+    }
+  };
+
   // Cleanup polling on unmount
   useEffect(() => {
     return () => {
@@ -131,8 +201,10 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   // Poll for task status
   const pollTaskStatus = useCallback(async (tid: string) => {
     try {
+      if (pollInFlightRef.current) return;
+      pollInFlightRef.current = true;
       const { data, error } = await supabase.functions.invoke('freepik-image2video', {
-        body: { mode: 'status', task_id: tid },
+        body: { mode: 'status', task_id: tid, increment_usage: !usageIncrementedRef.current },
       });
 
       if (error) throw error;
@@ -143,6 +215,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       if (status === 'completed' || status === 'succeed') {
         // Done!
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+        usageIncrementedRef.current = true;
         // Video URL is in generated array, NOT video.url!
         const videoUrl = data?.data?.generated?.[0] || data?.data?.video?.url;
         if (videoUrl) {
@@ -152,6 +225,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           setGenerationStatus(language === 'ar' ? 'تم!' : 'Done!');
           toast.success(language === 'ar' ? 'تم إنشاء الفيديو!' : 'Video generated!');
           await loadQuota();
+          await loadLatestVideo();
         } else {
           throw new Error('Video URL not found');
         }
@@ -171,8 +245,10 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       setTaskId(null);
       setGenerationProgress(0);
       toast.error(e?.message || (language === 'ar' ? 'فشل إنشاء الفيديو' : 'Failed to generate video'));
+    } finally {
+      pollInFlightRef.current = false;
     }
-  }, [language, loadQuota]);
+  }, [language, loadQuota, loadLatestVideo]);
 
   const handleGenerate = async () => {
     if (!imagePreview || !user) return;
@@ -203,6 +279,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setGenerationProgress(5);
     setGenerationStatus(language === 'ar' ? 'جاري رفع الصورة...' : 'Uploading image...');
     setGeneratedVideoUrl(null);
+    usageIncrementedRef.current = false;
 
     try {
       // Start task in async mode
@@ -318,6 +395,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const limit = quota?.limit || 10;
   const limitReached = quota !== null && !quota.canGenerate;
   const canGenerate = imagePreview && !limitReached && !isGenerating && !loadingQuota;
+  const showLatestVideo = !generatedVideoUrl && !!latestVideo?.video_url;
 
   return (
     <div className="relative">
@@ -357,6 +435,49 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
               </div>
             </div>
           </div>
+
+          {showLatestVideo && (
+            <div className="rounded-2xl overflow-hidden border border-border bg-gradient-to-b from-primary/5 to-transparent">
+              <div className="relative bg-black">
+                <video
+                  src={latestVideo?.video_url || undefined}
+                  controls
+                  playsInline
+                  className="w-full aspect-[9/16] max-h-[60vh] object-contain"
+                />
+                <div className="absolute top-3 left-3 px-3 py-1.5 rounded-full bg-primary text-white text-xs font-bold shadow-lg">
+                  {language === 'ar' ? 'آخر فيديو' : 'Latest Video'}
+                </div>
+              </div>
+              <div className="p-4 space-y-3">
+                <p className="text-center text-sm font-medium text-primary">
+                  {language === 'ar' ? 'هذا آخر فيديو محفوظ' : 'This is your latest saved video'}
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  <Button className="h-11 flex-col gap-1 rounded-xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300" disabled>
+                    <Check className="h-5 w-5" />
+                    <span className="text-[10px] font-medium">
+                      {language === 'ar' ? 'محفوظ' : 'Saved'}
+                    </span>
+                  </Button>
+                  <Button
+                    className="h-11 flex-col gap-1 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 text-blue-700 dark:text-blue-300"
+                    onClick={handleDownloadLatest}
+                  >
+                    <Download className="h-5 w-5" />
+                    <span className="text-[10px] font-medium">{language === 'ar' ? 'تحميل' : 'Download'}</span>
+                  </Button>
+                  <Button
+                    className="h-11 flex-col gap-1 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-700 dark:text-purple-300"
+                    onClick={() => onSaveSuccess?.()}
+                  >
+                    <FolderOpen className="h-5 w-5" />
+                    <span className="text-[10px] font-medium">{language === 'ar' ? 'المحفوظات' : 'Saved'}</span>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Unified content area */}
           <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-4">
