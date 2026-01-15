@@ -26,6 +26,8 @@ export interface RetrieveCalendarEventsResult {
   error?: string;
 }
 
+let hasShownCalendarDebug = false;
+
 export function retrieveCalendarEventsIfSupported(
   callback: (result: RetrieveCalendarEventsResult) => void
 ): void {
@@ -227,6 +229,32 @@ export function retrieveCalendars(callback: (result: RetrieveCalendarsResult) =>
       console.log('[NativelyCalendar] resp.error:', resp?.error);
       console.log('[NativelyCalendar] resp.id:', resp?.id);
       console.log('[NativelyCalendar] ======================================');
+
+      if (!hasShownCalendarDebug && typeof window !== 'undefined') {
+        hasShownCalendarDebug = true;
+        const instanceMethods = Object.keys(cal || {}).filter((key) =>
+          key.toLowerCase().includes('event') || key.toLowerCase().includes('calendar')
+        );
+        const debugPayload = {
+          resp,
+          methodCheck: {
+            hasRetrieveCalendars: typeof cal.retrieveCalendars === 'function',
+            hasCreateCalendarEvent: typeof cal.createCalendarEvent === 'function',
+            hasCreateCalendar: typeof cal.createCalendar === 'function',
+            hasRetrieveCalendarEvents: typeof cal.retrieveCalendarEvents === 'function',
+            hasGetCalendarEvents: typeof cal.getCalendarEvents === 'function',
+            hasRetrieveEvents: typeof cal.retrieveEvents === 'function',
+            hasGetEvents: typeof cal.getEvents === 'function',
+            hasReadCalendarEvents: typeof cal.readCalendarEvents === 'function'
+          },
+          instanceMethods
+        };
+        try {
+          alert(`[Wakti Calendar Debug] ${JSON.stringify(debugPayload)}`);
+        } catch {
+          alert('[Wakti Calendar Debug] Could not stringify calendar response');
+        }
+      }
       
       // Handle various response formats from Natively SDK
       let calendars: CalendarObject[] = [];

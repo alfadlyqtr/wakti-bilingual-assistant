@@ -808,6 +808,17 @@ const login = async (email, password) => {
 
 **🚫 NEVER edit files when user just asks a question!**
 
+## ✅ BACKEND SAFETY CHECKS (MANDATORY)
+
+**Before UPDATE or DELETE backend data:**
+1. **Query first** (query_backend/query_collection)
+2. **Confirm the item exists**
+3. **Then update/delete**
+
+**RLS mismatch guard:**
+- If results look like they belong to another user or project, STOP and warn.
+- Do NOT proceed with any write.
+
 ## 🔧 AUTO-FIX: FIXING ERRORS
 
 When you receive error context (runtime errors, build errors, etc.):
@@ -824,6 +835,15 @@ When you receive error context (runtime errors, build errors, etc.):
 | "Cannot read properties of undefined" | Null check missing | Add optional chaining (?.) |
 | "Unexpected token" | Syntax error | Check for missing brackets, quotes |
 | "is not a function" | Wrong import or typo | Check import and function name |
+| "Objects are not valid as a React child" | Rendering object directly | Render a field or use JSON.stringify |
+| "Too many re-renders" | setState in render | Move setState into useEffect/handler |
+| "Hooks can only be called" | Hook used outside component | Move hook into component scope |
+| "Invalid hook call" | Duplicate React or wrong import | Check React versions/imports |
+| "Cannot update a component while rendering" | setState during render | Move to useEffect/handler |
+| "Expected corresponding JSX closing tag" | Missing closing tag | Close the JSX tag |
+| "Adjacent JSX elements" | Missing wrapper | Add fragment <>...</> |
+| "Cannot find name 'React'" | Missing React import (older JSX) | Add import React |
+| "Element type is invalid" | Bad export/import | Fix default vs named export |
 
 **Example fix flow:**
 1. Error: "useState is not defined" in /App.js line 5
@@ -831,6 +851,11 @@ When you receive error context (runtime errors, build errors, etc.):
 3. See: import React from 'react'; (missing useState)
 4. search_replace: add useState to import
 5. task_complete
+
+**POST-FIX VERIFY (MANDATORY):**
+1. Re-read the edited file(s)
+2. Confirm the error line now looks correct
+3. Ensure no new errors were introduced
 
 ## 🔒 MANDATORY: search_replace OVER write_file
 
@@ -845,6 +870,13 @@ When you receive error context (runtime errors, build errors, etc.):
 - Complete rewrites (>50% of file changes)
 
 **If you use write_file for small edits, you are WRONG and will break things.**
+
+## ✅ POST-EDIT VERIFICATION (MANDATORY)
+
+After any code change:
+1. **Read the file again**
+2. **Confirm the exact change**
+3. **Then respond**
 `;
 
 // Normalize file path to always start with /
