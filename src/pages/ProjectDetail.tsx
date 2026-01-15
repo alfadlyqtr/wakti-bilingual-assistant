@@ -3092,6 +3092,54 @@ Fix the issue in the code and ensure it works correctly.`;
     const userMessage = chatInput.trim();
     setChatInput('');
     
+    // ===== STEP 1: FORM WIZARD DETECTION (ALWAYS FIRST - before any image logic) =====
+    // BOOKING FORM DETECTION - Show wizard instead of direct AI call
+    const bookingFormPatterns = /\b(add|create|build|make|need).*(booking|appointment|schedule|reservation)\s*(form|page|system)?/i;
+    if (bookingFormPatterns.test(userMessage)) {
+      setPendingFormPrompt(userMessage);
+      setShowBookingWizard(true);
+      
+      setChatMessages(prev => [...prev, {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content: userMessage
+      }]);
+      
+      setChatMessages(prev => [...prev, {
+        id: `booking-wizard-${Date.now()}`,
+        role: 'assistant',
+        content: JSON.stringify({
+          type: 'booking_form_wizard',
+          prompt: userMessage
+        })
+      }]);
+      return;
+    }
+    
+    // CONTACT FORM DETECTION - Show wizard instead of direct AI call
+    const contactFormPatterns = /\b(add|create|build|make|need).*(contact|inquiry|message|feedback)\s*(form|page)?/i;
+    if (contactFormPatterns.test(userMessage)) {
+      setPendingFormPrompt(userMessage);
+      setShowContactWizard(true);
+      
+      setChatMessages(prev => [...prev, {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content: userMessage
+      }]);
+      
+      setChatMessages(prev => [...prev, {
+        id: `contact-wizard-${Date.now()}`,
+        role: 'assistant',
+        content: JSON.stringify({
+          type: 'contact_form_wizard',
+          prompt: userMessage
+        })
+      }]);
+      return;
+    }
+    
+    // ===== STEP 2: IMAGE-RELATED LOGIC (only if no form wizard triggered) =====
     // CRITICAL FIX: If images are already attached, skip ALL photo selector patterns
     // and proceed directly to AI submission - prevents the selector from reopening in a loop
     const hasAttachedImages = attachedImages.length > 0;
@@ -3119,51 +3167,6 @@ Fix the issue in the code and ensure it works correctly.`;
     // Only check photo patterns if NO images are currently attached
     // AND we're not coming from the "Auto-Generate" selection
     if (!hasAttachedImages && !isAIGeneratingImages && !skipImageDialogRef.current) {
-      // BOOKING FORM DETECTION - Show wizard instead of direct AI call
-      const bookingFormPatterns = /\b(add|create|build|make|need).*(booking|appointment|schedule|reservation)\s*(form|page|system)?/i;
-      if (bookingFormPatterns.test(userMessage)) {
-        setPendingFormPrompt(userMessage);
-        setShowBookingWizard(true);
-        
-        setChatMessages(prev => [...prev, {
-          id: `user-${Date.now()}`,
-          role: 'user',
-          content: userMessage
-        }]);
-        
-        setChatMessages(prev => [...prev, {
-          id: `booking-wizard-${Date.now()}`,
-          role: 'assistant',
-          content: JSON.stringify({
-            type: 'booking_form_wizard',
-            prompt: userMessage
-          })
-        }]);
-        return;
-      }
-      
-      // CONTACT FORM DETECTION - Show wizard instead of direct AI call
-      const contactFormPatterns = /\b(add|create|build|make|need).*(contact|inquiry|message|feedback)\s*(form|page)?/i;
-      if (contactFormPatterns.test(userMessage)) {
-        setPendingFormPrompt(userMessage);
-        setShowContactWizard(true);
-        
-        setChatMessages(prev => [...prev, {
-          id: `user-${Date.now()}`,
-          role: 'user',
-          content: userMessage
-        }]);
-        
-        setChatMessages(prev => [...prev, {
-          id: `contact-wizard-${Date.now()}`,
-          role: 'assistant',
-          content: JSON.stringify({
-            type: 'contact_form_wizard',
-            prompt: userMessage
-          })
-        }]);
-        return;
-      }
       
       // Patterns that indicate user wants to work with images
       // IMPORTANT: Exclude questions (show me, what, which) and style changes (shadow, effect, color)
