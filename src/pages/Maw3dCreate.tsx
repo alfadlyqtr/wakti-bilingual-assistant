@@ -766,6 +766,16 @@ export default function Maw3dCreate() {
                           id="title" 
                           placeholder={t('enterEventTitle', language)}
                           className="input-enhanced backdrop-blur-sm"
+                          autoComplete="off"
+                          autoCorrect="off"
+                          autoCapitalize="off"
+                          spellCheck={false}
+                          onFocus={(event) => {
+                            const value = event.currentTarget.value?.trim();
+                            if (value === t('eventTitle', 'en') || value === t('enterEventTitle', 'en')) {
+                              setValue('title', '', { shouldDirty: true });
+                            }
+                          }}
                           {...field} 
                         />
                       )}

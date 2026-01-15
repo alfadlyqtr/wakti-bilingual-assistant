@@ -814,7 +814,28 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
       }
 
       await new Promise<void>((resolve) => {
-        mediaRecorder.onstop = () => resolve();
+        let settled = false;
+        const timeout = window.setTimeout(() => {
+          if (!settled) {
+            settled = true;
+            resolve();
+          }
+        }, 10000);
+
+        mediaRecorder.onstop = () => {
+          if (!settled) {
+            settled = true;
+            window.clearTimeout(timeout);
+            resolve();
+          }
+        };
+
+        try {
+          mediaRecorder.requestData();
+        } catch (_) {
+          // ignore
+        }
+
         mediaRecorder.stop();
       });
 

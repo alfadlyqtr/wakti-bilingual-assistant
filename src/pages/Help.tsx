@@ -194,7 +194,7 @@ export default function Help() {
       content: (
         <div className="space-y-4">
           <div>
-            <h4 className="font-medium mb-2 text-purple-400">{t('createEvent', language)}</h4>
+            <h4 className="font-medium mb-2 text-purple-400">{t('helpCreateEvent', language)}</h4>
             <ul className="text-sm space-y-1">
               <li>{t('eventStep1', language)}</li>
               <li>{t('eventStep2', language)}</li>

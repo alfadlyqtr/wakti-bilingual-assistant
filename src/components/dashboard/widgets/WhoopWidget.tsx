@@ -57,8 +57,13 @@ export const WhoopWidget: React.FC = () => {
         <CardHeader>
           <CardTitle>{language === 'ar' ? 'اتصل بـ WHOOP' : 'Connect WHOOP'}</CardTitle>
         </CardHeader>
-        <div className="p-4 text-sm text-muted-foreground">
-          {language === 'ar' ? 'قم بتوصيل حساب WHOOP لعرض النوم، التعافي، والإجهاد اليومي.' : 'Connect your WHOOP account to view sleep, recovery, and daily strain.'}
+        <div
+          className="p-4 text-sm text-muted-foreground"
+          dir={language === 'ar' ? 'ltr' : undefined}
+        >
+          {language === 'ar'
+            ? 'قم بتوصيل حساب WHOOP لعرض النوم، والتعافي، ومستوى الإجهاد اليومي.'
+            : 'Connect your WHOOP account to view sleep, recovery, and daily strain.'}
         </div>
         <div className="px-4 pb-4">
           <Button onClick={onConnect} className="w-full">{language === 'ar' ? 'اتصال WHOOP' : 'Connect WHOOP'}</Button>

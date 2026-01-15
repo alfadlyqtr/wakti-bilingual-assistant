@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, 
   isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, getDay, 
   addWeeks, subWeeks, setMonth, getMonth, startOfYear, endOfYear, 
-  setYear, getYear, addYears, subYears, parse } from "date-fns";
+  setYear, getYear, addYears, subYears, parse, addHours } from "date-fns";
+import { toast } from "sonner";
 import { arSA, enUS } from "date-fns/locale";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -30,8 +31,17 @@ import {
   CheckSquare,
   Bell,
   PinIcon,
-  Heart
+  Heart,
+  Smartphone,
+  RefreshCw
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import {
+  isNativeCalendarAvailable,
+  createCalendarEvent,
+  formatDateForNatively,
+  getUserTimezone
+} from "@/integrations/natively/calendarBridge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
@@ -59,6 +69,22 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
   const containerRef = useRef<HTMLDivElement>(null);
   const doubleTapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastTapRef = useRef<number>(0);
+  
+  // Phone calendar sync state
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('wakti_calendar_auto_sync') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [nativeCalendarAvailable, setNativeCalendarAvailable] = useState(false);
+  
+  // Check if native calendar is available on mount
+  useEffect(() => {
+    setNativeCalendarAvailable(isNativeCalendarAvailable());
+  }, []);
   
   // Use optimized calendar data hook to prevent freezing!
   const {
@@ -317,6 +343,116 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     });
   }, []);
 
+  // Sync calendar entries to phone calendar
+  const syncToPhoneCalendar = useCallback(async () => {
+    if (!nativeCalendarAvailable) {
+      toast.error(language === 'ar' ? 'مزامنة التقويم متاحة فقط في التطبيق' : 'Calendar sync is only available in the app');
+      return;
+    }
+    
+    setIsSyncing(true);
+    const timezone = getUserTimezone();
+    let successCount = 0;
+    let failCount = 0;
+    
+    // Sync tasks, reminders, and maw3d events
+    const entriesToSync = calendarEntries.filter(e => 
+      e.type === EntryType.TASK || 
+      e.type === EntryType.REMINDER || 
+      e.type === EntryType.MAW3D_EVENT
+    );
+    
+    for (const entry of entriesToSync) {
+      try {
+        const entryDate = new Date(entry.date);
+        if (entry.time) {
+          const [hours, minutes] = entry.time.split(':').map(Number);
+          entryDate.setHours(hours || 0, minutes || 0, 0, 0);
+        }
+        const startDate = formatDateForNatively(entryDate);
+        const endDate = formatDateForNatively(addHours(entryDate, 1));
+        
+        await new Promise<void>((resolve) => {
+          createCalendarEvent(
+            entry.title,
+            startDate,
+            endDate,
+            timezone,
+            null,
+            entry.description || null,
+            (result) => {
+              if (result.status === 'SUCCESS') {
+                successCount++;
+              } else {
+                failCount++;
+                console.warn('[CalendarSync] Failed to sync entry:', entry.title, result.error);
+              }
+              resolve();
+            }
+          );
+        });
+      } catch (err) {
+        failCount++;
+        console.error('[CalendarSync] Error syncing entry:', entry.title, err);
+      }
+    }
+    
+    setIsSyncing(false);
+    
+    if (successCount > 0) {
+      toast.success(
+        language === 'ar' 
+          ? `تمت مزامنة ${successCount} حدث إلى تقويم الهاتف` 
+          : `Synced ${successCount} events to phone calendar`
+      );
+    }
+    if (failCount > 0) {
+      toast.error(
+        language === 'ar' 
+          ? `فشل في مزامنة ${failCount} حدث` 
+          : `Failed to sync ${failCount} events`
+      );
+    }
+    if (successCount === 0 && failCount === 0) {
+      toast.info(
+        language === 'ar' 
+          ? 'لا توجد أحداث للمزامنة' 
+          : 'No events to sync'
+      );
+    }
+  }, [calendarEntries, nativeCalendarAvailable, language]);
+
+  // Handle auto-sync toggle
+  const handleAutoSyncToggle = useCallback((enabled: boolean) => {
+    setAutoSyncEnabled(enabled);
+    try {
+      localStorage.setItem('wakti_calendar_auto_sync', enabled ? 'true' : 'false');
+    } catch {}
+    
+    if (enabled) {
+      toast.success(
+        language === 'ar' 
+          ? 'تم تفعيل المزامنة التلقائية' 
+          : 'Auto-sync enabled'
+      );
+      // Trigger immediate sync when enabled
+      syncToPhoneCalendar();
+    } else {
+      toast.info(
+        language === 'ar' 
+          ? 'تم إيقاف المزامنة التلقائية' 
+          : 'Auto-sync disabled'
+      );
+    }
+  }, [language, syncToPhoneCalendar]);
+
+  // Auto-sync when calendar data changes (if enabled)
+  useEffect(() => {
+    if (autoSyncEnabled && nativeCalendarAvailable && calendarEntries.length > 0) {
+      syncToPhoneCalendar();
+    }
+  }, [autoSyncEnabled, nativeCalendarAvailable, calendarEntries.length]);
+
   return (
     <div 
       className="flex flex-col h-full w-full overflow-hidden" 
@@ -443,6 +579,45 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
             </Button>
           </div>
         </div>
+        
+        {/* Phone Calendar Sync Section */}
+        {nativeCalendarAvailable && (
+          <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border">
+            <div className="flex items-center gap-2">
+              <Smartphone className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">
+                {language === 'ar' ? 'مزامنة تقويم الهاتف' : 'Phone Calendar Sync'}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              {/* Manual sync button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={syncToPhoneCalendar}
+                disabled={isSyncing}
+                className="flex items-center gap-1"
+              >
+                <RefreshCw className={cn("h-4 w-4", isSyncing && "animate-spin")} />
+                <span className="hidden sm:inline">
+                  {language === 'ar' ? 'مزامنة' : 'Sync'}
+                </span>
+              </Button>
+              
+              {/* Auto-sync toggle */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">
+                  {language === 'ar' ? 'تلقائي' : 'Auto'}
+                </span>
+                <Switch
+                  checked={autoSyncEnabled}
+                  onCheckedChange={handleAutoSyncToggle}
+                  aria-label={language === 'ar' ? 'المزامنة التلقائية' : 'Auto-sync'}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <CalendarGrid

@@ -73,7 +73,7 @@ export const help = {
   // Maw3d section
   maw3dTitle: "Maw3d Events",
   maw3dDesc: "Create beautiful event invitations and manage RSVPs",
-  createEvent: "Creating an Event:",
+  helpCreateEvent: "Creating an Event:",
   eventStep1: "1. Go to Maw3d Events page",
   eventStep2: "2. Tap 'Create New Event'",
   eventStep3: "3. Fill in event details (title, description, date, time, location)",

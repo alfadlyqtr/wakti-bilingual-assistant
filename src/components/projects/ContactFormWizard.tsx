@@ -176,17 +176,21 @@ export function ContactFormWizard({ onComplete, onCancel, onSkipWizard, original
       }
     };
 
+    const isPopup = formStyle === 'floating';
+    
     let prompt = `Build a beautiful contact form with these specifications:
 
-FORM STYLE: ${formStyle === 'single' ? 'Single page form' : formStyle === 'multi-step' ? 'Multi-step wizard' : 'Floating/modal form'}
+${isPopup ? `CRITICAL - POPUP/MODAL BEHAVIOR:
+- Create a BUTTON that when clicked opens a MODAL/POPUP containing the contact form
+- The form must be HIDDEN by default and only appear when the button is clicked
+- Use React state (useState) to control modal visibility: const [isOpen, setIsOpen] = useState(false)
+- The modal should have a dark overlay backdrop and centered form
+- Include a close button (X) in the modal header
+- Close modal on backdrop click or close button click
+` : ''}FORM STYLE: ${formStyle === 'single' ? 'Single page inline form (visible on page)' : formStyle === 'multi-step' ? 'Multi-step wizard form' : 'Popup modal form (hidden until button clicked)'}
 
-FIELDS (in order with layout):
-${fields.map((f, i) => `${i + 1}. ${f.label} (${f.type}) - ${f.required ? 'REQUIRED' : 'optional'} - ${f.width === 'half' ? 'HALF WIDTH (2 per row)' : 'FULL WIDTH'}${f.placeholder ? ` - placeholder: "${f.placeholder}"` : ''}`).join('\n')}
-
-LAYOUT INSTRUCTIONS:
-- Fields marked as "HALF WIDTH" MUST appear side-by-side (2 fields per row using CSS grid: grid-cols-2)
-- Fields marked as "FULL WIDTH" span the entire row (col-span-2 or grid-cols-1)
-- Use a responsive grid layout that stacks on mobile
+FIELDS (in order):
+${fields.map((f, i) => `${i + 1}. ${f.label} (${f.type}) - ${f.required ? 'REQUIRED' : 'optional'}${f.placeholder ? ` - placeholder: "${f.placeholder}"` : ''}`).join('\n')}
 
 DESIGN:
 - Border style: ${borderRadius}
@@ -199,7 +203,7 @@ DESIGN:
 Include:
 - Form validation with error messages
 - Loading state on submit button  
-- Success message/toast after submission (use alert or simple state, no external toast library)
+- Success message after submission (use simple state, no external toast library)
 - Error handling with user-friendly messages
 
 CRITICAL - DO NOT:

@@ -65,7 +65,7 @@ export default function Maw3dEvents() {
             size="lg"
           >
             <Plus className="h-5 w-5" />
-            {language === 'ar' ? 'إنشاء حدث جديد' : 'Create New Event'}
+            {language === 'ar' ? 'إنشاء' : 'Create'}
           </Button>
         </div>
 
@@ -82,7 +82,7 @@ export default function Maw3dEvents() {
               {language === 'ar' ? 'ابدأ بإنشاء حدثك الأول' : 'Get started by creating your first event'}
             </p>
             <Button onClick={handleCreateEvent}>
-              {language === 'ar' ? 'إنشاء حدث' : 'Create Event'}
+              {language === 'ar' ? 'إنشاء' : 'Create'}
             </Button>
           </div>
         ) : (

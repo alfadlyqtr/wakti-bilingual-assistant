@@ -46,6 +46,8 @@ export interface BookingFormConfig {
     borderRadius: 'rounded' | 'sharp' | 'pill';
     submitButtonText: string;
     submitButtonTextAr: string;
+    colorScheme: 'indigo' | 'emerald' | 'rose' | 'amber' | 'slate';
+    showLabels: boolean;
   };
 }
 
@@ -61,7 +63,7 @@ const DEFAULT_FIELDS: FormField[] = [
   { id: 'name', name: 'name', type: 'text', required: true, label: 'Full Name', labelAr: 'الاسم الكامل' },
   { id: 'email', name: 'email', type: 'email', required: true, label: 'Email', labelAr: 'البريد الإلكتروني' },
   { id: 'phone', name: 'phone', type: 'tel', required: false, label: 'Phone', labelAr: 'الهاتف' },
-  { id: 'service', name: 'service', type: 'select', required: true, label: 'Service', labelAr: 'الخدمة' },
+  { id: 'service', name: 'service', type: 'select', required: false, label: 'Service (optional)', labelAr: 'الخدمة (اختياري)' },
   { id: 'date', name: 'date', type: 'date', required: true, label: 'Date', labelAr: 'التاريخ' },
   { id: 'time', name: 'time', type: 'time', required: true, label: 'Time', labelAr: 'الوقت' },
   { id: 'notes', name: 'notes', type: 'textarea', required: false, label: 'Notes', labelAr: 'ملاحظات' },
@@ -75,9 +77,7 @@ export function BookingFormWizard({ services, onComplete, onCancel, onSkipWizard
   const totalSteps = services.length > 0 ? 4 : 3;
   
   // Step 1: Service Selection
-  const [selectedServices, setSelectedServices] = useState<string[]>(
-    services.length > 0 ? services.map(s => s.id) : []
-  );
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
   
   // Step 2: Form Style
   const [formStyle, setFormStyle] = useState<'single' | 'multi-step' | 'sidebar'>('single');
@@ -90,6 +90,16 @@ export function BookingFormWizard({ services, onComplete, onCancel, onSkipWizard
   const [borderRadius, setBorderRadius] = useState<'rounded' | 'sharp' | 'pill'>('rounded');
   const [submitText, setSubmitText] = useState('Book Appointment');
   const [submitTextAr, setSubmitTextAr] = useState('احجز موعد');
+  const [colorScheme, setColorScheme] = useState<'indigo' | 'emerald' | 'rose' | 'amber' | 'slate'>('indigo');
+  const [showLabels, setShowLabels] = useState(true);
+
+  const COLOR_SCHEMES = [
+    { id: 'indigo', color: 'bg-indigo-500', label: 'Indigo', labelAr: 'نيلي' },
+    { id: 'emerald', color: 'bg-emerald-500', label: 'Green', labelAr: 'أخضر' },
+    { id: 'rose', color: 'bg-rose-500', label: 'Rose', labelAr: 'وردي' },
+    { id: 'amber', color: 'bg-amber-500', label: 'Amber', labelAr: 'كهرماني' },
+    { id: 'slate', color: 'bg-slate-600', label: 'Slate', labelAr: 'رمادي' },
+  ];
 
   const handleServiceToggle = (serviceId: string) => {
     setSelectedServices(prev => 
@@ -156,19 +166,26 @@ export function BookingFormWizard({ services, onComplete, onCancel, onSkipWizard
         borderRadius,
         submitButtonText: submitText,
         submitButtonTextAr: submitTextAr,
+        colorScheme,
+        showLabels,
       }
     };
 
     // Build structured prompt
     const selectedServiceDetails = services.filter(s => selectedServices.includes(s.id));
     
-    let prompt = `Build a booking form with these specifications:
+    let prompt = `Build a beautiful booking form with these specifications:
 
 `;
     
     if (selectedServiceDetails.length > 0) {
       prompt += `SERVICES TO INCLUDE:
 ${selectedServiceDetails.map(s => `- ${s.name} (${s.duration} min, ${s.price} QAR)`).join('\n')}
+
+`;
+    } else {
+      prompt += `SERVICES TO INCLUDE:
+- No preselected services (user can choose none or multiple at runtime)
 
 `;
     }
@@ -180,12 +197,24 @@ ${fields.map((f, i) => `${i + 1}. ${f.label} (${f.type}) - ${f.required ? 'requi
 
 DESIGN:
 - Border style: ${borderRadius}
+- Color scheme: ${colorScheme} (use ${colorScheme}-500 for primary buttons and accents)
 - Submit button text: "${submitText}"
+- ${showLabels ? 'Show field labels above inputs' : 'Use placeholder-only design (no labels)'}
+- Service selection must be OPTIONAL and allow MULTI-SELECT
+- Add subtle hover effects and focus states
+- Use smooth transitions and modern styling
 
-IMPORTANT: This form MUST submit to the project backend at:
-supabase.functions.invoke('project-backend-api', {
-  body: { action: 'createBooking', projectId: '{{PROJECT_ID}}', ... }
-})
+Include:
+- Form validation with error messages
+- Loading state on submit button
+- Success message/toast after submission (use alert or simple state, no external toast library)
+- Error handling with user-friendly messages
+
+CRITICAL - DO NOT:
+- Do NOT create or modify supabaseClient.js
+- Do NOT write any API keys or anon keys
+- Do NOT import from @supabase/supabase-js
+- Just create the UI form - backend integration will be added separately
 
 Original request: ${originalPrompt}`;
 
@@ -204,9 +233,14 @@ Original request: ${originalPrompt}`;
       return (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-              {isRTL ? 'اختر الخدمات للنموذج' : 'Select services for the form'}
-            </p>
+            <div>
+              <p className="text-sm font-medium">
+                {isRTL ? 'اختيار الخدمات (اختياري)' : 'Select services (optional)'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {isRTL ? 'يمكنك عدم الاختيار أو اختيار أكثر من خدمة' : 'Choose none or multiple services'}
+              </p>
+            </div>
             <Button
               variant="ghost"
               size="sm"
@@ -246,30 +280,6 @@ Original request: ${originalPrompt}`;
             ))}
           </div>
 
-          {/* Field Order Preview */}
-          <div className="rounded-xl border border-border/50 bg-muted/30 p-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold">
-                {isRTL ? 'معاينة الترتيب' : 'Order Preview'}
-              </span>
-              <span className="text-[10px] text-muted-foreground">
-                {isRTL ? 'ترتيب الحقول' : 'Field order'}
-              </span>
-            </div>
-            <div className="grid grid-cols-1 gap-2">
-              {fields.map((field, index) => (
-                <div
-                  key={`preview-${field.id}`}
-                  className="rounded-lg border border-border/60 bg-background/70 px-2 py-1.5 text-[10px]"
-                >
-                  <div className="font-medium truncate">
-                    {index + 1}. {isRTL ? field.labelAr : field.label}
-                  </div>
-                  <div className="text-muted-foreground">{field.type}</div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       );
     }
@@ -434,24 +444,89 @@ Original request: ${originalPrompt}`;
               />
             </div>
 
-            {/* Summary */}
-            <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-3">
-              <div className="text-xs font-semibold mb-2">
-                {isRTL ? 'ملخص سريع' : 'Quick Summary'}
+            {/* Color Scheme */}
+            <div className="space-y-2">
+              <Label className="text-xs">{isRTL ? 'نظام الألوان' : 'Color Scheme'}</Label>
+              <div className="flex gap-2">
+                {COLOR_SCHEMES.map(scheme => (
+                  <button
+                    key={scheme.id}
+                    onClick={() => setColorScheme(scheme.id as typeof colorScheme)}
+                    className={cn(
+                      "flex-1 flex flex-col items-center gap-1 py-2 rounded-lg border transition-all",
+                      colorScheme === scheme.id
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary/50"
+                    )}
+                  >
+                    <div className={cn("w-4 h-4 rounded-full", scheme.color)} />
+                    <span className="text-[10px]">{isRTL ? scheme.labelAr : scheme.label}</span>
+                  </button>
+                ))}
               </div>
-              <div className="grid grid-cols-2 gap-2 text-[10px] text-muted-foreground">
-                <div>
-                  <span className="font-medium text-foreground">{isRTL ? 'النمط:' : 'Style:'}</span>{' '}
-                  {formStyle === 'single' ? (isRTL ? 'صفحة واحدة' : 'Single') : formStyle === 'multi-step' ? (isRTL ? 'متعدد الخطوات' : 'Multi-step') : (isRTL ? 'شريط جانبي' : 'Sidebar')}
+            </div>
+
+            {/* Show Labels Toggle */}
+            <div className="flex items-center justify-between p-2 rounded-lg border border-border">
+              <Label className="text-xs">{isRTL ? 'إظهار التسميات' : 'Show Field Labels'}</Label>
+              <Switch
+                checked={showLabels}
+                onCheckedChange={setShowLabels}
+              />
+            </div>
+
+            {/* Design Preview */}
+            <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-3">
+              <div className="text-xs font-semibold mb-3">
+                {isRTL ? 'معاينة التصميم' : 'Design Preview'}
+              </div>
+              <div className={cn(
+                "p-3 bg-background border",
+                borderRadius === 'sharp' ? 'rounded-none' : borderRadius === 'pill' ? 'rounded-2xl' : 'rounded-lg'
+              )}>
+                {/* Preview field */}
+                <div className="space-y-2 mb-3">
+                  {showLabels && (
+                    <label className="text-[10px] font-medium text-muted-foreground">
+                      {isRTL ? 'الاسم الكامل' : 'Full Name'}
+                    </label>
+                  )}
+                  <div className={cn(
+                    "h-7 bg-muted/50 border border-border",
+                    borderRadius === 'sharp' ? 'rounded-none' : borderRadius === 'pill' ? 'rounded-full' : 'rounded-md'
+                  )} />
                 </div>
-                <div>
-                  <span className="font-medium text-foreground">{isRTL ? 'الحقول:' : 'Fields:'}</span>{' '}
-                  {fields.length}
-                </div>
-                <div className="col-span-2">
-                  <span className="font-medium text-foreground">{isRTL ? 'زر الإرسال:' : 'Submit:'}</span>{' '}
+                {/* Preview button */}
+                <button className={cn(
+                  "w-full py-1.5 text-[10px] font-medium text-white transition-all",
+                  borderRadius === 'sharp' ? 'rounded-none' : borderRadius === 'pill' ? 'rounded-full' : 'rounded-md',
+                  colorScheme === 'indigo' ? 'bg-indigo-500' :
+                  colorScheme === 'emerald' ? 'bg-emerald-500' :
+                  colorScheme === 'rose' ? 'bg-rose-500' :
+                  colorScheme === 'amber' ? 'bg-amber-500' : 'bg-slate-600'
+                )}>
                   {isRTL ? submitTextAr : submitText}
-                </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Summary */}
+            <div className="grid grid-cols-2 gap-2 text-[10px] text-muted-foreground p-2 rounded-lg bg-muted/30">
+              <div>
+                <span className="font-medium text-foreground">{isRTL ? 'النمط:' : 'Style:'}</span>{' '}
+                {formStyle === 'single' ? (isRTL ? 'صفحة واحدة' : 'Single') : formStyle === 'multi-step' ? (isRTL ? 'متعدد الخطوات' : 'Multi-step') : (isRTL ? 'شريط جانبي' : 'Sidebar')}
+              </div>
+              <div>
+                <span className="font-medium text-foreground">{isRTL ? 'الحقول:' : 'Fields:'}</span>{' '}
+                {fields.length}
+              </div>
+              <div>
+                <span className="font-medium text-foreground">{isRTL ? 'اللون:' : 'Color:'}</span>{' '}
+                {COLOR_SCHEMES.find(c => c.id === colorScheme)?.[isRTL ? 'labelAr' : 'label']}
+              </div>
+              <div>
+                <span className="font-medium text-foreground">{isRTL ? 'التسميات:' : 'Labels:'}</span>{' '}
+                {showLabels ? (isRTL ? 'نعم' : 'Yes') : (isRTL ? 'لا' : 'No')}
               </div>
             </div>
           </div>
@@ -463,26 +538,23 @@ Original request: ${originalPrompt}`;
   };
 
   return (
-    <div className="w-full space-y-4 p-4 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 border border-indigo-500/20 rounded-xl" dir={isRTL ? 'rtl' : 'ltr'}>
+    <div className="w-full space-y-4 p-4 bg-card border border-border rounded-2xl shadow-sm" dir={isRTL ? 'rtl' : 'ltr'}>
       {/* Header */}
-      <div className="flex items-center gap-2">
-        <Calendar className="h-5 w-5 text-indigo-500" />
-        <h3 className="font-semibold text-sm">
-          {isRTL ? '📅 معالج نموذج الحجز' : '📅 Booking Form Wizard'}
-        </h3>
-      </div>
-      
-      {/* Progress Indicator */}
-      <div className="flex items-center gap-1">
-        {Array.from({ length: totalSteps }).map((_, i) => (
-          <div
-            key={i}
-            className={cn(
-              "flex-1 h-1 rounded-full transition-all",
-              i + 1 <= step ? "bg-indigo-500" : "bg-muted"
-            )}
-          />
-        ))}
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-2">
+          <Calendar className="h-5 w-5 text-indigo-500" />
+          <div>
+            <h3 className="font-semibold text-sm">
+              {isRTL ? 'معالج نموذج الحجز' : 'Booking Form Wizard'}
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              {isRTL ? 'بسيط وسريع — خطوة بخطوة' : 'Simple & fast — step by step'}
+            </p>
+          </div>
+        </div>
+        <span className="text-[10px] text-muted-foreground">
+          {isRTL ? `الخطوة ${step} من ${totalSteps}` : `Step ${step} of ${totalSteps}`}
+        </span>
       </div>
       
       {/* Step Content */}

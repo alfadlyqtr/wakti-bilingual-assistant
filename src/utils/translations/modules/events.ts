@@ -8,7 +8,7 @@ export const events = {
   addEvent: "Add Event",
   editEvent: "Edit Event",
   deleteEvent: "Delete Event",
-  createEvent: "Create Event",
+  createEvent: "Create",
   manageEvent: "Manage Event",
   eventDetails: "Event Details",
   enterEventTitle: "Enter event title",

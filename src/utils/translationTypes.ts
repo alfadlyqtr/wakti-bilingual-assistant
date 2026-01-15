@@ -1301,6 +1301,7 @@ export type TranslationKey =
   | "autoDeleteFeature"
   | "maw3dTitle"
   | "maw3dDesc"
+  | "helpCreateEvent"
   | "eventStep1"
   | "eventStep2"
   | "eventStep3"

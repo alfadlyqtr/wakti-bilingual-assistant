@@ -1940,6 +1940,25 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
 
       if (uploadError) throw uploadError;
 
+      let finalPath = uploadData?.path || fileName;
+
+      // If WebM on iOS, trigger server-side conversion
+      const ua = navigator.userAgent || '';
+      const isIOS = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+      if (isWebm && isIOS && finalPath) {
+        try {
+          toast.info(language === 'ar' ? 'جاري تحويل الفيديو...' : 'Converting video for iOS...');
+          const { data: convData, error: convErr } = await supabase.functions.invoke('convert-webm-to-mp4', {
+            body: { storagePath: finalPath, bucket: 'videos' }
+          });
+          if (!convErr && convData?.storagePath) {
+            finalPath = convData.storagePath;
+          }
+        } catch (convE) {
+          console.warn('[VideoMaker] Server conversion failed, using WebM:', convE);
+        }
+      }
+
       // Save metadata to database (cast to any to bypass type checking for new table)
       const { data: videoData, error: dbError } = await (supabase as any)
         .from('user_videos')
@@ -1947,7 +1966,7 @@ export default function VideoMaker({ initialTab }: { initialTab?: VideoMakerTab 
           user_id: user.id,
           title: project.title || null,
           thumbnail_url: thumbnailPath,
-          storage_path: uploadData.path,
+          storage_path: finalPath,
           duration_seconds: totalDuration,
           aspect_ratio: '9:16',
           style_template: project.template,

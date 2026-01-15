@@ -72,7 +72,7 @@ export const helpAr = {
   // Maw3d section
   maw3dTitle: "موعد - الأحداث",
   maw3dDesc: "أنشئ دعوات أحداث جميلة وأدر الردود",
-  createEvent: "إنشاء حدث:",
+  helpCreateEvent: "إنشاء حدث:",
   eventStep1: "1. اذهب إلى صفحة موعد",
   eventStep2: "2. اضغط 'إنشاء حدث جديد'",
   eventStep3: "3. املأ تفاصيل الحدث (العنوان، الوصف، التاريخ، الوقت، الموقع)",

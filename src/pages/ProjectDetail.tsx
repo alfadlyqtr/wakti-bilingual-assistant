@@ -3187,14 +3187,27 @@ Fix the issue in the code and ensure it works correctly.`;
           }]);
         }
         
-        setChatMessages(prev => [...prev, {
-          id: `booking-wizard-${Date.now()}`,
-          role: 'assistant',
-          content: JSON.stringify({
-            type: 'booking_form_wizard',
-            prompt: userMessage
-          })
-        }]);
+        // Save wizard assistant message to DB so it persists on refresh
+        const wizardAssistantContent = JSON.stringify({
+          type: 'booking_form_wizard',
+          prompt: userMessage
+        });
+        const { data: wizardAssistantMsg, error: wizardAssistantErr } = await supabase
+          .from('project_chat_messages' as any)
+          .insert({ project_id: id, role: 'assistant', content: wizardAssistantContent } as any)
+          .select()
+          .single();
+        
+        if (wizardAssistantErr) console.error('Error saving wizard assistant message:', wizardAssistantErr);
+        if (wizardAssistantMsg) {
+          setChatMessages(prev => [...prev, wizardAssistantMsg as any]);
+        } else {
+          setChatMessages(prev => [...prev, {
+            id: `booking-wizard-${Date.now()}`,
+            role: 'assistant',
+            content: wizardAssistantContent
+          }]);
+        }
         return;
       }
       
@@ -3225,14 +3238,27 @@ Fix the issue in the code and ensure it works correctly.`;
           }]);
         }
         
-        setChatMessages(prev => [...prev, {
-          id: `contact-wizard-${Date.now()}`,
-          role: 'assistant',
-          content: JSON.stringify({
-            type: 'contact_form_wizard',
-            prompt: userMessage
-          })
-        }]);
+        // Save wizard assistant message to DB so it persists on refresh
+        const contactWizardContent = JSON.stringify({
+          type: 'contact_form_wizard',
+          prompt: userMessage
+        });
+        const { data: contactAssistantMsg, error: contactAssistantErr } = await supabase
+          .from('project_chat_messages' as any)
+          .insert({ project_id: id, role: 'assistant', content: contactWizardContent } as any)
+          .select()
+          .single();
+        
+        if (contactAssistantErr) console.error('Error saving wizard assistant message:', contactAssistantErr);
+        if (contactAssistantMsg) {
+          setChatMessages(prev => [...prev, contactAssistantMsg as any]);
+        } else {
+          setChatMessages(prev => [...prev, {
+            id: `contact-wizard-${Date.now()}`,
+            role: 'assistant',
+            content: contactWizardContent
+          }]);
+        }
         return;
       }
     }
