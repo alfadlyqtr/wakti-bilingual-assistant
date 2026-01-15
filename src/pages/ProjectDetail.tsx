@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, lazy, Suspense, useMemo, useCallbac
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDebugContext } from '@/hooks/useDebugContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -163,6 +164,7 @@ export default function ProjectDetail() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { language } = useTheme();
   const { user, session } = useAuth();
+  const debugContext = useDebugContext();
   const isRTL = language === 'ar';
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -383,6 +385,7 @@ export default function ProjectDetail() {
   const autoFixTimerRef = useRef<NodeJS.Timeout | null>(null);
   const autoFixTriggeredRef = useRef<boolean>(false);
   const autoFixAttemptsRef = useRef<Map<string, number>>(new Map()); // Track fix attempts per error
+  const MAX_AUTO_FIX_ATTEMPTS = 3;
   
   // Stop generation functionality
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -900,6 +903,7 @@ export default function ProjectDetail() {
           assets,
           userInstructions: customThemeInstructions,
           backendContext: backendContextForCreate || undefined,
+          debugContext: debugContext?.getDebugContextForAgent?.(),
         },
       });
 
@@ -2497,7 +2501,7 @@ ${convertToGlobalComponent(content, componentName)}
     
     // Check if we've already tried to fix this error too many times (max 2 attempts)
     const attempts = autoFixAttemptsRef.current.get(errorKey) || 0;
-    if (attempts >= 2) {
+    if (attempts >= MAX_AUTO_FIX_ATTEMPTS) {
       console.log('[Auto-Fix] Max attempts reached for this error, stopping to prevent loop');
       setCrashReport(errorMsg); // Still show the error but don't auto-fix
       return;
@@ -2509,7 +2513,7 @@ ${convertToGlobalComponent(content, componentName)}
       setTimeout(() => {
         if (!autoFixTriggeredRef.current && !isGenerating) {
           const currentAttempts = autoFixAttemptsRef.current.get(errorKey) || 0;
-          if (currentAttempts >= 2) return; // Double-check attempts
+          if (currentAttempts >= MAX_AUTO_FIX_ATTEMPTS) return; // Double-check attempts
           
           autoFixAttemptsRef.current.set(errorKey, currentAttempts + 1);
           setCrashReport(errorMsg);
@@ -2574,6 +2578,15 @@ ${convertToGlobalComponent(content, componentName)}
     const error = errorToFix || crashReport;
     if (!error) return;
     
+    // Increment global auto-fix attempts (debug panel) and stop if max reached
+    const canContinue = debugContext?.incrementAutoFixAttempt?.();
+    if (canContinue === false) {
+      autoFixTriggeredRef.current = false;
+      setCrashReport(error);
+      toast.error(isRTL ? 'تم الوصول للحد الأقصى لمحاولات الإصلاح التلقائي' : 'Max auto-fix attempts reached');
+      return;
+    }
+
     // Mark as triggered to prevent loops
     autoFixTriggeredRef.current = true;
     
@@ -3836,6 +3849,7 @@ ${fixInstructions}
             images: userImages.length > 0 ? userImages : undefined,
             uploadedAssets: uploadedAssets.length > 0 ? uploadedAssets : undefined,
             backendContext: backendContext || undefined,
+            debugContext: debugContext?.getDebugContextForAgent?.(),
           },
         });
 
@@ -3927,6 +3941,7 @@ ${fixInstructions}
             images: codeImages, // NOW SENDING IMAGES TO AI
             uploadedAssets: uploadedAssets.length > 0 ? uploadedAssets : undefined,
             backendContext: backendContext || undefined,
+            debugContext: debugContext?.getDebugContextForAgent?.(),
           },
         });
 

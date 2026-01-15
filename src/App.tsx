@@ -5,6 +5,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
 import AdminRoute from "@/components/auth/AdminRoute";
+import { DebugContextProvider } from "@/hooks/useDebugContext";
 import { GiftNotificationProvider } from "@/components/notifications/GiftNotificationProvider";
 import { AppLayout } from "@/components/AppLayout";
 import { SpeedInsights } from "@vercel/speed-insights/react";
@@ -388,7 +389,11 @@ function App() {
                 } />
                 <Route path="/projects/:id" element={
                   <GiftNotificationProvider>
-                    <AppLayout><ProjectDetail /></AppLayout>
+                    <AppLayout>
+                      <DebugContextProvider>
+                        <ProjectDetail />
+                      </DebugContextProvider>
+                    </AppLayout>
                   </GiftNotificationProvider>
                 } />
                 

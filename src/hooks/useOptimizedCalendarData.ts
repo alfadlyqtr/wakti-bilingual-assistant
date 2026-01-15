@@ -6,6 +6,7 @@ import { TRService, TRTask, TRReminder } from "@/services/trService";
 import { useDebounced } from "./useDebounced";
 import { JournalService } from "@/services/journalService";
 import { supabase, getCurrentUserId } from "@/integrations/supabase/client";
+import { retrieveCalendarEventsIfSupported } from "@/integrations/natively/calendarBridge";
 
 const MANUAL_ENTRIES_KEY = "calendarManualEntries";
 
@@ -28,6 +29,9 @@ export function useOptimizedCalendarData() {
   const [reminders, setReminders] = useState([]);
   const [journalOverlay, setJournalOverlay] = useState<{ date: string; mood_value: number | null }[]>([]);
   const [projectCalendarEntries, setProjectCalendarEntries] = useState<ProjectCalendarEntry[]>([]);
+  const [phoneCalendarEvents, setPhoneCalendarEvents] = useState<
+    { id?: string; title: string; startDate: string; endDate: string }[]
+  >([]);
   const [entries, setEntries] = useState<CalendarEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const mountedRef = useRef(true);
@@ -131,6 +135,13 @@ export function useOptimizedCalendarData() {
       setJournalOverlay(journalDays || []);
       setProjectCalendarEntries(projectEntries || []);
       
+      retrieveCalendarEventsIfSupported((result) => {
+        if (!mountedRef.current) return;
+        if (result.status === 'SUCCESS' && result.data) {
+          setPhoneCalendarEvents(result.data);
+        }
+      });
+      
       console.log('✅ Calendar data fetched and cached');
     } catch (error) {
       console.error('❌ Error fetching calendar data:', error);
@@ -163,10 +174,19 @@ export function useOptimizedCalendarData() {
 
   // Recompute entries when data changes
   useEffect(() => {
-    getCalendarEntries(manualEntries, [], maw3dEvents, tasks, reminders, journalOverlay, projectCalendarEntries)
+    getCalendarEntries(
+      manualEntries,
+      [],
+      maw3dEvents,
+      tasks,
+      reminders,
+      journalOverlay,
+      projectCalendarEntries,
+      phoneCalendarEvents
+    )
       .then(setEntries)
       .catch(() => setEntries([]));
-  }, [manualEntries, maw3dEvents, tasks, reminders, journalOverlay, projectCalendarEntries]);
+  }, [manualEntries, maw3dEvents, tasks, reminders, journalOverlay, projectCalendarEntries, phoneCalendarEvents]);
 
   // Safe manual entries setter with localStorage persistence
   const updateManualEntries = useCallback((newEntries: CalendarEntry[]) => {
@@ -188,6 +208,7 @@ export function useOptimizedCalendarData() {
     reminders,
     journalOverlay,
     projectCalendarEntries,
+    phoneCalendarEvents,
     refresh,
     debouncedRefresh,
     setManualEntries: updateManualEntries

@@ -411,6 +411,55 @@ function getGeminiApiKey() {
   return k;
 }
 
+type IntentGateResult = {
+  needsSearch: boolean;
+  confidence: number;
+  reason: string;
+};
+
+async function classifySearchIntent(message: string, language: string): Promise<IntentGateResult> {
+  const fallback: IntentGateResult = { needsSearch: false, confidence: 0, reason: 'fallback' };
+  if (!message || !message.trim()) return fallback;
+  try {
+    const key = getGeminiApiKey();
+    const model = 'gemini-2.0-flash';
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+    const prompt =
+      `You are a routing classifier. Decide if the user request needs LIVE or time-sensitive data ` +
+      `(weather now/tomorrow, prices, news, scores, flights, open now, nearby availability). ` +
+      `Return ONLY valid JSON with keys: needsSearch (true/false), confidence (0-1), reason (short).\n` +
+      `User language: ${language}.\nUser message: "${message}"`;
+
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'x-goog-api-key': key,
+      },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 80 },
+      }),
+    });
+
+    if (!resp.ok) return fallback;
+    const data = await resp.json().catch(() => null) as Record<string, unknown> | null;
+    const text = (data as any)?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const match = typeof text === 'string' ? text.match(/\{[\s\S]*\}/) : null;
+    if (!match) return fallback;
+    const parsed = JSON.parse(match[0]) as Partial<IntentGateResult>;
+    const confidence = Math.max(0, Math.min(1, Number(parsed.confidence ?? 0)));
+    return {
+      needsSearch: Boolean(parsed.needsSearch),
+      confidence,
+      reason: typeof parsed.reason === 'string' ? parsed.reason.slice(0, 120) : 'no-reason',
+    };
+  } catch {
+    return fallback;
+  }
+}
+
 type GeminiRole = 'user' | 'model';
 type GeminiContentPart = { text: string };
 type GeminiContent = { role: GeminiRole; parts: GeminiContentPart[] };
@@ -1482,10 +1531,27 @@ serve(async (req) => {
 
         // Store for logging
         requestMessage = typeof message === 'string' ? message : '';
-        requestTrigger = activeTrigger;
         requestSubmode = chatSubmode;
 
-        console.log(`🎯 REQUEST: trigger=${activeTrigger}, submode=${chatSubmode}, lang=${language}`);
+        let effectiveTrigger = activeTrigger;
+        if (activeTrigger === 'chat' && chatSubmode === 'chat' && !isWaktiInvolved(message || '')) {
+          const gate = await classifySearchIntent(message || '', language);
+          console.log('🔎 INTENT GATE:', gate);
+          if (gate.needsSearch && gate.confidence >= 0.6) {
+            effectiveTrigger = 'search';
+          } else if (gate.needsSearch && gate.confidence >= 0.35) {
+            const confirm = language === 'ar'
+              ? 'هل تريد أن أتحقق من المصادر الحية لهذا السؤال؟'
+              : 'Want me to check live sources for this?';
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: confirm, content: confirm })}\n\n`));
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+            controller.close();
+            return;
+          }
+        }
+
+        requestTrigger = effectiveTrigger;
+        console.log(`🎯 REQUEST: trigger=${effectiveTrigger}, submode=${chatSubmode}, lang=${language}`);
         console.log('📍 LOCATION PAYLOAD:', {
           hasLocation: !!location,
           source: location?.source,
@@ -1605,7 +1671,7 @@ serve(async (req) => {
         }
 
         // Chat mode: if the user is asking about WAKTI specifically, respond with the correct format + chip
-        if (activeTrigger === 'chat' && chatSubmode === 'chat' && isWaktiInvolved(message)) {
+        if (effectiveTrigger === 'chat' && chatSubmode === 'chat' && isWaktiInvolved(message)) {
           const userName = (personalTouch as { nickname?: string })?.nickname || '';
           const greeting = userName ? `Sure, ${userName}! ` : 'Sure! ';
           
@@ -1649,18 +1715,15 @@ serve(async (req) => {
           hour12: true
         });
 
-        // Build enhanced system prompt (pass chatSubmode for Study mode tutor instructions)
-        const systemPromptBase = buildSystemPrompt(
+        const systemPrompt = buildSystemPrompt(
           language,
           currentDate,
           localTime,
           personalTouch as Record<string, unknown> | null | undefined,
-          activeTrigger,
+          effectiveTrigger,
           chatSubmode
         );
 
-        const systemPrompt = `${stayHotSummary ? stayHotSummary + "\n\n" : ''}${fullLocationContext ? fullLocationContext + "\n\n" : (ipLocationLine ? ipLocationLine + "\n\n" : '')}${systemPromptBase}`;
-        
         const messages = [
           { role: 'system', content: systemPrompt }
         ];
@@ -1680,7 +1743,7 @@ serve(async (req) => {
         // Track external service usage (update outer scope vars for catch block access)
         
         // Search mode: Use Gemini 3 Flash with Google Search grounding (STREAMING)
-        if (activeTrigger === 'search') {
+        if (effectiveTrigger === 'search') {
           try {
             // Build search-specific system prompt with Personal Touch
             const pt = (personalTouch || {}) as Record<string, unknown>;
@@ -2046,7 +2109,7 @@ If you are running out of space, keep this order and drop the rest:
           }
         } else {
           // ─── CHAT MODE: Always grounded with Gemini 2.5 Flash (smooth, no prompts) ───
-          if (activeTrigger === 'chat' && chatSubmode === 'chat') {
+          if (effectiveTrigger === 'chat' && chatSubmode === 'chat') {
             // ─── LOCATION FOLLOW-UP DETECTION ───
             // If assistant previously asked for location and user just replied with a place,
             // combine with the original intent and run a proper grounded search
@@ -2233,7 +2296,7 @@ If you are running out of space, keep this order and drop the rest:
               try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`)); } catch { /* ignore */ }
             },
             sysMsg,
-            { temperature: activeTrigger === 'search' ? 0.3 : 0.7, maxOutputTokens: activeTrigger === 'search' ? 6000 : 8000 }
+            { temperature: effectiveTrigger === 'search' ? 0.3 : 0.7, maxOutputTokens: effectiveTrigger === 'search' ? 6000 : 8000 }
           );
           
           if (geminiTokenCount === 0) {
@@ -2253,8 +2316,8 @@ If you are running out of space, keep this order and drop the rest:
             body: JSON.stringify({
               model: 'gpt-4o-mini',
               messages,
-              temperature: activeTrigger === 'search' ? 0.3 : 0.7,
-              max_tokens: activeTrigger === 'search' ? 6000 : 8000,
+              temperature: effectiveTrigger === 'search' ? 0.3 : 0.7,
+              max_tokens: effectiveTrigger === 'search' ? 6000 : 8000,
               stream: true,
             }),
           });

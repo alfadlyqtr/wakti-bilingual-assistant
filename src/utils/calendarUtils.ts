@@ -56,7 +56,8 @@ export const getCalendarEntries = async (
   tasks: TRTask[] = [],
   reminders: TRReminder[] = [],
   journalOverlay: { date: string; mood_value: number | null }[] = [],
-  projectCalendarEntries: ProjectCalendarEntry[] = []
+  projectCalendarEntries: ProjectCalendarEntry[] = [],
+  phoneCalendarEvents: { id?: string; title: string; startDate: string; endDate: string }[] = []
 ): Promise<CalendarEntry[]> => {
   console.log('Getting calendar entries:', {
     manualEntries: manualEntries.length,
@@ -65,7 +66,8 @@ export const getCalendarEntries = async (
     tasks: tasks.length,
     reminders: reminders.length,
     journalDays: journalOverlay.length,
-    projectCalendarEntries: projectCalendarEntries.length
+    projectCalendarEntries: projectCalendarEntries.length,
+    phoneCalendarEvents: phoneCalendarEvents.length
   });
 
   const entries: CalendarEntry[] = [];
@@ -144,6 +146,20 @@ export const getCalendarEntries = async (
       color: entry.color
     }));
     entries.push(...projectEntries);
+  }
+
+  // Add phone calendar events (read-only)
+  if (phoneCalendarEvents && phoneCalendarEvents.length > 0) {
+    const phoneEntries: CalendarEntry[] = phoneCalendarEvents
+      .filter(event => event.startDate)
+      .map(event => ({
+        id: `phone-${event.id || event.startDate}`,
+        title: event.title,
+        date: event.startDate,
+        type: EntryType.PHONE_CALENDAR,
+        isAllDay: false
+      }));
+    entries.push(...phoneEntries);
   }
 
   console.log('Total calendar entries:', entries.length);

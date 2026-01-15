@@ -40,7 +40,8 @@ import {
   isNativeCalendarAvailable,
   createCalendarEvent,
   retrieveCalendars,
-  getUserTimezone
+  getUserTimezone,
+  createCalendarIfSupported
 } from "@/integrations/natively/calendarBridge";
 import { AppleLogo } from "./AppleLogo";
 import { Button } from "@/components/ui/button";
@@ -384,19 +385,34 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
       retrieveCalendars((result) => {
         console.log('[CalendarSync] Retrieved calendars result:', result);
         if (result.status === 'SUCCESS' && result.data && result.data.length > 0) {
-          const preferredCalendar = result.data.find((calendar) => {
-            const name = calendar.name?.toLowerCase() || '';
-            return name.includes('wakti') || name === 'calendar' || name === 'default';
+          const waktiCalendar = result.data.find((calendar) => (calendar.name || '').toLowerCase().includes('wakti'));
+          if (waktiCalendar) {
+            resolve({ calendarId: waktiCalendar.id, error: null });
+            return;
+          }
+
+          createCalendarIfSupported('Wakti', (createResult) => {
+            if (createResult.status === 'SUCCESS' && createResult.id) {
+              resolve({ calendarId: createResult.id, error: null });
+            } else {
+              resolve({ calendarId: null, error: createResult.error || 'Unable to create Wakti calendar' });
+            }
           });
-          const selectedCalendar = preferredCalendar ?? result.data[0];
-          resolve({ calendarId: selectedCalendar.id, error: null });
+        } else if (result.status === 'SUCCESS') {
+          createCalendarIfSupported('Wakti', (createResult) => {
+            if (createResult.status === 'SUCCESS' && createResult.id) {
+              resolve({ calendarId: createResult.id, error: null });
+            } else {
+              resolve({ calendarId: null, error: createResult.error || 'Unable to create Wakti calendar' });
+            }
+          });
         } else {
           console.warn('[CalendarSync] Failed to retrieve calendars:', result.error);
           resolve({ calendarId: null, error: result.error || 'No calendars available' });
         }
       });
     });
-    
+
     const calendarId = calendarResult.calendarId;
     console.log('[CalendarSync] Using calendar ID:', calendarId, '| Error:', calendarResult.error);
     

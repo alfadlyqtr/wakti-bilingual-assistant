@@ -1,6 +1,123 @@
+export {};
+
 declare global {
   interface Window {
     NativelyCalendar?: any;
+  }
+}
+
+export interface CreateCalendarResult {
+  status: 'SUCCESS' | 'FAILED';
+  id?: string;
+  error?: string;
+}
+
+export interface PhoneCalendarEvent {
+  id?: string;
+  title: string;
+  startDate: string;
+  endDate: string;
+  calendarId?: string;
+}
+
+export interface RetrieveCalendarEventsResult {
+  status: 'SUCCESS' | 'FAILED';
+  data?: PhoneCalendarEvent[];
+  error?: string;
+}
+
+export function retrieveCalendarEventsIfSupported(
+  callback: (result: RetrieveCalendarEventsResult) => void
+): void {
+  const cal = getInstance();
+  if (!cal) {
+    callback({ status: 'FAILED', error: 'SDK not available' });
+    return;
+  }
+
+  const fn =
+    cal.retrieveCalendarEvents ||
+    cal.getCalendarEvents ||
+    cal.retrieveEvents ||
+    cal.getEvents ||
+    cal.readCalendarEvents;
+
+  if (typeof fn !== 'function') {
+    callback({ status: 'FAILED', error: 'retrieveCalendarEvents not available' });
+    return;
+  }
+
+  const normalizeEvents = (resp: any): PhoneCalendarEvent[] => {
+    const raw = resp?.data || resp?.events || resp?.items || resp;
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+
+    return raw
+      .map((event: any) => {
+        const title = event?.title || event?.name || event?.summary || 'Untitled';
+        const startDate =
+          event?.start || event?.startDate || event?.start_time || event?.startTime || '';
+        const endDate =
+          event?.end || event?.endDate || event?.end_time || event?.endTime || '';
+        const calendarId = event?.calendarId || event?.calendar_id || event?.calendar || undefined;
+        const id = event?.id || event?.eventId || event?.uid || undefined;
+
+        if (!startDate || !endDate) {
+          return null;
+        }
+
+        return {
+          id: id ? String(id) : undefined,
+          title: String(title),
+          startDate: String(startDate),
+          endDate: String(endDate),
+          calendarId: calendarId ? String(calendarId) : undefined
+        } as PhoneCalendarEvent;
+      })
+      .filter(Boolean) as PhoneCalendarEvent[];
+  };
+
+  const callWithCallbackOnly = () =>
+    fn.call(cal, (resp: any) => {
+      const events = normalizeEvents(resp);
+      if (events.length > 0) {
+        callback({ status: 'SUCCESS', data: events });
+      } else if (resp?.status === 'SUCCESS') {
+        callback({ status: 'SUCCESS', data: [] });
+      } else {
+        callback({ status: 'FAILED', error: resp?.error || resp?.message || 'Failed to retrieve events' });
+      }
+    });
+
+  try {
+    callWithCallbackOnly();
+  } catch (err) {
+    callback({ status: 'FAILED', error: String(err) });
+  }
+}
+
+export function createCalendarIfSupported(name: string, callback: (result: CreateCalendarResult) => void): void {
+  const cal = getInstance();
+  if (!cal || typeof cal.createCalendar !== 'function') {
+    callback({ status: 'FAILED', error: 'createCalendar not available' });
+    return;
+  }
+
+  try {
+    cal.createCalendar(name, (resp: any) => {
+      const id = resp?.data?.id || resp?.id || resp?.data || resp?.calendarId;
+      if (resp?.status === 'SUCCESS' || id) {
+        callback({ status: 'SUCCESS', id: id ? String(id) : '' });
+      } else {
+        callback({
+          status: 'FAILED',
+          error: resp?.error || resp?.message || 'Failed to create calendar'
+        });
+      }
+    });
+  } catch (err) {
+    callback({ status: 'FAILED', error: String(err) });
   }
 }
 
@@ -59,6 +176,7 @@ function getInstance(): any | null {
     console.log('[NativelyCalendar] Instance created. Methods available:', {
       hasRetrieveCalendars: typeof instance.retrieveCalendars === 'function',
       hasCreateCalendarEvent: typeof instance.createCalendarEvent === 'function',
+      hasCreateCalendar: typeof instance.createCalendar === 'function'
     });
     return instance;
   } catch (err) {
