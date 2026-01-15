@@ -244,6 +244,110 @@ async function callGemini25Pro(
   return text;
 }
 
+// ============================================================================
+// STEP 1: ANALYZE SCREENSHOT - Extract visible UI text anchors
+// ============================================================================
+async function analyzeScreenshotForAnchors(
+  images: string[]
+): Promise<{ anchors: string[]; description: string }> {
+  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
+  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
+
+  const model = "gemini-2.5-pro";
+  
+  // Build image parts
+  const parts: Array<{text?: string; inlineData?: {mimeType: string; data: string}}> = [];
+  
+  for (const imgData of images) {
+    if (typeof imgData !== 'string') continue;
+    if (imgData.startsWith('data:image/')) {
+      const commaIdx = imgData.indexOf(',');
+      if (commaIdx > 0) {
+        const mimeMatch = imgData.match(/^data:(image\/[^;]+);base64,/);
+        const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+        const base64Data = imgData.substring(commaIdx + 1);
+        parts.push({
+          inlineData: { mimeType, data: base64Data }
+        });
+      }
+    }
+  }
+  
+  if (parts.length === 0) {
+    return { anchors: [], description: '' };
+  }
+  
+  // Add analysis prompt - focus on the MAIN/PRIMARY element, not all visible text
+  parts.push({ 
+    text: `The user is pointing at a specific UI section in this screenshot. Identify the PRIMARY section they want to modify.
+
+RULES:
+1. Focus on the MAIN/CENTRAL element - usually the largest or most prominent section
+2. If there's a section heading with a button below it, that's likely the target
+3. Ignore navigation bars, headers, footers unless they ARE the main focus
+4. Look for visual emphasis: larger text, icons, colored buttons
+
+EXTRACT (for the PRIMARY section only):
+1. The main section heading (e.g., "Get In Touch", "Contact Us")
+2. Any button text within that section (e.g., "Contact Me", "Send Message")
+3. Unique identifiers specific to THIS section
+
+Return JSON:
+{
+  "anchors": ["primary heading", "button text", ...],
+  "description": "What this section IS (e.g., 'contact section with email button')",
+  "confidence": "high/medium/low"
+}
+
+CRITICAL: Return ONLY the PRIMARY section's text. If you see multiple sections, pick the ONE that appears most prominent or central.`
+  });
+
+  console.log(`[Screenshot Analysis] Analyzing ${parts.length - 1} images for text anchors...`);
+
+  const response = await withTimeout(
+    fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": GEMINI_API_KEY,
+        },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts }],
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 1024,
+            responseMimeType: "application/json",
+          },
+        }),
+      }
+    ),
+    30000, // 30 seconds for quick analysis
+    'SCREENSHOT_ANALYSIS'
+  );
+
+  if (!response.ok) {
+    console.error(`[Screenshot Analysis] Failed: ${response.status}`);
+    return { anchors: [], description: '' };
+  }
+
+  const data = await response.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+  
+  try {
+    const result = JSON.parse(text);
+    console.log(`[Screenshot Analysis] Found anchors:`, result.anchors);
+    return {
+      anchors: Array.isArray(result.anchors) ? result.anchors : [],
+      description: result.description || ''
+    };
+  } catch {
+    console.error(`[Screenshot Analysis] JSON parse failed`);
+    return { anchors: [], description: '' };
+  }
+}
+
 // GEMINI 2.5 PRO WITH IMAGES - Vision-capable for screenshots/PDFs
 // ============================================================================
 async function callGemini25ProWithImages(
@@ -477,8 +581,42 @@ async function callGeminiFullRewriteEdit(
   // Build image context if provided
   let imageContext = '';
   let pdfTextContent = '';
+  let screenshotAnchorsContext = '';
+  
   if (images && images.length > 0) {
     console.log(`[Edit Mode] Processing ${images.length} attached files...`);
+    
+    // STEP 1: Analyze screenshots to extract visible text anchors
+    const screenshotImages = images.filter(img => 
+      typeof img === 'string' && img.startsWith('data:image/')
+    );
+    
+    if (screenshotImages.length > 0) {
+      console.log(`[Edit Mode] Running 2-step screenshot analysis...`);
+      try {
+        const { anchors, description } = await analyzeScreenshotForAnchors(screenshotImages);
+        if (anchors.length > 0) {
+          screenshotAnchorsContext = `
+
+🎯 SCREENSHOT ANALYSIS (STEP 1 COMPLETE):
+The user attached a screenshot. I analyzed it and found these text anchors:
+- Visible text: ${anchors.map(a => `"${a}"`).join(', ')}
+- Section description: ${description}
+
+⚠️ CRITICAL INSTRUCTION FOR STEP 2:
+1. Search the codebase for these EXACT strings: ${anchors.slice(0, 3).map(a => `"${a}"`).join(', ')}
+2. The section containing these strings is what the user is referring to
+3. Apply the user's request ONLY to that section
+4. Do NOT invent or guess other text - use ONLY the anchors above
+`;
+          console.log(`[Edit Mode] Screenshot anchors injected: ${anchors.join(', ')}`);
+        }
+      } catch (err) {
+        console.error(`[Edit Mode] Screenshot analysis failed:`, err);
+      }
+    }
+    
+    // Process PDFs
     for (const imgData of images) {
       if (typeof imgData !== 'string') continue;
       
@@ -555,7 +693,7 @@ IMPORTANT FOR AI CODER:
 
   const userMessage = `CURRENT CODEBASE:
 ${fileContext}
-${imageContext}${uploadedAssetsContext}${backendContextStr}
+${imageContext}${uploadedAssetsContext}${backendContextStr}${screenshotAnchorsContext}
 USER REQUEST:
 ${userPrompt}
 
@@ -1106,10 +1244,40 @@ const GEMINI_EXECUTE_SYSTEM_PROMPT = `You are a Senior React Engineer who ACTUAL
 
 🚨 CRITICAL: DO WHAT THE USER ASKS. If they want colors, add colors. If they want animations, add animations. If they want gradients, add gradients. NO EXCUSES.
 
+### SCREENSHOT ANALYSIS (CRITICAL - READ FIRST)
+When the user attaches a screenshot:
+1. **ANALYZE THE IMAGE FIRST** - Identify exactly what UI element/section is visible
+2. **MATCH TO CODE** - Find the EXACT component/section in the codebase that matches what's shown
+3. **VERIFY BEFORE ACTING** - Do NOT guess. If the screenshot shows "Get In Touch" section, find that exact text in the code
+4. **FOLLOW EXACT REQUEST** - If user says "remove this section", remove the EXACT section shown in the screenshot, not a different one
+
+### IMPORTANT: DO NOT INVENT TEXT FROM SCREENSHOTS
+- The user's typed message is the SOURCE OF TRUTH (e.g., "remove this section").
+- The screenshot is ONLY a locator to identify WHICH section they mean.
+- Do NOT fabricate quoted strings like "Click me" from OCR/guessing.
+- Only reference text that is CLEARLY visible AND RELEVANT (e.g., headings/buttons like "Get In Touch", "Contact Me").
+- If you cannot confidently identify a matching section in code, do NOT guess or ask for unrelated clarification.
+- In removal requests, prefer matching by the MOST UNIQUE visible anchor first:
+  1) Section heading text
+  2) Unique button labels within that section
+  3) Nearby nav link labels if it clearly maps to that section
+
+🚨 COMMON MISTAKE TO AVOID:
+- User shows screenshot of "Get In Touch" section and says "remove this"
+- ❌ WRONG: Remove "Our Commitment" section (different section!)
+- ✅ CORRECT: Remove the "Get In Touch" section that matches the screenshot
+
+**HOW TO IDENTIFY THE CORRECT SECTION:**
+1. Look at the screenshot - note the exact text, buttons, layout
+2. Search the codebase for that exact text (e.g., "Get In Touch", "Contact Me")
+3. Remove/modify ONLY that matching code block
+4. If you can't find an exact match, tell the user - don't guess
+
 ### YOUR JOB
 1. READ the user's request carefully
-2. IMPLEMENT exactly what they asked for - don't be conservative
-3. Return FULL FILE REWRITES (no patches, no diffs)
+2. If screenshot attached, ANALYZE it to identify the exact element
+3. IMPLEMENT exactly what they asked for - don't be conservative
+4. Return FULL FILE REWRITES (no patches, no diffs)
 
 ### VISUAL CHANGES (IMPORTANT)
 When users ask for visual improvements, ACTUALLY ADD THEM:
@@ -1989,6 +2157,44 @@ ${filesStr}`;
       const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
       if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
       
+      // ====================================================================
+      // STEP 1: SCREENSHOT ANALYSIS - Extract visible text anchors FIRST
+      // ====================================================================
+      let screenshotAnchorsContext = '';
+      // Frontend sends images as string[] (base64 or URLs), not ImageAttachment[]
+      const agentImages = (images as unknown as string[]) || [];
+      
+      if (agentImages.length > 0) {
+        console.log(`[Agent Mode] Found ${agentImages.length} images, running screenshot analysis...`);
+        try {
+          const screenshotImages = agentImages.filter(img => 
+            typeof img === 'string' && img.startsWith('data:image/')
+          );
+          
+          if (screenshotImages.length > 0) {
+            const { anchors, description } = await analyzeScreenshotForAnchors(screenshotImages);
+            if (anchors.length > 0) {
+              screenshotAnchorsContext = `
+
+🎯 SCREENSHOT ANALYSIS COMPLETE:
+The user attached a screenshot. I analyzed it and found these text anchors:
+- Visible text: ${anchors.map(a => `"${a}"`).join(', ')}
+- Section description: ${description}
+
+⚠️ CRITICAL - USE THESE ANCHORS:
+1. When user says "remove this", "change this", etc. - they mean the section with these anchors
+2. Search the codebase for these EXACT strings: ${anchors.slice(0, 3).map(a => `"${a}"`).join(', ')}
+3. Apply the user's request ONLY to the section containing these strings
+4. Do NOT guess or invent text - use ONLY the anchors above
+`;
+              console.log(`[Agent Mode] Screenshot anchors: ${anchors.join(', ')}`);
+            }
+          }
+        } catch (err) {
+          console.error(`[Agent Mode] Screenshot analysis failed:`, err);
+        }
+      }
+      
       // Build enhanced debug context for the agent
       const agentDebugContext: AgentDebugContext = {
         errors: debugContext?.errors || [],
@@ -2001,8 +2207,8 @@ ${filesStr}`;
       // Build system prompt with project ID - replace placeholder with actual project ID
       const systemPromptWithProjectId = AGENT_SYSTEM_PROMPT.replace(/\{\{PROJECT_ID\}\}/g, projectId);
       
-      // Prepare the initial user message with context
-      let userMessageContent = prompt;
+      // Prepare the initial user message with context (including screenshot anchors)
+      let userMessageContent = screenshotAnchorsContext + prompt;
       
       // Add debug context if there are errors
       if (agentDebugContext.errors.length > 0 || agentDebugContext.networkErrors.length > 0) {

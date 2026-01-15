@@ -39,16 +39,16 @@ export default function EventStyleCustomizer({ language, value, onChange }: Prop
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
           <div className="space-y-3">
-            <Label>{language === 'ar' ? 'حدود البطاقة' : 'Card Border'}</Label>
+            <Label>{language === 'ar' ? 'إطار البطاقة' : 'Card Border'}</Label>
             <div className="w-full">
               <Select value={section.border.mode || 'border'} onValueChange={(v) => updateCard({ border: { ...section.border, mode: v as any } })}>
                 <SelectTrigger className="mt-2 w-full">
-                  <SelectValue placeholder={language === 'ar' ? 'نمط الحدود' : 'Border Style'} />
+                  <SelectValue placeholder={language === 'ar' ? 'نمط الإطار' : 'Border Style'} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="border">{language === 'ar' ? 'حد خارجي' : 'Border (default)'}</SelectItem>
-                  <SelectItem value="outline">{language === 'ar' ? 'محدد خارجي' : 'Outline (outside)'}</SelectItem>
-                  <SelectItem value="inline">{language === 'ar' ? 'محدد داخلي' : 'Inline (inside)'}</SelectItem>
+                  <SelectItem value="border">{language === 'ar' ? 'إطار خارجي' : 'Border (default)'}</SelectItem>
+                  <SelectItem value="outline">{language === 'ar' ? 'إطار محدد خارجي' : 'Outline (outside)'}</SelectItem>
+                  <SelectItem value="inline">{language === 'ar' ? 'إطار محدد داخلي' : 'Inline (inside)'}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -63,7 +63,7 @@ export default function EventStyleCustomizer({ language, value, onChange }: Prop
               </div>
             </div>
             <div className="flex items-center justify-between">
-              <Label>{language === 'ar' ? 'لون الحدود' : 'Border Color'}</Label>
+              <Label>{language === 'ar' ? 'لون الإطار' : 'Border Color'}</Label>
               <input type="color" value={section.border.color as any || '#ffffff'} onChange={(e) => updateCard({ border: { ...section.border, color: e.target.value } })} className="h-8 w-16 rounded border" />
             </div>
           </div>
@@ -112,17 +112,17 @@ export default function EventStyleCustomizer({ language, value, onChange }: Prop
               </div>
 
               <div className="space-y-3">
-                <Label>{language === 'ar' ? 'حدود القسم السفلي' : 'Lower Border'}</Label>
+                <Label>{language === 'ar' ? 'إطار القسم السفلي' : 'Lower Border'}</Label>
                 <div className="w-full">
-                  <Label>{language === 'ar' ? 'نمط الحدود' : 'Border Style'}</Label>
+                  <Label>{language === 'ar' ? 'نمط الإطار' : 'Border Style'}</Label>
                   <Select value={lower.border.mode || 'border'} onValueChange={(v) => updateLower({ border: { ...lower.border, mode: v as any } })}>
                     <SelectTrigger className="mt-2 w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="border">{language === 'ar' ? 'حد خارجي' : 'Border (default)'}</SelectItem>
-                      <SelectItem value="outline">{language === 'ar' ? 'محدد خارجي' : 'Outline (outside)'}</SelectItem>
-                      <SelectItem value="inline">{language === 'ar' ? 'محدد داخلي' : 'Inline (inside)'}</SelectItem>
+                      <SelectItem value="border">{language === 'ar' ? 'إطار خارجي' : 'Border (default)'}</SelectItem>
+                      <SelectItem value="outline">{language === 'ar' ? 'إطار محدد خارجي' : 'Outline (outside)'}</SelectItem>
+                      <SelectItem value="inline">{language === 'ar' ? 'إطار محدد داخلي' : 'Inline (inside)'}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -137,7 +137,7 @@ export default function EventStyleCustomizer({ language, value, onChange }: Prop
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
-                  <Label>{language === 'ar' ? 'لون الحدود' : 'Border Color'}</Label>
+                  <Label>{language === 'ar' ? 'لون الإطار' : 'Border Color'}</Label>
                   <input type="color" value={lower.border.color as any || '#ffffff'} onChange={(e) => updateLower({ border: { ...lower.border, color: e.target.value } })} className="h-8 w-16 rounded border" />
                 </div>
 
@@ -175,12 +175,12 @@ export default function EventStyleCustomizer({ language, value, onChange }: Prop
                       <Slider value={[lower.buttonBorder?.radius ?? 12]} onValueChange={(v) => updateLower({ buttonBorder: { ...(lower.buttonBorder || { width: 1, color: '#ffffff' }), radius: v[0] } })} min={0} max={32} step={1} className="mt-2" />
                     </div>
                     <div>
-                      <Label>{language === 'ar' ? 'سُمك حد الزر' : 'Button Border Width'}</Label>
+                      <Label>{language === 'ar' ? 'سُمك إطار الزر' : 'Button Border Width'}</Label>
                       <Slider value={[lower.buttonBorder?.width ?? 1]} onValueChange={(v) => updateLower({ buttonBorder: { ...(lower.buttonBorder || { radius: 12, color: '#ffffff' }), width: v[0] } })} min={0} max={6} step={1} className="mt-2" />
                     </div>
                   </div>
                   <div className="flex items-center justify-between">
-                    <Label>{language === 'ar' ? 'لون حد الزر' : 'Button Border Color'}</Label>
+                    <Label>{language === 'ar' ? 'لون إطار الزر' : 'Button Border Color'}</Label>
                     <input type="color" value={(lower.buttonBorder?.color as any) || '#ffffff'} onChange={(e) => updateLower({ buttonBorder: { ...(lower.buttonBorder || { radius: 12, width: 1 }), color: e.target.value } })} className="h-8 w-16 rounded border" />
                   </div>
                 </div>

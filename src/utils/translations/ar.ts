@@ -66,6 +66,7 @@ export const ar = {
 
   // MISSING TRANSLATION KEYS FROM BUILD ERRORS:
   eventTemplate: "قالب الفعالية",
+  chooseTemplate: "اختر قالباً",
   basicInformation: "المعلومات الأساسية",
   allDayEvent: "فعالية يوم كامل",
   inviteContacts: "دعوة جهات الاتصال",
@@ -78,6 +79,7 @@ export const ar = {
   by: "بواسطة",
   background: "الخلفية",
   textStyle: "نمط النص",
+  eventStyle: "نمط الفعالية",
 
   // صفحة انتهاء الجلسة
   sessionEnded_title: "تم تسجيل الدخول على جهاز آخر",

@@ -196,16 +196,17 @@ DESIGN:
 - Add subtle hover effects and focus states
 - Use smooth transitions and modern styling
 
-IMPORTANT: This form MUST submit to the project backend at:
-supabase.functions.invoke('project-backend-api', {
-  body: { action: 'submitForm', projectId: '{{PROJECT_ID}}', formType: 'contact', ... }
-})
-
 Include:
 - Form validation with error messages
-- Loading state on submit button
-- Success message/toast after submission
+- Loading state on submit button  
+- Success message/toast after submission (use alert or simple state, no external toast library)
 - Error handling with user-friendly messages
+
+CRITICAL - DO NOT:
+- Do NOT create or modify supabaseClient.js
+- Do NOT write any API keys or anon keys
+- Do NOT import from @supabase/supabase-js
+- Just create the UI form - backend integration will be added separately
 
 Original request: ${originalPrompt}`;
 
@@ -318,7 +319,7 @@ Original request: ${originalPrompt}`;
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.9 }}
-                  className="group flex items-center gap-2 p-2.5 rounded-xl border border-border/60 bg-background/80 hover:border-indigo-500/30 hover:bg-indigo-500/5 transition-all"
+                  className="flex items-center gap-2 p-2.5 rounded-xl border border-border/60 bg-background/80 hover:border-indigo-500/30 hover:bg-indigo-500/5 transition-all"
                 >
                   {/* Field Icon */}
                   <div className="p-1.5 rounded-lg bg-muted/80 text-muted-foreground">
@@ -402,10 +403,12 @@ Original request: ${originalPrompt}`;
                   </button>
                   
                   {/* Move Buttons */}
-                  <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex flex-col gap-0.5">
                     <button
                       onClick={() => handleMoveField(field.id, 'up')}
                       disabled={index === 0}
+                      title={isRTL ? 'تحريك للأعلى' : 'Move up'}
+                      aria-label={isRTL ? 'تحريك للأعلى' : 'Move up'}
                       className={cn(
                         "p-0.5 rounded transition-colors",
                         index === 0 ? "text-muted-foreground/20" : "text-muted-foreground hover:text-indigo-500 hover:bg-indigo-500/10"
@@ -416,6 +419,8 @@ Original request: ${originalPrompt}`;
                     <button
                       onClick={() => handleMoveField(field.id, 'down')}
                       disabled={index === fields.length - 1}
+                      title={isRTL ? 'تحريك للأسفل' : 'Move down'}
+                      aria-label={isRTL ? 'تحريك للأسفل' : 'Move down'}
                       className={cn(
                         "p-0.5 rounded transition-colors",
                         index === fields.length - 1 ? "text-muted-foreground/20" : "text-muted-foreground hover:text-indigo-500 hover:bg-indigo-500/10"
@@ -429,7 +434,9 @@ Original request: ${originalPrompt}`;
                   {!['name', 'email', 'message'].includes(field.id) && (
                     <button
                       onClick={() => handleRemoveField(field.id)}
-                      className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-all opacity-0 group-hover:opacity-100"
+                      title={isRTL ? 'حذف الحقل' : 'Delete field'}
+                      aria-label={isRTL ? 'حذف الحقل' : 'Delete field'}
+                      className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-all"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -437,6 +444,36 @@ Original request: ${originalPrompt}`;
                 </motion.div>
               ))}
             </AnimatePresence>
+          </div>
+
+          {/* Layout Preview */}
+          <div className="rounded-xl border border-border/50 bg-muted/30 p-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold">
+                {isRTL ? 'معاينة التخطيط' : 'Layout Preview'}
+              </span>
+              <span className="text-[10px] text-muted-foreground">
+                {isRTL ? 'الترتيب والعرض' : 'Order + width'}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {fields.map((field, index) => (
+                <div
+                  key={`preview-${field.id}`}
+                  className={cn(
+                    "rounded-lg border border-border/60 bg-background/70 px-2 py-1.5 text-[10px]",
+                    field.width === 'full' ? "col-span-2" : "col-span-1"
+                  )}
+                >
+                  <div className="font-medium truncate">
+                    {index + 1}. {isRTL ? field.labelAr : field.label}
+                  </div>
+                  <div className="text-muted-foreground">
+                    {field.type} • {field.width === 'half' ? '1/2' : 'full'}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
           
           {/* Add Field */}
@@ -560,6 +597,27 @@ Original request: ${originalPrompt}`;
                 onChange={(e) => isRTL ? setSubmitTextAr(e.target.value) : setSubmitText(e.target.value)}
                 className="h-9 text-sm"
               />
+            </div>
+
+            {/* Summary */}
+            <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-3">
+              <div className="text-xs font-semibold mb-2">
+                {isRTL ? 'ملخص سريع' : 'Quick Summary'}
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[10px] text-muted-foreground">
+                <div>
+                  <span className="font-medium text-foreground">{isRTL ? 'النمط:' : 'Style:'}</span>{' '}
+                  {formStyle === 'single' ? (isRTL ? 'صفحة واحدة' : 'Single') : formStyle === 'multi-step' ? (isRTL ? 'متعدد الخطوات' : 'Multi-step') : (isRTL ? 'عائم' : 'Floating')}
+                </div>
+                <div>
+                  <span className="font-medium text-foreground">{isRTL ? 'الحقول:' : 'Fields:'}</span>{' '}
+                  {fields.length}
+                </div>
+                <div className="col-span-2">
+                  <span className="font-medium text-foreground">{isRTL ? 'زر الإرسال:' : 'Submit:'}</span>{' '}
+                  {isRTL ? submitTextAr : submitText}
+                </div>
+              </div>
             </div>
           </div>
         </motion.div>

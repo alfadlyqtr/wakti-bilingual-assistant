@@ -237,6 +237,8 @@ export default function ProjectDetail() {
   const [showBookingWizard, setShowBookingWizard] = useState(false);
   const [showContactWizard, setShowContactWizard] = useState(false);
   const [pendingFormPrompt, setPendingFormPrompt] = useState('');
+  const skipFormWizardRef = useRef(false);
+  const skipUserMessageSaveRef = useRef(false);
 
   // Clarifying questions modal state
   const [showClarifyingQuestions, setShowClarifyingQuestions] = useState(false);
@@ -272,6 +274,65 @@ export default function ProjectDetail() {
         autoCaptureTimeoutRef.current = null;
       }
     };
+  }, []);
+
+  // Resizable left panel state (desktop/tablet only)
+  const [leftPanelWidth, setLeftPanelWidth] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('wakti-coder-leftPanelWidth');
+      if (saved) {
+        const parsed = Number(saved);
+        if (!isNaN(parsed) && parsed >= 320 && parsed <= 720) return parsed;
+      }
+      // Default responsive width
+      return window.innerWidth >= 1024 ? 480 : 420;
+    }
+    return 420;
+  });
+  const [isDraggingDivider, setIsDraggingDivider] = useState(false);
+
+  // Persist left panel width to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('wakti-coder-leftPanelWidth', String(leftPanelWidth));
+    }
+  }, [leftPanelWidth]);
+
+  const dividerDragRef = useRef({ active: false, startX: 0, startWidth: 0 });
+
+  // Divider drag handlers (desktop/tablet only)
+  const handleDividerPointerDown = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    dividerDragRef.current = {
+      active: true,
+      startX: e.clientX,
+      startWidth: leftPanelWidth,
+    };
+    setIsDraggingDivider(true);
+    const divider = e.currentTarget as HTMLElement;
+    divider.setPointerCapture(e.pointerId);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, [leftPanelWidth]);
+
+  const handleDividerPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!dividerDragRef.current.active) return;
+    const deltaX = e.clientX - dividerDragRef.current.startX;
+    let newWidth = dividerDragRef.current.startWidth + deltaX;
+    newWidth = Math.max(320, Math.min(720, newWidth));
+    setLeftPanelWidth(newWidth);
+  }, []);
+
+  const handleDividerPointerUp = useCallback((e: React.PointerEvent) => {
+    if (!dividerDragRef.current.active) return;
+    dividerDragRef.current.active = false;
+    setIsDraggingDivider(false);
+    const divider = e.currentTarget as HTMLElement;
+    if (divider.hasPointerCapture(e.pointerId)) {
+      divider.releasePointerCapture(e.pointerId);
+    }
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
   }, []);
   
   // Preview state - default to mobile if on mobile device
@@ -3092,60 +3153,88 @@ Fix the issue in the code and ensure it works correctly.`;
     
     const userMessage = chatInput.trim();
     setChatInput('');
+    const skipFormWizardDetection = skipFormWizardRef.current;
+    skipFormWizardRef.current = false;
+    const skipUserMessageSave = skipUserMessageSaveRef.current;
+    skipUserMessageSaveRef.current = false;
     
-    // ===== STEP 1: FORM WIZARD DETECTION (ALWAYS FIRST - before any image logic) =====
-    // BOOKING FORM DETECTION - Show wizard instead of direct AI call
-    // Broader pattern to catch more variations
-    const bookingFormPatterns = /\b(add|create|build|make|need|want|show|display).*(booking|appointment|schedule|reservation|calendar)\s*(form|page|system|popup|modal|button)?/i;
-    const bookingFormAltPatterns = /\b(booking|appointment|reservation|schedule)\s*(form|page|system|popup|modal)\b/i;
-    const hasBookingFormRequest = bookingFormPatterns.test(userMessage) || bookingFormAltPatterns.test(userMessage);
-    
-    if (hasBookingFormRequest) {
-      setPendingFormPrompt(userMessage);
-      setShowBookingWizard(true);
+    if (!skipFormWizardDetection) {
+      // ===== STEP 1: FORM WIZARD DETECTION (ALWAYS FIRST - before any image logic) =====
+      // BOOKING FORM DETECTION - Show wizard instead of direct AI call
+      // Broader pattern to catch more variations
+      const bookingFormPatterns = /\b(add|create|build|make|need|want|show|display).*(booking|appointment|schedule|reservation|calendar)\s*(form|page|system|popup|modal|button)?/i;
+      const bookingFormAltPatterns = /\b(booking|appointment|reservation|schedule)\s*(form|page|system|popup|modal)\b/i;
+      const hasBookingFormRequest = bookingFormPatterns.test(userMessage) || bookingFormAltPatterns.test(userMessage);
       
-      setChatMessages(prev => [...prev, {
-        id: `user-${Date.now()}`,
-        role: 'user',
-        content: userMessage
-      }]);
+      if (hasBookingFormRequest) {
+        setPendingFormPrompt(userMessage);
+        setShowBookingWizard(true);
+        
+        const { data: wizardUserMsg, error: wizardUserErr } = await supabase
+          .from('project_chat_messages' as any)
+          .insert({ project_id: id, role: 'user', content: userMessage } as any)
+          .select()
+          .single();
+        
+        if (wizardUserErr) console.error('Error saving user message:', wizardUserErr);
+        if (wizardUserMsg) {
+          setChatMessages(prev => [...prev, wizardUserMsg as any]);
+        } else {
+          setChatMessages(prev => [...prev, {
+            id: `user-${Date.now()}`,
+            role: 'user',
+            content: userMessage
+          }]);
+        }
+        
+        setChatMessages(prev => [...prev, {
+          id: `booking-wizard-${Date.now()}`,
+          role: 'assistant',
+          content: JSON.stringify({
+            type: 'booking_form_wizard',
+            prompt: userMessage
+          })
+        }]);
+        return;
+      }
       
-      setChatMessages(prev => [...prev, {
-        id: `booking-wizard-${Date.now()}`,
-        role: 'assistant',
-        content: JSON.stringify({
-          type: 'booking_form_wizard',
-          prompt: userMessage
-        })
-      }]);
-      return;
-    }
-    
-    // CONTACT FORM DETECTION - Show wizard instead of direct AI call
-    // Broader pattern to catch more variations like "button with contact form", "popup contact", etc.
-    const contactFormPatterns = /\b(add|create|build|make|need|want|show|display|popup|pop.?up).*(contact|inquiry|message\s*me|feedback|get.?in.?touch)\s*(form|page|popup|modal|button)?/i;
-    const contactFormAltPatterns = /\b(contact|inquiry|message|feedback)\s*(form|page|popup|modal)\b/i;
-    const hasContactFormRequest = contactFormPatterns.test(userMessage) || contactFormAltPatterns.test(userMessage);
-    
-    if (hasContactFormRequest) {
-      setPendingFormPrompt(userMessage);
-      setShowContactWizard(true);
+      // CONTACT FORM DETECTION - Show wizard instead of direct AI call
+      // Broader pattern to catch more variations like "button with contact form", "popup contact", etc.
+      const contactFormPatterns = /\b(add|create|build|make|need|want|show|display|popup|pop.?up).*(contact|inquiry|message\s*me|feedback|get.?in.?touch)\s*(form|page|popup|modal|button)?/i;
+      const contactFormAltPatterns = /\b(contact|inquiry|message|feedback)\s*(form|page|popup|modal)\b/i;
+      const hasContactFormRequest = contactFormPatterns.test(userMessage) || contactFormAltPatterns.test(userMessage);
       
-      setChatMessages(prev => [...prev, {
-        id: `user-${Date.now()}`,
-        role: 'user',
-        content: userMessage
-      }]);
-      
-      setChatMessages(prev => [...prev, {
-        id: `contact-wizard-${Date.now()}`,
-        role: 'assistant',
-        content: JSON.stringify({
-          type: 'contact_form_wizard',
-          prompt: userMessage
-        })
-      }]);
-      return;
+      if (hasContactFormRequest) {
+        setPendingFormPrompt(userMessage);
+        setShowContactWizard(true);
+        
+        const { data: wizardUserMsg, error: wizardUserErr } = await supabase
+          .from('project_chat_messages' as any)
+          .insert({ project_id: id, role: 'user', content: userMessage } as any)
+          .select()
+          .single();
+        
+        if (wizardUserErr) console.error('Error saving user message:', wizardUserErr);
+        if (wizardUserMsg) {
+          setChatMessages(prev => [...prev, wizardUserMsg as any]);
+        } else {
+          setChatMessages(prev => [...prev, {
+            id: `user-${Date.now()}`,
+            role: 'user',
+            content: userMessage
+          }]);
+        }
+        
+        setChatMessages(prev => [...prev, {
+          id: `contact-wizard-${Date.now()}`,
+          role: 'assistant',
+          content: JSON.stringify({
+            type: 'contact_form_wizard',
+            prompt: userMessage
+          })
+        }]);
+        return;
+      }
     }
     
     // ===== STEP 2: IMAGE-RELATED LOGIC (only if no form wizard triggered) =====
@@ -3326,32 +3415,34 @@ Fix the issue in the code and ensure it works correctly.`;
     
     // Store attachment count in content as metadata marker for persistence
     // Format: [ATTACHMENTS:N] at the start of content (hidden in display)
-    const attachmentMarker = userImages.length > 0 ? `[ATTACHMENTS:${userImages.length}]` : '';
-    const contentToStore = attachmentMarker + userMessage;
-    
-    const { data: userMsg, error: msgError } = await supabase
-      .from('project_chat_messages' as any)
-      .insert({ 
-        project_id: id, 
-        role: 'user', 
-        content: contentToStore
-      } as any)
-      .select()
-      .single();
-    
-    if (msgError) console.error('Error saving user message:', msgError);
-    
-    // Add to local state (with images for display)
-    if (userMsg) {
-      setChatMessages(prev => [...prev, { ...(userMsg as object), images: userImages } as any]);
-    } else {
-      // Fallback local state if DB insert fails
-      setChatMessages(prev => [...prev, {
-        id: `user-${Date.now()}`,
-        role: 'user',
-        content: contentToStore,
-        images: userImages
-      }]);
+    if (!skipUserMessageSave) {
+      const attachmentMarker = userImages.length > 0 ? `[ATTACHMENTS:${userImages.length}]` : '';
+      const contentToStore = attachmentMarker + userMessage;
+      
+      const { data: userMsg, error: msgError } = await supabase
+        .from('project_chat_messages' as any)
+        .insert({ 
+          project_id: id, 
+          role: 'user', 
+          content: contentToStore
+        } as any)
+        .select()
+        .single();
+      
+      if (msgError) console.error('Error saving user message:', msgError);
+      
+      // Add to local state (with images for display)
+      if (userMsg) {
+        setChatMessages(prev => [...prev, { ...(userMsg as object), images: userImages } as any]);
+      } else {
+        // Fallback local state if DB insert fails
+        setChatMessages(prev => [...prev, {
+          id: `user-${Date.now()}`,
+          role: 'user',
+          content: contentToStore,
+          images: userImages
+        }]);
+      }
     }
     
     try {
@@ -3821,10 +3912,14 @@ Fix the issue in the code and ensure it works correctly.`;
         <div className={cn(
           "flex flex-col border-r transition-all duration-300 relative",
           "bg-background dark:bg-[#0c0f14]",
-          "md:w-[420px] lg:w-[480px] shrink-0",
+          "shrink-0",
           mobileTab === 'preview' ? "hidden md:flex" : "flex w-full",
           "h-full max-h-full overflow-hidden"
-        )}>
+        )}
+        style={{
+          width: typeof window !== 'undefined' && window.innerWidth >= 768 ? `${leftPanelWidth}px` : undefined,
+        }}
+        >
           {/* Mode Toggle: Chat / Code / Server - FIXED at top */}
           <div className="flex items-center justify-between border-b border-border/50 dark:border-white/10 px-3 py-0 h-[56px] shrink-0 absolute top-0 left-0 right-0 z-[100] bg-background dark:bg-[#0c0f14]">
             <div className="flex items-center gap-2">
@@ -4242,14 +4337,25 @@ Fix the issue in the code and ensure it works correctly.`;
                             setShowBookingWizard(false);
                             setChatMessages(prev => prev.filter(m => m.id !== msg.id));
                             setPendingFormPrompt('');
+                            skipFormWizardRef.current = true;
+                            skipUserMessageSaveRef.current = true;
                             
-                            // Add user message first
-                            const userMsgId = `user-wizard-${Date.now()}`;
-                            setChatMessages(prev => [...prev, {
-                              id: userMsgId,
-                              role: 'user',
-                              content: structuredPrompt
-                            }]);
+                            const { data: wizardAssistantMsg, error: wizardAssistantErr } = await supabase
+                              .from('project_chat_messages' as any)
+                              .insert({ project_id: id, role: 'assistant', content: structuredPrompt } as any)
+                              .select()
+                              .single();
+                            
+                            if (wizardAssistantErr) console.error('Error saving assistant message:', wizardAssistantErr);
+                            if (wizardAssistantMsg) {
+                              setChatMessages(prev => [...prev, wizardAssistantMsg as any]);
+                            } else {
+                              setChatMessages(prev => [...prev, {
+                                id: `assistant-${Date.now()}`,
+                                role: 'assistant',
+                                content: structuredPrompt
+                              }]);
+                            }
                             
                             // Set chat input and trigger submit after state update
                             setChatInput(structuredPrompt);
@@ -4271,17 +4377,12 @@ Fix the issue in the code and ensure it works correctly.`;
                           onSkipWizard={async () => {
                             setShowBookingWizard(false);
                             setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            skipFormWizardRef.current = true;
+                            skipUserMessageSaveRef.current = true;
                             
                             // Use original prompt directly - let AI handle it
                             const prompt = pendingFormPrompt || 'Create a booking form';
                             setPendingFormPrompt('');
-                            
-                            setChatMessages(prev => [...prev, {
-                              id: `user-skip-${Date.now()}`,
-                              role: 'user',
-                              content: prompt
-                            }]);
-                            
                             setChatInput(prompt);
                             
                             requestAnimationFrame(() => {
@@ -4314,14 +4415,25 @@ Fix the issue in the code and ensure it works correctly.`;
                             setShowContactWizard(false);
                             setChatMessages(prev => prev.filter(m => m.id !== msg.id));
                             setPendingFormPrompt('');
+                            skipFormWizardRef.current = true;
+                            skipUserMessageSaveRef.current = true;
                             
-                            // Add user message first
-                            const userMsgId = `user-wizard-${Date.now()}`;
-                            setChatMessages(prev => [...prev, {
-                              id: userMsgId,
-                              role: 'user',
-                              content: structuredPrompt
-                            }]);
+                            const { data: wizardAssistantMsg, error: wizardAssistantErr } = await supabase
+                              .from('project_chat_messages' as any)
+                              .insert({ project_id: id, role: 'assistant', content: structuredPrompt } as any)
+                              .select()
+                              .single();
+                            
+                            if (wizardAssistantErr) console.error('Error saving assistant message:', wizardAssistantErr);
+                            if (wizardAssistantMsg) {
+                              setChatMessages(prev => [...prev, wizardAssistantMsg as any]);
+                            } else {
+                              setChatMessages(prev => [...prev, {
+                                id: `assistant-${Date.now()}`,
+                                role: 'assistant',
+                                content: structuredPrompt
+                              }]);
+                            }
                             
                             // Set chat input and trigger submit after state update
                             setChatInput(structuredPrompt);
@@ -4343,17 +4455,12 @@ Fix the issue in the code and ensure it works correctly.`;
                           onSkipWizard={async () => {
                             setShowContactWizard(false);
                             setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            skipFormWizardRef.current = true;
+                            skipUserMessageSaveRef.current = true;
                             
                             // Use original prompt directly - let AI handle it
                             const prompt = pendingFormPrompt || 'Create a contact form';
                             setPendingFormPrompt('');
-                            
-                            setChatMessages(prev => [...prev, {
-                              id: `user-skip-${Date.now()}`,
-                              role: 'user',
-                              content: prompt
-                            }]);
-                            
                             setChatInput(prompt);
                             
                             requestAnimationFrame(() => {
@@ -5491,6 +5598,30 @@ Fix the issue in the code and ensure it works correctly.`;
               </>
             )}
           </div>
+
+        {/* Divider - Draggable (desktop/tablet only) */}
+        {typeof window !== 'undefined' && window.innerWidth >= 768 && (
+          <div
+            className={cn(
+              "absolute top-0 bottom-0 w-1.5 bg-border/40 hover:bg-indigo-500/60 transition-all duration-200 z-[60] cursor-col-resize",
+              isDraggingDivider && "bg-indigo-500/80 shadow-lg shadow-indigo-500/40"
+            )}
+            style={{ left: `${leftPanelWidth}px` }}
+            onPointerDown={handleDividerPointerDown}
+            onPointerMove={handleDividerPointerMove}
+            onPointerUp={handleDividerPointerUp}
+            onPointerCancel={handleDividerPointerUp}
+            title={isRTL ? 'اسحب لتغيير العرض' : 'Drag to resize'}
+          >
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
+              <div className="w-5 h-5 bg-indigo-500/60 rounded-full flex items-center justify-center">
+                <svg className="w-2.5 h-2.5 text-white" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+                  <path d="M7 16l4-4-4-4M17 16l-4-4 4-4" />
+                </svg>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Right Panel - Studio Canvas */}
         <div className={cn(

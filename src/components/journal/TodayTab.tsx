@@ -1534,8 +1534,13 @@ export const TodayTab: React.FC = () => {
                 <span className="text-purple-500 dark:text-purple-400 font-bold text-lg mt-2 flex-shrink-0 animate-fade-in">1.</span>
                 <div className="flex-1 animate-fade-in" style={{ animationDelay: '0.1s' }}>
                   <label className="text-sm font-semibold mb-2 block bg-gradient-to-r from-purple-600 via-purple-500 to-pink-500 dark:from-purple-400 dark:via-purple-300 dark:to-pink-400 bg-clip-text text-transparent group-hover:scale-105 transition-transform">
-                    {language === 'ar' 
-                      ? `✨ ${displayName || '[اسم المستخدم]'} ممتن لـ` 
+                    {language === 'ar'
+                      ? (
+                        <span className="block">
+                          <span className="block">✨ <span dir="ltr">{displayName || '[اسم المستخدم]'}</span></span>
+                          <span className="block">ممتن لـ</span>
+                        </span>
+                      )
                       : `✨ ${displayName || '[username]'} is grateful for`}
                   </label>
                   <Input
@@ -1553,8 +1558,13 @@ export const TodayTab: React.FC = () => {
                 <span className="text-pink-500 dark:text-pink-400 font-bold text-lg mt-2 flex-shrink-0 animate-fade-in" style={{ animationDelay: '0.2s' }}>2.</span>
                 <div className="flex-1 animate-fade-in" style={{ animationDelay: '0.3s' }}>
                   <label className="text-sm font-semibold mb-2 block bg-gradient-to-r from-pink-600 via-rose-500 to-purple-500 dark:from-pink-400 dark:via-rose-300 dark:to-purple-400 bg-clip-text text-transparent group-hover:scale-105 transition-transform">
-                    {language === 'ar' 
-                      ? `💖 ${displayName || '[اسم المستخدم]'} ممتن لـ` 
+                    {language === 'ar'
+                      ? (
+                        <span className="block">
+                          <span className="block">💖 <span dir="ltr">{displayName || '[اسم المستخدم]'}</span></span>
+                          <span className="block">ممتن لـ</span>
+                        </span>
+                      )
                       : `💖 ${displayName || '[username]'} is grateful for`}
                   </label>
                   <Input
@@ -1572,8 +1582,13 @@ export const TodayTab: React.FC = () => {
                 <span className="text-purple-600 dark:text-purple-300 font-bold text-lg mt-2 flex-shrink-0 animate-fade-in" style={{ animationDelay: '0.4s' }}>3.</span>
                 <div className="flex-1 animate-fade-in" style={{ animationDelay: '0.5s' }}>
                   <label className="text-sm font-semibold mb-2 block bg-gradient-to-r from-purple-600 via-indigo-500 to-blue-500 dark:from-purple-400 dark:via-indigo-300 dark:to-blue-400 bg-clip-text text-transparent group-hover:scale-105 transition-transform">
-                    {language === 'ar' 
-                      ? `🌟 ${displayName || '[اسم المستخدم]'} ممتن لـ` 
+                    {language === 'ar'
+                      ? (
+                        <span className="block">
+                          <span className="block">🌟 <span dir="ltr">{displayName || '[اسم المستخدم]'}</span></span>
+                          <span className="block">ممتن لـ</span>
+                        </span>
+                      )
                       : `🌟 ${displayName || '[username]'} is grateful for`}
                   </label>
                   <Input

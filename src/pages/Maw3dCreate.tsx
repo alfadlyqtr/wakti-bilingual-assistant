@@ -131,11 +131,35 @@ const templates = [
   }
 ];
 
+const getTemplateTranslations = (language: string) => ({
+  blank: {
+    name: language === 'ar' ? 'قالب فارغ' : 'Blank Template',
+    title: language === 'ar' ? 'عنوان الحدث' : 'Event Title',
+    preview: language === 'ar' ? 'ابدأ من الصفر' : 'Start from scratch'
+  },
+  birthday: {
+    name: language === 'ar' ? 'عيد ميلاد' : 'Birthday',
+    title: language === 'ar' ? 'عيد ميلاد سعيد!' : 'Happy Birthday!',
+    description: language === 'ar' ? 'انضم إلينا للاحتفال بعيد الميلاد' : 'Join us for a birthday celebration'
+  },
+  meeting: {
+    name: language === 'ar' ? 'اجتماع' : 'Meeting',
+    title: language === 'ar' ? 'اجتماع الفريق' : 'Team Meeting',
+    description: language === 'ar' ? 'مناقشة مهمة للفريق' : 'Important team discussion'
+  },
+  gathering: {
+    name: language === 'ar' ? 'تجمع' : 'Gathering',
+    title: language === 'ar' ? 'تجمع الأصدقاء' : 'Friends Gathering',
+    description: language === 'ar' ? 'تعال وانضم إلينا لقضاء وقت ممتع' : 'Come and join us for a fun time'
+  }
+});
+
 export default function Maw3dCreate() {
   const navigate = useNavigate();
   const location = useLocation();
   const { language, theme } = useTheme();
   const { user, isLoading } = useAuth();
+  const templateTranslations = getTemplateTranslations(language);
   
   // Form state
   const [selectedTemplate, setSelectedTemplate] = useState(null);
@@ -624,7 +648,16 @@ export default function Maw3dCreate() {
                     </h3>
                     
                     <div className="grid grid-cols-2 gap-4">
-                      {templates.map((template) => (
+                      {templates.map((template) => {
+                        const translation = templateTranslations[template.id as keyof typeof templateTranslations];
+                        const localizedTemplate = {
+                          ...template,
+                          name: translation?.name || template.name,
+                          title: translation?.title || template.title,
+                          description: translation?.description || template.description
+                        };
+
+                        return (
                         <Card 
                           key={template.id}
                           className={`cursor-pointer border-2 transition-all duration-300 hover:scale-105 backdrop-blur-lg ${
@@ -632,7 +665,7 @@ export default function Maw3dCreate() {
                               ? 'border-primary shadow-glow-blue bg-gradient-vibrant/10' 
                               : 'border-border/50 hover:border-primary/50 bg-gradient-card'
                           }`}
-                          onClick={() => setSelectedTemplate(template)}
+                          onClick={() => setSelectedTemplate(localizedTemplate)}
                         >
                           <CardContent className="p-4 text-center">
                             <div 
@@ -652,12 +685,13 @@ export default function Maw3dCreate() {
                                 textAlign: template.text_style.alignment
                               }}
                             >
-                              {template.id === 'blank' ? 'Start from scratch' : template.title}
+                              {template.id === 'blank' ? translation?.preview || 'Start from scratch' : localizedTemplate.title}
                             </div>
-                            <h4 className="font-medium">{template.name}</h4>
+                            <h4 className="font-medium">{localizedTemplate.name}</h4>
                           </CardContent>
                         </Card>
-                      ))}
+                      );
+                    })}
                     </div>
                   </div>
                 </CardContent>
@@ -674,7 +708,7 @@ export default function Maw3dCreate() {
                     <div className="flex items-center gap-3">
                       <Brush className="w-5 h-5 text-accent-purple drop-shadow-glow-purple" />
                       <span className="bg-gradient-primary bg-clip-text text-transparent">
-                        Event Style
+                        {t('eventStyle', language)}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">

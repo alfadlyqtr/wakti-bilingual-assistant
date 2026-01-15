@@ -1237,6 +1237,7 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
     if (overLimit) return;
     setSubmitting(true);
     let placeholderRecordId: string | null = null;
+    let savedOk = false;
     
     try {
       // Check music generation quota via RPC
@@ -1297,8 +1298,8 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
           prompt: fullPrompt,
           include_styles: includeTags.length ? includeTags : null,
           requested_duration_seconds: Math.min(120, duration),
-          provider: 'runware',
-          model: 'elevenlabs:1@1',
+          provider: 'elevenlabs',
+          model: 'music_v1',
           storage_path: placeholderFileName,
           signed_url: null,
           mime: 'audio/mpeg',
@@ -1319,76 +1320,48 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
       setSongsRemaining((v) => Math.max(0, v - 1));
       
       // fullPrompt already composed above
-      
-      // Call Runware directly from frontend (as before)
-      const runwareResponse = await fetch('https://api.runware.ai/v1/inference', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // NOTE: client-side key usage restored per request
-          'Authorization': 'Bearer uS1Bbyhfcs0dAigYhXwELRxBcCndER6M'
-        },
-        body: JSON.stringify([{
-          taskType: 'audioInference',
-          taskUUID: crypto.randomUUID(),
-          model: 'elevenlabs:1@1',
-          positivePrompt: fullPrompt,
-          duration: Math.min(120, duration),
-          outputFormat: 'MP3',
-          deliveryMethod: 'sync',
-          numberResults: 1,
-          audioSettings: { sampleRate: 44100, bitrate: 128 }
-        }])
+
+      // Call ElevenLabs music generation via Edge Function
+      const { data: genData, error: genError } = await supabase.functions.invoke('music-generate', {
+        body: {
+          prompt: fullPrompt,
+          duration_seconds: Math.min(120, duration),
+          output_format: 'mp3_44100_128',
+          model_id: 'music_v1',
+          force_instrumental: vocalType === 'none'
+        }
       });
-      
-      const result = await runwareResponse.json();
-      if (!runwareResponse.ok || result?.errors) {
-        throw new Error(result?.errors?.[0]?.message || 'Runware API error');
-      }
-      
-      // Accept audioURL or dataURI
-      const audioData = Array.isArray(result?.data) ? result.data[0] : result?.data || result;
-      const foundUrl = audioData?.audioURL || audioData?.audioDataURI || audioData?.dataURI;
-      if (!foundUrl) throw new Error('No audio returned from Runware');
-      
-      // Upload to Supabase Storage, then UPDATE the placeholder record
-      let storedUrl = foundUrl as string;
+
+      if (genError) throw genError;
+      if (!genData?.publicUrl) throw new Error('No audio returned from ElevenLabs');
+
+      const storedUrl = genData.publicUrl as string;
+      const storagePath = genData.storagePath as string | null;
+      const mime = (genData.mime as string) || 'audio/mpeg';
+
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('Not authenticated');
-        
-        const response = await fetch(foundUrl);
-        const blob = await response.blob();
-        const mime = blob.type || 'audio/mpeg';
-        const ext = mime.includes('wav') ? 'wav' : mime.includes('ogg') ? 'ogg' : 'mp3';
-        const fileName = `${user.id}/${Date.now()}.${ext}`;
-        const up = await supabase.storage.from('music').upload(fileName, blob, { contentType: mime, upsert: false });
-        if (up.error) throw up.error;
-        const { data: urlData } = supabase.storage.from('music').getPublicUrl(fileName);
-        storedUrl = urlData.publicUrl;
-        
         // UPDATE the placeholder record with actual data
         if (placeholderRecordId) {
           const { error: updateError } = await (supabase as any)
             .from('user_music_tracks')
             .update({
-              storage_path: fileName,
+              storage_path: storagePath || null,
               signed_url: storedUrl,
-              mime: mime,
+              mime,
               meta: {
                 status: 'completed',
-                ...(audioData?.cost ? { cost_usd: audioData.cost } : {}),
                 ...(instrumentTags.length ? { instruments: instrumentTags } : {}),
                 ...(moodTags.length ? { mood: moodTags } : {})
               } as any
             })
             .eq('id', placeholderRecordId);
-          
+
           if (updateError) throw updateError;
         }
-        
+
         // Reflect saved state (counter already updated above)
         setAudios((prev) => [{ url: storedUrl, mime, meta: {}, createdAt: Date.now(), saved: true }, ...prev]);
+        savedOk = true;
         onSaved?.();
       } catch (saveError) {
         console.error('Storage/DB save error:', saveError);
@@ -1403,12 +1376,16 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
             .eq('id', placeholderRecordId);
         }
         // Still show playable result
-        setAudios((prev) => [{ url: storedUrl, mime: 'audio/mpeg', meta: {}, createdAt: Date.now(), saved: false }, ...prev]);
+        setAudios((prev) => [{ url: storedUrl, mime: mime || 'audio/mpeg', meta: {}, createdAt: Date.now(), saved: false }, ...prev]);
       }
 
       setLastError(null);
 
-      toast.success(language==='ar' ? 'تم الإنشاء' : 'Generated');
+      toast.success(
+        savedOk
+          ? (language === 'ar' ? 'تم الحفظ. انتقل إلى المحفوظات أو مشاريعي.' : 'Saved. Go to Saved or My Projects.')
+          : (language === 'ar' ? 'تم الإنشاء' : 'Generated')
+      );
     } catch (e: any) {
       const msg = e?.message || String(e);
       console.error('Music generate error:', e);
@@ -1859,7 +1836,11 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
                           }
                         }
                         setAudios((prev) => prev.map((it, i) => i===idx ? { ...it, url: publicUrl, saved: true } : it));
-                        toast.success(language==='ar' ? 'تم الحفظ. انتقل إلى المحفوظات.' : 'Saved. Switched to Saved.');
+                        toast.success(
+                          language === 'ar'
+                            ? 'تم الحفظ. انتقل إلى المحفوظات أو مشاريعي.'
+                            : 'Saved. Go to Saved or My Projects.'
+                        );
                         onSaved?.();
                       } catch (e: any) {
                         toast.error((language==='ar'?'تعذر الحفظ: ':'Save failed: ') + (e?.message || String(e)));
@@ -1880,15 +1861,21 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
 
 function EditorTab() {
   const { language } = useTheme();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [tracks, setTracks] = useState<Array<{ id: string; created_at: string; prompt: string | null; include_styles: string[] | null; exclude_styles: string[] | null; requested_duration_seconds: number | null; signed_url: string | null; storage_path: string | null; mime: string | null; play_url?: string | null }>>([]);
 
   const load = async () => {
+    if (!user) {
+      setTracks([]);
+      return;
+    }
     setLoading(true);
     try {
       const { data, error } = await (supabase as any)
         .from('user_music_tracks')
         .select('id, created_at, prompt, include_styles, exclude_styles, requested_duration_seconds, signed_url, storage_path, mime, meta')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(50);
 
@@ -1928,7 +1915,7 @@ function EditorTab() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [user?.id]);
 
   const handleDelete = async (trackId: string, storagePath: string | null) => {
     const confirmMsg = language === 'ar' 

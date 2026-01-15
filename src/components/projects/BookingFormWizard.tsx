@@ -14,6 +14,8 @@ import {
   LayoutGrid, 
   ListOrdered,
   Plus,
+  ArrowUp,
+  ArrowDown,
   Trash2,
   GripVertical,
   Check
@@ -109,6 +111,20 @@ export function BookingFormWizard({ services, onComplete, onCancel, onSkipWizard
     setFields(prev => prev.map(f => 
       f.id === fieldId ? { ...f, [key]: !f[key] } : f
     ));
+  };
+
+  const handleMoveField = (fieldId: string, direction: 'up' | 'down') => {
+    setFields(prev => {
+      const index = prev.findIndex(f => f.id === fieldId);
+      if (index === -1) return prev;
+      if (direction === 'up' && index === 0) return prev;
+      if (direction === 'down' && index === prev.length - 1) return prev;
+
+      const newFields = [...prev];
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      [newFields[index], newFields[targetIndex]] = [newFields[targetIndex], newFields[index]];
+      return newFields;
+    });
   };
 
   const handleRemoveField = (fieldId: string) => {
@@ -229,6 +245,31 @@ Original request: ${originalPrompt}`;
               </div>
             ))}
           </div>
+
+          {/* Field Order Preview */}
+          <div className="rounded-xl border border-border/50 bg-muted/30 p-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold">
+                {isRTL ? 'معاينة الترتيب' : 'Order Preview'}
+              </span>
+              <span className="text-[10px] text-muted-foreground">
+                {isRTL ? 'ترتيب الحقول' : 'Field order'}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 gap-2">
+              {fields.map((field, index) => (
+                <div
+                  key={`preview-${field.id}`}
+                  className="rounded-lg border border-border/60 bg-background/70 px-2 py-1.5 text-[10px]"
+                >
+                  <div className="font-medium truncate">
+                    {index + 1}. {isRTL ? field.labelAr : field.label}
+                  </div>
+                  <div className="text-muted-foreground">{field.type}</div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       );
     }
@@ -294,6 +335,32 @@ Original request: ${originalPrompt}`;
                     onCheckedChange={() => handleFieldToggle(field.id, 'required')}
                     disabled={['name', 'email'].includes(field.id)}
                   />
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <button
+                    onClick={() => handleMoveField(field.id, 'up')}
+                    disabled={idx === 0}
+                    title={isRTL ? 'تحريك للأعلى' : 'Move up'}
+                    aria-label={isRTL ? 'تحريك للأعلى' : 'Move up'}
+                    className={cn(
+                      "p-0.5 rounded transition-colors",
+                      idx === 0 ? "text-muted-foreground/20" : "text-muted-foreground hover:text-indigo-500 hover:bg-indigo-500/10"
+                    )}
+                  >
+                    <ArrowUp className="h-3 w-3" />
+                  </button>
+                  <button
+                    onClick={() => handleMoveField(field.id, 'down')}
+                    disabled={idx === fields.length - 1}
+                    title={isRTL ? 'تحريك للأسفل' : 'Move down'}
+                    aria-label={isRTL ? 'تحريك للأسفل' : 'Move down'}
+                    className={cn(
+                      "p-0.5 rounded transition-colors",
+                      idx === fields.length - 1 ? "text-muted-foreground/20" : "text-muted-foreground hover:text-indigo-500 hover:bg-indigo-500/10"
+                    )}
+                  >
+                    <ArrowDown className="h-3 w-3" />
+                  </button>
                 </div>
                 {!['name', 'email', 'date', 'time'].includes(field.id) && (
                   <Button
@@ -365,6 +432,27 @@ Original request: ${originalPrompt}`;
                 onChange={(e) => isRTL ? setSubmitTextAr(e.target.value) : setSubmitText(e.target.value)}
                 className="h-8 text-sm"
               />
+            </div>
+
+            {/* Summary */}
+            <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-3">
+              <div className="text-xs font-semibold mb-2">
+                {isRTL ? 'ملخص سريع' : 'Quick Summary'}
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[10px] text-muted-foreground">
+                <div>
+                  <span className="font-medium text-foreground">{isRTL ? 'النمط:' : 'Style:'}</span>{' '}
+                  {formStyle === 'single' ? (isRTL ? 'صفحة واحدة' : 'Single') : formStyle === 'multi-step' ? (isRTL ? 'متعدد الخطوات' : 'Multi-step') : (isRTL ? 'شريط جانبي' : 'Sidebar')}
+                </div>
+                <div>
+                  <span className="font-medium text-foreground">{isRTL ? 'الحقول:' : 'Fields:'}</span>{' '}
+                  {fields.length}
+                </div>
+                <div className="col-span-2">
+                  <span className="font-medium text-foreground">{isRTL ? 'زر الإرسال:' : 'Submit:'}</span>{' '}
+                  {isRTL ? submitTextAr : submitText}
+                </div>
+              </div>
             </div>
           </div>
         </div>

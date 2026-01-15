@@ -6,7 +6,7 @@ export type TagId = string;
 const emojiMap: Record<string, string> = {
   family: "👨‍👩‍👧",
   friends: "👯",
-  date: "❤️",
+  date: "📅",
   exercise: "🏋️",
   sport: "🏆",
   relax: "😌",
@@ -31,7 +31,7 @@ const emojiMap: Record<string, string> = {
   love: "❤️",
   romance: "💕",
   spouse: "💑",
-  prayer: "🙏",
+  prayer: "🤲",
   writing: "✍️",
   horse_riding: "🐴",
   fishing: "🎣",
@@ -112,7 +112,7 @@ const customTagEmojis: Record<string, string> = {
   sun: "☀️", sunset: "🌅", sunrise: "🌄",
   
   // Social
-  date: "💘", dating: "💘",
+  date: "📅", dating: "💘",
   friend: "👋", hangout: "🤝", catch: "☕",
   call: "📞", phone: "📞", videocall: "📹", zoom: "💻",
   

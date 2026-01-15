@@ -66,6 +66,7 @@ export const en = {
 
   // MISSING TRANSLATION KEYS FROM BUILD ERRORS:
   eventTemplate: "Event Template",
+  chooseTemplate: "Choose Template",
   basicInformation: "Basic Information",
   allDayEvent: "All Day Event",
   inviteContacts: "Invite Contacts",
@@ -78,6 +79,7 @@ export const en = {
   by: "by",
   background: "Background",
   textStyle: "Text Style",
+  eventStyle: "Event Style",
 
   // Session Ended page
   sessionEnded_title: "You’re signed in on another device",
