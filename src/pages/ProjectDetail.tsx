@@ -2542,6 +2542,11 @@ ${convertToGlobalComponent(content, componentName)}
     }
     setAutoFixCountdown(null);
     
+    // Normalize error for tracking
+    const errorKey = error.replace(/:\d+:\d+/g, '').replace(/line \d+/gi, '').trim().substring(0, 200);
+    const attemptNumber = autoFixAttemptsRef.current.get(errorKey) || 1;
+    const isRetry = attemptNumber > 1;
+    
     // Smart fix prompt with specific instructions based on error type
     let fixInstructions = '';
     
@@ -2555,11 +2560,10 @@ ${convertToGlobalComponent(content, componentName)}
 The file ${moduleName} doesn't exist or the import path is wrong.
 
 **FIX STEPS:**
-1. Check if the file exists - if not, CREATE it
-2. If the file exists, fix the import path (use correct relative path from App.js)
-3. Make sure the component is exported correctly (export default or named export)
-
-**IMPORTANT:** If you created a new component file, make sure it actually exists and has valid code.`;
+1. Use list_files to see what files exist
+2. Use read_file to check the import statement
+3. Either CREATE the missing file or FIX the import path
+4. Make sure the component is exported correctly`;
     } else if (error.includes('is not defined') || error.includes('ReferenceError')) {
       const varMatch = error.match(/(\w+) is not defined/);
       const varName = varMatch ? varMatch[1] : 'variable';
@@ -2569,9 +2573,10 @@ The file ${moduleName} doesn't exist or the import path is wrong.
 ${varName} is used but not defined or imported.
 
 **FIX STEPS:**
-1. If it's a React hook (useState, useEffect, etc.) - add: import { ${varName} } from 'react';
-2. If it's a component - import it from the correct file
-3. If it's a variable - define it before using it`;
+1. Use read_file to see the current imports
+2. If it's a React hook (useState, useEffect, etc.) - add to React import
+3. If it's a component - import it from the correct file
+4. If it's a variable - define it before using it`;
     } else if (error.includes('SyntaxError') || error.includes('Unexpected token')) {
       fixInstructions = `
 **ERROR TYPE: Syntax Error**
@@ -2579,26 +2584,48 @@ ${varName} is used but not defined or imported.
 There's invalid JavaScript/JSX syntax.
 
 **FIX STEPS:**
-1. Check for missing closing brackets, braces, or parentheses
-2. Check for missing commas in objects/arrays
-3. Make sure JSX tags are properly closed
-4. Check for typos in keywords`;
+1. Use read_file to see the file with the error
+2. Look for missing closing brackets, braces, or parentheses
+3. Check for missing commas in objects/arrays
+4. Make sure JSX tags are properly closed`;
     } else {
       fixInstructions = `
 **ERROR TYPE: Runtime Error**
 
 **FIX STEPS:**
-1. Read the error message carefully
+1. Use read_file to see the file causing the error
 2. Find the exact line causing the issue
 3. Fix the root cause, not just the symptom`;
     }
     
-    const fixPrompt = `🔧 **AUTO-FIX: Fix this error NOW**
+    // Add retry-specific instructions
+    let retryWarning = '';
+    if (isRetry) {
+      retryWarning = `
+⚠️ **THIS IS ATTEMPT #${attemptNumber} - PREVIOUS FIX FAILED**
 
+The previous fix did NOT work. You MUST:
+1. READ the file(s) again to see current state
+2. UNDERSTAND why the previous fix failed
+3. Try a DIFFERENT approach this time
+4. State your new plan before making changes
+
+DO NOT repeat the same fix that already failed.
+`;
+    }
+    
+    const fixPrompt = `🔧 **AUTO-FIX: Fix this error NOW**
+${retryWarning}
 \`\`\`
 ${error}
 \`\`\`
 ${fixInstructions}
+
+**MANDATORY WORKFLOW:**
+1. First, use read_file to see the current code
+2. State your fix plan
+3. Make the fix using search_replace
+4. Call task_complete when done
 
 **ACTION REQUIRED:** Edit the file(s) to fix this error. Do NOT just explain - actually make the code changes.`;
     

@@ -393,6 +393,8 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     
     console.log('[CalendarSync] Using calendar ID:', calendarId);
     
+    let lastError = '';
+    
     for (const entry of entriesToSync) {
       try {
         // Parse date safely - handle both 'yyyy-MM-dd' and ISO formats
@@ -432,6 +434,7 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
                 successCount++;
               } else {
                 failCount++;
+                lastError = result.error || 'Unknown error';
                 console.warn('[CalendarSync] Failed to sync entry:', entry.title, result.error);
               }
               resolve();
@@ -456,8 +459,8 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     if (failCount > 0) {
       toast.error(
         language === 'ar' 
-          ? `فشل في مزامنة ${failCount} حدث` 
-          : `Failed to sync ${failCount} events`
+          ? `فشل في مزامنة ${failCount} حدث: ${lastError}` 
+          : `Failed to sync ${failCount} events: ${lastError}`
       );
     }
   }, [calendarEntries, nativeCalendarAvailable, language]);
