@@ -85,62 +85,60 @@ export function retrieveCalendars(callback: (result: RetrieveCalendarsResult) =>
   }
 
   try {
-    console.log('[NativelyCalendar] Calling retrieveCalendars...');
+    console.log('[NativelyCalendar] ========== CALLING retrieveCalendars ==========');
+    
+    // Set a timeout in case callback never fires
+    let callbackFired = false;
+    const timeoutId = setTimeout(() => {
+      if (!callbackFired) {
+        console.warn('[NativelyCalendar] retrieveCalendars timeout - callback never fired');
+        callback({ status: 'FAILED', error: 'Timeout waiting for calendar response' });
+      }
+    }, 10000); // 10 second timeout
+    
     cal.retrieveCalendars((resp: any) => {
-      console.log('[NativelyCalendar] ===== RETRIEVE CALENDARS DEBUG =====');
-      console.log('[NativelyCalendar] Raw resp:', resp);
+      callbackFired = true;
+      clearTimeout(timeoutId);
+      
+      console.log('[NativelyCalendar] ===== RETRIEVE CALENDARS RESPONSE =====');
+      console.log('[NativelyCalendar] Raw resp:', JSON.stringify(resp));
       console.log('[NativelyCalendar] resp type:', typeof resp);
       console.log('[NativelyCalendar] resp.status:', resp?.status);
-      console.log('[NativelyCalendar] resp.data:', resp?.data);
+      console.log('[NativelyCalendar] resp.data:', JSON.stringify(resp?.data));
       console.log('[NativelyCalendar] resp.error:', resp?.error);
-      if (resp?.data && typeof resp.data === 'object') {
-        console.log('[NativelyCalendar] resp.data.id:', resp.data?.id);
-        console.log('[NativelyCalendar] Is resp.data array?:', Array.isArray(resp.data));
-      }
-      console.log('[NativelyCalendar] ====================================');
+      console.log('[NativelyCalendar] resp.id:', resp?.id);
+      console.log('[NativelyCalendar] ======================================');
       
       // Handle various response formats from Natively SDK
-      // Docs show resp.data.id (singular), but it could also be an array
       let calendars: CalendarObject[] = [];
       
-      // Try to extract calendars from response
+      // Try to extract calendars from response - check ALL possible locations
       if (Array.isArray(resp?.data)) {
-        // Array of calendar objects
         calendars = resp.data.filter((c: any) => c?.id).map((c: any) => ({ id: String(c.id) }));
       } else if (resp?.data?.id) {
-        // Single calendar object
         calendars = [{ id: String(resp.data.id) }];
       } else if (typeof resp?.data === 'string' && resp.data.length > 0) {
-        // Sometimes data might just be the calendar ID as a string
         calendars = [{ id: resp.data }];
       } else if (resp?.id) {
-        // Response itself might have the id directly
         calendars = [{ id: String(resp.id) }];
+      } else if (Array.isArray(resp)) {
+        // Response itself might be the array
+        calendars = resp.filter((c: any) => c?.id).map((c: any) => ({ id: String(c.id) }));
       }
       
-      console.log('[NativelyCalendar] Parsed calendars:', calendars);
+      console.log('[NativelyCalendar] Extracted calendars:', JSON.stringify(calendars));
       
       if (calendars.length > 0) {
-        callback({
-          status: 'SUCCESS',
-          data: calendars
-        });
+        callback({ status: 'SUCCESS', data: calendars });
       } else if (resp?.status === 'SUCCESS') {
-        // Status is success but no calendars found - user might have no calendars
-        callback({
-          status: 'SUCCESS',
-          data: []
-        });
+        callback({ status: 'SUCCESS', data: [] });
       } else {
-        // Failed to retrieve
-        const errorMsg = resp?.error || resp?.message || resp?.errorMessage || 'Failed to retrieve calendars';
-        console.log('[NativelyCalendar] Failed with error:', errorMsg);
-        callback({
-          status: 'FAILED',
-          error: typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg)
-        });
+        const errorMsg = resp?.error || resp?.message || 'Failed to retrieve calendars';
+        callback({ status: 'FAILED', error: String(errorMsg) });
       }
     });
+    
+    console.log('[NativelyCalendar] retrieveCalendars called, waiting for callback...');
   } catch (err) {
     console.error('[NativelyCalendar] Error calling retrieveCalendars:', err);
     callback({ status: 'FAILED', error: String(err) });
