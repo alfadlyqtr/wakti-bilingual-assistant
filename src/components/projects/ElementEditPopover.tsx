@@ -3,7 +3,8 @@ import {
   X, Type, Wand2, Check, ChevronRight, ChevronDown, ChevronUp,
   Image as ImageIcon, Link2, Square, Circle, ArrowRight, ArrowDown,
   AlignStartVertical, AlignCenterVertical, 
-  AlignEndVertical, Maximize2, Move, LayoutGrid, ChevronUpSquare
+  AlignEndVertical, Maximize2, Move, LayoutGrid, ChevronUpSquare,
+  Edit3, MousePointer2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +23,9 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { ColorPickerPopover } from '@/pages/ProjectDetail/components/VisualEditMode/ColorPickerPopover';
+import { ResizeHandles } from '@/pages/ProjectDetail/components/VisualEditMode/ResizeHandles';
+import { InlineTextEditor } from '@/pages/ProjectDetail/components/VisualEditMode/InlineTextEditor';
+import type { SelectedElementInfo as VisualEditElementInfo, ResizeDimensions } from '@/pages/ProjectDetail/types/visual-edit';
 
 interface SelectedElementInfo {
   tagName: string;
@@ -34,6 +38,12 @@ interface SelectedElementInfo {
     backgroundColor: string;
     fontSize: string;
   };
+  rect?: {
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+  };
 }
 
 interface ElementEditPopoverProps {
@@ -43,7 +53,10 @@ interface ElementEditPopoverProps {
   onAIEdit: (prompt: string) => void;
   onImageChange?: () => void;
   onSelectParent?: () => void;
+  onResize?: (dimensions: ResizeDimensions) => void;
+  onInlineTextSave?: (newText: string) => void;
   isRTL?: boolean;
+  showResizeHandles?: boolean;
 }
 
 // Helper to check if element contains editable text
@@ -314,8 +327,13 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
   onAIEdit,
   onImageChange,
   onSelectParent,
-  isRTL = false
+  onResize,
+  onInlineTextSave,
+  isRTL = false,
+  showResizeHandles = false
 }) => {
+  // Inline editing state
+  const [isInlineEditing, setIsInlineEditing] = useState(false);
   // Local state for edits
   const [editedText, setEditedText] = useState(element.innerText || '');
   const [editedColor, setEditedColor] = useState(element.computedStyle?.color || 'inherit');
@@ -409,8 +427,69 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
 
   const setMod = (key: string) => setModified(m => ({ ...m, [key]: true }));
 
+  // Handle inline text edit
+  const handleStartInlineEdit = useCallback(() => {
+    if (showTextEdit) {
+      setIsInlineEditing(true);
+    }
+  }, [showTextEdit]);
+
+  const handleSaveInlineEdit = useCallback((newText: string) => {
+    if (onInlineTextSave) {
+      onInlineTextSave(newText);
+    } else {
+      onDirectEdit({ text: newText });
+    }
+    setIsInlineEditing(false);
+    onClose();
+  }, [onInlineTextSave, onDirectEdit, onClose]);
+
+  const handleCancelInlineEdit = useCallback(() => {
+    setIsInlineEditing(false);
+  }, []);
+
+  // Handle resize
+  const handleResize = useCallback((dimensions: ResizeDimensions) => {
+    if (onResize) {
+      onResize(dimensions);
+    }
+  }, [onResize]);
+
+  // If inline editing, show the inline editor instead
+  if (isInlineEditing && element.rect) {
+    return (
+      <InlineTextEditor
+        element={{ ...element, rect: element.rect } as any}
+        onSave={handleSaveInlineEdit}
+        onCancel={handleCancelInlineEdit}
+        isRTL={isRTL}
+      />
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-[200] flex items-end md:items-center justify-center p-4 md:p-8">
+      {/* Resize Handles - shown when element has rect */}
+      {showResizeHandles && element.rect && (
+        <div 
+          className="fixed z-[201] pointer-events-none"
+          style={{
+            top: element.rect.top,
+            left: element.rect.left,
+            width: element.rect.width,
+            height: element.rect.height,
+          }}
+        >
+          <div className="relative w-full h-full pointer-events-auto">
+            <ResizeHandles 
+              element={element as any}
+              onResize={handleResize}
+              onResizeEnd={handleResize}
+            />
+          </div>
+        </div>
+      )}
+      
       {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
@@ -433,6 +512,7 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
                 <h3 className="text-sm font-bold text-white">
                   {isRTL ? 'تحرير مرئي' : 'Visual Edit'}
                 </h3>
+                {/* Parent selection button */}
                 <button 
                   onClick={onSelectParent}
                   className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-500/10 hover:bg-indigo-500/20 transition-colors"
@@ -440,6 +520,17 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
                   <ChevronUpSquare className="h-3 w-3" />
                   {isRTL ? 'الأب' : 'Parent'}
                 </button>
+                {/* Inline text edit button */}
+                {showTextEdit && (
+                  <button 
+                    onClick={handleStartInlineEdit}
+                    className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors"
+                    title={isRTL ? 'تحرير النص مباشرة' : 'Edit text inline'}
+                  >
+                    <Edit3 className="h-3 w-3" />
+                    {isRTL ? 'تحرير' : 'Edit'}
+                  </button>
+                )}
               </div>
               <p className="text-[11px] text-zinc-400 font-mono">
                 &lt;{element.tagName.toLowerCase()}&gt;

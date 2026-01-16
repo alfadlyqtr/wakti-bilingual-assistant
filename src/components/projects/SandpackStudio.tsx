@@ -10,6 +10,7 @@ import { SandpackErrorListener } from "./SandpackErrorListener";
 import { atomDark } from "@codesandbox/sandpack-themes";
 import { Code2, Eye, FileCode, FileJson, FileType, CheckCircle2, MousePointer2, Monitor, Tablet, Smartphone, ExternalLink, RefreshCw, Download, Upload, Loader2, Settings, Share2, Save } from "lucide-react";
 import { SandpackSkeleton } from '@/pages/ProjectDetail/components/PreviewPanel/SandpackSkeleton';
+import { useIncrementalFileUpdater } from '@/pages/ProjectDetail/hooks/useSandpackFiles';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -230,7 +231,14 @@ const InspectablePreview = ({
   );
 };
 
-// --- 4. MAIN STUDIO COMPONENT ---
+// --- 4. INCREMENTAL FILE UPDATER COMPONENT ---
+// Uses the hook inside SandpackProvider context to enable incremental updates
+const IncrementalFileUpdaterComponent = ({ files }: { files: Record<string, string> }) => {
+  useIncrementalFileUpdater(files);
+  return null; // This component only runs the hook, renders nothing
+};
+
+// --- 5. MAIN STUDIO COMPONENT ---
 interface SandpackStudioProps {
   files: Record<string, string>;
   projectId?: string; // Used for stable key to prevent full rebuilds
@@ -736,6 +744,9 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                 )}
               </div>
             )}
+
+            {/* INCREMENTAL FILE UPDATER - Prevents full rebuilds on code changes */}
+            <IncrementalFileUpdaterComponent files={formattedFiles} />
 
             {/* ERROR LISTENER - Invisible component that detects crashes */}
             {onRuntimeError && (
