@@ -593,6 +593,43 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
         <div className="p-4 space-y-1 max-h-[60vh] overflow-y-auto">
           {activeTab === 'direct' ? (
             <>
+              {/* ===== TEXT CONTENT SECTION (Top Priority) ===== */}
+              {showTextEdit && (
+                <div className="mb-4 p-3 bg-zinc-800/50 rounded-xl border border-zinc-700/50">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-medium text-white flex items-center gap-1.5">
+                      <Edit3 className="h-3.5 w-3.5 text-emerald-400" />
+                      {isRTL ? 'محتوى النص' : 'Text Content'}
+                    </label>
+                    <button
+                      onClick={handleStartInlineEdit}
+                      className="text-[10px] text-emerald-400 hover:text-emerald-300 px-2 py-0.5 rounded bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors flex items-center gap-1"
+                    >
+                      <MousePointer2 className="h-3 w-3" />
+                      {isRTL ? 'تحرير في المكان' : 'Edit in place'}
+                    </button>
+                  </div>
+                  <textarea
+                    value={editedText}
+                    onChange={(e) => { setEditedText(e.target.value); setMod('text'); }}
+                    placeholder={isRTL ? 'أدخل النص هنا...' : 'Enter text here...'}
+                    className={cn(
+                      "w-full min-h-[60px] px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg",
+                      "text-sm text-white placeholder:text-zinc-500",
+                      "focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50",
+                      "resize-none transition-all",
+                      isRTL && "text-right"
+                    )}
+                    dir={isRTL ? 'rtl' : 'ltr'}
+                  />
+                  <p className="mt-1.5 text-[10px] text-zinc-500">
+                    {isRTL 
+                      ? 'قم بتعديل النص مباشرة هنا أو اضغط "تحرير في المكان" للتحرير على العنصر'
+                      : 'Edit text directly here or click "Edit in place" to edit on the element'}
+                  </p>
+                </div>
+              )}
+
               {/* ===== COLORS SECTION ===== */}
               <Collapsible open={openSections.colors} onOpenChange={() => toggleSection('colors')}>
                 <CollapsibleTrigger asChild>
