@@ -324,18 +324,19 @@ function assertNoHtml(path: string, value: string): void {
 // GEMINI 2.5 PRO - FULL REWRITE ENGINE (NO PATCHES)
 // ============================================================================
 
-async function callGemini25Pro(
+// ============================================================================
+// UNIVERSAL MODEL CALLER - Supports all Gemini models with dynamic selection
+// ============================================================================
+async function callGeminiWithModel(
+  model: string,
   systemPrompt: string,
   userPrompt: string,
   jsonMode: boolean = true
 ): Promise<string> {
   const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
   if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
-
-  // Use Gemini 2.5 Pro (stable) for Edit/Plan/Execute modes
-  const model = "gemini-2.5-pro";
   
-  console.log(`[Gemini 2.5 Pro] Calling model: ${model}`);
+  console.log(`[Gemini] Calling model: ${model}`);
 
   const response = await withTimeout(
     fetch(
@@ -363,7 +364,7 @@ async function callGemini25Pro(
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error(`[Gemini 2.5 Pro] HTTP ${response.status}: ${errorText}`);
+    console.error(`[Gemini ${model}] HTTP ${response.status}: ${errorText}`);
     throw new Error(`Gemini API error: ${response.status}`);
   }
 
@@ -375,6 +376,15 @@ async function callGemini25Pro(
   }
   
   return text;
+}
+
+// Legacy wrapper for backward compatibility - always uses Pro
+async function callGemini25Pro(
+  systemPrompt: string,
+  userPrompt: string,
+  jsonMode: boolean = true
+): Promise<string> {
+  return callGeminiWithModel('gemini-2.5-pro', systemPrompt, userPrompt, jsonMode);
 }
 
 // ============================================================================
@@ -590,13 +600,19 @@ async function callGemini25ProWithImages(
 // NOTE: Create mode uses callGemini25Pro directly (line ~2243)
 
 // PLAN MODE: AI proposes changes, returns a structured plan (Lovable-style)
+// Now with SMART MODEL SELECTION - uses Flash for simple plans, Pro for complex
 async function callGeminiPlanMode(
   userPrompt: string,
   currentFiles: Record<string, string>
-): Promise<string> {
+): Promise<{ plan: string; modelSelection: ModelSelection }> {
   const fileContext = Object.entries(currentFiles || {})
     .map(([path, content]) => `=== FILE: ${path} ===\n${content}`)
     .join("\n\n");
+
+  // Smart model selection for plan mode
+  const fileCount = Object.keys(currentFiles || {}).length;
+  const modelSelection = selectOptimalModel(userPrompt, false, 'plan', fileCount);
+  console.log(`[Plan Mode] Model selected: ${modelSelection.model} (${modelSelection.tier}) - ${modelSelection.reason}`);
 
   const systemPrompt = `You are a code analysis engine. Your ONLY job is to analyze the provided codebase and propose REAL, SPECIFIC changes.
 
@@ -652,18 +668,25 @@ REQUEST: ${userPrompt}
 
 Return JSON only.`;
 
-  return await callGemini25Pro(systemPrompt, userMessage, true);
+  const plan = await callGeminiWithModel(modelSelection.model, systemPrompt, userMessage, true);
+  return { plan, modelSelection };
 }
 
 // EXECUTE MODE: AI writes full file rewrites based on a plan
+// Now with SMART MODEL SELECTION - uses Flash for simple executions, Pro for complex
 async function callGeminiExecuteMode(
   planToExecute: string,
   currentFiles: Record<string, string>,
   userInstructions: string = ""
-): Promise<{ files: Record<string, string>; summary: string }> {
+): Promise<{ files: Record<string, string>; summary: string; modelSelection: ModelSelection }> {
   const fileContext = Object.entries(currentFiles || {})
     .map(([path, content]) => `=== FILE: ${path} ===\n${content}`)
     .join("\n\n");
+
+  // Smart model selection for execute mode
+  const fileCount = Object.keys(currentFiles || {}).length;
+  const modelSelection = selectOptimalModel(planToExecute, false, 'execute', fileCount);
+  console.log(`[Execute Mode] Model selected: ${modelSelection.model} (${modelSelection.tier}) - ${modelSelection.reason}`);
 
   const systemPrompt = GEMINI_EXECUTE_SYSTEM_PROMPT;
 
@@ -677,7 +700,7 @@ ${userInstructions ? `ADDITIONAL INSTRUCTIONS:\n${userInstructions}\n\n` : ""}
 Execute this plan. Return the FULL content of every file that needs to be modified or created.
 Return ONLY a valid JSON object with the structure shown in the system prompt.`;
 
-  const text = await callGemini25Pro(systemPrompt, userMessage, true);
+  const text = await callGeminiWithModel(modelSelection.model, systemPrompt, userMessage, true);
   
   let parsed: unknown;
   try {
@@ -700,7 +723,7 @@ Return ONLY a valid JSON object with the structure shown in the system prompt.`;
     assertNoHtml(p, c);
   }
 
-  return { files, summary: summary || "Changes applied." };
+  return { files, summary: summary || "Changes applied.", modelSelection };
 }
 
 // EDIT MODE (Legacy compatibility): Direct edit without plan step
@@ -2018,16 +2041,20 @@ When user asks for "contact form", "newsletter", use the form submission API.
 
 
     // CHAT MODE: Smart Q&A - answers questions OR returns a plan if code changes are needed
+    // Now with SMART MODEL SELECTION
     if (mode === 'chat') {
       const currentFiles = body.currentFiles || {};
       const filesStr = Object.entries(currentFiles || {}).map(([k, v]) => `FILE: ${k}\n${v}`).join('\n\n');
+      const fileCount = Object.keys(currentFiles).length;
       
-      // Use Gemini 2.0 Flash for smart chat with intelligent detection
+      // Smart model selection for chat mode
+      const hasImages = Array.isArray(images) && images.length > 0;
+      const chatModelSelection = selectOptimalModel(prompt, hasImages, 'chat', fileCount);
+      console.log(`[Chat Mode] Model selected: ${chatModelSelection.model} (${chatModelSelection.tier}) - ${chatModelSelection.reason}`);
+      
       const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
       if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
       
-      // Check if images were provided
-      const hasImages = Array.isArray(images) && images.length > 0;
       console.log(`[Chat Mode] Has images: ${hasImages}, count: ${hasImages ? images.length : 0}`);
       
       // Build asset picker priority section - MUST be checked FIRST
@@ -2191,9 +2218,12 @@ ${filesStr}`;
       const fullPrompt = pdfTextContent ? `${prompt}${pdfTextContent}` : prompt;
       contentParts.push({ text: fullPrompt });
 
+      // Use smart model selection - Flash-Lite for simple Q&A, Flash for code changes, Pro for vision
+      const selectedChatModel = chatModelSelection.model;
+      
       const chatResponse = await withTimeout(
         fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`,
+          `https://generativelanguage.googleapis.com/v1beta/models/${selectedChatModel}:generateContent`,
           {
             method: "POST",
             headers: {
@@ -2213,6 +2243,10 @@ ${filesStr}`;
         60000,
         'GEMINI_CHAT'
       );
+      
+      // Log credit usage for chat mode
+      const chatInputText = chatSystemPrompt + fullPrompt + filesStr;
+      let chatOutputText = '';
 
       if (!chatResponse.ok) {
         const errorText = await chatResponse.text();
@@ -2222,6 +2256,10 @@ ${filesStr}`;
 
       const chatData = await chatResponse.json();
       const answer = chatData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      chatOutputText = answer;
+      
+      // Log credit usage for chat mode
+      const chatCreditUsage = logCreditUsage('chat', chatModelSelection, chatInputText, chatOutputText, projectId);
       
       // Check if the response contains a JSON (plan or asset_picker)
       const trimmedAnswer = answer.trim();
@@ -2269,10 +2307,11 @@ ${filesStr}`;
             return new Response(JSON.stringify({ 
               ok: true, 
               assetPicker: parsed,
-              mode: 'asset_picker' 
+              mode: 'asset_picker',
+              creditUsage: chatCreditUsage
             }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
           } else {
-            return new Response(JSON.stringify({ ok: true, plan: extractedJson, mode: 'plan' }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            return new Response(JSON.stringify({ ok: true, plan: extractedJson, mode: 'plan', creditUsage: chatCreditUsage }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
           }
         } catch {
           // Invalid JSON, return as regular message
@@ -2280,8 +2319,8 @@ ${filesStr}`;
         }
       }
       
-      // Return as regular chat message
-      return new Response(JSON.stringify({ ok: true, message: answer }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      // Return as regular chat message with credit usage
+      return new Response(JSON.stringify({ ok: true, message: answer, creditUsage: chatCreditUsage }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // ========================================================================
@@ -2352,8 +2391,28 @@ The user attached a screenshot. I analyzed it and found these text anchors:
       // Build system prompt with project ID - replace placeholder with actual project ID
       const systemPromptWithProjectId = AGENT_SYSTEM_PROMPT.replace(/\{\{PROJECT_ID\}\}/g, projectId);
       
-      // Prepare the initial user message with context (including screenshot anchors)
-      let userMessageContent = screenshotAnchorsContext + prompt;
+      // ========================================================================
+      // CONTEXT OPTIMIZATION: Send only file NAMES, not full content
+      // Agent uses read_file tool to fetch what it needs (80% token reduction!)
+      // ========================================================================
+      const fileList = Object.keys(currentFiles || {}).join('\n');
+      const fileCount = Object.keys(currentFiles || {}).length;
+      
+      console.log(`[Agent Mode] OPTIMIZED: Sending ${fileCount} file NAMES only (not content)`);
+      console.log(`[Agent Mode] Files: ${fileList.substring(0, 200)}...`);
+      
+      // Prepare the initial user message with FILE LIST ONLY (not content)
+      let userMessageContent = `📁 PROJECT FILES (${fileCount} files):
+${fileList}
+
+⚠️ IMPORTANT: Use the read_file tool to view file contents before editing.
+Use list_files to see directory structure.
+Use search_replace for targeted edits (preferred) or write_file for new files.
+
+${screenshotAnchorsContext}
+
+USER REQUEST:
+${prompt}`;
       
       // Add debug context if there are errors
       if (agentDebugContext.errors.length > 0 || agentDebugContext.networkErrors.length > 0) {
@@ -2387,7 +2446,7 @@ The user attached a screenshot. I analyzed it and found these text anchors:
       
       // Smart model selection for agent mode
       const hasVisionInput = body.images && body.images.length > 0;
-      const fileCount = Object.keys(currentFiles || {}).length;
+      // fileCount already defined above in context optimization section
       const agentModelSelection = selectOptimalModel(prompt, hasVisionInput, 'agent', fileCount);
       
       console.log(`[Agent Mode] Model selected: ${agentModelSelection.model} (${agentModelSelection.tier}) - ${agentModelSelection.reason}`);
@@ -2599,6 +2658,7 @@ The user attached a screenshot. I analyzed it and found these text anchors:
     }
 
     // PLAN MODE: Propose changes without executing (Lovable-style)
+    // Now with SMART MODEL SELECTION and CREDIT LOGGING
     if (mode === 'plan') {
       if (!projectId) {
         return new Response(JSON.stringify({ ok: false, error: 'Missing projectId' }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -2621,11 +2681,15 @@ The user attached a screenshot. I analyzed it and found these text anchors:
         console.log(`[Plan Mode] Generating plan for: ${prompt.substring(0, 50)}...`);
         console.log(`[Plan Mode] Files count: ${Object.keys(existingFiles).length}`);
         
-        const plan = await callGeminiPlanMode(prompt, existingFiles);
+        const { plan, modelSelection: planModelSelection } = await callGeminiPlanMode(prompt, existingFiles);
+        
+        // Log credit usage for plan mode
+        const planInputText = Object.values(existingFiles).join('\n') + prompt;
+        const planCreditUsage = logCreditUsage('plan', planModelSelection, planInputText, plan, projectId);
         
         console.log(`[Plan Mode] Plan generated, length: ${plan.length}`);
         
-        return new Response(JSON.stringify({ ok: true, plan, mode: 'plan' }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ ok: true, plan, mode: 'plan', creditUsage: planCreditUsage }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       } catch (planError: any) {
         console.error(`[Plan Mode] Error: ${planError.message}`);
         return new Response(JSON.stringify({ ok: false, error: planError.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -2633,6 +2697,7 @@ The user attached a screenshot. I analyzed it and found these text anchors:
     }
 
     // EXECUTE MODE: Execute a previously approved plan (Lovable-style)
+    // Now with SMART MODEL SELECTION and CREDIT LOGGING
     if (mode === 'execute') {
       if (!projectId) {
         return new Response(JSON.stringify({ ok: false, error: 'Missing projectId' }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -2663,6 +2728,10 @@ The user attached a screenshot. I analyzed it and found these text anchors:
         const result = await callGeminiExecuteMode(planToExecute, existingFiles, userInstructions);
         const changedFiles = result.files || {};
         
+        // Log credit usage for execute mode
+        const execInputText = Object.values(existingFiles).join('\n') + planToExecute;
+        const execCreditUsage = logCreditUsage('execute', result.modelSelection, execInputText, JSON.stringify(changedFiles), projectId);
+        
         console.log(`[Execute Mode] Changed files returned: ${Object.keys(changedFiles).join(', ') || 'NONE'}`);
         console.log(`[Execute Mode] Summary: ${result.summary}`);
         
@@ -2684,7 +2753,7 @@ The user attached a screenshot. I analyzed it and found these text anchors:
         
         await upsertProjectFiles(supabase, projectId, finalFilesToUpsert);
         await updateJob(supabase, job.id, { status: 'succeeded', result_summary: result.summary || 'Plan executed.', error: null });
-        return new Response(JSON.stringify({ ok: true, jobId: job.id, status: 'succeeded' }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ ok: true, jobId: job.id, status: 'succeeded', creditUsage: execCreditUsage }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         
       } catch (innerErr) {
         const innerMsg = innerErr instanceof Error ? innerErr.message : String(innerErr);
