@@ -5,12 +5,145 @@ import { validateProjectCSS, formatCSSWarnings, getCSSInheritanceGuidelines, typ
 import { AGENT_TOOLS, AGENT_SYSTEM_PROMPT, executeToolCall, getGeminiToolsConfig, type AgentDebugContext, type AgentResult } from "./agentTools.ts";
 
 // ============================================================================
-// WAKTI PROJECTS-GENERATE V2 - FULL REWRITE ENGINE
+// WAKTI PROJECTS-GENERATE V2 - OPTIMIZED ENGINE
 // ============================================================================
-// NO PATCHES. NO DIFFS. FULL FILE REWRITES ONLY.
-// Model: Gemini 2.5 Pro for both planning and execution
-// Modes: plan (propose changes) | execute (write code) | create | chat
+// SMART MODEL SELECTION: Flash-Lite for simple, Flash for medium, Pro for complex
+// REDUCED ITERATIONS: 4 instead of 8 for agent mode
+// CREDIT TRACKING: Log model used, tokens, and estimated cost
+// Modes: plan (propose changes) | execute (write code) | create | chat | agent
 // ============================================================================
+
+// ============================================================================
+// SMART MODEL SELECTION - Reduce AI costs by 60-80%
+// ============================================================================
+interface ModelSelection {
+  model: string;
+  reason: string;
+  tier: 'lite' | 'flash' | 'pro';
+}
+
+// Pricing per 1M tokens (input/output) - for cost estimation
+const MODEL_PRICING: Record<string, { input: number; output: number }> = {
+  'gemini-2.5-flash-lite': { input: 0.075, output: 0.30 },
+  'gemini-2.5-flash': { input: 0.15, output: 0.60 },
+  'gemini-2.0-flash': { input: 0.10, output: 0.40 },
+  'gemini-2.5-pro': { input: 1.25, output: 5.00 },
+};
+
+function selectOptimalModel(
+  prompt: string, 
+  hasImages: boolean, 
+  mode: string,
+  fileCount: number = 0
+): ModelSelection {
+  // PRO tier: Creation, vision, and complex operations ALWAYS use Pro
+  if (mode === 'create') {
+    return { model: 'gemini-2.5-pro', reason: 'Project creation requires Pro', tier: 'pro' };
+  }
+  
+  if (hasImages) {
+    return { model: 'gemini-2.5-pro', reason: 'Vision/screenshot analysis requires Pro', tier: 'pro' };
+  }
+  
+  // Analyze prompt complexity
+  const promptLower = prompt.toLowerCase();
+  
+  // SIMPLE patterns (Flash-Lite) - ~10x cheaper than Pro
+  const simplePatterns = [
+    /\b(change|update|set|fix)\s+(the\s+)?(color|colour|text|font|size|background|bg)/i,
+    /\b(typo|spelling|text)\s*(fix|error|mistake|change)/i,
+    /\b(remove|delete|hide)\s+(the\s+)?(button|text|element|section)/i,
+    /\b(show|display|unhide)\s+(the\s+)?(button|text|element|section)/i,
+    /\b(change|update)\s+(the\s+)?(title|heading|label|placeholder)/i,
+    /\bmake\s+(it\s+)?(bigger|smaller|larger|wider|taller|shorter)/i,
+    /\b(add|change)\s+(the\s+)?(padding|margin|spacing|border)/i,
+    /\brename\s/i,
+    /\bchange\s.*\s(to|into)\s/i,
+  ];
+  
+  // COMPLEX patterns (Pro) - Full capabilities needed
+  const complexPatterns = [
+    /\b(refactor|restructure|redesign|rebuild|rewrite|architect)/i,
+    /\b(create|build|implement|add)\s+(a\s+)?(new\s+)?(page|feature|system|module|component)/i,
+    /\b(integrate|connect|setup|configure)\s+(the\s+)?(api|backend|database|auth)/i,
+    /\b(multi-?step|workflow|wizard|form\s+validation)/i,
+    /\b(complex|advanced|sophisticated)/i,
+    /\b(debug|fix\s+crash|runtime\s+error|broken)/i,
+  ];
+  
+  // Check for simple edits first
+  for (const pattern of simplePatterns) {
+    if (pattern.test(promptLower)) {
+      // Simple edit with small project = Flash-Lite
+      if (fileCount < 10) {
+        return { model: 'gemini-2.5-flash-lite', reason: 'Simple edit detected', tier: 'lite' };
+      }
+      // Simple edit with larger project = Flash (needs more context handling)
+      return { model: 'gemini-2.5-flash', reason: 'Simple edit in larger project', tier: 'flash' };
+    }
+  }
+  
+  // Check for complex operations
+  for (const pattern of complexPatterns) {
+    if (pattern.test(promptLower)) {
+      return { model: 'gemini-2.5-pro', reason: 'Complex operation detected', tier: 'pro' };
+    }
+  }
+  
+  // Default: Flash for medium complexity (5x cheaper than Pro)
+  return { model: 'gemini-2.5-flash', reason: 'Standard edit', tier: 'flash' };
+}
+
+// ============================================================================
+// CREDIT USAGE TRACKING
+// ============================================================================
+interface CreditUsage {
+  model: string;
+  tier: 'lite' | 'flash' | 'pro';
+  inputTokensEstimate: number;
+  outputTokensEstimate: number;
+  estimatedCostUSD: number;
+  reason: string;
+}
+
+function estimateTokens(text: string): number {
+  // Rough estimate: ~4 characters per token for code
+  return Math.ceil(text.length / 4);
+}
+
+function calculateCost(model: string, inputTokens: number, outputTokens: number): number {
+  const pricing = MODEL_PRICING[model] || MODEL_PRICING['gemini-2.5-pro'];
+  return ((inputTokens / 1000000) * pricing.input) + ((outputTokens / 1000000) * pricing.output);
+}
+
+function logCreditUsage(
+  mode: string,
+  modelSelection: ModelSelection,
+  inputText: string,
+  outputText: string,
+  projectId: string
+): CreditUsage {
+  const inputTokens = estimateTokens(inputText);
+  const outputTokens = estimateTokens(outputText);
+  const cost = calculateCost(modelSelection.model, inputTokens, outputTokens);
+  
+  const usage: CreditUsage = {
+    model: modelSelection.model,
+    tier: modelSelection.tier,
+    inputTokensEstimate: inputTokens,
+    outputTokensEstimate: outputTokens,
+    estimatedCostUSD: cost,
+    reason: modelSelection.reason
+  };
+  
+  console.log(`[💰 CREDIT USAGE] Mode: ${mode} | Model: ${usage.model} (${usage.tier})`);
+  console.log(`[💰 CREDIT USAGE] Tokens: ~${inputTokens} in / ~${outputTokens} out`);
+  console.log(`[💰 CREDIT USAGE] Estimated cost: $${cost.toFixed(6)}`);
+  console.log(`[💰 CREDIT USAGE] Reason: ${usage.reason}`);
+  console.log(`[💰 CREDIT USAGE] Project: ${projectId}`);
+  
+  return usage;
+}
 
 declare const Deno: {
   env: {
@@ -2247,19 +2380,31 @@ The user attached a screenshot. I analyzed it and found these text anchors:
         { role: "user", parts: [{ text: userMessageContent }] }
       ];
       
-      const maxIterations = 8;
+      // OPTIMIZATION: Reduced from 8 to 4 iterations (50% less AI calls)
+      const maxIterations = 4;
       const toolCallsLog: Array<{ tool: string; args: any; result: any }> = [];
       let taskCompleteResult: { summary: string; filesChanged: string[] } | null = null;
+      
+      // Smart model selection for agent mode
+      const hasVisionInput = body.images && body.images.length > 0;
+      const fileCount = Object.keys(currentFiles || {}).length;
+      const agentModelSelection = selectOptimalModel(prompt, hasVisionInput, 'agent', fileCount);
+      
+      console.log(`[Agent Mode] Model selected: ${agentModelSelection.model} (${agentModelSelection.tier}) - ${agentModelSelection.reason}`);
+      
+      // Track total input for cost estimation
+      let totalInputText = systemPromptWithProjectId + userMessageContent;
+      let totalOutputText = '';
       
       for (let iteration = 0; iteration < maxIterations; iteration++) {
         console.log(`[Agent Mode] ========== ITERATION ${iteration + 1}/${maxIterations} ==========`);
         console.log(`[Agent Mode] User prompt: ${prompt.substring(0, 500)}...`);
         
-        // Call Gemini with tools
-        // Using gemini-2.5-pro for EXCELLENT code quality in agent mode
+        // Call Gemini with smart model selection
+        // Pro for complex/vision, Flash for standard, Flash-Lite for simple
         const geminiResponse = await withTimeout(
           fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent`,
+            `https://generativelanguage.googleapis.com/v1beta/models/${agentModelSelection.model}:generateContent`,
             {
               method: "POST",
               headers: {
@@ -2296,6 +2441,10 @@ The user attached a screenshot. I analyzed it and found these text anchors:
           console.error(`[Agent Mode] No content in response`);
           break;
         }
+        
+        // Track output for cost estimation
+        const textParts = content.parts?.filter((p: any) => p.text) || [];
+        textParts.forEach((p: any) => { totalOutputText += p.text || ''; });
         
         // Add model response to messages
         messages.push({ role: "model", parts: content.parts });
@@ -2422,6 +2571,15 @@ The user attached a screenshot. I analyzed it and found these text anchors:
         }
       }
       
+      // Log credit usage for agent mode
+      const agentCreditUsage = logCreditUsage(
+        'agent',
+        agentModelSelection,
+        totalInputText,
+        totalOutputText,
+        projectId
+      );
+      
       const result: AgentResult = {
         success: true,
         summary: taskCompleteResult?.summary || `Agent completed after ${toolCallsLog.length} tool calls`,
@@ -2435,7 +2593,8 @@ The user attached a screenshot. I analyzed it and found these text anchors:
       return new Response(JSON.stringify({ 
         ok: true, 
         mode: 'agent',
-        result
+        result,
+        creditUsage: agentCreditUsage
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
