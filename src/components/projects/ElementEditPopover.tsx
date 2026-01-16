@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { 
-  X, Type, Palette, Wand2, Check, ChevronRight, ChevronDown, ChevronUp,
+  X, Type, Wand2, Check, ChevronRight, ChevronDown, ChevronUp,
   Image as ImageIcon, Link2, Square, Circle, ArrowRight, ArrowDown,
-  AlignLeft, AlignCenter, AlignRight, AlignStartVertical, AlignCenterVertical, 
-  AlignEndVertical, Maximize2, Move, LayoutGrid
+  AlignStartVertical, AlignCenterVertical, 
+  AlignEndVertical, Maximize2, Move, LayoutGrid, ChevronUpSquare
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +21,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { ColorPickerPopover } from '@/pages/ProjectDetail/components/VisualEditMode/ColorPickerPopover';
 
 interface SelectedElementInfo {
   tagName: string;
@@ -41,6 +42,7 @@ interface ElementEditPopoverProps {
   onDirectEdit: (changes: Record<string, string | undefined>) => void;
   onAIEdit: (prompt: string) => void;
   onImageChange?: () => void;
+  onSelectParent?: () => void;
   isRTL?: boolean;
 }
 
@@ -268,7 +270,7 @@ const SectionHeader = ({
   </button>
 );
 
-// Color picker with inherit option
+// Enhanced Color picker row using ColorPickerPopover with inherit option
 const ColorPickerRow = ({
   label,
   value,
@@ -295,26 +297,12 @@ const ColorPickerRow = ({
         <div className="w-4 h-4 rounded-full bg-gradient-to-br from-zinc-600 to-zinc-800 border border-zinc-600" />
         {isRTL ? 'وراثة' : 'Inherit'}
       </button>
-      <div className="flex items-center gap-1 flex-wrap">
-        {colorPresets.slice(1, 6).map((preset) => (
-          <button
-            key={preset.color}
-            onClick={() => onChange(preset.color)}
-            className={cn(
-              "w-6 h-6 rounded-lg border-2 transition-all hover:scale-110",
-              value === preset.color ? "border-indigo-500 ring-2 ring-indigo-500/30" : "border-zinc-600"
-            )}
-            style={{ backgroundColor: preset.color }}
-            title={preset.label}
-          />
-        ))}
-        <input
-          type="color"
-          value={value === 'inherit' || value === 'transparent' ? '#000000' : value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-6 h-6 rounded-lg cursor-pointer border-0 bg-transparent"
-        />
-      </div>
+      <ColorPickerPopover
+        color={value === 'inherit' || value === 'transparent' ? '#000000' : value}
+        onChange={onChange}
+        label={label}
+        isRTL={isRTL}
+      />
     </div>
   </div>
 );
@@ -325,6 +313,7 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
   onDirectEdit,
   onAIEdit,
   onImageChange,
+  onSelectParent,
   isRTL = false
 }) => {
   // Local state for edits
@@ -444,8 +433,12 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
                 <h3 className="text-sm font-bold text-white">
                   {isRTL ? 'تحرير مرئي' : 'Visual Edit'}
                 </h3>
-                <button className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
-                  ↑ {isRTL ? 'الأب' : 'Select parent'}
+                <button 
+                  onClick={onSelectParent}
+                  className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-500/10 hover:bg-indigo-500/20 transition-colors"
+                >
+                  <ChevronUpSquare className="h-3 w-3" />
+                  {isRTL ? 'الأب' : 'Parent'}
                 </button>
               </div>
               <p className="text-[11px] text-zinc-400 font-mono">

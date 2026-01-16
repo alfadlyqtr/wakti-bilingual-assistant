@@ -9,6 +9,7 @@ import {
 import { SandpackErrorListener } from "./SandpackErrorListener";
 import { atomDark } from "@codesandbox/sandpack-themes";
 import { Code2, Eye, FileCode, FileJson, FileType, CheckCircle2, MousePointer2, Monitor, Tablet, Smartphone, ExternalLink, RefreshCw, Download, Upload, Loader2, Settings, Share2, Save } from "lucide-react";
+import { SandpackSkeleton } from '@/pages/ProjectDetail/components/PreviewPanel/SandpackSkeleton';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -232,6 +233,7 @@ const InspectablePreview = ({
 // --- 4. MAIN STUDIO COMPONENT ---
 interface SandpackStudioProps {
   files: Record<string, string>;
+  projectId?: string; // Used for stable key to prevent full rebuilds
   onRuntimeError?: (error: string) => void;
   elementSelectMode?: boolean;
   onElementSelect?: (elementRef: string, elementInfo?: SelectedElementInfo) => void;
@@ -244,10 +246,12 @@ interface SandpackStudioProps {
   onDownload?: () => void;
   onPublish?: () => void;
   isPublishing?: boolean;
+  isRTL?: boolean;
 }
 
 export default function SandpackStudio({ 
   files, 
+  projectId,
   onRuntimeError, 
   elementSelectMode, 
   onElementSelect, 
@@ -259,7 +263,8 @@ export default function SandpackStudio({
   onRefresh,
   onDownload,
   onPublish,
-  isPublishing = false
+  isPublishing = false,
+  isRTL = false
 }: SandpackStudioProps) {
   const [viewMode, setViewMode] = useState<'preview' | 'code'>('preview');
   const [selectedElement, setSelectedElement] = useState<SelectedElementInfo | null>(null);
@@ -708,49 +713,13 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                   }
                 `}} />
 
-                {/* LOADING OVERLAY - Covers Sandpack while AI is generating */}
+                {/* LOADING OVERLAY - Uses SandpackSkeleton component */}
                 {(isLoading || !hasValidFiles) && (
-                  <div className="absolute inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center">
-                    {isLoading ? (
-                      <>
-                        <div className="relative">
-                          {/* Animated rings */}
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="w-24 h-24 rounded-full border-2 border-indigo-500/30 animate-ping" />
-                          </div>
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="w-16 h-16 rounded-full border-2 border-purple-500/50 animate-pulse" />
-                          </div>
-                          {/* Center icon */}
-                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-                            <Code2 className="w-6 h-6 text-white animate-pulse" />
-                          </div>
-                        </div>
-                        <p className="mt-6 text-sm text-gray-400 animate-pulse">Building your project...</p>
-                        <p className="mt-2 text-xs text-gray-600">This may take up to 3 minutes</p>
-                      </>
-                    ) : !hasValidFiles && Object.keys(files).length > 0 ? (
-                      <>
-                        {/* Error state - invalid files received */}
-                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-red-600 to-orange-600 flex items-center justify-center shadow-lg shadow-red-500/30 mb-4">
-                          <Code2 className="w-8 h-8 text-white" />
-                        </div>
-                        <p className="text-sm text-red-400 font-medium">Generation Error</p>
-                        <p className="mt-2 text-xs text-gray-500 text-center max-w-xs px-4">
-                          The AI returned invalid code. Please try again with a different prompt.
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <div className="relative">
-                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-                            <Code2 className="w-6 h-6 text-white animate-pulse" />
-                          </div>
-                        </div>
-                        <p className="mt-6 text-sm text-gray-400 animate-pulse">Waiting for code...</p>
-                      </>
-                    )}
-                  </div>
+                  <SandpackSkeleton
+                    isLoading={isLoading}
+                    isError={!hasValidFiles && Object.keys(files).length > 0}
+                    isRTL={isRTL}
+                  />
                 )}
 
                 <InspectablePreview 
