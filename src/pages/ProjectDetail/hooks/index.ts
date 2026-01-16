@@ -6,3 +6,6 @@ export { useVisualEditMode } from './useVisualEditMode';
 export { useUIState } from './useUIState';
 export { useGenerationState } from './useGenerationState';
 export { useWizards } from './useWizards';
+export { useEditHistory } from './useEditHistory';
+export { useAgentMode } from './useAgentMode';
+export type { AgentTask, AgentPlan, ConversationContext } from './useAgentMode';
