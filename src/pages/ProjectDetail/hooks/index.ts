@@ -8,4 +8,6 @@ export { useGenerationState } from './useGenerationState';
 export { useWizards } from './useWizards';
 export { useEditHistory } from './useEditHistory';
 export { useAgentMode } from './useAgentMode';
+export { useConversationMemory } from './useConversationMemory';
 export type { AgentTask, AgentPlan, ConversationContext } from './useAgentMode';
+export type { ContextMessage, ProjectContext, UserContext, ConversationMemory } from './useConversationMemory';
