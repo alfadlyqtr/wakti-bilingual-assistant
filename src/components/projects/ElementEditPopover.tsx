@@ -4,7 +4,7 @@ import {
   Image as ImageIcon, Link2, Square, Circle, ArrowRight, ArrowDown,
   AlignStartVertical, AlignCenterVertical, 
   AlignEndVertical, Maximize2, Move, LayoutGrid, ChevronUpSquare,
-  Edit3, MousePointer2
+  Edit3, MousePointer2, Undo2, Redo2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -57,6 +57,11 @@ interface ElementEditPopoverProps {
   onInlineTextSave?: (newText: string) => void;
   isRTL?: boolean;
   showResizeHandles?: boolean;
+  // Undo/Redo support
+  canUndo?: boolean;
+  canRedo?: boolean;
+  onUndo?: () => void;
+  onRedo?: () => void;
 }
 
 // Helper to check if element contains editable text
@@ -330,7 +335,11 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
   onResize,
   onInlineTextSave,
   isRTL = false,
-  showResizeHandles = false
+  showResizeHandles = false,
+  canUndo = false,
+  canRedo = false,
+  onUndo,
+  onRedo
 }) => {
   // Inline editing state
   const [isInlineEditing, setIsInlineEditing] = useState(false);
@@ -538,12 +547,41 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-zinc-500 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          {/* Undo/Redo buttons */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onUndo}
+              disabled={!canUndo}
+              className={cn(
+                "p-2 rounded-lg transition-colors",
+                canUndo 
+                  ? "text-amber-400 hover:text-amber-300 hover:bg-amber-500/10" 
+                  : "text-zinc-600 cursor-not-allowed"
+              )}
+              title={isRTL ? 'تراجع (Ctrl+Z)' : 'Undo (Ctrl+Z)'}
+            >
+              <Undo2 className="h-4 w-4" />
+            </button>
+            <button
+              onClick={onRedo}
+              disabled={!canRedo}
+              className={cn(
+                "p-2 rounded-lg transition-colors",
+                canRedo 
+                  ? "text-amber-400 hover:text-amber-300 hover:bg-amber-500/10" 
+                  : "text-zinc-600 cursor-not-allowed"
+              )}
+              title={isRTL ? 'إعادة (Ctrl+Shift+Z)' : 'Redo (Ctrl+Shift+Z)'}
+            >
+              <Redo2 className="h-4 w-4" />
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 text-zinc-500 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         {/* Tab Switcher */}
