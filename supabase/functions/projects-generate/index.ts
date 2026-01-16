@@ -148,8 +148,49 @@ function logCreditUsage(
 declare const Deno: {
   env: {
     get(key: string): string | undefined;
+    toObject(): Record<string, string>;
   };
 };
+
+// ============================================================================
+// ROBUST API KEY LOADER - Handles whitespace/encoding edge cases
+// ============================================================================
+function getGeminiApiKey(): string {
+  // Try direct lookup first (most common case)
+  let key = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
+  
+  if (key && key.trim()) {
+    return key.trim();
+  }
+  
+  // Fallback: iterate all keys with trimming (handles whitespace bugs)
+  try {
+    const allEnvKeys = Object.keys(Deno.env.toObject());
+    const geminiKey = allEnvKeys.find(k => k.trim() === "GEMINI_API_KEY");
+    const googleKey = allEnvKeys.find(k => k.trim() === "GOOGLE_GENAI_API_KEY");
+    
+    if (geminiKey) {
+      key = Deno.env.get(geminiKey);
+      if (key && key.trim()) return key.trim();
+    }
+    if (googleKey) {
+      key = Deno.env.get(googleKey);
+      if (key && key.trim()) return key.trim();
+    }
+  } catch (e) {
+    console.error("[getGeminiApiKey] Fallback lookup failed:", e);
+  }
+  
+  // Log available keys (names only, not values) for debugging
+  try {
+    const envKeys = Object.keys(Deno.env.toObject());
+    console.error(`[getGeminiApiKey] Available env keys: ${envKeys.join(', ')}`);
+  } catch (e) {
+    console.error("[getGeminiApiKey] Could not list env keys");
+  }
+  
+  throw new Error("GEMINI_API_KEY is not defined");
+}
 
 const allowedOrigins = [
   "https://wakti.qa",
@@ -333,8 +374,7 @@ async function callGeminiWithModel(
   userPrompt: string,
   jsonMode: boolean = true
 ): Promise<string> {
-  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
-  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
+  const GEMINI_API_KEY = getGeminiApiKey();
   
   console.log(`[Gemini] Calling model: ${model}`);
 
@@ -393,8 +433,7 @@ async function callGemini25Pro(
 async function analyzeScreenshotForAnchors(
   images: string[]
 ): Promise<{ anchors: string[]; description: string }> {
-  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
-  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
+  const GEMINI_API_KEY = getGeminiApiKey();
 
   const model = "gemini-2.5-pro";
   
@@ -499,8 +538,7 @@ async function callGemini25ProWithImages(
   images?: string[],
   jsonMode: boolean = true
 ): Promise<string> {
-  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
-  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
+  const GEMINI_API_KEY = getGeminiApiKey();
 
   // Use Gemini 2.5 Pro (vision-capable)
   const model = "gemini-2.5-pro";
@@ -2139,8 +2177,7 @@ ${fileList}
       const chatModelSelection = selectOptimalModel(prompt, hasImages, 'chat', fileCount);
       console.log(`[Chat Mode] Model selected: ${chatModelSelection.model} (${chatModelSelection.tier}) - ${chatModelSelection.reason}`);
       
-      const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
-      if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
+      const GEMINI_API_KEY = getGeminiApiKey();
       
       console.log(`[Chat Mode] Has images: ${hasImages}, count: ${hasImages ? images.length : 0}`);
       
@@ -2425,8 +2462,7 @@ ${filesStr}`;
       
       console.log(`[Agent Mode] Starting agent loop for: ${prompt.substring(0, 100)}...`);
       
-      const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
-      if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
+      const GEMINI_API_KEY = getGeminiApiKey();
       
       // ====================================================================
       // STEP 1: SCREENSHOT ANALYSIS - Extract visible text anchors FIRST
@@ -2850,6 +2886,9 @@ ${prompt}`;
       await assertProjectOwnership(supabase, projectId, userId);
       
       const job = await createJob(supabase, { projectId, userId, mode: 'edit', prompt: planToExecute });
+      
+      // Get API key FIRST before entering try block
+      const GEMINI_API_KEY = getGeminiApiKey();
       
       try {
         // Get current file LIST only (not content) - ULTRA OPTIMIZED
