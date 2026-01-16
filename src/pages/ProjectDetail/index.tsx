@@ -8,14 +8,14 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 
-// Import modular hooks
+// Import modular hooks directly
 import { useProjectState } from './hooks/useProjectState';
 import { useChatState } from './hooks/useChatState';
 import { useAgentMode } from './hooks/useAgentMode';
 import { useVisualEditMode } from './hooks/useVisualEditMode';
 import { useSandpackSync } from './hooks/useSandpackSync';
 
-// Import regular components
+// Import regular components directly
 import { ChatSkeleton } from './components/ChatSkeleton';
 import { PreviewSkeleton } from './components/PreviewSkeleton';
 import { SuspenseFallback } from './components/SuspenseFallback';
