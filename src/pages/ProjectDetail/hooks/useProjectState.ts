@@ -36,12 +36,12 @@ export function useProjectState({ projectId, userId, isRTL }: UseProjectStatePro
     if (!projectId) return;
     
     try {
-      // Fetch project metadata
+      // Fetch project metadata - cast to any to avoid Supabase type inference issues
       const { data: projectData, error: projectError } = await (supabase
         .from('projects' as any)
         .select('*')
         .eq('id', projectId)
-        .single() as any);
+        .single()) as any;
       
       if (projectError) throw projectError;
       if (!projectData) {
@@ -56,7 +56,7 @@ export function useProjectState({ projectId, userId, isRTL }: UseProjectStatePro
       const { data: filesData, error: filesError } = await (supabase
         .from('project_files' as any)
         .select('*')
-        .eq('project_id', projectId) as any);
+        .eq('project_id', projectId)) as any;
       
       if (filesError) {
         console.error('Error fetching project files:', filesError);
@@ -74,7 +74,7 @@ export function useProjectState({ projectId, userId, isRTL }: UseProjectStatePro
       
       // Legacy support: projects used to store JSON blob in path='index.html'
       if (Object.keys(mapFromRows).length === 0) {
-        const legacyIndexFile = filesList.find((f: ProjectFile) => f.path === 'index.html');
+        const legacyIndexFile = filesList.find((f) => f.path === 'index.html');
         if (legacyIndexFile?.content) {
           try {
             const parsed = JSON.parse(legacyIndexFile.content);
@@ -122,9 +122,9 @@ export function useProjectState({ projectId, userId, isRTL }: UseProjectStatePro
         content,
       }));
       
-      const { error } = await (supabase
-        .from('project_files' as any)
-        .upsert(rows, { onConflict: 'project_id,path' }) as any);
+      const { error } = await supabase
+        .from('project_files')
+        .upsert(rows as any, { onConflict: 'project_id,path' });
       
       if (error) throw error;
       
