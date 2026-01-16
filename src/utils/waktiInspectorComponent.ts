@@ -92,6 +92,57 @@ function WaktiInspector() {
       if (type === 'WAKTI_INSPECTOR_PING') {
         window.parent.postMessage({ type: 'WAKTI_INSPECTOR_PONG' }, '*');
       }
+      
+      // NEW: Handle parent selection request
+      if (type === 'WAKTI_SELECT_PARENT') {
+        if (currentTargetRef.current?.parentElement) {
+          const parent = currentTargetRef.current.parentElement;
+          if (parent !== document.body && parent !== document.documentElement && parent.id !== 'root') {
+            // Update overlay to show parent
+            const rect = parent.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0 && overlayRef.current) {
+              currentTargetRef.current = parent;
+              const { overlay, label } = overlayRef.current;
+              Object.assign(overlay.style, {
+                display: 'block',
+                top: rect.top + 'px',
+                left: rect.left + 'px',
+                width: rect.width + 'px',
+                height: rect.height + 'px'
+              });
+              
+              // Update label
+              let labelText = parent.tagName.toLowerCase();
+              if (parent.className && typeof parent.className === 'string') {
+                const cleanClasses = parent.className.split(' ').filter(c => c && !c.includes('wakti'));
+                if (cleanClasses[0]) labelText += '.' + cleanClasses[0];
+              }
+              if (parent.id) labelText = '#' + parent.id;
+              label.textContent = labelText;
+              
+              // Gather and send parent info
+              const computedStyle = window.getComputedStyle(parent);
+              const elementInfo = {
+                tagName: parent.tagName.toLowerCase(),
+                className: parent.className || '',
+                id: parent.id || '',
+                innerText: (parent.innerText || '').trim().substring(0, 150),
+                openingTag: parent.outerHTML.split('>')[0] + '>',
+                computedStyle: {
+                  color: computedStyle.color,
+                  backgroundColor: computedStyle.backgroundColor,
+                  fontSize: computedStyle.fontSize
+                },
+                rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height }
+              };
+              window.parent.postMessage({ 
+                type: 'WAKTI_ELEMENT_SELECTED', 
+                payload: elementInfo 
+              }, '*');
+            }
+          }
+        }
+      }
     };
     
     window.addEventListener('message', handleMessage);
