@@ -1184,7 +1184,7 @@ export const MailWarning = createLazyIconComponent('MailWarning');
 export const MailQuestion = createLazyIconComponent('MailQuestion');
 export const Mails = createLazyIconComponent('Mails');
 export const MessagesSquare = createLazyIconComponent('MessagesSquare');
-export const MessageSquare = createLazyIconComponent('MessageSquare');
+// NOTE: MessageSquare is already exported earlier in this shim.
 export const MessageSquarePlus = createLazyIconComponent('MessageSquarePlus');
 export const MessageSquareDashed = createLazyIconComponent('MessageSquareDashed');
 export const MessageSquareWarning = createLazyIconComponent('MessageSquareWarning');
@@ -1198,7 +1198,7 @@ export const MessageSquareMore = createLazyIconComponent('MessageSquareMore');
 export const MessageSquareReply = createLazyIconComponent('MessageSquareReply');
 export const MessageSquareShare = createLazyIconComponent('MessageSquareShare');
 export const MessageSquareOff = createLazyIconComponent('MessageSquareOff');
-export const MessageCircle = createLazyIconComponent('MessageCircle');
+// NOTE: MessageCircle is already exported earlier in this shim.
 export const MessageCirclePlus = createLazyIconComponent('MessageCirclePlus');
 export const MessageCircleWarning = createLazyIconComponent('MessageCircleWarning');
 export const MessageCircleX = createLazyIconComponent('MessageCircleX');
