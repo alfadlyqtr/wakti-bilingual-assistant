@@ -3970,6 +3970,7 @@ ${fixInstructions}
         }
 
         // Using AGENT mode for targeted, intelligent edits (not full file rewrites)
+        // FIX: Send currentFiles so agent can see the file list (not content, just paths)
         const startRes = await supabase.functions.invoke('projects-generate', {
           body: {
             action: 'start',
@@ -3981,6 +3982,7 @@ ${fixInstructions}
             uploadedAssets: uploadedAssets.length > 0 ? uploadedAssets : undefined,
             backendContext: backendContext || undefined,
             debugContext: debugContext?.getDebugContextForAgent?.(),
+            currentFiles: generatedFiles, // CRITICAL: Send files so agent knows what exists
           },
         });
 
@@ -4030,11 +4032,16 @@ ${fixInstructions}
           const summaryText = agentResult.result.summary || (isRTL ? 'تم تطبيق التعديلات!' : 'Changes applied!');
           
           // Store as structured JSON so the UI can parse it properly
+          // FIX: Do NOT force /App.js when no files changed - be honest about changes
+          const actualChangedFiles = changedFilesList.length > 0 ? changedFilesList : [];
+          const hasActualChanges = actualChangedFiles.length > 0;
+          
           assistantMsg = JSON.stringify({
             type: 'execution_result',
-            title: isRTL ? 'تم التطبيق' : 'Applied',
-            summary: summaryText,
-            files: changedFilesList.length > 0 ? changedFilesList : ['/App.js']
+            title: hasActualChanges ? (isRTL ? 'تم التطبيق' : 'Applied') : (isRTL ? 'لم يتم التغيير' : 'No changes made'),
+            summary: hasActualChanges ? summaryText : (isRTL ? 'لم يتم إجراء تغييرات على الملفات' : 'No file changes were made. The AI may have misunderstood the request.'),
+            files: actualChangedFiles,
+            noChanges: !hasActualChanges
           });
           
           // Update tool usage count for Lovable-style indicator
@@ -4079,11 +4086,16 @@ ${fixInstructions}
           
           const summaryText = job.result_summary || (isRTL ? 'تم تطبيق التعديلات!' : 'Changes applied!');
           
+          // FIX: Same as above - be honest about changes
+          const actualChangedFilesJob = changedFilesList.length > 0 ? changedFilesList : [];
+          const hasActualChangesJob = actualChangedFilesJob.length > 0;
+          
           assistantMsg = JSON.stringify({
             type: 'execution_result',
-            title: isRTL ? 'تم التطبيق' : 'Applied',
-            summary: summaryText,
-            files: changedFilesList.length > 0 ? changedFilesList : ['/App.js']
+            title: hasActualChangesJob ? (isRTL ? 'تم التطبيق' : 'Applied') : (isRTL ? 'لم يتم التغيير' : 'No changes made'),
+            summary: hasActualChangesJob ? summaryText : (isRTL ? 'لم يتم إجراء تغييرات' : 'No changes were applied'),
+            files: actualChangedFilesJob,
+            noChanges: !hasActualChangesJob
           });
           
           // Update tool usage count for Lovable-style indicator (polling path)
