@@ -607,23 +607,59 @@ async function callGeminiPlanMode(
 ): Promise<{ plan: string; modelSelection: ModelSelection }> {
   const fileCount = Object.keys(currentFiles || {}).length;
   
-  // 🚀 CONTEXT OPTIMIZATION: Send only file names + key files (reduces tokens by 75%+)
+  // 🚀 CONTEXT OPTIMIZATION V2: Send file structure + SCAN ALL FILES to find relevant elements
   const fileNames = Object.keys(currentFiles || {});
-  const keyFiles = ['App.jsx', 'App.js', 'App.tsx', 'index.jsx', 'index.js', 'index.tsx', 'main.jsx', 'main.js', 'main.tsx'];
-  const targetFiles = fileNames.filter(f => keyFiles.some(k => f.endsWith(k)));
+  const promptLower = userPrompt.toLowerCase();
   
-  // Include only essential entry files + file list for context
-  const essentialContext = targetFiles.length > 0
-    ? targetFiles.map(path => `=== FILE: ${path} ===\n${currentFiles[path] || ''}`).join("\n\n")
-    : '';
+  // Extract keywords from user prompt (names, specific text, element types)
+  const promptWords = promptLower.split(/\s+/).filter(w => w.length > 3);
   
-  const fileListStr = fileNames.join('\n');
-  const fileContext = `📁 Project has ${fileCount} files:
-${fileListStr}
+  // Scan ALL files to find which ones contain relevant keywords/elements
+  const fileRelevanceScores: Record<string, number> = {};
+  for (const filePath of fileNames) {
+    const content = currentFiles[filePath] || '';
+    const contentLower = content.toLowerCase();
+    let score = 0;
+    
+    // Check for prompt keywords in file
+    for (const word of promptWords) {
+      if (contentLower.includes(word)) score += 2;
+    }
+    
+    // Bonus for visual/UI files
+    if (filePath.includes('Home') || filePath.includes('Hero')) score += 3;
+    if (filePath.includes('Header') || filePath.includes('Nav')) score += 2;
+    if (filePath.includes('page') || filePath.includes('Page')) score += 2;
+    
+    // Key entry files always get included
+    const keyFiles = ['App.jsx', 'App.js', 'App.tsx', 'index.jsx', 'index.js', 'index.tsx'];
+    if (keyFiles.some(k => filePath.endsWith(k))) score += 5;
+    
+    fileRelevanceScores[filePath] = score;
+  }
+  
+  // Sort by relevance and take top 5 most relevant files
+  const sortedFiles = Object.entries(fileRelevanceScores)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([path]) => path);
+  
+  // Include content of relevant files only
+  const relevantContext = sortedFiles
+    .map(path => `=== FILE: ${path} ===\n${currentFiles[path] || ''}`)
+    .join("\n\n");
+  
+  const otherFiles = fileNames.filter(f => !sortedFiles.includes(f)).join('\n');
+  
+  const fileContext = `📁 Project has ${fileCount} files.
 
-${essentialContext ? `📄 Key Entry Files (for routing/structure):\n${essentialContext}` : ''}
+📄 Most Relevant Files (full content for analysis):
+${relevantContext}
 
-⚠️ Note: For detailed file content during plan execution, the execute step will receive full file content.`;
+${otherFiles ? `📁 Other files (names only):
+${otherFiles}` : ''}
+
+⚠️ CRITICAL: Scan the relevant files above to find the EXACT element/text mentioned in the request. Do NOT guess - verify the element exists.`;
 
   // Smart model selection for plan mode
   const modelSelection = selectOptimalModel(userPrompt, false, 'plan', fileCount);
@@ -688,7 +724,7 @@ Return JSON only.`;
 }
 
 // EXECUTE MODE: AI writes full file rewrites based on a plan
-// Now with SMART MODEL SELECTION + CONTEXT OPTIMIZATION (plan-relevant files only)
+// Now with SMART MODEL SELECTION + ULTRA-OPTIMIZED CONTEXT (only plan-specified files)
 async function callGeminiExecuteMode(
   planToExecute: string,
   currentFiles: Record<string, string>,
@@ -696,36 +732,38 @@ async function callGeminiExecuteMode(
 ): Promise<{ files: Record<string, string>; summary: string; modelSelection: ModelSelection }> {
   const fileCount = Object.keys(currentFiles || {}).length;
   
-  // 🚀 CONTEXT OPTIMIZATION: Extract files mentioned in the plan + include those only
+  // 🚀 CONTEXT OPTIMIZATION V2: STRICT - only files explicitly mentioned in plan
   const allFileNames = Object.keys(currentFiles || {});
   const planLower = planToExecute.toLowerCase();
   
-  // Find files mentioned in the plan (by path or filename)
+  // Extract ONLY files explicitly mentioned in the plan (strict matching)
   const mentionedFiles = allFileNames.filter(filePath => {
     const fileName = filePath.split('/').pop() || '';
+    const fileNameNoExt = fileName.replace(/\.(jsx?|tsx?|css|scss)$/i, '');
     return planLower.includes(filePath.toLowerCase()) || 
-           planLower.includes(fileName.toLowerCase());
+           planLower.includes(fileName.toLowerCase()) ||
+           planLower.includes(fileNameNoExt.toLowerCase());
   });
   
-  // Also include key entry files for context
-  const keyFiles = ['App.jsx', 'App.js', 'App.tsx', 'index.jsx', 'index.js', 'index.tsx'];
-  const entryFiles = allFileNames.filter(f => keyFiles.some(k => f.endsWith(k)));
+  // MINIMAL entry files - only if they contain routing AND are very small
+  const criticalEntryFiles = ['App.jsx', 'App.js', 'App.tsx'];
+  const entryFiles = allFileNames.filter(f => {
+    if (!criticalEntryFiles.some(k => f.endsWith(k))) return false;
+    const content = currentFiles[f] || '';
+    // Only include if it's a small routing file (< 2KB)
+    return content.length < 2000;
+  });
   
-  // Combine mentioned + entry files (dedupe)
+  // Combine mentioned + critical entry files (dedupe)
   const relevantFiles = [...new Set([...mentionedFiles, ...entryFiles])];
   
-  // Build context with only relevant files
+  // ULTRA-COMPACT context: Only mentioned files, no other file list
   const relevantContext = relevantFiles
-    .map(path => `=== FILE: ${path} ===\n${currentFiles[path] || ''}`)
+    .map(path => `=== ${path} ===\n${currentFiles[path] || ''}`)
     .join("\n\n");
   
-  const otherFilesList = allFileNames.filter(f => !relevantFiles.includes(f)).join('\n');
-  
-  const fileContext = `📄 Files to modify (full content):
-${relevantContext}
-
-${otherFilesList ? `📁 Other project files (names only - ${allFileNames.length - relevantFiles.length} files):
-${otherFilesList}` : ''}`;
+  const fileContext = `📄 Files to modify:
+${relevantContext}`;
 
   // Smart model selection for execute mode
   const modelSelection = selectOptimalModel(planToExecute, false, 'execute', fileCount);
