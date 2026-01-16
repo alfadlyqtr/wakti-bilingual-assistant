@@ -3691,72 +3691,6 @@ export type Database = {
           },
         ]
       }
-      user_ai_video_quotas: {
-        Row: {
-          extra_videos: number
-          monthly_date: string
-          updated_at: string
-          user_id: string
-          videos_generated: number
-        }
-        Insert: {
-          extra_videos?: number
-          monthly_date: string
-          updated_at?: string
-          user_id: string
-          videos_generated?: number
-        }
-        Update: {
-          extra_videos?: number
-          monthly_date?: string
-          updated_at?: string
-          user_id?: string
-          videos_generated?: number
-        }
-        Relationships: []
-      }
-      user_ai_videos: {
-        Row: {
-          created_at: string
-          duration_seconds: number | null
-          id: string
-          is_public: boolean | null
-          prompt: string | null
-          source_image_url: string | null
-          storage_path: string | null
-          title: string | null
-          updated_at: string
-          user_id: string
-          video_url: string
-        }
-        Insert: {
-          created_at?: string
-          duration_seconds?: number | null
-          id?: string
-          is_public?: boolean | null
-          prompt?: string | null
-          source_image_url?: string | null
-          storage_path?: string | null
-          title?: string | null
-          updated_at?: string
-          user_id: string
-          video_url: string
-        }
-        Update: {
-          created_at?: string
-          duration_seconds?: number | null
-          id?: string
-          is_public?: boolean | null
-          prompt?: string | null
-          source_image_url?: string | null
-          storage_path?: string | null
-          title?: string | null
-          updated_at?: string
-          user_id?: string
-          video_url?: string
-        }
-        Relationships: []
-      }
       user_event_links: {
         Row: {
           added_at: string
@@ -5330,15 +5264,6 @@ export type Database = {
         }[]
       }
       backfill_missing_profiles: { Args: never; Returns: number }
-      can_generate_ai_video: {
-        Args: { p_user_id?: string }
-        Returns: {
-          can_generate: boolean
-          extra_videos: number
-          videos_generated: number
-          videos_limit: number
-        }[]
-      }
       can_generate_music: { Args: never; Returns: Json }
       can_users_message: {
         Args: { recipient_id: string; sender_id: string }
@@ -5496,16 +5421,6 @@ export type Database = {
           updated_at: string
         }[]
       }
-      get_or_create_user_ai_video_quota: {
-        Args: { p_user_id: string }
-        Returns: {
-          out_extra_videos: number
-          out_monthly_date: string
-          out_updated_at: string
-          out_user_id: string
-          out_videos_generated: number
-        }[]
-      }
       get_or_create_user_quota: {
         Args: { p_user_id: string }
         Returns: {
@@ -5547,14 +5462,6 @@ export type Database = {
         Returns: {
           payment_method: string
           user_count: number
-        }[]
-      }
-      increment_ai_video_usage: {
-        Args: { p_user_id?: string }
-        Returns: {
-          extra_videos: number
-          success: boolean
-          videos_generated: number
         }[]
       }
       increment_regular_search_usage: {
