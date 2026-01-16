@@ -2482,9 +2482,24 @@ The user attached a screenshot. I analyzed it and found these text anchors:
       // CONTEXT OPTIMIZATION: Send only file NAMES, not full content
       // Agent uses read_file tool to fetch what it needs (80% token reduction!)
       // ========================================================================
-      const currentFiles = body.currentFiles || {};
-      const fileList = Object.keys(currentFiles).join('\n');
-      const fileCount = Object.keys(currentFiles).length;
+      let currentFiles = body.currentFiles || {};
+      let fileList = Object.keys(currentFiles).join('\n');
+      let fileCount = Object.keys(currentFiles).length;
+      
+      // SAFETY NET: If currentFiles is empty, fetch file list from DB
+      if (fileCount === 0) {
+        console.log(`[Agent Mode] WARNING: currentFiles empty, fetching from DB...`);
+        const { data: dbFiles } = await supabase
+          .from('project_files')
+          .select('path')
+          .eq('project_id', projectId);
+        
+        if (dbFiles && dbFiles.length > 0) {
+          fileList = dbFiles.map(f => normalizeFilePath(f.path)).join('\n');
+          fileCount = dbFiles.length;
+          console.log(`[Agent Mode] Recovered ${fileCount} files from DB`);
+        }
+      }
       
       console.log(`[Agent Mode] OPTIMIZED: Sending ${fileCount} file NAMES only (not content)`);
       console.log(`[Agent Mode] Files: ${fileList.substring(0, 200)}...`);
@@ -2624,8 +2639,23 @@ ${prompt}`;
           // No function calls, check if we got a text response
           const textPart = content.parts?.find((p: any) => p.text);
           if (textPart) {
-            console.log(`[Agent Mode] Got text response: ${textPart.text.substring(0, 100)}...`);
+            console.log(`[Agent Mode] Got text response (no tools): ${textPart.text.substring(0, 100)}...`);
           }
+          
+          // FIX: If iteration 0 has no tool calls for an EDIT request, force the agent to use tools
+          const isEditRequest = /\b(change|update|fix|add|remove|set|make|edit|modify|delete|replace|rename)\b/i.test(prompt);
+          if (iteration === 0 && isEditRequest && toolCallsLog.length === 0) {
+            console.log(`[Agent Mode] FORCING tool usage - edit request received but no tools called`);
+            // Append a follow-up message requiring tool usage
+            messages.push({
+              role: "user",
+              parts: [{
+                text: `⚠️ You MUST use tools to complete this edit request. Start by calling list_files to see the project structure, then read_file on the likely target file (e.g., /App.js or /src/App.jsx), then use search_replace to make the change. Do NOT just respond with text - use the tools!`
+              }]
+            });
+            continue; // Don't break - continue to next iteration
+          }
+          
           break;
         }
         
