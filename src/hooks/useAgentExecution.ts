@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 
 export interface AgentStep {
   id: string;
@@ -10,6 +9,9 @@ export interface AgentStep {
   result?: string;
   duration?: number;
   startedAt?: number;
+  // Enhanced for parallel execution
+  dependsOn?: string[];
+  parallelGroup?: string;
 }
 
 export interface AgentExecutionResult {
@@ -18,6 +20,15 @@ export interface AgentExecutionResult {
   summary?: string;
   error?: string;
   steps: AgentStep[];
+  toolsExecuted?: string[];
+}
+
+interface ToolExecution {
+  tool: string;
+  args: Record<string, any>;
+  result?: any;
+  error?: string;
+  duration?: number;
 }
 
 interface UseAgentExecutionOptions {
@@ -25,6 +36,8 @@ interface UseAgentExecutionOptions {
   currentFiles: Record<string, string>;
   onFilesUpdated?: (files: Record<string, string>) => void;
   onStepUpdate?: (steps: AgentStep[]) => void;
+  onToolExecuted?: (tool: ToolExecution) => void;
+  debugContext?: any;
 }
 
 export function useAgentExecution({
@@ -32,13 +45,20 @@ export function useAgentExecution({
   currentFiles,
   onFilesUpdated,
   onStepUpdate,
+  onToolExecuted,
+  debugContext,
 }: UseAgentExecutionOptions) {
   const [isExecuting, setIsExecuting] = useState(false);
   const [steps, setSteps] = useState<AgentStep[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [toolsExecuted, setToolsExecuted] = useState<string[]>([]);
   const abortRef = useRef<AbortController | null>(null);
+  const stepsRef = useRef<AgentStep[]>([]);
 
   const generateId = () => `step-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+  // Keep ref in sync for closure access
+  stepsRef.current = steps;
 
   const updateStep = useCallback((stepId: string, update: Partial<AgentStep>) => {
     setSteps(prev => {
@@ -57,6 +77,11 @@ export function useAgentExecution({
     });
     return newStep.id;
   }, [onStepUpdate]);
+
+  const recordToolExecution = useCallback((tool: string, args: Record<string, any>, result?: any, error?: string, duration?: number) => {
+    setToolsExecuted(prev => [...prev, tool]);
+    onToolExecuted?.({ tool, args, result, error, duration });
+  }, [onToolExecuted]);
 
   /**
    * Execute agent mode with real AI generation
@@ -90,6 +115,15 @@ export function useAgentExecution({
     });
 
     try {
+      // Get auth token if available
+      let authToken = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      try {
+        const { data: { session } } = await (await import('@/integrations/supabase/client')).supabase.auth.getSession();
+        if (session?.access_token) {
+          authToken = session.access_token;
+        }
+      } catch {}
+
       // Call the projects-generate edge function in agent mode
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/projects-generate`,
@@ -97,7 +131,7 @@ export function useAgentExecution({
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Authorization': `Bearer ${authToken}`,
           },
           body: JSON.stringify({
             projectId,
@@ -105,7 +139,7 @@ export function useAgentExecution({
             prompt,
             currentFiles,
             conversationHistory: context?.conversationHistory,
-            debugContext: context?.debugContext,
+            debugContext: debugContext || context?.debugContext,
             uploadedAssets: context?.uploadedAssets,
             images: context?.images,
           }),
@@ -165,7 +199,8 @@ export function useAgentExecution({
     let buffer = '';
     let resultFiles: Record<string, string> = {};
     let summary = '';
-    const executedTools: string[] = [];
+    const executedToolSteps: Map<string, string> = new Map(); // tool -> stepId
+    const toolExecutionQueue: Array<{ tool: string; stepId: string; startedAt: number }> = [];
 
     while (true) {
       const { done, value } = await reader.read();
@@ -183,32 +218,103 @@ export function useAgentExecution({
         try {
           const event = JSON.parse(data);
 
-          // Handle tool execution events
-          if (event.type === 'tool_start') {
-            const stepId = addStep({
-              title: getToolTitle(event.tool),
-              description: event.description,
-              status: 'in_progress',
-              tool: event.tool,
-              startedAt: Date.now(),
-            });
-            executedTools.push(stepId);
-          } else if (event.type === 'tool_end') {
-            const lastStepId = executedTools[executedTools.length - 1];
-            if (lastStepId) {
-              updateStep(lastStepId, {
-                status: event.success ? 'completed' : 'failed',
-                result: event.result,
-                duration: Date.now() - (steps.find(s => s.id === lastStepId)?.startedAt || Date.now()),
+          // Handle different event types
+          switch (event.type) {
+            case 'thinking':
+            case 'plan': {
+              // AI is planning - update thinking step
+              const existingThinking = stepsRef.current.find(s => s.tool === 'thinking' && s.status === 'in_progress');
+              if (existingThinking) {
+                updateStep(existingThinking.id, { description: event.content || event.plan });
+              }
+              break;
+            }
+
+            case 'tool_start': {
+              const stepId = addStep({
+                title: getToolTitle(event.tool),
+                description: event.description || event.args?.path || '',
+                status: 'in_progress',
+                tool: event.tool,
+                startedAt: Date.now(),
+                parallelGroup: event.parallelGroup,
               });
+              executedToolSteps.set(event.tool + (event.id || ''), stepId);
+              toolExecutionQueue.push({ tool: event.tool, stepId, startedAt: Date.now() });
+              break;
             }
-          } else if (event.type === 'file_written') {
-            resultFiles[event.path] = event.content;
-          } else if (event.type === 'complete') {
-            summary = event.summary || '';
-            if (event.files) {
-              resultFiles = { ...resultFiles, ...event.files };
+
+            case 'tool_end': {
+              const toolKey = event.tool + (event.id || '');
+              const stepId = executedToolSteps.get(toolKey) || toolExecutionQueue[toolExecutionQueue.length - 1]?.stepId;
+              if (stepId) {
+                const queueItem = toolExecutionQueue.find(t => t.stepId === stepId);
+                const duration = queueItem ? Date.now() - queueItem.startedAt : 0;
+                
+                updateStep(stepId, {
+                  status: event.success !== false ? 'completed' : 'failed',
+                  result: event.result || event.error,
+                  duration,
+                });
+                
+                recordToolExecution(event.tool, event.args || {}, event.result, event.error, duration);
+              }
+              break;
             }
+
+            case 'file_written':
+            case 'file_updated': {
+              resultFiles[event.path] = event.content;
+              // Also update any write_file step with this path
+              const writeStep = stepsRef.current.find(s => 
+                s.tool === 'write_file' && 
+                s.status === 'in_progress' && 
+                s.description?.includes(event.path)
+              );
+              if (writeStep) {
+                updateStep(writeStep.id, { status: 'completed', result: `Wrote ${event.path}` });
+              }
+              break;
+            }
+
+            case 'search_replace_success': {
+              const srStep = stepsRef.current.find(s => 
+                s.tool === 'search_replace' && s.status === 'in_progress'
+              );
+              if (srStep) {
+                updateStep(srStep.id, { status: 'completed', result: event.message || 'Code updated' });
+              }
+              break;
+            }
+
+            case 'error': {
+              // Mark current in-progress step as failed
+              const inProgress = stepsRef.current.find(s => s.status === 'in_progress');
+              if (inProgress) {
+                updateStep(inProgress.id, { status: 'failed', result: event.message || event.error });
+              }
+              break;
+            }
+
+            case 'complete':
+            case 'task_complete': {
+              summary = event.summary || event.message || '';
+              if (event.files) {
+                resultFiles = { ...resultFiles, ...event.files };
+              }
+              // Add completion step
+              addStep({
+                title: 'Complete',
+                description: summary.slice(0, 100),
+                status: 'completed',
+                tool: 'task_complete',
+              });
+              break;
+            }
+
+            default:
+              // Log unknown event types for debugging
+              console.log('[AgentExecution] Unknown event:', event.type, event);
           }
         } catch {
           // Ignore parse errors for partial JSON
@@ -225,7 +331,8 @@ export function useAgentExecution({
       success: true,
       files: resultFiles,
       summary,
-      steps,
+      steps: stepsRef.current,
+      toolsExecuted: Array.from(executedToolSteps.keys()),
     };
   };
 
