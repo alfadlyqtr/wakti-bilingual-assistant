@@ -6562,27 +6562,68 @@ ${fixInstructions}
             if (result.success) {
               // Validate the resulting JSX before applying
               if (validateJSX(result.code)) {
-                setGeneratedFiles(prev => ({
-                  ...prev,
+                const newFiles = {
+                  ...generatedFiles,
                   '/App.js': result.code
-                }));
+                };
+                setGeneratedFiles(newFiles);
                 // IMPORTANT: keep editor content in sync; Save button uses codeContent
                 setCodeContent(result.code);
-                toast.success(
-                  isRTL
-                    ? `تم التطبيق: ${result.message} (غير محفوظ بعد)`
-                    : `Applied: ${result.message} (not saved yet)`
-                );
+                
+                // AUTO-SAVE: Persist changes immediately to database
+                (async () => {
+                  try {
+                    const rows = Object.entries(newFiles).map(([path, content]) => ({
+                      project_id: id,
+                      path,
+                      content,
+                    }));
+                    await (supabase
+                      .from('project_files' as any)
+                      .upsert(rows, { onConflict: 'project_id,path' }) as any);
+                    
+                    toast.success(
+                      isRTL
+                        ? `✓ تم الحفظ: ${result.message}`
+                        : `✓ Saved: ${result.message}`
+                    );
+                  } catch (err) {
+                    console.error('[Visual Edit] Auto-save failed:', err);
+                    toast.warning(
+                      isRTL
+                        ? `تم التطبيق: ${result.message} (اضغط حفظ يدوياً)`
+                        : `Applied: ${result.message} (click Save to persist)`
+                    );
+                  }
+                })();
               } else {
                 // JSX validation failed - shouldn't happen but fallback to simple text replace
                 console.warn('[Visual Edits] JSX validation failed, trying simple replace');
                 if (changes.text && selectedElementInfo.innerText) {
                   const simpleCode = currentCode.replace(selectedElementInfo.innerText, changes.text);
-                  setGeneratedFiles(prev => ({
-                    ...prev,
+                  const newFiles = {
+                    ...generatedFiles,
                     '/App.js': simpleCode
-                  }));
-                  toast.success(isRTL ? 'تم تحديث النص!' : 'Text updated!');
+                  };
+                  setGeneratedFiles(newFiles);
+                  setCodeContent(simpleCode);
+                  
+                  // AUTO-SAVE fallback too
+                  (async () => {
+                    try {
+                      const rows = Object.entries(newFiles).map(([path, content]) => ({
+                        project_id: id,
+                        path,
+                        content,
+                      }));
+                      await (supabase
+                        .from('project_files' as any)
+                        .upsert(rows, { onConflict: 'project_id,path' }) as any);
+                      toast.success(isRTL ? '✓ تم حفظ النص!' : '✓ Text saved!');
+                    } catch (err) {
+                      toast.success(isRTL ? 'تم تحديث النص!' : 'Text updated!');
+                    }
+                  })();
                 } else {
                   toast.error(isRTL ? 'فشل تطبيق التغييرات' : 'Failed to apply changes');
                 }
