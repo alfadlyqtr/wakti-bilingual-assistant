@@ -70,8 +70,13 @@ import {
   useChatMessages,
   useSandpackFiles,
   useVisualEditMode,
-  useIncrementalFileUpdater
+  useIncrementalFileUpdater,
+  useConversationMemory
 } from './ProjectDetail/hooks';
+
+// Import Agent Mode components
+import { AgentTaskPanel } from './ProjectDetail/components/AgentTaskPanel';
+import type { AgentStep } from './ProjectDetail/components/AgentTaskPanel';
 
 // Lazy load Sandpack Studio for full control over layout
 const SandpackStudio = lazy(() => import('@/components/projects/SandpackStudio'));
@@ -5463,47 +5468,27 @@ ${fixInstructions}
                         
                         {/* Tasks Panel - Lovable Dark Card Style */}
                         {(isGenerating || aiEditing) && generationSteps.length > 0 && (
-                          <div className="bg-zinc-900 dark:bg-zinc-900 rounded-xl p-4 border border-zinc-800">
-                            {/* Tasks Header */}
-                            <div className={`flex items-center justify-between mb-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
-                              <h3 className="text-sm font-medium text-white">{isRTL ? 'المهام' : 'Tasks'}</h3>
-                              <span className="text-xs text-zinc-500">
-                                {generationSteps.filter(s => s.status === 'completed').length}/{generationSteps.length}
-                              </span>
-                            </div>
-
-                            {/* Tasks List */}
-                            <div className="space-y-2">
-                              {generationSteps.map((step, idx) => (
-                                <div key={idx} className={`flex items-center gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
-                                  {/* Status Icon */}
-                                  <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
-                                    {step.status === 'completed' ? (
-                                      <div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
-                                        <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />
-                                      </div>
-                                    ) : step.status === 'loading' ? (
-                                      <div className="w-4 h-4 rounded-full border-2 border-zinc-400 border-t-transparent animate-spin" />
-                                    ) : (
-                                      <Circle className="h-4 w-4 text-zinc-600" />
-                                    )}
-                                  </div>
-
-                                  {/* Task Label */}
-                                  <span className={cn(
-                                    "text-sm",
-                                    step.status === 'completed' 
-                                      ? "text-zinc-500 line-through" 
-                                      : step.status === 'loading'
-                                        ? "text-white"
-                                        : "text-zinc-500"
-                                  )}>
-                                    {step.label}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
+                          <AgentTaskPanel
+                            steps={generationSteps.map((step, idx) => ({
+                              id: `step-${idx}`,
+                              title: step.label,
+                              status: step.status === 'loading' ? 'in_progress' : 
+                                      step.status === 'error' ? 'failed' : 
+                                      step.status as 'pending' | 'completed',
+                              tool: idx === 0 ? 'read_file' : 
+                                    idx === 1 ? 'search_replace' : 
+                                    idx === 2 ? 'write_file' : undefined
+                            }))}
+                            isActive={aiEditing || isGenerating}
+                            currentGoal={chatInput || undefined}
+                            isRTL={isRTL}
+                            onCancel={() => {
+                              setAiEditing(false);
+                              setIsGenerating(false);
+                              setGenerationSteps([]);
+                              toast.info(isRTL ? 'تم إلغاء العملية' : 'Operation cancelled');
+                            }}
+                          />
                         )}
                         
                         {/* Tool Usage Indicator - Lovable Style */}
