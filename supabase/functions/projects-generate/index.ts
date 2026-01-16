@@ -2489,6 +2489,27 @@ The user attached a screenshot. I analyzed it and found these text anchors:
       console.log(`[Agent Mode] OPTIMIZED: Sending ${fileCount} file NAMES only (not content)`);
       console.log(`[Agent Mode] Files: ${fileList.substring(0, 200)}...`);
       
+      // Extract inspect selection from debug context for precise element targeting
+      let inspectSelectionContext = '';
+      if (agentDebugContext.consoleLogs && agentDebugContext.consoleLogs.length > 0) {
+        const inspectLogs = agentDebugContext.consoleLogs.filter(log => 
+          log.message.includes('Element selected') || 
+          log.message.includes('InspectablePreview') ||
+          log.message.includes('Selected element')
+        );
+        if (inspectLogs.length > 0) {
+          const lastInspect = inspectLogs[inspectLogs.length - 1];
+          inspectSelectionContext = `
+🎯 USER SELECTED ELEMENT (from Inspect Mode):
+${lastInspect.message}
+
+⚠️ CRITICAL: The user clicked on this specific element. Your changes MUST target this EXACT element.
+Match the className and innerText to find it in the code.
+`;
+          console.log(`[Agent Mode] Inspect selection context injected: ${lastInspect.message.substring(0, 200)}...`);
+        }
+      }
+      
       // Prepare the initial user message with FILE LIST ONLY (not content)
       let userMessageContent = `📁 PROJECT FILES (${fileCount} files):
 ${fileList}
@@ -2496,7 +2517,7 @@ ${fileList}
 ⚠️ IMPORTANT: Use the read_file tool to view file contents before editing.
 Use list_files to see directory structure.
 Use search_replace for targeted edits (preferred) or write_file for new files.
-
+${inspectSelectionContext}
 ${screenshotAnchorsContext}
 
 USER REQUEST:
@@ -2784,8 +2805,11 @@ ${prompt}`;
       }
     }
 
-    // EXECUTE MODE: Execute a previously approved plan (Lovable-style)
-    // Now with SMART MODEL SELECTION and CREDIT LOGGING
+    // ========================================================================
+    // EXECUTE MODE V2: AGENT-STYLE EXECUTION (Tool-based targeted reading)
+    // Instead of sending full file contents, we use agent loop with tools
+    // This reduces input tokens from ~19K to ~3K (85% reduction!)
+    // ========================================================================
     if (mode === 'execute') {
       if (!projectId) {
         return new Response(JSON.stringify({ ok: false, error: 'Missing projectId' }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -2798,53 +2822,209 @@ ${prompt}`;
       const job = await createJob(supabase, { projectId, userId, mode: 'edit', prompt: planToExecute });
       
       try {
-        // Get current files
+        // Get current file LIST only (not content) - ULTRA OPTIMIZED
         const { data: existingRows, error: existingErr } = await supabase
           .from('project_files')
-          .select('path, content')
+          .select('path')
           .eq('project_id', projectId);
         if (existingErr) throw new Error(`DB_FILES_SELECT_FAILED: ${existingErr.message}`);
-        const existingFiles: Record<string, string> = {};
-        for (const row of existingRows || []) {
-          existingFiles[normalizeFilePath(row.path)] = row.content;
+        
+        const fileList = (existingRows || []).map(r => normalizeFilePath(r.path)).join('\n');
+        const fileCount = existingRows?.length || 0;
+        
+        console.log(`[Execute Mode V2] AGENT-STYLE: Sending ${fileCount} file NAMES only (not content)`);
+        console.log(`[Execute Mode V2] Plan to execute: ${planToExecute.substring(0, 200)}...`);
+        
+        // Prepare agent-style system prompt for execute mode
+        const executeSystemPrompt = AGENT_SYSTEM_PROMPT.replace(/\{\{PROJECT_ID\}\}/g, projectId) + `
+
+## 🎯 EXECUTE MODE SPECIFIC INSTRUCTIONS
+
+You are in EXECUTE MODE. A plan has already been created and approved. Your job is to EXECUTE IT PRECISELY.
+
+**EXECUTION RULES:**
+1. Read the plan carefully
+2. Use read_file to get file contents BEFORE editing
+3. Use search_replace for targeted edits (preferred)
+4. Use write_file ONLY for new files
+5. Execute ALL steps in the plan
+6. Call task_complete when done with a summary of what you changed
+
+**DO NOT:**
+- Skip any step in the plan
+- Deviate from the plan
+- Add features not in the plan
+- Make assumptions - read files first!`;
+        
+        // Prepare execute mode user message (FILE LIST ONLY)
+        const executeUserMessage = `📁 PROJECT FILES (${fileCount} files):
+${fileList}
+
+⚠️ IMPORTANT: Use read_file to see file contents before editing.
+Use search_replace for targeted edits (preferred).
+
+📋 PLAN TO EXECUTE:
+${planToExecute}
+
+${userInstructions ? `ADDITIONAL INSTRUCTIONS:\n${userInstructions}\n\n` : ''}
+Execute this plan step by step. Read files first, then make changes using search_replace.
+Call task_complete when finished.`;
+        
+        // Agent loop for execute mode (max 3 iterations - execute is focused)
+        const execMessages: Array<{ role: string; parts: Array<{ text?: string; functionCall?: any; functionResponse?: any }> }> = [
+          { role: "user", parts: [{ text: executeUserMessage }] }
+        ];
+        
+        const execMaxIterations = 3;
+        const execToolCallsLog: Array<{ tool: string; args: any; result: any }> = [];
+        let execTaskCompleteResult: { summary: string; filesChanged: string[] } | null = null;
+        
+        // Model selection for execute mode
+        const execModelSelection = selectOptimalModel(planToExecute, false, 'execute', fileCount);
+        console.log(`[Execute Mode V2] Model selected: ${execModelSelection.model} (${execModelSelection.tier})`);
+        
+        let execTotalInputText = executeSystemPrompt + executeUserMessage;
+        let execTotalOutputText = '';
+        
+        // Empty debug context for execute mode
+        const execDebugContext: AgentDebugContext = {
+          errors: [],
+          networkErrors: [],
+          consoleLogs: []
+        };
+        
+        for (let iteration = 0; iteration < execMaxIterations; iteration++) {
+          console.log(`[Execute Mode V2] ========== ITERATION ${iteration + 1}/${execMaxIterations} ==========`);
+          
+          const geminiResponse = await withTimeout(
+            fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${execModelSelection.model}:generateContent`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-goog-api-key": GEMINI_API_KEY,
+                },
+                body: JSON.stringify({
+                  contents: execMessages,
+                  systemInstruction: { parts: [{ text: executeSystemPrompt }] },
+                  tools: [getGeminiToolsConfig()],
+                  generationConfig: {
+                    temperature: 0.1, // Lower temp for precise execution
+                    maxOutputTokens: 8192,
+                  },
+                }),
+              }
+            ),
+            120000,
+            'GEMINI_EXECUTE_AGENT'
+          );
+          
+          if (!geminiResponse.ok) {
+            const errorText = await geminiResponse.text();
+            console.error(`[Execute Mode V2] Gemini error: ${errorText}`);
+            throw new Error(`Execute API error: ${geminiResponse.status}`);
+          }
+          
+          const geminiData = await geminiResponse.json();
+          const candidate = geminiData.candidates?.[0];
+          const content = candidate?.content;
+          
+          if (!content) {
+            console.error(`[Execute Mode V2] No content in response`);
+            break;
+          }
+          
+          // Track output
+          const textParts = content.parts?.filter((p: any) => p.text) || [];
+          textParts.forEach((p: any) => { execTotalOutputText += p.text || ''; });
+          
+          execMessages.push({ role: "model", parts: content.parts });
+          
+          // Check for function calls
+          const functionCalls = content.parts?.filter((p: any) => p.functionCall);
+          
+          if (!functionCalls || functionCalls.length === 0) {
+            const textPart = content.parts?.find((p: any) => p.text);
+            if (textPart) {
+              console.log(`[Execute Mode V2] Got text response: ${textPart.text.substring(0, 100)}...`);
+            }
+            break;
+          }
+          
+          // Execute function calls
+          const functionResponses: Array<{ functionResponse: { name: string; response: any } }> = [];
+          
+          for (const fc of functionCalls) {
+            const { name, args } = fc.functionCall;
+            
+            console.log(`[Execute Mode V2] Tool: ${name} | Args: ${JSON.stringify(args).substring(0, 500)}`);
+            
+            const result = await executeToolCall(projectId, { name, arguments: args || {} }, execDebugContext, supabase, userId);
+            
+            console.log(`[Execute Mode V2] Result: ${JSON.stringify(result).substring(0, 300)}`);
+            
+            execToolCallsLog.push({ tool: name, args, result });
+            functionResponses.push({
+              functionResponse: { name, response: result }
+            });
+            
+            // Check for task_complete
+            if (name === 'task_complete' && result.acknowledged) {
+              execTaskCompleteResult = {
+                summary: result.summary || 'Plan executed',
+                filesChanged: result.filesChanged || []
+              };
+            }
+          }
+          
+          execMessages.push({ role: "user", parts: functionResponses });
+          
+          if (execTaskCompleteResult) {
+            console.log(`[Execute Mode V2] Task completed: ${execTaskCompleteResult.summary}`);
+            break;
+          }
         }
         
-        console.log(`[Execute Mode] Executing plan...`);
-        console.log(`[Execute Mode] Plan to execute: ${planToExecute.substring(0, 200)}...`);
-        console.log(`[Execute Mode] Existing files: ${Object.keys(existingFiles).join(', ')}`);
+        // Collect files changed
+        const execFilesChanged: string[] = [];
+        execToolCallsLog.forEach(tc => {
+          if (tc.tool === 'write_file' && tc.result?.success && tc.result?.path) {
+            execFilesChanged.push(tc.result.path);
+          }
+          if (tc.tool === 'search_replace' && tc.result?.success && tc.result?.path) {
+            execFilesChanged.push(tc.result.path);
+          }
+          if (tc.tool === 'insert_code' && tc.result?.success && tc.result?.path) {
+            execFilesChanged.push(tc.result.path);
+          }
+        });
         
-        const result = await callGeminiExecuteMode(planToExecute, existingFiles, userInstructions);
-        const changedFiles = result.files || {};
+        // Log credit usage
+        const execCreditUsage = logCreditUsage('execute', execModelSelection, execTotalInputText, execTotalOutputText, projectId);
         
-        // Log credit usage for execute mode
-        const execInputText = Object.values(existingFiles).join('\n') + planToExecute;
-        const execCreditUsage = logCreditUsage('execute', result.modelSelection, execInputText, JSON.stringify(changedFiles), projectId);
+        console.log(`[Execute Mode V2] Completed. Files changed: ${[...new Set(execFilesChanged)].join(', ')}`);
         
-        console.log(`[Execute Mode] Changed files returned: ${Object.keys(changedFiles).join(', ') || 'NONE'}`);
-        console.log(`[Execute Mode] Summary: ${result.summary}`);
+        await updateJob(supabase, job.id, { 
+          status: 'succeeded', 
+          result_summary: execTaskCompleteResult?.summary || `Executed plan with ${execToolCallsLog.length} tool calls`, 
+          error: null 
+        });
         
-        if (Object.keys(changedFiles).length === 0) {
-          console.error(`[Execute Mode] WARNING: AI returned no changed files!`);
-        }
-        
-        if (changedFiles["/App.js"]) assertNoHtml(changedFiles["/App.js"]);
-        
-        // Check for missing referenced files
-        const missing = findMissingReferencedFiles({ changedFiles, existingFiles });
-        let finalFilesToUpsert: Record<string, string> = { ...changedFiles };
-        
-        if (missing.length > 0) {
-          console.log(`[Execute] Missing files detected: ${missing.join(', ')}`);
-          const generatedMissing = await callGPT41MiniMissingFiles(missing, changedFiles, existingFiles, planToExecute);
-          finalFilesToUpsert = { ...finalFilesToUpsert, ...generatedMissing };
-        }
-        
-        await upsertProjectFiles(supabase, projectId, finalFilesToUpsert);
-        await updateJob(supabase, job.id, { status: 'succeeded', result_summary: result.summary || 'Plan executed.', error: null });
-        return new Response(JSON.stringify({ ok: true, jobId: job.id, status: 'succeeded', creditUsage: execCreditUsage }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ 
+          ok: true, 
+          jobId: job.id, 
+          status: 'succeeded', 
+          mode: 'execute-agent',
+          filesChanged: [...new Set(execFilesChanged)],
+          summary: execTaskCompleteResult?.summary || 'Plan executed',
+          toolCalls: execToolCallsLog.length,
+          creditUsage: execCreditUsage 
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         
       } catch (innerErr) {
         const innerMsg = innerErr instanceof Error ? innerErr.message : String(innerErr);
+        console.error(`[Execute Mode V2] Error: ${innerMsg}`);
         await updateJob(supabase, job.id, { status: 'failed', error: innerMsg, result_summary: null });
         return new Response(JSON.stringify({ ok: false, jobId: job.id, error: innerMsg }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
