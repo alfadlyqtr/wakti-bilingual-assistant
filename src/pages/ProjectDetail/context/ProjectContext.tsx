@@ -18,6 +18,9 @@ import type {
   MainTab,
   RightPanelMode,
   ImageAttachment,
+  ClarifyingQuestion,
+  PendingElementImageEdit,
+  CreationPromptInfo,
 } from '../types';
 
 interface ProjectContextValue {
@@ -27,6 +30,7 @@ interface ProjectContextValue {
   generatedFiles: Record<string, string>;
   codeContent: string;
   loading: boolean;
+  saving: boolean;
   
   // Chat state
   chatMessages: ChatMessage[];
@@ -34,6 +38,7 @@ interface ProjectContextValue {
   attachedImages: ImageAttachment[];
   aiEditing: boolean;
   isGenerating: boolean;
+  dynamicSuggestions: string[];
   
   // UI state
   deviceView: DeviceView;
@@ -41,15 +46,18 @@ interface ProjectContextValue {
   mainTab: MainTab;
   rightPanelMode: RightPanelMode;
   mobileTab: 'chat' | 'preview';
+  leftPanelWidth: number;
   
   // Visual edit state
   elementSelectMode: boolean;
   selectedElementInfo: SelectedElementInfo | null;
   showElementEditPopover: boolean;
+  pendingElementImageEdit: PendingElementImageEdit | null;
   
   // Error state
   crashReport: string | null;
   aiError: AIError | null;
+  autoFixCountdown: number | null;
   
   // Backend context
   backendContext: BackendContext | null;
@@ -60,36 +68,27 @@ interface ProjectContextValue {
   toolsUsedCount: number;
   editedFilesTracking: EditedFileTracking[];
   generationSteps: GenerationStep[];
+  lastThinkingDuration: number | null;
+  
+  // Dialogs & Modals
+  showClarifyingQuestions: boolean;
+  clarifyingQuestions: ClarifyingQuestion[];
+  pendingPrompt: string;
+  showMigrationApproval: boolean;
+  pendingMigration: PendingMigration | null;
+  showStockPhotoSelector: boolean;
+  showPublishModal: boolean;
   
   // Language
   isRTL: boolean;
   language: string;
   
-  // Actions - these will be provided by hooks
-  setProject: React.Dispatch<React.SetStateAction<Project | null>>;
-  setFiles: React.Dispatch<React.SetStateAction<ProjectFile[]>>;
-  setGeneratedFiles: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-  setCodeContent: React.Dispatch<React.SetStateAction<string>>;
-  setChatMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
-  setChatInput: React.Dispatch<React.SetStateAction<string>>;
-  setAttachedImages: React.Dispatch<React.SetStateAction<ImageAttachment[]>>;
-  setAiEditing: React.Dispatch<React.SetStateAction<boolean>>;
-  setIsGenerating: React.Dispatch<React.SetStateAction<boolean>>;
-  setDeviceView: React.Dispatch<React.SetStateAction<DeviceView>>;
-  setLeftPanelMode: React.Dispatch<React.SetStateAction<LeftPanelMode>>;
-  setMainTab: React.Dispatch<React.SetStateAction<MainTab>>;
-  setRightPanelMode: React.Dispatch<React.SetStateAction<RightPanelMode>>;
-  setMobileTab: React.Dispatch<React.SetStateAction<'chat' | 'preview'>>;
-  setElementSelectMode: React.Dispatch<React.SetStateAction<boolean>>;
-  setSelectedElementInfo: React.Dispatch<React.SetStateAction<SelectedElementInfo | null>>;
-  setShowElementEditPopover: React.Dispatch<React.SetStateAction<boolean>>;
-  setCrashReport: React.Dispatch<React.SetStateAction<string | null>>;
-  setAiError: React.Dispatch<React.SetStateAction<AIError | null>>;
-  setBackendContext: React.Dispatch<React.SetStateAction<BackendContext | null>>;
-  setThinkingStartTime: React.Dispatch<React.SetStateAction<number | null>>;
-  setToolsUsedCount: React.Dispatch<React.SetStateAction<number>>;
-  setEditedFilesTracking: React.Dispatch<React.SetStateAction<EditedFileTracking[]>>;
-  setGenerationSteps: React.Dispatch<React.SetStateAction<GenerationStep[]>>;
+  // User instructions
+  userInstructions: string;
+  creationPromptInfo: CreationPromptInfo | null;
+  
+  // Sandpack key for forcing re-render
+  sandpackKey: number;
 }
 
 const ProjectContext = createContext<ProjectContextValue | null>(null);
@@ -116,3 +115,4 @@ export function ProjectContextProvider({ children, value }: ProjectContextProvid
 }
 
 export { ProjectContext };
+export type { ProjectContextValue };

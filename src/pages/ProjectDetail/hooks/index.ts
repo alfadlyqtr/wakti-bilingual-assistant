@@ -5,3 +5,4 @@ export { useProjectState } from './useProjectState';
 export { useChatState } from './useChatState';
 export { useAgentMode } from './useAgentMode';
 export { useVisualEditMode } from './useVisualEditMode';
+export { useSandpackSync } from './useSandpackSync';

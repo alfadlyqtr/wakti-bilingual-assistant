@@ -124,6 +124,19 @@ export interface PendingMigration {
   descriptionAr?: string;
 }
 
+export interface ClarifyingQuestionOption {
+  label: string;
+  labelAr?: string;
+}
+
+export interface ClarifyingQuestion {
+  id: string;
+  question: string;
+  questionAr?: string;
+  options: ClarifyingQuestionOption[];
+  type?: 'single' | 'multiple';
+}
+
 export interface CreationPromptInfo {
   userPrompt: string;
   themeId: string;
