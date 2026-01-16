@@ -2482,8 +2482,9 @@ The user attached a screenshot. I analyzed it and found these text anchors:
       // CONTEXT OPTIMIZATION: Send only file NAMES, not full content
       // Agent uses read_file tool to fetch what it needs (80% token reduction!)
       // ========================================================================
-      const fileList = Object.keys(currentFiles || {}).join('\n');
-      const fileCount = Object.keys(currentFiles || {}).length;
+      const currentFiles = body.currentFiles || {};
+      const fileList = Object.keys(currentFiles).join('\n');
+      const fileCount = Object.keys(currentFiles).length;
       
       console.log(`[Agent Mode] OPTIMIZED: Sending ${fileCount} file NAMES only (not content)`);
       console.log(`[Agent Mode] Files: ${fileList.substring(0, 200)}...`);
