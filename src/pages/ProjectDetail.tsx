@@ -54,6 +54,25 @@ import { cn } from '@/lib/utils';
 import html2canvas from 'html2canvas';
 import confetti from 'canvas-confetti';
 
+// Import shared types from centralized type definitions
+import type { 
+  Project, 
+  ProjectFile, 
+  GeneratedFiles, 
+  BackendContext,
+  UploadedAsset 
+} from './ProjectDetail/types';
+
+// Import hook interfaces for future integration
+// These hooks encapsulate common patterns and can be gradually adopted
+import { 
+  useProjectData,
+  useChatMessages,
+  useSandpackFiles,
+  useVisualEditMode,
+  useIncrementalFileUpdater
+} from './ProjectDetail/hooks';
+
 // Lazy load Sandpack Studio for full control over layout
 const SandpackStudio = lazy(() => import('@/components/projects/SandpackStudio'));
 import { MatrixOverlay } from '@/components/projects/MatrixOverlay';
@@ -77,27 +96,8 @@ import { AutoFixCard, parseAutoFixMessage } from '@/components/projects/AutoFixC
 // Direct style editor for FREE visual edits (no AI prompts needed)
 import { applyDirectEdits, validateJSX } from '@/utils/directStyleEditor';
 
-interface Project {
-  id: string;
-  name: string;
-  slug: string;
-  description: string | null;
-  template_type: string | null;
-  status: string;
-  published_url: string | null;
-  deployment_id: string | null;
-  thumbnail_url?: string | null;
-  subdomain?: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-interface ProjectFile {
-  id: string;
-  project_id: string;
-  path: string;
-  content: string;
-}
+// Note: Project, ProjectFile, GeneratedFiles, BackendContext, UploadedAsset 
+// are now imported from './ProjectDetail/types' above
 
 type GenerationJobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
 
