@@ -71,7 +71,8 @@ import {
   useSandpackFiles,
   useVisualEditMode,
   useIncrementalFileUpdater,
-  useConversationMemory
+  useConversationMemory,
+  useEditHistory
 } from './ProjectDetail/hooks';
 
 // Import Agent Mode components
@@ -263,6 +264,9 @@ export default function ProjectDetail() {
     descriptionAr?: string;
   } | null>(null);
   const [alwaysAllowMigrations, setAlwaysAllowMigrations] = useState(false);
+
+  // Visual Edit Mode undo/redo history
+  const visualEditHistory = useEditHistory({ maxHistory: 30 });
 
   // Helper to build prompt with clarifying question answers
   const buildPromptWithAnswers = useCallback((basePrompt: string, answers: Record<string, string | string[]>) => {
@@ -461,7 +465,37 @@ export default function ProjectDetail() {
   // Force Sandpack re-render key (incremented on revert)
   const [sandpackKey, setSandpackKey] = useState(0);
 
-  // Publish modal state
+  // Visual Edit Mode keyboard shortcuts (Ctrl+Z undo, Ctrl+Shift+Z redo)
+  useEffect(() => {
+    if (!showElementEditPopover) return;
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+Z or Cmd+Z for Undo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        const previousFiles = visualEditHistory.undo();
+        if (previousFiles) {
+          setGeneratedFiles(previousFiles);
+          setCodeContent(previousFiles['/App.js'] || '');
+          toast.info(isRTL ? 'تم التراجع' : 'Undone');
+        }
+      }
+      // Ctrl+Shift+Z or Cmd+Shift+Z or Ctrl+Y for Redo
+      if ((e.ctrlKey || e.metaKey) && ((e.key === 'z' && e.shiftKey) || e.key === 'y')) {
+        e.preventDefault();
+        const nextFiles = visualEditHistory.redo();
+        if (nextFiles) {
+          setGeneratedFiles(nextFiles);
+          setCodeContent(nextFiles['/App.js'] || '');
+          toast.info(isRTL ? 'تم الإعادة' : 'Redone');
+        }
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showElementEditPopover, visualEditHistory, isRTL]);
+
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [subdomainInput, setSubdomainInput] = useState('');
   const [subdomainError, setSubdomainError] = useState<string | null>(null);
@@ -6523,6 +6557,8 @@ ${fixInstructions}
               }
               
               if (replaced) {
+                // Push current state to history before applying changes
+                visualEditHistory.pushState(generatedFiles, isRTL ? 'تحديث الصورة' : 'Image update');
                 setGeneratedFiles(prev => ({ ...prev, '/App.js': newCode }));
                 setCodeContent(newCode);
                 toast.success(isRTL ? 'تم تحديث الصورة!' : 'Image updated!');
@@ -6547,6 +6583,9 @@ ${fixInstructions}
             if (result.success) {
               // Validate the resulting JSX before applying
               if (validateJSX(result.code)) {
+                // Push current state to history before applying changes
+                visualEditHistory.pushState(generatedFiles, result.message);
+                
                 const newFiles = {
                   ...generatedFiles,
                   '/App.js': result.code
@@ -6711,6 +6750,24 @@ ${fixInstructions}
             setSelectedElementInfo(null);
           }}
           isRTL={isRTL}
+          canUndo={visualEditHistory.canUndo}
+          canRedo={visualEditHistory.canRedo}
+          onUndo={() => {
+            const previousFiles = visualEditHistory.undo();
+            if (previousFiles) {
+              setGeneratedFiles(previousFiles);
+              setCodeContent(previousFiles['/App.js'] || '');
+              toast.info(isRTL ? 'تم التراجع' : 'Undone');
+            }
+          }}
+          onRedo={() => {
+            const nextFiles = visualEditHistory.redo();
+            if (nextFiles) {
+              setGeneratedFiles(nextFiles);
+              setCodeContent(nextFiles['/App.js'] || '');
+              toast.info(isRTL ? 'تم الإعادة' : 'Redone');
+            }
+          }}
         />
       )}
       </>
