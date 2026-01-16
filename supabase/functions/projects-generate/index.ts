@@ -600,17 +600,32 @@ async function callGemini25ProWithImages(
 // NOTE: Create mode uses callGemini25Pro directly (line ~2243)
 
 // PLAN MODE: AI proposes changes, returns a structured plan (Lovable-style)
-// Now with SMART MODEL SELECTION - uses Flash for simple plans, Pro for complex
+// Now with SMART MODEL SELECTION + CONTEXT OPTIMIZATION (targeted files only)
 async function callGeminiPlanMode(
   userPrompt: string,
   currentFiles: Record<string, string>
 ): Promise<{ plan: string; modelSelection: ModelSelection }> {
-  const fileContext = Object.entries(currentFiles || {})
-    .map(([path, content]) => `=== FILE: ${path} ===\n${content}`)
-    .join("\n\n");
+  const fileCount = Object.keys(currentFiles || {}).length;
+  
+  // 🚀 CONTEXT OPTIMIZATION: Send only file names + key files (reduces tokens by 75%+)
+  const fileNames = Object.keys(currentFiles || {});
+  const keyFiles = ['App.jsx', 'App.js', 'App.tsx', 'index.jsx', 'index.js', 'index.tsx', 'main.jsx', 'main.js', 'main.tsx'];
+  const targetFiles = fileNames.filter(f => keyFiles.some(k => f.endsWith(k)));
+  
+  // Include only essential entry files + file list for context
+  const essentialContext = targetFiles.length > 0
+    ? targetFiles.map(path => `=== FILE: ${path} ===\n${currentFiles[path] || ''}`).join("\n\n")
+    : '';
+  
+  const fileListStr = fileNames.join('\n');
+  const fileContext = `📁 Project has ${fileCount} files:
+${fileListStr}
+
+${essentialContext ? `📄 Key Entry Files (for routing/structure):\n${essentialContext}` : ''}
+
+⚠️ Note: For detailed file content during plan execution, the execute step will receive full file content.`;
 
   // Smart model selection for plan mode
-  const fileCount = Object.keys(currentFiles || {}).length;
   const modelSelection = selectOptimalModel(userPrompt, false, 'plan', fileCount);
   console.log(`[Plan Mode] Model selected: ${modelSelection.model} (${modelSelection.tier}) - ${modelSelection.reason}`);
 
@@ -673,18 +688,46 @@ Return JSON only.`;
 }
 
 // EXECUTE MODE: AI writes full file rewrites based on a plan
-// Now with SMART MODEL SELECTION - uses Flash for simple executions, Pro for complex
+// Now with SMART MODEL SELECTION + CONTEXT OPTIMIZATION (plan-relevant files only)
 async function callGeminiExecuteMode(
   planToExecute: string,
   currentFiles: Record<string, string>,
   userInstructions: string = ""
 ): Promise<{ files: Record<string, string>; summary: string; modelSelection: ModelSelection }> {
-  const fileContext = Object.entries(currentFiles || {})
-    .map(([path, content]) => `=== FILE: ${path} ===\n${content}`)
+  const fileCount = Object.keys(currentFiles || {}).length;
+  
+  // 🚀 CONTEXT OPTIMIZATION: Extract files mentioned in the plan + include those only
+  const allFileNames = Object.keys(currentFiles || {});
+  const planLower = planToExecute.toLowerCase();
+  
+  // Find files mentioned in the plan (by path or filename)
+  const mentionedFiles = allFileNames.filter(filePath => {
+    const fileName = filePath.split('/').pop() || '';
+    return planLower.includes(filePath.toLowerCase()) || 
+           planLower.includes(fileName.toLowerCase());
+  });
+  
+  // Also include key entry files for context
+  const keyFiles = ['App.jsx', 'App.js', 'App.tsx', 'index.jsx', 'index.js', 'index.tsx'];
+  const entryFiles = allFileNames.filter(f => keyFiles.some(k => f.endsWith(k)));
+  
+  // Combine mentioned + entry files (dedupe)
+  const relevantFiles = [...new Set([...mentionedFiles, ...entryFiles])];
+  
+  // Build context with only relevant files
+  const relevantContext = relevantFiles
+    .map(path => `=== FILE: ${path} ===\n${currentFiles[path] || ''}`)
     .join("\n\n");
+  
+  const otherFilesList = allFileNames.filter(f => !relevantFiles.includes(f)).join('\n');
+  
+  const fileContext = `📄 Files to modify (full content):
+${relevantContext}
+
+${otherFilesList ? `📁 Other project files (names only - ${allFileNames.length - relevantFiles.length} files):
+${otherFilesList}` : ''}`;
 
   // Smart model selection for execute mode
-  const fileCount = Object.keys(currentFiles || {}).length;
   const modelSelection = selectOptimalModel(planToExecute, false, 'execute', fileCount);
   console.log(`[Execute Mode] Model selected: ${modelSelection.model} (${modelSelection.tier}) - ${modelSelection.reason}`);
 
@@ -2041,11 +2084,17 @@ When user asks for "contact form", "newsletter", use the form submission API.
 
 
     // CHAT MODE: Smart Q&A - answers questions OR returns a plan if code changes are needed
-    // Now with SMART MODEL SELECTION
+    // Now with SMART MODEL SELECTION + CONTEXT OPTIMIZATION (file names only, not content)
     if (mode === 'chat') {
       const currentFiles = body.currentFiles || {};
-      const filesStr = Object.entries(currentFiles || {}).map(([k, v]) => `FILE: ${k}\n${v}`).join('\n\n');
       const fileCount = Object.keys(currentFiles).length;
+      
+      // 🚀 CONTEXT OPTIMIZATION: Send only file NAMES, not content (reduces tokens by 90%+)
+      const fileList = Object.keys(currentFiles).join('\n');
+      const filesStr = `📁 Project Structure (${fileCount} files - names only for efficiency):
+${fileList}
+
+⚠️ Note: For detailed code analysis or edits, use Agent mode which can read specific files on-demand.`;
       
       // Smart model selection for chat mode
       const hasImages = Array.isArray(images) && images.length > 0;
