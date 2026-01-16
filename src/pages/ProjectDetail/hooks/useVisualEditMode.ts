@@ -17,7 +17,7 @@ interface UseVisualEditModeReturn {
   setShowPopover: React.Dispatch<React.SetStateAction<boolean>>;
   setIsInlineEditing: React.Dispatch<React.SetStateAction<boolean>>;
   setInlineEditText: React.Dispatch<React.SetStateAction<string>>;
-  handleElementSelect: (ref: string, info?: SelectedElementInfo) => void;
+  handleElementSelect: (info: SelectedElementInfo) => void;
   handleClose: () => void;
   handleSelectParent: () => void;
   handleStartInlineEdit: () => void;
@@ -34,13 +34,11 @@ export function useVisualEditMode({ isRTL, onDirectEdit }: UseVisualEditModeOpti
   const [inlineEditText, setInlineEditText] = useState('');
 
   // Handle element selection from the iframe
-  const handleElementSelect = useCallback((ref: string, info?: SelectedElementInfo) => {
-    console.log('[useVisualEditMode] Element selected:', ref, info);
-    if (info) {
-      setSelectedElement(info);
-      setShowPopover(true);
-      setIsInlineEditing(false);
-    }
+  const handleElementSelect = useCallback((info: SelectedElementInfo) => {
+    console.log('[useVisualEditMode] Element selected:', info);
+    setSelectedElement(info);
+    setShowPopover(true);
+    setIsInlineEditing(false);
   }, []);
 
   // Close the popover and clear selection
