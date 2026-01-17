@@ -40,13 +40,42 @@ import VideoEditorPro from '@/components/video-maker/VideoEditorPro';
 import AIVideomaker from '@/components/video-maker/AIVideomaker';
 import { useLocation } from 'react-router-dom';
 
+const normalizeAudioUrl = (url: string) => {
+  if (!url) return '';
+  let cleanUrl = url.trim();
+  try {
+    cleanUrl = decodeURIComponent(cleanUrl).trim();
+  } catch {
+    // keep trimmed
+  }
+  if (cleanUrl.startsWith(' ')) {
+    cleanUrl = cleanUrl.trimStart();
+  }
+  if (cleanUrl.startsWith('%20')) {
+    cleanUrl = cleanUrl.slice(3).trimStart();
+  }
+  if (!/^https?:\/\//i.test(cleanUrl)) {
+    const base = SUPABASE_URL.replace(/\/$/, '');
+    if (cleanUrl.startsWith('/')) {
+      cleanUrl = `${base}${cleanUrl}`;
+    } else if (cleanUrl.startsWith('storage/v1/object/public/')) {
+      cleanUrl = `${base}/${cleanUrl}`;
+    }
+  }
+  return cleanUrl;
+};
+
 // Helper function to download audio files on mobile
 const handleDownload = async (url: string, filename: string) => {
   try {
     // Detect iOS
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    const safeUrl = normalizeAudioUrl(url);
+    if (!safeUrl) {
+      throw new Error('Missing audio URL');
+    }
     
-    const response = await fetch(url);
+    const response = await fetch(safeUrl);
     const blob = await response.blob();
     
     // On iOS, use Share API if available for better UX
@@ -79,7 +108,10 @@ const handleDownload = async (url: string, filename: string) => {
   } catch (error) {
     console.error('Download failed:', error);
     // Last resort: open in new tab
-    window.open(url, '_blank');
+    const safeUrl = normalizeAudioUrl(url);
+    if (safeUrl) {
+      window.open(safeUrl, '_blank');
+    }
   }
 };
 
@@ -1431,13 +1463,29 @@ function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
       const prodIntensityGen = wantsArabicGen
         ? `شدة المنتج: ${producerIntensity} من 5`
         : `Producer intensity: ${producerIntensity} of 5`;
+      const languageQualityGen = wantsArabicGen
+        ? 'استخدم العربية الفصحى الواضحة فقط بدون كلمات غير مفهومة أو مختلقة.'
+        : '';
       const hookLineGen = hookEmphasis
         ? (wantsArabicGen ? 'ركّز على لازمـة قوية وواضحة.' : 'Emphasize a strong, clear hook.')
         : '';
       const honorChipsGen = wantsArabicGen
         ? 'التزم بالأنماط والآلات والمزاج المحدد. لا تضف عناصر جديدة إذا كانت السلامة مفعلة.'
         : 'Honor the selected styles, instruments, and mood. Do not add new elements if safety is on.';
-      const fullPrompt = [titleLineGen, contentLineGen, stylesLineGen, honorChipsGen, producerNotesGen, hookLineGen, prodIntensityGen, arrangementLineGen, durationLineGen, vocalsLineGen, lyricsContentGen].filter(Boolean).join('\n');
+      const fullPrompt = [
+        titleLineGen,
+        contentLineGen,
+        stylesLineGen,
+        honorChipsGen,
+        producerNotesGen,
+        hookLineGen,
+        prodIntensityGen,
+        arrangementLineGen,
+        durationLineGen,
+        vocalsLineGen,
+        languageQualityGen,
+        lyricsContentGen
+      ].filter(Boolean).join('\n');
 
       // INSERT PLACEHOLDER RECORD FIRST - ensures the generation counts toward limit
       const placeholderFileName = `${user.id}/${Date.now()}_pending.mp3`;

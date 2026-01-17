@@ -47,7 +47,8 @@ import {
   Lightbulb,
   Circle,
   FileText,
-  Square
+  Square,
+  HelpCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -5139,14 +5140,78 @@ ${fixInstructions}
                   }
 
                   // EXECUTION RESPONSE FORMAT: Clean Lovable-style format
-                  // Detect structured execution_result OR verbose execution response
+                  // Detect structured execution_result OR clarification_needed OR verbose execution response
                   let executionResult: { type: string; title: string; response?: string; summary: string; files: string[] } | null = null;
+                  let clarificationResult: { type: string; title: string; message: string; candidates: Array<{ file: string; preview: string; line?: number }>; suggestion: string } | null = null;
                   try {
                     const parsed = JSON.parse(msg.content);
                     if (parsed.type === 'execution_result') {
                       executionResult = parsed;
+                    } else if (parsed.type === 'clarification_needed') {
+                      clarificationResult = parsed;
                     }
                   } catch { /* not JSON */ }
+                  
+                  // 🎯 OPTION D: CLARIFICATION CARD - When agent needs user to specify which element
+                  if (clarificationResult) {
+                    return (
+                      <div key={i} className={cn(
+                        "flex flex-col group animate-in fade-in slide-in-from-bottom-1 duration-300",
+                        "items-start w-full"
+                      )}>
+                        <div className="w-full bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-lg overflow-hidden backdrop-blur-sm">
+                          {/* Header with question mark */}
+                          <div className="px-4 py-3 border-b border-amber-500/20 flex items-center gap-2">
+                            <HelpCircle className="h-4 w-4 text-amber-500" />
+                            <span className="text-[13px] text-amber-500 font-semibold flex-1">
+                              {isRTL ? 'أي عنصر تقصد؟' : clarificationResult.title || 'Which element do you mean?'}
+                            </span>
+                          </div>
+                          
+                          {/* Message */}
+                          <div className="px-4 py-3 space-y-3">
+                            <p className="text-[13px] text-foreground/80 leading-relaxed">
+                              {isRTL ? 'وجدت عدة عناصر تطابق طلبك. الرجاء تحديد أي واحد تريد تغييره:' : clarificationResult.message}
+                            </p>
+                            
+                            {/* Candidate options */}
+                            {clarificationResult.candidates && clarificationResult.candidates.length > 0 && (
+                              <div className="space-y-2">
+                                {clarificationResult.candidates.map((candidate, idx) => (
+                                  <button
+                                    key={idx}
+                                    onClick={() => {
+                                      // Send a follow-up message specifying this candidate
+                                      const clarifyMsg = `I mean the one in ${candidate.file}${candidate.line ? ` at line ${candidate.line}` : ''}: "${candidate.preview.substring(0, 50)}..."`;
+                                      setChatInput(clarifyMsg);
+                                    }}
+                                    className="w-full text-left p-3 rounded-lg border border-amber-500/20 hover:border-amber-500/50 hover:bg-amber-500/5 transition-all group/candidate"
+                                  >
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <FileCode className="h-3 w-3 text-amber-500" />
+                                      <code className="text-[11px] font-mono text-amber-600 dark:text-amber-400">
+                                        {candidate.file}{candidate.line ? `:${candidate.line}` : ''}
+                                      </code>
+                                    </div>
+                                    <p className="text-[12px] text-foreground/60 truncate group-hover/candidate:text-foreground/80">
+                                      {candidate.preview || 'Click to select this element'}
+                                    </p>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                            
+                            {/* Suggestion */}
+                            {clarificationResult.suggestion && (
+                              <p className="text-[11px] text-foreground/50 italic">
+                                💡 {isRTL ? 'نصيحة: يمكنك النقر على العنصر في المعاينة لتحديده بدقة' : clarificationResult.suggestion}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
                   
                   const isExecutionResponse = executionResult || (isAssistant && msg.content && msg.content.length > 150 && 
                     (msg.content.includes('implement') || msg.content.includes('add') || msg.content.includes('update') || 

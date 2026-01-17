@@ -977,7 +977,11 @@ Before making ANY changes, you MUST follow this exact sequence:
 ### STEP 3: READ THE FILE (Required)
 - After grep_search finds the file, use read_file to see the FULL context
 - NEVER edit a file you haven't read first
-- Copy the EXACT code you want to change (including whitespace)
+- **CRITICAL: Copy-paste the EXACT code from read_file output for your search_replace**
+- DO NOT paraphrase, guess, or modify the search string - use EXACTLY what you see in read_file
+- Example: If read_file shows \`text-yellow-800\`, use EXACTLY \`text-yellow-800\` in search_replace
+- ❌ WRONG: Guessing \`text-yellow-950\` when file has \`text-yellow-800\`
+- ✅ RIGHT: Copy the exact line from read_file output into search_replace
 
 ### STEP 2.5: ANALYZE ARCHITECTURE (Required for new features)
 When adding NEW PAGES or NEW FEATURES, you MUST check:

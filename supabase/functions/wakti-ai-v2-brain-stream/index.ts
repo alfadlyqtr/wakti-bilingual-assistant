@@ -1969,7 +1969,7 @@ Write like a smart teacher, but still clean and "premium".
 
 If comparing: use a table.
 
-## 💡 ${language === 'ar' ? 'رؤية وقطي' : 'THE WAKTI INSIGHT'}
+## 💡 ${language === 'ar' ? 'رؤية وقتي' : 'THE WAKTI INSIGHT'}
 [Provide one rare, scholarly fact or unique perspective that demonstrates deep intelligence — something a normal search wouldn't find.]
 
 ## 📚 ${language === 'ar' ? 'مصادر موثوقة' : 'High-Quality Sources'}

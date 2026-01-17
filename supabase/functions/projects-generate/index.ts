@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validateProjectCSS, formatCSSWarnings, getCSSInheritanceGuidelines, type CSSWarning } from "../_shared/cssValidator.ts";
+import { logAIFromRequest } from "../_shared/aiLogger.ts";
 import { 
   AGENT_TOOLS, 
   AGENT_SYSTEM_PROMPT, 
@@ -2436,6 +2437,8 @@ ${filesStr}`;
     // AGENT MODE: Full autonomous agent with tool calling
     // ========================================================================
     if (mode === 'agent') {
+      const agentStartTime = Date.now(); // Track duration for AI logging
+      
       if (!projectId) {
         return new Response(JSON.stringify({ ok: false, error: 'Missing projectId' }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
@@ -2547,6 +2550,50 @@ Match the className and innerText to find it in the code.
         }
       }
       
+      // ========================================================================
+      // 🧠 OPTION B: SMART PROMPT PRE-PROCESSING
+      // Enrich vague user requests with specific guidance for amateur users
+      // ========================================================================
+      let enrichedPrompt = prompt;
+      const promptLower = prompt.toLowerCase();
+      
+      // Detect "title" requests and add guidance
+      if (promptLower.includes('title') || promptLower.includes('heading') || promptLower.includes('عنوان')) {
+        if (!promptLower.includes('section') && !promptLower.includes('card') && !promptLower.includes('قسم')) {
+          enrichedPrompt += `
+
+🎯 CLARIFICATION: When user says "title" or "heading", they mean the MAIN/PRIMARY one:
+- Look for the LARGEST text (h1, or elements with text-4xl, text-5xl, text-6xl)
+- Look for dynamic content like {data.name}, {user.name}, {title}, {name}
+- The main title is usually in the HERO section at the top
+- Do NOT change section titles, card titles, or smaller headings
+- If you find MULTIPLE possible titles, you MUST ask the user which one they mean`;
+        }
+      }
+      
+      // Detect "name" requests (like "change the name color")
+      if (promptLower.includes('name') || promptLower.includes('اسم')) {
+        if (!promptLower.includes('file') && !promptLower.includes('variable') && !promptLower.includes('ملف')) {
+          enrichedPrompt += `
+
+🎯 CLARIFICATION: When user says "name", they likely mean a person's name displayed on the page:
+- Search for {data.name}, {user.name}, {profile.name}, or similar dynamic bindings
+- Look for the prominent name display (usually large text, hero section)
+- Do NOT change variable names or file names unless explicitly asked`;
+        }
+      }
+      
+      // Detect color change requests
+      if (promptLower.includes('color') || promptLower.includes('لون')) {
+        enrichedPrompt += `
+
+🎯 COLOR CHANGE GUIDANCE:
+- First use grep_search to find the EXACT element
+- Read the file to see the CURRENT color class (e.g., text-cyan-400, text-purple-900)
+- Copy the EXACT current class and replace it - do NOT guess the class name
+- Valid Tailwind colors: red, orange, amber, yellow, lime, green, emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia, pink, rose (with shades 50-950)`;
+      }
+      
       // Prepare the initial user message with FILE LIST ONLY (not content)
       let userMessageContent = `📁 PROJECT FILES (${fileCount} files):
 ${fileList}
@@ -2558,7 +2605,7 @@ ${inspectSelectionContext}
 ${screenshotAnchorsContext}
 
 USER REQUEST:
-${prompt}`;
+${enrichedPrompt}`;
       
       // Add debug context if there are errors
       if (agentDebugContext.errors.length > 0 || agentDebugContext.networkErrors.length > 0) {
@@ -2589,6 +2636,15 @@ ${prompt}`;
       const filesRead: Set<string> = new Set();
       const filesEdited: Set<string> = new Set();
       const filesVerified: Set<string> = new Set();
+      
+      // 🔒 NEW: KNOWN FILES SET - Only allow edits to files that EXIST in the project
+      const knownFiles: Set<string> = new Set();
+      // Populate from fileList (already normalized paths)
+      fileList.split('\n').filter(f => f.trim()).forEach(f => {
+        const normalized = f.startsWith('/') ? f : `/${f}`;
+        knownFiles.add(normalized);
+      });
+      console.log(`[Agent Mode] 🔒 Known files set initialized with ${knownFiles.size} files: ${[...knownFiles].slice(0, 5).join(', ')}...`);
       
       // 🔒 NEW: RENDER PATH TRACKING - Know which files are actually used
       let allFilesCache: Record<string, string> = {};
@@ -2632,9 +2688,16 @@ ${prompt}`;
       // 🔒 NEW: AMBIGUITY TRACKING - Track if agent found multiple candidates
       let grepAmbiguityDetected = false;
       let grepCandidateFiles: string[] = [];
-      let grepAmbiguityMessage = '';
-      let grepRequiresUserInput = false;
-      let grepSuggestInspectMode = false;
+      const grepAmbiguityMessage = '';
+      const grepRequiresUserInput = false;
+      const grepSuggestInspectMode = false;
+      
+      // 🔒 EDIT TRACKING - Track last edit for verification
+      let lastEditPath: string | null = null;
+      let editVerificationPending = false;
+      
+      // 🔒 CONTENT TRACKING - Cache content from read_file to validate search_replace
+      const fileContentCache: Map<string, string> = new Map();
       
       // 🔒 NEW: Accumulated warnings for result
       const resultWarnings: string[] = [];
@@ -2783,16 +2846,57 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
           const targetPath = args?.path ? (args.path.startsWith('/') ? args.path : `/${args.path}`) : null;
           
           if ((name === 'search_replace' || name === 'write_file' || name === 'insert_code') && targetPath) {
+            // 🔒 HARD BLOCK: Reject edits to files that don't exist in the project (unless write_file for new file)
+            const isNewFileCreation = name === 'write_file' && !knownFiles.has(targetPath);
+            
+            if (!knownFiles.has(targetPath) && name !== 'write_file') {
+              console.error(`[Agent Mode] 🚫 BLOCKED: Attempted ${name} on "${targetPath}" which does NOT exist in project!`);
+              console.error(`[Agent Mode] Known files: ${[...knownFiles].join(', ')}`);
+              
+              // Return error instead of executing
+              const blockResult = {
+                success: false,
+                error: `BLOCKED: File "${targetPath}" does not exist in this project. ` +
+                  `You can only edit files that exist. Available files: ${[...knownFiles].slice(0, 5).join(', ')}${knownFiles.size > 5 ? '...' : ''}`,
+                hint: `Use list_files to see all project files, then edit one of those.`,
+                availableFiles: [...knownFiles].slice(0, 10)
+              };
+              
+              toolCallsLog.push({ tool: name, args, result: blockResult });
+              functionResponses.push({
+                functionResponse: { name, response: blockResult }
+              });
+              continue; // Skip to next function call
+            }
+            
+            // If creating a new file, add it to knownFiles
+            if (isNewFileCreation) {
+              console.log(`[Agent Mode] 📝 New file creation: ${targetPath}`);
+              knownFiles.add(targetPath);
+            }
+            
             // Check if file was read first (or found via grep_search)
-            if (!filesRead.has(targetPath)) {
+            if (!filesRead.has(targetPath) && !isNewFileCreation) {
               console.warn(`[Agent Mode] ⚠️ ENFORCEMENT: Attempted ${name} on ${targetPath} without reading first!`);
               // Don't block, but inject a warning into the response
-              const warningResult = {
+              const _warningResult = {
                 warning: `You should read_file or grep_search for "${targetPath}" before editing. Proceeding anyway, but this may cause incorrect edits.`,
                 proceedingAnyway: true
               };
               // Still execute but log the violation
               console.log(`[Agent Mode] VIOLATION: Edit without read - ${targetPath}`);
+            }
+            
+            // 🔒 HALLUCINATION CHECK: Validate search string was actually seen in read_file
+            if (name === 'search_replace' && args?.search && fileContentCache.has(targetPath)) {
+              const cachedContent = fileContentCache.get(targetPath)!;
+              const searchString = args.search as string;
+              if (!cachedContent.includes(searchString)) {
+                console.error(`[Agent Mode] 🚫 HALLUCINATION DETECTED: search_replace search string NOT found in cached read_file content!`);
+                console.error(`[Agent Mode] Search string (first 100 chars): "${searchString.substring(0, 100)}..."`);
+                console.error(`[Agent Mode] This suggests the agent is guessing/hallucinating the code instead of copying from read_file`);
+                // Add warning to result but don't block (the tool itself will fail if string not found)
+              }
             }
           }
           
@@ -2803,9 +2907,10 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
           // ========================================================================
           if (name === 'read_file' && targetPath && result.content) {
             filesRead.add(targetPath);
-            // Cache file content for render path computation
+            // Cache file content for render path computation AND search_replace validation
             allFilesCache[targetPath] = result.content;
-            console.log(`[Agent Mode] 📖 Tracked read: ${targetPath}`);
+            fileContentCache.set(targetPath, result.content);
+            console.log(`[Agent Mode] 📖 Tracked read: ${targetPath} (${result.content.length} chars cached)`);
           }
           
           if (name === 'list_files' && result.files && !renderPathComputed) {
@@ -2869,6 +2974,12 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
               tc.tool === 'list_files' || tc.tool === 'grep_search' || tc.tool === 'read_file'
             );
             
+            // Count successful edits (moved up to fix "used before declaration" error)
+            const successfulEdits = toolCallsLog.filter(tc => 
+              (tc.tool === 'search_replace' || tc.tool === 'write_file' || tc.tool === 'insert_code') && 
+              tc.result?.success === true
+            );
+            
             if (explorationCalls.length === 0) {
               console.error(`[Agent Mode] 🚫 BLOCKED task_complete: NO exploration tools called!`);
               functionResponses[functionResponses.length - 1].functionResponse.response = {
@@ -2894,12 +3005,6 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
             
             // Check if this is an EDIT request
             const isEditRequest = /\b(change|update|fix|add|remove|set|make|edit|modify|delete|replace|rename|color|style)\b/i.test(prompt);
-            
-            // Count successful edits
-            const successfulEdits = toolCallsLog.filter(tc => 
-              (tc.tool === 'search_replace' || tc.tool === 'write_file' || tc.tool === 'insert_code') && 
-              tc.result?.success === true
-            );
             
             // 🔒 CHECK 3: Block if edit request but NO successful edits
             if (isEditRequest && successfulEdits.length === 0) {
@@ -3026,6 +3131,52 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
         }), { headers: corsHeaders, status: 200 });
       }
       
+      // ========================================================================
+      // 🎯 OPTION D: CLARIFICATION RESPONSE - When multiple candidates found
+      // Return a special response type that frontend renders as a choice card
+      // ========================================================================
+      if (grepAmbiguityDetected && grepCandidateFiles.length > 1) {
+        // Check if the agent made any edits despite ambiguity
+        const successfulEditsCheck = toolCallsLog.filter(tc => 
+          (tc.tool === 'search_replace' || tc.tool === 'write_file' || tc.tool === 'insert_code') && 
+          tc.result?.success === true
+        );
+        
+        // If no successful edits and ambiguity detected, return clarification card
+        if (successfulEditsCheck.length === 0) {
+          console.log(`[Agent Mode] 🎯 CLARIFICATION NEEDED: Found ${grepCandidateFiles.length} candidates, no edits made`);
+          
+          // Extract candidate details from grep results
+          const candidateDetails: Array<{ file: string; preview: string; line?: number }> = [];
+          for (const tc of toolCallsLog) {
+            if (tc.tool === 'grep_search' && tc.result?.matches) {
+              for (const match of tc.result.matches) {
+                if (grepCandidateFiles.includes(match.file)) {
+                  candidateDetails.push({
+                    file: match.file,
+                    preview: match.content?.substring(0, 100) || '',
+                    line: match.line
+                  });
+                }
+              }
+            }
+          }
+          
+          return new Response(JSON.stringify({
+            mode: 'agent',
+            result: {
+              type: 'clarification_needed',
+              title: 'Which element do you mean?',
+              message: 'I found multiple elements that could match your request. Please specify which one you want to change:',
+              candidates: candidateDetails.slice(0, 5),
+              candidateFiles: grepCandidateFiles.slice(0, 5),
+              suggestion: 'You can click on the element in the preview to select it precisely, or describe it more specifically.',
+              filesChanged: []
+            }
+          }), { headers: corsHeaders, status: 200 });
+        }
+      }
+      
       // Collect all files that were written
       const filesChanged: string[] = [];
       toolCallsLog.forEach(tc => {
@@ -3101,6 +3252,31 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
         totalOutputText,
         projectId
       );
+      
+      // 📊 LOG TO ADMIN AI USAGE - Track in ai_logs table for admin dashboard
+      const agentDurationMs = Date.now() - agentStartTime;
+      await logAIFromRequest(req, {
+        functionName: "projects-generate",
+        provider: "gemini",
+        model: agentModelSelection.model,
+        inputText: totalInputText.substring(0, 2000),
+        outputText: totalOutputText.substring(0, 2000),
+        inputTokens: agentCreditUsage.inputTokensEstimate,
+        outputTokens: agentCreditUsage.outputTokensEstimate,
+        durationMs: agentDurationMs,
+        status: "success",
+        metadata: {
+          mode: "agent",
+          tier: agentModelSelection.tier,
+          reason: agentModelSelection.reason,
+          projectId,
+          fileCount,
+          iterations: Math.ceil(toolCallsLog.length / 2),
+          toolCalls: toolCallsLog.length,
+          filesChanged: filesChanged.length,
+          costUSD: agentCreditUsage.estimatedCostUSD
+        }
+      });
       
       const result: AgentResult = {
         success: true,
@@ -3268,6 +3444,9 @@ Call task_complete when finished.`;
           consoleLogs: []
         };
         
+        const GEMINI_API_KEY_EXEC = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
+        if (!GEMINI_API_KEY_EXEC) throw new Error("GEMINI_API_KEY missing");
+        
         for (let iteration = 0; iteration < execMaxIterations; iteration++) {
           console.log(`[Execute Mode V2] ========== ITERATION ${iteration + 1}/${execMaxIterations} ==========`);
           
@@ -3278,7 +3457,7 @@ Call task_complete when finished.`;
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
-                  "x-goog-api-key": GEMINI_API_KEY,
+                  "x-goog-api-key": GEMINI_API_KEY_EXEC,
                 },
                 body: JSON.stringify({
                   contents: execMessages,
@@ -3475,7 +3654,7 @@ Return ONLY the JSON object. No explanation.`;
           console.error(`[Create Mode] MISSING /App.js after retry! Available: ${Object.keys(files).join(', ')}`);
           throw new Error("MISSING_APP_JS");
         }
-        assertNoHtml(files["/App.js"]);
+        assertNoHtml("/App.js", files["/App.js"]);
 
         // CSS Inheritance Validation - warn about common visual bugs
         const cssWarnings = validateProjectCSS(files);
@@ -3557,7 +3736,7 @@ Return ONLY the JSON object. No explanation.`;
         console.error(`[Edit Mode] WARNING: AI returned no changed files!`);
       }
       
-      if (changedFiles["/App.js"]) assertNoHtml(changedFiles["/App.js"]);
+      if (changedFiles["/App.js"]) assertNoHtml("/App.js", changedFiles["/App.js"]);
 
       const missing = findMissingReferencedFiles({ changedFiles, existingFiles });
       let finalFilesToUpsert: Record<string, string> = { ...changedFiles };
