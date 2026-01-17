@@ -4008,6 +4008,9 @@ ${fixInstructions}
           snapshotToSave = beforeSnapshot;
           setGeneratedFiles(newFiles);
           setCodeContent(newCode);
+          
+          // 🔒 FIX: Force Sandpack to fully re-mount after agent edits to ensure preview updates
+          setSandpackKey(prev => prev + 1);
 
           // Get files changed from agent result
           const changedFilesList: string[] = agentResult.result.filesChanged || [];
