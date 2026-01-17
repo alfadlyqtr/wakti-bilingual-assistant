@@ -148,49 +148,8 @@ function logCreditUsage(
 declare const Deno: {
   env: {
     get(key: string): string | undefined;
-    toObject(): Record<string, string>;
   };
 };
-
-// ============================================================================
-// ROBUST API KEY LOADER - Handles whitespace/encoding edge cases
-// ============================================================================
-function getGeminiApiKey(): string {
-  // Try direct lookup first (most common case)
-  let key = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
-  
-  if (key && key.trim()) {
-    return key.trim();
-  }
-  
-  // Fallback: iterate all keys with trimming (handles whitespace bugs)
-  try {
-    const allEnvKeys = Object.keys(Deno.env.toObject());
-    const geminiKey = allEnvKeys.find(k => k.trim() === "GEMINI_API_KEY");
-    const googleKey = allEnvKeys.find(k => k.trim() === "GOOGLE_GENAI_API_KEY");
-    
-    if (geminiKey) {
-      key = Deno.env.get(geminiKey);
-      if (key && key.trim()) return key.trim();
-    }
-    if (googleKey) {
-      key = Deno.env.get(googleKey);
-      if (key && key.trim()) return key.trim();
-    }
-  } catch (e) {
-    console.error("[getGeminiApiKey] Fallback lookup failed:", e);
-  }
-  
-  // Log available keys (names only, not values) for debugging
-  try {
-    const envKeys = Object.keys(Deno.env.toObject());
-    console.error(`[getGeminiApiKey] Available env keys: ${envKeys.join(', ')}`);
-  } catch (e) {
-    console.error("[getGeminiApiKey] Could not list env keys");
-  }
-  
-  throw new Error("GEMINI_API_KEY is not defined");
-}
 
 const allowedOrigins = [
   "https://wakti.qa",
@@ -374,7 +333,8 @@ async function callGeminiWithModel(
   userPrompt: string,
   jsonMode: boolean = true
 ): Promise<string> {
-  const GEMINI_API_KEY = getGeminiApiKey();
+  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
+  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
   
   console.log(`[Gemini] Calling model: ${model}`);
 
@@ -433,7 +393,8 @@ async function callGemini25Pro(
 async function analyzeScreenshotForAnchors(
   images: string[]
 ): Promise<{ anchors: string[]; description: string }> {
-  const GEMINI_API_KEY = getGeminiApiKey();
+  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
+  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
 
   const model = "gemini-2.5-pro";
   
@@ -538,7 +499,8 @@ async function callGemini25ProWithImages(
   images?: string[],
   jsonMode: boolean = true
 ): Promise<string> {
-  const GEMINI_API_KEY = getGeminiApiKey();
+  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
+  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
 
   // Use Gemini 2.5 Pro (vision-capable)
   const model = "gemini-2.5-pro";
@@ -2177,7 +2139,8 @@ ${fileList}
       const chatModelSelection = selectOptimalModel(prompt, hasImages, 'chat', fileCount);
       console.log(`[Chat Mode] Model selected: ${chatModelSelection.model} (${chatModelSelection.tier}) - ${chatModelSelection.reason}`);
       
-      const GEMINI_API_KEY = getGeminiApiKey();
+      const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
+      if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
       
       console.log(`[Chat Mode] Has images: ${hasImages}, count: ${hasImages ? images.length : 0}`);
       
@@ -2462,7 +2425,8 @@ ${filesStr}`;
       
       console.log(`[Agent Mode] Starting agent loop for: ${prompt.substring(0, 100)}...`);
       
-      const GEMINI_API_KEY = getGeminiApiKey();
+      const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
+      if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
       
       // ====================================================================
       // STEP 1: SCREENSHOT ANALYSIS - Extract visible text anchors FIRST
@@ -2600,12 +2564,9 @@ ${prompt}`;
       ];
       
       // OPTIMIZATION: Reduced from 8 to 4 iterations (50% less AI calls)
-      let maxIterations = 4;
+      const maxIterations = 4;
       const toolCallsLog: Array<{ tool: string; args: any; result: any }> = [];
       let taskCompleteResult: { summary: string; filesChanged: string[] } | null = null;
-      
-      const isEditRequest = /\b(change|update|fix|add|remove|set|make|edit|modify|delete|replace|rename)\b/i.test(prompt);
-      let hasMutationToolCall = false;
       
       // Smart model selection for agent mode
       const hasVisionInput = body.images && body.images.length > 0;
@@ -2681,21 +2642,8 @@ ${prompt}`;
             console.log(`[Agent Mode] Got text response (no tools): ${textPart.text.substring(0, 100)}...`);
           }
           
-          // SAFETY: If this is an edit request but we still haven't changed any file,
-          // extend the loop and force at least one real mutation tool call.
-          if (isEditRequest && !hasMutationToolCall && maxIterations === 4) {
-            console.log(`[Agent Mode] No file edits detected in first 4 iterations - extending and forcing a real edit`);
-            maxIterations = 6;
-            messages.push({
-              role: "user",
-              parts: [{
-                text: `⚠️ You have not made any code changes yet. You MUST apply at least ONE real edit now using search_replace/insert_code/write_file (not just read_file). Find the exact target element in the code (use screenshot anchors / inspect selection if provided), then apply the requested change. Do NOT call task_complete until you actually modify a file.`
-              }]
-            });
-            continue;
-          }
-          
           // FIX: If iteration 0 has no tool calls for an EDIT request, force the agent to use tools
+          const isEditRequest = /\b(change|update|fix|add|remove|set|make|edit|modify|delete|replace|rename)\b/i.test(prompt);
           if (iteration === 0 && isEditRequest && toolCallsLog.length === 0) {
             console.log(`[Agent Mode] FORCING tool usage - edit request received but no tools called`);
             // Append a follow-up message requiring tool usage
@@ -2724,39 +2672,22 @@ ${prompt}`;
           console.log(`[Agent Mode] Tool: ${name}`);
           console.log(`[Agent Mode] Args: ${JSON.stringify(args, null, 2).substring(0, 2000)}`);
           
-          let toolResult = await executeToolCall(projectId, { name, arguments: args || {} }, agentDebugContext, supabase, userId);
-          
-          // Track whether we actually mutated any file
-          if (
-            (name === 'search_replace' || name === 'write_file' || name === 'insert_code' || name === 'delete_file') &&
-            toolResult?.success
-          ) {
-            hasMutationToolCall = true;
-          }
-          
-          // Prevent "fake success": don't allow task_complete for edit requests if no file mutation happened
-          if (name === 'task_complete' && toolResult?.acknowledged && isEditRequest && !hasMutationToolCall) {
-            console.log('[Agent Mode] Rejecting task_complete: edit request but no file mutations detected');
-            toolResult = {
-              acknowledged: false,
-              error: 'No file edits were made. You must modify at least one file with search_replace/insert_code/write_file before completing.'
-            };
-          }
+          const result = await executeToolCall(projectId, { name, arguments: args || {} }, agentDebugContext, supabase, userId);
           
           // Log the result
-          console.log(`[Agent Mode] Result: ${JSON.stringify(toolResult, null, 2).substring(0, 1000)}`);
+          console.log(`[Agent Mode] Result: ${JSON.stringify(result, null, 2).substring(0, 1000)}`);
           console.log(`[Agent Mode] ================================`);
           
-          toolCallsLog.push({ tool: name, args, result: toolResult });
+          toolCallsLog.push({ tool: name, args, result });
           functionResponses.push({
-            functionResponse: { name, response: toolResult }
+            functionResponse: { name, response: result }
           });
           
           // Check for task_complete
-          if (name === 'task_complete' && toolResult.acknowledged) {
+          if (name === 'task_complete' && result.acknowledged) {
             taskCompleteResult = {
-              summary: toolResult.summary || 'Task completed',
-              filesChanged: toolResult.filesChanged || []
+              summary: result.summary || 'Task completed',
+              filesChanged: result.filesChanged || []
             };
           }
         }
@@ -2848,13 +2779,9 @@ ${prompt}`;
       );
       
       const result: AgentResult = {
-        success: !isEditRequest || hasMutationToolCall,
-        summary: taskCompleteResult?.summary || (!isEditRequest || hasMutationToolCall
-          ? `Agent completed after ${toolCallsLog.length} tool calls`
-          : 'No changes were applied. The agent could not locate a safe target to edit.') ,
-        filesChanged: (taskCompleteResult?.filesChanged && taskCompleteResult.filesChanged.length > 0)
-          ? taskCompleteResult.filesChanged
-          : [...new Set(filesChanged)],
+        success: true,
+        summary: taskCompleteResult?.summary || `Agent completed after ${toolCallsLog.length} tool calls`,
+        filesChanged: taskCompleteResult?.filesChanged || [...new Set(filesChanged)],
         iterations: Math.ceil(toolCallsLog.length / 2),
         toolCalls: toolCallsLog
       };
@@ -2923,9 +2850,6 @@ ${prompt}`;
       await assertProjectOwnership(supabase, projectId, userId);
       
       const job = await createJob(supabase, { projectId, userId, mode: 'edit', prompt: planToExecute });
-      
-      // Get API key FIRST before entering try block
-      const GEMINI_API_KEY = getGeminiApiKey();
       
       try {
         // Get current file LIST only (not content) - ULTRA OPTIMIZED

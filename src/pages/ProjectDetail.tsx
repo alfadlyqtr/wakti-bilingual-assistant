@@ -5137,7 +5137,7 @@ ${fixInstructions}
 
                   // EXECUTION RESPONSE FORMAT: Clean Lovable-style format
                   // Detect structured execution_result OR verbose execution response
-                  let executionResult: { type: string; title: string; response?: string; summary: string; files: string[]; noChanges?: boolean } | null = null;
+                  let executionResult: { type: string; title: string; response?: string; summary: string; files: string[] } | null = null;
                   try {
                     const parsed = JSON.parse(msg.content);
                     if (parsed.type === 'execution_result') {
@@ -5167,7 +5167,7 @@ ${fixInstructions}
                     }
                     
                     const hasSnapshotForApplied = msg.snapshot && Object.keys(msg.snapshot).length > 0;
-                    const isNoChanges = !!executionResult?.noChanges;
+                    
                     return (
                       <div key={i} className={cn(
                         "flex flex-col group animate-in fade-in slide-in-from-bottom-1 duration-300",
@@ -5176,10 +5176,8 @@ ${fixInstructions}
                         <div className="w-full bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border border-indigo-500/30 rounded-lg overflow-hidden backdrop-blur-sm">
                           {/* Header with checkmark */}
                           <div className="px-4 py-3 border-b border-indigo-500/20 flex items-center gap-2">
-                            <Check className={cn("h-4 w-4", isNoChanges ? "text-muted-foreground" : "text-emerald-500")} />
-                            <span className={cn("text-[13px] font-semibold flex-1", isNoChanges ? "text-muted-foreground" : "text-emerald-500")}>
-                              {executionResult?.title || (isRTL ? 'تم التطبيق' : 'Applied')}
-                            </span>
+                            <Check className="h-4 w-4 text-emerald-500" />
+                            <span className="text-[13px] text-emerald-500 font-semibold flex-1">{isRTL ? 'تم التطبيق' : 'Applied'}</span>
                             <button
                               onClick={() => {
                                 const text = `${summary}${uniqueFiles.length ? `\n\nFiles:\n- ${uniqueFiles.join('\n- ')}` : ''}`;
