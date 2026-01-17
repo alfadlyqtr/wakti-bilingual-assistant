@@ -2569,9 +2569,26 @@ ${prompt}`;
       const filesVerified: Set<string> = new Set();
       
       // Increased iterations to allow for proper read-edit-verify workflow
-      const maxIterations = 6;
+      const maxIterations = 8; // Increased to allow for mandatory exploration + edits
       const toolCallsLog: Array<{ tool: string; args: any; result: any }> = [];
       let taskCompleteResult: { summary: string; filesChanged: string[] } | null = null;
+      
+      // 🔒 HARDENING: Inject mandatory exploration prompt BEFORE the loop starts
+      // This ensures the agent ALWAYS explores the codebase first, regardless of prompt keywords
+      const mandatoryExplorationPrompt = `
+MANDATORY FIRST STEP: Before making ANY changes or completing ANY task, you MUST:
+1. Call list_files to understand the project structure
+2. Call grep_search to find the relevant code for this request  
+3. Call read_file on the most likely target file(s)
+
+Do NOT call task_complete or respond without first exploring the codebase.
+This is a HARD REQUIREMENT - the system will reject task_complete if no exploration was done.
+`;
+      messages.push({
+        role: "user",
+        parts: [{ text: mandatoryExplorationPrompt }]
+      });
+      console.log(`[Agent Mode] 🔒 Injected mandatory exploration prompt`);
       
       // Smart model selection for agent mode
       const hasVisionInput = body.images && body.images.length > 0;
@@ -2647,15 +2664,14 @@ ${prompt}`;
             console.log(`[Agent Mode] Got text response (no tools): ${textPart.text.substring(0, 100)}...`);
           }
           
-          // FIX: If iteration 0 has no tool calls for an EDIT request, force the agent to use tools
-          const isEditRequest = /\b(change|update|fix|add|remove|set|make|edit|modify|delete|replace|rename)\b/i.test(prompt);
-          if (iteration === 0 && isEditRequest && toolCallsLog.length === 0) {
-            console.log(`[Agent Mode] FORCING tool usage - edit request received but no tools called`);
-            // Append a follow-up message requiring tool usage
+          // 🔒 HARDENED: Force tool usage for ALL requests on early iterations, not just keyword-matched edits
+          // Removed keyword dependency - now applies to ANY agent request
+          if (iteration <= 1 && toolCallsLog.length === 0) {
+            console.log(`[Agent Mode] 🔒 FORCING tool usage - iteration ${iteration} with no tools called`);
             messages.push({
               role: "user",
               parts: [{
-                text: `⚠️ You MUST use tools to complete this edit request. Start by calling list_files to see the project structure, then read_file on the likely target file (e.g., /App.js or /src/App.jsx), then use search_replace to make the change. Do NOT just respond with text - use the tools!`
+                text: `⚠️ You MUST use tools before responding. Start by calling list_files to see the project structure, then grep_search to find relevant code, then read_file on the target file. Do NOT respond without using tools - this is a HARD REQUIREMENT!`
               }]
             });
             continue; // Don't break - continue to next iteration
@@ -2728,6 +2744,23 @@ ${prompt}`;
           // 🔒 HARD ENFORCEMENT: Block task_complete if no actual edits were made
           // ========================================================================
           if (name === 'task_complete') {
+            // 🔒 HARDENED STEP 1: Block task_complete if NO exploration happened at all
+            const explorationCalls = toolCallsLog.filter(tc => 
+              tc.tool === 'list_files' || tc.tool === 'grep_search' || tc.tool === 'read_file'
+            );
+            
+            if (explorationCalls.length === 0) {
+              console.error(`[Agent Mode] 🚫 BLOCKED task_complete: NO exploration tools called!`);
+              console.error(`[Agent Mode] Tool calls so far: ${toolCallsLog.map(tc => tc.tool).join(', ')}`);
+              functionResponses[functionResponses.length - 1].functionResponse.response = {
+                acknowledged: false,
+                error: 'BLOCKED: You must explore the codebase first. Call list_files or grep_search before completing.',
+                hint: 'Start with list_files to see what files exist, then grep_search to find the target code, then read_file to see it.'
+              };
+              // Force another iteration - don't set taskCompleteResult
+              continue;
+            }
+            
             // Check if this is an EDIT request
             const isEditRequest = /\b(change|update|fix|add|remove|set|make|edit|modify|delete|replace|rename|color|style)\b/i.test(prompt);
             
@@ -2788,6 +2821,24 @@ ${prompt}`;
           console.log(`[Agent Mode] Task completed: ${taskCompleteResult.summary}`);
           break;
         }
+      }
+      
+      // 🔒 HARDENED: Final safety check - ensure at least 1 meaningful tool call was made
+      const meaningfulToolCalls = toolCallsLog.filter(tc => 
+        tc.tool !== 'task_complete' && tc.result?.success !== false
+      );
+      
+      if (meaningfulToolCalls.length === 0) {
+        console.error(`[Agent Mode] 🔒 SAFETY BLOCK: Agent completed with ZERO meaningful tool calls!`);
+        console.error(`[Agent Mode] All calls: ${toolCallsLog.map(tc => tc.tool).join(', ')}`);
+        return new Response(JSON.stringify({
+          mode: 'agent',
+          result: {
+            summary: 'The AI Coder failed to explore the codebase. Please try again with a more specific request.',
+            filesChanged: [],
+            error: 'NO_TOOL_CALLS'
+          }
+        }), { headers: corsHeaders, status: 200 });
       }
       
       // Collect all files that were written
