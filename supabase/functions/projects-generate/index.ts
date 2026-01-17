@@ -9,16 +9,21 @@ import {
   getGeminiToolsConfig, 
   type AgentDebugContext, 
   type AgentResult,
-  // NEW: Smart enforcement utilities
+  // Smart enforcement utilities
   traceRenderPath,
   isFileInRenderPath,
   parseIntentAnchors,
   getSuggestedGrepQueries,
   detectAmbiguity,
   verifyEdit,
+  // NEW Phase 1-5: Enhanced validation
+  validateStyleChangeRequest,
+  isValidTailwindColor,
+  parseColorFromPrompt,
   type IntentAnchors,
   type AmbiguityResult,
-  type VerificationResult
+  type VerificationResult,
+  type StyleChangeValidation
 } from "./agentTools.ts";
 
 // ============================================================================
@@ -2590,23 +2595,49 @@ ${prompt}`;
       let activeRenderPath: Set<string> = new Set();
       let renderPathComputed = false;
       
-      // 🔒 NEW: INTENT PARSING - Extract specific anchors from user prompt
-      const intentAnchors = parseIntentAnchors(prompt);
+      // 🔒 ENHANCED: INTENT PARSING - Extract specific anchors from user prompt (with debugContext)
+      const intentAnchors = parseIntentAnchors(prompt, agentDebugContext);
       console.log(`[Agent Mode] 🎯 Intent anchors parsed:`, JSON.stringify({
         exactTexts: intentAnchors.exactTexts,
         classNames: intentAnchors.classNames,
         dataBindings: intentAnchors.dataBindings,
-        isGeneric: intentAnchors.isGenericQuery
+        isGeneric: intentAnchors.isGenericQuery,
+        isStyleRequest: intentAnchors.isStyleRequest,
+        requestedColor: intentAnchors.requestedColor,
+        hasInspectSelection: intentAnchors.hasInspectSelection
       }));
+      
+      // 🔒 PHASE 1: Early block for style changes without proper anchors
+      let styleChangeBlocked = false;
+      let styleBlockReason = '';
+      if (intentAnchors.isStyleRequest && intentAnchors.isGenericQuery && !intentAnchors.hasInspectSelection) {
+        styleChangeBlocked = true;
+        styleBlockReason = intentAnchors.genericReason || 'Style change requires specific element targeting.';
+        console.warn(`[Agent Mode] ⚠️ STYLE CHANGE PRE-BLOCKED: ${styleBlockReason}`);
+      }
+      
+      // 🔒 Validate requested color if present
+      let colorValidation = { valid: true, message: '' };
+      if (intentAnchors.requestedColor) {
+        const isValid = isValidTailwindColor(intentAnchors.requestedColor);
+        if (!isValid) {
+          colorValidation = { 
+            valid: false, 
+            message: `"${intentAnchors.requestedColor}" is not a valid Tailwind color. Use colors like: purple-900, blue-500, [#060541].`
+          };
+          console.warn(`[Agent Mode] ⚠️ INVALID COLOR: ${colorValidation.message}`);
+        }
+      }
       
       // 🔒 NEW: AMBIGUITY TRACKING - Track if agent found multiple candidates
       let grepAmbiguityDetected = false;
       let grepCandidateFiles: string[] = [];
+      let grepAmbiguityMessage = '';
+      let grepRequiresUserInput = false;
+      let grepSuggestInspectMode = false;
       
-      // 🔒 NEW: VERIFICATION TRACKING - Track if edits were verified
-      let lastEditPath: string | null = null;
-      let lastEditContent: string | null = null;
-      let editVerificationPending = false;
+      // 🔒 NEW: Accumulated warnings for result
+      const resultWarnings: string[] = [];
       
       // Increased iterations to allow for proper read-edit-verify workflow
       const maxIterations = 8; // Increased to allow for mandatory exploration + edits
@@ -3076,7 +3107,28 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
         summary: taskCompleteResult?.summary || `Agent completed after ${toolCallsLog.length} tool calls`,
         filesChanged: taskCompleteResult?.filesChanged || [...new Set(filesChanged)],
         iterations: Math.ceil(toolCallsLog.length / 2),
-        toolCalls: toolCallsLog
+        toolCalls: toolCallsLog,
+        // Phase 5: Enhanced debugging info
+        renderPathStatus: {
+          computed: renderPathComputed,
+          activeFiles: [...activeRenderPath].slice(0, 10),
+          deadFiles: [...filesEdited].filter(f => renderPathComputed && !activeRenderPath.has(f))
+        },
+        ambiguityStatus: {
+          detected: grepAmbiguityDetected,
+          candidateFiles: grepCandidateFiles,
+          message: grepAmbiguityMessage,
+          requiresUserInput: grepRequiresUserInput,
+          suggestInspectMode: grepSuggestInspectMode
+        },
+        styleChangeStatus: {
+          isStyleRequest: intentAnchors.isStyleRequest,
+          requestedColor: intentAnchors.requestedColor,
+          colorValid: colorValidation.valid,
+          blocked: styleChangeBlocked,
+          blockedReason: styleBlockReason || colorValidation.message || undefined
+        },
+        warnings: resultWarnings
       };
       
       console.log(`[Agent Mode] Completed. Files changed: ${result.filesChanged.join(', ')}`);

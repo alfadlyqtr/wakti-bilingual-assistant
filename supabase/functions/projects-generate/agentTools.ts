@@ -194,19 +194,164 @@ export interface IntentAnchors {
   dataBindings: string[];    // Data bindings like {data.name}
   isGenericQuery: boolean;   // True if the prompt is too vague
   genericReason?: string;    // Why it's considered generic
+  isStyleRequest: boolean;   // True if this is a color/style change request
+  requestedColor?: string;   // The color the user wants (if detected)
+  hasInspectSelection: boolean; // True if debugContext has valid selectedElement
+}
+
+// Valid Tailwind color families (to validate color requests)
+const TAILWIND_COLOR_FAMILIES = [
+  'slate', 'gray', 'zinc', 'neutral', 'stone',
+  'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal',
+  'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose',
+  'white', 'black', 'transparent', 'current', 'inherit'
+];
+
+// Validate if a color class is valid Tailwind
+export function isValidTailwindColor(colorClass: string): boolean {
+  // Direct named colors
+  if (['white', 'black', 'transparent', 'current', 'inherit'].includes(colorClass)) {
+    return true;
+  }
+  
+  // Arbitrary values like text-[#060541]
+  if (colorClass.includes('[') && colorClass.includes(']')) {
+    return true;
+  }
+  
+  // Standard Tailwind pattern: color-shade (e.g., blue-500, rose-900)
+  const match = colorClass.match(/^([a-z]+)-(\d+)$/);
+  if (match) {
+    const [, family, shade] = match;
+    const validShades = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900', '950'];
+    return TAILWIND_COLOR_FAMILIES.includes(family) && validShades.includes(shade);
+  }
+  
+  return false;
+}
+
+// Parse color from natural language
+export function parseColorFromPrompt(prompt: string): string | undefined {
+  const promptLower = prompt.toLowerCase();
+  
+  // Common color mappings
+  const colorMappings: Record<string, string> = {
+    'dark purple': 'purple-900',
+    'darkpurple': 'purple-900',
+    'light purple': 'purple-300',
+    'dark blue': 'blue-900',
+    'light blue': 'blue-300',
+    'dark red': 'red-900',
+    'light red': 'red-300',
+    'dark green': 'green-900',
+    'light green': 'green-300',
+    'dark gray': 'gray-700',
+    'dark grey': 'gray-700',
+    'light gray': 'gray-300',
+    'light grey': 'gray-300',
+    'navy': 'blue-900',
+    'gold': 'amber-500',
+    'golden': 'amber-500',
+    'silver': 'gray-400',
+    'maroon': 'red-900',
+    'teal': 'teal-500',
+    'cyan': 'cyan-500',
+    'magenta': 'fuchsia-500',
+    'crimson': 'red-700',
+    'coral': 'orange-400',
+    'salmon': 'red-300',
+    'olive': 'lime-700',
+    'beige': 'amber-100',
+    'ivory': 'amber-50',
+    'tan': 'amber-200',
+    'brown': 'amber-800',
+  };
+  
+  // Check for explicit hex colors
+  const hexMatch = prompt.match(/#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b/);
+  if (hexMatch) {
+    return `[${hexMatch[0]}]`;
+  }
+  
+  // Check for rgb/rgba
+  const rgbMatch = prompt.match(/rgba?\s*\([^)]+\)/i);
+  if (rgbMatch) {
+    return `[${rgbMatch[0].replace(/\s/g, '')}]`;
+  }
+  
+  // Check for color mappings
+  for (const [phrase, tailwind] of Object.entries(colorMappings)) {
+    if (promptLower.includes(phrase)) {
+      return tailwind;
+    }
+  }
+  
+  // Check for direct Tailwind colors mentioned
+  for (const family of TAILWIND_COLOR_FAMILIES) {
+    const regex = new RegExp(`\\b${family}[- ]?(\\d{2,3})\\b`, 'i');
+    const match = promptLower.match(regex);
+    if (match) {
+      return `${family}-${match[1]}`;
+    }
+    // Just the color family without shade
+    if (promptLower.includes(family) && family !== 'current' && family !== 'inherit') {
+      // Default to 500 for most colors
+      if (['white', 'black', 'transparent'].includes(family)) {
+        return family;
+      }
+      return `${family}-500`;
+    }
+  }
+  
+  return undefined;
 }
 
 /**
  * Parse user prompt to extract target element anchors
  */
-export function parseIntentAnchors(prompt: string): IntentAnchors {
+export function parseIntentAnchors(prompt: string, debugContext?: AgentDebugContext): IntentAnchors {
   const result: IntentAnchors = {
     exactTexts: [],
     classNames: [],
     elementTypes: [],
     dataBindings: [],
-    isGenericQuery: false
+    isGenericQuery: false,
+    isStyleRequest: false,
+    hasInspectSelection: false
   };
+  
+  // Check for Inspect Selection in debugContext
+  if (debugContext?.selectedElement) {
+    result.hasInspectSelection = true;
+    const sel = debugContext.selectedElement;
+    if (sel.innerText) {
+      result.exactTexts.push(sel.innerText.substring(0, 100));
+    }
+    if (sel.className) {
+      result.classNames.push(...sel.className.split(' ').filter(c => c.trim()));
+    }
+  }
+  
+  // Detect if this is a style/color request
+  const stylePatterns = [
+    /\b(change|update|set|make|modify)\s+(the\s+)?(color|colour|background|bg|text|font)/i,
+    /\b(color|colour)\s+(to|into|as)\s/i,
+    /\b(bg-|text-|border-|ring-)/i,
+    /\b(red|blue|green|purple|yellow|orange|pink|gray|grey|white|black|dark|light)\b/i,
+    /#[0-9a-fA-F]{3,6}\b/,
+  ];
+  
+  for (const pattern of stylePatterns) {
+    if (pattern.test(prompt)) {
+      result.isStyleRequest = true;
+      break;
+    }
+  }
+  
+  // Parse the requested color
+  if (result.isStyleRequest) {
+    result.requestedColor = parseColorFromPrompt(prompt);
+  }
   
   // Extract exact quoted text
   const quotedRe = /"([^"]+)"|'([^']+)'/g;
@@ -239,7 +384,7 @@ export function parseIntentAnchors(prompt: string): IntentAnchors {
   // Extract element type keywords
   const elementKeywords = ['button', 'title', 'header', 'footer', 'nav', 'navbar', 'sidebar', 
     'hero', 'section', 'card', 'modal', 'form', 'input', 'label', 'image', 'img', 'link',
-    'heading', 'h1', 'h2', 'h3', 'paragraph', 'text', 'span', 'div', 'container'];
+    'heading', 'h1', 'h2', 'h3', 'paragraph', 'text', 'span', 'div', 'container', 'name'];
   const promptLower = prompt.toLowerCase();
   for (const keyword of elementKeywords) {
     if (promptLower.includes(keyword)) {
@@ -247,13 +392,22 @@ export function parseIntentAnchors(prompt: string): IntentAnchors {
     }
   }
   
-  // Check if the query is too generic
-  const genericTerms = ['title', 'text', 'color', 'button', 'element', 'thing', 'stuff'];
+  // Check if the query is too generic (especially for style requests)
+  const genericTerms = ['title', 'text', 'color', 'button', 'element', 'thing', 'stuff', 'it', 'this', 'that', 'name'];
   const hasSpecificAnchor = result.exactTexts.length > 0 || 
                             result.dataBindings.length > 0 || 
-                            result.classNames.length > 0;
+                            (result.classNames.length > 0 && !result.classNames.every(c => genericTerms.includes(c)));
   
-  if (!hasSpecificAnchor && result.elementTypes.length > 0) {
+  // For style requests, we need STRONG anchors
+  if (result.isStyleRequest && !hasSpecificAnchor && !result.hasInspectSelection) {
+    result.isGenericQuery = true;
+    result.genericReason = `⚠️ STYLE CHANGE BLOCKED: Cannot reliably target the element. ` +
+      `For style/color changes, you MUST have one of: ` +
+      `1) Inspect Selection (click the element), ` +
+      `2) Exact text in quotes ("The Title Text"), ` +
+      `3) A specific className. ` +
+      `Currently only have generic terms: "${result.elementTypes.join(', ')}".`;
+  } else if (!hasSpecificAnchor && result.elementTypes.length > 0 && !result.hasInspectSelection) {
     // Only has generic element types, no specific anchors
     const onlyGenericTerms = result.elementTypes.every(t => genericTerms.includes(t));
     if (onlyGenericTerms) {
@@ -300,42 +454,55 @@ export interface AmbiguityResult {
   candidateFiles: string[];
   matchCount: number;
   message?: string;
+  requiresUserInput: boolean;  // True if we need user to pick a file
+  suggestInspectMode: boolean; // True if Inspect Mode would help
 }
 
 /**
  * Analyze grep_search results for ambiguity
  */
-export function detectAmbiguity(grepResults: Array<{ file: string; line: number; content: string }>): AmbiguityResult {
+export function detectAmbiguity(grepResults: Array<{ file: string; line: number; content: string }>, isStyleRequest: boolean = false): AmbiguityResult {
   if (!grepResults || grepResults.length === 0) {
-    return { isAmbiguous: false, candidateFiles: [], matchCount: 0 };
+    return { isAmbiguous: false, candidateFiles: [], matchCount: 0, requiresUserInput: false, suggestInspectMode: false };
   }
   
   // Get unique files
   const uniqueFiles = [...new Set(grepResults.map(r => r.file))];
   
-  // If matches are in more than 3 files, it's ambiguous
-  if (uniqueFiles.length > 3) {
+  // For style requests, be MORE strict about ambiguity
+  const ambiguityThreshold = isStyleRequest ? 2 : 3;
+  const matchThreshold = isStyleRequest ? 5 : 10;
+  
+  // If matches are in more than threshold files, it's ambiguous
+  if (uniqueFiles.length > ambiguityThreshold) {
     return {
       isAmbiguous: true,
       candidateFiles: uniqueFiles.slice(0, 5),
       matchCount: grepResults.length,
-      message: `Found "${grepResults[0]?.content?.substring(0, 30)}..." in ${uniqueFiles.length} files. ` +
-        `Please clarify which file you want to edit: ${uniqueFiles.slice(0, 5).join(', ')}${uniqueFiles.length > 5 ? '...' : ''}`
+      requiresUserInput: true,
+      suggestInspectMode: isStyleRequest,
+      message: `🔍 AMBIGUITY: Found "${grepResults[0]?.content?.substring(0, 30)}..." in ${uniqueFiles.length} files. ` +
+        `Please specify which file: ${uniqueFiles.slice(0, 3).join(', ')}${uniqueFiles.length > 3 ? '...' : ''} ` +
+        `OR use Inspect Mode to click on the element you want to change.`
     };
   }
   
-  // If too many matches (>10) even in few files, still ambiguous for generic terms
-  if (grepResults.length > 10 && uniqueFiles.length > 1) {
+  // If too many matches even in few files, still ambiguous for style changes
+  if (grepResults.length > matchThreshold && uniqueFiles.length > 1) {
     return {
       isAmbiguous: true,
       candidateFiles: uniqueFiles,
       matchCount: grepResults.length,
-      message: `Found ${grepResults.length} matches across ${uniqueFiles.length} files. ` +
-        `Please be more specific about which element you want to modify, or use Inspect Mode to click on it.`
+      requiresUserInput: true,
+      suggestInspectMode: isStyleRequest,
+      message: `🔍 AMBIGUITY: Found ${grepResults.length} matches across ${uniqueFiles.length} files. ` +
+        (isStyleRequest 
+          ? `For style changes, please use Inspect Mode to click on the exact element, or provide the exact text in quotes.`
+          : `Please be more specific about which element you want to modify.`)
     };
   }
   
-  return { isAmbiguous: false, candidateFiles: uniqueFiles, matchCount: grepResults.length };
+  return { isAmbiguous: false, candidateFiles: uniqueFiles, matchCount: grepResults.length, requiresUserInput: false, suggestInspectMode: false };
 }
 
 // ============================================================================
@@ -347,18 +514,37 @@ export interface VerificationResult {
   elementFound: boolean;
   fileExists: boolean;
   fileInRenderPath: boolean;
+  colorVerified?: boolean;      // For style changes: did the color change as expected?
+  colorIssue?: string;          // Description of color verification issue
+  conflictingClasses?: string[]; // Classes that might override (e.g., text-transparent)
   issues: string[];
 }
 
+// Classes that can prevent solid colors from showing
+const COLOR_BLOCKING_CLASSES = [
+  'text-transparent',
+  'bg-clip-text',
+  'bg-gradient-to-',
+  'from-',
+  'to-',
+  'via-',
+];
+
 /**
  * Verify that an edit was successful and the element exists in the active render chain
+ * Enhanced for style/color verification
  */
 export async function verifyEdit(
   filePath: string,
   expectedContent: string, // Content that should exist after edit
   allFiles: Record<string, string>,
   supabase: any,
-  projectId: string
+  projectId: string,
+  options?: {
+    isStyleChange?: boolean;
+    expectedColor?: string;
+    targetText?: string;
+  }
 ): Promise<VerificationResult> {
   const result: VerificationResult = {
     verified: false,
@@ -387,7 +573,7 @@ export async function verifyEdit(
   
   // 2. Check if the expected content exists in the file
   if (expectedContent && !data.content.includes(expectedContent)) {
-    result.issues.push(`Expected content not found in ${normalizedPath} after edit`);
+    result.issues.push(`Expected content "${expectedContent.substring(0, 50)}..." not found in ${normalizedPath} after edit`);
   } else {
     result.elementFound = true;
   }
@@ -397,16 +583,127 @@ export async function verifyEdit(
   const activeFiles = traceRenderPath(updatedFiles);
   
   if (!activeFiles.has(normalizedPath)) {
-    result.issues.push(`File ${normalizedPath} is NOT imported by the app entrypoint (App.js). ` +
-      `Changes to this file will have NO visible effect. Either edit the correct file, or add an import to App.js.`);
+    result.issues.push(`⚠️ RENDER PATH ERROR: File ${normalizedPath} is NOT imported by App.js. ` +
+      `Changes will have NO visible effect. Either edit the correct file, or add an import to App.js.`);
     result.fileInRenderPath = false;
   } else {
     result.fileInRenderPath = true;
   }
   
-  result.verified = result.fileExists && result.elementFound && result.fileInRenderPath;
+  // 4. Style-specific verification
+  if (options?.isStyleChange && options.expectedColor) {
+    result.colorVerified = false;
+    
+    // Check if the color class exists in the file
+    const colorClassRegex = new RegExp(`(text|bg|border)-${options.expectedColor.replace('[', '\\[').replace(']', '\\]')}`, 'i');
+    if (!colorClassRegex.test(data.content)) {
+      // Also check for arbitrary values
+      const arbitraryRegex = new RegExp(`(text|bg|border)-\\[${options.expectedColor}\\]`, 'i');
+      if (!arbitraryRegex.test(data.content)) {
+        result.colorIssue = `Color class for "${options.expectedColor}" not found in the file after edit.`;
+        result.issues.push(result.colorIssue);
+      } else {
+        result.colorVerified = true;
+      }
+    } else {
+      result.colorVerified = true;
+    }
+    
+    // Check for conflicting classes that would override the color
+    const conflicting: string[] = [];
+    for (const blocker of COLOR_BLOCKING_CLASSES) {
+      if (data.content.includes(blocker)) {
+        // Check if it's on the same element (rough heuristic: within 100 chars)
+        if (options.targetText) {
+          const targetIdx = data.content.indexOf(options.targetText);
+          if (targetIdx !== -1) {
+            const nearbyContent = data.content.substring(Math.max(0, targetIdx - 100), targetIdx + 100);
+            if (nearbyContent.includes(blocker)) {
+              conflicting.push(blocker);
+            }
+          }
+        } else {
+          conflicting.push(blocker);
+        }
+      }
+    }
+    
+    if (conflicting.length > 0) {
+      result.conflictingClasses = conflicting;
+      result.colorIssue = `⚠️ COLOR OVERRIDE DETECTED: Classes ${conflicting.join(', ')} may override your color change. ` +
+        `If the element uses text-transparent with bg-clip-text (for gradients), you need to modify the gradient colors instead.`;
+      result.issues.push(result.colorIssue);
+      result.colorVerified = false;
+    }
+  }
+  
+  result.verified = result.fileExists && result.elementFound && result.fileInRenderPath && 
+    (!options?.isStyleChange || result.colorVerified !== false);
   
   return result;
+}
+
+// ============================================================================
+// STYLE CHANGE VALIDATION - Ensure style changes will actually work
+// ============================================================================
+
+export interface StyleChangeValidation {
+  isValid: boolean;
+  blockedReason?: string;
+  suggestedFix?: string;
+  requiresInspectMode: boolean;
+}
+
+/**
+ * Validate a style change request BEFORE allowing the edit
+ */
+export function validateStyleChangeRequest(
+  anchors: IntentAnchors,
+  grepResults: Array<{ file: string; line: number; content: string }> | null
+): StyleChangeValidation {
+  // If not a style request, always valid
+  if (!anchors.isStyleRequest) {
+    return { isValid: true, requiresInspectMode: false };
+  }
+  
+  // Style request requires strong anchors
+  if (anchors.isGenericQuery) {
+    return {
+      isValid: false,
+      blockedReason: anchors.genericReason,
+      suggestedFix: 'Use Inspect Mode to click on the element, or provide exact text in quotes like "Mr. Abdullah".',
+      requiresInspectMode: true
+    };
+  }
+  
+  // Check if grep results are ambiguous
+  if (grepResults && grepResults.length > 0) {
+    const ambiguity = detectAmbiguity(grepResults, true);
+    if (ambiguity.isAmbiguous) {
+      return {
+        isValid: false,
+        blockedReason: ambiguity.message,
+        suggestedFix: ambiguity.suggestInspectMode 
+          ? 'Use Inspect Mode to click on the exact element you want to change.'
+          : `Specify which file: ${ambiguity.candidateFiles.slice(0, 3).join(' or ')}.`,
+        requiresInspectMode: ambiguity.suggestInspectMode
+      };
+    }
+  }
+  
+  // Validate the requested color if present
+  if (anchors.requestedColor) {
+    if (!isValidTailwindColor(anchors.requestedColor)) {
+      return {
+        isValid: false,
+        blockedReason: `"${anchors.requestedColor}" is not a valid Tailwind CSS color.`,
+        suggestedFix: `Use a valid Tailwind color like: purple-900, blue-500, [#060541], or rgb(6,5,65).`,
+        requiresInspectMode: false
+      };
+    }
+  }
+  
+  return { isValid: true, requiresInspectMode: false };
 }
 
 // Debug context from the AI Coder debug system
@@ -1814,7 +2111,7 @@ export async function executeToolCall(
   }
 }
 
-// Agent result interface
+// Agent result interface - Enhanced for Phase 5: Better debugging
 export interface AgentResult {
   success: boolean;
   summary: string;
@@ -1822,6 +2119,33 @@ export interface AgentResult {
   iterations: number;
   toolCalls: Array<{ tool: string; result: any }>;
   error?: string;
+  // Phase 5: Enhanced debugging info
+  renderPathStatus?: {
+    computed: boolean;
+    activeFiles: string[];
+    deadFiles: string[];  // Files edited but not in render path
+  };
+  verificationStatus?: {
+    verified: boolean;
+    issues: string[];
+    colorVerified?: boolean;
+    conflictingClasses?: string[];
+  };
+  ambiguityStatus?: {
+    detected: boolean;
+    candidateFiles?: string[];
+    message?: string;
+    requiresUserInput?: boolean;
+    suggestInspectMode?: boolean;
+  };
+  styleChangeStatus?: {
+    isStyleRequest: boolean;
+    requestedColor?: string;
+    colorValid?: boolean;
+    blocked?: boolean;
+    blockedReason?: string;
+  };
+  warnings: string[];
 }
 
 // Format tools for Gemini API
