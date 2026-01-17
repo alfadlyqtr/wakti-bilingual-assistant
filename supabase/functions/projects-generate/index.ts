@@ -2,7 +2,24 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validateProjectCSS, formatCSSWarnings, getCSSInheritanceGuidelines, type CSSWarning } from "../_shared/cssValidator.ts";
-import { AGENT_TOOLS, AGENT_SYSTEM_PROMPT, executeToolCall, getGeminiToolsConfig, type AgentDebugContext, type AgentResult } from "./agentTools.ts";
+import { 
+  AGENT_TOOLS, 
+  AGENT_SYSTEM_PROMPT, 
+  executeToolCall, 
+  getGeminiToolsConfig, 
+  type AgentDebugContext, 
+  type AgentResult,
+  // NEW: Smart enforcement utilities
+  traceRenderPath,
+  isFileInRenderPath,
+  parseIntentAnchors,
+  getSuggestedGrepQueries,
+  detectAmbiguity,
+  verifyEdit,
+  type IntentAnchors,
+  type AmbiguityResult,
+  type VerificationResult
+} from "./agentTools.ts";
 
 // ============================================================================
 // WAKTI PROJECTS-GENERATE V2 - OPTIMIZED ENGINE
@@ -2568,19 +2585,55 @@ ${prompt}`;
       const filesEdited: Set<string> = new Set();
       const filesVerified: Set<string> = new Set();
       
+      // 🔒 NEW: RENDER PATH TRACKING - Know which files are actually used
+      let allFilesCache: Record<string, string> = {};
+      let activeRenderPath: Set<string> = new Set();
+      let renderPathComputed = false;
+      
+      // 🔒 NEW: INTENT PARSING - Extract specific anchors from user prompt
+      const intentAnchors = parseIntentAnchors(prompt);
+      console.log(`[Agent Mode] 🎯 Intent anchors parsed:`, JSON.stringify({
+        exactTexts: intentAnchors.exactTexts,
+        classNames: intentAnchors.classNames,
+        dataBindings: intentAnchors.dataBindings,
+        isGeneric: intentAnchors.isGenericQuery
+      }));
+      
+      // 🔒 NEW: AMBIGUITY TRACKING - Track if agent found multiple candidates
+      let grepAmbiguityDetected = false;
+      let grepCandidateFiles: string[] = [];
+      
+      // 🔒 NEW: VERIFICATION TRACKING - Track if edits were verified
+      let lastEditPath: string | null = null;
+      let lastEditContent: string | null = null;
+      let editVerificationPending = false;
+      
       // Increased iterations to allow for proper read-edit-verify workflow
       const maxIterations = 8; // Increased to allow for mandatory exploration + edits
       const toolCallsLog: Array<{ tool: string; args: any; result: any }> = [];
       let taskCompleteResult: { summary: string; filesChanged: string[] } | null = null;
       
-      // 🔒 HARDENING: Inject mandatory exploration prompt BEFORE the loop starts
-      // This ensures the agent ALWAYS explores the codebase first, regardless of prompt keywords
+      // 🔒 HARDENING: Inject mandatory exploration prompt with SMART SUGGESTIONS
+      // If intent parsing found good anchors, suggest them. If generic, warn.
+      let explorationGuidance = '';
+      if (intentAnchors.exactTexts.length > 0) {
+        explorationGuidance = `
+SPECIFIC TARGETS DETECTED: Search for these exact strings first:
+${intentAnchors.exactTexts.map(t => `- grep_search for "${t}"`).join('\n')}
+`;
+      } else if (intentAnchors.isGenericQuery) {
+        explorationGuidance = `
+⚠️ WARNING: Your request is GENERIC. "${intentAnchors.genericReason}"
+You MUST use Inspect Mode or provide exact text content to target the right element.
+`;
+      }
+      
       const mandatoryExplorationPrompt = `
 MANDATORY FIRST STEP: Before making ANY changes or completing ANY task, you MUST:
 1. Call list_files to understand the project structure
 2. Call grep_search to find the relevant code for this request  
 3. Call read_file on the most likely target file(s)
-
+${explorationGuidance}
 Do NOT call task_complete or respond without first exploring the codebase.
 This is a HARD REQUIREMENT - the system will reject task_complete if no exploration was done.
 `;
@@ -2588,7 +2641,7 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
         role: "user",
         parts: [{ text: mandatoryExplorationPrompt }]
       });
-      console.log(`[Agent Mode] 🔒 Injected mandatory exploration prompt`);
+      console.log(`[Agent Mode] 🔒 Injected mandatory exploration prompt with intent-aware guidance`);
       
       // Smart model selection for agent mode
       const hasVisionInput = body.images && body.images.length > 0;
@@ -2715,20 +2768,56 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
           const result = await executeToolCall(projectId, { name, arguments: args || {} }, agentDebugContext, supabase, userId);
           
           // ========================================================================
-          // 🔒 TRACKING: Update read/edit tracking sets
+          // 🔒 TRACKING: Update read/edit tracking sets + ENHANCED ENFORCEMENT
           // ========================================================================
           if (name === 'read_file' && targetPath && result.content) {
             filesRead.add(targetPath);
+            // Cache file content for render path computation
+            allFilesCache[targetPath] = result.content;
             console.log(`[Agent Mode] 📖 Tracked read: ${targetPath}`);
           }
+          
+          if (name === 'list_files' && result.files && !renderPathComputed) {
+            // When we get the file list, pre-populate for render path computation
+            console.log(`[Agent Mode] 📁 Got file list, will compute render path on first edit`);
+          }
+          
           if (name === 'grep_search' && result.matches && result.matches.length > 0) {
             // Mark all files found in grep as "read" (agent knows about them)
             result.matches.forEach((m: { file: string }) => filesRead.add(m.file));
             console.log(`[Agent Mode] 🔍 Grep found files: ${[...new Set(result.matches.map((m: { file: string }) => m.file))].join(', ')}`);
+            
+            // 🔒 NEW: AMBIGUITY DETECTION
+            const ambiguity = detectAmbiguity(result.matches);
+            if (ambiguity.isAmbiguous) {
+              grepAmbiguityDetected = true;
+              grepCandidateFiles = ambiguity.candidateFiles;
+              console.warn(`[Agent Mode] ⚠️ AMBIGUITY DETECTED: ${ambiguity.message}`);
+              // Inject warning into result
+              result.ambiguityWarning = ambiguity.message;
+              result.candidateFiles = ambiguity.candidateFiles;
+            }
           }
+          
           if ((name === 'search_replace' || name === 'write_file' || name === 'insert_code') && targetPath && result.success) {
             filesEdited.add(targetPath);
+            lastEditPath = targetPath;
+            editVerificationPending = true;
             console.log(`[Agent Mode] ✏️ Tracked edit: ${targetPath}`);
+            
+            // 🔒 NEW: RENDER PATH ENFORCEMENT - Check if edited file is in active render chain
+            if (!renderPathComputed && Object.keys(allFilesCache).length > 0) {
+              activeRenderPath = traceRenderPath(allFilesCache);
+              renderPathComputed = true;
+              console.log(`[Agent Mode] 🔗 Computed render path: ${[...activeRenderPath].join(', ')}`);
+            }
+            
+            if (renderPathComputed && !activeRenderPath.has(targetPath)) {
+              console.error(`[Agent Mode] 🚫 RENDER PATH WARNING: Edited ${targetPath} is NOT in active render chain!`);
+              result.renderPathWarning = `⚠️ WARNING: File "${targetPath}" is NOT imported by App.js or any active component. ` +
+                `Changes to this file will have NO visible effect. Consider editing a file that IS imported, or add an import to App.js.`;
+              result.activeFiles = [...activeRenderPath].slice(0, 10);
+            }
           }
           
           // Log the result
@@ -2741,23 +2830,34 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
           });
           
           // ========================================================================
-          // 🔒 HARD ENFORCEMENT: Block task_complete if no actual edits were made
+          // 🔒 HARD ENFORCEMENT: Block task_complete with comprehensive checks
           // ========================================================================
           if (name === 'task_complete') {
-            // 🔒 HARDENED STEP 1: Block task_complete if NO exploration happened at all
+            // 🔒 CHECK 1: Block if NO exploration happened at all
             const explorationCalls = toolCallsLog.filter(tc => 
               tc.tool === 'list_files' || tc.tool === 'grep_search' || tc.tool === 'read_file'
             );
             
             if (explorationCalls.length === 0) {
               console.error(`[Agent Mode] 🚫 BLOCKED task_complete: NO exploration tools called!`);
-              console.error(`[Agent Mode] Tool calls so far: ${toolCallsLog.map(tc => tc.tool).join(', ')}`);
               functionResponses[functionResponses.length - 1].functionResponse.response = {
                 acknowledged: false,
                 error: 'BLOCKED: You must explore the codebase first. Call list_files or grep_search before completing.',
                 hint: 'Start with list_files to see what files exist, then grep_search to find the target code, then read_file to see it.'
               };
-              // Force another iteration - don't set taskCompleteResult
+              continue;
+            }
+            
+            // 🔒 CHECK 2: Block if ambiguity was detected and not resolved
+            if (grepAmbiguityDetected && successfulEdits.length === 0) {
+              console.error(`[Agent Mode] 🚫 BLOCKED task_complete: Ambiguity detected but not resolved!`);
+              functionResponses[functionResponses.length - 1].functionResponse.response = {
+                acknowledged: false,
+                error: `BLOCKED: Multiple candidate files were found (${grepCandidateFiles.slice(0, 3).join(', ')}${grepCandidateFiles.length > 3 ? '...' : ''}). ` +
+                  `You must clarify which file to edit. Ask the user to specify or use Inspect Mode.`,
+                candidateFiles: grepCandidateFiles,
+                hint: 'When multiple files match, ask the user to clarify which file they want to edit.'
+              };
               continue;
             }
             
@@ -2770,45 +2870,99 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
               tc.result?.success === true
             );
             
-            // 🚫 BLOCK: If edit request but NO successful edits, reject task_complete
+            // 🔒 CHECK 3: Block if edit request but NO successful edits
             if (isEditRequest && successfulEdits.length === 0) {
               console.error(`[Agent Mode] 🚫 BLOCKED task_complete: Edit request but NO successful edits made!`);
-              console.error(`[Agent Mode] Tool calls so far: ${toolCallsLog.map(tc => tc.tool).join(', ')}`);
-              
-              // Don't acknowledge - force agent to actually make edits
               functionResponses[functionResponses.length - 1].functionResponse.response = {
                 acknowledged: false,
                 error: 'BLOCKED: You claimed to complete an edit task but made NO successful edits. You MUST: 1) Use grep_search to find the code, 2) Use read_file to see the exact code, 3) Use search_replace to make the change. Try again!',
                 hint: 'Use grep_search first to find where the code is, then read_file, then search_replace.'
               };
-              // Don't set taskCompleteResult - force another iteration
-            } else {
-              // Check if edited files were verified
-              if (filesEdited.size > 0) {
-                const unverifiedFiles = [...filesEdited].filter(f => {
-                  const editIndex = toolCallsLog.findIndex(tc => 
-                    (tc.tool === 'search_replace' || tc.tool === 'write_file' || tc.tool === 'insert_code') && 
-                    tc.result?.path === f && tc.result?.success
-                  );
-                  const verifyIndex = toolCallsLog.findIndex((tc, idx) => 
-                    idx > editIndex && tc.tool === 'read_file' && tc.args?.path === f
-                  );
-                  return verifyIndex === -1;
-                });
+              continue;
+            }
+            
+            // 🔒 CHECK 4: RENDER PATH ENFORCEMENT - Block if edited file is not in render chain
+            if (filesEdited.size > 0 && renderPathComputed) {
+              const deadFiles = [...filesEdited].filter(f => !activeRenderPath.has(f));
+              if (deadFiles.length > 0 && deadFiles.length === filesEdited.size) {
+                console.error(`[Agent Mode] 🚫 BLOCKED task_complete: ALL edited files are outside render path!`);
+                console.error(`[Agent Mode] Dead files: ${deadFiles.join(', ')}`);
+                console.error(`[Agent Mode] Active files: ${[...activeRenderPath].slice(0, 10).join(', ')}`);
+                functionResponses[functionResponses.length - 1].functionResponse.response = {
+                  acknowledged: false,
+                  error: `BLOCKED: You edited "${deadFiles.join(', ')}" but these files are NOT imported by App.js. ` +
+                    `Changes will have NO visible effect. Edit a file that IS in the active render chain: ${[...activeRenderPath].slice(0, 5).join(', ')}`,
+                  activeFiles: [...activeRenderPath].slice(0, 10),
+                  hint: 'Use list_files and read App.js to find which files are actually imported and rendered.'
+                };
+                continue;
+              }
+            }
+            
+            // 🔒 CHECK 5: POST-EDIT VERIFICATION - Confirm changes exist after editing
+            if (filesEdited.size > 0 && editVerificationPending) {
+              let verificationIssues: string[] = [];
+              
+              for (const editedFile of filesEdited) {
+                // Find the last successful edit to this file
+                const lastEdit = [...toolCallsLog].reverse().find(tc => 
+                  (tc.tool === 'search_replace' || tc.tool === 'write_file' || tc.tool === 'insert_code') && 
+                  tc.result?.path === editedFile && tc.result?.success
+                );
                 
-                if (unverifiedFiles.length > 0) {
-                  console.warn(`[Agent Mode] ⚠️ ENFORCEMENT: task_complete without verifying: ${unverifiedFiles.join(', ')}`);
-                } else {
-                  filesEdited.forEach(f => filesVerified.add(f));
+                if (lastEdit) {
+                  // Verify the edit by checking if file was re-read after edit
+                  const editIndex = toolCallsLog.indexOf(lastEdit);
+                  const verifyRead = toolCallsLog.find((tc, idx) => 
+                    idx > editIndex && tc.tool === 'read_file' && tc.args?.path === editedFile
+                  );
+                  
+                  if (!verifyRead) {
+                    console.warn(`[Agent Mode] ⚠️ VERIFICATION: ${editedFile} was not re-read after edit`);
+                    // Perform async verification
+                    const verification = await verifyEdit(
+                      editedFile, 
+                      lastEdit.args?.replace || '', 
+                      allFilesCache, 
+                      supabase, 
+                      projectId
+                    );
+                    
+                    if (!verification.verified) {
+                      verificationIssues.push(...verification.issues);
+                    }
+                    
+                    // Update verification status
+                    if (verification.fileInRenderPath) {
+                      filesVerified.add(editedFile);
+                    }
+                  } else {
+                    filesVerified.add(editedFile);
+                  }
                 }
               }
               
-              if (result.acknowledged) {
-                taskCompleteResult = {
-                  summary: result.summary || 'Task completed',
-                  filesChanged: result.filesChanged || [...filesEdited]
-                };
+              if (verificationIssues.length > 0) {
+                console.warn(`[Agent Mode] ⚠️ VERIFICATION ISSUES:`, verificationIssues);
+                // Don't block, but add warnings to result
+                result.verificationWarnings = verificationIssues;
               }
+              
+              editVerificationPending = false;
+            }
+            
+            // All checks passed - allow task_complete
+            if (result.acknowledged) {
+              // Add any warnings from verification
+              const warnings = [];
+              if (grepAmbiguityDetected) warnings.push('Multiple file candidates were found');
+              if (filesEdited.size > filesVerified.size) warnings.push('Some edits were not verified');
+              
+              taskCompleteResult = {
+                summary: result.summary || 'Task completed',
+                filesChanged: result.filesChanged || [...filesEdited],
+                ...(warnings.length > 0 ? { warnings } : {})
+              };
             }
           }
         }

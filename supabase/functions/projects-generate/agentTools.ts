@@ -41,6 +41,374 @@ const ALLOWED_TABLES = [
   'project_collection_schemas'
 ] as const;
 
+// ============================================================================
+// RENDER-PATH ENFORCEMENT - Trace active files from entrypoint
+// ============================================================================
+
+/**
+ * Extract relative import paths from source code
+ */
+function extractImportsFromSource(source: string): string[] {
+  const imports: string[] = [];
+  const s = source || '';
+
+  // import X from './foo'
+  const importRe = /import\s+[\s\S]*?from\s+['"]([^'"]+)['"]/g;
+  // import './foo'
+  const importSideEffectRe = /import\s+['"]([^'"]+)['"]/g;
+  // require('./foo')
+  const requireRe = /require\(\s*['"]([^'"]+)['"]\s*\)/g;
+
+  const scan = (re: RegExp) => {
+    re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(s)) !== null) {
+      const spec = (m[1] || '').trim();
+      if (!spec) continue;
+      if (!spec.startsWith('.')) continue;
+      imports.push(spec);
+    }
+  };
+
+  scan(importRe);
+  scan(importSideEffectRe);
+  scan(requireRe);
+
+  return Array.from(new Set(imports));
+}
+
+/**
+ * Resolve an import specifier to candidate file paths
+ */
+function resolveImportSpec(fromFile: string, spec: string): string[] {
+  const dirOf = (path: string): string => {
+    const p = path.startsWith('/') ? path : `/${path}`;
+    const idx = p.lastIndexOf('/');
+    if (idx <= 0) return '/';
+    return p.slice(0, idx);
+  };
+  
+  const joinPath = (baseDir: string, rel: string): string => {
+    const base = (baseDir || '/').split('/').filter(Boolean);
+    const parts = (rel || '').split('/').filter((x) => x.length > 0);
+    const stack = [...base];
+    for (const part of parts) {
+      if (part === '.') continue;
+      if (part === '..') {
+        if (stack.length > 0) stack.pop();
+        continue;
+      }
+      stack.push(part);
+    }
+    return '/' + stack.join('/');
+  };
+  
+  const fromDir = dirOf(fromFile);
+  const base = joinPath(fromDir, spec);
+  const hasExt = /\.[a-z0-9]+$/i.test(base);
+  const candidates: string[] = [];
+  
+  if (hasExt) {
+    candidates.push(base);
+  } else {
+    for (const ext of ['.js', '.jsx', '.ts', '.tsx']) {
+      candidates.push(base + ext);
+    }
+    for (const ext of ['.js', '.jsx', '.ts', '.tsx']) {
+      candidates.push(base + '/index' + ext);
+    }
+    candidates.push(base);
+  }
+  
+  return Array.from(new Set(candidates.map(c => c.startsWith('/') ? c : `/${c}`)));
+}
+
+/**
+ * Trace the render path from entrypoint (App.js) to find all actively imported files
+ */
+export function traceRenderPath(files: Record<string, string>): Set<string> {
+  const activeFiles = new Set<string>();
+  const entrypoints = ['/App.js', '/App.jsx', '/App.tsx', '/index.js', '/index.jsx', '/index.tsx'];
+  
+  // Find the entrypoint
+  const entrypoint = entrypoints.find(e => files[e] !== undefined);
+  if (!entrypoint) {
+    // No entrypoint found - consider all files active
+    Object.keys(files).forEach(f => activeFiles.add(f));
+    return activeFiles;
+  }
+  
+  // BFS to trace all imported files
+  const queue: string[] = [entrypoint];
+  const visited = new Set<string>();
+  
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (visited.has(current)) continue;
+    visited.add(current);
+    
+    const content = files[current];
+    if (!content) continue;
+    
+    activeFiles.add(current);
+    
+    // Extract imports and resolve them
+    const imports = extractImportsFromSource(content);
+    for (const importSpec of imports) {
+      const candidates = resolveImportSpec(current, importSpec);
+      for (const candidate of candidates) {
+        if (files[candidate] !== undefined && !visited.has(candidate)) {
+          queue.push(candidate);
+        }
+      }
+    }
+  }
+  
+  // Always include CSS files if they exist
+  Object.keys(files).forEach(f => {
+    if (f.endsWith('.css') || f.endsWith('.scss')) {
+      activeFiles.add(f);
+    }
+  });
+  
+  return activeFiles;
+}
+
+/**
+ * Check if a file is in the active render path
+ */
+export function isFileInRenderPath(filePath: string, files: Record<string, string>): boolean {
+  const activeFiles = traceRenderPath(files);
+  const normalizedPath = filePath.startsWith('/') ? filePath : `/${filePath}`;
+  return activeFiles.has(normalizedPath);
+}
+
+// ============================================================================
+// INTENT PARSING - Extract target element anchors from prompts
+// ============================================================================
+
+export interface IntentAnchors {
+  exactTexts: string[];      // Exact quoted text like "Abdullah"
+  classNames: string[];      // CSS classes like "text-blue-500"
+  elementTypes: string[];    // Element types like "button", "title", "header"
+  dataBindings: string[];    // Data bindings like {data.name}
+  isGenericQuery: boolean;   // True if the prompt is too vague
+  genericReason?: string;    // Why it's considered generic
+}
+
+/**
+ * Parse user prompt to extract target element anchors
+ */
+export function parseIntentAnchors(prompt: string): IntentAnchors {
+  const result: IntentAnchors = {
+    exactTexts: [],
+    classNames: [],
+    elementTypes: [],
+    dataBindings: [],
+    isGenericQuery: false
+  };
+  
+  // Extract exact quoted text
+  const quotedRe = /"([^"]+)"|'([^']+)'/g;
+  let match;
+  while ((match = quotedRe.exec(prompt)) !== null) {
+    const text = match[1] || match[2];
+    if (text && text.length > 1) {
+      result.exactTexts.push(text);
+    }
+  }
+  
+  // Extract data bindings like {data.name}, {item.title}
+  const bindingRe = /\{([a-zA-Z_][a-zA-Z0-9_.]+)\}/g;
+  while ((match = bindingRe.exec(prompt)) !== null) {
+    result.dataBindings.push(match[0]);
+  }
+  
+  // Extract CSS class patterns
+  const classRe = /(?:class|className)["'=:\s]+([a-z][a-z0-9-_]+)/gi;
+  while ((match = classRe.exec(prompt)) !== null) {
+    result.classNames.push(match[1]);
+  }
+  
+  // Extract Tailwind class mentions
+  const tailwindRe = /\b(bg-[a-z]+-\d+|text-[a-z]+-\d+|border-[a-z]+-\d+|hover:[a-z-]+)\b/gi;
+  while ((match = tailwindRe.exec(prompt)) !== null) {
+    result.classNames.push(match[1]);
+  }
+  
+  // Extract element type keywords
+  const elementKeywords = ['button', 'title', 'header', 'footer', 'nav', 'navbar', 'sidebar', 
+    'hero', 'section', 'card', 'modal', 'form', 'input', 'label', 'image', 'img', 'link',
+    'heading', 'h1', 'h2', 'h3', 'paragraph', 'text', 'span', 'div', 'container'];
+  const promptLower = prompt.toLowerCase();
+  for (const keyword of elementKeywords) {
+    if (promptLower.includes(keyword)) {
+      result.elementTypes.push(keyword);
+    }
+  }
+  
+  // Check if the query is too generic
+  const genericTerms = ['title', 'text', 'color', 'button', 'element', 'thing', 'stuff'];
+  const hasSpecificAnchor = result.exactTexts.length > 0 || 
+                            result.dataBindings.length > 0 || 
+                            result.classNames.length > 0;
+  
+  if (!hasSpecificAnchor && result.elementTypes.length > 0) {
+    // Only has generic element types, no specific anchors
+    const onlyGenericTerms = result.elementTypes.every(t => genericTerms.includes(t));
+    if (onlyGenericTerms) {
+      result.isGenericQuery = true;
+      result.genericReason = `The request mentions "${result.elementTypes.join(', ')}" but lacks specific identifiers. ` +
+        `To target the right element, please provide: exact text content ("The Title Text"), ` +
+        `a CSS class name (like "hero-title"), or use Inspect Mode to click on the element.`;
+    }
+  }
+  
+  return result;
+}
+
+/**
+ * Get suggested grep queries based on intent anchors
+ */
+export function getSuggestedGrepQueries(anchors: IntentAnchors): string[] {
+  const queries: string[] = [];
+  
+  // Prioritize exact text matches
+  for (const text of anchors.exactTexts) {
+    queries.push(text);
+  }
+  
+  // Then data bindings
+  for (const binding of anchors.dataBindings) {
+    queries.push(binding);
+  }
+  
+  // Then class names
+  for (const className of anchors.classNames) {
+    queries.push(className);
+  }
+  
+  return queries;
+}
+
+// ============================================================================
+// AMBIGUITY DETECTION - Detect when grep_search returns too many candidates
+// ============================================================================
+
+export interface AmbiguityResult {
+  isAmbiguous: boolean;
+  candidateFiles: string[];
+  matchCount: number;
+  message?: string;
+}
+
+/**
+ * Analyze grep_search results for ambiguity
+ */
+export function detectAmbiguity(grepResults: Array<{ file: string; line: number; content: string }>): AmbiguityResult {
+  if (!grepResults || grepResults.length === 0) {
+    return { isAmbiguous: false, candidateFiles: [], matchCount: 0 };
+  }
+  
+  // Get unique files
+  const uniqueFiles = [...new Set(grepResults.map(r => r.file))];
+  
+  // If matches are in more than 3 files, it's ambiguous
+  if (uniqueFiles.length > 3) {
+    return {
+      isAmbiguous: true,
+      candidateFiles: uniqueFiles.slice(0, 5),
+      matchCount: grepResults.length,
+      message: `Found "${grepResults[0]?.content?.substring(0, 30)}..." in ${uniqueFiles.length} files. ` +
+        `Please clarify which file you want to edit: ${uniqueFiles.slice(0, 5).join(', ')}${uniqueFiles.length > 5 ? '...' : ''}`
+    };
+  }
+  
+  // If too many matches (>10) even in few files, still ambiguous for generic terms
+  if (grepResults.length > 10 && uniqueFiles.length > 1) {
+    return {
+      isAmbiguous: true,
+      candidateFiles: uniqueFiles,
+      matchCount: grepResults.length,
+      message: `Found ${grepResults.length} matches across ${uniqueFiles.length} files. ` +
+        `Please be more specific about which element you want to modify, or use Inspect Mode to click on it.`
+    };
+  }
+  
+  return { isAmbiguous: false, candidateFiles: uniqueFiles, matchCount: grepResults.length };
+}
+
+// ============================================================================
+// POST-EDIT VERIFICATION - Confirm changes exist after editing
+// ============================================================================
+
+export interface VerificationResult {
+  verified: boolean;
+  elementFound: boolean;
+  fileExists: boolean;
+  fileInRenderPath: boolean;
+  issues: string[];
+}
+
+/**
+ * Verify that an edit was successful and the element exists in the active render chain
+ */
+export async function verifyEdit(
+  filePath: string,
+  expectedContent: string, // Content that should exist after edit
+  allFiles: Record<string, string>,
+  supabase: any,
+  projectId: string
+): Promise<VerificationResult> {
+  const result: VerificationResult = {
+    verified: false,
+    elementFound: false,
+    fileExists: false,
+    fileInRenderPath: false,
+    issues: []
+  };
+  
+  const normalizedPath = filePath.startsWith('/') ? filePath : `/${filePath}`;
+  
+  // 1. Check if file exists in DB
+  const { data, error } = await supabase
+    .from('project_files')
+    .select('content')
+    .eq('project_id', projectId)
+    .eq('path', normalizedPath)
+    .maybeSingle();
+  
+  if (error || !data) {
+    result.issues.push(`File ${normalizedPath} not found in database after edit`);
+    return result;
+  }
+  
+  result.fileExists = true;
+  
+  // 2. Check if the expected content exists in the file
+  if (expectedContent && !data.content.includes(expectedContent)) {
+    result.issues.push(`Expected content not found in ${normalizedPath} after edit`);
+  } else {
+    result.elementFound = true;
+  }
+  
+  // 3. Update allFiles with latest content and check render path
+  const updatedFiles = { ...allFiles, [normalizedPath]: data.content };
+  const activeFiles = traceRenderPath(updatedFiles);
+  
+  if (!activeFiles.has(normalizedPath)) {
+    result.issues.push(`File ${normalizedPath} is NOT imported by the app entrypoint (App.js). ` +
+      `Changes to this file will have NO visible effect. Either edit the correct file, or add an import to App.js.`);
+    result.fileInRenderPath = false;
+  } else {
+    result.fileInRenderPath = true;
+  }
+  
+  result.verified = result.fileExists && result.elementFound && result.fileInRenderPath;
+  
+  return result;
+}
+
 // Debug context from the AI Coder debug system
 export interface AgentDebugContext {
   errors: Array<{
