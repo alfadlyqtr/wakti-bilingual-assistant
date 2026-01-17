@@ -424,6 +424,8 @@ ${personalTouchSection}
 ${memoryContext ? memoryContext : ''}`,
           `أنت مساعد WAKTI الصوتي الذكي. ${personalTouch}
 
+🚨 قاعدة اللغة (إلزامية): يجب أن تكون جميع ردودك بالعربية فقط. لا تستخدم أي كلمات إنجليزية إلا إذا كانت أسماء علم أو مصطلحات تقنية لا بديل عربي لها.
+
 قواعد أسلوب (مهم):
 - ابدأ دائماً بإجابة مباشرة (سطر أو سطرين).
 - بعد ذلك: 2 إلى 6 أسطر كحد أقصى.
@@ -449,7 +451,7 @@ ${memoryContext ? memoryContext : ''}`
           session: {
             instructions,
             voice: openaiVoice,
-            input_audio_transcription: { model: 'whisper-1' },
+            input_audio_transcription: { model: 'whisper-1', language: language === 'ar' ? 'ar' : undefined },
             turn_detection: null, // Manual - we control when user finishes speaking
           }
         }));
@@ -1317,7 +1319,7 @@ ${memoryContext ? memoryContext : ''}`
         {aiTranscript && status !== 'listening' && (
           <div className={`max-w-sm text-center text-base select-none ${theme === 'dark' ? 'text-purple-300/90' : 'text-purple-600/90'}`}>
             <span className={`text-sm block mb-1 ${theme === 'dark' ? 'text-purple-300/60' : 'text-purple-600/60'}`}>{t('Wakti:', 'واكتي:')}</span>
-            <div className="leading-snug max-h-[4.5em] overflow-y-auto overscroll-contain">
+            <div className="leading-snug max-h-[8em] overflow-y-auto overscroll-contain">
               "{aiTranscript}"
             </div>
           </div>
