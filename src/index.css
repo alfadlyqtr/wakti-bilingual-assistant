@@ -663,7 +663,7 @@ textarea::placeholder {
   /* Ensure chat input stays at bottom and flush with keyboard when visible */
   .wakti-ai-container.keyboard-visible .chat-input-container {
     position: fixed !important;
-    bottom: 0 !important;
+    bottom: var(--keyboard-height, 0px) !important;
     left: 0 !important;
     right: 0 !important;
     padding-bottom: 0 !important;

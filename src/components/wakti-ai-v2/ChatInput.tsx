@@ -259,7 +259,8 @@ export function ChatInput({
       const vv = window.visualViewport;
       const vvH = vv?.height ?? window.innerHeight;
       const threshold = 150;
-      const viewportShrank = window.innerHeight - vvH > threshold;
+      const keyboardHeight = window.innerHeight - vvH;
+      const viewportShrank = keyboardHeight > threshold;
       
       const ae = document.activeElement as HTMLElement | null;
       const isEditableActive = !!ae && (
@@ -271,13 +272,16 @@ export function ChatInput({
       const visible = isEditableActive && viewportShrank;
       setIsKeyboardVisible(visible);
       
-      // Apply class to closest parent container only, NOT document.body
+      // Apply class and keyboard height to closest parent container only, NOT document.body
       const container = containerRef.current;
       if (container) {
         if (visible) {
           container.classList.add('keyboard-visible');
+          // Apply keyboard height as CSS variable for positioning input above keyboard
+          container.style.setProperty('--keyboard-height', `${keyboardHeight}px`);
         } else {
           container.classList.remove('keyboard-visible');
+          container.style.setProperty('--keyboard-height', '0px');
         }
       }
     };
@@ -635,7 +639,8 @@ export function ChatInput({
           continue;
         }
         try {
-          const base64DataUrl = await fileToBase64(file);
+          // Use EXIF-aware normalization to fix sideways mobile photos
+          const base64DataUrl = await normalizeImageOrientation(file);
           validFiles.push({
             id: `${Date.now()}-${i}`,
             name: file.name,
@@ -771,13 +776,125 @@ export function ChatInput({
   const triggerSeedUpload = () => {
     if (!isLoading && !isUploading) seedFileInputRef.current?.click();
   };
-  // Local base64 converter
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = (err) => reject(err);
+  
+  // EXIF-aware image orientation normalizer for mobile photos
+  // Reads EXIF orientation and rotates/flips image to be upright before sending to API
+  const normalizeImageOrientation = (file: File): Promise<string> => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        // Get EXIF orientation
+        const orientation = await new Promise<number>((res) => {
+          // PNG/non-JPEG don't have EXIF
+          if (!file.type.includes('jpeg') && !file.type.includes('jpg') && !file.name.toLowerCase().match(/\.(jpe?g|heic|heif)$/)) {
+            res(1);
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            try {
+              const view = new DataView(e.target?.result as ArrayBuffer);
+              if (view.getUint16(0, false) !== 0xFFD8) { res(1); return; }
+              const length = view.byteLength;
+              let offset = 2;
+              while (offset < length) {
+                if (offset + 2 > length) break;
+                const marker = view.getUint16(offset, false);
+                offset += 2;
+                if (marker === 0xFFE1) {
+                  if (offset + 8 > length) break;
+                  if (view.getUint32(offset + 2, false) !== 0x45786966 || view.getUint16(offset + 6, false) !== 0x0000) { res(1); return; }
+                  const tiffOffset = offset + 8;
+                  if (tiffOffset + 8 > length) break;
+                  const littleEndian = view.getUint16(tiffOffset, false) === 0x4949;
+                  const ifdOffset = view.getUint32(tiffOffset + 4, littleEndian) + tiffOffset;
+                  if (ifdOffset + 2 > length) break;
+                  const tags = view.getUint16(ifdOffset, littleEndian);
+                  for (let i = 0; i < tags; i++) {
+                    const tagOffset = ifdOffset + 2 + i * 12;
+                    if (tagOffset + 12 > length) break;
+                    if (view.getUint16(tagOffset, littleEndian) === 0x0112) {
+                      res(view.getUint16(tagOffset + 8, littleEndian));
+                      return;
+                    }
+                  }
+                  res(1); return;
+                } else if ((marker & 0xFF00) !== 0xFF00) {
+                  break;
+                } else {
+                  if (offset + 2 > length) break;
+                  offset += view.getUint16(offset, false);
+                }
+              }
+              res(1);
+            } catch { res(1); }
+          };
+          reader.onerror = () => res(1);
+          reader.readAsArrayBuffer(file.slice(0, 65536));
+        });
+
+        // If orientation is 1 (normal), just return raw base64
+        if (orientation === 1) {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+          return;
+        }
+
+        // Load image and apply rotation/flip based on EXIF orientation
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(file);
+        
+        img.onload = () => {
+          URL.revokeObjectURL(objectUrl);
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          if (!ctx) { reject(new Error('Canvas context not available')); return; }
+
+          let width = img.width;
+          let height = img.height;
+
+          // Orientations 5-8 swap width/height
+          if (orientation >= 5 && orientation <= 8) {
+            canvas.width = height;
+            canvas.height = width;
+          } else {
+            canvas.width = width;
+            canvas.height = height;
+          }
+
+          // Apply transforms based on orientation
+          switch (orientation) {
+            case 2: ctx.transform(-1, 0, 0, 1, width, 0); break;
+            case 3: ctx.transform(-1, 0, 0, -1, width, height); break;
+            case 4: ctx.transform(1, 0, 0, -1, 0, height); break;
+            case 5: ctx.transform(0, 1, 1, 0, 0, 0); break;
+            case 6: ctx.transform(0, 1, -1, 0, height, 0); break;
+            case 7: ctx.transform(0, -1, -1, 0, height, width); break;
+            case 8: ctx.transform(0, -1, 1, 0, 0, width); break;
+            default: break;
+          }
+
+          ctx.drawImage(img, 0, 0);
+          const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+          const quality = mimeType === 'image/jpeg' ? 0.92 : undefined;
+          const dataUrl = canvas.toDataURL(mimeType, quality);
+          console.log(`📐 EXIF: Normalized orientation ${orientation} → upright`);
+          resolve(dataUrl);
+        };
+
+        img.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          const fallbackReader = new FileReader();
+          fallbackReader.onload = () => resolve(fallbackReader.result as string);
+          fallbackReader.onerror = () => reject(new Error('Failed to load image'));
+          fallbackReader.readAsDataURL(file);
+        };
+
+        img.src = objectUrl;
+      } catch (err) {
+        reject(err);
+      }
     });
   };
   const handleSeedFilesChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -790,7 +907,8 @@ export function ChatInput({
         if (!isImageFile(file)) continue;
         if (file.size > 5 * 1024 * 1024) continue;
         try {
-          const base64DataUrl = await fileToBase64(file);
+          // Use EXIF-aware normalization to fix sideways mobile photos
+          const base64DataUrl = await normalizeImageOrientation(file);
           validFiles.push({
             id: `${Date.now()}-${i}`,
             name: file.name,
@@ -1637,7 +1755,8 @@ export function ChatInput({
                             const file = item.getAsFile();
                             if (file && file.size <= 5 * 1024 * 1024) {
                               try {
-                                const base64DataUrl = await fileToBase64(file);
+                                // Use EXIF-aware normalization to fix sideways mobile photos
+                                const base64DataUrl = await normalizeImageOrientation(file);
                                 const pastedFile: UploadedFile = {
                                   id: `paste-${Date.now()}`,
                                   name: `pasted-image-${Date.now()}.${file.type.split('/')[1] || 'png'}`,

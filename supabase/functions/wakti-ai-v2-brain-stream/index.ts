@@ -644,8 +644,8 @@ async function streamGemini25FlashGrounded(
   onToken: (token: string) => void
 ): Promise<string> {
   const key = getGeminiApiKey();
-  // Use gemini-2.5-flash-preview-05-20 for proper Google Search grounding support
-  const model = 'gemini-2.5-flash-preview-05-20';
+  // Use stable gemini-2.5-flash for proper Google Search grounding support
+  const model = 'gemini-2.5-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
 
   const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
