@@ -2563,8 +2563,13 @@ ${prompt}`;
         { role: "user", parts: [{ text: userMessageContent }] }
       ];
       
-      // OPTIMIZATION: Reduced from 8 to 4 iterations (50% less AI calls)
-      const maxIterations = 4;
+      // 🔒 ENFORCEMENT TRACKING - Like Cascade, track what files were read/edited
+      const filesRead: Set<string> = new Set();
+      const filesEdited: Set<string> = new Set();
+      const filesVerified: Set<string> = new Set();
+      
+      // Increased iterations to allow for proper read-edit-verify workflow
+      const maxIterations = 6;
       const toolCallsLog: Array<{ tool: string; args: any; result: any }> = [];
       let taskCompleteResult: { summary: string; filesChanged: string[] } | null = null;
       
@@ -2672,7 +2677,43 @@ ${prompt}`;
           console.log(`[Agent Mode] Tool: ${name}`);
           console.log(`[Agent Mode] Args: ${JSON.stringify(args, null, 2).substring(0, 2000)}`);
           
+          // ========================================================================
+          // 🔒 ENFORCEMENT: Read-before-edit check (like Cascade)
+          // ========================================================================
+          const targetPath = args?.path ? (args.path.startsWith('/') ? args.path : `/${args.path}`) : null;
+          
+          if ((name === 'search_replace' || name === 'write_file' || name === 'insert_code') && targetPath) {
+            // Check if file was read first (or found via grep_search)
+            if (!filesRead.has(targetPath)) {
+              console.warn(`[Agent Mode] ⚠️ ENFORCEMENT: Attempted ${name} on ${targetPath} without reading first!`);
+              // Don't block, but inject a warning into the response
+              const warningResult = {
+                warning: `You should read_file or grep_search for "${targetPath}" before editing. Proceeding anyway, but this may cause incorrect edits.`,
+                proceedingAnyway: true
+              };
+              // Still execute but log the violation
+              console.log(`[Agent Mode] VIOLATION: Edit without read - ${targetPath}`);
+            }
+          }
+          
           const result = await executeToolCall(projectId, { name, arguments: args || {} }, agentDebugContext, supabase, userId);
+          
+          // ========================================================================
+          // 🔒 TRACKING: Update read/edit tracking sets
+          // ========================================================================
+          if (name === 'read_file' && targetPath && result.content) {
+            filesRead.add(targetPath);
+            console.log(`[Agent Mode] 📖 Tracked read: ${targetPath}`);
+          }
+          if (name === 'grep_search' && result.matches && result.matches.length > 0) {
+            // Mark all files found in grep as "read" (agent knows about them)
+            result.matches.forEach((m: { file: string }) => filesRead.add(m.file));
+            console.log(`[Agent Mode] 🔍 Grep found files: ${[...new Set(result.matches.map((m: { file: string }) => m.file))].join(', ')}`);
+          }
+          if ((name === 'search_replace' || name === 'write_file' || name === 'insert_code') && targetPath && result.success) {
+            filesEdited.add(targetPath);
+            console.log(`[Agent Mode] ✏️ Tracked edit: ${targetPath}`);
+          }
           
           // Log the result
           console.log(`[Agent Mode] Result: ${JSON.stringify(result, null, 2).substring(0, 1000)}`);
@@ -2683,12 +2724,59 @@ ${prompt}`;
             functionResponse: { name, response: result }
           });
           
-          // Check for task_complete
-          if (name === 'task_complete' && result.acknowledged) {
-            taskCompleteResult = {
-              summary: result.summary || 'Task completed',
-              filesChanged: result.filesChanged || []
-            };
+          // ========================================================================
+          // 🔒 HARD ENFORCEMENT: Block task_complete if no actual edits were made
+          // ========================================================================
+          if (name === 'task_complete') {
+            // Check if this is an EDIT request
+            const isEditRequest = /\b(change|update|fix|add|remove|set|make|edit|modify|delete|replace|rename|color|style)\b/i.test(prompt);
+            
+            // Count successful edits
+            const successfulEdits = toolCallsLog.filter(tc => 
+              (tc.tool === 'search_replace' || tc.tool === 'write_file' || tc.tool === 'insert_code') && 
+              tc.result?.success === true
+            );
+            
+            // 🚫 BLOCK: If edit request but NO successful edits, reject task_complete
+            if (isEditRequest && successfulEdits.length === 0) {
+              console.error(`[Agent Mode] 🚫 BLOCKED task_complete: Edit request but NO successful edits made!`);
+              console.error(`[Agent Mode] Tool calls so far: ${toolCallsLog.map(tc => tc.tool).join(', ')}`);
+              
+              // Don't acknowledge - force agent to actually make edits
+              functionResponses[functionResponses.length - 1].functionResponse.response = {
+                acknowledged: false,
+                error: 'BLOCKED: You claimed to complete an edit task but made NO successful edits. You MUST: 1) Use grep_search to find the code, 2) Use read_file to see the exact code, 3) Use search_replace to make the change. Try again!',
+                hint: 'Use grep_search first to find where the code is, then read_file, then search_replace.'
+              };
+              // Don't set taskCompleteResult - force another iteration
+            } else {
+              // Check if edited files were verified
+              if (filesEdited.size > 0) {
+                const unverifiedFiles = [...filesEdited].filter(f => {
+                  const editIndex = toolCallsLog.findIndex(tc => 
+                    (tc.tool === 'search_replace' || tc.tool === 'write_file' || tc.tool === 'insert_code') && 
+                    tc.result?.path === f && tc.result?.success
+                  );
+                  const verifyIndex = toolCallsLog.findIndex((tc, idx) => 
+                    idx > editIndex && tc.tool === 'read_file' && tc.args?.path === f
+                  );
+                  return verifyIndex === -1;
+                });
+                
+                if (unverifiedFiles.length > 0) {
+                  console.warn(`[Agent Mode] ⚠️ ENFORCEMENT: task_complete without verifying: ${unverifiedFiles.join(', ')}`);
+                } else {
+                  filesEdited.forEach(f => filesVerified.add(f));
+                }
+              }
+              
+              if (result.acknowledged) {
+                taskCompleteResult = {
+                  summary: result.summary || 'Task completed',
+                  filesChanged: result.filesChanged || [...filesEdited]
+                };
+              }
+            }
           }
         }
         

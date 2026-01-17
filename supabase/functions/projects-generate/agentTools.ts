@@ -97,7 +97,26 @@ export const AGENT_TOOLS = [
       }
     }
   },
-  // 🚀 NEW: SEARCH AND REPLACE - Targeted edits like Lovable uses!
+  // 🚀 GREP SEARCH - Find code across ALL files (like Cascade does!)
+  {
+    name: "grep_search",
+    description: "Search for text/code across ALL project files. Use this to find where specific code, text, classes, or functions are used. Returns file paths and matching lines. ESSENTIAL for finding the exact location of code before editing.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { 
+          type: "string", 
+          description: "Text or code to search for (case-insensitive). Examples: 'Abdullah', 'bg-blue-500', 'onClick', 'className=\"hero\"'" 
+        },
+        filePattern: { 
+          type: "string", 
+          description: "Optional: filter by file extension like '.js', '.css', '.jsx'. Leave empty to search all files." 
+        }
+      },
+      required: ["query"]
+    }
+  },
+  // 🚀 SEARCH AND REPLACE - Targeted edits like Lovable uses!
   {
     name: "search_replace",
     description: "PREFERRED tool for editing existing files. Find exact code snippet and replace it with new code. Much faster than rewriting entire files. Use this for targeted changes like updating a button color, fixing a bug, or modifying a function.",
@@ -284,10 +303,16 @@ Before making ANY changes, you MUST follow this exact sequence:
 - Identify what they ACTUALLY want (not what you assume)
 - If unclear, state your understanding before proceeding
 
-### STEP 2: INVESTIGATE (Required)
-- Use read_file to see the CURRENT state of relevant files
-- Use list_files if you need to find where code lives
+### STEP 2: SEARCH & FIND (Required) ⭐ NEW - LIKE CASCADE
+- **ALWAYS use grep_search FIRST** to find where the code/text lives
+- Example: User says "change the title color" → grep_search for the title text first
+- Example: User says "fix the button" → grep_search for button-related code
+- This tells you EXACTLY which file and line to edit
+
+### STEP 3: READ THE FILE (Required)
+- After grep_search finds the file, use read_file to see the FULL context
 - NEVER edit a file you haven't read first
+- Copy the EXACT code you want to change (including whitespace)
 
 ### STEP 2.5: ANALYZE ARCHITECTURE (Required for new features)
 When adding NEW PAGES or NEW FEATURES, you MUST check:
@@ -385,28 +410,30 @@ Unlike basic code generators, you make SURGICAL, TARGETED changes:
 
 ## YOUR TOOLS (PRIORITIZED BY EFFICIENCY)
 
-1. **search_replace** ⭐ PRIMARY - Find exact code and replace it. FASTEST for edits!
-2. **insert_code** ⭐ - Add new code after a specific location
-3. **read_file** - Read files BEFORE editing (MANDATORY before any edit)
-4. **list_files** - See project structure
-5. **write_file** - ONLY for NEW files or complete rewrites (>50% changes)
-6. **delete_file** - Remove files
-7. **get_console_logs** - Debug runtime issues
-8. **get_network_errors** - Debug API calls
-9. **get_runtime_errors** - See all errors
-10. **query_collection** - Query backend data
-11. **get_project_info** - Get project metadata
-12. **task_complete** - Call when DONE
+1. **grep_search** ⭐⭐ FIRST - Search ALL files for text/code. Use this FIRST to find where code lives!
+2. **read_file** ⭐ - Read file AFTER grep_search finds it. MANDATORY before any edit!
+3. **search_replace** ⭐ PRIMARY EDIT - Find exact code and replace it. FASTEST for edits!
+4. **insert_code** - Add new code after a specific location
+5. **list_files** - See project structure
+6. **write_file** - ONLY for NEW files or complete rewrites (>50% changes)
+7. **delete_file** - Remove files
+8. **get_console_logs** - Debug runtime issues
+9. **get_network_errors** - Debug API calls
+10. **get_runtime_errors** - See all errors
+11. **query_collection** - Query backend data
+12. **get_project_info** - Get project metadata
+13. **task_complete** - Call when DONE (MUST verify changes first!)
 
-## YOUR WORKFLOW (LIKE LOVABLE + CASCADE)
+## YOUR WORKFLOW (LIKE CASCADE) ⭐ CRITICAL
 
-1. **READ FIRST**: Always read_file before editing (MANDATORY)
-2. **STATE PLAN**: Tell user what you will do before doing it
-3. **THINK SMALL**: Identify the MINIMUM code that needs to change
-4. **TARGETED EDIT**: Use search_replace for existing code changes
-5. **INSERT NEW**: Use insert_code for adding new functionality
-6. **VERIFY**: Check for errors after changes
-7. **DONE**: Call task_complete with summary
+1. **GREP FIRST**: Use grep_search to find where the code/text lives
+2. **READ FILE**: Use read_file to see full context of the file
+3. **STATE PLAN**: Tell user what you will do before doing it
+4. **TARGETED EDIT**: Use search_replace with EXACT code from read_file
+5. **VERIFY**: Re-read the file to confirm your change worked!
+6. **DONE**: Call task_complete with summary
+
+**⚠️ ENFORCEMENT: The system tracks if you read files before editing. If you edit without reading first, you will get a warning.**
 
 ## ⚠️ TOOL SELECTION RULES - CRITICAL
 
@@ -1004,6 +1031,65 @@ export async function executeToolCall(
         files = files.filter(f => f.startsWith(directory));
       }
       return { files, count: files.length };
+    }
+    
+    // 🚀 GREP SEARCH - Find code across ALL files (like Cascade does!)
+    case "grep_search": {
+      const query = args.query || "";
+      const filePattern = args.filePattern || "";
+      
+      if (!query) {
+        return { error: "grep_search: 'query' parameter is required" };
+      }
+      
+      console.log(`[Agent] grep_search: query="${query}", filePattern="${filePattern}"`);
+      
+      // Get all files from project
+      const { data: allFiles, error } = await supabase
+        .from('project_files')
+        .select('path, content')
+        .eq('project_id', projectId);
+      
+      if (error) {
+        console.error(`[Agent] grep_search error:`, error);
+        return { error: `Failed to search files: ${error.message}` };
+      }
+      
+      const results: Array<{ file: string; line: number; content: string }> = [];
+      const queryLower = query.toLowerCase();
+      
+      for (const file of (allFiles || [])) {
+        // Filter by file pattern if specified
+        if (filePattern && !file.path.endsWith(filePattern)) {
+          continue;
+        }
+        
+        const lines = (file.content || "").split('\n');
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].toLowerCase().includes(queryLower)) {
+            results.push({
+              file: file.path,
+              line: i + 1,
+              content: lines[i].trim().substring(0, 200) // Limit line length
+            });
+          }
+        }
+      }
+      
+      console.log(`[Agent] grep_search: Found ${results.length} matches for "${query}"`);
+      
+      // Limit results to prevent token overflow
+      const limitedResults = results.slice(0, 50);
+      
+      return { 
+        query,
+        matches: limitedResults,
+        totalMatches: results.length,
+        truncated: results.length > 50,
+        summary: results.length === 0 
+          ? `No matches found for "${query}"` 
+          : `Found ${results.length} match(es) in ${[...new Set(results.map(r => r.file))].length} file(s)`
+      };
     }
     
     case "write_file": {
