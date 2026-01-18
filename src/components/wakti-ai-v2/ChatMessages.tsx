@@ -1669,6 +1669,7 @@ export function ChatMessages({
               answer={wolframMeta?.answer || extractStudyAnswer(content)}
               steps={wolframMeta?.steps}
               inputInterpretation={wolframMeta?.interpretation}
+              summaryBox={wolframMeta?.summaryBox}
               language={language}
             />
           )}
@@ -2077,6 +2078,40 @@ export function ChatMessages({
                               <div className="flex items-center gap-2 text-muted-foreground">
                                 <Globe className="h-4 w-4 animate-spin" />
                                 <span>{language === 'ar' ? 'وقتي يبحث في الويب...' : 'Wakti AI is searching the web...'}</span>
+                              </div>
+                            </div>
+                          );
+                        }
+                        // Chat mode loading: Wakti logo pulse animation with friendly message
+                        const isChatLoading = message.role === 'assistant'
+                          && (message.intent === 'chat' || !message.intent)
+                          && (message as any)?.metadata?.loading
+                          && !message.content;
+                        if (isChatLoading) {
+                          return (
+                            <div className="w-full">
+                              <div className="flex items-center gap-3">
+                                <div className="relative">
+                                  <img
+                                    src="/lovable-uploads/wakti-logo.png"
+                                    alt="Wakti"
+                                    className="h-6 w-6 rounded-full animate-pulse"
+                                    style={{
+                                      filter: 'drop-shadow(0 0 8px hsl(210 100% 65% / 0.6))',
+                                      animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite, glow-breathe 2s ease-in-out infinite'
+                                    }}
+                                  />
+                                  <div 
+                                    className="absolute inset-0 rounded-full"
+                                    style={{
+                                      background: 'radial-gradient(circle, hsl(210 100% 65% / 0.3) 0%, transparent 70%)',
+                                      animation: 'ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite'
+                                    }}
+                                  />
+                                </div>
+                                <span className="text-sm text-muted-foreground">
+                                  {language === 'ar' ? 'أنا عليها...' : "I'm on it..."}
+                                </span>
                               </div>
                             </div>
                           );

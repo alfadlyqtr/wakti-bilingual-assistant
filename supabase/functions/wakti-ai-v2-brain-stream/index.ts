@@ -32,7 +32,7 @@ const getCorsHeaders = (origin: string | null) => {
 
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
-const WOLFRAM_APP_ID = Deno.env.get('WOLFRAM_APP_ID') || 'VJT5YA9VGJ';
+const WOLFRAM_APP_ID = Deno.env.get('WOLFRAM_APP_ID') || 'H2PK3P9R7E';
 const GOOGLE_MAPS_API_KEY = Deno.env.get('GOOGLE_MAPS_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -1264,19 +1264,223 @@ async function queryWolfram(input: string, timeoutMs: number = 4000): Promise<{ 
   }
 }
 
-// Detect if query is suitable for Wolfram (math/science/facts)
+// === WOLFRAM SUMMARY BOXES API (for entity lookups: countries, people, chemicals, etc.) ===
+interface SummaryBoxResult {
+  success: boolean;
+  domain?: string;
+  summary?: string;
+  path?: string;
+  error?: string;
+}
+
+async function queryWolframSummaryBox(input: string, timeoutMs: number = 3000): Promise<SummaryBoxResult> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    // Step 1: Get the summary box path from Query Recognizer
+    const recognizerUrl = `http://www.wolframalpha.com/queryrecognizer/query.jsp?appid=${WOLFRAM_APP_ID}&mode=Default&i=${encodeURIComponent(input)}`;
+    console.log('📦 WOLFRAM SUMMARY: Query Recognizer for:', input.substring(0, 40));
+
+    const recognizerResp = await fetch(recognizerUrl, {
+      method: 'GET',
+      signal: controller.signal,
+    });
+
+    if (!recognizerResp.ok) {
+      clearTimeout(timeoutId);
+      console.warn('⚠️ WOLFRAM SUMMARY: Recognizer HTTP error', recognizerResp.status);
+      return { success: false, error: `Recognizer HTTP ${recognizerResp.status}` };
+    }
+
+    const recognizerXml = await recognizerResp.text();
+    
+    // Parse XML to extract path and domain
+    const pathMatch = recognizerXml.match(/summarybox\s+path="([^"]+)"/);
+    const domainMatch = recognizerXml.match(/domain="([^"]+)"/);
+    const acceptedMatch = recognizerXml.match(/accepted="([^"]+)"/);
+
+    if (!pathMatch || acceptedMatch?.[1] === 'false') {
+      clearTimeout(timeoutId);
+      console.log('📦 WOLFRAM SUMMARY: No summary box available for this query');
+      return { success: false, error: 'No summary box path' };
+    }
+
+    const path = pathMatch[1];
+    const domain = domainMatch?.[1] || 'unknown';
+    console.log('📦 WOLFRAM SUMMARY: Found path:', path, 'domain:', domain);
+
+    // Step 2: Get the summary box content
+    const summaryUrl = `http://www.wolframalpha.com/summaryboxes/v1/query?appid=${WOLFRAM_APP_ID}&path=${encodeURIComponent(path)}`;
+    
+    const summaryResp = await fetch(summaryUrl, {
+      method: 'GET',
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!summaryResp.ok) {
+      console.warn('⚠️ WOLFRAM SUMMARY: Summary HTTP error', summaryResp.status);
+      return { success: false, error: `Summary HTTP ${summaryResp.status}` };
+    }
+
+    const summaryHtml = await summaryResp.text();
+    
+    // Extract text content from XHTML (strip tags, get meaningful text)
+    // The summary box returns XHTML with structured data
+    const textContent = summaryHtml
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .substring(0, 1500); // Limit to reasonable size
+
+    if (!textContent || textContent.length < 20) {
+      console.log('📦 WOLFRAM SUMMARY: Empty or too short summary');
+      return { success: false, error: 'Empty summary' };
+    }
+
+    console.log('✅ WOLFRAM SUMMARY: Got summary for domain:', domain, '(', textContent.length, 'chars)');
+    return { success: true, domain, summary: textContent, path };
+
+  } catch (err: unknown) {
+    const errName = (err && typeof err === 'object' && 'name' in err) ? (err as { name?: unknown }).name : undefined;
+    const errMessage = err instanceof Error ? err.message : String(err);
+    if (errName === 'AbortError') {
+      console.warn('⚠️ WOLFRAM SUMMARY: Timeout after', timeoutMs, 'ms');
+      return { success: false, error: 'Timeout' };
+    }
+    console.error('❌ WOLFRAM SUMMARY: Error:', errMessage);
+    return { success: false, error: errMessage };
+  }
+}
+
+// Detect if query is better suited for Summary Boxes (entity lookups)
+function isSummaryBoxQuery(q: string): boolean {
+  if (!q) return false;
+  const lower = q.toLowerCase();
+  // Entity patterns - countries, people, places, chemicals, dates
+  if (/\b(who is|who was|tell me about|what is|describe)\b/i.test(lower)) return true;
+  if (/\b(country|city|capital|president|king|queen|ceo|founder|inventor)\b/i.test(lower)) return true;
+  if (/\b(element|chemical|compound|molecule|atom)\b/i.test(lower)) return true;
+  if (/\b(born|died|birthday|founded|established)\b/i.test(lower)) return true;
+  if (/\b(person|people|biography|scientist|author|artist|poet|philosopher|leader|dynasty)\b/i.test(lower)) return true;
+  if (/\b(company|brand|product|device|vehicle|aircraft|ship|train|car|phone|computer)\b/i.test(lower)) return true;
+  if (/\b(animal|species|planet|star|galaxy|mountain|river|lake|ocean)\b/i.test(lower)) return true;
+  if (/\b(monument|museum|building|bridge|tower|airport|university|school)\b/i.test(lower)) return true;
+  // Proper nouns (capitalized words that aren't at sentence start)
+  const words = q.split(/\s+/);
+  const properNouns = words.filter((w, i) => i > 0 && /^[A-Z][a-z]+$/.test(w));
+  if (properNouns.length >= 1) return true;
+  return false;
+}
+
+// Detect if query is suitable for Wolfram (academic subjects, math, science, facts)
 function isWolframQuery(q: string): boolean {
   if (!q) return false;
   const lower = q.toLowerCase();
-  // Math patterns
+  
+  // === MATHEMATICS (All Levels) ===
   if (/\d+\s*[\+\-\*\/\^]\s*\d+/.test(q)) return true;
-  if (/\b(solve|integrate|derivative|limit|factor|simplify|equation|calculate)\b/i.test(q)) return true;
-  if (/[∫∑∏√π∞]/.test(q)) return true;
-  if (/\b(sin|cos|tan|log|ln|sqrt)\s*\(/i.test(q)) return true;
-  // Science/facts patterns
-  if (/\b(convert|distance|population|capital|temperature|speed of|atomic|molecular|planet|star|gravity)\b/i.test(lower)) return true;
-  if (/\d+\s*(km|m|cm|mm|ft|in|mi|kg|g|lb|oz|l|ml|gal|mph|kph|°[CF])/i.test(q)) return true;
-  if (/\b(how (far|much|many|tall|big|old)|what is the)\b/i.test(lower)) return true;
+  if (/[∫∑∏√π∞±×÷=≠≤≥<>]/.test(q)) return true;
+  if (/\b(sin|cos|tan|cot|sec|csc|log|ln|sqrt|exp)\s*\(/i.test(q)) return true;
+  if (/\b(math|maths|arithmetic|algebra|geometry|trigonometry|calculus|statistics|probability|precalculus|pre-calculus)\b/i.test(lower)) return true;
+  if (/\b(solve|integrate|derivative|differentiate|limit|factor|simplify|equation|calculate|compute|evaluate|graph|plot)\b/i.test(lower)) return true;
+  if (/\b(linear algebra|matrix|matrices|vector|determinant|eigenvalue|eigenvector)\b/i.test(lower)) return true;
+  if (/\b(differential equation|discrete math|number theory|topology|real analysis|complex analysis|abstract algebra)\b/i.test(lower)) return true;
+  if (/\b(polynomial|quadratic|cubic|exponential|logarithm|function|variable|coefficient|constant)\b/i.test(lower)) return true;
+  if (/\b(fraction|decimal|percentage|ratio|proportion|prime|factorial|permutation|combination)\b/i.test(lower)) return true;
+  if (/\b(mean|median|mode|average|standard deviation|variance|correlation|regression)\b/i.test(lower)) return true;
+  
+  // === PHYSICS ===
+  if (/\b(physics|mechanics|thermodynamics|electromagnetism|quantum|relativity|optics|nuclear|astrophysics)\b/i.test(lower)) return true;
+  if (/\b(force|mass|acceleration|velocity|speed|momentum|energy|power|work|torque|friction)\b/i.test(lower)) return true;
+  if (/\b(newton|joule|watt|volt|ampere|ohm|coulomb|farad|tesla|hertz|pascal)\b/i.test(lower)) return true;
+  if (/\b(gravity|gravitational|magnetic|electric|electromagnetic|wave|frequency|wavelength|amplitude)\b/i.test(lower)) return true;
+  if (/\b(circuit|resistance|capacitance|inductance|current|voltage|charge)\b/i.test(lower)) return true;
+  
+  // === CHEMISTRY ===
+  if (/\b(chemistry|chemical|organic chemistry|inorganic|biochemistry|physical chemistry|analytical chemistry)\b/i.test(lower)) return true;
+  if (/\b(element|compound|molecule|atom|ion|isotope|electron|proton|neutron)\b/i.test(lower)) return true;
+  if (/\b(periodic table|atomic number|atomic mass|valence|oxidation|reduction|reaction|bond|covalent|ionic)\b/i.test(lower)) return true;
+  if (/\b(acid|base|ph|solution|solute|solvent|concentration|molarity|mole)\b/i.test(lower)) return true;
+  if (/\b(formula|equation|balance|stoichiometry|yield|catalyst|equilibrium)\b/i.test(lower)) return true;
+  
+  // === BIOLOGY / LIFE SCIENCES ===
+  if (/\b(biology|biological|genetics|molecular biology|microbiology|ecology|zoology|botany|neuroscience|immunology)\b/i.test(lower)) return true;
+  if (/\b(cell|dna|rna|protein|gene|chromosome|mitosis|meiosis|evolution|natural selection)\b/i.test(lower)) return true;
+  if (/\b(organism|species|kingdom|phylum|class|order|family|genus|taxonomy)\b/i.test(lower)) return true;
+  if (/\b(photosynthesis|respiration|metabolism|enzyme|hormone|antibody|virus|bacteria)\b/i.test(lower)) return true;
+  
+  // === MEDICINE / HEALTH ===
+  if (/\b(anatomy|physiology|pharmacology|pathology|cardiology|neurology|medicine|medical)\b/i.test(lower)) return true;
+  if (/\b(heart|brain|lung|liver|kidney|blood|bone|muscle|nerve|tissue|organ)\b/i.test(lower)) return true;
+  if (/\b(disease|symptom|diagnosis|treatment|drug|medication|dose|vaccine)\b/i.test(lower)) return true;
+  if (/\b(nutrition|vitamin|mineral|calorie|protein|carbohydrate|fat|fiber)\b/i.test(lower)) return true;
+  
+  // === EARTH & SPACE SCIENCES ===
+  if (/\b(earth science|geology|geography|meteorology|oceanography|astronomy|astrophysics)\b/i.test(lower)) return true;
+  if (/\b(planet|star|galaxy|universe|solar system|moon|sun|orbit|satellite|comet|asteroid)\b/i.test(lower)) return true;
+  if (/\b(earthquake|volcano|tectonic|rock|mineral|fossil|erosion|weathering)\b/i.test(lower)) return true;
+  if (/\b(climate|weather|atmosphere|temperature|pressure|humidity|precipitation)\b/i.test(lower)) return true;
+  if (/\b(ocean|sea|river|lake|mountain|continent|latitude|longitude)\b/i.test(lower)) return true;
+  
+  // === HISTORY (World, Islamic, Regional) ===
+  if (/\b(history|historical|ancient|medieval|modern|century|era|period|civilization|empire)\b/i.test(lower)) return true;
+  if (/\b(world war|revolution|independence|colonialism|renaissance|enlightenment)\b/i.test(lower)) return true;
+  if (/\b(prophet|caliphate|ottoman|umayyad|abbasid|islamic golden age|crusade)\b/i.test(lower)) return true;
+  if (/\b(pharaoh|roman|greek|persian|byzantine|mongol|dynasty)\b/i.test(lower)) return true;
+  
+  // === ISLAMIC STUDIES ===
+  if (/\b(quran|qur'an|hadith|fiqh|tafsir|seerah|aqeedah|shariah|sharia|islamic)\b/i.test(lower)) return true;
+  if (/\b(tajweed|usul|uloom|maqasid|ijtihad|fatwa|halal|haram|sunnah|salah|zakat|hajj|sawm|ramadan)\b/i.test(lower)) return true;
+  if (/\b(prophet muhammad|sahaba|companion|imam|scholar|mosque|masjid|kaaba|mecca|medina)\b/i.test(lower)) return true;
+  if (/\b(surah|ayah|verse|chapter|revelation|angel|jannah|jahannam|day of judgment)\b/i.test(lower)) return true;
+  // Arabic Islamic terms
+  if (/\b(قرآن|حديث|فقه|تفسير|سيرة|عقيدة|شريعة|تجويد|أصول|علوم|مقاصد|اجتهاد|فتوى|حلال|حرام|سنة|صلاة|زكاة|حج|صوم|رمضان)\b/.test(q)) return true;
+  
+  // === LANGUAGES (Arabic, English, French, etc.) ===
+  if (/\b(grammar|syntax|morphology|phonetics|phonology|semantics|linguistics|vocabulary|etymology)\b/i.test(lower)) return true;
+  if (/\b(noun|verb|adjective|adverb|pronoun|preposition|conjunction|article|tense|conjugation|declension)\b/i.test(lower)) return true;
+  if (/\b(arabic grammar|nahw|sarf|balagha|rhetoric|literature|poetry|prose)\b/i.test(lower)) return true;
+  if (/\b(english grammar|french grammar|spanish grammar|german grammar)\b/i.test(lower)) return true;
+  if (/\b(translation|translate|meaning of|definition of|what does .* mean)\b/i.test(lower)) return true;
+  // Arabic grammar terms
+  if (/\b(نحو|صرف|بلاغة|إعراب|فعل|اسم|حرف|جملة|مبتدأ|خبر|فاعل|مفعول)\b/.test(q)) return true;
+  
+  // === ECONOMICS / BUSINESS / FINANCE ===
+  if (/\b(economics|microeconomics|macroeconomics|econometrics|finance|accounting|business)\b/i.test(lower)) return true;
+  if (/\b(supply|demand|market|price|cost|profit|loss|revenue|gdp|inflation|interest rate)\b/i.test(lower)) return true;
+  if (/\b(stock|bond|investment|portfolio|dividend|capital|asset|liability|equity)\b/i.test(lower)) return true;
+  if (/\b(tax|budget|fiscal|monetary|trade|export|import|tariff)\b/i.test(lower)) return true;
+  
+  // === COMPUTER SCIENCE / ENGINEERING ===
+  if (/\b(computer science|programming|algorithm|data structure|database|network|operating system)\b/i.test(lower)) return true;
+  if (/\b(machine learning|artificial intelligence|neural network|deep learning|nlp|cryptography|cybersecurity)\b/i.test(lower)) return true;
+  if (/\b(engineering|electrical|mechanical|civil|chemical|aerospace|biomedical|industrial)\b/i.test(lower)) return true;
+  if (/\b(binary|hexadecimal|boolean|logic gate|cpu|memory|bandwidth|latency)\b/i.test(lower)) return true;
+  
+  // === LAW / POLITICAL SCIENCE ===
+  if (/\b(law|legal|constitutional|criminal law|civil law|international law|sharia law|jurisprudence)\b/i.test(lower)) return true;
+  if (/\b(political science|government|democracy|republic|parliament|congress|constitution|rights)\b/i.test(lower)) return true;
+  if (/\b(treaty|legislation|statute|court|judge|verdict|appeal|jurisdiction)\b/i.test(lower)) return true;
+  
+  // === PHILOSOPHY / PSYCHOLOGY / SOCIOLOGY ===
+  if (/\b(philosophy|ethics|logic|metaphysics|epistemology|aesthetics|existentialism)\b/i.test(lower)) return true;
+  if (/\b(psychology|cognitive|behavioral|developmental|clinical|social psychology|freud|jung)\b/i.test(lower)) return true;
+  if (/\b(sociology|anthropology|culture|society|social|demographic|population)\b/i.test(lower)) return true;
+  
+  // === CONVERSIONS & MEASUREMENTS ===
+  if (/\b(convert|conversion|how many|how much|what is .* in)\b/i.test(lower)) return true;
+  if (/\d+\s*(km|m|cm|mm|ft|in|mi|yd|kg|g|lb|oz|l|ml|gal|mph|kph|°[CF]|kelvin|fahrenheit|celsius)/i.test(q)) return true;
+  
+  // === GENERAL ACADEMIC QUESTION PATTERNS ===
+  if (/\b(what is|what are|who is|who was|when did|where is|why does|how does|explain|define|describe|compare|contrast)\b/i.test(lower)) return true;
+  if (/\b(formula for|equation for|law of|theory of|principle of|definition of)\b/i.test(lower)) return true;
+  if (/\b(calculate|compute|find|determine|prove|derive|show that)\b/i.test(lower)) return true;
+  
   return false;
 }
 
@@ -2211,49 +2415,113 @@ If you are running out of space, keep this order and drop the rest:
             } catch {}
           }
 
-          // Study mode ALWAYS tries Wolfram; Chat mode only for math/science queries
+          // Study mode ALWAYS tries Wolfram; Chat mode for academic/math/science queries
           let wolframContext = '';
+          let fullResultsData = '';
+          let summaryBoxData = '';
+          let wolframMetaBase: Record<string, unknown> | null = null;
           const useWolfram = chatSubmode === 'study' || isWolframQuery(message);
+          const useSummaryBox = isSummaryBoxQuery(message);
           
+          // For academic queries: run BOTH APIs in parallel for maximum knowledge
           if (useWolfram) {
-            console.log(`🔢 WOLFRAM: ${chatSubmode === 'study' ? 'Study mode (always)' : 'Facts booster'} - querying...`);
-            try {
-              // Study mode: shorter timeout (2s) to not slow down, Chat mode: longer (2.5s)
-              const wolfResult = await queryWolfram(message, chatSubmode === 'study' ? 2000 : 2500);
+            console.log(`🔢 WOLFRAM: ${chatSubmode === 'study' ? 'Study mode' : 'Academic query'} - querying BOTH APIs in parallel...`);
+            
+            // Run both APIs in parallel for speed
+            const [fullResultsResult, summaryBoxResult] = await Promise.all([
+              queryWolfram(message, chatSubmode === 'study' ? 2000 : 2500),
+              useSummaryBox ? queryWolframSummaryBox(message, 2500) : Promise.resolve<SummaryBoxResult>({ success: false })
+            ]);
+            
+            // Process Full Results API response
+            if (fullResultsResult.success && fullResultsResult.answer) {
+              const wolfResult = fullResultsResult;
+              console.log('✅ WOLFRAM FULL: Got answer');
               
-              if (wolfResult.success && wolfResult.answer) {
-                // Emit metadata so frontend knows Wolfram was used
-                try {
-                  const wolfMeta = {
-                    metadata: {
-                      wolfram: {
-                        answer: wolfResult.answer,
-                        interpretation: wolfResult.interpretation || null,
-                        steps: wolfResult.steps || [],
-                        mode: chatSubmode
-                      }
-                    }
-                  };
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify(wolfMeta)}\n\n`));
-                } catch {}
-
-                // Build context for AI
-                if (chatSubmode === 'study') {
-                  wolframContext = language === 'ar'
-                    ? `[بيانات موثقة]\nالسؤال: ${wolfResult.interpretation || message}\nالإجابة: ${wolfResult.answer}${wolfResult.steps?.length ? '\nالخطوات: ' + wolfResult.steps.join(' → ') : ''}\n\nاستخدم هذه البيانات لشرح الإجابة بطريقة تعليمية واضحة. اعرض الإجابة أولاً ثم الشرح.`
-                    : `[Verified data]\nQuestion: ${wolfResult.interpretation || message}\nAnswer: ${wolfResult.answer}${wolfResult.steps?.length ? '\nSteps: ' + wolfResult.steps.join(' → ') : ''}\n\nUse this data to explain the answer in a clear, educational way. Present the answer first, then explain.`;
-                } else {
-                  wolframContext = language === 'ar'
-                    ? `[حقيقة موثقة: ${wolfResult.answer}]\n\nاستخدم هذه الحقيقة في إجابتك بشكل طبيعي.`
-                    : `[Verified fact: ${wolfResult.answer}]\n\nUse this fact naturally in your response.`;
-                }
-                console.log('✅ WOLFRAM: Data injected into prompt');
-                wolframUsedOuter = true; // Mark that Wolfram was successfully used
+              // Emit metadata for Full Results
+              wolframMetaBase = {
+                answer: wolfResult.answer,
+                interpretation: wolfResult.interpretation || null,
+                steps: wolfResult.steps || [],
+                mode: chatSubmode,
+                api: 'full_results'
+              };
+              try {
+                const wolfMeta = {
+                  metadata: {
+                    wolfram: wolframMetaBase
+                  }
+                };
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify(wolfMeta)}\n\n`));
+              } catch { /* ignore */ }
+              
+              // Build Full Results context
+              if (chatSubmode === 'study') {
+                fullResultsData = language === 'ar'
+                  ? `[بيانات موثقة - Full Results]\nالسؤال: ${wolfResult.interpretation || message}\nالإجابة: ${wolfResult.answer}${wolfResult.steps?.length ? '\nالخطوات: ' + wolfResult.steps.join(' → ') : ''}`
+                  : `[Verified Data - Full Results]\nQuestion: ${wolfResult.interpretation || message}\nAnswer: ${wolfResult.answer}${wolfResult.steps?.length ? '\nSteps: ' + wolfResult.steps.join(' → ') : ''}`;
               } else {
-                console.log('⚠️ WOLFRAM: No result, AI will handle alone');
+                fullResultsData = language === 'ar'
+                  ? `[حقيقة موثقة: ${wolfResult.answer}]`
+                  : `[Verified fact: ${wolfResult.answer}]`;
               }
-            } catch (wolfErr) {
-              console.warn('⚠️ WOLFRAM: Error (AI will handle alone):', wolfErr);
+              wolframUsedOuter = true;
+            } else {
+              console.log('⚠️ WOLFRAM FULL: No result');
+            }
+            
+            // Process Summary Boxes API response
+            if (summaryBoxResult.success && summaryBoxResult.summary) {
+              const summaryResult = summaryBoxResult;
+              const summaryText = summaryResult.summary || '';
+              console.log('✅ WOLFRAM SUMMARY: Got summary (domain:', summaryResult.domain, ')');
+              
+              // Emit metadata with Summary Box appended (preserve full-results fields if present)
+              try {
+                const summaryMeta = {
+                  metadata: {
+                    wolfram: {
+                      ...(wolframMetaBase || {
+                        answer: summaryText.substring(0, 500),
+                        mode: chatSubmode,
+                        api: 'summary_boxes'
+                      }),
+                      summaryBox: summaryText.substring(0, 1200),
+                      summaryDomain: summaryResult.domain || null,
+                      api: wolframMetaBase ? 'full_results+summary_boxes' : 'summary_boxes'
+                    }
+                  }
+                };
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify(summaryMeta)}\n\n`));
+              } catch { /* ignore */ }
+              
+              // Build Summary Box context
+              summaryBoxData = language === 'ar'
+                ? `[معلومات إضافية عن ${summaryResult.domain || 'الموضوع'}]\n${summaryText.substring(0, 800)}`
+                : `[Additional info about ${summaryResult.domain || 'topic'}]\n${summaryText.substring(0, 800)}`;
+              wolframUsedOuter = true;
+            } else if (useSummaryBox) {
+              console.log('⚠️ WOLFRAM SUMMARY: No summary box');
+            }
+            
+            // Combine both results into context
+            if (fullResultsData || summaryBoxData) {
+              const combinedParts: string[] = [];
+              if (fullResultsData) combinedParts.push(fullResultsData);
+              if (summaryBoxData) combinedParts.push(summaryBoxData);
+              
+              const instruction = chatSubmode === 'study'
+                ? (language === 'ar' 
+                    ? '\n\nاستخدم هذه البيانات لشرح الإجابة بطريقة تعليمية واضحة. اعرض الإجابة أولاً ثم الشرح.'
+                    : '\n\nUse this data to explain the answer in a clear, educational way. Present the answer first, then explain.')
+                : (language === 'ar'
+                    ? '\n\nاستخدم هذه المعلومات في إجابتك بشكل طبيعي.'
+                    : '\n\nUse this information naturally in your response.');
+              
+              wolframContext = combinedParts.join('\n\n') + instruction;
+              console.log('✅ WOLFRAM: Combined context from', combinedParts.length, 'API(s)');
+            } else {
+              console.log('⚠️ WOLFRAM: No data from either API, AI will handle alone');
             }
           }
 

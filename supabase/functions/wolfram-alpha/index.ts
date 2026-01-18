@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const WOLFRAM_APP_ID = Deno.env.get('WOLFRAM_APP_ID') || 'VJT5YA9VGJ';
+const WOLFRAM_APP_ID = Deno.env.get('WOLFRAM_APP_ID') || 'H2PK3P9R7E';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

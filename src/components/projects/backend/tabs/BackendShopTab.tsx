@@ -24,6 +24,7 @@ interface BackendShopTabProps {
   projectId: string;
   isRTL: boolean;
   onRefresh: () => void;
+  initialInnerTab?: ShopInnerTab;
 }
 
 type ShopInnerTab = 'orders' | 'inventory' | 'categories' | 'discounts' | 'settings';
@@ -79,8 +80,8 @@ interface ShopSettings {
   free_shipping_threshold?: number;
 }
 
-export function BackendShopTab({ orders, inventory, projectId, isRTL, onRefresh }: BackendShopTabProps) {
-  const [activeInnerTab, setActiveInnerTab] = useState<ShopInnerTab>('orders');
+export function BackendShopTab({ orders, inventory, projectId, isRTL, onRefresh, initialInnerTab }: BackendShopTabProps) {
+  const [activeInnerTab, setActiveInnerTab] = useState<ShopInnerTab>(initialInnerTab || 'orders');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   
@@ -114,6 +115,12 @@ export function BackendShopTab({ orders, inventory, projectId, isRTL, onRefresh 
     fetchDiscounts();
     fetchSettings();
   }, [projectId]);
+
+  useEffect(() => {
+    if (initialInnerTab) {
+      setActiveInnerTab(initialInnerTab);
+    }
+  }, [initialInnerTab]);
 
   const fetchCategories = async () => {
     const { data } = await supabase

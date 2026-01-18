@@ -220,6 +220,18 @@ textarea::placeholder {
   }
 }
 
+/* Chat mode loading: Wakti logo glow breathe animation */
+@keyframes glow-breathe {
+  0%, 100% {
+    filter: drop-shadow(0 0 6px hsl(210 100% 65% / 0.5));
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 14px hsl(210 100% 65% / 0.8));
+    transform: scale(1.08);
+  }
+}
+
 .wakti-wave-bar {
   transform-origin: center;
   animation: wakti-wave-pulse 1400ms ease-in-out infinite;

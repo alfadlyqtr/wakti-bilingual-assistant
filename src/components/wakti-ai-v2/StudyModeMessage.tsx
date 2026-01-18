@@ -7,6 +7,7 @@ interface StudyModeMessageProps {
   steps?: string[];
   inputInterpretation?: string;
   explanation?: string;
+  summaryBox?: string;
   language: string;
 }
 
@@ -15,6 +16,7 @@ export function StudyModeMessage({
   steps = [],
   inputInterpretation,
   explanation,
+  summaryBox,
   language
 }: StudyModeMessageProps) {
   const [showSteps, setShowSteps] = useState(false);
@@ -33,6 +35,16 @@ export function StudyModeMessage({
         <div className="text-lg font-medium text-purple-900 dark:text-purple-100 font-mono">
           {answer}
         </div>
+        {summaryBox && (
+          <div className="mt-3 pt-3 border-t border-purple-200/60 dark:border-purple-700/40">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-purple-600 dark:text-purple-300">
+              {isArabic ? 'ملخص إضافي' : 'Summary Box'}
+            </div>
+            <div className="mt-1 text-sm text-purple-900/90 dark:text-purple-100/90">
+              {summaryBox}
+            </div>
+          </div>
+        )}
         {inputInterpretation && inputInterpretation !== answer && (
           <div className="mt-2 text-xs text-purple-600/70 dark:text-purple-400/70">
             {isArabic ? 'تفسير السؤال: ' : 'Interpreted as: '}

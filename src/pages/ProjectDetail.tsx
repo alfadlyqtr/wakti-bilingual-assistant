@@ -89,6 +89,7 @@ import { StockPhotoSelector } from '@/components/projects/StockPhotoSelector';
 import { ImageSourceButtons, ImageSourceChoice } from '@/components/projects/ImageSourceButtons';
 import { BookingFormWizard, BookingFormConfig, BookingService } from '@/components/projects/BookingFormWizard';
 import { ContactFormWizard, ContactFormConfig } from '@/components/projects/ContactFormWizard';
+import { ProductFormCard } from '@/components/projects/ProductFormCard';
 import { FreepikService } from '@/services/FreepikService';
 
 // Lovable-style components
@@ -246,6 +247,7 @@ export default function ProjectDetail() {
   // Booking/Contact Form Wizard state
   const [showBookingWizard, setShowBookingWizard] = useState(false);
   const [showContactWizard, setShowContactWizard] = useState(false);
+  const [showProductFormCard, setShowProductFormCard] = useState(false);
   const [pendingFormPrompt, setPendingFormPrompt] = useState('');
   const skipFormWizardRef = useRef(false);
   const skipUserMessageSaveRef = useRef(false);
@@ -363,6 +365,8 @@ export default function ProjectDetail() {
   
   // Main tab state - Builder vs Server
   const [mainTab, setMainTab] = useState<MainTab>('builder');
+  const [backendInitialTab, setBackendInitialTab] = useState<string | undefined>(undefined);
+  const [backendInitialShopTab, setBackendInitialShopTab] = useState<'orders' | 'inventory' | 'categories' | 'discounts' | 'settings' | undefined>(undefined);
   
   // Uploaded assets from backend (for AI context)
   const [uploadedAssets, setUploadedAssets] = useState<Array<{ filename: string; url: string; file_type: string | null }>>([]);
@@ -597,7 +601,7 @@ export default function ProjectDetail() {
         console.error('Error fetching uploaded assets:', error);
         return;
       }
-      
+
       if (data && data.length > 0) {
         const assets = data.map((upload: any) => {
           const { data: urlData } = supabase.storage.from('project-uploads').getPublicUrl(upload.storage_path);
@@ -3598,6 +3602,55 @@ ${fixInstructions}
         }
         return;
       }
+
+      // PRODUCT FORM DETECTION - Show add-product card instead of direct AI call
+      const productFormPatterns = /\b(add|create|build|make|need|want|show|display).*(product|item|inventory)\s*(form|page|popup|modal|card|button)?/i;
+      const productFormAltPatterns = /\b(product|inventory)\s*(form|page|popup|modal|card)\b/i;
+      const hasProductFormRequest = productFormPatterns.test(userMessage) || productFormAltPatterns.test(userMessage);
+
+      if (hasProductFormRequest) {
+        setPendingFormPrompt(userMessage);
+        setShowProductFormCard(true);
+
+        const { data: wizardUserMsg, error: wizardUserErr } = await supabase
+          .from('project_chat_messages' as any)
+          .insert({ project_id: id, role: 'user', content: userMessage } as any)
+          .select()
+          .single();
+
+        if (wizardUserErr) console.error('Error saving user message:', wizardUserErr);
+        if (wizardUserMsg) {
+          setChatMessages(prev => [...prev, wizardUserMsg as any]);
+        } else {
+          setChatMessages(prev => [...prev, {
+            id: `user-${Date.now()}`,
+            role: 'user',
+            content: userMessage
+          }]);
+        }
+
+        const productCardContent = JSON.stringify({
+          type: 'product_form_card',
+          prompt: userMessage
+        });
+        const { data: productAssistantMsg, error: productAssistantErr } = await supabase
+          .from('project_chat_messages' as any)
+          .insert({ project_id: id, role: 'assistant', content: productCardContent } as any)
+          .select()
+          .single();
+
+        if (productAssistantErr) console.error('Error saving product card message:', productAssistantErr);
+        if (productAssistantMsg) {
+          setChatMessages(prev => [...prev, productAssistantMsg as any]);
+        } else {
+          setChatMessages(prev => [...prev, {
+            id: `product-card-${Date.now()}`,
+            role: 'assistant',
+            content: productCardContent
+          }]);
+        }
+        return;
+      }
     }
 
     const isBackendQuestion = /\b(how many|count|what|which|list|كم|عدد|ما|كم عدد)\b/i.test(userMessage) &&
@@ -4289,7 +4342,13 @@ ${fixInstructions}
       {/* Server Tab Content */}
       {mainTab === 'server' ? (
         <div className="flex-1 min-h-0 overflow-hidden">
-          <BackendDashboard projectId={id || ''} isRTL={isRTL} onBack={() => { setMainTab('builder'); fetchBackendContext(); }} />
+          <BackendDashboard
+            projectId={id || ''}
+            isRTL={isRTL}
+            initialTab={backendInitialTab}
+            initialShopInnerTab={backendInitialShopTab}
+            onBack={() => { setMainTab('builder'); fetchBackendContext(); }}
+          />
         </div>
       ) : (
       <>
@@ -4501,6 +4560,8 @@ ${fixInstructions}
                       } else if (parsed.type === 'plan' || (parsed.title && (parsed.steps || parsed.codeChanges))) {
                         parsedPlan = parsed;
                         isPlanCard = true;
+                      } else if (parsed.type === 'product_form_card' && parsed.prompt) {
+                        // Handled below as ProductFormCard
                       }
                     } catch {
                       // Method 2: Extract JSON object from mixed content
@@ -4548,6 +4609,60 @@ ${fixInstructions}
                           }
                         }
                       }
+                    }
+                    
+                    // PRODUCT FORM CARD - Inline card in chat
+                    let productCardData: { type: string; prompt: string } | null = null;
+                    try {
+                      const parsedProduct = JSON.parse(msg.content);
+                      if (parsedProduct.type === 'product_form_card') {
+                        productCardData = parsedProduct;
+                      }
+                    } catch {}
+
+                    if (productCardData && showProductFormCard) {
+                      return (
+                        <div key={i} className="flex flex-col items-start w-full animate-in fade-in slide-in-from-bottom-1 duration-300">
+                          <ProductFormCard
+                            projectId={id || ''}
+                            isRTL={isRTL}
+                            onCancel={() => {
+                              setShowProductFormCard(false);
+                              setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            }}
+                            onSaved={async (productName) => {
+                              setShowProductFormCard(false);
+                              setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+
+                              const successMsg = isRTL
+                                ? `✓ تم حفظ المنتج: ${productName}`
+                                : `✓ Product saved: ${productName}`;
+                              const { data: aiMsgData, error: aiMsgErr } = await supabase
+                                .from('project_chat_messages' as any)
+                                .insert({ project_id: id, role: 'assistant', content: successMsg } as any)
+                                .select()
+                                .single();
+
+                              if (aiMsgErr) console.error('Error saving product success message:', aiMsgErr);
+                              if (aiMsgData) {
+                                setChatMessages(prev => [...prev, aiMsgData as any]);
+                              } else {
+                                setChatMessages(prev => [...prev, {
+                                  id: `product-saved-${Date.now()}`,
+                                  role: 'assistant',
+                                  content: successMsg
+                                }]);
+                              }
+                              fetchBackendContext();
+                            }}
+                            onOpenInventory={() => {
+                              setBackendInitialTab('shop');
+                              setBackendInitialShopTab('inventory');
+                              setMainTab('server');
+                            }}
+                          />
+                        </div>
+                      );
                     }
                   }
                   
@@ -5806,7 +5921,7 @@ ${fixInstructions}
                         try {
                           const parsed = JSON.parse(raw);
                           // Skip wizard messages - don't show chips for them
-                          if (parsed?.type === 'booking_form_wizard' || parsed?.type === 'contact_form_wizard') {
+                          if (parsed?.type === 'booking_form_wizard' || parsed?.type === 'contact_form_wizard' || parsed?.type === 'product_form_card') {
                             return null;
                           }
                           if (parsed?.type === 'execution_result' && typeof parsed.summary === 'string') {

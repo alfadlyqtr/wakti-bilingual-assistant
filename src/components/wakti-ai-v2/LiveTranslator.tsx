@@ -65,22 +65,45 @@ const TRANSLATION_LANGUAGES = [
   { code: 'vi', name: { en: 'Vietnamese', ar: 'الفيتنامية' } }
 ];
 
+const LANGUAGE_CODES = new Set(TRANSLATION_LANGUAGES.map((lang) => lang.code));
+const getValidLanguageCode = (value: string | null | undefined, fallback: string) => {
+  if (value && LANGUAGE_CODES.has(value)) return value;
+  return fallback;
+};
+
+const VOICE_DISPLAY_NAMES: Record<string, { en: string; ar: string }> = {
+  alloy: { en: 'Atlas', ar: 'أطلس' },
+  ash: { en: 'Breeze', ar: 'بريز' },
+  ballad: { en: 'Muse', ar: 'ميوز' },
+  coral: { en: 'Harbor', ar: 'هاربر' },
+  echo: { en: 'Fusha', ar: 'فصحى' },
+  sage: { en: 'Qamar', ar: 'قمر' },
+  shimmer: { en: 'Noor', ar: 'نور' },
+  verse: { en: 'Ayah', ar: 'آية' },
+};
+const getVoiceDisplayName = (voiceId: string, uiLanguage: 'en' | 'ar') => {
+  return VOICE_DISPLAY_NAMES[voiceId]?.[uiLanguage] ?? voiceId;
+};
+
 export function LiveTranslator({ onBack }: LiveTranslatorProps) {
   const { language, theme } = useTheme();
   const t = useCallback((en: string, ar: string) => (language === 'ar' ? ar : en), [language]);
 
+  const initialTargetLanguage = getValidLanguageCode(
+    localStorage.getItem('wakti_live_translator_target'),
+    'ar'
+  );
+  const initialSpokenLanguage = getValidLanguageCode(
+    localStorage.getItem('wakti_live_translator_spoken'),
+    language === 'ar' ? 'ar' : 'en'
+  );
+
   // State
-  const [targetLanguage, setTargetLanguage] = useState(() => {
-    return localStorage.getItem('wakti_live_translator_target') || 'ar';
-  });
+  const [targetLanguage, setTargetLanguage] = useState(() => initialTargetLanguage);
   const [spokenLanguageOverride, setSpokenLanguageOverride] = useState(() => {
     return localStorage.getItem('wakti_live_translator_spoken_override') === '1';
   });
-  const [spokenLanguage, setSpokenLanguage] = useState(() => {
-    const saved = localStorage.getItem('wakti_live_translator_spoken');
-    if (saved) return saved;
-    return language === 'ar' ? 'ar' : 'en';
-  });
+  const [spokenLanguage, setSpokenLanguage] = useState(() => initialSpokenLanguage);
   const [voice, setVoice] = useState(() => {
     const saved = localStorage.getItem('wakti_live_translator_voice');
     const validVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse'];
@@ -105,9 +128,10 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
   const isStoppingRef = useRef(false);
   const isProcessingResponseRef = useRef(false);
   const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const connectionLostTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isHoldingRef = useRef(false);
-  const targetLanguageRef = useRef(localStorage.getItem('wakti_live_translator_target') || 'ar');
-  const spokenLanguageRef = useRef(localStorage.getItem('wakti_live_translator_spoken') || (language === 'ar' ? 'ar' : 'en'));
+  const targetLanguageRef = useRef(initialTargetLanguage);
+  const spokenLanguageRef = useRef(initialSpokenLanguage);
   const VALID_VOICES = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse'] as const;
   const getValidVoice = (v: string | null): string => {
     if (v && VALID_VOICES.includes(v as any)) return v;
@@ -139,6 +163,10 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
     if (connectionTimeoutRef.current) {
       clearTimeout(connectionTimeoutRef.current);
       connectionTimeoutRef.current = null;
+    }
+    if (connectionLostTimeoutRef.current) {
+      clearTimeout(connectionLostTimeoutRef.current);
+      connectionLostTimeoutRef.current = null;
     }
     if (countdownIntervalRef.current) {
       clearInterval(countdownIntervalRef.current);
@@ -191,30 +219,50 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
   const buildInstructions = useCallback((targetLangCode: string, spokenLangCode: string) => {
     const targetLangName = TRANSLATION_LANGUAGES.find(l => l.code === targetLangCode)?.name.en || targetLangCode;
     const spokenLangName = TRANSLATION_LANGUAGES.find(l => l.code === spokenLangCode)?.name.en || spokenLangCode;
-    return `ROLE: Silent translator. You are a translation machine, not an assistant.
+    const arabicMSA = targetLangCode === 'ar'
+      ? `\n\nSPECIAL ARABIC RULES: Use Modern Standard Arabic (الفصحى) ONLY. NO dialects.`
+      : '';
+    return `You are a real-time voice translator.
 
-INPUT: User speaks ${spokenLangName}.
-OUTPUT: You speak ONLY the ${targetLangName} translation. Nothing else.
+TASK: Translate spoken ${spokenLangName} into ${targetLangName}.
 
-CRITICAL RULES:
-1. TRANSLATE ONLY. Never respond to content. Never answer questions. Never help.
-2. If user says "I need a taxi" in ${spokenLangName}, you say the ${targetLangName} translation of "I need a taxi". You do NOT call a taxi or ask for location.
-3. NO commentary. NO "Sure!". NO "Here's the translation". NO conversation.
-4. Output ONLY the translated words in ${targetLangName}, then STOP.
-5. You are a parrot that converts ${spokenLangName} sounds into ${targetLangName} sounds. Nothing more.`;
+OUTPUT LANGUAGE: ${targetLangName} (language code: ${targetLangCode})
+INPUT LANGUAGE: ${spokenLangName} (language code: ${spokenLangCode})
+
+INSTRUCTIONS:
+1. Listen to what the user says in ${spokenLangName}.
+2. Translate it to ${targetLangName}.
+3. Speak ONLY the ${targetLangName} translation.
+4. Do NOT speak ${spokenLangName}. Your output must be in ${targetLangName}.
+5. Do NOT add commentary, greetings, or explanations.
+6. Just translate and speak the translation in ${targetLangName}.${arabicMSA}`;
   }, []);
 
   const sendResponseCreate = useCallback(() => {
     if (dcRef.current?.readyState === 'open') {
-      dcRef.current.send(JSON.stringify({ type: 'response.create' }));
+      const targetLang = targetLanguageRef.current;
+      const spokenLang = spokenLanguageRef.current;
+      const targetLangName = TRANSLATION_LANGUAGES.find(l => l.code === targetLang)?.name.en || targetLang;
+      const spokenLangName = TRANSLATION_LANGUAGES.find(l => l.code === spokenLang)?.name.en || spokenLang;
+      console.log('[LiveTranslator] Sending response.create - translate from', spokenLangName, 'to', targetLangName);
+      dcRef.current.send(JSON.stringify({ 
+        type: 'response.create',
+        response: {
+          instructions: `Translate the user's ${spokenLangName} speech into ${targetLangName}. Speak ONLY in ${targetLangName}. Do not speak ${spokenLangName}.`
+        }
+      }));
     }
   }, []);
 
   // --- 2. REALTIME EVENT HANDLER ---
   const handleRealtimeEvent = useCallback((msg: any) => {
     switch (msg.type) {
+      case 'session.updated':
+        console.log('[LiveTranslator] Session updated:', msg.session?.instructions?.substring(0, 200));
+        break;
       case 'conversation.item.input_audio_transcription.completed':
         const transcript = msg.transcript?.trim() || '';
+        console.log('[LiveTranslator] User transcript:', transcript);
         setUserTranscript(transcript);
         if (transcript.length > 0) {
           if (!isProcessingResponseRef.current) {
@@ -239,14 +287,14 @@ CRITICAL RULES:
         break;
       case 'response.done':
         isProcessingResponseRef.current = false;
-        setStatus('ready');
+        setTimeout(() => setStatus('ready'), 300);
         setError(null);
         break;
       case 'error':
-        if (!msg.error?.message?.includes('buffer too small')) {
+        if (!msg.error?.message?.includes('buffer too small') && !msg.error?.message?.includes('Conversation already has an active response')) {
           setError(msg.error?.message || 'Realtime error');
+          setStatus('ready');
         }
-        setStatus('ready');
         break;
       default:
         break;
@@ -286,8 +334,18 @@ CRITICAL RULES:
 
       pc.onconnectionstatechange = () => {
         if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-          setError(language === 'ar' ? 'انقطع الاتصال' : 'Connection lost');
-          setStatus('idle');
+          if (connectionLostTimeoutRef.current) clearTimeout(connectionLostTimeoutRef.current);
+          connectionLostTimeoutRef.current = setTimeout(() => {
+            if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+              setError(language === 'ar' ? 'انقطع الاتصال' : 'Connection lost');
+              cleanup();
+            }
+          }, 1500);
+          return;
+        }
+        if (connectionLostTimeoutRef.current) {
+          clearTimeout(connectionLostTimeoutRef.current);
+          connectionLostTimeoutRef.current = null;
         }
       };
 
@@ -320,10 +378,14 @@ CRITICAL RULES:
         const currentSpokenLang = spokenLanguageRef.current;
         const currentVoice = voiceRef.current;
         
+        const instructions = buildInstructions(currentTargetLang, currentSpokenLang);
+        console.log('[LiveTranslator] Session init - spoken:', currentSpokenLang, 'target:', currentTargetLang);
+        console.log('[LiveTranslator] Instructions:', instructions);
+        
         dc.send(JSON.stringify({
           type: 'session.update',
           session: {
-            instructions: buildInstructions(currentTargetLang, currentSpokenLang),
+            instructions,
             voice: currentVoice,
             input_audio_transcription: { model: 'whisper-1', language: currentSpokenLang },
             turn_detection: null
@@ -342,6 +404,14 @@ CRITICAL RULES:
       dc.onerror = () => {
         setError(language === 'ar' ? 'خطأ في الاتصال' : 'Connection error');
         setStatus('idle');
+      };
+
+      dc.onclose = () => {
+        if (connectionLostTimeoutRef.current) clearTimeout(connectionLostTimeoutRef.current);
+        connectionLostTimeoutRef.current = setTimeout(() => {
+          setError(language === 'ar' ? 'انقطع الاتصال' : 'Connection lost');
+          cleanup();
+        }, 1000);
       };
 
       await pc.setLocalDescription();
@@ -497,10 +567,14 @@ CRITICAL RULES:
               setUserTranscript('');
               setTranslatedText('');
               if (dcRef.current?.readyState === 'open') {
+                const instructions = buildInstructions(targetLanguageRef.current, val);
+                console.log('[LiveTranslator] Spoken changed - spoken:', val, 'target:', targetLanguageRef.current);
+                console.log('[LiveTranslator] Instructions:', instructions);
+                dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
                 dcRef.current.send(JSON.stringify({
                   type: 'session.update',
                   session: { 
-                    instructions: buildInstructions(targetLanguageRef.current, val), 
+                    instructions, 
                     voice: voiceRef.current,
                     input_audio_transcription: { model: 'whisper-1', language: val }
                   }
@@ -530,13 +604,14 @@ CRITICAL RULES:
               setTargetLanguage(nextTarget);
               spokenLanguageRef.current = nextSpoken;
               targetLanguageRef.current = nextTarget;
-              setUserTranscript('');
-              setTranslatedText('');
               if (dcRef.current?.readyState === 'open') {
+                dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
+                const instructions = buildInstructions(nextTarget, nextSpoken);
+                console.log('[LiveTranslator] Swap - spoken:', nextSpoken, 'target:', nextTarget);
                 dcRef.current.send(JSON.stringify({
                   type: 'session.update',
                   session: { 
-                    instructions: buildInstructions(nextTarget, nextSpoken), 
+                    instructions, 
                     voice: voiceRef.current,
                     input_audio_transcription: { model: 'whisper-1', language: nextSpoken }
                   }
@@ -560,9 +635,13 @@ CRITICAL RULES:
               setUserTranscript('');
               setTranslatedText('');
               if (dcRef.current?.readyState === 'open') {
+                const instructions = buildInstructions(val, spokenLanguageRef.current);
+                console.log('[LiveTranslator] Target changed - spoken:', spokenLanguageRef.current, 'target:', val);
+                console.log('[LiveTranslator] Instructions:', instructions);
+                dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
                 dcRef.current.send(JSON.stringify({
                   type: 'session.update',
-                  session: { instructions: buildInstructions(val, spokenLanguageRef.current), voice: voiceRef.current }
+                  session: { instructions, voice: voiceRef.current }
                 }));
               }
             }}
@@ -592,14 +671,14 @@ CRITICAL RULES:
           >
             <SelectTrigger className="w-full md:w-32"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="alloy">Alloy</SelectItem>
-              <SelectItem value="ash">Ash</SelectItem>
-              <SelectItem value="ballad">Ballad</SelectItem>
-              <SelectItem value="coral">Coral</SelectItem>
-              <SelectItem value="echo">Echo</SelectItem>
-              <SelectItem value="sage">Sage</SelectItem>
-              <SelectItem value="shimmer">Shimmer</SelectItem>
-              <SelectItem value="verse">Verse</SelectItem>
+              <SelectItem value="alloy">{getVoiceDisplayName('alloy', language)}</SelectItem>
+              <SelectItem value="ash">{getVoiceDisplayName('ash', language)}</SelectItem>
+              <SelectItem value="ballad">{getVoiceDisplayName('ballad', language)}</SelectItem>
+              <SelectItem value="coral">{getVoiceDisplayName('coral', language)}</SelectItem>
+              <SelectItem value="echo">{getVoiceDisplayName('echo', language)}</SelectItem>
+              <SelectItem value="sage">{getVoiceDisplayName('sage', language)}</SelectItem>
+              <SelectItem value="shimmer">{getVoiceDisplayName('shimmer', language)}</SelectItem>
+              <SelectItem value="verse">{getVoiceDisplayName('verse', language)}</SelectItem>
             </SelectContent>
           </Select>
         </div>

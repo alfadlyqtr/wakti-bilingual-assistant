@@ -41,6 +41,34 @@ const ALLOWED_TABLES = [
   'project_collection_schemas'
 ] as const;
 
+// Allowed backend CLI actions (project-scoped only)
+const BACKEND_CLI_ACTIONS = new Set([
+  'listCollections',
+  'describeCollection',
+  'createItem',
+  'updateItem',
+  'deleteItem',
+  'createCollection',
+  'listOrders',
+  'getOrder',
+  'updateOrder',
+  'listBookings',
+  'createBooking',
+  'updateBooking',
+  'checkAvailability',
+  'listChatRooms',
+  'listMessages',
+  'sendMessage',
+  'listComments',
+  'addComment',
+  'deleteComment',
+  'listNotifications',
+  'markNotificationRead',
+  'listSiteUsers',
+  'assignRole',
+  'checkRole'
+]);
+
 // ============================================================================
 // RENDER-PATH ENFORCEMENT - Trace active files from entrypoint
 // ============================================================================
@@ -926,6 +954,23 @@ export const AGENT_TOOLS = [
     }
   },
   {
+    name: "backend_cli",
+    description: "CLI-style backend access for THIS project only. Use this to list collections, create items, update items, and manage bookings/orders/chat. NEVER use any projectId except the current one.",
+    parameters: {
+      type: "object",
+      properties: {
+        command: {
+          type: "string",
+          description: "CLI command. Allowed: listCollections, describeCollection, createCollection, createItem, updateItem, deleteItem, listOrders, getOrder, updateOrder, listBookings, createBooking, updateBooking, checkAvailability, listChatRooms, listMessages, sendMessage, listComments, addComment, deleteComment, listNotifications, markNotificationRead, listSiteUsers, assignRole, checkRole."
+        },
+        collection: { type: "string", description: "Collection name for collection commands (e.g., products, posts)" },
+        id: { type: "string", description: "Item ID for update/delete/get commands" },
+        data: { type: "object", description: "Payload for create/update commands" }
+      },
+      required: ["command"]
+    }
+  },
+  {
     name: "get_project_info",
     description: "Get project metadata including backend status, available collections, and uploaded assets.",
     parameters: {
@@ -1068,6 +1113,23 @@ You are working on a USER PROJECT within the WAKTI AI Coder feature.
 - You can ONLY access files and data for THIS project
 - You CANNOT access the main WAKTI app (tasks, events, messages, contacts, etc.)
 - You are sandboxed to the projects feature only
+
+## 🧩 PROJECT BACKEND CLI (FOR THIS PROJECT ONLY)
+Use the backend_cli tool to interact with the project's backend like a CLI. Do NOT use any other projectId. Never access other users' data.
+
+Allowed commands:
+- listCollections
+- describeCollection (collection)
+- createCollection (collection, data)
+- createItem (collection, data)
+- updateItem (collection, id, data)
+- deleteItem (collection, id)
+- listOrders / getOrder / updateOrder
+- listBookings / createBooking / updateBooking / checkAvailability
+- listChatRooms / listMessages / sendMessage
+- listComments / addComment / deleteComment
+- listNotifications / markNotificationRead
+- listSiteUsers / assignRole / checkRole
 
 ## 🚀 KEY DIFFERENCE: TARGETED EDITS, NOT FULL REWRITES
 
@@ -2071,6 +2133,204 @@ export async function executeToolCall(
         return await response.json();
       } catch (err: any) {
         return { error: `Failed to query backend: ${err.message}` };
+      }
+    }
+
+    case "backend_cli": {
+      const command = args.command as string;
+      const collection = args.collection as string | undefined;
+      const id = args.id as string | undefined;
+      const data = args.data || {};
+      const safeUserId = userId || projectId;
+      const supabaseClient = supabase as any;
+
+      if (!command || !BACKEND_CLI_ACTIONS.has(command)) {
+        return { error: `Invalid backend_cli command: ${command}` };
+      }
+
+      const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+      if (!SUPABASE_URL) {
+        return { error: "SUPABASE_URL missing" };
+      }
+
+      const commandMap: Record<string, { action: string; method: "GET" | "POST" | "PUT" | "DELETE" }> = {
+        createItem: { action: "collection", method: "POST" },
+        updateItem: { action: "collection", method: "PUT" },
+        deleteItem: { action: "collection", method: "DELETE" },
+        listOrders: { action: "order/list", method: "GET" },
+        getOrder: { action: "order/get", method: "GET" },
+        updateOrder: { action: "order/update", method: "POST" },
+        listBookings: { action: "booking/list", method: "GET" },
+        createBooking: { action: "booking/create", method: "POST" },
+        updateBooking: { action: "booking/update", method: "POST" },
+        checkAvailability: { action: "booking/check", method: "POST" },
+        listChatRooms: { action: "chat/rooms", method: "GET" },
+        listMessages: { action: "chat/messages", method: "GET" },
+        sendMessage: { action: "chat/send", method: "POST" },
+        listComments: { action: "comments/list", method: "GET" },
+        addComment: { action: "comments/add", method: "POST" },
+        deleteComment: { action: "comments/delete", method: "POST" },
+        listNotifications: { action: "notifications/list", method: "GET" },
+        markNotificationRead: { action: "notifications/markRead", method: "POST" },
+        listSiteUsers: { action: "roles/list", method: "GET" },
+        assignRole: { action: "roles/assign", method: "POST" },
+        checkRole: { action: "roles/check", method: "GET" }
+      };
+
+      const isCollectionCommand = ["describeCollection", "createCollection", "createItem", "updateItem", "deleteItem"].includes(command);
+      if (isCollectionCommand && !collection) {
+        return { error: "collection is required for this command" };
+      }
+
+      if (["updateItem", "deleteItem"].includes(command) && !id) {
+        return { error: "id is required for this command" };
+      }
+
+      try {
+        if (command === "listCollections") {
+          const { data: schemaRows, error: schemaError } = await supabaseClient
+            .from('project_collection_schemas')
+            .select('collection_name, schema, display_name')
+            .eq('project_id', projectId);
+
+          if (schemaError) return { error: `Failed to list collections: ${schemaError.message}` };
+
+          const { data: collectionRows, error: collectionError } = await supabaseClient
+            .from('project_collections')
+            .select('collection_name')
+            .eq('project_id', projectId)
+            .eq('status', 'active');
+
+          if (collectionError) return { error: `Failed to count collections: ${collectionError.message}` };
+
+          const counts = (collectionRows || []).reduce((acc: Record<string, number>, row: { collection_name: string }) => {
+            acc[row.collection_name] = (acc[row.collection_name] || 0) + 1;
+            return acc;
+          }, {});
+
+          const collections = (schemaRows || []).map((row: { collection_name: string; display_name?: string; schema?: { fields?: Array<{ name: string; type: string }> } }) => ({
+            name: row.collection_name,
+            displayName: row.display_name || row.collection_name,
+            fields: row.schema?.fields || [],
+            itemCount: counts[row.collection_name] || 0
+          }));
+
+          return { collections };
+        }
+
+        if (command === "describeCollection") {
+          const collectionName = collection as string;
+          const { data: schemaRow, error: schemaError } = await supabaseClient
+            .from('project_collection_schemas')
+            .select('collection_name, schema, display_name')
+            .eq('project_id', projectId)
+            .eq('collection_name', collectionName)
+            .maybeSingle();
+
+          if (schemaError) return { error: `Failed to describe collection: ${schemaError.message}` };
+
+          const { data: sampleRows, error: sampleError } = await supabaseClient
+            .from('project_collections')
+            .select('id, data, created_at')
+            .eq('project_id', projectId)
+            .eq('collection_name', collectionName)
+            .eq('status', 'active')
+            .order('created_at', { ascending: false })
+            .limit(5);
+
+          if (sampleError) return { error: `Failed to fetch sample items: ${sampleError.message}` };
+
+          return {
+            collection: {
+              name: collectionName,
+              displayName: (schemaRow as any)?.display_name || collectionName,
+              schema: schemaRow?.schema || { fields: [] },
+              sampleItems: sampleRows || []
+            }
+          };
+        }
+
+        if (command === "createCollection") {
+          const collectionName = collection as string;
+          const schemaData = data?.schema || data?.fields ? { fields: data?.fields || data?.schema?.fields || [] } : null;
+          if (!schemaData || (schemaData.fields || []).length === 0) {
+            return { error: "createCollection requires data.fields (array of {name,type})" };
+          }
+
+          const { data: existing } = await supabaseClient
+            .from('project_collection_schemas')
+            .select('id')
+            .eq('project_id', projectId)
+            .eq('collection_name', collectionName)
+            .maybeSingle();
+
+          if (existing?.id) {
+            return { error: `Collection already exists: ${collectionName}` };
+          }
+
+          const { data: created, error: createError } = await supabaseClient
+            .from('project_collection_schemas')
+            .insert({
+              project_id: projectId,
+              user_id: safeUserId,
+              collection_name: collectionName,
+              display_name: collectionName.charAt(0).toUpperCase() + collectionName.slice(1),
+              schema: schemaData
+            })
+            .select('id, collection_name, schema')
+            .single();
+
+          if (createError) {
+            return { error: `Failed to create collection: ${createError.message}` };
+          }
+
+          return { collection: created };
+        }
+
+        const mapping = commandMap[command];
+        if (!mapping) {
+          return { error: `No mapping for backend_cli command: ${command}` };
+        }
+
+        const useGet = mapping.method === "GET" && (!data || Object.keys(data).length === 0);
+        if (useGet) {
+          const params = new URLSearchParams({
+            projectId,
+            action: mapping.action,
+          });
+          if (collection) params.set("collection", collection);
+          if (id) params.set("id", id);
+          const response = await fetch(`${SUPABASE_URL}/functions/v1/project-backend-api?${params.toString()}`);
+          if (!response.ok) {
+            const errText = await response.text();
+            return { error: `backend_cli failed: HTTP ${response.status} - ${errText}` };
+          }
+          return await response.json();
+        }
+
+        const action = isCollectionCommand
+          ? `collection/${collection}`
+          : mapping.action;
+
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/project-backend-api`, {
+          method: mapping.method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectId,
+            action,
+            id,
+            data
+          })
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          return { error: `backend_cli failed: HTTP ${response.status} - ${errText}` };
+        }
+
+        return await response.json();
+      } catch (err: any) {
+        return { error: `backend_cli failed: ${err.message}` };
       }
     }
     

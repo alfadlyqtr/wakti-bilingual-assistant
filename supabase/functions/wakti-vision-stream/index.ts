@@ -279,10 +279,10 @@ async function tryGemini(
   const key = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
   if (!key) throw new Error("No Gemini API Key configured");
 
-  // PRIMARY "ELITE" ENGINE: Gemini 2.0 Flash (exp) via v1beta streaming
+  // PRIMARY "ELITE" ENGINE: Gemini 3 Pro Image Preview via v1beta streaming
   // NOTE: Some Gemini variants reject `system_instruction` (400 schema mismatch).
   // We embed the full system protocol as the first user text part instead.
-  const GEMINI_MODEL = "gemini-2.0-flash-exp";
+  const GEMINI_MODEL = "gemini-3-pro-image-preview";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse&key=${key}`;
 
   const langPrefix = language === 'ar'

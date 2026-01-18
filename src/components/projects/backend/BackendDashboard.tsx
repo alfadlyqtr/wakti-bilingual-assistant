@@ -40,6 +40,7 @@ interface BackendDashboardProps {
   onBack?: () => void;
   initialTab?: string;
   onTabChange?: (tabId: string) => void;
+  initialShopInnerTab?: 'orders' | 'inventory' | 'categories' | 'discounts' | 'settings';
 }
 
 interface BackendStatus {
@@ -49,7 +50,7 @@ interface BackendStatus {
   allowed_origins: string[];
 }
 
-export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabChange }: BackendDashboardProps) {
+export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabChange, initialShopInnerTab }: BackendDashboardProps) {
   const [loading, setLoading] = useState(true);
   const [enabling, setEnabling] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -636,6 +637,7 @@ export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabCh
               projectId={projectId}
               isRTL={isRTL}
               onRefresh={fetchAllData}
+              initialInnerTab={initialShopInnerTab}
             />
           )}
           
