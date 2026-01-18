@@ -3,8 +3,10 @@ import {
   ShoppingCart, Package, Tag, Percent, Settings, Plus, Search, Filter, 
   Download, Trash2, Edit, Check, X, AlertCircle, Eye, Image as ImageIcon,
   ChevronDown, MoreHorizontal, RefreshCw, TrendingUp, DollarSign, Archive,
-  Upload, Copy, ExternalLink, Loader2
+  Upload, Copy, ExternalLink, Loader2, LayoutGrid, List, Sparkles, Star,
+  TrendingDown, Box, Layers, ArrowUpRight, Heart, ShoppingBag
 } from 'lucide-react';
+import { ProductFormCard } from '@/components/projects/ProductFormCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -503,17 +505,22 @@ export function BackendShopTab({ orders, inventory, projectId, isRTL, onRefresh,
         )}
       </div>
 
-      {/* Add/Edit Product Modal */}
-      <ProductModal 
-        open={showAddProduct}
-        onClose={() => { setShowAddProduct(false); setEditingProduct(null); }}
-        product={editingProduct}
-        categories={categories}
-        onSave={handleSaveProduct}
-        saving={saving}
-        isRTL={isRTL}
-        projectId={projectId}
-      />
+      {/* Add/Edit Product Modal - Using ProductFormCard from chat */}
+      <Dialog open={showAddProduct} onOpenChange={() => { setShowAddProduct(false); setEditingProduct(null); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto p-0 gap-0">
+          <ProductFormCard
+            projectId={projectId}
+            isRTL={isRTL}
+            onCancel={() => { setShowAddProduct(false); setEditingProduct(null); }}
+            onSaved={(name) => {
+              setShowAddProduct(false);
+              setEditingProduct(null);
+              onRefresh();
+            }}
+            onOpenInventory={() => {}}
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* Add Category Modal */}
       <CategoryModal 
@@ -629,114 +636,348 @@ function OrdersTab({ orders, searchQuery, setSearchQuery, statusFilter, setStatu
 // ========== Inventory Tab ==========
 function InventoryTab({ products, categories, searchQuery, setSearchQuery, statusFilter, setStatusFilter, onAddProduct, onEditProduct, onDeleteProduct, isRTL, currency }: any) {
   const t = (en: string, ar: string) => isRTL ? ar : en;
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [sortBy, setSortBy] = useState<'name' | 'price' | 'stock' | 'newest'>('newest');
+  
+  // Stats
+  const totalProducts = products.length;
+  const activeProducts = products.filter((p: Product) => p.status === 'active').length;
+  const lowStockProducts = products.filter((p: Product) => (p.stock_quantity || 0) < 10 && (p.stock_quantity || 0) > 0).length;
+  const outOfStock = products.filter((p: Product) => (p.stock_quantity || 0) === 0).length;
+  const totalValue = products.reduce((sum: number, p: Product) => sum + ((p.price || 0) * (p.stock_quantity || 0)), 0);
+
+  // Sort products
+  const sortedProducts = [...products].sort((a: Product, b: Product) => {
+    switch (sortBy) {
+      case 'name': return (a.name || '').localeCompare(b.name || '');
+      case 'price': return (b.price || 0) - (a.price || 0);
+      case 'stock': return (b.stock_quantity || 0) - (a.stock_quantity || 0);
+      default: return 0;
+    }
+  });
+
+  // Filter by status
+  const filteredProducts = statusFilter === 'all' 
+    ? sortedProducts 
+    : sortedProducts.filter((p: Product) => p.status === statusFilter);
   
   return (
-    <div className="space-y-4">
-      {/* Actions Bar */}
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input 
-            placeholder={t('Search products...', 'بحث في المنتجات...')}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 bg-white/5 border-white/10"
-          />
+    <div className="space-y-5">
+      {/* Hero Stats Row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-500/20 via-purple-500/10 to-fuchsia-500/20 border border-violet-500/20 p-4 group hover:border-violet-500/40 transition-all">
+          <div className="absolute top-0 right-0 w-20 h-20 bg-violet-500/10 rounded-full blur-2xl group-hover:bg-violet-500/20 transition-all" />
+          <div className="relative">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="p-2 rounded-xl bg-violet-500/20">
+                <Package className="h-4 w-4 text-violet-400" />
+              </div>
+              <span className="text-xs font-medium text-violet-300/80">{t('Total Products', 'إجمالي المنتجات')}</span>
+            </div>
+            <p className="text-2xl font-bold text-foreground">{totalProducts}</p>
+            <p className="text-[10px] text-muted-foreground mt-1">{activeProducts} {t('active', 'نشط')}</p>
+          </div>
         </div>
-        <Button onClick={onAddProduct} className="bg-pink-500 hover:bg-pink-600 text-white gap-1">
-          <Plus className="h-4 w-4" />
-          {t('Add', 'إضافة')}
-        </Button>
+
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500/20 via-green-500/10 to-teal-500/20 border border-emerald-500/20 p-4 group hover:border-emerald-500/40 transition-all">
+          <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all" />
+          <div className="relative">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="p-2 rounded-xl bg-emerald-500/20">
+                <DollarSign className="h-4 w-4 text-emerald-400" />
+              </div>
+              <span className="text-xs font-medium text-emerald-300/80">{t('Inventory Value', 'قيمة المخزون')}</span>
+            </div>
+            <p className="text-2xl font-bold text-foreground">{currency} {totalValue.toLocaleString()}</p>
+            <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
+              <TrendingUp className="h-3 w-3 text-emerald-500" />
+              {t('Total stock value', 'إجمالي قيمة المخزون')}
+            </p>
+          </div>
+        </div>
+
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-500/20 via-orange-500/10 to-yellow-500/20 border border-amber-500/20 p-4 group hover:border-amber-500/40 transition-all">
+          <div className="absolute top-0 right-0 w-20 h-20 bg-amber-500/10 rounded-full blur-2xl group-hover:bg-amber-500/20 transition-all" />
+          <div className="relative">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="p-2 rounded-xl bg-amber-500/20">
+                <AlertCircle className="h-4 w-4 text-amber-400" />
+              </div>
+              <span className="text-xs font-medium text-amber-300/80">{t('Low Stock', 'مخزون منخفض')}</span>
+            </div>
+            <p className="text-2xl font-bold text-foreground">{lowStockProducts}</p>
+            <p className="text-[10px] text-muted-foreground mt-1">{t('Need restocking', 'يحتاج إعادة تخزين')}</p>
+          </div>
+        </div>
+
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-red-500/20 via-rose-500/10 to-pink-500/20 border border-red-500/20 p-4 group hover:border-red-500/40 transition-all">
+          <div className="absolute top-0 right-0 w-20 h-20 bg-red-500/10 rounded-full blur-2xl group-hover:bg-red-500/20 transition-all" />
+          <div className="relative">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="p-2 rounded-xl bg-red-500/20">
+                <Box className="h-4 w-4 text-red-400" />
+              </div>
+              <span className="text-xs font-medium text-red-300/80">{t('Out of Stock', 'نفذ المخزون')}</span>
+            </div>
+            <p className="text-2xl font-bold text-foreground">{outOfStock}</p>
+            <p className="text-[10px] text-muted-foreground mt-1">{t('Urgent attention', 'يحتاج اهتمام عاجل')}</p>
+          </div>
+        </div>
       </div>
 
-      {products.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <div className="p-4 rounded-2xl bg-pink-500/10 mb-4">
-            <Package className="h-10 w-10 text-pink-500" />
+      {/* Toolbar */}
+      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+        <div className="flex gap-2 flex-1 w-full sm:w-auto">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input 
+              placeholder={t('Search products...', 'بحث في المنتجات...')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 bg-white/5 border-white/10 h-10"
+            />
           </div>
-          <h4 className="font-semibold text-foreground mb-1">{t('No Products Yet', 'لا توجد منتجات')}</h4>
-          <p className="text-sm text-muted-foreground max-w-xs mb-4">
-            {t('Add your first product to start selling', 'أضف منتجك الأول للبدء في البيع')}
-          </p>
-          <Button onClick={onAddProduct} className="bg-pink-500 hover:bg-pink-600 text-white gap-2">
+        </div>
+
+        <div className="flex gap-2 items-center w-full sm:w-auto justify-between sm:justify-end">
+          {/* Status Filter */}
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[130px] h-10 bg-white/5 border-white/10">
+              <Filter className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+              <SelectValue placeholder={t('Filter', 'تصفية')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('All Status', 'جميع الحالات')}</SelectItem>
+              <SelectItem value="active">{t('Active', 'نشط')}</SelectItem>
+              <SelectItem value="draft">{t('Draft', 'مسودة')}</SelectItem>
+              <SelectItem value="archived">{t('Archived', 'مؤرشف')}</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Sort */}
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+            <SelectTrigger className="w-[130px] h-10 bg-white/5 border-white/10">
+              <Layers className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+              <SelectValue placeholder={t('Sort', 'ترتيب')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">{t('Newest', 'الأحدث')}</SelectItem>
+              <SelectItem value="name">{t('Name', 'الاسم')}</SelectItem>
+              <SelectItem value="price">{t('Price', 'السعر')}</SelectItem>
+              <SelectItem value="stock">{t('Stock', 'المخزون')}</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* View Toggle */}
+          <div className="flex rounded-xl bg-white/5 border border-white/10 p-1">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={cn(
+                "p-2 rounded-lg transition-all",
+                viewMode === 'grid' 
+                  ? "bg-pink-500 text-white shadow-lg shadow-pink-500/25" 
+                  : "text-muted-foreground hover:text-foreground hover:bg-white/10"
+              )}
+              title={t('Grid View', 'عرض شبكي')}
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={cn(
+                "p-2 rounded-lg transition-all",
+                viewMode === 'list' 
+                  ? "bg-pink-500 text-white shadow-lg shadow-pink-500/25" 
+                  : "text-muted-foreground hover:text-foreground hover:bg-white/10"
+              )}
+              title={t('List View', 'عرض قائمة')}
+            >
+              <List className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* Add Button */}
+          <Button onClick={onAddProduct} className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white gap-2 h-10 px-4 shadow-lg shadow-pink-500/25">
             <Plus className="h-4 w-4" />
-            {t('Add Product', 'إضافة منتج')}
+            <span className="hidden sm:inline">{t('Add Product', 'إضافة منتج')}</span>
+            <span className="sm:hidden">{t('Add', 'إضافة')}</span>
           </Button>
         </div>
-      ) : (
-        <div className="space-y-2">
-          {products.map((product: Product) => (
+      </div>
+
+      {/* Empty State */}
+      {filteredProducts.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="relative mb-6">
+            <div className="absolute inset-0 bg-gradient-to-r from-pink-500 to-purple-500 rounded-3xl blur-2xl opacity-30 animate-pulse" />
+            <div className="relative p-6 rounded-3xl bg-gradient-to-br from-pink-500/20 to-purple-500/20 border border-pink-500/30">
+              <ShoppingBag className="h-12 w-12 text-pink-400" />
+            </div>
+          </div>
+          <h4 className="text-xl font-bold text-foreground mb-2">{t('No Products Yet', 'لا توجد منتجات بعد')}</h4>
+          <p className="text-sm text-muted-foreground max-w-sm mb-6">
+            {t('Start building your inventory. Add your first product and watch your store come to life!', 'ابدأ ببناء مخزونك. أضف منتجك الأول وشاهد متجرك ينبض بالحياة!')}
+          </p>
+          <Button onClick={onAddProduct} className="bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 hover:from-pink-600 hover:via-purple-600 hover:to-indigo-600 text-white gap-2 h-12 px-6 shadow-xl shadow-pink-500/30">
+            <Sparkles className="h-5 w-5" />
+            {t('Add Your First Product', 'أضف منتجك الأول')}
+          </Button>
+        </div>
+      ) : viewMode === 'grid' ? (
+        /* Grid View - Compact mobile-friendly cards */
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+          {filteredProducts.map((product: Product) => (
             <div 
               key={product.id} 
-              className="p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+              className="relative rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10 overflow-hidden"
             >
-              <div className="flex items-center gap-3">
-                {/* Product Image */}
-                <div className="w-14 h-14 rounded-lg bg-white/10 flex items-center justify-center overflow-hidden flex-shrink-0">
-                  {product.image_url ? (
-                    <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <ImageIcon className="h-6 w-6 text-muted-foreground" />
-                  )}
-                </div>
+              {/* Product Image - Smaller aspect ratio */}
+              <div className="relative aspect-[4/3] bg-gradient-to-br from-white/5 to-transparent overflow-hidden">
+                {product.image_url ? (
+                  <img 
+                    src={product.image_url} 
+                    alt={product.name} 
+                    className="w-full h-full object-cover" 
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <ImageIcon className="h-8 w-8 text-muted-foreground/50" />
+                  </div>
+                )}
                 
-                {/* Product Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-medium text-foreground truncate">{product.name}</h4>
-                    <Badge variant="outline" className={cn(
-                      "text-xs",
-                      product.status === 'active' && "border-emerald-500/30 text-emerald-500",
-                      product.status === 'draft' && "border-amber-500/30 text-amber-500",
-                      product.status === 'archived' && "border-muted-foreground/30"
+                {/* Status Badge */}
+                <div className="absolute top-2 left-2">
+                  <Badge className={cn(
+                    "text-[9px] font-semibold px-1.5 py-0.5 rounded-full border-0",
+                    product.status === 'active' && "bg-emerald-500 text-white",
+                    product.status === 'draft' && "bg-amber-500 text-white",
+                    product.status === 'archived' && "bg-zinc-500 text-white"
+                  )}>
+                    {product.status === 'active' ? t('Active', 'نشط') : product.status === 'draft' ? t('Draft', 'مسودة') : t('Archived', 'مؤرشف')}
+                  </Badge>
+                </div>
+
+                {/* Stock Warning */}
+                {(product.stock_quantity || 0) <= 10 && (
+                  <div className="absolute top-2 right-2">
+                    <Badge className={cn(
+                      "text-[9px] font-semibold px-1.5 py-0.5 rounded-full border-0",
+                      (product.stock_quantity || 0) === 0 ? "bg-red-500 text-white" : "bg-amber-500 text-white"
                     )}>
-                      {product.status}
+                      {(product.stock_quantity || 0) === 0 ? t('Out', 'نفذ') : t('Low', 'قليل')}
                     </Badge>
                   </div>
-                  <div className="flex items-center gap-3 text-sm text-muted-foreground mt-0.5">
-                    <span className="font-medium text-foreground">{currency} {product.price?.toFixed(2)}</span>
-                    <span>•</span>
-                    <span className={cn(
-                      product.stock_quantity < 10 && "text-amber-500",
-                      product.stock_quantity === 0 && "text-red-500"
-                    )}>
-                      {product.stock_quantity} {t('in stock', 'في المخزون')}
-                    </span>
-                    {product.sku && (
-                      <>
-                        <span>•</span>
-                        <span className="font-mono text-xs">{product.sku}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
+                )}
+              </div>
+
+              {/* Product Info - Compact */}
+              <div className="p-2.5">
+                <h4 className="text-sm font-medium text-foreground truncate">
+                  {product.name || t('Untitled', 'بدون اسم')}
+                </h4>
                 
-                {/* Actions */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => onEditProduct(product)}>
-                      <Edit className="h-4 w-4 mr-2" />
-                      {t('Edit', 'تعديل')}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigator.clipboard.writeText(product.sku || '')}>
-                      <Copy className="h-4 w-4 mr-2" />
-                      {t('Copy SKU', 'نسخ SKU')}
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem 
-                      onClick={() => onDeleteProduct(product.id)}
-                      className="text-red-500 focus:text-red-500"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      {t('Delete', 'حذف')}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <div className="flex items-center justify-between mt-1.5">
+                  <p className="text-sm font-bold text-foreground">
+                    {currency} {(product.price || 0).toFixed(0)}
+                  </p>
+                  <span className={cn(
+                    "text-xs font-medium",
+                    (product.stock_quantity || 0) === 0 && "text-red-400",
+                    (product.stock_quantity || 0) > 0 && (product.stock_quantity || 0) < 10 && "text-amber-400",
+                    (product.stock_quantity || 0) >= 10 && "text-muted-foreground"
+                  )}>
+                    {product.stock_quantity || 0} {t('qty', 'كمية')}
+                  </span>
+                </div>
+
+                {/* Always visible action buttons - no hover */}
+                <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-white/10">
+                  <Button 
+                    size="sm" 
+                    onClick={() => onEditProduct(product)}
+                    className="flex-1 h-8 text-xs bg-pink-500/20 text-pink-400 border-0 active:scale-95"
+                  >
+                    <Edit className="h-3 w-3 mr-1" />
+                    {t('Edit', 'تعديل')}
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="ghost"
+                    onClick={() => onDeleteProduct(product.id)}
+                    className="h-8 w-8 p-0 bg-red-500/10 text-red-400 border-0 active:scale-95"
+                    title={t('Delete', 'حذف')}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        /* List View - Compact mobile-friendly */
+        <div className="space-y-2">
+          {filteredProducts.map((product: Product) => (
+            <div 
+              key={product.id} 
+              className="flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-white/5 to-white/[0.02] border border-white/10"
+            >
+              {/* Product Image */}
+              <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-white/10 to-white/5 flex items-center justify-center overflow-hidden flex-shrink-0">
+                {product.image_url ? (
+                  <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
+                ) : (
+                  <ImageIcon className="h-5 w-5 text-muted-foreground/50" />
+                )}
+              </div>
+              
+              {/* Product Info */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <h4 className="text-sm font-medium text-foreground truncate">
+                    {product.name || t('Untitled', 'بدون اسم')}
+                  </h4>
+                  <Badge className={cn(
+                    "text-[9px] font-semibold px-1.5 py-0.5 rounded-full border-0",
+                    product.status === 'active' && "bg-emerald-500/20 text-emerald-400",
+                    product.status === 'draft' && "bg-amber-500/20 text-amber-400",
+                    product.status === 'archived' && "bg-zinc-500/20 text-zinc-400"
+                  )}>
+                    {product.status}
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="font-bold text-foreground">{currency} {(product.price || 0).toFixed(0)}</span>
+                  <span className={cn(
+                    (product.stock_quantity || 0) === 0 && "text-red-400",
+                    (product.stock_quantity || 0) > 0 && (product.stock_quantity || 0) < 10 && "text-amber-400",
+                    (product.stock_quantity || 0) >= 10 && "text-muted-foreground"
+                  )}>
+                    {product.stock_quantity || 0} {t('qty', 'كمية')}
+                  </span>
+                </div>
+              </div>
+              
+              {/* Always visible actions - no hover */}
+              <div className="flex items-center gap-1">
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => onEditProduct(product)}
+                  className="h-8 w-8 p-0 bg-pink-500/10 text-pink-400 active:scale-95"
+                  title={t('Edit', 'تعديل')}
+                >
+                  <Edit className="h-3.5 w-3.5" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => onDeleteProduct(product.id)}
+                  className="h-8 w-8 p-0 bg-red-500/10 text-red-400 active:scale-95"
+                  title={t('Delete', 'حذف')}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
               </div>
             </div>
           ))}
@@ -999,18 +1240,26 @@ function ProductModal({ open, onClose, product, categories, onSave, saving, isRT
     
     setUploading(true);
     try {
-      const fileName = `${Date.now()}-${file.name}`;
-      const filePath = `products/${projectId}/${fileName}`;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.id) {
+        toast.error(t('Please log in to upload images', 'يرجى تسجيل الدخول لرفع الصور'));
+        return;
+      }
+
+      const timestamp = Date.now();
+      const safeFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const filePath = `${user.id}/${projectId}/products/${timestamp}-${safeFilename}`;
       
       const { error: uploadError } = await supabase.storage
         .from('project-uploads')
-        .upload(filePath, file);
+        .upload(filePath, file, { cacheControl: '3600', upsert: false });
       
       if (uploadError) throw uploadError;
       
       const { data } = supabase.storage.from('project-uploads').getPublicUrl(filePath);
       setForm({ ...form, image_url: data.publicUrl });
     } catch (err) {
+      console.error('Image upload error:', err);
       toast.error(t('Failed to upload image', 'فشل رفع الصورة'));
     } finally {
       setUploading(false);

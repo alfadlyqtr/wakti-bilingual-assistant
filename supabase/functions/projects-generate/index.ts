@@ -3144,8 +3144,8 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
               continue;
             }
             
-            // Check if this is an EDIT request
-            const isEditRequest = /\b(change|update|fix|add|remove|set|make|edit|modify|delete|replace|rename|color|style)\b/i.test(prompt);
+            // Check if this is an EDIT/BUILD request (user wants changes to files)
+            const isEditRequest = /\b(change|update|fix|add|remove|set|make|edit|modify|delete|replace|rename|color|style|build|create|implement|generate|write|develop|code)\b/i.test(prompt);
             
             // 🔒 CHECK 3: Block if edit request but NO successful edits
             if (isEditRequest && successfulEdits.length === 0) {
@@ -3176,7 +3176,89 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
               }
             }
             
-            // 🔒 CHECK 5: POST-EDIT VERIFICATION - Confirm changes exist after editing
+            // 🔒 CHECK 5: PAGE ROUTING ENFORCEMENT - Block if page created but not wired up
+            const isPageCreationRequest = /\b(build|create|add|make).*(page|screen|view)\b/i.test(prompt);
+            if (isPageCreationRequest && successfulEdits.length > 0) {
+              // Check if a page file was created (in /pages/ or /src/pages/)
+              const pageFilesCreated = [...filesEdited].filter(f => 
+                f.includes('/pages/') || f.includes('/Pages/') || 
+                (f.endsWith('.js') || f.endsWith('.jsx') || f.endsWith('.tsx')) && 
+                !f.includes('App.') && !f.includes('index.')
+              );
+              
+              // Check if App.js was also modified (to add routing)
+              const appJsModified = [...filesEdited].some(f => 
+                f.includes('App.js') || f.includes('App.jsx') || f.includes('App.tsx')
+              );
+              
+              if (pageFilesCreated.length > 0 && !appJsModified) {
+                console.error(`[Agent Mode] 🚫 BLOCKED task_complete: Page created but NOT wired up in App.js!`);
+                console.error(`[Agent Mode] Page files: ${pageFilesCreated.join(', ')}`);
+                functionResponses[functionResponses.length - 1].functionResponse.response = {
+                  acknowledged: false,
+                  error: `BLOCKED: You created page file(s) "${pageFilesCreated.join(', ')}" but did NOT wire them up in App.js! ` +
+                    `A page file without routing is USELESS - it won't load! ` +
+                    `You MUST: 1) Add react-router-dom imports to App.js, 2) Import the new page component, ` +
+                    `3) Add a <Route path="/..." element={<PageName />} />, 4) Add a navigation link.`,
+                  pageFilesCreated,
+                  hint: 'Read App.js, add BrowserRouter/Routes if missing, import your page, add a Route, and add a nav link.'
+                };
+                continue;
+              }
+              
+              // Additional check: If App.js was modified, verify it has the page import
+              if (pageFilesCreated.length > 0 && appJsModified) {
+                // Get the latest App.js content
+                const { data: appJsData } = await supabase
+                  .from('project_files')
+                  .select('content')
+                  .eq('project_id', projectId)
+                  .or('path.eq./App.js,path.eq./App.jsx,path.eq./App.tsx')
+                  .maybeSingle();
+                
+                if (appJsData?.content) {
+                  const appContent = appJsData.content;
+                  const missingImports: string[] = [];
+                  const missingRoutes: string[] = [];
+                  
+                  for (const pageFile of pageFilesCreated) {
+                    // Extract component name from file path
+                    const fileName = pageFile.split('/').pop()?.replace(/\.(js|jsx|tsx)$/, '') || '';
+                    
+                    // Check if imported
+                    const importPattern = new RegExp(`import\\s+.*${fileName}`, 'i');
+                    if (!importPattern.test(appContent)) {
+                      missingImports.push(fileName);
+                    }
+                    
+                    // Check if has Route
+                    const routePattern = new RegExp(`<Route.*${fileName}|element=.*${fileName}`, 'i');
+                    if (!routePattern.test(appContent)) {
+                      missingRoutes.push(fileName);
+                    }
+                  }
+                  
+                  if (missingImports.length > 0 || missingRoutes.length > 0) {
+                    console.error(`[Agent Mode] 🚫 BLOCKED task_complete: Page not fully wired up!`);
+                    console.error(`[Agent Mode] Missing imports: ${missingImports.join(', ')}`);
+                    console.error(`[Agent Mode] Missing routes: ${missingRoutes.join(', ')}`);
+                    functionResponses[functionResponses.length - 1].functionResponse.response = {
+                      acknowledged: false,
+                      error: `BLOCKED: Page file created but not fully wired up! ` +
+                        (missingImports.length > 0 ? `Missing imports in App.js: ${missingImports.join(', ')}. ` : '') +
+                        (missingRoutes.length > 0 ? `Missing Routes in App.js: ${missingRoutes.join(', ')}. ` : '') +
+                        `The page won't be accessible without proper routing!`,
+                      missingImports,
+                      missingRoutes,
+                      hint: 'Add the import statement and Route element for each page in App.js.'
+                    };
+                    continue;
+                  }
+                }
+              }
+            }
+            
+            // 🔒 CHECK 6: POST-EDIT VERIFICATION - Confirm changes exist after editing
             if (filesEdited.size > 0 && editVerificationPending) {
               let verificationIssues: string[] = [];
               

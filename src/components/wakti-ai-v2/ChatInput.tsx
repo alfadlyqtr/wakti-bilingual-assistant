@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useAudioSession } from '@/hooks/useAudioSession';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Loader2, ChevronDown, ChevronLeft, ChevronRight, Plus, ImagePlus, MessageSquare, Search as SearchIcon, Image as ImageIcon, SlidersHorizontal, Wand2, Mic, X } from 'lucide-react';
+import { Send, Loader2, ChevronDown, ChevronLeft, ChevronRight, Plus, ImagePlus, MessageSquare, Search as SearchIcon, Image as ImageIcon, SlidersHorizontal, Wand2, Mic, X, Square } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -67,6 +67,7 @@ interface ChatInputProps {
   onAddTalkMessage?: (role: 'user' | 'assistant', text: string) => void;
   replyContext?: ReplyContext | null;
   onClearReply?: () => void;
+  onStop?: () => void;
 }
 
 export function ChatInput({
@@ -89,7 +90,8 @@ export function ChatInput({
   onChatSubmodeChange,
   onAddTalkMessage,
   replyContext,
-  onClearReply
+  onClearReply,
+  onStop
 }: ChatInputProps) {
   const { language } = useTheme();
   const [wasAutoSwitchedToVision, setWasAutoSwitchedToVision] = useState(false);
@@ -1922,27 +1924,43 @@ export function ChatInput({
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Button
-                            onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); handleSendMessage(); }}
-                            disabled={!canSend}
-                            className={`
-                              h-11 w-11 rounded-xl p-0 flex-shrink-0
-                              ${sendBtnColors}
-                              border-0 shadow-2xl backdrop-blur-md
-                              transition-all duration-200 hover:scale-110 hover:shadow-2xl
-                              shadow-lg
-                            `}
-                            size="icon"
-                          >
-                            {isLoading || isUploading ? (
-                              <Loader2 className="h-5 w-5 animate-spin" />
-                            ) : (
-                              <Send className="h-5 w-5" />
-                            )}
-                          </Button>
+                          {isLoading ? (
+                            <Button
+                              onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); onStop?.(); }}
+                              className={`
+                                h-11 w-11 rounded-xl p-0 flex-shrink-0
+                                bg-red-500 hover:bg-red-600 text-white
+                                border-0 shadow-2xl backdrop-blur-md
+                                transition-all duration-200 hover:scale-110 hover:shadow-2xl
+                                shadow-lg
+                              `}
+                              size="icon"
+                            >
+                              <Square className="h-5 w-5 fill-current" />
+                            </Button>
+                          ) : (
+                            <Button
+                              onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); handleSendMessage(); }}
+                              disabled={!canSend || isUploading}
+                              className={`
+                                h-11 w-11 rounded-xl p-0 flex-shrink-0
+                                ${sendBtnColors}
+                                border-0 shadow-2xl backdrop-blur-md
+                                transition-all duration-200 hover:scale-110 hover:shadow-2xl
+                                shadow-lg
+                              `}
+                              size="icon"
+                            >
+                              {isUploading ? (
+                                <Loader2 className="h-5 w-5 animate-spin" />
+                              ) : (
+                                <Send className="h-5 w-5" />
+                              )}
+                            </Button>
+                          )}
                         </TooltipTrigger>
                         <TooltipContent side="top" className="text-xs bg-black/80 dark:bg-white/80 backdrop-blur-xl border-0 rounded-xl">
-                          {language === 'ar' ? 'إرسال' : 'Send'}
+                          {isLoading ? (language === 'ar' ? 'إيقاف' : 'Stop') : (language === 'ar' ? 'إرسال' : 'Send')}
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>

@@ -248,6 +248,7 @@ export default function ProjectDetail() {
   const [showBookingWizard, setShowBookingWizard] = useState(false);
   const [showContactWizard, setShowContactWizard] = useState(false);
   const [showProductFormCard, setShowProductFormCard] = useState(false);
+  const [activeProductCardId, setActiveProductCardId] = useState<string | null>(null);
   const [pendingFormPrompt, setPendingFormPrompt] = useState('');
   const skipFormWizardRef = useRef(false);
   const skipUserMessageSaveRef = useRef(false);
@@ -367,6 +368,7 @@ export default function ProjectDetail() {
   const [mainTab, setMainTab] = useState<MainTab>('builder');
   const [backendInitialTab, setBackendInitialTab] = useState<string | undefined>(undefined);
   const [backendInitialShopTab, setBackendInitialShopTab] = useState<'orders' | 'inventory' | 'categories' | 'discounts' | 'settings' | undefined>(undefined);
+  const [backendRefreshKey, setBackendRefreshKey] = useState(0);
   
   // Uploaded assets from backend (for AI context)
   const [uploadedAssets, setUploadedAssets] = useState<Array<{ filename: string; url: string; file_type: string | null }>>([]);
@@ -580,6 +582,18 @@ export default function ProjectDetail() {
       } else if (data && data.length > 0) {
         console.log('[ProjectDetail] Loaded', data.length, 'chat messages');
         setChatMessages(data as any);
+        const latestCard = [...data].reverse().find((msg: any) => {
+          try {
+            const parsed = JSON.parse(msg.content);
+            return parsed?.type === 'product_form_card';
+          } catch {
+            return false;
+          }
+        });
+        if (latestCard?.id) {
+          setActiveProductCardId(latestCard.id);
+          setShowProductFormCard(true);
+        }
       } else {
         console.log('[ProjectDetail] No chat messages found for project', id);
       }
@@ -876,12 +890,15 @@ export default function ProjectDetail() {
 
   useEffect(() => {
     // Scroll to bottom when messages change (including initial load)
+    // Skip auto-scroll when ProductFormCard is shown - let it scroll to top instead
+    if (showProductFormCard) return;
+    
     // Use a small delay to ensure DOM has updated
     const timer = setTimeout(() => {
       scrollToBottom();
     }, 150);
     return () => clearTimeout(timer);
-  }, [chatMessages]);
+  }, [chatMessages, showProductFormCard]);
 
   const thinkingBoxRef = useRef<HTMLDivElement>(null);
 
@@ -3604,8 +3621,9 @@ ${fixInstructions}
       }
 
       // PRODUCT FORM DETECTION - Show add-product card instead of direct AI call
-      const productFormPatterns = /\b(add|create|build|make|need|want|show|display).*(product|item|inventory)\s*(form|page|popup|modal|card|button)?/i;
-      const productFormAltPatterns = /\b(product|inventory)\s*(form|page|popup|modal|card)\b/i;
+      // Option 1: only trigger for explicit add/create/new product intent
+      const productFormPatterns = /\b(add|create|new)\s+(product|item)\b/i;
+      const productFormAltPatterns = /\b(add|create)\s+(inventory|product)\b/i;
       const hasProductFormRequest = productFormPatterns.test(userMessage) || productFormAltPatterns.test(userMessage);
 
       if (hasProductFormRequest) {
@@ -3642,12 +3660,15 @@ ${fixInstructions}
         if (productAssistantErr) console.error('Error saving product card message:', productAssistantErr);
         if (productAssistantMsg) {
           setChatMessages(prev => [...prev, productAssistantMsg as any]);
+          setActiveProductCardId(productAssistantMsg.id);
         } else {
+          const fallbackId = `product-card-${Date.now()}`;
           setChatMessages(prev => [...prev, {
-            id: `product-card-${Date.now()}`,
+            id: fallbackId,
             role: 'assistant',
             content: productCardContent
           }]);
+          setActiveProductCardId(fallbackId);
         }
         return;
       }
@@ -4347,6 +4368,7 @@ ${fixInstructions}
             isRTL={isRTL}
             initialTab={backendInitialTab}
             initialShopInnerTab={backendInitialShopTab}
+            refreshKey={backendRefreshKey}
             onBack={() => { setMainTab('builder'); fetchBackendContext(); }}
           />
         </div>
@@ -4620,7 +4642,7 @@ ${fixInstructions}
                       }
                     } catch {}
 
-                    if (productCardData && showProductFormCard) {
+                    if (productCardData && showProductFormCard && msg.id === activeProductCardId) {
                       return (
                         <div key={i} className="flex flex-col items-start w-full animate-in fade-in slide-in-from-bottom-1 duration-300">
                           <ProductFormCard
@@ -4633,6 +4655,11 @@ ${fixInstructions}
                             onSaved={async (productName) => {
                               setShowProductFormCard(false);
                               setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+
+                              setBackendInitialTab('shop');
+                              setBackendInitialShopTab('inventory');
+                              setBackendRefreshKey(prev => prev + 1);
+                              setMainTab('server');
 
                               const successMsg = isRTL
                                 ? `✓ تم حفظ المنتج: ${productName}`

@@ -2082,6 +2082,47 @@ export function ChatMessages({
                             </div>
                           );
                         }
+                        // Search confirmation Yes/No card
+                        const searchConf = (message as any)?.metadata?.searchConfirmation;
+                        if (searchConf && message.role === 'assistant' && !message.content) {
+                          return (
+                            <div className="w-full">
+                              <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 dark:from-blue-500/20 dark:to-purple-500/20 border border-blue-500/30 rounded-xl p-4 max-w-sm">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <Globe className="h-5 w-5 text-blue-500" />
+                                  <span className="font-medium text-foreground">
+                                    {searchConf.question}
+                                  </span>
+                                </div>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => {
+                                      // Dispatch event to trigger search with original message
+                                      window.dispatchEvent(new CustomEvent('wakti-search-confirm', {
+                                        detail: { confirmed: true, originalMessage: searchConf.originalMessage }
+                                      }));
+                                    }}
+                                    className="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                                  >
+                                    <CheckCircle className="h-4 w-4" />
+                                    {language === 'ar' ? 'نعم' : 'Yes'}
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      // Dispatch event to continue with chat (no search)
+                                      window.dispatchEvent(new CustomEvent('wakti-search-confirm', {
+                                        detail: { confirmed: false, originalMessage: searchConf.originalMessage }
+                                      }));
+                                    }}
+                                    className="flex-1 px-4 py-2 bg-muted hover:bg-muted/80 text-foreground rounded-lg font-medium transition-colors"
+                                  >
+                                    {language === 'ar' ? 'لا، استمر' : 'No, continue'}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }
                         // Chat mode loading: Wakti logo pulse animation with friendly message
                         const isChatLoading = message.role === 'assistant'
                           && (message.intent === 'chat' || !message.intent)
@@ -2093,7 +2134,7 @@ export function ChatMessages({
                               <div className="flex items-center gap-3">
                                 <div className="relative">
                                   <img
-                                    src="/lovable-uploads/wakti-logo.png"
+                                    src="/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png"
                                     alt="Wakti"
                                     className="h-6 w-6 rounded-full animate-pulse"
                                     style={{

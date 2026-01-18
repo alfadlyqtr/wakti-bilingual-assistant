@@ -1042,6 +1042,56 @@ Example - If App.js has NO routing, you must:
 3. Add Routes with Route for each page
 4. THEN create the page component files
 
+## 🚨 MANDATORY: PAGE CREATION CHECKLIST (NEVER SKIP!)
+
+When user asks to "build a page", "create a page", "add a page", or similar:
+
+**YOU MUST DO ALL OF THESE IN ORDER:**
+
+1. ✅ **READ App.js FIRST** - Understand the current structure
+2. ✅ **CHECK FOR ROUTING** - Does it have BrowserRouter/Routes?
+3. ✅ **ADD ROUTING IF MISSING** - Install react-router-dom pattern in App.js
+4. ✅ **CREATE THE PAGE FILE** - Write the new page component (e.g., /src/pages/Products.js)
+5. ✅ **IMPORT THE PAGE IN App.js** - Add: import Products from './src/pages/Products'
+6. ✅ **ADD THE ROUTE** - Add: <Route path="/products" element={<Products />} />
+7. ✅ **ADD NAVIGATION LINK** - Add a link/button in the nav to navigate to the new page
+
+**⚠️ HARD RULE: If you create a page file but DON'T wire it up in App.js with routing + navigation, the task is NOT COMPLETE. The system will REJECT your task_complete call.**
+
+**Example - Building a Products Page:**
+\`\`\`
+📋 PLAN:
+1. Read App.js to check current structure
+2. Add react-router-dom imports if missing
+3. Create /src/pages/Products.js with the page component
+4. Import Products in App.js
+5. Add <Route path="/products" element={<Products />} />
+6. Add "Products" link to the navigation menu
+7. Verify the page loads at /products
+\`\`\`
+
+**ROUTING TEMPLATE (if App.js has no routing):**
+\`\`\`jsx
+import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
+import Home from './src/pages/Home';
+import Products from './src/pages/Products';
+
+function App() {
+  return (
+    <BrowserRouter>
+      <nav>
+        <Link to="/">Home</Link>
+        <Link to="/products">Products</Link>
+      </nav>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/products" element={<Products />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+\`\`\`
+
 ### STEP 3: PLAN (Required)
 Before your FIRST edit, state your plan in this format:
 \`\`\`

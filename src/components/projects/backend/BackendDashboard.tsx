@@ -41,6 +41,7 @@ interface BackendDashboardProps {
   initialTab?: string;
   onTabChange?: (tabId: string) => void;
   initialShopInnerTab?: 'orders' | 'inventory' | 'categories' | 'discounts' | 'settings';
+  refreshKey?: number;
 }
 
 interface BackendStatus {
@@ -50,7 +51,7 @@ interface BackendStatus {
   allowed_origins: string[];
 }
 
-export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabChange, initialShopInnerTab }: BackendDashboardProps) {
+export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabChange, initialShopInnerTab, refreshKey }: BackendDashboardProps) {
   const [loading, setLoading] = useState(true);
   const [enabling, setEnabling] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -225,6 +226,12 @@ export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabCh
       fetchAllData();
     }
   }, [backendStatus?.enabled]);
+
+  useEffect(() => {
+    if (backendStatus?.enabled && refreshKey !== undefined) {
+      fetchAllData();
+    }
+  }, [refreshKey, backendStatus?.enabled]);
 
   const enableBackend = async () => {
     setEnabling(true);
@@ -633,7 +640,7 @@ export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabCh
           {activeTab === 'shop' && (
             <BackendShopTab 
               orders={orders}
-              inventory={inventory}
+              inventory={collections['products'] || []}
               projectId={projectId}
               isRTL={isRTL}
               onRefresh={fetchAllData}

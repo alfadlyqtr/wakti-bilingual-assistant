@@ -23,10 +23,10 @@ interface CategoryOption {
 interface ProductFormData {
   name: string;
   description: string;
-  price: number;
-  compare_at_price?: number;
+  price: number | '';
+  compare_at_price?: number | '';
   currency: string;
-  stock_quantity: number;
+  stock_quantity: number | '';
   track_inventory: boolean;
   category: string;
   image_url?: string;
@@ -54,10 +54,10 @@ export function ProductFormCard({ projectId, isRTL, onCancel, onSaved, onOpenInv
   const [form, setForm] = useState<ProductFormData>({
     name: '',
     description: '',
-    price: 0,
-    compare_at_price: undefined,
+    price: '',
+    compare_at_price: '',
     currency: 'QAR',
-    stock_quantity: 0,
+    stock_quantity: '',
     track_inventory: true,
     category: '',
     image_url: '',
@@ -214,7 +214,8 @@ export function ProductFormCard({ projectId, isRTL, onCancel, onSaved, onOpenInv
 
       const timestamp = Date.now();
       const safeFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const filePath = `${user.id}/${projectId}/${timestamp}-${safeFilename}`;
+      // Use 'products' subfolder to separate from user uploads
+      const filePath = `${user.id}/${projectId}/products/${timestamp}-${safeFilename}`;
 
       const { error: uploadError } = await supabase.storage
         .from('project-uploads')
@@ -224,22 +225,8 @@ export function ProductFormCard({ projectId, isRTL, onCancel, onSaved, onOpenInv
 
       const { data } = supabase.storage.from('project-uploads').getPublicUrl(filePath);
       setForm(prev => ({ ...prev, image_url: data.publicUrl }));
-
-      const { error: dbError } = await supabase
-        .from('project_uploads')
-        .insert({
-          project_id: projectId,
-          user_id: user.id,
-          filename: safeFilename,
-          storage_path: filePath,
-          file_type: file.type,
-          size_bytes: file.size
-        });
-
-      if (dbError) {
-        await supabase.storage.from('project-uploads').remove([filePath]);
-        throw dbError;
-      }
+      
+      // NOTE: Do NOT insert into project_uploads table - product images should not appear in Uploads tab
     } catch (err) {
       toast.error(t('Failed to upload image', 'فشل رفع الصورة'));
     } finally {
@@ -251,7 +238,12 @@ export function ProductFormCard({ projectId, isRTL, onCancel, onSaved, onOpenInv
     if (!form.name.trim()) return;
     setSaving(true);
     try {
-      const productData = { ...form } as Record<string, any>;
+      const productData = {
+        ...form,
+        price: form.price === '' ? 0 : Number(form.price),
+        compare_at_price: form.compare_at_price === '' ? null : Number(form.compare_at_price),
+        stock_quantity: form.stock_quantity === '' ? 0 : Number(form.stock_quantity)
+      } as Record<string, any>;
       const user = await supabase.auth.getUser();
       const { data: createdProduct, error } = await supabase
         .from('project_collections')
@@ -294,30 +286,14 @@ export function ProductFormCard({ projectId, isRTL, onCancel, onSaved, onOpenInv
     }
   };
 
-  // Scroll to top on mount - find the scrollable parent container and scroll it
+  // Scroll to show the TOP of this card when it mounts
   useEffect(() => {
-    const scrollToTop = () => {
+    const timer = setTimeout(() => {
       if (cardRef.current) {
-        // Find the scrollable parent (chat messages container)
-        let scrollParent = cardRef.current.parentElement;
-        while (scrollParent) {
-          const { overflow, overflowY } = window.getComputedStyle(scrollParent);
-          if (overflow === 'auto' || overflow === 'scroll' || overflowY === 'auto' || overflowY === 'scroll') {
-            // Found scrollable parent - scroll to show this card at top
-            const cardTop = cardRef.current.offsetTop;
-            scrollParent.scrollTo({ top: cardTop - 20, behavior: 'smooth' });
-            break;
-          }
-          scrollParent = scrollParent.parentElement;
-        }
-        // Fallback: use scrollIntoView
-        if (!scrollParent) {
-          cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
+        // Use scrollIntoView with block: 'start' to show top of card
+        cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
-    };
-    // Small delay to ensure DOM is fully rendered
-    const timer = setTimeout(scrollToTop, 100);
+    }, 150);
     return () => clearTimeout(timer);
   }, []);
 
@@ -470,7 +446,7 @@ export function ProductFormCard({ projectId, isRTL, onCancel, onSaved, onOpenInv
             <Input
               type="number"
               value={form.price}
-              onChange={(e) => setForm(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+              onChange={(e) => setForm(prev => ({ ...prev, price: e.target.value === '' ? '' : Number(e.target.value) }))}
               className="mt-1"
             />
           </div>
@@ -478,9 +454,8 @@ export function ProductFormCard({ projectId, isRTL, onCancel, onSaved, onOpenInv
             <Label>{t('Compare at Price', 'السعر قبل الخصم')}</Label>
             <Input
               type="number"
-              value={form.compare_at_price || ''}
-              onChange={(e) => setForm(prev => ({ ...prev, compare_at_price: parseFloat(e.target.value) || undefined }))}
-              placeholder="0"
+              value={form.compare_at_price ?? ''}
+              onChange={(e) => setForm(prev => ({ ...prev, compare_at_price: e.target.value === '' ? '' : Number(e.target.value) }))}
               className="mt-1"
             />
           </div>
@@ -488,11 +463,11 @@ export function ProductFormCard({ projectId, isRTL, onCancel, onSaved, onOpenInv
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label>{t('Stock Quantity', 'الكمية')}</Label>
+            <Label>{t('Stock Quantity', 'الكمية بالمخزون')}</Label>
             <Input
               type="number"
               value={form.stock_quantity}
-              onChange={(e) => setForm(prev => ({ ...prev, stock_quantity: parseInt(e.target.value) || 0 }))}
+              onChange={(e) => setForm(prev => ({ ...prev, stock_quantity: e.target.value === '' ? '' : Number(e.target.value) }))}
               className="mt-1"
             />
           </div>

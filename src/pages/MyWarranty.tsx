@@ -7,7 +7,7 @@ import {
   Shield, Plus, SortAsc, Camera, Upload, X, 
   ChevronLeft, Trash2, FileText, MessageCircle, Calendar,
   Tag, Clock, CheckCircle, AlertTriangle, XCircle, Loader2,
-  Edit2, ExternalLink
+  Edit2, ExternalLink, CreditCard, User, FolderOpen
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,83 +50,131 @@ type ViewMode = 'list' | 'detail' | 'add' | 'categories' | 'ask';
 
 const translations = {
   en: {
-    title: 'My Warranty',
+    title: 'My Documents',
     welcome: 'Welcome',
     youHave: 'you have',
-    items: 'items',
-    warrantiesTab: 'Warranties',
-    askTab: 'Ask',
+    items: 'documents',
+    warrantiesTab: 'Documents',
+    askTab: 'Ask Wakti AI',
+    // Main tabs
+    myDocsTab: 'My Docs',
+    myCardTab: 'My Card',
+    myCVTab: 'My CV',
+    // Docs hero
+    docsHeroTitle: 'Your Smart Document Vault',
+    docsHeroSubtitle: 'Store IDs, passports, warranties, policies & more. AI extracts key info so you can ask questions anytime.',
+    docsFeature1: 'IDs & Passports',
+    docsFeature2: 'Warranties',
+    docsFeature3: 'Insurance Policies',
+    docsFeature4: 'Contracts',
+    // Card tab
+    cardTitle: 'My Card',
+    cardDescription: 'Store and manage your cards',
+    cardComingSoon: 'Card management coming soon',
+    // CV tab
+    cvTitle: 'My CV',
+    cvDescription: 'Create and manage your CV',
+    cvComingSoon: 'CV builder coming soon',
     filterAll: 'All',
     filterExpiring: 'Expiring',
     filterExpired: 'Expired',
-    addNew: 'Add New',
+    addNew: 'Add Document',
     sort: 'Sort',
     expiredItems: 'Expired Items',
-    willExpireOn: 'Will expire on',
-    expiredOn: 'Expired on',
+    willExpireOn: 'Expires',
+    expiredOn: 'Expired',
     monthsLeft: 'months left',
     daysLeft: 'days left',
     expired: 'Expired',
-    analyzing: 'Analyzing document...',
+    analyzing: 'AI is reading your document...',
     uploadFile: 'Upload File',
     takePhoto: 'Take Photo',
-    productName: 'Product Name',
-    purchaseDate: 'Purchase Date',
-    warrantyMonths: 'Warranty Duration (months)',
+    productName: 'Document Name',
+    purchaseDate: 'Issue Date',
+    warrantyMonths: 'Validity (months)',
     expiryDate: 'Expiry Date',
     coverage: 'Coverage',
     notes: 'Notes',
-    viewReceipt: 'View Receipt',
-    deleteItem: 'Delete Item',
-    askWakti: 'Ask Wakti',
-    provider: 'Provider',
-    refNumber: 'Ref Number',
-    supportContact: 'Support Contact',
+    viewReceipt: 'View Document',
+    deleteItem: 'Delete',
+    askWakti: 'Ask Wakti AI',
+    askEmptyTitle: 'Ask about any document',
+    askEmptyHint: 'Try questions like:',
+    askExample1: 'Is my passport expiring soon?',
+    askExample2: 'When does my rent agreement end?',
+    askExample3: 'What is my policy coverage?',
+    provider: 'Issuer',
+    refNumber: 'Reference #',
+    supportContact: 'Contact',
     categoryLabel: 'Category',
     snapPhoto: 'Snap Photo',
     uploadDocument: 'Upload Document',
     extractedInfo: 'Extracted Info',
     aiSummary: 'AI Summary',
-    askQuestion: 'Ask a question about this warranty...',
+    askQuestion: 'Ask anything about this document...',
     send: 'Send',
-    noItems: 'No warranties yet',
-    addFirst: 'Add your first warranty',
+    noItems: 'No documents yet',
+    addFirst: 'Add your first document',
     optional: 'Optional',
     back: 'Back',
     save: 'Save',
     cancel: 'Cancel',
   },
   ar: {
-    title: 'ضماناتي',
+    title: 'مستنداتي',
     welcome: 'أهلاً',
     youHave: 'لديك',
-    items: 'عناصر',
-    warrantiesTab: 'الضمانات',
-    askTab: 'اسأل',
+    items: 'مستندات',
+    warrantiesTab: 'المستندات',
+    askTab: 'اسأل وقتي الذكي',
+    // Main tabs
+    myDocsTab: 'مستنداتي',
+    myCardTab: 'بطاقتي',
+    myCVTab: 'سيرتي',
+    // Docs hero
+    docsHeroTitle: 'خزنة مستنداتك الذكية',
+    docsHeroSubtitle: 'احفظ الهويات، جوازات السفر، الضمانات، وثائق التأمين والمزيد. الذكاء الاصطناعي يستخرج المعلومات المهمة.',
+    docsFeature1: 'الهويات والجوازات',
+    docsFeature2: 'الضمانات',
+    docsFeature3: 'وثائق التأمين',
+    docsFeature4: 'العقود',
+    // Card tab
+    cardTitle: 'بطاقتي',
+    cardDescription: 'احفظ وأدر بطاقاتك',
+    cardComingSoon: 'إدارة البطاقات قريباً',
+    // CV tab
+    cvTitle: 'سيرتي الذاتية',
+    cvDescription: 'أنشئ وأدر سيرتك الذاتية',
+    cvComingSoon: 'منشئ السيرة الذاتية قريباً',
     filterAll: 'الكل',
     filterExpiring: 'قريب الانتهاء',
     filterExpired: 'منتهي',
-    addNew: 'إضافة جديد',
+    addNew: 'إضافة مستند',
     sort: 'ترتيب',
-    expiredItems: 'عناصر منتهية الصلاحية',
-    willExpireOn: 'سينتهي في',
-    expiredOn: 'انتهى في',
+    expiredItems: 'مستندات منتهية',
+    willExpireOn: 'ينتهي',
+    expiredOn: 'انتهى',
     monthsLeft: 'شهور متبقية',
     daysLeft: 'أيام متبقية',
     expired: 'منتهي',
-    analyzing: 'جاري تحليل المستند...',
+    analyzing: 'الذكاء الاصطناعي يقرأ مستندك...',
     uploadFile: 'رفع ملف',
     takePhoto: 'التقاط صورة',
-    productName: 'اسم المنتج',
-    purchaseDate: 'تاريخ الشراء',
-    warrantyMonths: 'مدة الضمان (بالشهور)',
+    productName: 'اسم المستند',
+    purchaseDate: 'تاريخ الإصدار',
+    warrantyMonths: 'الصلاحية (بالشهور)',
     expiryDate: 'تاريخ الانتهاء',
     coverage: 'التغطية',
     notes: 'ملاحظات',
-    viewReceipt: 'عرض الإيصال',
+    viewReceipt: 'عرض المستند',
     deleteItem: 'حذف',
-    askWakti: 'اسأل وقتي',
-    provider: 'المزود',
+    askWakti: 'اسأل وقتي الذكي',
+    askEmptyTitle: 'اسأل عن أي مستند',
+    askEmptyHint: 'جرّب أسئلة مثل:',
+    askExample1: 'هل جواز سفري ينتهي قريباً؟',
+    askExample2: 'متى تنتهي اتفاقية الإيجار؟',
+    askExample3: 'ما هي تغطية وثيقة التأمين؟',
+    provider: 'الجهة المصدرة',
     refNumber: 'رقم المرجع',
     supportContact: 'جهة الاتصال',
     categoryLabel: 'الفئة',
@@ -134,10 +182,10 @@ const translations = {
     uploadDocument: 'رفع مستند',
     extractedInfo: 'المعلومات المستخرجة',
     aiSummary: 'ملخص الذكاء الاصطناعي',
-    askQuestion: 'اسأل سؤالاً عن هذا الضمان...',
+    askQuestion: 'اسأل أي شيء عن هذا المستند...',
     send: 'إرسال',
-    noItems: 'لا توجد ضمانات بعد',
-    addFirst: 'أضف أول ضمان لك',
+    noItems: 'لا توجد مستندات بعد',
+    addFirst: 'أضف أول مستند لك',
     optional: 'اختياري',
     back: 'رجوع',
     save: 'حفظ',
@@ -153,6 +201,7 @@ const MyWarranty: React.FC = () => {
   const isRTL = language === 'ar';
 
   const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [mainTab, setMainTab] = useState<'docs' | 'card' | 'cv'>('docs');
   const [activeTab, setActiveTab] = useState<'warranties' | 'ask'>('warranties');
   const [statusFilter, setStatusFilter] = useState<'all' | 'expiring' | 'expired'>('all');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
@@ -186,7 +235,7 @@ const MyWarranty: React.FC = () => {
 
   // Ask Wakti state
   const [askQuestion, setAskQuestion] = useState('');
-  const [askAnswer, setAskAnswer] = useState('');
+  const [askMessages, setAskMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   const [isAsking, setIsAsking] = useState(false);
   
   // Document viewer modal state
@@ -441,47 +490,42 @@ const MyWarranty: React.FC = () => {
     }
   };
 
-  // Ask Wakti
+  // Ask Wakti - searches ALL documents
   const handleAskWakti = async () => {
-    if (!askQuestion.trim() || !selectedItem) return;
+    const trimmedQuestion = askQuestion.trim();
+    if (!trimmedQuestion || warranties.length === 0) return;
 
     setIsAsking(true);
-    setAskAnswer(''); // Clear previous answer while loading
+    setAskMessages((prev) => [...prev, { role: 'user', content: trimmedQuestion }]);
     
     try {
-      // Build comprehensive context from ALL stored warranty data
-      const context = JSON.stringify({
-        product_name: selectedItem.product_name,
-        provider: selectedItem.provider,
-        ref_number: selectedItem.ref_number,
-        support_contact: selectedItem.support_contact,
-        purchase_date: selectedItem.purchase_date,
-        expiry_date: selectedItem.expiry_date,
-        warranty_months: selectedItem.warranty_months,
-        notes: selectedItem.notes,
-        ai_summary: selectedItem.ai_summary,
-        extracted_data: selectedItem.extracted_data, // Contains full document extraction
-      });
+      // Build context from ALL user documents
+      const allDocsContext = warranties.map((doc) => ({
+        product_name: doc.product_name,
+        provider: doc.provider,
+        ref_number: doc.ref_number,
+        support_contact: doc.support_contact,
+        purchase_date: doc.purchase_date,
+        expiry_date: doc.expiry_date,
+        warranty_months: doc.warranty_months,
+        notes: doc.notes,
+        ai_summary: doc.ai_summary,
+        extracted_data: doc.extracted_data,
+      }));
 
       const { data, error } = await supabase.functions.invoke('my-warranty-ai', {
         body: {
           mode: 'qa',
-          question: askQuestion,
-          warrantyContext: context,
+          question: trimmedQuestion,
+          warrantyContext: JSON.stringify(allDocsContext),
         },
       });
 
       if (error) throw error;
 
       if (data?.success) {
-        setAskAnswer(data.answer);
-        // Keep the current question visible until we clear it
-        const currentQuestion = askQuestion;
-        // Clear the input but keep the question displayed
+        setAskMessages((prev) => [...prev, { role: 'assistant', content: data.answer }]);
         setAskQuestion('');
-        // Ensure we're in ask mode to see the answer
-        setViewMode('ask');
-        setActiveTab('ask');
       }
     } catch (error) {
       console.error('Error asking Wakti:', error);
@@ -618,21 +662,54 @@ const MyWarranty: React.FC = () => {
   const renderWarrantiesTab = () => (
     <div className="flex flex-col h-full">
       <div className="px-4 pt-4 pb-3 solid-bg">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-foreground">{t.title}</h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              {t.welcome}, {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User'}
-              <br />
-              {t.youHave} {warranties.length} {t.items}
+        {/* Hero Section - Beautiful intro */}
+        <div className="relative mb-6 p-5 rounded-2xl overflow-hidden bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-emerald-500/10 border border-white/10">
+          {/* Decorative elements */}
+          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/20 to-transparent rounded-full blur-2xl" />
+          <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-emerald-500/20 to-transparent rounded-full blur-2xl" />
+          
+          <div className="relative z-10">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center shadow-lg">
+                <FolderOpen className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-foreground">{t.docsHeroTitle}</h1>
+                <p className="text-xs text-muted-foreground">{warranties.length} {t.items}</p>
+              </div>
+            </div>
+            
+            <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+              {t.docsHeroSubtitle}
             </p>
+            
+            {/* Feature pills */}
+            <div className="flex flex-wrap gap-2">
+              <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-blue-500/15 text-blue-400 border border-blue-500/20">
+                🪪 {t.docsFeature1}
+              </span>
+              <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+                🛡️ {t.docsFeature2}
+              </span>
+              <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-purple-500/15 text-purple-400 border border-purple-500/20">
+                📋 {t.docsFeature3}
+              </span>
+              <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-orange-500/15 text-orange-400 border border-orange-500/20">
+                📝 {t.docsFeature4}
+              </span>
+            </div>
           </div>
-          <Button variant="ghost" size="icon" className="text-muted-foreground">
-            <SortAsc className="w-5 h-5" />
+        </div>
+
+        {/* Filter buttons */}
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <h2 className="text-sm font-semibold text-foreground">{t.title}</h2>
+          <Button variant="ghost" size="icon" className="text-muted-foreground h-8 w-8">
+            <SortAsc className="w-4 h-4" />
           </Button>
         </div>
 
-        <div className="mt-4 flex gap-2 overflow-x-auto scrollbar-hide">
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide">
           <Button
             type="button"
             variant={statusFilter === 'all' ? 'default' : 'outline'}
@@ -747,74 +824,154 @@ const MyWarranty: React.FC = () => {
   );
 
   const renderAskTab = () => (
-    <div className="flex flex-col h-full">
-      <div className="px-4 pt-4 pb-3">
-        <h2 className="text-xl font-bold text-foreground">{t.askWakti}</h2>
-        <p className="text-muted-foreground text-sm mt-1">
-          {selectedItem ? selectedItem.product_name : t.back}
-        </p>
+    <div className="flex flex-col h-full bg-gradient-to-b from-background via-background to-blue-500/5">
+      {/* Beautiful Header with gradient */}
+      <div className="relative px-4 pt-6 pb-4 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-purple-500/5 to-transparent" />
+        <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-blue-500/20 to-transparent rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+        
+        <div className="relative z-10 flex items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
+            <MessageCircle className="w-7 h-7 text-white" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-foreground">{t.askWakti}</h2>
+            <p className="text-muted-foreground text-sm">
+              {warranties.length} {t.items} • {isRTL ? 'اسأل أي شيء' : 'Ask anything'}
+            </p>
+          </div>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pb-10">
-        {!selectedItem ? (
-          <div className="space-y-3">
-            {warranties.map((w) => (
-              <button
-                key={w.id}
-                onClick={() => setSelectedItem(w)}
-                className="enhanced-card p-4 w-full text-left active:scale-[0.98] transition-transform"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="font-semibold text-foreground truncate">{w.product_name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {w.expiry_date ? format(parseISO(w.expiry_date), 'MM/dd/yy') : '-'}
-                    </div>
-                  </div>
-                  <MessageCircle className="w-5 h-5 text-muted-foreground" />
-                </div>
-              </button>
-            ))}
+      {/* Chat Area */}
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        {askMessages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full py-8">
+            {/* Empty state with beautiful design */}
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center mb-6">
+              <MessageCircle className="w-10 h-10 text-blue-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-foreground mb-2">{t.askEmptyHint}</h3>
+            <div className="space-y-2 mt-4 w-full max-w-sm">
+              {[t.askExample1, t.askExample2, t.askExample3].map((example, i) => (
+                <button
+                  key={i}
+                  onClick={() => setAskQuestion(example)}
+                  className="w-full p-3 rounded-xl bg-gradient-to-r from-white/5 to-white/[0.02] border border-white/10 text-sm text-muted-foreground hover:border-blue-500/30 hover:bg-blue-500/5 transition-all text-left active:scale-[0.98]"
+                >
+                  <span className="text-blue-400 mr-2">→</span> {example}
+                </button>
+              ))}
+            </div>
           </div>
         ) : (
-          <div className="enhanced-card p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="font-semibold text-foreground truncate">{selectedItem.product_name}</div>
-              <Button variant="ghost" size="sm" onClick={() => { setAskQuestion(''); setAskAnswer(''); setSelectedItem(null); }}>
-                {t.back}
-              </Button>
-            </div>
-
-            <Textarea
-              value={askQuestion}
-              onChange={(e) => setAskQuestion(e.target.value)}
-              placeholder={t.askQuestion}
-              className="min-h-[110px] bg-white/5 border-white/10"
-            />
-
-            <Button
-              className="w-full mt-3"
-              onClick={handleAskWakti}
-              disabled={isAsking || !askQuestion.trim()}
-            >
-              {isAsking ? <Loader2 className="w-4 h-4 animate-spin" /> : t.send}
-            </Button>
-
-            {askAnswer && (
-              <div className="mt-4">
-                <div className="text-sm text-muted-foreground mb-2">{t.aiSummary}</div>
-                <div className="text-sm text-foreground whitespace-pre-wrap">{askAnswer}</div>
+          <div className="space-y-4">
+            {askMessages.map((message, index) => (
+              <div
+                key={`${message.role}-${index}`}
+                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                {message.role === 'assistant' && (
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center mr-2 mt-1 flex-shrink-0 shadow-lg shadow-blue-500/20">
+                    <MessageCircle className="w-4 h-4 text-white" />
+                  </div>
+                )}
+                <div
+                  className={
+                    message.role === 'user'
+                      ? 'max-w-[80%] rounded-2xl rounded-tr-md bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-3 text-sm text-white shadow-lg shadow-blue-500/20'
+                      : 'max-w-[80%] rounded-2xl rounded-tl-md bg-gradient-to-br from-white/10 to-white/5 border border-white/10 px-4 py-3 text-sm text-foreground whitespace-pre-wrap'
+                  }
+                >
+                  {message.content}
+                </div>
+                {message.role === 'user' && (
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center ml-2 mt-1 flex-shrink-0 shadow-lg shadow-emerald-500/20">
+                    <User className="w-4 h-4 text-white" />
+                  </div>
+                )}
+              </div>
+            ))}
+            {isAsking && (
+              <div className="flex justify-start">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center mr-2 mt-1 flex-shrink-0 animate-pulse">
+                  <MessageCircle className="w-4 h-4 text-white" />
+                </div>
+                <div className="max-w-[80%] rounded-2xl rounded-tl-md bg-gradient-to-br from-white/10 to-white/5 border border-white/10 px-4 py-3 text-sm text-muted-foreground flex items-center gap-3">
+                  <div className="flex gap-1">
+                    <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                  {isRTL ? 'جاري البحث في مستنداتك...' : 'Searching your documents...'}
+                </div>
               </div>
             )}
           </div>
         )}
       </div>
+
+      {/* Beautiful Input Area */}
+      <div className="shrink-0 px-4 py-4 border-t border-white/20 bg-gradient-to-t from-background to-transparent">
+        <div className="flex gap-3 items-end p-3 rounded-2xl border border-white/20 bg-white/5">
+          <div className="flex-1 relative">
+            <Textarea
+              value={askQuestion}
+              onChange={(e) => setAskQuestion(e.target.value)}
+              placeholder={t.askQuestion}
+              className="min-h-[52px] max-h-[120px] bg-transparent border-0 rounded-xl resize-none pr-4 py-3 focus:ring-0 focus:border-0 transition-all"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleAskWakti();
+                }
+              }}
+            />
+          </div>
+          <Button
+            className="h-[52px] w-[52px] rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg shadow-blue-500/25 transition-all active:scale-95"
+            onClick={handleAskWakti}
+            disabled={isAsking || !askQuestion.trim() || warranties.length === 0}
+          >
+            {isAsking ? <Loader2 className="w-5 h-5 animate-spin" /> : <MessageCircle className="w-5 h-5" />}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 
-  const renderMainView = () => (
+  // Render My Card Tab (placeholder)
+  const renderMyCardTab = () => (
+    <div className="flex flex-col h-full items-center justify-center px-4 py-20">
+      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center mb-6">
+        <CreditCard className="w-10 h-10 text-blue-400" />
+      </div>
+      <h2 className="text-xl font-bold text-foreground mb-2">{t.cardTitle}</h2>
+      <p className="text-muted-foreground text-center mb-4">{t.cardDescription}</p>
+      <div className="px-4 py-2 rounded-full bg-white/5 border border-white/10">
+        <span className="text-sm text-muted-foreground">{t.cardComingSoon}</span>
+      </div>
+    </div>
+  );
+
+  // Render My CV Tab (placeholder)
+  const renderMyCVTab = () => (
+    <div className="flex flex-col h-full items-center justify-center px-4 py-20">
+      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center mb-6">
+        <User className="w-10 h-10 text-purple-400" />
+      </div>
+      <h2 className="text-xl font-bold text-foreground mb-2">{t.cvTitle}</h2>
+      <p className="text-muted-foreground text-center mb-4">{t.cvDescription}</p>
+      <div className="px-4 py-2 rounded-full bg-white/5 border border-white/10">
+        <span className="text-sm text-muted-foreground">{t.cvComingSoon}</span>
+      </div>
+    </div>
+  );
+
+  // Render Docs Tab Content (existing warranties + ask)
+  const renderDocsTabContent = () => (
     <div className="flex flex-col h-full">
-      <div className="px-4 pt-4 pb-2">
+      <div className="px-4 pt-2 pb-2">
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'warranties' | 'ask')}>
           <TabsList className="bg-white/5 border border-white/10">
             <TabsTrigger value="warranties">{t.warrantiesTab}</TabsTrigger>
@@ -828,6 +985,37 @@ const MyWarranty: React.FC = () => {
             {renderAskTab()}
           </TabsContent>
         </Tabs>
+      </div>
+    </div>
+  );
+
+  const renderMainView = () => (
+    <div className="flex flex-col h-full">
+      {/* Main 3-Tab Navigation */}
+      <div className="px-4 pt-4 pb-2 solid-bg border-b border-white/10">
+        <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as 'docs' | 'card' | 'cv')}>
+          <TabsList className="w-full bg-white/5 border border-white/10 grid grid-cols-3">
+            <TabsTrigger value="docs" className="flex items-center gap-2">
+              <FolderOpen className="w-4 h-4" />
+              <span className="hidden sm:inline">{t.myDocsTab}</span>
+            </TabsTrigger>
+            <TabsTrigger value="card" className="flex items-center gap-2">
+              <CreditCard className="w-4 h-4" />
+              <span className="hidden sm:inline">{t.myCardTab}</span>
+            </TabsTrigger>
+            <TabsTrigger value="cv" className="flex items-center gap-2">
+              <User className="w-4 h-4" />
+              <span className="hidden sm:inline">{t.myCVTab}</span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
+      {/* Tab Content */}
+      <div className="flex-1 overflow-hidden">
+        {mainTab === 'docs' && renderDocsTabContent()}
+        {mainTab === 'card' && renderMyCardTab()}
+        {mainTab === 'cv' && renderMyCVTab()}
       </div>
     </div>
   );
@@ -1342,7 +1530,7 @@ const MyWarranty: React.FC = () => {
             className="w-full mb-3"
             onClick={() => {
               setAskQuestion('');
-              setAskAnswer('');
+              setAskMessages([]);
               setViewMode('ask');
             }}
           >
@@ -1382,7 +1570,6 @@ const MyWarranty: React.FC = () => {
       <div className="flex-1 overflow-y-auto px-4 py-4">
         {selectedItem && (
           <div className="space-y-4">
-            {/* AI Summary Card - Always at top */}
             {selectedItem.ai_summary && (
               <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
                 <h4 className="text-sm font-medium text-blue-400 mb-2">{t.aiSummary}</h4>
@@ -1390,24 +1577,29 @@ const MyWarranty: React.FC = () => {
               </div>
             )}
 
-            {/* Question & Answer Chat */}
-            {(askQuestion || askAnswer) && (
-              <div className="space-y-4">
-                {/* Your Question */}
-                {askQuestion && (
-                  <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
-                    <h4 className="text-sm font-medium text-blue-400 mb-2">{isRTL ? 'سؤالك' : 'Your Question'}</h4>
-                    <p className="text-sm text-foreground whitespace-pre-wrap">{askQuestion}</p>
+            {askMessages.length === 0 ? (
+              <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-muted-foreground">
+                <div className="font-semibold text-foreground mb-2">{t.askEmptyHint}</div>
+                <ul className="space-y-2">
+                  <li>• {t.askExample1}</li>
+                  <li>• {t.askExample2}</li>
+                  <li>• {t.askExample3}</li>
+                </ul>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {askMessages.map((message, index) => (
+                  <div
+                    key={`${message.role}-${index}`}
+                    className={
+                      message.role === 'user'
+                        ? 'ml-auto max-w-[85%] rounded-2xl bg-blue-500/15 border border-blue-500/30 px-4 py-3 text-sm text-foreground'
+                        : 'mr-auto max-w-[85%] rounded-2xl bg-white/5 border border-white/10 px-4 py-3 text-sm text-foreground'
+                    }
+                  >
+                    {message.content}
                   </div>
-                )}
-                
-                {/* Wakti's Answer */}
-                {askAnswer && (
-                  <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                    <h4 className="text-sm font-medium text-emerald-400 mb-2">{isRTL ? 'إجابة وقتي' : 'Wakti\'s Answer'}</h4>
-                    <p className="text-sm text-foreground whitespace-pre-wrap">{askAnswer}</p>
-                  </div>
-                )}
+                ))}
               </div>
             )}
           </div>
@@ -1445,8 +1637,8 @@ const MyWarranty: React.FC = () => {
     >
       {viewMode === 'add' ? renderAddView() : viewMode === 'detail' ? renderDetailView() : viewMode === 'ask' ? renderAskView() : renderMainView()}
 
-      {/* Center-bottom FAB (+) - Only show when NOT in empty state or detail/add/ask views */}
-      {viewMode !== 'add' && viewMode !== 'detail' && viewMode !== 'ask' && activeTab === 'warranties' && warranties.length > 0 && (
+      {/* Center-bottom FAB (+) - Only show when on docs tab in warranties view */}
+      {viewMode !== 'add' && viewMode !== 'detail' && viewMode !== 'ask' && mainTab === 'docs' && activeTab === 'warranties' && warranties.length > 0 && (
         <div className="fixed left-1/2 -translate-x-1/2 bottom-20 z-50">
           <button
             type="button"

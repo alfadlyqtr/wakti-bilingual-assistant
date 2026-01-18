@@ -430,6 +430,10 @@ async function classifySearchIntent(message: string, language: string): Promise<
       `Return ONLY valid JSON with keys: needsSearch (true/false), confidence (0-1), reason (short).\n` +
       `User language: ${language}.\nUser message: "${message}"`;
 
+    // Add timeout to prevent blocking
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
+
     const resp = await fetch(url, {
       method: 'POST',
       headers: {
@@ -441,7 +445,9 @@ async function classifySearchIntent(message: string, language: string): Promise<
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.1, maxOutputTokens: 80 },
       }),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     if (!resp.ok) return fallback;
     const data = await resp.json().catch(() => null) as Record<string, unknown> | null;
@@ -1273,13 +1279,28 @@ interface SummaryBoxResult {
   error?: string;
 }
 
+function normalizeSummaryBoxQuery(input: string): string {
+  if (!input) return input;
+  const trimmed = input.trim();
+  const stripped = trimmed.replace(
+    /^\s*(what can you tell me about|tell me about|what can you say about|who is|who was|what is|describe|explain|summary of|information about|facts about|give me info on|give me information on|tell me something about)\s+/i,
+    ''
+  );
+  const strippedArabic = stripped.replace(
+    /^\s*(من هو|من كانت|ما هو|ما هي|ماذا تعرف عن|اشرح|عرف|ملخص عن)\s+/,
+    ''
+  );
+  const cleaned = strippedArabic.replace(/[?؟!]+\s*$/g, '').trim();
+  return cleaned.length >= 2 ? cleaned : trimmed;
+}
+
 async function queryWolframSummaryBox(input: string, timeoutMs: number = 3000): Promise<SummaryBoxResult> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     // Step 1: Get the summary box path from Query Recognizer
-    const recognizerUrl = `http://www.wolframalpha.com/queryrecognizer/query.jsp?appid=${WOLFRAM_APP_ID}&mode=Default&i=${encodeURIComponent(input)}`;
+    const recognizerUrl = `https://www.wolframalpha.com/queryrecognizer/query.jsp?appid=${WOLFRAM_APP_ID}&mode=Default&i=${encodeURIComponent(input)}`;
     console.log('📦 WOLFRAM SUMMARY: Query Recognizer for:', input.substring(0, 40));
 
     const recognizerResp = await fetch(recognizerUrl, {
@@ -1311,7 +1332,7 @@ async function queryWolframSummaryBox(input: string, timeoutMs: number = 3000): 
     console.log('📦 WOLFRAM SUMMARY: Found path:', path, 'domain:', domain);
 
     // Step 2: Get the summary box content
-    const summaryUrl = `http://www.wolframalpha.com/summaryboxes/v1/query?appid=${WOLFRAM_APP_ID}&path=${encodeURIComponent(path)}`;
+    const summaryUrl = `https://www.wolframalpha.com/summaryboxes/v1/query?appid=${WOLFRAM_APP_ID}&path=${encodeURIComponent(path)}`;
     
     const summaryResp = await fetch(summaryUrl, {
       method: 'GET',
@@ -1704,23 +1725,36 @@ serve(async (req) => {
   let tavilyUsedOuter = false;
   let tavilyResultsCountOuter = 0;
 
+  // Read body BEFORE creating stream to avoid broken pipe errors
+  let parsedBody: Record<string, unknown> = {};
+  let bodyParseError: string | null = null;
+  try {
+    const bodyText = await req.text();
+    parsedBody = bodyText ? JSON.parse(bodyText) : {};
+  } catch (bodyErr: unknown) {
+    bodyParseError = bodyErr instanceof Error ? bodyErr.message : 'Unknown error';
+    console.error('🔥 BODY PARSE ERROR:', bodyParseError);
+  }
+
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
+      // CRITICAL: Send first SSE byte IMMEDIATELY to prevent 504 Gateway Timeout
+      // Supabase gateway times out if no bytes sent within ~60s
       try {
-        // Defensive body parsing
-        let body: Record<string, unknown> = {};
-        try {
-          const bodyText = await req.text();
-          body = bodyText ? JSON.parse(bodyText) : {};
-        } catch (bodyErr: unknown) {
-          const errMsg = bodyErr instanceof Error ? bodyErr.message : 'Unknown error';
-          console.error('🔥 BODY PARSE ERROR:', errMsg);
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Invalid request body' })}\n\n`));
-          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-          controller.close();
-          return;
-        }
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ keepalive: true, stage: 'init' })}\n\n`));
+      } catch { /* connection may already be closed */ }
+
+      // Handle body parse error
+      if (bodyParseError) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Invalid request body' })}\n\n`));
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        controller.close();
+        return;
+      }
+
+      try {
+        const body = parsedBody;
 
         const { 
           message, 
@@ -1738,19 +1772,23 @@ serve(async (req) => {
         requestSubmode = chatSubmode;
 
         let effectiveTrigger = activeTrigger;
-        if (activeTrigger === 'chat' && chatSubmode === 'chat' && !isWaktiInvolved(message || '')) {
-          const gate = await classifySearchIntent(message || '', language);
-          console.log('🔎 INTENT GATE:', gate);
-          if (gate.needsSearch && gate.confidence >= 0.6) {
-            effectiveTrigger = 'search';
-          } else if (gate.needsSearch && gate.confidence >= 0.35) {
-            const confirm = language === 'ar'
-              ? 'هل تريد أن أتحقق من المصادر الحية لهذا السؤال؟'
-              : 'Want me to check live sources for this?';
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: confirm, content: confirm })}\n\n`));
-            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-            controller.close();
-            return;
+        // Only run search intent gate for regular chat mode (NOT study mode)
+        // Study mode should always go straight to Wolfram/AI without search interruption
+        // SIMPLIFIED: Only auto-search at very high confidence (0.95+) to keep chat as chat
+        const shouldCheckSearchIntent = activeTrigger === 'chat' && chatSubmode === 'chat' && !isWaktiInvolved(message || '');
+        if (shouldCheckSearchIntent) {
+          try {
+            const gate = await classifySearchIntent(message || '', language);
+            console.log('🔎 INTENT GATE:', gate);
+            // 95% threshold: only auto-search for obvious live-data queries (weather, prices, scores)
+            if (gate.needsSearch && gate.confidence >= 0.95) {
+              effectiveTrigger = 'search';
+              console.log('🔍 AUTO-SEARCH: High confidence live data query');
+            }
+            // Everything else stays in chat mode
+          } catch (gateErr) {
+            console.error('❌ INTENT GATE ERROR:', gateErr);
+            // On error, just continue with chat mode
           }
         }
 
@@ -2427,10 +2465,17 @@ If you are running out of space, keep this order and drop the rest:
           if (useWolfram) {
             console.log(`🔢 WOLFRAM: ${chatSubmode === 'study' ? 'Study mode' : 'Academic query'} - querying BOTH APIs in parallel...`);
             
+            // Send keepalive ping to prevent connection timeout during Wolfram calls
+            try {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ keepalive: true, stage: 'wolfram' })}\n\n`));
+            } catch { /* connection may be closed */ }
+            
             // Run both APIs in parallel for speed
+            // Study mode needs longer timeout (8s) since Wolfram is the primary source
+            const summaryBoxInput = normalizeSummaryBoxQuery(message);
             const [fullResultsResult, summaryBoxResult] = await Promise.all([
-              queryWolfram(message, chatSubmode === 'study' ? 2000 : 2500),
-              useSummaryBox ? queryWolframSummaryBox(message, 2500) : Promise.resolve<SummaryBoxResult>({ success: false })
+              queryWolfram(message, chatSubmode === 'study' ? 8000 : 4000),
+              useSummaryBox ? queryWolframSummaryBox(summaryBoxInput, 5000) : Promise.resolve<SummaryBoxResult>({ success: false })
             ]);
             
             // Process Full Results API response
@@ -2537,6 +2582,11 @@ If you are running out of space, keep this order and drop the rest:
         let streamReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
         let modelUsed = '';
         let responseText = ''; // Track full response for token estimation
+
+        // Send keepalive ping before AI model calls to prevent connection timeout
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ keepalive: true, stage: 'ai_init' })}\n\n`));
+        } catch { /* connection may be closed */ }
 
         const tryGemini = async () => {
           const sysMsg = messages.find((m) => m.role === 'system')?.content || '';

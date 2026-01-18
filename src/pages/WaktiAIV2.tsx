@@ -231,6 +231,27 @@ const WaktiAIV2 = () => {
     setReplyContext(null);
   }, []);
 
+  // Stop/abort the current request
+  const handleStop = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsLoading(false);
+    // Update the last assistant message to show it was stopped
+    setSessionMessages(prev => {
+      const lastMsg = prev[prev.length - 1];
+      if (lastMsg?.role === 'assistant' && (lastMsg as any)?.metadata?.loading) {
+        return prev.map((m, i) => i === prev.length - 1 ? {
+          ...m,
+          content: m.content || (language === 'ar' ? '(تم الإيقاف)' : '(Stopped)'),
+          metadata: { ...m.metadata, loading: false, stopped: true }
+        } : m);
+      }
+      return prev;
+    });
+  }, [language]);
+
   const handleSendMessage = useCallback(async (
     messageContent: string,
     trigger: string,
@@ -561,11 +582,40 @@ const WaktiAIV2 = () => {
             }
             setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, content: streamed } : m));
           },
-          (metadata: any) => { streamMeta = metadata || {}; },
-          (err: string) => { console.error('Stream error:', err); },
+          (metadata: any) => { 
+            streamMeta = metadata || {};
+            // Handle search confirmation request - show Yes/No card
+            if (metadata?.searchConfirmation) {
+              const conf = metadata.searchConfirmation;
+              setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? {
+                ...m,
+                content: '',
+                metadata: { 
+                  ...m.metadata, 
+                  loading: false,
+                  searchConfirmation: conf
+                }
+              } : m));
+              setIsLoading(false);
+            }
+          },
+          (err: string) => { 
+            console.error('Stream error:', err);
+            // CRITICAL: Clear loading state on error to prevent "I'm on it..." stuck forever
+            setIsLoading(false);
+            setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { 
+              ...m, 
+              metadata: { ...(m.metadata || {}), loading: false, error: true }
+            } : m));
+          },
           controller.signal,
           chatSubmodeParam || 'chat' // Pass chatSubmode for Study mode support
         );
+
+        // If search confirmation was triggered, don't update with final message
+        if (streamMeta?.searchConfirmation) {
+          return;
+        }
 
         const streamEndTime = Date.now();
         const streamThinkingDuration = Math.round((streamEndTime - startTime) / 1000);
@@ -691,6 +741,33 @@ const WaktiAIV2 = () => {
     }
   }, [currentConversationId, language, sessionMessages, userProfile]);
 
+  // Listen for search confirmation Yes/No card responses
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ce = e as CustomEvent<{ confirmed: boolean; originalMessage: string }>;
+      const { confirmed, originalMessage } = ce.detail || {};
+      if (!originalMessage) return;
+      
+      // Remove the search confirmation message
+      setSessionMessages(prev => prev.filter(m => !(m.role === 'assistant' && (m as any)?.metadata?.searchConfirmation)));
+      
+      if (confirmed) {
+        // User said Yes - trigger search mode with original message
+        setActiveTrigger('search');
+        setTimeout(() => {
+          handleSendMessage(originalMessage, 'search', [], undefined, undefined, 'chat');
+        }, 100);
+      } else {
+        // User said No - continue with chat mode (force chat, skip intent gate)
+        setTimeout(() => {
+          handleSendMessage(originalMessage, 'chat', [], undefined, undefined, 'chat');
+        }, 100);
+      }
+    };
+    window.addEventListener('wakti-search-confirm', handler as EventListener);
+    return () => window.removeEventListener('wakti-search-confirm', handler as EventListener);
+  }, [handleSendMessage]);
+
   const handleConfirmTask = (taskData: any) => { console.log('Task confirmed:', taskData); setShowTaskConfirmation(false); };
   const handleDeclineTask = () => { console.log('Task declined'); setShowTaskConfirmation(false); };
   const handleConfirmReminder = (reminderData: any) => { console.log('Reminder confirmed:', reminderData); };
@@ -799,6 +876,7 @@ const WaktiAIV2 = () => {
               onAddTalkMessage={handleAddTalkMessage}
               replyContext={replyContext}
               onClearReply={handleClearReply}
+              onStop={handleStop}
             />
           </div>,
           portalRoot
@@ -821,6 +899,7 @@ const WaktiAIV2 = () => {
               onAddTalkMessage={handleAddTalkMessage}
               replyContext={replyContext}
               onClearReply={handleClearReply}
+              onStop={handleStop}
             />
           </div>
         )}

@@ -1109,6 +1109,13 @@ class WaktiAIV2ServiceClass {
                   console.log('🧩 PT_IN_APPLIED:', parsed.metadata.pt_applied);
                 }
 
+                // Handle search confirmation request from backend (Yes/No card)
+                if (parsed.searchConfirmation) {
+                  console.log('🔎 SEARCH CONFIRMATION:', parsed.searchConfirmation);
+                  metadata = { ...metadata, searchConfirmation: parsed.searchConfirmation };
+                  continue;
+                }
+
                 if (typeof parsed.token === 'string') { 
                   if (!firstTokenReceived) {
                     firstTokenReceived = true;

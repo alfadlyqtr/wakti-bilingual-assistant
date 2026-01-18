@@ -3,6 +3,7 @@ import { X, Mic, Search, MessageCircle } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { DEFAULT_VOICES } from './TalkBackSettings';
+import { getNativeLocation } from '@/integrations/natively/locationBridge';
 
 interface TalkBubbleProps {
   isOpen: boolean;
@@ -85,6 +86,7 @@ function cleanSearchQuery(transcript: string): string {
 export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage }: TalkBubbleProps) {
   const { language, theme } = useTheme();
   const t = useCallback((en: string, ar: string) => (language === 'ar' ? ar : en), [language]);
+  const tLang = useCallback((lang: 'ar' | 'en', en: string, ar: string) => (lang === 'ar' ? ar : en), []);
   const [isHolding, setIsHolding] = useState(false);
   const [countdown, setCountdown] = useState(MAX_RECORD_SECONDS);
   const [liveTranscript, setLiveTranscript] = useState('');
@@ -100,14 +102,17 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const [searchMode, setSearchMode] = useState(false); // One-turn search mode (auto-resets after use)
   const [isSearching, setIsSearching] = useState(false); // Currently fetching search results
   const [personalTouch, setPersonalTouch] = useState<any>(null);
+  const [userLocation, setUserLocation] = useState<{ city?: string; country?: string } | null>(null);
 
   // Use refs for values needed in callbacks to avoid stale closures
   const userNameRef = useRef<string>('');
   const voiceGenderRef = useRef<'male' | 'female'>('male');
+  const userLocationRef = useRef<{ city?: string; country?: string } | null>(null);
   const conversationHistoryRef = useRef<{role: 'user' | 'assistant', text: string}[]>([]);
   const talkSummaryRef = useRef<string>('');
   const searchModeRef = useRef(false); // Ref for search mode to avoid stale closures
   const pendingTranscriptRef = useRef<string>(''); // Store transcript while waiting for search
+  const detectedLanguageRef = useRef<'ar' | 'en'>(language === 'ar' ? 'ar' : 'en');
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -149,7 +154,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
 
   // Fetch user's nickname from PersonalTouchManager and voice gender from TTS settings
   useEffect(() => {
-    const fetchUserData = () => {
+    const fetchUserData = async () => {
       // Get nickname from PersonalTouchManager settings (localStorage)
       try {
         const personalTouchRaw = localStorage.getItem('wakti_personal_touch');
@@ -188,6 +193,36 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
         voiceGenderRef.current = gender;
       } catch (e) {
         console.warn('[Talk] Could not get voice gender:', e);
+      }
+
+      // Get user location - try Natively SDK first, then fallback to profile
+      try {
+        // Try Natively SDK for live location (includes city/country from reverse geocoding)
+        const nativeLoc = await getNativeLocation({ timeoutMs: 5000 });
+        if (nativeLoc && (nativeLoc.city || nativeLoc.country)) {
+          const loc = { city: nativeLoc.city, country: nativeLoc.country };
+          console.log('[Talk] Got location from Natively SDK:', loc);
+          setUserLocation(loc);
+          userLocationRef.current = loc;
+        } else {
+          // Fallback to profile location
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user?.id) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('city, country')
+              .eq('id', user.id)
+              .maybeSingle();
+            if (profile && (profile.city || profile.country)) {
+              const loc = { city: profile.city || undefined, country: profile.country || undefined };
+              console.log('[Talk] Fetched user location from profile:', loc);
+              setUserLocation(loc);
+              userLocationRef.current = loc;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[Talk] Could not fetch user location:', e);
       }
     };
     fetchUserData();
@@ -294,7 +329,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     return out;
   }, []);
 
-  const buildMemoryContext = useCallback((lang: string) => {
+  const buildMemoryContext = useCallback((lang: 'ar' | 'en') => {
     const lastTurns = conversationHistoryRef.current.slice(-10);
     const summary = talkSummaryRef.current.trim();
 
@@ -303,11 +338,28 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     }
 
     const lines = lastTurns.map(t => `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.text}`);
-    return t(
+    return tLang(
+      lang,
       `Conversation memory (important):\nSummary so far: ${summary || '(none)'}\nLast 10 turns:\n${lines.join('\n')}`,
       `ذاكرة المحادثة (مهم):\nملخص حتى الآن: ${summary || '(لا يوجد)'}\nآخر 10 رسائل:\n${lines.join('\n')}`
     );
-  }, [t]);
+  }, [tLang]);
+
+  const detectTranscriptLanguage = useCallback((text: string): 'ar' | 'en' | 'unknown' => {
+    if (!text) return 'unknown';
+    const hasArabic = /[\u0600-\u06FF]/.test(text);
+    const hasLatin = /[A-Za-z]/.test(text);
+    const hasCJK = /[\u4E00-\u9FFF]/.test(text);
+    if (hasArabic && !hasLatin) return 'ar';
+    if (hasLatin && !hasArabic) return 'en';
+    if (hasArabic && hasLatin) {
+      const arCount = (text.match(/[\u0600-\u06FF]/g) || []).length;
+      const enCount = (text.match(/[A-Za-z]/g) || []).length;
+      return arCount >= enCount ? 'ar' : 'en';
+    }
+    if (hasCJK) return 'unknown';
+    return 'unknown';
+  }, []);
 
   // Continuous mic level animation
   const startMicLevelAnimation = useCallback(() => {
@@ -386,43 +438,55 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
         // Use refs to get current values (avoid stale closures)
         const currentUserName = userNameRef.current;
         const currentVoiceGender = voiceGenderRef.current;
+        const currentLocation = userLocationRef.current;
         
         // Build personal instructions with user's name - MUST use name in greeting
         const personalTouch = currentUserName ? (language === 'ar' 
           ? `أنت تتحدث مع ${currentUserName}. يجب أن تستخدم اسمه "${currentUserName}" في ردك الأول وأحياناً في الردود الأخرى.`
           : `You are talking to ${currentUserName}. You MUST use their name "${currentUserName}" in your first response and occasionally in other responses.`
         ) : '';
+
+        // Build location context for weather/local queries
+        const locationContext = currentLocation?.city || currentLocation?.country
+          ? (language === 'ar'
+            ? `📍 موقع المستخدم: ${currentLocation.city ? currentLocation.city + '، ' : ''}${currentLocation.country || ''}. عند السؤال عن الطقس أو أي شيء محلي، استخدم هذا الموقع.`
+            : `📍 User location: ${currentLocation.city ? currentLocation.city + ', ' : ''}${currentLocation.country || ''}. When asked about weather or anything local, use this location.`)
+          : '';
         
         const waktiQuickRules = t(
           `WAKTI quick rules (app questions):
 1) When asked "what is Wakti": answer friendly and mention Help & Guides has 3 tabs: Guides, my little brother Wakti Help Assistant, and Support.
 2) When asked "who made Wakti": say it was made by TMW (The Modern Web) in Doha, Qatar (tmw.qa).
 3) When asked "what can Wakti do": give a short list of key capabilities (tasks/events/voice tools/AI chat+search+content) then point to Help & Guides.
-4) IMPORTANT - Web Search: You CANNOT browse the internet in Talk mode. If user asks you to search something, tell them: "I can't browse the web in Talk mode. Tap the Search toggle above, then ask me again and I'll search for real." Never pretend you searched.`,
+4) IMPORTANT - Web Search: You CANNOT browse the internet in Talk mode. If user asks you to search something, tell them: "I can't browse the web in Talk mode. Tap the Search toggle above, then ask me again and I'll search for real." Never pretend you searched.
+5) IMPORTANT - Weather: When asked about weather, you MUST use the user's location provided above. Do NOT make up or guess a location. If no location is set, ask them to set their location in Account settings.`,
           `قواعد WAKTI السريعة (عند السؤال عن التطبيق):
 1) عندما يسأل المستخدم "ما هو وقتي" أو سؤال مشابه: أجب بطريقة ودية واذكر أن "المساعدة والأدلة" فيها 3 تبويبات: الأدلة، مساعد وقتي الصغير، والدعم.
 2) عندما يسأل "من صنع وقتي" أو "من عمل وقتي": قل أنه تم تطويره بواسطة TMW (The Modern Web) في الدوحة، قطر (tmw.qa).
 3) عندما يسأل "ماذا يمكن لوقتي أن يفعل" أو "وش يسوي وقتي": أعطِ قائمة قصيرة بأهم القدرات (مهام/فعاليات/أدوات صوت/دردشة وبحث وذكاء) ثم وجّه للمساعدة والأدلة.
-4) مهم - البحث: لا يمكنك تصفح الإنترنت في وضع المحادثة. إذا طلب المستخدم البحث، قل له: "لا أستطيع البحث في وضع المحادثة. اضغط على زر البحث في الأعلى، ثم اسألني مرة أخرى وسأبحث فعلاً." لا تتظاهر أبداً بأنك بحثت.`
+4) مهم - البحث: لا يمكنك تصفح الإنترنت في وضع المحادثة. إذا طلب المستخدم البحث، قل له: "لا أستطيع البحث في وضع المحادثة. اضغط على زر البحث في الأعلى، ثم اسألني مرة أخرى وسأبحث فعلاً." لا تتظاهر أبداً بأنك بحثت.
+5) مهم - الطقس: عند السؤال عن الطقس، يجب استخدام موقع المستخدم المذكور أعلاه. لا تخترع أو تخمن موقعاً. إذا لم يكن هناك موقع محدد، اطلب منه تحديد موقعه في إعدادات الحساب.`
         );
 
-        const memoryContext = buildMemoryContext(language);
+        const memoryContext = buildMemoryContext(language === 'ar' ? 'ar' : 'en');
         const personalTouchSection = buildPersonalTouchSection();
 
         const instructions = t(
           `You are WAKTI, a smart voice assistant. ${personalTouch}
+${locationContext}
 
 Style rules (important):
 - Always start with the direct answer (1-2 lines).
 - Then: max 2-6 lines.
 - Use bullet points for features/steps.
-- Don’t ramble or repeat.
+- Don't ramble or repeat.
 
 ${waktiQuickRules}
 ${personalTouchSection}
 
 ${memoryContext ? memoryContext : ''}`,
           `أنت مساعد WAKTI الصوتي الذكي. ${personalTouch}
+${locationContext}
 
 🚨 قاعدة اللغة (إلزامية): يجب أن تكون جميع ردودك بالعربية فقط. لا تستخدم أي كلمات إنجليزية إلا إذا كانت أسماء علم أو مصطلحات تقنية لا بديل عربي لها.
 
@@ -451,7 +515,7 @@ ${memoryContext ? memoryContext : ''}`
           session: {
             instructions,
             voice: openaiVoice,
-            input_audio_transcription: { model: 'whisper-1', language: language === 'ar' ? 'ar' : undefined },
+            input_audio_transcription: { model: 'whisper-1' },
             turn_detection: null, // Manual - we control when user finishes speaking
           }
         }));
@@ -560,6 +624,14 @@ ${memoryContext ? memoryContext : ''}`
         
         // Only proceed if user actually said something (not empty/silence)
         if (transcript.length > 0) {
+          const detectedLang = detectTranscriptLanguage(transcript);
+          if (detectedLang === 'unknown') {
+            setError(tLang(language === 'ar' ? 'ar' : 'en', 'Please speak Arabic or English.', 'الرجاء التحدث بالعربية أو الإنجليزية.'));
+            setStatus('ready');
+            return;
+          }
+          detectedLanguageRef.current = detectedLang;
+
           setConversationHistory(prev => {
             const next = [...prev, { role: 'user' as const, text: transcript }];
             conversationHistoryRef.current = next;
@@ -575,9 +647,9 @@ ${memoryContext ? memoryContext : ''}`
             const cleanedQuery = cleanSearchQuery(transcript);
             
             // Perform search and then send response with results
-            performWebSearch(cleanedQuery).then((searchContext) => {
+            performWebSearch(cleanedQuery, detectedLang).then((searchContext) => {
               console.log('[Talk] Search complete, sending response with context');
-              sendResponseCreate(searchContext, transcript);
+              sendResponseCreate(searchContext, transcript, detectedLang);
               
               // Auto-reset search mode after one use (A2 behavior)
               setSearchMode(false);
@@ -586,7 +658,7 @@ ${memoryContext ? memoryContext : ''}`
           } else {
             // Talk mode - respond normally (transcript already validated as non-empty)
             console.log('[Talk] Talk mode - sending response for:', transcript);
-            sendResponseCreate(undefined, transcript);
+            sendResponseCreate(undefined, transcript, detectedLang);
           }
         } else {
           // User didn't say anything - go back to ready without responding
@@ -648,7 +720,7 @@ ${memoryContext ? memoryContext : ''}`
   }, []);
 
   // Perform web search using live-talk-search Edge Function
-  const performWebSearch = useCallback(async (query: string): Promise<string> => {
+  const performWebSearch = useCallback(async (query: string, lang: 'ar' | 'en'): Promise<string> => {
     try {
       console.log('[Talk] Performing web search for:', query);
       setIsSearching(true);
@@ -657,53 +729,57 @@ ${memoryContext ? memoryContext : ''}`
       const accessToken = sessionData?.session?.access_token;
       
       const response = await supabase.functions.invoke('live-talk-search', {
-        body: { query, language },
+        body: { query, language: lang },
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
       });
       
       if (response.error || !response.data?.success) {
         console.error('[Talk] Search failed:', response.error || response.data?.error);
-        return t(
+        return tLang(
+          lang,
           'Search failed. Please try again.',
           'فشل البحث. يرجى المحاولة مرة أخرى.'
         );
       }
       
       console.log('[Talk] Search results:', response.data);
-      return response.data.context || t('No results found.', 'لم يتم العثور على نتائج.');
+      return response.data.context || tLang(lang, 'No results found.', 'لم يتم العثور على نتائج.');
     } catch (err) {
       console.error('[Talk] Search error:', err);
-      return t('Search error occurred.', 'حدث خطأ في البحث.');
+      return tLang(lang, 'Search error occurred.', 'حدث خطأ في البحث.');
     } finally {
       setIsSearching(false);
     }
-  }, [language, t]);
+  }, [tLang]);
 
   // Send response.create with optional search context
-  const sendResponseCreate = useCallback((searchContext?: string, userUtterance?: string) => {
+  const sendResponseCreate = useCallback((searchContext?: string, userUtterance?: string, detectedLang?: 'ar' | 'en') => {
     if (!dcRef.current || dcRef.current.readyState !== 'open') {
       console.warn('[Talk] Data channel not open, cannot send response.create');
-      setError(language === 'ar' ? 'فشل الاتصال' : 'Connection failed');
+      setError((detectedLang || language) === 'ar' ? 'فشل الاتصال' : 'Connection failed');
       setStatus('ready');
       return;
     }
 
     try {
+      const activeLang = detectedLang || detectedLanguageRef.current || (language === 'ar' ? 'ar' : 'en');
       const currentUserName = userNameRef.current;
-      const personalTouch = currentUserName ? (language === 'ar'
-        ? `أنت تتحدث مع ${currentUserName}. يجب أن تستخدم اسمه "${currentUserName}" في ردك الأول وأحياناً في الردود الأخرى.`
-        : `You are talking to ${currentUserName}. You MUST use their name "${currentUserName}" in your first response and occasionally in other responses.`
-      ) : '';
+      const personalTouch = currentUserName
+        ? (activeLang === 'ar'
+          ? `أنت تتحدث مع ${currentUserName}. يجب أن تستخدم اسمه "${currentUserName}" في ردك الأول وأحياناً في الردود الأخرى.`
+          : `You are talking to ${currentUserName}. You MUST use their name "${currentUserName}" in your first response and occasionally in other responses.`)
+        : '';
 
       const personalTouchSection = buildPersonalTouchSection();
 
-      // If we have search context, use special search instructions
-      const searchInstructions = searchContext ? t(
+      const searchInstructions = searchContext ? tLang(
+        activeLang,
         `\n\nWEB SEARCH RESULTS (use these to answer the user's question):\n${searchContext}\n\nIMPORTANT: Base your answer on the search results above. Cite sources when relevant.\nAfter you finish the answer, add a short friendly note: "For advanced search, try Search mode in Wakti AI."`,
-        `\n\nنتائج البحث على الويب (استخدمها للإجابة على سؤال المستخدم):\n${searchContext}\n\nمهم: بني إجابتك على نتائج البحث أعلاه. اذكر المصادر عند الحاجة.\nبعد أن تنهي الإجابة، أضف ملاحظة ودية قصيرة: \"للبحث المتقدم، جرّب وضع البحث في Wakti AI.\"`
+        `\n\nنتائج البحث على الويب (استخدمها للإجابة على سؤال المستخدم):\n${searchContext}\n\nمهم: بني إجابتك على نتائج البحث أعلاه. اذكر المصادر عند الحاجة.\nبعد أن تنهي الإجابة، أضف ملاحظة ودية قصيرة: "للبحث المتقدم، جرّب وضع البحث في Wakti AI."`
       ) : '';
 
-      const waktiQuickRules = searchContext ? '' : t(
+      const waktiQuickRules = searchContext ? '' : tLang(
+        activeLang,
         `WAKTI quick rules (app questions):
 1) When asked "what is Wakti": answer friendly and mention Help & Guides has 3 tabs: Guides, my little brother Wakti Help Assistant, and Support.
 2) When asked "who made Wakti": say it was made by TMW (The Modern Web) in Doha, Qatar (tmw.qa).
@@ -716,14 +792,22 @@ ${memoryContext ? memoryContext : ''}`
 4) مهم - البحث: لا يمكنك تصفح الإنترنت في وضع المحادثة. إذا طلب المستخدم البحث، قل له: "لا أستطيع البحث في وضع المحادثة. اضغط على زر البحث في الأعلى، ثم اسألني مرة أخرى وسأبحث فعلاً." لا تتظاهر أبداً بأنك بحثت.`
       );
 
-      const memoryContext = buildMemoryContext(language);
+      const memoryContext = buildMemoryContext(activeLang);
+
+      // Build location context for weather/local queries
+      const loc = userLocationRef.current;
+      const locationContext = (loc?.city || loc?.country) ? tLang(
+        activeLang,
+        `\n📍 USER LOCATION: The user is currently in ${loc.city ? loc.city : ''}${loc.city && loc.country ? ', ' : ''}${loc.country || ''}. Use this for weather, local time, nearby places, or any location-related questions. Do NOT ask where they are - you already know.`,
+        `\n📍 موقع المستخدم: المستخدم حالياً في ${loc.city ? loc.city : ''}${loc.city && loc.country ? '، ' : ''}${loc.country || ''}. استخدم هذا للطقس أو الوقت المحلي أو الأماكن القريبة أو أي سؤال متعلق بالموقع. لا تسأل أين هو - أنت تعرف بالفعل.`
+      ) : '';
 
       let followUpContext = '';
       const history = conversationHistoryRef.current;
       if (history.length > 0) {
         const lastMsg = history[history.length - 1];
         const lastMsgText = lastMsg.text.length > 300 ? `${lastMsg.text.slice(0, 300)}...` : lastMsg.text;
-        
+
         let summaryOfPrevious = '';
         if (history.length > 1) {
           const previousMsgs = history.slice(Math.max(0, history.length - 6), history.length - 1);
@@ -733,16 +817,16 @@ ${memoryContext ? memoryContext : ''}`
           });
           summaryOfPrevious = summaryParts.join(' | ');
         }
-        
-        followUpContext = t(
-          `\n\nCONVERSATION MEMORY (use for context):
-Last message (${lastMsg.role}): "${lastMsgText}"${summaryOfPrevious ? `\nPrevious exchanges summary: ${summaryOfPrevious}` : ''}`,
-          `\n\nذاكرة المحادثة (للسياق):
-آخر رسالة (${lastMsg.role === 'user' ? 'المستخدم' : 'واكتي'}): "${lastMsgText}"${summaryOfPrevious ? `\nملخص المحادثات السابقة: ${summaryOfPrevious}` : ''}`
+
+        followUpContext = tLang(
+          activeLang,
+          `\n\nCONVERSATION MEMORY (use for context):\nLast message (${lastMsg.role}): "${lastMsgText}"${summaryOfPrevious ? `\nPrevious exchanges summary: ${summaryOfPrevious}` : ''}`,
+          `\n\nذاكرة المحادثة (للسياق):\nآخر رسالة (${lastMsg.role === 'user' ? 'المستخدم' : 'واكتي'}): "${lastMsgText}"${summaryOfPrevious ? `\nملخص المحادثات السابقة: ${summaryOfPrevious}` : ''}`
         );
       }
 
-      const refreshedInstructions = t(
+      const refreshedInstructions = tLang(
+        activeLang,
         `You are WAKTI, a smart voice assistant. ${personalTouch}
 
 Style rules (important):
@@ -751,7 +835,7 @@ Style rules (important):
 - Use bullet points for features/steps.
 - Don't ramble or repeat.
 
-${waktiQuickRules}${searchInstructions}${followUpContext}
+${waktiQuickRules}${searchInstructions}${locationContext}${followUpContext}
 
 ${personalTouchSection}
 
@@ -764,7 +848,7 @@ ${memoryContext ? memoryContext : ''}`,
 - استخدم نقاط عند ذكر ميزات أو خطوات.
 - لا تطوّل ولا تكرر.
 
-${waktiQuickRules}${searchInstructions}${followUpContext}
+${waktiQuickRules}${searchInstructions}${locationContext}${followUpContext}
 
 ${personalTouchSection}
 
@@ -773,16 +857,14 @@ ${memoryContext ? memoryContext : ''}`
 
       dcRef.current.send(JSON.stringify({
         type: 'session.update',
-        session: {
-          instructions: refreshedInstructions,
-        }
+        session: { instructions: refreshedInstructions }
       }));
     } catch (e) {
       console.warn('[Talk] Failed to inject instructions before response:', e);
     }
 
     dcRef.current.send(JSON.stringify({ type: 'response.create' }));
-  }, [buildMemoryContext, buildPersonalTouchSection, language, t]);
+  }, [buildMemoryContext, buildPersonalTouchSection, language, tLang]);
 
   // Stop recording and send to AI (defined first so startRecording can reference it)
   const stopRecording = useCallback(() => {
