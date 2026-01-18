@@ -165,9 +165,9 @@ export function DesktopSidebar() {
         transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
       />
       
-      <div className="flex flex-col h-full p-4 relative z-10">
+      <div className="flex flex-col h-full p-3 relative z-10">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4">
           <AnimatePresence>
             {!isCollapsed && (
               <motion.div
@@ -204,9 +204,9 @@ export function DesktopSidebar() {
           </Button>
         </div>
 
-        {/* Main Navigation (scrollable to prevent clipping on small heights) */}
-        <div className="flex-1 overflow-y-auto scrollbar-hide pb-4">
-          <motion.nav className="space-y-2" variants={navVariants} initial="hidden" animate="show">
+        {/* Main Navigation */}
+        <div className="flex-1 overflow-hidden pb-3">
+          <motion.nav className="space-y-1.5" variants={navVariants} initial="hidden" animate="show">
             {navItems.filter(i => i.path !== '/games').map((item) => {
               const isActive = location.pathname === item.path || 
                 (item.path === '/maw3d' && location.pathname.startsWith('/maw3d')) || 
@@ -265,7 +265,7 @@ export function DesktopSidebar() {
               return (
                 <motion.button
                   key={item.label}
-                  className={`w-full ${isCollapsed ? 'h-14 px-1' : 'h-12 px-3'} justify-start rounded-xl group ${
+                  className={`w-full ${isCollapsed ? 'h-12 px-1' : 'h-11 px-3'} justify-start rounded-xl group ${
                     isActive
                       ? `bg-white/10 dark:bg-white/5 shadow-lg backdrop-blur-sm ${getGlowColor(item.path)} border ${getBorderClass(item.path)}`
                       : "hover:bg-white/5 dark:hover:bg-white/[0.02]"

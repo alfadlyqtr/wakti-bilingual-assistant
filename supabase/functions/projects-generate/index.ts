@@ -661,10 +661,16 @@ async function callGeminiPlanMode(
     fileRelevanceScores[filePath] = score;
   }
   
-  // Sort by relevance and take top 5 most relevant files
+  // Sort by relevance and take DYNAMIC top-N files based on project size
+  // Small projects (≤10 files): include all
+  // Medium projects (11-30 files): top 15
+  // Large projects (>30 files): top 20
+  const dynamicTopN = fileCount <= 10 ? fileCount : (fileCount <= 30 ? 15 : 20);
+  console.log(`[Plan Mode] Dynamic context: ${dynamicTopN} files (project has ${fileCount})`);
+  
   const sortedFiles = Object.entries(fileRelevanceScores)
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
+    .slice(0, dynamicTopN)
     .map(([path]) => path);
   
   // Include content of relevant files only
@@ -2811,17 +2817,108 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
             console.log(`[Agent Mode] Got text response (no tools): ${textPart.text.substring(0, 100)}...`);
           }
           
-          // 🔒 HARDENED: Force tool usage for ALL requests on early iterations, not just keyword-matched edits
-          // Removed keyword dependency - now applies to ANY agent request
+          // 🚀 AUTO-SEARCH FALLBACK: If model skips tools on early iterations, WE run them automatically
+          // This makes the AI Coder "Cascade-like" - always searches before editing
           if (iteration <= 1 && toolCallsLog.length === 0) {
-            console.log(`[Agent Mode] 🔒 FORCING tool usage - iteration ${iteration} with no tools called`);
+            console.log(`[Agent Mode] 🚀 AUTO-SEARCH FALLBACK: Model skipped tools, running automatic search...`);
+            
+            // Step 1: Get suggested grep queries from intent anchors
+            const suggestedQueries = getSuggestedGrepQueries(intentAnchors);
+            
+            // Step 2: If no specific anchors, extract keywords from prompt
+            if (suggestedQueries.length === 0) {
+              const keywords = prompt.toLowerCase()
+                .split(/\s+/)
+                .filter(w => w.length > 3 && !['change', 'update', 'make', 'the', 'this', 'that', 'color', 'style'].includes(w));
+              if (keywords.length > 0) {
+                suggestedQueries.push(keywords[0]);
+              }
+            }
+            
+            // Step 3: Run automatic grep search
+            let autoSearchResults: Array<{ file: string; line: number; content: string }> = [];
+            let bestMatchFile: string | null = null;
+            let bestMatchContent: string | null = null;
+            
+            if (suggestedQueries.length > 0) {
+              const searchQuery = suggestedQueries[0];
+              console.log(`[Agent Mode] 🔍 Auto-grep for: "${searchQuery}"`);
+              
+              // Get all files from project for grep
+              const { data: allProjectFiles } = await supabase
+                .from('project_files')
+                .select('path, content')
+                .eq('project_id', projectId);
+              
+              if (allProjectFiles) {
+                const queryLower = searchQuery.toLowerCase();
+                for (const file of allProjectFiles) {
+                  const lines = (file.content || "").split('\n');
+                  for (let i = 0; i < lines.length; i++) {
+                    if (lines[i].toLowerCase().includes(queryLower)) {
+                      autoSearchResults.push({
+                        file: file.path,
+                        line: i + 1,
+                        content: lines[i].trim().substring(0, 200)
+                      });
+                    }
+                  }
+                }
+                
+                // Find best match file (most matches)
+                const fileCounts: Record<string, number> = {};
+                autoSearchResults.forEach(r => {
+                  fileCounts[r.file] = (fileCounts[r.file] || 0) + 1;
+                });
+                const sortedFiles = Object.entries(fileCounts).sort((a, b) => b[1] - a[1]);
+                if (sortedFiles.length > 0) {
+                  bestMatchFile = sortedFiles[0][0];
+                  // Read the best match file
+                  const matchedFile = allProjectFiles.find(f => f.path === bestMatchFile);
+                  if (matchedFile) {
+                    bestMatchContent = matchedFile.content;
+                    filesRead.add(bestMatchFile);
+                    fileContentCache.set(bestMatchFile, bestMatchContent);
+                    console.log(`[Agent Mode] 📖 Auto-read best match: ${bestMatchFile}`);
+                  }
+                }
+              }
+            }
+            
+            // Step 4: Inject auto-search results into conversation
+            let autoSearchContext = `\n\n🚀 AUTO-SEARCH RESULTS (I searched for you):\n`;
+            
+            if (autoSearchResults.length > 0) {
+              autoSearchContext += `Found ${autoSearchResults.length} matches for "${suggestedQueries[0]}":\n`;
+              autoSearchResults.slice(0, 10).forEach(r => {
+                autoSearchContext += `- ${r.file}:${r.line}: ${r.content.substring(0, 100)}\n`;
+              });
+              
+              if (bestMatchFile && bestMatchContent) {
+                autoSearchContext += `\n📄 BEST MATCH FILE (${bestMatchFile}):\n\`\`\`\n${bestMatchContent.substring(0, 3000)}\n\`\`\`\n`;
+                autoSearchContext += `\n⚠️ IMPORTANT: Use the EXACT code from above for your search_replace. Do NOT guess or modify the search string.`;
+              }
+            } else {
+              // No grep results - just list files
+              autoSearchContext += `No specific matches found. Here are the project files:\n${fileList}\n`;
+              autoSearchContext += `\nUse read_file to examine the most likely target file.`;
+            }
+            
             messages.push({
               role: "user",
               parts: [{
-                text: `⚠️ You MUST use tools before responding. Start by calling list_files to see the project structure, then grep_search to find relevant code, then read_file on the target file. Do NOT respond without using tools - this is a HARD REQUIREMENT!`
+                text: autoSearchContext + `\n\nNow proceed with the user's request using the information above. Use search_replace with EXACT code from the file content shown.`
               }]
             });
-            continue; // Don't break - continue to next iteration
+            
+            // Log the auto-search as a tool call
+            toolCallsLog.push({ 
+              tool: 'auto_search', 
+              args: { query: suggestedQueries[0] || 'files' }, 
+              result: { matches: autoSearchResults.length, bestFile: bestMatchFile } 
+            });
+            
+            continue; // Continue to next iteration with the injected context
           }
           
           break;
@@ -2887,15 +2984,59 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
               console.log(`[Agent Mode] VIOLATION: Edit without read - ${targetPath}`);
             }
             
-            // 🔒 HALLUCINATION CHECK: Validate search string was actually seen in read_file
-            if (name === 'search_replace' && args?.search && fileContentCache.has(targetPath)) {
-              const cachedContent = fileContentCache.get(targetPath)!;
+            // 🚀 SOFT VALIDATION REDIRECT: If search string not in target file, find the right file automatically
+            if (name === 'search_replace' && args?.search && targetPath) {
               const searchString = args.search as string;
-              if (!cachedContent.includes(searchString)) {
-                console.error(`[Agent Mode] 🚫 HALLUCINATION DETECTED: search_replace search string NOT found in cached read_file content!`);
-                console.error(`[Agent Mode] Search string (first 100 chars): "${searchString.substring(0, 100)}..."`);
-                console.error(`[Agent Mode] This suggests the agent is guessing/hallucinating the code instead of copying from read_file`);
-                // Add warning to result but don't block (the tool itself will fail if string not found)
+              
+              // Check if we have cached content for this file
+              let targetContent = fileContentCache.get(targetPath);
+              
+              // If not cached, try to fetch it
+              if (!targetContent) {
+                const { data: fileData } = await supabase
+                  .from('project_files')
+                  .select('content')
+                  .eq('project_id', projectId)
+                  .eq('path', targetPath)
+                  .maybeSingle();
+                if (fileData?.content) {
+                  targetContent = fileData.content;
+                  fileContentCache.set(targetPath, targetContent);
+                }
+              }
+              
+              // If search string NOT in target file, find the correct file
+              if (targetContent && !targetContent.includes(searchString)) {
+                console.warn(`[Agent Mode] 🔄 SOFT REDIRECT: Search string not found in ${targetPath}, searching all files...`);
+                
+                // Search all project files for the search string
+                const { data: allFiles } = await supabase
+                  .from('project_files')
+                  .select('path, content')
+                  .eq('project_id', projectId);
+                
+                let correctFile: string | null = null;
+                if (allFiles) {
+                  for (const file of allFiles) {
+                    if (file.content && file.content.includes(searchString)) {
+                      correctFile = file.path;
+                      console.log(`[Agent Mode] 🎯 Found correct file: ${correctFile}`);
+                      break;
+                    }
+                  }
+                }
+                
+                if (correctFile && correctFile !== targetPath) {
+                  // REDIRECT: Update the args to use the correct file
+                  console.log(`[Agent Mode] 🔄 REDIRECTING edit from ${targetPath} to ${correctFile}`);
+                  args.path = correctFile;
+                  // Update tracking
+                  filesRead.add(correctFile);
+                  resultWarnings.push(`Auto-redirected edit from ${targetPath} to ${correctFile} (search string found there)`);
+                } else if (!correctFile) {
+                  console.error(`[Agent Mode] 🚫 Search string not found in ANY file - edit will likely fail`);
+                  resultWarnings.push(`Warning: Search string not found in any project file`);
+                }
               }
             }
           }

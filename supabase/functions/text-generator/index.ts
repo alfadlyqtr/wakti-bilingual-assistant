@@ -138,7 +138,7 @@ serve(async (req) => {
       requestBody = {};
     }
 
-    const { prompt, mode, language, languageVariant, messageAnalysis, modelPreference, temperature, contentType, length, replyLength, tone, register, image, extractTarget } = requestBody;
+    const { prompt, mode, language, languageVariant, messageAnalysis, modelPreference, temperature, contentType, length, replyLength, tone, register, image, extractTarget, webSearch } = requestBody;
 
     console.log("🎯 Request details:", { 
       promptLength: prompt?.length || 0, 
@@ -150,7 +150,8 @@ serve(async (req) => {
       replyLength,
       tone,
       hasImage: !!image,
-      extractTarget
+      extractTarget,
+      webSearch: !!webSearch
     });
 
     // ============================================
@@ -384,7 +385,132 @@ Return ONLY the JSON, no additional text.`;
 
     let generatedText: string | undefined;
 
-    // Primary: OpenAI (gpt-4.1-mini)
+    // If webSearch is enabled, use OpenAI Responses API with web_search tool
+    if (webSearch && OPENAI_API_KEY) {
+      try {
+        console.log("🎯 Text Generator: Web Search enabled - using OpenAI Responses API");
+        const startWebSearch = Date.now();
+        
+        // Build the enhanced prompt that instructs to ADD facts, not replace content
+        // This prompt is designed to produce high-quality, fact-rich content with real data
+        const webSearchPrompt = language === 'ar'
+          ? `أنت كاتب محترف. المستخدم يريد محتوى عالي الجودة عن الموضوع التالي.
+
+**تعليمات مهمة:**
+1. ابحث في الويب عن أحدث الحقائق والإحصائيات والأرقام الحقيقية
+2. أضف تواريخ محددة وأرقام دقيقة (مثل: "في 2024، بلغ عدد السياح 5.6 مليون")
+3. اذكر أسماء حقيقية للأماكن والمنظمات والأحداث
+4. اكتب بأسلوب واضح ومنظم مع فقرات متماسكة
+5. لا تحذف أي شيء من محتوى المستخدم - فقط عززه بالحقائق والمصادر
+6. اجعل المحتوى غنياً بالمعلومات ومفيداً للقارئ
+
+الموضوع:
+${prompt}`
+          : `You are a professional writer. The user wants high-quality content about the following topic.
+
+**Critical Instructions:**
+1. Search the web for the LATEST facts, statistics, and real data
+2. Include SPECIFIC numbers, dates, and figures (e.g., "In 2024, tourism reached 5.6 million visitors")
+3. Mention REAL names of places, organizations, events, and people where relevant
+4. Write in a clear, well-organized style with coherent paragraphs
+5. Do NOT remove or change the user's original content - only ENHANCE it with facts and sources
+6. Make the content information-rich and valuable to the reader
+7. If writing an essay or report, include a strong introduction, detailed body paragraphs, and a clear conclusion
+
+Topic:
+${prompt}`;
+
+        const responsesApiBody = {
+          model: 'gpt-4.1-mini',
+          input: webSearchPrompt,
+          tools: [{ type: 'web_search' }],
+          instructions: systemPrompt,
+          temperature: genParams.temperature,
+        };
+
+        const webSearchResponse = await fetch("https://api.openai.com/v1/responses", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${OPENAI_API_KEY}`,
+          },
+          body: JSON.stringify(responsesApiBody),
+        });
+
+        const webSearchDuration = Date.now() - startWebSearch;
+        console.log(`🎯 Text Generator: Web Search request completed in ${webSearchDuration}ms with status ${webSearchResponse.status}`);
+
+        if (webSearchResponse.ok) {
+          const webSearchResult = await webSearchResponse.json();
+          console.log("🎯 Text Generator: Web Search raw response keys:", Object.keys(webSearchResult));
+          
+          // Extract the output text from Responses API
+          const outputText = webSearchResult.output_text || webSearchResult.output?.[0]?.content?.[0]?.text || '';
+          
+          // Extract sources/citations from the response
+          // OpenAI Responses API returns citations in output array with type "web_search_call"
+          const sources: Array<{ title: string; url: string }> = [];
+          if (Array.isArray(webSearchResult.output)) {
+            for (const item of webSearchResult.output) {
+              // Look for web_search_call results which contain the search results
+              if (item.type === 'web_search_call' && Array.isArray(item.search_results)) {
+                for (const result of item.search_results) {
+                  if (result.url && result.title) {
+                    sources.push({ title: result.title, url: result.url });
+                  }
+                }
+              }
+              // Also check for message content with annotations (inline citations)
+              if (item.type === 'message' && Array.isArray(item.content)) {
+                for (const contentItem of item.content) {
+                  if (contentItem.type === 'output_text' && Array.isArray(contentItem.annotations)) {
+                    for (const annotation of contentItem.annotations) {
+                      if (annotation.type === 'url_citation' && annotation.url && annotation.title) {
+                        // Avoid duplicates
+                        if (!sources.some(s => s.url === annotation.url)) {
+                          sources.push({ title: annotation.title, url: annotation.url });
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+          
+          console.log("🎯 Text Generator: Web Search extracted sources:", sources.length);
+          
+          if (outputText) {
+            generatedText = outputText;
+            console.log("🎯 Text Generator: Web Search generated text, length:", generatedText?.length || 0);
+
+            return new Response(
+              JSON.stringify({
+                success: true,
+                generatedText,
+                mode,
+                language,
+                modelUsed: 'gpt-4.1-mini (web_search)',
+                temperatureUsed: genParams.temperature,
+                contentType: contentType || null,
+                webSearchUsed: true,
+                webSearchSources: sources
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          } else {
+            console.warn("🎯 Text Generator: Web Search returned no content, falling back to standard generation");
+          }
+        } else {
+          const errTxt = await webSearchResponse.text();
+          console.warn("🎯 Text Generator: Web Search API error, falling back:", { status: webSearchResponse.status, error: errTxt });
+        }
+      } catch (e) {
+        console.warn("🎯 Text Generator: Web Search request threw error, falling back:", e);
+      }
+    }
+
+    // Primary: OpenAI (gpt-4.1-mini) - standard generation without web search
     if (OPENAI_API_KEY && !generatedText) {
       try {
         console.log("🎯 Text Generator: Attempting OpenAI", genParams.model);

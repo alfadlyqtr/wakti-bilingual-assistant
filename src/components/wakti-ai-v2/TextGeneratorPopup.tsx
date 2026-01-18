@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { ImagePlus, Loader2 } from 'lucide-react';
+import { ImagePlus, Loader2, Globe } from 'lucide-react';
 import { callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
 import DiagramsTab from './DiagramsTab';
@@ -183,6 +183,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   const [register, setRegister] = useState<RegisterKey>('auto');
   const [languageVariant, setLanguageVariant] = useState<LanguageVariantKey>('auto');
   const [emojis, setEmojis] = useState<EmojisKey>('auto');
+  const [useWebSearch, setUseWebSearch] = useState(false);
 
   // Reply fields
   const [keyPoints, setKeyPoints] = useState('');
@@ -195,6 +196,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [generatedText, setGeneratedText] = useState('');
+  const [webSearchSources, setWebSearchSources] = useState<Array<{ title: string; url: string }>>([]);
   const [copied, setCopied] = useState(false);
   const [copyMenuOpen, setCopyMenuOpen] = useState(false);
 
@@ -476,6 +478,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         contentType: modeForRequest === 'compose' ? (contentType === 'auto' ? undefined : contentType) : undefined,
         length: modeForRequest === 'compose' ? effectiveLength(length) : undefined,
         replyLength: modeForRequest === 'reply' ? effectiveLength(replyLength) : undefined,
+        webSearch: useWebSearch,
       };
 
       const resp = await callEdgeFunctionWithRetry<any>('text-generator', {
@@ -486,6 +489,8 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
 
       if (resp?.success && resp?.generatedText) {
         setGeneratedText(resp.generatedText);
+        // Capture web search sources if available
+        setWebSearchSources(Array.isArray(resp.webSearchSources) ? resp.webSearchSources : []);
         setActiveTab('generated');
         onTextGenerated(resp.generatedText, body.mode);
 
@@ -771,7 +776,30 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 </div>
               </div>
 
-              {/* Row 3 removed (Register was duplicated) */}
+              {/* Web Search Toggle */}
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setUseWebSearch(!useWebSearch)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${
+                    useWebSearch 
+                      ? 'bg-blue-500/10 border-blue-500/40 text-blue-600 dark:text-blue-400' 
+                      : 'border-border hover:bg-muted'
+                  }`}
+                  title={language === 'ar' ? 'تفعيل البحث على الويب لإضافة حقائق ومصادر' : 'Enable web search to add facts and sources'}
+                >
+                  <Globe className={`w-4 h-4 ${useWebSearch ? 'text-blue-500' : ''}`} />
+                  <span className="text-sm font-medium">{language === 'ar' ? 'بحث الويب' : 'Web Search'}</span>
+                  <span className={`text-xs px-1.5 py-0.5 rounded ${useWebSearch ? 'bg-blue-500 text-white' : 'bg-muted text-muted-foreground'}`}>
+                    {useWebSearch ? (language === 'ar' ? 'مفعّل' : 'ON') : (language === 'ar' ? 'معطّل' : 'OFF')}
+                  </span>
+                </button>
+                {useWebSearch && (
+                  <span className="text-xs text-muted-foreground">
+                    {language === 'ar' ? 'سيتم إضافة حقائق ومصادر من الويب' : 'Facts and sources will be added from the web'}
+                  </span>
+                )}
+              </div>
             </div>
           )}
 
@@ -993,6 +1021,32 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                   title={language === 'ar' ? 'النص المُولد' : 'Generated text'}
                 />
               </div>
+              
+              {/* Web Search Sources */}
+              {webSearchSources.length > 0 && (
+                <details className="rounded-xl border border-blue-500/30 bg-blue-500/5 dark:bg-blue-500/10 p-3">
+                  <summary className="cursor-pointer text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors flex items-center gap-2">
+                    <Globe className="w-4 h-4" />
+                    {language === 'ar' ? `المصادر (${webSearchSources.length})` : `Sources (${webSearchSources.length})`}
+                  </summary>
+                  <ul className="mt-3 space-y-2">
+                    {webSearchSources.slice(0, 10).map((s, idx) => (
+                      <li key={idx} className="flex items-start gap-2 min-w-0">
+                        <span className="text-blue-500 text-xs mt-1">•</span>
+                        <a
+                          href={s.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 dark:text-blue-400 hover:underline text-xs break-words"
+                        >
+                          {s.title || s.url}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+              
               {/* Cached texts: show up to 3 previous results */}
               {cachedTexts.length > 0 && (
                 <div className="space-y-2">

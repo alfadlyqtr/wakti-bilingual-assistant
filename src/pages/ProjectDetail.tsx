@@ -5986,7 +5986,7 @@ ${fixInstructions}
                             aria-label={isRTL ? 'رفع صور أو PDF' : 'Upload images or PDF'}
                           />
                           
-                          {/* AMP Button - Amplify/Enhance prompt */}
+                          {/* AMP Button - Amplify/Enhance prompt with project context */}
                           <button
                             type="button"
                             disabled={!chatInput.trim() || isAmplifying || aiEditing}
@@ -5994,8 +5994,13 @@ ${fixInstructions}
                               if (!chatInput.trim()) return;
                               setIsAmplifying(true);
                               try {
+                                // Send files to AMP so it can find LIKELY FILES
                                 const response = await supabase.functions.invoke('projects-amp-prompt', {
-                                  body: { prompt: chatInput, mode: leftPanelMode }
+                                  body: { 
+                                    prompt: chatInput, 
+                                    mode: leftPanelMode,
+                                    files: leftPanelMode === 'code' ? generatedFiles : undefined
+                                  }
                                 });
                                 if (response.data?.amplified) {
                                   setChatInput(response.data.amplified);
