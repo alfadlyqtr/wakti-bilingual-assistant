@@ -912,14 +912,14 @@ const MyWarranty: React.FC = () => {
       </div>
 
       {/* Beautiful Input Area */}
-      <div className="shrink-0 px-4 py-4 border-t border-white/20 bg-gradient-to-t from-background to-transparent">
-        <div className="flex gap-3 items-end p-3 rounded-2xl border border-white/20 bg-white/5">
+      <div className="shrink-0 px-4 py-4 border-t-2 border-border bg-gradient-to-t from-background to-transparent">
+        <div className="flex gap-3 items-end p-3 rounded-2xl border-2 border-border bg-muted/30">
           <div className="flex-1 relative">
             <Textarea
               value={askQuestion}
               onChange={(e) => setAskQuestion(e.target.value)}
               placeholder={t.askQuestion}
-              className="min-h-[52px] max-h-[120px] bg-transparent border-0 rounded-xl resize-none pr-4 py-3 focus:ring-0 focus:border-0 transition-all"
+              className="min-h-[52px] max-h-[120px] bg-background border-2 border-border rounded-xl resize-none pr-4 py-3 focus:border-blue-500 focus:ring-0 transition-all"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
