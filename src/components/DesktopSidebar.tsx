@@ -19,8 +19,8 @@ import {
   LucideIcon,
   Gamepad2,
   Music,
-  Shield,
-  Code2
+  Code2,
+  FolderOpen
 } from "lucide-react";
 
 type IconComponent = React.ComponentType<{ 
@@ -57,7 +57,7 @@ export function DesktopSidebar() {
     { icon: Sparkles, label: "wakti_ai", path: "/wakti-ai" },
     { icon: HeartPulse, label: "vitality", path: "/fitness" },
     { icon: AudioLines as unknown as IconComponent, label: "tasjeel", path: "/tasjeel" },
-    { icon: Shield as unknown as IconComponent, label: "my_warranty", path: "/my-warranty" },
+    { icon: FolderOpen as unknown as IconComponent, label: "my_warranty", path: "/my-warranty" },
     { icon: Music as unknown as IconComponent, label: "music", path: "/music" },
     { icon: Code2 as unknown as IconComponent, label: "projects", path: "/projects" },
     { icon: Gamepad2 as unknown as IconComponent, label: "games", path: "/games" },

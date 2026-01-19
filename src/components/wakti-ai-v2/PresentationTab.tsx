@@ -1127,6 +1127,9 @@ const PresentationTab: React.FC = () => {
   const [researchModeType, setResearchModeType] = useState<'global' | 'per_slide'>('global');
   const [inputMode, setInputMode] = useState<InputMode>('verbatim');
 
+  // Presentation language (separate from app UI language)
+  const [presentationLanguage, setPresentationLanguage] = useState<'en' | 'ar'>(language as 'en' | 'ar');
+
   const [aiGenerateImagesByMode, setAiGenerateImagesByMode] = useState<InputModeFlags>({
     verbatim: false,
     polish: false,
@@ -1406,7 +1409,7 @@ const PresentationTab: React.FC = () => {
           slideCount,
           researchMode: effectiveResearchMode,
           inputMode,
-          language,
+          language: presentationLanguage,
         },
         maxRetries: 2,
         retryDelay: 1000,
@@ -1424,7 +1427,7 @@ const PresentationTab: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [effectiveResearchMode, inputMode, language, selectedTheme, slideCount, topic]);
+  }, [effectiveResearchMode, inputMode, presentationLanguage, selectedTheme, slideCount, topic]);
 
   const handleGenerateOutline = useCallback(async () => {
     if (!brief) return;
@@ -1444,7 +1447,7 @@ const PresentationTab: React.FC = () => {
           brief,
           slideCount: effectiveSlideCount,
           theme: selectedTheme,
-          language,
+          language: presentationLanguage,
           inputMode,
           originalText: topic,
           researchMode: effectiveResearchMode,
@@ -1465,7 +1468,7 @@ const PresentationTab: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [brief, effectiveResearchMode, inputMode, language, researchModeType, selectedTheme, slideCount, topic]);
+  }, [brief, effectiveResearchMode, inputMode, presentationLanguage, researchModeType, selectedTheme, slideCount, topic]);
 
   const handleGenerateSlides = useCallback(async () => {
     if (outline.length === 0) return;
@@ -1493,7 +1496,7 @@ const PresentationTab: React.FC = () => {
             tone: brief.tone,
           } : null,
           theme: selectedTheme,
-          language,
+          language: presentationLanguage,
           generateImages: shouldGenerateImages,
         },
         maxRetries: 2,
@@ -1572,7 +1575,7 @@ const PresentationTab: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [outline, selectedTheme, brief, language, applyPerSlideResearchBlanks, effectiveResearchMode, researchModeType, slideCount, aiGenerateImagesByMode, inputMode]);
+  }, [outline, selectedTheme, brief, presentationLanguage, applyPerSlideResearchBlanks, effectiveResearchMode, researchModeType, slideCount, aiGenerateImagesByMode, inputMode]);
 
   // Regenerate image for current slide using AI (simple auto-only)
   const handleRegenerateImage = useCallback(async () => {
@@ -1692,6 +1695,15 @@ const PresentationTab: React.FC = () => {
 
       toast.dismiss(toastId);
       toast.success(language === 'ar' ? `تم حفظ ${filename}` : `Saved ${filename}`);
+      // Help users understand how to open PPTX files
+      setTimeout(() => {
+        toast.info(
+          language === 'ar' 
+            ? '💡 افتح الملف في PowerPoint أو Google Slides — لا تقم بفك الضغط'
+            : '💡 Open this file in PowerPoint or Google Slides — don\'t extract it',
+          { duration: 6000 }
+        );
+      }, 1000);
     } catch (err) {
       console.error('PPTX export error:', err);
       toast.dismiss(toastId);
@@ -2798,6 +2810,45 @@ const PresentationTab: React.FC = () => {
           />
         </div>
 
+        {/* Presentation Language Selection */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Globe className="w-4 h-4 text-primary" />
+            <label className="text-sm font-semibold">
+              {language === 'ar' ? 'لغة العرض التقديمي' : 'Presentation Language'}
+            </label>
+          </div>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setPresentationLanguage('en')}
+              className={`flex-1 px-4 py-3 rounded-xl border text-sm font-medium transition-all ${
+                presentationLanguage === 'en'
+                  ? 'border-primary bg-primary/10 text-primary shadow-colored'
+                  : 'border-border bg-background text-muted-foreground hover:border-primary/40'
+              }`}
+            >
+              🇬🇧 English
+            </button>
+            <button
+              type="button"
+              onClick={() => setPresentationLanguage('ar')}
+              className={`flex-1 px-4 py-3 rounded-xl border text-sm font-medium transition-all ${
+                presentationLanguage === 'ar'
+                  ? 'border-primary bg-primary/10 text-primary shadow-colored'
+                  : 'border-border bg-background text-muted-foreground hover:border-primary/40'
+              }`}
+            >
+              🇸🇦 العربية
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {language === 'ar' 
+              ? 'اختر اللغة التي سيتم إنشاء محتوى العرض التقديمي بها'
+              : 'Choose the language for your presentation content'}
+          </p>
+        </div>
+
         {/* Input Mode Selection - Enhanced Wakti Style */}
         <div className="space-y-3">
           <div className="flex items-center gap-2 mb-1">
@@ -2810,6 +2861,7 @@ const PresentationTab: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {INPUT_MODES.map((mode) => {
               const isSelected = inputMode === mode.key;
+              const isModeActive = isSelected;
               const ModeIcon = mode.key === 'verbatim' ? Type 
                 : mode.key === 'polish' ? Wand2 
                 : mode.key === 'topic_only' ? Lightbulb 
@@ -2835,15 +2887,6 @@ const PresentationTab: React.FC = () => {
                     isSelected ? 'opacity-100' : 'group-hover:opacity-100'
                   }`} />
 
-                  {/* Selection indicator */}
-                  {isSelected && (
-                    <div className="absolute top-3 right-3">
-                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-colored">
-                        <Check className="w-3 h-3 text-white" />
-                      </div>
-                    </div>
-                  )}
-                  
                   {/* Mode header */}
                   <div className="flex items-start gap-3 mb-3">
                     <div className={`p-2 rounded-lg ${
@@ -2863,6 +2906,18 @@ const PresentationTab: React.FC = () => {
                         {mode.description[language]}
                       </p>
                     </div>
+                    <span
+                      className={`ml-auto inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold border shadow-sm ${
+                        isSelected
+                          ? 'border-primary/60 bg-gradient-to-r from-primary/20 via-primary/10 to-transparent text-primary'
+                          : 'border-border/60 bg-muted/50 text-muted-foreground'
+                      }`}
+                    >
+                      <span className={`h-1.5 w-1.5 rounded-full ${isSelected ? 'bg-primary' : 'bg-muted-foreground/60'}`} />
+                      {isSelected
+                        ? (language === 'ar' ? 'محدد' : 'Selected')
+                        : (language === 'ar' ? 'اختر' : 'Select')}
+                    </span>
                   </div>
 
                   {/* Divider */}
@@ -2873,8 +2928,8 @@ const PresentationTab: React.FC = () => {
                     className={`flex items-center justify-between gap-2 p-2.5 rounded-xl transition-colors border ${
                       isSelected
                         ? 'bg-background/60 border-primary/15 hover:bg-background/75'
-                        : 'bg-muted/40 border-border/40 hover:bg-muted/60'
-                    }`}
+                        : 'bg-muted/40 border-border/40'
+                    } ${isModeActive ? '' : 'opacity-60 cursor-not-allowed'}`}
                     onClick={(e) => e.stopPropagation()}
                   >
                     <div className="flex items-center gap-2">
@@ -2887,7 +2942,9 @@ const PresentationTab: React.FC = () => {
                     </div>
                     <Switch
                       checked={!!aiGenerateImagesByMode[mode.key]}
+                      disabled={!isModeActive}
                       onCheckedChange={() => {
+                        if (!isModeActive) return;
                         setAiGenerateImagesByMode((prev) => ({
                           ...prev,
                           [mode.key]: !prev[mode.key],
@@ -2903,8 +2960,8 @@ const PresentationTab: React.FC = () => {
                       className={`mt-2 flex items-center justify-between gap-2 p-2.5 rounded-xl transition-colors border ${
                         isSelected
                           ? 'bg-background/60 border-primary/15 hover:bg-background/75'
-                          : 'bg-muted/40 border-border/40 hover:bg-muted/60'
-                      }`}
+                          : 'bg-muted/40 border-border/40'
+                      } ${isModeActive ? '' : 'opacity-60 cursor-not-allowed'}`}
                       onClick={(e) => e.stopPropagation()}
                     >
                       <div className="flex items-center gap-2">
@@ -2917,7 +2974,9 @@ const PresentationTab: React.FC = () => {
                       </div>
                       <Switch
                         checked={researchMode}
+                        disabled={!isModeActive}
                         onCheckedChange={(checked) => {
+                          if (!isModeActive) return;
                           setResearchMode(checked);
                           if (!checked) setResearchModeType('global');
                         }}
@@ -2928,7 +2987,7 @@ const PresentationTab: React.FC = () => {
 
                   {/* Research mode options */}
                   {mode.key === 'topic_only' && researchMode && (
-                    <div className="mt-2 p-2.5 rounded-xl bg-gradient-to-br from-primary/10 via-background/70 to-background border border-primary/20 shadow-soft">
+                    <div className={`mt-2 p-2.5 rounded-xl bg-gradient-to-br from-primary/10 via-background/70 to-background border border-primary/20 shadow-soft ${isModeActive ? '' : 'opacity-60 pointer-events-none'}`}>
                       <div className="flex items-center gap-3 text-xs">
                         <label 
                           className="flex items-center gap-1.5 cursor-pointer"

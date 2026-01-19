@@ -266,6 +266,13 @@ interface RequestBody {
   uploadedAssets?: UploadedAsset[];
   backendContext?: BackendContext;
   debugContext?: DebugContext;  // NEW: Debug context for error-aware editing
+  fixerMode?: boolean;  // NEW: Use Claude Opus 4 as "The Fixer" for final auto-fix attempt
+  fixerContext?: {  // NEW: Extra context for The Fixer
+    errorMessage: string;
+    previousAttempts: number;
+    recentEdits?: string[];  // Files that were recently edited
+    chatHistory?: string;  // Recent chat context
+  };
 }
 
 type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
@@ -1915,6 +1922,157 @@ async function callGPT4oMini(systemPrompt: string, userPrompt: string): Promise<
 // REMOVED: Old patch-based editing system
 // The new system uses FULL FILE REWRITES only via callGeminiFullRewriteEdit
 
+// ============================================================================
+// THE FIXER - Claude Opus 4 for final auto-fix attempt
+// ============================================================================
+// When Gemini fails 3 times, The Fixer gets one shot with full context
+// Uses Claude claude-sonnet-4-5-20250929 (best coding model) with streaming
+// ============================================================================
+
+const FIXER_SYSTEM_PROMPT = `You are THE FIXER - an elite debugging AI called in when other attempts have failed.
+
+## YOUR MISSION
+Previous auto-fix attempts (using a weaker model) have FAILED. You are the last resort before the user sees a recovery screen. You MUST fix this error.
+
+## YOUR APPROACH
+1. **UNDERSTAND** - Read the error carefully. What is the ROOT CAUSE?
+2. **INVESTIGATE** - Use tools to read the broken file(s) and understand the current state
+3. **DIAGNOSE** - Why did previous fixes fail? What did they miss?
+4. **FIX** - Apply a CORRECT fix using search_replace
+5. **VERIFY** - Confirm the fix is syntactically correct
+
+## CRITICAL RULES
+- You have ONE SHOT. Make it count.
+- Read the file BEFORE editing. Copy EXACT code for search_replace.
+- Fix the ROOT CAUSE, not symptoms.
+- For syntax errors: check brackets, braces, JSX tags, imports.
+- For undefined errors: add missing imports or definitions.
+- NEVER guess. ALWAYS read first.
+
+## TOOLS AVAILABLE
+- grep_search: Find code in files
+- read_file: Read file contents
+- list_files: See project structure
+- search_replace: Edit existing code
+- task_complete: Call when done with summary
+
+## OUTPUT
+After fixing, call task_complete with:
+- What was broken
+- What you fixed
+- Why previous attempts failed`;
+
+async function callClaudeOpus4Fixer(
+  systemPrompt: string, 
+  userPrompt: string,
+  tools: any[]
+): Promise<{ content: string; toolCalls?: any[] }> {
+  const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY missing");
+
+  console.log(`[THE FIXER] Claude claude-sonnet-4-5-20250929 activated - Final auto-fix attempt`);
+
+  // Convert Gemini-style tools to Claude format
+  const claudeTools = tools.map(tool => ({
+    name: tool.name,
+    description: tool.description,
+    input_schema: {
+      type: "object",
+      properties: tool.parameters?.properties || {},
+      required: tool.parameters?.required || []
+    }
+  }));
+
+  const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 
+      'x-api-key': ANTHROPIC_API_KEY, 
+      'anthropic-version': '2023-06-01', 
+      'content-type': 'application/json' 
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-5-20250929",
+      max_tokens: 16384,
+      stream: true,
+      system: systemPrompt,
+      tools: claudeTools,
+      messages: [{ role: "user", content: userPrompt }],
+    }),
+  });
+
+  if (!anthropicResponse.ok) {
+    const errText = await anthropicResponse.text();
+    console.error(`[THE FIXER] HTTP ${anthropicResponse.status}: ${errText}`);
+    throw new Error(`Claude Fixer API error: ${anthropicResponse.status}`);
+  }
+
+  // Read streaming response
+  const reader = anthropicResponse.body?.getReader();
+  if (!reader) throw new Error("No response body from Claude Fixer");
+
+  const decoder = new TextDecoder();
+  let fullContent = "";
+  let toolCalls: any[] = [];
+  let currentToolUse: any = null;
+  let toolInputJson = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    const chunk = decoder.decode(value, { stream: true });
+    const lines = chunk.split('\n');
+
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        const jsonStr = line.slice(6).trim();
+        if (jsonStr === '[DONE]') continue;
+        try {
+          const event = JSON.parse(jsonStr);
+          
+          // Handle text content
+          if (event.type === 'content_block_delta' && event.delta?.text) {
+            fullContent += event.delta.text;
+          }
+          
+          // Handle tool use start
+          if (event.type === 'content_block_start' && event.content_block?.type === 'tool_use') {
+            currentToolUse = {
+              id: event.content_block.id,
+              name: event.content_block.name,
+              input: {}
+            };
+            toolInputJson = "";
+          }
+          
+          // Handle tool input delta
+          if (event.type === 'content_block_delta' && event.delta?.partial_json) {
+            toolInputJson += event.delta.partial_json;
+          }
+          
+          // Handle tool use end
+          if (event.type === 'content_block_stop' && currentToolUse) {
+            try {
+              currentToolUse.input = JSON.parse(toolInputJson);
+            } catch {
+              currentToolUse.input = {};
+            }
+            toolCalls.push(currentToolUse);
+            currentToolUse = null;
+            toolInputJson = "";
+          }
+        } catch {
+          // Skip malformed JSON
+        }
+      }
+    }
+  }
+
+  console.log(`[THE FIXER] Response complete. Content: ${fullContent.length} chars, Tool calls: ${toolCalls.length}`);
+
+  return { content: fullContent, toolCalls: toolCalls.length > 0 ? toolCalls : undefined };
+}
+
 // Claude 3.7 Sonnet with STREAMING to avoid 504 gateway timeout
 async function callClaudeStreaming(systemPrompt: string, userPrompt: string, images: ImageAttachment[] | undefined): Promise<string> {
   const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
@@ -2453,6 +2611,157 @@ ${filesStr}`;
       }
       
       await assertProjectOwnership(supabase, projectId, userId);
+      
+      // ========================================================================
+      // THE FIXER MODE: Claude Opus 4 for final auto-fix attempt (attempt #4)
+      // ========================================================================
+      if (body.fixerMode && body.fixerContext) {
+        console.log(`[THE FIXER] 🔧 Fixer Mode activated - Claude claude-sonnet-4-5-20250929 taking over`);
+        console.log(`[THE FIXER] Error: ${body.fixerContext.errorMessage.substring(0, 200)}...`);
+        console.log(`[THE FIXER] Previous attempts: ${body.fixerContext.previousAttempts}`);
+        
+        // Build Fixer context with all available information
+        const fixerUserPrompt = `🔧 THE FIXER - FINAL AUTO-FIX ATTEMPT
+
+## ERROR TO FIX:
+\`\`\`
+${body.fixerContext.errorMessage}
+\`\`\`
+
+## CONTEXT:
+- Previous auto-fix attempts: ${body.fixerContext.previousAttempts} (all failed)
+- You are the LAST RESORT before showing recovery UI to the user
+${body.fixerContext.recentEdits?.length ? `- Recently edited files: ${body.fixerContext.recentEdits.join(', ')}` : ''}
+${body.fixerContext.chatHistory ? `\n## RECENT CHAT HISTORY:\n${body.fixerContext.chatHistory}` : ''}
+
+## YOUR MISSION:
+1. Use read_file to see the CURRENT state of the broken file(s)
+2. Understand WHY previous fixes failed
+3. Apply a CORRECT fix using search_replace
+4. Call task_complete when done
+
+## PROJECT FILES:
+${Object.keys(body.currentFiles || {}).join('\n') || 'Use list_files to discover files'}
+
+REMEMBER: You have ONE SHOT. Read first, then fix correctly.`;
+
+        try {
+          // Get tools config for Claude
+          const geminiTools = getGeminiToolsConfig();
+          const toolsArray = geminiTools.functionDeclarations || [];
+          
+          // Run The Fixer with tool calling loop
+          let fixerMessages: Array<{ role: string; content: any }> = [
+            { role: "user", content: fixerUserPrompt }
+          ];
+          let fixerTaskComplete: { summary: string; filesChanged: string[] } | null = null;
+          const fixerToolCallsLog: Array<{ tool: string; args: any; result: any }> = [];
+          const fixerMaxIterations = 6; // Fixer gets 6 iterations max
+          
+          for (let fixerIter = 0; fixerIter < fixerMaxIterations; fixerIter++) {
+            console.log(`[THE FIXER] Iteration ${fixerIter + 1}/${fixerMaxIterations}`);
+            
+            const fixerResponse = await callClaudeOpus4Fixer(
+              FIXER_SYSTEM_PROMPT,
+              fixerMessages.map(m => m.content).join('\n\n'),
+              toolsArray
+            );
+            
+            // Handle tool calls
+            if (fixerResponse.toolCalls && fixerResponse.toolCalls.length > 0) {
+              const toolResults: string[] = [];
+              
+              for (const toolCall of fixerResponse.toolCalls) {
+                console.log(`[THE FIXER] Tool call: ${toolCall.name}`);
+                
+                // Execute the tool - match executeToolCall signature
+                const toolCallObj = {
+                  name: toolCall.name,
+                  arguments: toolCall.input
+                };
+                const fixerDebugContext: AgentDebugContext = {
+                  errors: [],
+                  networkErrors: [],
+                  consoleLogs: []
+                };
+                const result = await executeToolCall(
+                  projectId,
+                  toolCallObj,
+                  fixerDebugContext,
+                  supabase,
+                  userId
+                );
+                
+                fixerToolCallsLog.push({ tool: toolCall.name, args: toolCall.input, result });
+                toolResults.push(`Tool: ${toolCall.name}\nResult: ${JSON.stringify(result).substring(0, 1000)}`);
+                
+                // Check for task_complete
+                if (toolCall.name === 'task_complete') {
+                  fixerTaskComplete = {
+                    summary: toolCall.input.summary || 'Fix applied by The Fixer',
+                    filesChanged: toolCall.input.filesChanged || []
+                  };
+                  console.log(`[THE FIXER] ✅ Task complete: ${fixerTaskComplete.summary}`);
+                  break;
+                }
+              }
+              
+              if (fixerTaskComplete) break;
+              
+              // Add tool results to conversation
+              fixerMessages.push({
+                role: "assistant",
+                content: fixerResponse.content + '\n\nTool calls made.'
+              });
+              fixerMessages.push({
+                role: "user", 
+                content: `Tool Results:\n${toolResults.join('\n\n')}\n\nContinue fixing or call task_complete if done.`
+              });
+            } else {
+              // No tool calls, just text response
+              console.log(`[THE FIXER] Text response: ${fixerResponse.content.substring(0, 200)}...`);
+              break;
+            }
+          }
+          
+          // Return Fixer result
+          const fixerDuration = Date.now() - agentStartTime;
+          
+          if (fixerTaskComplete) {
+            return new Response(JSON.stringify({
+              ok: true,
+              mode: 'agent',
+              fixerMode: true,
+              result: {
+                summary: `🔧 THE FIXER: ${fixerTaskComplete.summary}`,
+                filesChanged: fixerTaskComplete.filesChanged,
+                toolCalls: fixerToolCallsLog.map(tc => ({ tool: tc.tool, success: tc.result?.success !== false }))
+              },
+              duration: fixerDuration
+            }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          } else {
+            // Fixer also failed
+            return new Response(JSON.stringify({
+              ok: false,
+              mode: 'agent',
+              fixerMode: true,
+              fixerFailed: true,
+              error: 'The Fixer (Claude Opus 4) was unable to fix the error. Recovery options should be shown.',
+              toolCalls: fixerToolCallsLog.map(tc => ({ tool: tc.tool, success: tc.result?.success !== false })),
+              duration: fixerDuration
+            }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }
+        } catch (fixerError) {
+          console.error(`[THE FIXER] Error:`, fixerError);
+          return new Response(JSON.stringify({
+            ok: false,
+            mode: 'agent',
+            fixerMode: true,
+            fixerFailed: true,
+            error: `The Fixer encountered an error: ${fixerError instanceof Error ? fixerError.message : 'Unknown error'}`
+          }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+      }
       
       console.log(`[Agent Mode] Starting agent loop for: ${prompt.substring(0, 100)}...`);
       

@@ -98,6 +98,7 @@ export type TranslationKey =
   | "share"
   | "copy"
   | "paste"
+  | "my_warranty"
   | "cut"
   | "undo"
   | "redo"

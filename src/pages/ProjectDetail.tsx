@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, lazy, Suspense, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, lazy, Suspense, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -398,10 +398,13 @@ export default function ProjectDetail() {
   // Self-healing: Runtime error detection with smart auto-fix
   const [crashReport, setCrashReport] = useState<string | null>(null);
   const [autoFixCountdown, setAutoFixCountdown] = useState<number | null>(null);
+  const [autoFixExhausted, setAutoFixExhausted] = useState<boolean>(false); // Show recovery UI when all attempts fail
+  const [fixerInProgress, setFixerInProgress] = useState<boolean>(false); // Track when The Fixer is running
   const autoFixTimerRef = useRef<NodeJS.Timeout | null>(null);
   const autoFixTriggeredRef = useRef<boolean>(false);
   const autoFixAttemptsRef = useRef<Map<string, number>>(new Map()); // Track fix attempts per error
-  const MAX_AUTO_FIX_ATTEMPTS = 3;
+  const MAX_GEMINI_ATTEMPTS = 3; // Attempts 1-3 use Gemini
+  const FIXER_ATTEMPT = 4; // Attempt 4 uses Claude Opus 4 (The Fixer)
   
   // Stop generation functionality
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -594,6 +597,21 @@ export default function ProjectDetail() {
           setActiveProductCardId(latestCard.id);
           setShowProductFormCard(true);
         }
+        
+        // Force scroll to bottom after chat history loads with longer delays
+        // This ensures scroll happens AFTER React renders the messages
+        const forceScrollToBottom = () => {
+          if (chatEndRef.current) {
+            chatEndRef.current.scrollIntoView({ behavior: 'instant', block: 'end' });
+          }
+          if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+          }
+        };
+        setTimeout(forceScrollToBottom, 200);
+        setTimeout(forceScrollToBottom, 500);
+        setTimeout(forceScrollToBottom, 1000);
+        setTimeout(forceScrollToBottom, 1500);
       } else {
         console.log('[ProjectDetail] No chat messages found for project', id);
       }
@@ -882,23 +900,68 @@ export default function ProjectDetail() {
   };
 
   // Scroll to bottom when messages or generation state changes
-  const scrollToBottom = () => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-    }
-  };
+  const scrollToBottom = useCallback(() => {
+    // Use requestAnimationFrame to ensure DOM is painted before scrolling
+    requestAnimationFrame(() => {
+      // Method 1: Use scrollIntoView on the end ref (more reliable)
+      if (chatEndRef.current) {
+        chatEndRef.current.scrollIntoView({ behavior: 'instant', block: 'end' });
+      }
+      // Method 2: Fallback to scrollTop
+      if (chatContainerRef.current) {
+        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+      }
+    });
+  }, []);
 
-  useEffect(() => {
+  // Use useLayoutEffect for synchronous scroll after DOM updates (more reliable)
+  useLayoutEffect(() => {
     // Scroll to bottom when messages change (including initial load)
     // Skip auto-scroll when ProductFormCard is shown - let it scroll to top instead
     if (showProductFormCard) return;
     
-    // Use a small delay to ensure DOM has updated
-    const timer = setTimeout(() => {
-      scrollToBottom();
-    }, 150);
-    return () => clearTimeout(timer);
-  }, [chatMessages, showProductFormCard]);
+    // Immediate scroll after DOM update
+    scrollToBottom();
+  }, [chatMessages, showProductFormCard, scrollToBottom]);
+
+  useEffect(() => {
+    // Additional delayed scrolls for async content that renders after initial paint
+    if (showProductFormCard) return;
+    
+    const timer1 = setTimeout(scrollToBottom, 150);
+    const timer2 = setTimeout(scrollToBottom, 400);
+    const timer3 = setTimeout(scrollToBottom, 800);
+    const timer4 = setTimeout(scrollToBottom, 1500);
+    
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+      clearTimeout(timer4);
+    };
+  }, [chatMessages, showProductFormCard, scrollToBottom]);
+
+  // AGGRESSIVE SCROLL FIX: Scroll to bottom on initial mount and when chat panel becomes visible
+  useEffect(() => {
+    if (leftPanelMode === 'chat' && chatMessages.length > 0 && !showProductFormCard) {
+      // Multiple aggressive scroll attempts when switching to chat mode
+      const scrollAggressively = () => {
+        if (chatEndRef.current) {
+          chatEndRef.current.scrollIntoView({ behavior: 'instant', block: 'end' });
+        }
+        if (chatContainerRef.current) {
+          chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        }
+      };
+      
+      scrollAggressively();
+      setTimeout(scrollAggressively, 50);
+      setTimeout(scrollAggressively, 150);
+      setTimeout(scrollAggressively, 300);
+      setTimeout(scrollAggressively, 500);
+      setTimeout(scrollAggressively, 1000);
+    }
+  }, [leftPanelMode, chatMessages.length, showProductFormCard]);
 
   const thinkingBoxRef = useRef<HTMLDivElement>(null);
 
@@ -2560,11 +2623,13 @@ ${convertToGlobalComponent(content, componentName)}
     // Normalize error for tracking (remove line numbers, timestamps, etc.)
     const errorKey = errorMsg.replace(/:\d+:\d+/g, '').replace(/line \d+/gi, '').trim().substring(0, 200);
     
-    // Check if we've already tried to fix this error too many times (max 2 attempts)
+    // Check if we've already tried to fix this error too many times
+    // Attempts 1-3: Gemini, Attempt 4: The Fixer (Claude), Attempt 5+: Show recovery UI
     const attempts = autoFixAttemptsRef.current.get(errorKey) || 0;
-    if (attempts >= MAX_AUTO_FIX_ATTEMPTS) {
-      console.log('[Auto-Fix] Max attempts reached for this error, stopping to prevent loop');
-      setCrashReport(errorMsg); // Still show the error but don't auto-fix
+    if (attempts > FIXER_ATTEMPT) {
+      console.log('[Auto-Fix] All attempts exhausted (including The Fixer), showing recovery UI');
+      setAutoFixExhausted(true);
+      setCrashReport(errorMsg);
       return;
     }
     
@@ -2574,7 +2639,7 @@ ${convertToGlobalComponent(content, componentName)}
       setTimeout(() => {
         if (!autoFixTriggeredRef.current && !isGenerating) {
           const currentAttempts = autoFixAttemptsRef.current.get(errorKey) || 0;
-          if (currentAttempts >= MAX_AUTO_FIX_ATTEMPTS) return; // Double-check attempts
+          if (currentAttempts > FIXER_ATTEMPT) return; // Double-check attempts
           
           autoFixAttemptsRef.current.set(errorKey, currentAttempts + 1);
           setCrashReport(errorMsg);
@@ -2635,16 +2700,23 @@ ${convertToGlobalComponent(content, componentName)}
   }, []);
 
   // Self-healing: Auto-fix the crash (can be triggered automatically or manually)
-  const triggerAutoFix = useCallback((errorToFix?: string) => {
+  const triggerAutoFix = useCallback(async (errorToFix?: string) => {
     const error = errorToFix || crashReport;
     if (!error) return;
     
-    // Increment global auto-fix attempts (debug panel) and stop if max reached
-    const canContinue = debugContext?.incrementAutoFixAttempt?.();
-    if (canContinue === false) {
-      autoFixTriggeredRef.current = false;
+    // Normalize error for tracking
+    const errorKey = error.replace(/:\d+:\d+/g, '').replace(/line \d+/gi, '').trim().substring(0, 200);
+    const attemptNumber = (autoFixAttemptsRef.current.get(errorKey) || 0) + 1;
+    autoFixAttemptsRef.current.set(errorKey, attemptNumber);
+    
+    console.log(`[Auto-Fix] Attempt #${attemptNumber} for error: ${errorKey.substring(0, 50)}...`);
+    
+    // Check if all attempts exhausted (including The Fixer)
+    if (attemptNumber > FIXER_ATTEMPT) {
+      console.log('[Auto-Fix] All attempts exhausted, showing recovery UI');
+      setAutoFixExhausted(true);
       setCrashReport(error);
-      toast.error(isRTL ? 'تم الوصول للحد الأقصى لمحاولات الإصلاح التلقائي' : 'Max auto-fix attempts reached');
+      autoFixTriggeredRef.current = false;
       return;
     }
 
@@ -2658,9 +2730,97 @@ ${convertToGlobalComponent(content, componentName)}
     }
     setAutoFixCountdown(null);
     
-    // Normalize error for tracking
-    const errorKey = error.replace(/:\d+:\d+/g, '').replace(/line \d+/gi, '').trim().substring(0, 200);
-    const attemptNumber = autoFixAttemptsRef.current.get(errorKey) || 1;
+    // ========================================================================
+    // ATTEMPT 4: THE FIXER (Claude Opus 4) - Final attempt before recovery UI
+    // ========================================================================
+    if (attemptNumber === FIXER_ATTEMPT) {
+      console.log('[Auto-Fix] 🔧 Calling THE FIXER (Claude Opus 4) - Final attempt');
+      setFixerInProgress(true);
+      setCrashReport(null);
+      
+      // Add a message to chat showing The Fixer is working
+      setChatMessages(prev => [...prev, {
+        id: `fixer-${Date.now()}`,
+        role: 'assistant',
+        content: isRTL 
+          ? '🔧 **المُصلح (Claude Opus 4)** يعمل على إصلاح الخطأ...\n\nالمحاولات السابقة فشلت. هذه المحاولة الأخيرة قبل عرض خيارات الاستعادة.'
+          : '🔧 **THE FIXER (Claude Opus 4)** is working on the error...\n\nPrevious attempts failed. This is the final attempt before showing recovery options.'
+      }]);
+      
+      try {
+        // Get recent chat history for context
+        const recentHistory = chatMessages.slice(-5).map(m => `${m.role}: ${m.content.substring(0, 200)}`).join('\n');
+        
+        // Call the backend with fixerMode
+        const response = await supabase.functions.invoke('projects-generate', {
+          body: {
+            mode: 'agent',
+            projectId: id,
+            prompt: `Fix this error: ${error}`,
+            currentFiles: generatedFiles,
+            fixerMode: true,
+            fixerContext: {
+              errorMessage: error,
+              previousAttempts: attemptNumber - 1,
+              recentEdits: [...(editedFilesTracking || [])].map(f => f.fileName),
+              chatHistory: recentHistory
+            }
+          }
+        });
+        
+        setFixerInProgress(false);
+        
+        if (response.data?.ok) {
+          // Fixer succeeded!
+          console.log('[Auto-Fix] 🔧 THE FIXER succeeded!', response.data.result?.summary);
+          
+          setChatMessages(prev => [...prev, {
+            id: `fixer-success-${Date.now()}`,
+            role: 'assistant',
+            content: isRTL
+              ? `✅ **المُصلح نجح!**\n\n${response.data.result?.summary || 'تم إصلاح الخطأ.'}`
+              : `✅ **THE FIXER succeeded!**\n\n${response.data.result?.summary || 'Error fixed.'}`
+          }]);
+          
+          // Refresh files to show the fix
+          if (response.data.result?.filesChanged?.length > 0) {
+            toast.success(isRTL ? 'تم إصلاح الخطأ بواسطة المُصلح!' : 'Error fixed by The Fixer!');
+            // Trigger a refresh of the preview
+            window.location.reload();
+          }
+        } else if (response.data?.fixerFailed) {
+          // Fixer also failed - show recovery UI
+          console.log('[Auto-Fix] 🔧 THE FIXER failed, showing recovery UI');
+          setAutoFixExhausted(true);
+          setCrashReport(error);
+          
+          setChatMessages(prev => [...prev, {
+            id: `fixer-failed-${Date.now()}`,
+            role: 'assistant',
+            content: isRTL
+              ? '❌ **المُصلح لم يتمكن من إصلاح الخطأ.**\n\nجميع المحاولات التلقائية فشلت. يرجى استخدام خيارات الاستعادة أدناه.'
+              : '❌ **THE FIXER was unable to fix the error.**\n\nAll automatic attempts failed. Please use the recovery options below.'
+          }]);
+        } else {
+          // API error
+          console.error('[Auto-Fix] Fixer API error:', response.error);
+          setAutoFixExhausted(true);
+          setCrashReport(error);
+        }
+      } catch (err) {
+        console.error('[Auto-Fix] Fixer exception:', err);
+        setFixerInProgress(false);
+        setAutoFixExhausted(true);
+        setCrashReport(error);
+      }
+      
+      autoFixTriggeredRef.current = false;
+      return;
+    }
+    
+    // ========================================================================
+    // ATTEMPTS 1-3: Gemini auto-fix (existing logic)
+    // ========================================================================
     const isRetry = attemptNumber > 1;
     
     // Smart fix prompt with specific instructions based on error type
@@ -2730,7 +2890,7 @@ DO NOT repeat the same fix that already failed.
 `;
     }
     
-    const fixPrompt = `🔧 **AUTO-FIX: Fix this error NOW**
+    const fixPrompt = `🔧 **AUTO-FIX: Fix this error NOW** (Attempt ${attemptNumber}/${MAX_GEMINI_ATTEMPTS})
 ${retryWarning}
 \`\`\`
 ${error}
@@ -5869,7 +6029,7 @@ ${fixInstructions}
                 {crashReport && (
                   <div className="mx-3 mb-2 overflow-hidden rounded-xl border border-red-500/30 bg-gradient-to-r from-red-950/80 via-red-900/60 to-red-950/80 backdrop-blur-sm shadow-lg shadow-red-500/10 animate-in slide-in-from-bottom-3 duration-300">
                     {/* Progress bar for auto-fix countdown */}
-                    {autoFixCountdown !== null && (
+                    {autoFixCountdown !== null && !autoFixExhausted && (
                       <div className="h-1 bg-red-950">
                         <div 
                           className="h-full bg-gradient-to-r from-amber-500 to-red-500 transition-all duration-1000 ease-linear"
@@ -5878,56 +6038,140 @@ ${fixInstructions}
                       </div>
                     )}
                     
-                    <div className="p-3 flex items-center gap-3">
-                      {/* Animated error icon */}
-                      <div className="relative shrink-0">
-                        <div className="absolute inset-0 bg-red-500/30 rounded-full animate-ping" />
-                        <div className="relative p-2 bg-gradient-to-br from-red-500/20 to-red-600/20 rounded-full border border-red-500/30">
-                          <AlertTriangle className="w-4 h-4 text-red-400" />
+                    {/* RECOVERY UI - When all auto-fix attempts exhausted */}
+                    {autoFixExhausted ? (
+                      <div className="p-4 space-y-3">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-red-500/20 rounded-full border border-red-500/30">
+                            <AlertTriangle className="w-5 h-5 text-red-400" />
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-red-100">
+                              {isRTL ? 'فشل الإصلاح التلقائي' : 'Auto-Fix Failed'}
+                            </h4>
+                            <p className="text-xs text-red-300/70">
+                              {isRTL 
+                                ? 'تمت محاولة الإصلاح 4 مرات (بما في ذلك المُصلح). يرجى اختيار خيار الاستعادة.'
+                                : 'Attempted 4 fixes (including The Fixer). Please choose a recovery option.'}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                      
-                      {/* Error info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-semibold text-red-100">
-                            {isRTL ? 'تم اكتشاف خطأ' : 'Error Detected'}
-                          </h4>
-                          {autoFixCountdown !== null && (
-                            <span className="px-2 py-0.5 bg-amber-500/20 border border-amber-500/30 rounded-full text-[10px] font-medium text-amber-300">
-                              {isRTL ? `إصلاح تلقائي في ${autoFixCountdown}` : `Auto-fixing in ${autoFixCountdown}s`}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-red-300/80 truncate mt-0.5 font-mono">
-                          {crashReport.length > 60 ? crashReport.substring(0, 60) + '...' : crashReport}
-                        </p>
-                      </div>
-                      
-                      {/* Action buttons */}
-                      <div className="flex items-center gap-2 shrink-0">
-                        {/* Cancel button */}
-                        <button 
-                          onClick={cancelAutoFix}
-                          className="p-2 text-red-400/70 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
-                          title={isRTL ? 'إلغاء' : 'Dismiss'}
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
                         
-                        {/* Fix Now button */}
-                        <button 
-                          onClick={handleAutoFix}
-                          className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white text-xs font-bold rounded-lg transition-all duration-200 flex items-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95"
-                        >
-                          <Wand2 className="w-3.5 h-3.5" />
-                          {autoFixCountdown !== null 
-                            ? (isRTL ? 'إصلاح الآن' : 'Fix Now') 
-                            : (isRTL ? 'إصلاح تلقائي' : 'Auto-Fix')
-                          }
-                        </button>
+                        <p className="text-xs text-red-300/60 font-mono bg-red-950/50 p-2 rounded-lg overflow-hidden">
+                          {crashReport.length > 100 ? crashReport.substring(0, 100) + '...' : crashReport}
+                        </p>
+                        
+                        <div className="flex flex-wrap gap-2">
+                          {/* Revert to last working version */}
+                          <button 
+                            onClick={() => {
+                              const lastWorkingMsg = [...chatMessages].reverse().find(m => m.snapshot && Object.keys(m.snapshot).length > 0);
+                              if (lastWorkingMsg) {
+                                handleRevert(lastWorkingMsg.id);
+                                setAutoFixExhausted(false);
+                                setCrashReport(null);
+                                autoFixAttemptsRef.current.clear();
+                              } else {
+                                toast.error(isRTL ? 'لا توجد نسخة سابقة للاستعادة' : 'No previous version to revert to');
+                              }
+                            }}
+                            className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20"
+                          >
+                            <RefreshCw className="w-4 h-4" />
+                            {isRTL ? 'استعادة النسخة السابقة' : 'Revert to Last Working'}
+                          </button>
+                          
+                          {/* Dismiss and edit manually */}
+                          <button 
+                            onClick={() => {
+                              setAutoFixExhausted(false);
+                              setCrashReport(null);
+                              autoFixAttemptsRef.current.clear();
+                              setLeftPanelMode('code');
+                              toast.info(isRTL ? 'يمكنك الآن تعديل الكود يدوياً' : 'You can now edit the code manually');
+                            }}
+                            className="px-4 py-2.5 bg-gray-600/50 hover:bg-gray-500/50 text-gray-200 text-xs font-medium rounded-lg transition-all flex items-center gap-2"
+                          >
+                            <Code2 className="w-4 h-4" />
+                            {isRTL ? 'تعديل يدوي' : 'Edit Manually'}
+                          </button>
+                        </div>
                       </div>
-                    </div>
+                    ) : fixerInProgress ? (
+                      /* The Fixer is working */
+                      <div className="p-3 flex items-center gap-3">
+                        <div className="relative shrink-0">
+                          <div className="p-2 bg-gradient-to-br from-purple-500/20 to-blue-600/20 rounded-full border border-purple-500/30">
+                            <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
+                          </div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-semibold text-purple-100">
+                              {isRTL ? '🔧 المُصلح يعمل...' : '🔧 The Fixer Working...'}
+                            </h4>
+                            <span className="px-2 py-0.5 bg-purple-500/20 border border-purple-500/30 rounded-full text-[10px] font-medium text-purple-300">
+                              Claude Opus 4
+                            </span>
+                          </div>
+                          <p className="text-xs text-purple-300/80 mt-0.5">
+                            {isRTL ? 'المحاولة الأخيرة قبل خيارات الاستعادة' : 'Final attempt before recovery options'}
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Normal auto-fix UI */
+                      <div className="p-3 flex items-center gap-3">
+                        {/* Animated error icon */}
+                        <div className="relative shrink-0">
+                          <div className="absolute inset-0 bg-red-500/30 rounded-full animate-ping" />
+                          <div className="relative p-2 bg-gradient-to-br from-red-500/20 to-red-600/20 rounded-full border border-red-500/30">
+                            <AlertTriangle className="w-4 h-4 text-red-400" />
+                          </div>
+                        </div>
+                        
+                        {/* Error info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-semibold text-red-100">
+                              {isRTL ? 'تم اكتشاف خطأ' : 'Error Detected'}
+                            </h4>
+                            {autoFixCountdown !== null && (
+                              <span className="px-2 py-0.5 bg-amber-500/20 border border-amber-500/30 rounded-full text-[10px] font-medium text-amber-300">
+                                {isRTL ? `إصلاح تلقائي في ${autoFixCountdown}` : `Auto-fixing in ${autoFixCountdown}s`}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-red-300/80 truncate mt-0.5 font-mono">
+                            {crashReport.length > 60 ? crashReport.substring(0, 60) + '...' : crashReport}
+                          </p>
+                        </div>
+                        
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          {/* Cancel button */}
+                          <button 
+                            onClick={cancelAutoFix}
+                            className="p-2 text-red-400/70 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
+                            title={isRTL ? 'إلغاء' : 'Dismiss'}
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                          
+                          {/* Fix Now button */}
+                          <button 
+                            onClick={handleAutoFix}
+                            className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white text-xs font-bold rounded-lg transition-all duration-200 flex items-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95"
+                          >
+                            <Wand2 className="w-3.5 h-3.5" />
+                            {autoFixCountdown !== null 
+                              ? (isRTL ? 'إصلاح الآن' : 'Fix Now') 
+                              : (isRTL ? 'إصلاح تلقائي' : 'Auto-Fix')
+                            }
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -6336,7 +6580,7 @@ ${fixInstructions}
             }>
               {(codeContent || Object.keys(generatedFiles).length > 0) ? (
                 <div className="w-full h-full flex items-center justify-center relative">
-                  <MatrixOverlay isVisible={aiEditing && leftPanelMode === 'code'} />
+                  <MatrixOverlay isVisible={aiEditing} />
                   <div className={cn(
                     "h-full w-full transition-all flex flex-col overflow-hidden",
                     deviceView === 'desktop' && "max-w-full",

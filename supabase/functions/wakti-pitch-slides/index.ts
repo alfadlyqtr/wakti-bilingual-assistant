@@ -60,7 +60,10 @@ interface Slide {
 // ALL slides get images now (except cover and thank_you which are text-focused)
 const SKIP_IMAGE_ROLES = ["cover", "thank_you", "contents"];
 
-async function fetchPexelsImage(query: string): Promise<{ url: string; meta: Slide["imageMeta"] } | null> {
+// Track used image IDs to prevent duplicates across slides
+const usedImageIds = new Set<number>();
+
+async function fetchPexelsImage(query: string): Promise<{ url: string; meta: Slide["imageMeta"]; id: number } | null> {
   const pexelsKey = Deno.env.get("PEXELS_API_KEY");
   if (!pexelsKey) {
     console.warn("PEXELS_API_KEY not configured");
@@ -82,7 +85,7 @@ async function fetchPexelsImage(query: string): Promise<{ url: string; meta: Sli
     }
     
     console.log("Pexels search query:", cleanQuery);
-    const url = "https://api.pexels.com/v1/search?query=" + encodeURIComponent(cleanQuery) + "&per_page=5&orientation=landscape";
+    const url = "https://api.pexels.com/v1/search?query=" + encodeURIComponent(cleanQuery) + "&per_page=15&orientation=landscape";
     
     const res = await fetch(url, {
       headers: { Authorization: pexelsKey },
@@ -100,9 +103,27 @@ async function fetchPexelsImage(query: string): Promise<{ url: string; meta: Sli
       return null;
     }
     
-    // Pick a random photo from results for variety
-    const photo = photos[Math.floor(Math.random() * photos.length)];
-    console.log("Selected photo:", photo.id, "from", photos.length, "results");
+    // Filter out already-used images to prevent duplicates
+    const availablePhotos = photos.filter((p: { id: number }) => !usedImageIds.has(p.id));
+    
+    if (availablePhotos.length === 0) {
+      // If all images were used, pick from full list (better than no image)
+      console.log("All images already used, picking from full list");
+      const photo = photos[Math.floor(Math.random() * photos.length)];
+      return {
+        url: photo.src?.large || photo.src?.medium,
+        meta: {
+          photographer: photo.photographer,
+          photographerUrl: photo.photographer_url,
+          pexelsUrl: photo.url,
+        },
+        id: photo.id,
+      };
+    }
+    
+    // Pick a random photo from available (unused) results
+    const photo = availablePhotos[Math.floor(Math.random() * availablePhotos.length)];
+    console.log("Selected photo:", photo.id, "from", availablePhotos.length, "available (", photos.length, "total)");
 
     return {
       url: photo.src?.large || photo.src?.medium,
@@ -111,6 +132,7 @@ async function fetchPexelsImage(query: string): Promise<{ url: string; meta: Sli
         photographerUrl: photo.photographer_url,
         pexelsUrl: photo.url,
       },
+      id: photo.id,
     };
   } catch (err) {
     console.error("Pexels fetch error:", err);
@@ -138,6 +160,9 @@ Deno.serve(async (req) => {
     }
 
     console.log("Generating " + outline.length + " Dokie-style slides");
+
+    // Clear used image IDs for this request (prevent cross-request pollution)
+    usedImageIds.clear();
 
     const slides = [];
     let imageCount = 0;
@@ -177,8 +202,10 @@ Deno.serve(async (req) => {
         console.log("🖼️ Pexels search for slide " + (i + 1) + ": \"" + query + "\"");
         imageData = await fetchPexelsImage(query);
         if (imageData) {
+          // Track this image ID to prevent duplicates on other slides
+          usedImageIds.add(imageData.id);
           imageCount++;
-          console.log("✅ Found image for slide " + (i + 1));
+          console.log("✅ Found image for slide " + (i + 1) + " (ID: " + imageData.id + ")");
         } else {
           console.log("⚠️ No image found for slide " + (i + 1));
         }

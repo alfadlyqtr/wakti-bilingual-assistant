@@ -15,7 +15,8 @@ import {
   ChevronRight,
   Gamepad2,
   Music,
-  Shield
+  Shield,
+  FolderOpen
 } from "lucide-react";
 import { t } from "@/utils/translations";
 import { Logo3D } from "@/components/Logo3D";
@@ -44,7 +45,7 @@ export function TabletSidebar() {
     { icon: Music, label: "music", path: "/music" },
     { icon: Gamepad2, label: "games", path: "/games" },
     { icon: Mic, label: "tasjeel", path: "/tasjeel" },
-    { icon: Shield, label: "my_warranty", path: "/my-warranty" },
+    { icon: FolderOpen, label: "my_warranty", path: "/my-warranty" },
   ];
 
   const bottomNavItems: NavItemProps[] = [];  // Remove settings and knowledge

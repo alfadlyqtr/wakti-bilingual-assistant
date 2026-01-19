@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { cn } from "@/lib/utils";
-import { Calendar, CalendarClock, Mic, Sparkles, ListTodo, LayoutDashboard, PenTool, Gamepad2, HeartPulse, NotebookPen, Music, AudioLines, Shield, Code2 } from "lucide-react";
+import { Calendar, CalendarClock, Mic, Sparkles, ListTodo, LayoutDashboard, PenTool, Gamepad2, HeartPulse, NotebookPen, Music, AudioLines, Shield, Code2, FolderOpen } from "lucide-react";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { waktiBadges } from "@/services/waktiBadges";
 import { motion } from "framer-motion";
@@ -129,9 +129,9 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
       colorClass: 'text-cyan-500',
     },
     {
-      name: language === 'ar' ? 'ضماناتي' : 'My Warranty',
+      name: t('my_warranty', language),
       path: '/my-warranty',
-      icon: 'shield',
+      icon: 'folder-open',
       colorClass: 'text-emerald-500',
     },
     {
@@ -178,6 +178,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
     music: Music,
     'audio-lines': AudioLines,
     'shield': Shield,
+    'folder-open': FolderOpen,
     'code2': Code2,
   };
 

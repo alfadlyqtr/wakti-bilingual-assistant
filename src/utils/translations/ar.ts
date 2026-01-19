@@ -92,7 +92,7 @@ export const ar = {
   waktiPresentationsDesc: "أنشئ شرائح وملخصات ومخططات احترافية فوراً بالذكاء الاصطناعي",
   
   // My Warranty
-  my_warranty: "ضماناتي",
+  my_warranty: "ملفاتي",
   
   // Projects
   projects: "مشاريع",

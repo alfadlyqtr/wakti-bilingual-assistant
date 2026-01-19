@@ -35,7 +35,7 @@ async function callGeminiGrounded(prompt: string): Promise<SlideOutline[]> {
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       tools: [{ google_search_retrieval: {} }],
       generationConfig: {
-        temperature: 0.8,
+        temperature: 0.5,
         maxOutputTokens: 8000,
         responseMimeType: "application/json",
       },
@@ -93,7 +93,7 @@ async function _callGemini(prompt: string): Promise<SlideOutline[]> {
     body: JSON.stringify({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: {
-        temperature: 0.8,
+        temperature: 0.5,
         maxOutputTokens: 8000,
         responseMimeType: "application/json",
       },
@@ -137,7 +137,7 @@ async function callOpenAI(prompt: string): Promise<SlideOutline[]> {
         { role: "system", content: "You are an expert presentation designer like Dokie.ai. Create rich, detailed slide outlines with statistics, highlights, and structured content. Respond ONLY with valid JSON." },
         { role: "user", content: prompt },
       ],
-      temperature: 0.8,
+      temperature: 0.5,
       max_tokens: 8000,
     }),
   });
@@ -177,7 +177,7 @@ async function callGemini(prompt: string): Promise<SlideOutline[]> {
     body: JSON.stringify({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: {
-        temperature: 0.8,
+        temperature: 0.5,
         maxOutputTokens: 8000,
         responseMimeType: "application/json",
       },
@@ -334,15 +334,35 @@ Deno.serve(async (req) => {
       console.log("Using OpenAI");
     }
 
-    // Post-process: ensure proper layouts and structure
+    // Post-process: ensure proper layouts, structure, and bullet quality
     const validatedSlides = slides.map(function(s, i) {
       const role = s.role || "content";
+      
+      // Validate and enhance bullets - flag short ones for quality
+      let bullets = Array.isArray(s.bullets) ? s.bullets : [];
+      let shortBulletCount = 0;
+      
+      bullets = bullets.map((bullet: string) => {
+        if (typeof bullet !== 'string') return String(bullet);
+        const wordCount = bullet.trim().split(/\s+/).length;
+        if (wordCount < 10 && role !== 'cover' && role !== 'thank_you') {
+          shortBulletCount++;
+          // Log warning but don't modify - the few-shot examples should help
+          console.log(`⚠️ Short bullet (${wordCount} words) on slide ${i + 1}: "${bullet.substring(0, 50)}..."`);
+        }
+        return bullet;
+      });
+      
+      if (shortBulletCount > 0) {
+        console.log(`📊 Slide ${i + 1} has ${shortBulletCount}/${bullets.length} short bullets`);
+      }
+      
       return {
         slideNumber: s.slideNumber || i + 1,
         role: role,
         title: s.title || "Slide " + (i + 1),
         subtitle: s.subtitle || null,
-        bullets: Array.isArray(s.bullets) ? s.bullets : [],
+        bullets: bullets,
         highlightedStats: s.highlightedStats || [],
         columns: s.columns || null,
         imageHint: s.imageHint || getImageHint(role, brief.subject, brief),
@@ -694,7 +714,17 @@ CRITICAL RULES:
 3. Include SPECIFIC statistics, dates, names, and facts
 4. Use **bold** for key terms and statistics
 5. ALL slides except cover/thank_you MUST have 4-6 bullet points (NOT columns)
-6. Make content educational and informative, not generic`;
+6. Make content educational and informative, not generic
+
+EXAMPLE OF HIGH-QUALITY BULLET POINTS (follow this style):
+❌ BAD: "Climate change is a problem" (too short, no specifics)
+✅ GOOD: "**Global temperatures** have risen by **1.1°C** since pre-industrial times, with **2023** being the hottest year on record according to NASA"
+
+❌ BAD: "Many companies use AI" (vague, no data)
+✅ GOOD: "**Over 77%** of Fortune 500 companies now use AI in their operations, with **$150 billion** invested globally in AI startups during 2023"
+
+❌ BAD: "The market is growing" (generic)
+✅ GOOD: "The global market reached **$4.2 trillion** in 2023, growing at a **CAGR of 12.5%**, with Asia-Pacific leading at **38%** market share"`;
 }
 
 function buildArabicPrompt(brief, slideCount, inputMode: InputMode, originalText: string) {
@@ -853,5 +883,15 @@ ${originalText}
 3. أضف إحصائيات وتواريخ وأسماء وحقائق محددة
 4. استخدم **نص عريض** للمصطلحات والإحصائيات الرئيسية
 5. جميع الشرائح (ما عدا الغلاف والشكر) يجب أن تحتوي على 4-6 نقاط مفصلة
-6. اجعل المحتوى تعليمياً ومعلوماتياً وليس عاماً`;
+6. اجعل المحتوى تعليمياً ومعلوماتياً وليس عاماً
+
+أمثلة على نقاط عالية الجودة (اتبع هذا الأسلوب):
+❌ سيء: "تغير المناخ مشكلة" (قصير جداً، بدون تفاصيل)
+✅ جيد: "ارتفعت **درجات الحرارة العالمية** بمقدار **1.1 درجة مئوية** منذ عصر ما قبل الصناعة، وكان **2023** أكثر الأعوام حرارة على الإطلاق وفقاً لناسا"
+
+❌ سيء: "شركات كثيرة تستخدم الذكاء الاصطناعي" (غامض، بدون بيانات)
+✅ جيد: "**أكثر من 77%** من شركات فورتشن 500 تستخدم الآن الذكاء الاصطناعي في عملياتها، مع استثمار **150 مليار دولار** عالمياً في الشركات الناشئة للذكاء الاصطناعي خلال 2023"
+
+❌ سيء: "السوق ينمو" (عام)
+✅ جيد: "وصل السوق العالمي إلى **4.2 تريليون دولار** في 2023، بنمو **12.5%** سنوياً، مع قيادة آسيا والمحيط الهادئ بحصة **38%** من السوق"`;
 }

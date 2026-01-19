@@ -92,7 +92,7 @@ export const en = {
   waktiPresentationsDesc: "Create professional slides, briefs, and outlines instantly with AI",
   
   // My Warranty
-  my_warranty: "My Warranty",
+  my_warranty: "My Files",
   
   // Projects
   projects: "Projects",

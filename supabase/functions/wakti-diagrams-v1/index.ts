@@ -33,6 +33,7 @@ type Language = "en" | "ar";
 type KrokiStyleKey =
   | "auto"
   // Common Graphs
+  | "flowchart"
   | "block-diagram"
   | "dag"
   | "mindmap-style"
@@ -159,11 +160,22 @@ serve(async (req) => {
     });
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Step 1: Call GPT-4o-mini to plan diagrams
+    // Step 1: Smart Auto - classify text and pick best diagram style
+    // ─────────────────────────────────────────────────────────────────────────
+    let effectiveStyle: KrokiStyleKey = krokiStyle || 'auto';
+    
+    if (effectiveStyle === 'auto') {
+      console.log("🧠 Auto mode: Running hybrid text classifier...");
+      effectiveStyle = await classifyTextForDiagram(textToProcess);
+      console.log(`✅ Classifier picked style: ${effectiveStyle}`);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Step 2: Call GPT-4o-mini to plan diagrams with the chosen style
     // ─────────────────────────────────────────────────────────────────────────
     console.log("🤖 Calling GPT-4o-mini for diagram planning...");
 
-    const diagramSpecs = await planDiagrams(textToProcess, diagramFamily || 'auto', language, numDiagrams, krokiStyle || 'auto');
+    const diagramSpecs = await planDiagrams(textToProcess, diagramFamily || 'auto', language, numDiagrams, effectiveStyle);
 
     console.log(`✅ GPT returned ${diagramSpecs.length} diagram spec(s)`);
 
@@ -261,6 +273,113 @@ serve(async (req) => {
     );
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hybrid Text Classifier - Picks best diagram style for Auto mode
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function classifyTextForDiagram(text: string): Promise<KrokiStyleKey> {
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // Step 1: Heuristic rules (fast, no API call)
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  // Legal/Policy/Terms → mindmap (extract key concepts)
+  const legalKeywords = /\b(privacy|policy|terms|conditions|agreement|legal|copyright|disclaimer|liability|rights|consent|gdpr|data protection|cookie|refund|warranty)\b/i;
+  if (legalKeywords.test(text)) {
+    console.log("📋 Heuristic: Detected legal/policy text → mindmap");
+    return "mindmap-style";
+  }
+  
+  // Timeline/Schedule/Dates → gantt
+  const timelineKeywords = /\b(schedule|timeline|deadline|milestone|phase|week|month|year|q[1-4]|january|february|march|april|may|june|july|august|september|october|november|december|2024|2025|2026|ramadan|eid)\b/i;
+  const hasMultipleDates = (text.match(/\d{1,2}[\/\-]\d{1,2}|\d{4}/g) || []).length >= 2;
+  if (timelineKeywords.test(text) || hasMultipleDates) {
+    console.log("📅 Heuristic: Detected timeline/schedule → gantt");
+    return "gantt";
+  }
+  
+  // Process/Steps/Flow → flowchart
+  const processKeywords = /\b(step|process|flow|workflow|procedure|stage|then|next|after|before|first|second|third|finally|start|end|begin|complete)\b/i;
+  const hasNumberedSteps = /\b(1\.|2\.|3\.|step 1|step 2|الخطوة)/i.test(text);
+  if (processKeywords.test(text) || hasNumberedSteps) {
+    console.log("🔄 Heuristic: Detected process/steps → flowchart");
+    return "flowchart";
+  }
+  
+  // Org/Teams/Hierarchy → block-diagram
+  const orgKeywords = /\b(team|department|manager|director|ceo|cto|employee|staff|organization|hierarchy|report|supervisor|lead|head of)\b/i;
+  if (orgKeywords.test(text)) {
+    console.log("🏢 Heuristic: Detected org/hierarchy → block-diagram");
+    return "block-diagram";
+  }
+  
+  // Sequence/Interaction → sequence-diagram
+  const sequenceKeywords = /\b(request|response|send|receive|call|return|api|server|client|user|system|message|notify)\b/i;
+  if (sequenceKeywords.test(text)) {
+    console.log("🔀 Heuristic: Detected sequence/interaction → sequence-diagram");
+    return "sequence-diagram";
+  }
+  
+  // Database/Entities → er-diagram
+  const dbKeywords = /\b(table|database|entity|relation|foreign key|primary key|column|field|record|schema|sql)\b/i;
+  if (dbKeywords.test(text)) {
+    console.log("🗄️ Heuristic: Detected database/entities → er-diagram");
+    return "er-diagram";
+  }
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // Step 2: AI fallback for unclear text (small, cheap call)
+  // ─────────────────────────────────────────────────────────────────────────
+  console.log("🤖 Heuristic unclear, using AI classifier...");
+  
+  try {
+    const classifierPrompt = `Analyze this text and pick the BEST diagram type. Return ONLY one of these exact values:
+- "flowchart" (for processes, steps, workflows, decisions)
+- "mindmap-style" (for concepts, topics, brainstorming, policies, terms)
+- "gantt" (for schedules, timelines, project plans)
+- "sequence-diagram" (for interactions, API calls, message flows)
+- "block-diagram" (for systems, architecture, org charts)
+- "er-diagram" (for databases, entities, relationships)
+
+Text to analyze (first 500 chars):
+${text.substring(0, 500)}
+
+Return ONLY the diagram type, nothing else.`;
+
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: classifierPrompt }],
+        temperature: 0.1,
+        max_tokens: 50,
+      }),
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      const style = result.choices?.[0]?.message?.content?.trim().toLowerCase();
+      
+      // Validate the response
+      const validStyles: KrokiStyleKey[] = ["flowchart", "mindmap-style", "gantt", "sequence-diagram", "block-diagram", "er-diagram"];
+      if (validStyles.includes(style as KrokiStyleKey)) {
+        console.log(`✅ AI classifier picked: ${style}`);
+        return style as KrokiStyleKey;
+      }
+    }
+  } catch (err) {
+    console.error("AI classifier error:", err);
+  }
+  
+  // Default fallback: mindmap (works for most general text)
+  console.log("⚠️ Fallback to mindmap-style");
+  return "mindmap-style";
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GPT-4o-mini Vision: Extract text from image (cheap & fast)
@@ -445,6 +564,20 @@ function getKrokiStyleInstructions(style: KrokiStyleKey): string {
     // ─────────────────────────────────────────────────────────────────────────
     // Common Graphs
     // ─────────────────────────────────────────────────────────────────────────
+    case "flowchart":
+      return `MANDATORY STYLE: Flowchart (Mermaid)
+Engine: "mermaid"
+You MUST use Mermaid flowchart syntax. Example:
+flowchart TD
+    A[Start] --> B{Decision}
+    B -->|Yes| C[Action 1]
+    B -->|No| D[Action 2]
+    C --> E[End]
+    D --> E
+Create flowcharts showing processes, decisions, and workflows.
+Use TD for top-down, LR for left-right. Use {} for decisions, [] for actions.
+IMPORTANT: Each element MUST be on its own line.`;
+
     case "block-diagram":
       return `MANDATORY STYLE: Block Diagram
 Engine: "graphviz"

@@ -102,7 +102,7 @@ async function callGeminiGrounded(systemPrompt: string, userPrompt: string): Pro
           contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
           tools: [{ google_search_retrieval: {} }],
           generationConfig: {
-            temperature: 0.7,
+            temperature: 0.5,
             maxOutputTokens: 2048,
             responseMimeType: "application/json",
           },
@@ -141,7 +141,7 @@ async function callOpenAI(systemPrompt: string, userPrompt: string): Promise<str
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
         ],
-        temperature: 0.7,
+        temperature: 0.5,
         max_tokens: 1024,
         response_format: { type: "json_object" }
       })
@@ -179,7 +179,7 @@ async function callGemini(systemPrompt: string, userPrompt: string): Promise<{ t
             body: JSON.stringify({
               contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
               generationConfig: {
-                temperature: 0.7,
+                temperature: 0.5,
                 maxOutputTokens: 1024
               }
             })

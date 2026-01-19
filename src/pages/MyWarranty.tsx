@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -7,7 +7,7 @@ import {
   Shield, Plus, SortAsc, Camera, Upload, X, 
   ChevronLeft, Trash2, FileText, MessageCircle, Calendar,
   Tag, Clock, CheckCircle, AlertTriangle, XCircle, Loader2,
-  Edit2, ExternalLink, CreditCard, User, FolderOpen
+  Edit2, ExternalLink, CreditCard, User, FolderOpen, ChevronDown
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -112,12 +112,18 @@ const translations = {
     extractedInfo: 'Extracted Info',
     aiSummary: 'AI Summary',
     askQuestion: 'Ask anything about this document...',
+    scopeTitle: 'Smart Scope',
+    scopeHint: 'Tap to choose sources',
+    scopeAuto: 'Auto',
+    scopeAll: 'All Files',
+    scopeInstruction: 'Ask a question — keep Auto or tap to pick files.',
     send: 'Send',
     noItems: 'No documents yet',
     addFirst: 'Add your first document',
     optional: 'Optional',
     back: 'Back',
     save: 'Save',
+    saveFile: 'Save File',
     cancel: 'Cancel',
   },
   ar: {
@@ -183,12 +189,18 @@ const translations = {
     extractedInfo: 'المعلومات المستخرجة',
     aiSummary: 'ملخص الذكاء الاصطناعي',
     askQuestion: 'اسأل أي شيء عن هذا المستند...',
+    scopeTitle: 'نطاق ذكي',
+    scopeHint: 'اختر المصادر',
+    scopeAuto: 'تلقائي',
+    scopeAll: 'كل الملفات',
+    scopeInstruction: 'اكتب سؤالك — اتركه تلقائي أو اختر الملفات.',
     send: 'إرسال',
     noItems: 'لا توجد مستندات بعد',
     addFirst: 'أضف أول مستند لك',
     optional: 'اختياري',
     back: 'رجوع',
     save: 'حفظ',
+    saveFile: 'حفظ الملف',
     cancel: 'إلغاء',
   },
 };
@@ -237,6 +249,9 @@ const MyWarranty: React.FC = () => {
   const [askQuestion, setAskQuestion] = useState('');
   const [askMessages, setAskMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   const [isAsking, setIsAsking] = useState(false);
+  const [docScopeMode, setDocScopeMode] = useState<'auto' | 'manual'>('auto');
+  const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
+  const [isScopeOpen, setIsScopeOpen] = useState(false);
   
   // Document viewer modal state
   const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
@@ -490,6 +505,86 @@ const MyWarranty: React.FC = () => {
     }
   };
 
+  const getDocLabel = (doc: WarrantyItem) =>
+    doc.product_name || doc.provider || doc.ref_number || (isRTL ? 'مستند' : 'Document');
+
+  const getDocSortValue = (doc: WarrantyItem) => {
+    const dateValue = doc.expiry_date || doc.purchase_date;
+    if (!dateValue) return 0;
+    return parseISO(dateValue).getTime();
+  };
+
+  const getSuggestedDocs = (question: string) => {
+    const trimmed = question.trim().toLowerCase();
+    const tokens = trimmed.split(/[^a-z0-9\u0600-\u06FF]+/i).filter((t) => t.length > 2);
+    const hasExpiryIntent = /expire|expiry|valid|end|انتهاء|ينتهي|صالحة/.test(trimmed);
+
+    if (tokens.length === 0) {
+      return [...warranties]
+        .sort((a, b) => getDocSortValue(b) - getDocSortValue(a))
+        .slice(0, 3);
+    }
+
+    const scored = warranties
+      .map((doc) => {
+        const haystack = [
+          doc.product_name,
+          doc.provider,
+          doc.ref_number,
+          doc.notes,
+          doc.ai_summary,
+          JSON.stringify(doc.extracted_data || {}),
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+
+        let score = 0;
+        tokens.forEach((token) => {
+          if (haystack.includes(token)) score += 2;
+        });
+        if (hasExpiryIntent && doc.expiry_date) score += 3;
+        return { doc, score };
+      })
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map((entry) => entry.doc);
+
+    if (scored.length > 0) return scored.slice(0, 3);
+
+    return [...warranties]
+      .sort((a, b) => getDocSortValue(b) - getDocSortValue(a))
+      .slice(0, 3);
+  };
+
+  const smartPicks = useMemo(() => getSuggestedDocs(askQuestion), [askQuestion, warranties]);
+  const smartPickIds = useMemo(() => new Set(smartPicks.map((doc) => doc.id)), [smartPicks]);
+  const allDocIds = useMemo(() => warranties.map((doc) => doc.id), [warranties]);
+
+  const isAllFilesSelected =
+    docScopeMode === 'manual' && selectedDocIds.length > 0 && selectedDocIds.length === allDocIds.length;
+
+  const handleSelectAuto = () => {
+    setDocScopeMode('auto');
+    setSelectedDocIds([]);
+  };
+
+  const handleSelectAllFiles = () => {
+    setDocScopeMode('manual');
+    setSelectedDocIds(allDocIds);
+  };
+
+  const handleToggleDoc = (docId: string) => {
+    setDocScopeMode('manual');
+    setSelectedDocIds((prev) => {
+      const next = prev.includes(docId) ? prev.filter((id) => id !== docId) : [...prev, docId];
+      if (next.length === 0) {
+        setDocScopeMode('auto');
+      }
+      return next;
+    });
+  };
+
   // Ask Wakti - searches ALL documents
   const handleAskWakti = async () => {
     const trimmedQuestion = askQuestion.trim();
@@ -499,8 +594,16 @@ const MyWarranty: React.FC = () => {
     setAskMessages((prev) => [...prev, { role: 'user', content: trimmedQuestion }]);
     
     try {
-      // Build context from ALL user documents
-      const allDocsContext = warranties.map((doc) => ({
+      const suggestedDocs = getSuggestedDocs(trimmedQuestion);
+      const scopedDocs =
+        docScopeMode === 'manual' && selectedDocIds.length > 0
+          ? warranties.filter((doc) => selectedDocIds.includes(doc.id))
+          : suggestedDocs.length > 0
+            ? suggestedDocs
+            : warranties;
+
+      // Build context from scoped documents
+      const allDocsContext = scopedDocs.map((doc) => ({
         product_name: doc.product_name,
         provider: doc.provider,
         ref_number: doc.ref_number,
@@ -823,22 +926,88 @@ const MyWarranty: React.FC = () => {
     </div>
   );
 
-  const renderAskTab = () => (
+  const renderAskTab = () => {
+    return (
     <div className="flex flex-col h-full bg-gradient-to-b from-background via-background to-blue-500/5">
-      {/* Beautiful Header with gradient */}
-      <div className="relative px-4 pt-6 pb-4 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-purple-500/5 to-transparent" />
-        <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-blue-500/20 to-transparent rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-        
-        <div className="relative z-10 flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
-            <MessageCircle className="w-7 h-7 text-white" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-foreground">{t.askWakti}</h2>
-            <p className="text-muted-foreground text-sm">
-              {warranties.length} {t.items} • {isRTL ? 'اسأل أي شيء' : 'Ask anything'}
-            </p>
+      {/* Minimal Scope Chips Row */}
+      <div className="px-4 pt-3 pb-2 shrink-0">
+        <div className="flex items-center gap-2 p-2 rounded-xl border border-border/50 bg-muted/20">
+          <p className="text-[10px] text-muted-foreground/70 mr-1">{t.scopeInstruction}</p>
+          {/* Auto Chip */}
+          <button
+            type="button"
+            onClick={handleSelectAuto}
+            className={
+              `px-3 py-1.5 rounded-full text-xs font-semibold border transition ` +
+              (docScopeMode === 'auto'
+                ? 'bg-gradient-to-r from-blue-500/30 to-purple-500/30 border-blue-400/60 text-foreground shadow-[0_4px_12px_rgba(59,130,246,0.2)]'
+                : 'bg-white/5 border-white/10 text-muted-foreground hover:bg-white/10')
+            }
+          >
+            ✨ {t.scopeAuto}
+          </button>
+
+          {/* All Files Chip with Dropdown */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsScopeOpen(!isScopeOpen)}
+              className={
+                `px-3 py-1.5 rounded-full text-xs font-semibold border transition flex items-center gap-1.5 ` +
+                (docScopeMode === 'manual'
+                  ? isAllFilesSelected
+                    ? 'bg-gradient-to-r from-emerald-500/25 to-teal-500/25 border-emerald-400/60 text-foreground shadow-[0_4px_12px_rgba(16,185,129,0.2)]'
+                    : 'bg-gradient-to-r from-blue-500/25 to-indigo-500/25 border-blue-400/60 text-foreground'
+                  : 'bg-white/5 border-white/10 text-muted-foreground hover:bg-white/10')
+              }
+            >
+              📚 {docScopeMode === 'manual' && !isAllFilesSelected ? `${selectedDocIds.length} ${t.items}` : t.scopeAll}
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isScopeOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Dropdown with file chips */}
+            {isScopeOpen && (
+              <div className="absolute top-full left-0 mt-2 z-50 min-w-[280px] max-w-[90vw] rounded-xl border border-white/10 bg-background/95 backdrop-blur-xl p-3 shadow-2xl shadow-black/30 animate-in slide-in-from-top-2 duration-200">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-medium text-muted-foreground">{t.scopeHint}</p>
+                  <button
+                    type="button"
+                    onClick={handleSelectAllFiles}
+                    className={
+                      `px-2 py-1 rounded-full text-[10px] font-semibold border transition ` +
+                      (isAllFilesSelected
+                        ? 'bg-gradient-to-r from-emerald-500/25 to-teal-500/25 border-emerald-400/60 text-foreground'
+                        : 'bg-white/5 border-white/10 text-muted-foreground hover:bg-white/10')
+                    }
+                  >
+                    {isAllFilesSelected ? '✓ ' : ''}{t.scopeAll}
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+                  {warranties.map((doc) => {
+                    const isSelected = selectedDocIds.includes(doc.id);
+                    const isSmartPick = docScopeMode === 'auto' && smartPickIds.has(doc.id);
+                    return (
+                      <button
+                        key={doc.id}
+                        type="button"
+                        onClick={() => handleToggleDoc(doc.id)}
+                        className={
+                          `px-2.5 py-1 rounded-full text-xs border transition truncate max-w-[200px] ` +
+                          (isSelected
+                            ? 'bg-gradient-to-r from-blue-500/25 to-indigo-500/25 border-blue-400/60 text-foreground'
+                            : isSmartPick
+                              ? 'bg-white/10 border-blue-500/30 text-foreground'
+                              : 'bg-white/5 border-white/10 text-muted-foreground hover:bg-white/10')
+                        }
+                      >
+                        {isSmartPick && docScopeMode === 'auto' ? '⭐ ' : ''}{isSelected ? '✓ ' : ''}{getDocLabel(doc)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -911,15 +1080,18 @@ const MyWarranty: React.FC = () => {
         )}
       </div>
 
-      {/* Beautiful Input Area */}
-      <div className="shrink-0 px-4 py-4 border-t-2 border-border bg-gradient-to-t from-background to-transparent">
-        <div className="flex gap-3 items-end p-3 rounded-2xl border-2 border-border bg-muted/30">
-          <div className="flex-1 relative">
+      {/* Premium Input Area */}
+      <div className="shrink-0 px-4 pb-4 pt-2">
+        <div className="relative rounded-2xl bg-gradient-to-br from-white/10 to-white/5 border-2 border-border shadow-lg shadow-black/10 overflow-hidden">
+          {/* Subtle glow effect */}
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-purple-500/5 to-blue-500/5 pointer-events-none" />
+          
+          <div className="relative flex items-end gap-2 p-3">
             <Textarea
               value={askQuestion}
               onChange={(e) => setAskQuestion(e.target.value)}
               placeholder={t.askQuestion}
-              className="min-h-[52px] max-h-[120px] bg-background border-2 border-border rounded-xl resize-none pr-4 py-3 focus:border-blue-500 focus:ring-0 transition-all"
+              className="flex-1 min-h-[44px] max-h-[120px] bg-transparent border border-border rounded-lg resize-none text-foreground placeholder:text-muted-foreground/60 focus:ring-0 focus:outline-none focus:border-blue-500 text-sm py-2 px-3"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
@@ -927,18 +1099,19 @@ const MyWarranty: React.FC = () => {
                 }
               }}
             />
+            <Button
+              className="h-10 w-10 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg shadow-blue-500/30 transition-all active:scale-95 shrink-0"
+              onClick={handleAskWakti}
+              disabled={isAsking || !askQuestion.trim() || warranties.length === 0}
+            >
+              {isAsking ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageCircle className="w-4 h-4" />}
+            </Button>
           </div>
-          <Button
-            className="h-[52px] w-[52px] rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg shadow-blue-500/25 transition-all active:scale-95"
-            onClick={handleAskWakti}
-            disabled={isAsking || !askQuestion.trim() || warranties.length === 0}
-          >
-            {isAsking ? <Loader2 className="w-5 h-5 animate-spin" /> : <MessageCircle className="w-5 h-5" />}
-          </Button>
         </div>
       </div>
     </div>
-  );
+    );
+  };
 
   // Render My Card Tab (placeholder)
   const renderMyCardTab = () => (
@@ -975,7 +1148,12 @@ const MyWarranty: React.FC = () => {
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'warranties' | 'ask')}>
           <TabsList className="bg-white/5 border border-white/10">
             <TabsTrigger value="warranties">{t.warrantiesTab}</TabsTrigger>
-            <TabsTrigger value="ask">{t.askTab}</TabsTrigger>
+            <TabsTrigger
+              value="ask"
+              className="border-2 border-blue-500/40 bg-gradient-to-r from-blue-500/15 to-purple-500/15 text-foreground shadow-[0_8px_24px_rgba(59,130,246,0.25)] hover:shadow-[0_10px_28px_rgba(99,102,241,0.35)] data-[state=active]:from-blue-500/30 data-[state=active]:to-purple-500/30 data-[state=active]:border-blue-400/60"
+            >
+              {t.askTab}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="warranties" className="mt-3">
@@ -1264,7 +1442,7 @@ const MyWarranty: React.FC = () => {
             }}
           >
             <CheckCircle className="w-5 h-5 mr-2" />
-            {isRTL ? 'حفظ الضمان' : 'Save Warranty'}
+            {t.saveFile}
           </Button>
         </div>
       )}
