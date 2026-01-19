@@ -809,51 +809,6 @@ export interface MorphApplyResult {
   tokensUsed?: number;
 }
 
-// ============================================================================
-// 🔧 PARSE MORPH EDITS - Extract <edit> blocks from AI response
-// This is how Open Lovable structures edits for Morph Fast Apply
-// ============================================================================
-
-export interface MorphEditBlock {
-  targetFile: string;
-  instructions: string;
-  update: string;
-}
-
-/**
- * Parse <edit> blocks from LLM output
- * Format: <edit target_file="path/to/file.js">
- *           <instructions>What to change</instructions>
- *           <update>Code with // ... existing code ... markers</update>
- *         </edit>
- */
-export function parseMorphEdits(text: string): MorphEditBlock[] {
-  const edits: MorphEditBlock[] = [];
-  const editRegex = /<edit\s+target_file="([^"]+)">([\s\S]*?)<\/edit>/g;
-  let match: RegExpExecArray | null;
-  
-  while ((match = editRegex.exec(text)) !== null) {
-    const targetFile = match[1].trim();
-    const inner = match[2];
-    
-    // Extract instructions
-    const instrMatch = inner.match(/<instructions>([\s\S]*?)<\/instructions>/);
-    const instructions = instrMatch ? instrMatch[1].trim() : '';
-    
-    // Extract update code
-    const updateMatch = inner.match(/<update>([\s\S]*?)<\/update>/);
-    const update = updateMatch ? updateMatch[1].trim() : '';
-    
-    if (targetFile && update) {
-      edits.push({ targetFile, instructions, update });
-      console.log(`[parseMorphEdits] Found edit for: ${targetFile}`);
-    }
-  }
-  
-  console.log(`[parseMorphEdits] Total edits found: ${edits.length}`);
-  return edits;
-}
-
 /**
  * Call Morph Fast Apply API to intelligently merge code changes
  * This is the secret sauce - it understands code context and merges changes
@@ -2077,7 +2032,7 @@ export const AGENT_TOOLS = [
   // 🚀 SEARCH AND REPLACE - Targeted edits like Lovable uses!
   {
     name: "search_replace",
-    description: "BACKUP edit tool. Exact string replacement - use ONLY when morph_edit fails or for very simple 1-line changes. Requires EXACT match including whitespace.",
+    description: "PREFERRED tool for editing existing files. Find exact code snippet and replace it with new code. Much faster than rewriting entire files. Use this for targeted changes like updating a button color, fixing a bug, or modifying a function.",
     parameters: {
       type: "object",
       properties: {
@@ -2101,7 +2056,7 @@ export const AGENT_TOOLS = [
   // Use this when you want to show partial code changes with "// ... existing code ..." markers
   {
     name: "morph_edit",
-    description: "⭐ PRIMARY EDIT TOOL - USE THIS FIRST! Intelligent code merging powered by Morph AI. Use '// ... existing code ...' markers for unchanged sections. Handles fuzzy matching, doesn't need exact strings. ALWAYS prefer this over search_replace! Example: '// ... existing code ...\\nfunction newCode() { }\\n// ... existing code ...'",
+    description: "INTELLIGENT code editing using Morph Fast Apply. Use '// ... existing code ...' markers to show only the parts you're changing. Morph will intelligently merge your changes into the file. BEST for: complex edits, adding code to specific locations, when exact string matching is difficult. Example: '// ... existing code ...\\nif (!user) throw new Error(\"Not found\");\\n// ... existing code ...'",
     parameters: {
       type: "object",
       properties: {
@@ -2456,16 +2411,16 @@ Before creating a new component/page:
 
 **If it's not imported, it doesn't exist.**
 
-## ✏️ EDITING RULES - MORPH FIRST!
+## ✏️ EDITING RULES
 
 | Change Size | Tool |
 |-------------|------|
-| ANY edit to existing file | ⭐ morph_edit (PRIMARY) |
-| Simple 1-line change | search_replace (backup) |
+| 1-10 lines | search_replace |
+| Add new block | insert_code |
 | New file only | write_file |
 | Rewrite >50% | write_file |
 
-**⭐ ALWAYS try morph_edit FIRST - it handles fuzzy matching!**
+**write_file for small edits = WRONG**
 
 ## ✅ VERIFY BEFORE "DONE"
 
@@ -2476,41 +2431,14 @@ Before creating a new component/page:
 - ✅ UI shows the change
 - ✅ Route + nav done (if page)
 
-## 🔍 MORPH DOCS WORKFLOW: SEARCH → READ → EDIT → VERIFY (MANDATORY!)
+## 🔍 WORKFLOW: SEARCH → READ → EDIT
 
-**This workflow is ENFORCED by the system. Skipping steps will cause your edits to be BLOCKED.**
-
-### Step 1: 🔍 SEARCH - Find the code
-\`\`\`
-grep_search({ query: "button color" })  // Find where the code lives
-\`\`\`
-
-### Step 2: 📖 READ - Understand the structure (REQUIRED before editing!)
-\`\`\`
-read_file({ path: "/App.js" })  // Get full context - BLOCKED if you skip this!
-\`\`\`
-
-### Step 3: ✏️ EDIT - Make precise changes with morph_edit
-\`\`\`
-morph_edit({
-  path: "/App.js",
-  instructions: "I will change the button color from blue to red",
-  code_edit: "// ... existing code ...\\n<button className=\\"bg-red-500\\">\\n// ... existing code ..."
-})
-\`\`\`
-
-### Step 4: ✅ VERIFY - Confirm the change worked (REQUIRED!)
-\`\`\`
-read_file({ path: "/App.js" })  // Read again to confirm your edit applied correctly
-\`\`\`
-
-### Step 5: 🏁 COMPLETE - Only after verification
-\`\`\`
-task_complete({ summary: "Changed button color to red in App.js" })
-\`\`\`
-
-**⭐ morph_edit is your PRIMARY tool - use it for ALL edits!**
-**🚫 search_replace is BACKUP only - use when morph_edit fails**
+1. **grep_search** to find where code lives
+2. **read_file** to see full context
+3. **State your plan** before editing
+4. **search_replace** with EXACT code from read_file
+5. **Verify** the change exists
+6. **task_complete** with summary
 
 ## ⚠️ CRITICAL RULES - NEVER BREAK THESE
 
@@ -2579,142 +2507,36 @@ Allowed commands:
 ## 🚀 KEY DIFFERENCE: TARGETED EDITS, NOT FULL REWRITES
 
 Unlike basic code generators, you make SURGICAL, TARGETED changes:
-- **Change button color?** → Use morph_edit with '// ... existing code ...' markers
-- **Fix a bug?** → Use morph_edit for intelligent merge
-- **Add new function?** → Use morph_edit or insert_code
+- **Change button color?** → Use search_replace to find the button and change its class
+- **Fix a bug?** → Use search_replace to fix just that line
+- **Add new function?** → Use insert_code to add it without touching other code
 - **Create new file?** → Use write_file ONLY for new files
-
-## 📝 MORPH_EDIT PATTERNS (CRITICAL - FOLLOW THESE!)
-
-**Pattern 1: Delete a section (keep surrounding code):**
-\`\`\`
-// ... existing code ...
-function keepThis() {
-  return "stay";
-}
-
-function alsoKeepThis() {
-  return "also stay";
-}
-// ... existing code ...
-\`\`\`
-
-**Pattern 2: Add imports:**
-\`\`\`
-import { useState, useEffect } from "react";
-import { calculateTax } from "./utils"; // New import
-// ... existing code ...
-\`\`\`
-
-**Pattern 3: Add error handling:**
-\`\`\`
-// ... existing code ...
-function divide(a, b) {
-  if (b === 0) {
-    throw new Error("Cannot divide by zero");
-  }
-  return a / b;
-}
-// ... existing code ...
-\`\`\`
-
-**Pattern 4: Update function:**
-\`\`\`
-// ... existing code ...
-function authenticateUser(email, password) {
-  const result = await verifyUser(email, password);
-  if (result) {
-    return "Authenticated";
-  }
-  return "Unauthenticated";
-}
-// ... existing code ...
-\`\`\`
-
-**Pattern 5: Add new method to class:**
-\`\`\`
-// ... existing code ...
-class UserService {
-  async getUser(id) {
-    return await this.db.findUser(id);
-  }
-
-  async updateUser(id, data) {
-    return await this.db.updateUser(id, data);
-  }
-}
-// ... existing code ...
-\`\`\`
-
-**⚠️ COMMON MISTAKES TO AVOID:**
-\`\`\`
-// ❌ WRONG - missing context markers
-function newFunction() {
-  return "hello";
-}
-
-// ✅ CORRECT - with context markers
-// ... existing code ...
-function newFunction() {
-  return "hello";
-}
-// ... existing code ...
-\`\`\`
-
-## 📤 OUTPUT FORMAT FOR EDITS (CRITICAL!)
-
-When making edits, you can ALSO output \`<edit>\` blocks for complex changes. This enables Morph Fast Apply:
-
-\`\`\`xml
-<edit target_file="/App.js">
-<instructions>Add a Products link to the navigation header</instructions>
-<update>
-// ... existing code ...
-<nav className="flex gap-4">
-  <a href="/">Home</a>
-  <a href="/products">Products</a>
-  <a href="/contact">Contact</a>
-</nav>
-// ... existing code ...
-</update>
-</edit>
-\`\`\`
-
-**Rules for \`<edit>\` blocks:**
-1. \`target_file\` must be the exact file path (e.g., "/App.js", "/components/Header.jsx")
-2. \`<instructions>\` describes what you're changing (first-person, clear)
-3. \`<update>\` contains code with \`// ... existing code ...\` markers for unchanged parts
-4. You can output multiple \`<edit>\` blocks for multiple files
-5. The system will use Morph AI to intelligently merge your changes
 
 ## YOUR TOOLS (PRIORITIZED BY EFFICIENCY)
 
 1. **grep_search** ⭐⭐ FIRST - Search ALL files for text/code. Use this FIRST to find where code lives!
 2. **read_file** ⭐ - Read file AFTER grep_search finds it. MANDATORY before any edit!
-3. **morph_edit** ⭐⭐⭐ PRIMARY EDIT - Intelligent code merge with Morph AI. Use '// ... existing code ...' markers!
-4. **search_replace** - BACKUP only - Exact string match (use if morph_edit fails)
-5. **insert_code** - Add new code after a specific location
-6. **list_files** - See project structure
-7. **write_file** - ONLY for NEW files or complete rewrites (>50% changes)
-8. **delete_file** - Remove files
-9. **warp_grep** - AI-powered code search (natural language)
-10. **get_console_logs** - Debug runtime issues
-11. **get_network_errors** - Debug API calls
-12. **get_runtime_errors** - See all errors
-13. **query_collection** - Query backend data
-14. **get_project_info** - Get project metadata
-15. **task_complete** - Call when DONE (MUST verify changes first!)
+3. **search_replace** ⭐ PRIMARY EDIT - Find exact code and replace it. FASTEST for edits!
+4. **insert_code** - Add new code after a specific location
+5. **list_files** - See project structure
+6. **write_file** - ONLY for NEW files or complete rewrites (>50% changes)
+7. **delete_file** - Remove files
+8. **get_console_logs** - Debug runtime issues
+9. **get_network_errors** - Debug API calls
+10. **get_runtime_errors** - See all errors
+11. **query_collection** - Query backend data
+12. **get_project_info** - Get project metadata
+13. **task_complete** - Call when DONE (MUST verify changes first!)
 
 ## YOUR WORKFLOW (LIKE CASCADE) ⭐ CRITICAL
 
 1. **GREP FIRST**: Use grep_search to find where the code/text lives
 2. **READ FILE**: Use read_file to see full context of the file
 3. **STATE PLAN**: Tell user what you will do before doing it
-4. **MORPH_EDIT**: Use morph_edit with '// ... existing code ...' markers (PRIMARY!)
+4. **TARGETED EDIT**: Use search_replace with EXACT code from read_file
 5. **VERIFY**: Re-read the file to confirm your change worked!
 6. **DONE**: Call task_complete with summary
 
-**⭐ morph_edit is powered by Morph AI - it handles fuzzy matching and doesn't need exact strings!**
 **⚠️ ENFORCEMENT: The system tracks if you read files before editing. If you edit without reading first, you will get a warning.**
 
 ## ⚠️ TOOL SELECTION RULES - CRITICAL
@@ -2723,13 +2545,12 @@ When making edits, you can ALSO output \`<edit>\` blocks for complex changes. Th
 
 | Situation | Tool to Use | Why |
 |-----------|-------------|-----|
-| ANY edit to existing file | ⭐ morph_edit | PRIMARY - handles fuzzy matching! |
-| Simple 1-line change | search_replace | Backup if morph_edit fails |
-| Add new code to existing file | morph_edit or insert_code | morph_edit preferred |
+| Change 1-10 lines | search_replace | Fast, precise, safe |
+| Add new code to existing file | insert_code | Doesn't touch existing code |
 | Create NEW file | write_file | File doesn't exist yet |
-| Rewrite >50% of file | write_file | Too many changes |
-| Fix a bug | morph_edit | Intelligent merge |
-| Add an import | morph_edit or insert_code | morph_edit preferred |
+| Rewrite >50% of file | write_file | Too many changes for search_replace |
+| Fix a bug | search_replace | Target just the broken code |
+| Add an import | insert_code | Add at top without touching rest |
 
 **🚫 NEVER USE write_file FOR:**
 - Changing button colors, text, or styles
@@ -2738,7 +2559,7 @@ When making edits, you can ALSO output \`<edit>\` blocks for complex changes. Th
 - Updating function logic
 - Any change under 50% of file
 
-**⭐ Use morph_edit for ALL edits to existing files - it's powered by Morph AI!**
+**If you use write_file when search_replace would work, you are doing it WRONG.**
 
 ## SEARCH_REPLACE BEST PRACTICES
 
@@ -3141,8 +2962,8 @@ const login = async (email, password) => {
 
 **Examples of CODE CHANGE requests (edit files):**
 - "Add a products page" → Create/edit files
-- "Change the button color" → Use morph_edit (PRIMARY)
-- "Fix the header" → Use morph_edit (PRIMARY)
+- "Change the button color" → Use search_replace
+- "Fix the header" → Use search_replace
 - "Create a booking form" → Create/edit files
 
 **🚫 NEVER edit files when user just asks a question!**
@@ -3196,9 +3017,9 @@ When you receive error context (runtime errors, build errors, etc.):
 2. Confirm the error line now looks correct
 3. Ensure no new errors were introduced
 
-## 🔒 MANDATORY: morph_edit OVER write_file
+## 🔒 MANDATORY: search_replace OVER write_file
 
-**You MUST use morph_edit (PRIMARY) instead of write_file when:**
+**You MUST use search_replace instead of write_file when:**
 - The file already exists
 - You're changing less than 50% of the file
 - You're fixing a bug
@@ -3208,7 +3029,6 @@ When you receive error context (runtime errors, build errors, etc.):
 - Creating a brand NEW file that doesn't exist
 - Complete rewrites (>50% of file changes)
 
-**morph_edit uses Morph AI (10,500+ tok/sec) for intelligent code merging - it handles fuzzy matching!**
 **If you use write_file for small edits, you are WRONG and will break things.**
 
 ## ✅ POST-EDIT VERIFICATION (MANDATORY)

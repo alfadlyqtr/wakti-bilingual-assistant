@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { BusinessCardWizard } from '@/components/business-card/BusinessCardWizard';
+import { BusinessCardBuilder } from '@/components/business-card/BusinessCardBuilder';
+import { CardCreatedCelebration } from '@/components/business-card/CardCreatedCelebration';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -47,6 +50,18 @@ interface WarrantyItem {
 }
 
 type ViewMode = 'list' | 'detail' | 'add' | 'categories' | 'ask';
+
+interface BusinessCardData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  companyName: string;
+  jobTitle: string;
+  website: string;
+  logoUrl: string;
+  profilePhotoUrl: string;
+}
 
 const translations = {
   en: {
@@ -256,6 +271,15 @@ const MyWarranty: React.FC = () => {
   // Document viewer modal state
   const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
   const [documentToView, setDocumentToView] = useState<{ url: string; type: 'image' | 'pdf' } | null>(null);
+
+  // Business Card state
+  const [businessCard, setBusinessCard] = useState<BusinessCardData | null>(null);
+  const [showCardWizard, setShowCardWizard] = useState(false);
+  const [showCardBuilder, setShowCardBuilder] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [isLoadingCard, setIsLoadingCard] = useState(true);
+  const [cardInnerTab, setCardInnerTab] = useState<'mycard' | 'collected'>('mycard');
+  const [collectedCards, setCollectedCards] = useState<any[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -1113,19 +1137,375 @@ const MyWarranty: React.FC = () => {
     );
   };
 
-  // Render My Card Tab (placeholder)
-  const renderMyCardTab = () => (
-    <div className="flex flex-col h-full items-center justify-center px-4 py-20">
-      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center mb-6">
-        <CreditCard className="w-10 h-10 text-blue-400" />
+  // Handle business card wizard completion
+  const handleCardWizardComplete = async (data: BusinessCardData) => {
+    if (!user) return;
+    
+    try {
+      // Generate a unique share slug
+      const shareSlug = `${data.firstName.toLowerCase()}-${Date.now().toString(36)}`;
+      
+      const { error } = await supabase
+        .from('user_business_cards')
+        .upsert({
+          user_id: user.id,
+          first_name: data.firstName,
+          last_name: data.lastName || null,
+          email: data.email || null,
+          phone: data.phone || null,
+          company_name: data.companyName || null,
+          job_title: data.jobTitle || null,
+          website: data.website || null,
+          logo_url: data.logoUrl || null,
+          profile_photo_url: data.profilePhotoUrl || null,
+          share_slug: shareSlug,
+        }, { onConflict: 'user_id' });
+
+      if (error) throw error;
+
+      setBusinessCard(data);
+      setShowCardWizard(false);
+      setShowCelebration(true); // Show celebration popup first
+    } catch (error) {
+      console.error('Error saving business card:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to save business card',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Fetch existing business card
+  const fetchBusinessCard = useCallback(async () => {
+    if (!user) return;
+    
+    setIsLoadingCard(true);
+    try {
+      const { data, error } = await supabase
+        .from('user_business_cards')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows
+
+      if (data) {
+        setBusinessCard({
+          firstName: data.first_name,
+          lastName: data.last_name || '',
+          email: data.email || '',
+          phone: data.phone || '',
+          companyName: data.company_name || '',
+          jobTitle: data.job_title || '',
+          website: data.website || '',
+          logoUrl: data.logo_url || '',
+          profilePhotoUrl: data.profile_photo_url || '',
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching business card:', error);
+    } finally {
+      setIsLoadingCard(false);
+    }
+  }, [user]);
+
+  // Fetch business card on mount
+  useEffect(() => {
+    fetchBusinessCard();
+  }, [fetchBusinessCard]);
+
+  // Handle builder save
+  const handleBuilderSave = async (data: BusinessCardData) => {
+    if (!user) return;
+    
+    try {
+      const { error } = await supabase
+        .from('user_business_cards')
+        .update({
+          first_name: data.firstName,
+          last_name: data.lastName || null,
+          email: data.email || null,
+          phone: data.phone || null,
+          company_name: data.companyName || null,
+          job_title: data.jobTitle || null,
+          website: data.website || null,
+          logo_url: data.logoUrl || null,
+          profile_photo_url: data.profilePhotoUrl || null,
+          template: (data as any).template || 'modern',
+          social_links: (data as any).socialLinks || [],
+        })
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+      setBusinessCard(data);
+    } catch (error) {
+      console.error('Error updating business card:', error);
+      throw error;
+    }
+  };
+
+  // Render My Card inner content (user's own card)
+  const renderMyCardContent = () => {
+    // Loading state
+    if (isLoadingCard) {
+      return (
+        <div className="flex flex-col h-full items-center justify-center px-4 py-20">
+          <Loader2 className="w-10 h-10 animate-spin text-blue-400 mb-4" />
+          <p className="text-muted-foreground">{isRTL ? 'جاري التحميل...' : 'Loading...'}</p>
+        </div>
+      );
+    }
+
+    // No card yet - show create CTA
+    if (!businessCard) {
+      return (
+        <div className="flex flex-col h-full bg-gradient-to-b from-background via-background to-blue-500/5">
+          {/* Hero Section */}
+          <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
+            {/* Floating cards illustration */}
+            <div className="relative w-64 h-48 mb-8">
+              {/* Background cards */}
+              <div className="absolute top-4 left-4 w-44 h-28 rounded-2xl bg-gradient-to-br from-orange-400/30 to-pink-500/30 transform -rotate-12 shadow-xl" />
+              <div className="absolute top-2 right-4 w-44 h-28 rounded-2xl bg-gradient-to-br from-emerald-400/30 to-teal-500/30 transform rotate-6 shadow-xl" />
+              {/* Main card */}
+              <div className="absolute top-8 left-1/2 -translate-x-1/2 w-52 h-32 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-2xl shadow-blue-500/30 flex flex-col items-center justify-center p-4">
+                <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center mb-2">
+                  <User className="w-6 h-6 text-white" />
+                </div>
+                <div className="h-2 w-24 bg-white/40 rounded-full mb-1" />
+                <div className="h-1.5 w-16 bg-white/30 rounded-full" />
+              </div>
+            </div>
+
+            <h1 className="text-2xl font-bold text-foreground text-center mb-3">
+              {isRTL ? 'أنشئ بطاقتك الرقمية' : 'Create Your Digital Card'}
+            </h1>
+            <p className="text-muted-foreground text-center max-w-xs mb-8">
+              {isRTL 
+                ? 'شارك معلوماتك المهنية بسهولة مع أي شخص في ثوانٍ'
+                : 'Share your professional info with anyone in seconds'}
+            </p>
+
+            <Button
+              onClick={() => setShowCardWizard(true)}
+              className="h-14 px-8 text-lg font-semibold rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg shadow-blue-500/25 transition-all active:scale-95"
+            >
+              <CreditCard className="w-5 h-5 mr-2" />
+              {isRTL ? 'إنشاء بطاقة العمل' : 'Create Business Card'}
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    // Has card - show card preview (TODO: implement card builder/preview)
+    return (
+      <div className="flex flex-col h-full bg-gradient-to-b from-background via-background to-blue-500/5 px-4 py-6">
+        <div className="text-center mb-6">
+          <h2 className="text-xl font-bold text-foreground">{isRTL ? 'بطاقتي' : 'My Card'}</h2>
+          <p className="text-sm text-muted-foreground">{isRTL ? 'معاينة بطاقتك الرقمية' : 'Preview your digital card'}</p>
+        </div>
+
+        {/* Card Preview */}
+        <div className="mx-auto w-full max-w-sm">
+          <div className="rounded-3xl bg-gradient-to-br from-blue-500 to-purple-600 p-6 shadow-2xl shadow-blue-500/30">
+            {/* Logo */}
+            {businessCard.logoUrl && (
+              <div className="flex justify-end mb-4">
+                <img src={businessCard.logoUrl} alt="Logo" className="h-10 w-auto object-contain" />
+              </div>
+            )}
+
+            {/* Profile */}
+            <div className="flex items-center gap-4 mb-6">
+              {businessCard.profilePhotoUrl ? (
+                <img
+                  src={businessCard.profilePhotoUrl}
+                  alt="Profile"
+                  className="w-16 h-16 rounded-full object-cover border-2 border-white/30"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center">
+                  <User className="w-8 h-8 text-white/70" />
+                </div>
+              )}
+              <div>
+                <h3 className="text-xl font-bold text-white">
+                  {businessCard.firstName} {businessCard.lastName}
+                </h3>
+                {businessCard.jobTitle && (
+                  <p className="text-white/80 text-sm">{businessCard.jobTitle}</p>
+                )}
+                {businessCard.companyName && (
+                  <p className="text-white/60 text-xs">{businessCard.companyName}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Contact Info */}
+            <div className="space-y-2">
+              {businessCard.email && (
+                <div className="flex items-center gap-3 text-white/90 text-sm">
+                  <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                    <span className="text-xs">✉️</span>
+                  </div>
+                  {businessCard.email}
+                </div>
+              )}
+              {businessCard.phone && (
+                <div className="flex items-center gap-3 text-white/90 text-sm">
+                  <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                    <span className="text-xs">📞</span>
+                  </div>
+                  {businessCard.phone}
+                </div>
+              )}
+              {businessCard.website && (
+                <div className="flex items-center gap-3 text-white/90 text-sm">
+                  <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                    <span className="text-xs">🌐</span>
+                  </div>
+                  {businessCard.website}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="mt-6 flex gap-3 justify-center">
+          <Button
+            variant="outline"
+            onClick={() => setShowCardBuilder(true)}
+            className="rounded-xl"
+          >
+            <Edit2 className="w-4 h-4 mr-2" />
+            {isRTL ? 'تعديل' : 'Edit Card'}
+          </Button>
+          <Button
+            className="rounded-xl bg-gradient-to-r from-blue-500 to-purple-600"
+            onClick={() => {
+              toast({ title: 'Coming soon', description: 'Share feature coming soon!' });
+            }}
+          >
+            {isRTL ? 'مشاركة' : 'Share'}
+          </Button>
+        </div>
       </div>
-      <h2 className="text-xl font-bold text-foreground mb-2">{t.cardTitle}</h2>
-      <p className="text-muted-foreground text-center mb-4">{t.cardDescription}</p>
-      <div className="px-4 py-2 rounded-full bg-white/5 border border-white/10">
-        <span className="text-sm text-muted-foreground">{t.cardComingSoon}</span>
+    );
+  };
+
+  // Render Collected tab (scanned cards from others)
+  const renderCollectedContent = () => {
+    if (collectedCards.length === 0) {
+      return (
+        <div className="flex flex-col h-full items-center justify-center px-6 py-12">
+          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center mb-6">
+            <FolderOpen className="w-10 h-10 text-emerald-400" />
+          </div>
+          <h2 className="text-xl font-bold text-foreground mb-2">
+            {isRTL ? 'لا توجد بطاقات محفوظة' : 'No Cards Collected'}
+          </h2>
+          <p className="text-muted-foreground text-center max-w-xs mb-6">
+            {isRTL 
+              ? 'امسح بطاقات الآخرين لحفظها هنا'
+              : 'Scan other people\'s cards to save them here'}
+          </p>
+          <Button
+            variant="outline"
+            className="rounded-xl"
+            onClick={() => {
+              toast({ title: 'Coming soon', description: 'QR scanner coming soon!' });
+            }}
+          >
+            {isRTL ? 'مسح بطاقة' : 'Scan a Card'}
+          </Button>
+        </div>
+      );
+    }
+
+    // Show collected cards list
+    return (
+      <div className="flex flex-col h-full px-4 py-4">
+        <div className="grid gap-3">
+          {collectedCards.map((card, index) => (
+            <div
+              key={index}
+              className="p-4 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-4"
+            >
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                <User className="w-6 h-6 text-white" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-foreground">{card.name}</h3>
+                <p className="text-sm text-muted-foreground">{card.company}</p>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
+
+  // Render My Card Tab with inner tabs
+  const renderMyCardTab = () => {
+    // Show wizard if user wants to create/edit card
+    if (showCardWizard) {
+      return (
+        <BusinessCardWizard
+          onComplete={handleCardWizardComplete}
+          onCancel={() => setShowCardWizard(false)}
+        />
+      );
+    }
+
+    // Show builder after wizard or when editing
+    if (showCardBuilder && businessCard) {
+      return (
+        <BusinessCardBuilder
+          initialData={businessCard}
+          onSave={handleBuilderSave}
+          onBack={() => setShowCardBuilder(false)}
+        />
+      );
+    }
+
+    return (
+      <div className="flex flex-col h-full">
+        {/* Inner Tab Navigation */}
+        <div className="px-4 pt-2 pb-2">
+          <div className="flex items-center gap-1 p-1 rounded-2xl bg-white/5 border border-white/10">
+            <button
+              onClick={() => setCardInnerTab('mycard')}
+              className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all ${
+                cardInnerTab === 'mycard'
+                  ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+              }`}
+            >
+              {isRTL ? 'بطاقتي' : 'My Card'}
+            </button>
+            <button
+              onClick={() => setCardInnerTab('collected')}
+              className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all ${
+                cardInnerTab === 'collected'
+                  ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+              }`}
+            >
+              {isRTL ? 'المحفوظة' : 'Collected'}
+            </button>
+          </div>
+        </div>
+
+        {/* Inner Tab Content */}
+        <div className="flex-1 overflow-y-auto">
+          {cardInnerTab === 'mycard' ? renderMyCardContent() : renderCollectedContent()}
+        </div>
+      </div>
+    );
+  };
 
   // Render My CV Tab (placeholder)
   const renderMyCVTab = () => (
@@ -1870,6 +2250,15 @@ const MyWarranty: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Card Created Celebration Popup */}
+      <CardCreatedCelebration
+        isOpen={showCelebration}
+        onContinue={() => {
+          setShowCelebration(false);
+          setShowCardBuilder(true);
+        }}
+      />
     </div>
   );
 };

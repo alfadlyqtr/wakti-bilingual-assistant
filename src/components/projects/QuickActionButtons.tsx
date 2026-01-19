@@ -18,11 +18,46 @@ interface QuickActionButtonsProps {
   onActionClick: (prompt: string) => void;
   isRTL?: boolean;
   className?: string;
+  dynamicSuggestions?: string[]; // 🎯 Context-aware suggestions from code mode
 }
+
+// 🎯 PRIORITY 1: Extract options from AI questions (emoji-prefixed lines)
+// When AI asks "Would you like me to:" with options, extract those as chips
+const extractQuestionOptions = (content: string): QuickAction[] => {
+  const options: QuickAction[] = [];
+  
+  // Pattern: Lines starting with emoji like 🔍, 🔗, 📝, ✨, etc. followed by text
+  const emojiPattern = /[🔍🔗📝✨🎨💡🔧⚡🚀📦🎯✅❌🔄📋🛠️]\s*([^\n?]+)\??/g;
+  
+  const matches = content.matchAll(emojiPattern);
+  for (const match of matches) {
+    const optionText = match[1].trim().replace(/[?？]$/, '').trim();
+    // Only include reasonable length options
+    if (optionText.length > 3 && optionText.length < 80) {
+      options.push({
+        id: `option-${options.length}`,
+        label: optionText,
+        labelAr: optionText, // Keep original for now
+        icon: <Sparkles className="w-3.5 h-3.5" />,
+        prompt: optionText, // Use the option text as the prompt
+        category: 'features'
+      });
+    }
+  }
+  
+  return options.slice(0, 3); // Max 3 question options
+};
 
 // Generate context-aware actions based on AI response content
 // Returns EMPTY array if no strong match found (no static fallback)
 const generateActionsFromResponse = (content: string): QuickAction[] => {
+  // 🎯 FIRST: Check if AI asked a question with options
+  const questionOptions = extractQuestionOptions(content);
+  if (questionOptions.length >= 2) {
+    console.log('[QuickActionButtons] Found AI question options:', questionOptions.map(o => o.label));
+    return questionOptions;
+  }
+  
   const actions: QuickAction[] = [];
   const lowerContent = content.toLowerCase();
 
@@ -90,6 +125,22 @@ const generateActionsFromResponse = (content: string): QuickAction[] => {
     );
   }
 
+  // Products/Shop page mentioned
+  if (lowerContent.includes('product') || lowerContent.includes('shop') || lowerContent.includes('inventory')) {
+    actions.push(
+      { id: 'link-products', label: 'Add products link to header', labelAr: 'أضف رابط المنتجات للهيدر', icon: <Plus className="w-3.5 h-3.5" />, prompt: 'Add a link to the products page in the header navigation', category: 'features' },
+      { id: 'show-products', label: 'Show products page', labelAr: 'اعرض صفحة المنتجات', icon: <Zap className="w-3.5 h-3.5" />, prompt: 'Show me the products page in the preview', category: 'features' }
+    );
+  }
+
+  // Page/File mentioned
+  if (lowerContent.includes('page') || lowerContent.includes('.js') || lowerContent.includes('.tsx') || lowerContent.includes('file')) {
+    actions.push(
+      { id: 'add-link', label: 'Add link to this page', labelAr: 'أضف رابط لهذه الصفحة', icon: <Plus className="w-3.5 h-3.5" />, prompt: 'Add a navigation link to this page', category: 'features' },
+      { id: 'edit-page', label: 'Edit this page', labelAr: 'عدّل هذه الصفحة', icon: <Zap className="w-3.5 h-3.5" />, prompt: 'Make changes to this page', category: 'features' }
+    );
+  }
+
   // NO STATIC FALLBACK - only return actions if there's context
   // Limit to 4 actions max
   return actions.slice(0, 4);
@@ -108,11 +159,27 @@ export const QuickActionButtons: React.FC<QuickActionButtonsProps> = ({
   onActionClick,
   isRTL = false,
   className = '',
+  dynamicSuggestions = [],
 }) => {
   const { i18n } = useTranslation();
   const isArabic = i18n.language === 'ar';
 
-  const actions = useMemo(() => generateActionsFromResponse(responseContent), [responseContent]);
+  // 🎯 PRIORITY: Use dynamic suggestions if provided, otherwise generate from response
+  const actions = useMemo(() => {
+    // If we have dynamic suggestions from code mode, use those first
+    if (dynamicSuggestions.length > 0) {
+      return dynamicSuggestions.map((suggestion, idx) => ({
+        id: `dynamic-${idx}`,
+        label: suggestion,
+        labelAr: suggestion,
+        icon: <Sparkles className="w-3.5 h-3.5" />,
+        prompt: suggestion,
+        category: 'features' as const
+      }));
+    }
+    // Otherwise, generate from response content
+    return generateActionsFromResponse(responseContent);
+  }, [responseContent, dynamicSuggestions]);
 
   if (actions.length === 0) return null;
 

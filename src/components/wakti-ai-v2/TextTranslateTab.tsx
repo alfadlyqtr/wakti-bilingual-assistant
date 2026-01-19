@@ -6,6 +6,7 @@ import pdfjsWorker from 'pdfjs-dist/build/pdf.worker?url';
 import Tesseract from 'tesseract.js';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
+import ArabicReshaper from 'arabic-reshaper';
 import { supabase } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -74,7 +75,7 @@ export default function TextTranslateTab() {
   const [ttLoading, setTtLoading] = useState(false);
   const [ttResult, setTtResult] = useState('');
   const [ttSectionTab, setTtSectionTab] = useState<'input' | 'results' | 'my'>('input');
-  const [ttActiveTab, setTtActiveTab] = useState<'text' | 'document'>('text');
+  // Removed ttActiveTab - no longer needed after UX simplification
   const [ttSelectedFile, setTtSelectedFile] = useState<File | null>(null);
   const [ttExtracting, setTtExtracting] = useState(false);
   const [ttExtractError, setTtExtractError] = useState<string>('');
@@ -285,7 +286,6 @@ export default function TextTranslateTab() {
   const handleClearTextTranslate = () => {
     setTtText('');
     setTtResult('');
-    setTtActiveTab('text');
     setTtSelectedFile(null);
     setTtExtracting(false);
     setTtExtractError('');
@@ -379,10 +379,13 @@ export default function TextTranslateTab() {
   };
 
   const renderTranslationCardHtml = (args: { title: string; subtitle: string; body: string; isRtl: boolean }) => {
+    // Use same fonts as Tasjeel - system fonts that support Arabic
     const fontFamily = args.isRtl
-      ? "'Noto Sans Arabic', 'Segoe UI', Tahoma, Arial, sans-serif"
-      : "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+      ? 'Arial, "Segoe UI", Tahoma, sans-serif'
+      : 'Inter, Arial, sans-serif';
     const bodyEscaped = (args.body || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const bodyHtml = bodyEscaped.split('\n').map(line => `<div>${line || '&nbsp;'}</div>`).join('');
+    
     return `
       <div style="
         width: 794px;
@@ -399,29 +402,33 @@ export default function TextTranslateTab() {
           box-shadow: 0 10px 30px rgba(0,0,0,0.08);
           background: linear-gradient(135deg, #fcfefd 0%, hsl(200 15% 96%) 30%, #fcfefd 100%);
         ">
-          <div style="display:flex; align-items:flex-start; justify-content:space-between; gap: 12px;">
-            <div>
-              <div style="font-size:16px; font-weight:800; color:#060541; margin-bottom:4px;">${args.title}</div>
+          <div style="display:flex; align-items:flex-start; justify-content:space-between; gap: 12px; flex-direction: ${args.isRtl ? 'row-reverse' : 'row'};">
+            <div style="text-align: ${args.isRtl ? 'right' : 'left'};">
+              <div style="font-size:16px; font-weight:700; color:#060541; margin-bottom:4px;">${args.title}</div>
               <div style="font-size:12px; color:#475569;">${args.subtitle}</div>
             </div>
             <div style="font-size:12px; color:#94a3b8;">WAKTI</div>
           </div>
           <div style="height: 10px;"></div>
           <div style="
-            white-space: pre-wrap;
-            font-size: 13px;
-            line-height: 1.7;
+            font-size: 14px;
+            line-height: 1.8;
             color: #0f172a;
-          ">${bodyEscaped}</div>
+            direction: ${args.isRtl ? 'rtl' : 'ltr'};
+            text-align: ${args.isRtl ? 'right' : 'left'};
+          ">${bodyHtml}</div>
         </div>
       </div>
     `;
   };
 
   const generatePreviewAndPdf = async (translatedText: string) => {
-    const isRtl = ttTarget === 'ar';
+    const isRtl = ttTarget === 'ar' || ttTarget === 'he' || ttTarget === 'fa' || ttTarget === 'ur';
     const title = language === 'ar' ? 'ترجمة المستند' : 'Document Translation';
     const subtitle = `${language === 'ar' ? 'إلى' : 'To'} ${ttTargetLabel}`;
+    
+    // Use html2canvas for ALL languages - browser handles text shaping correctly
+    // Using system fonts (Arial, Segoe UI, Tahoma) that support Arabic natively
     const html = renderTranslationCardHtml({ title, subtitle, body: translatedText, isRtl });
 
     const container = document.createElement('div');
@@ -434,7 +441,6 @@ export default function TextTranslateTab() {
     document.body.appendChild(container);
 
     try {
-      await (document as any).fonts?.ready;
       const cardEl = container.firstElementChild as HTMLElement;
       const canvas = await html2canvas(cardEl, {
         backgroundColor: 'white',
@@ -474,25 +480,38 @@ export default function TextTranslateTab() {
     if (!user?.id) {
       throw new Error(language === 'ar' ? 'يجب تسجيل الدخول' : 'You must be logged in');
     }
-    if (!ttSelectedFile) {
-      throw new Error(language === 'ar' ? 'يرجى اختيار ملف' : 'Please select a file');
-    }
 
     const { previewBlob, pdfBlob } = await generatePreviewAndPdf(translatedText);
 
     const id = crypto.randomUUID();
     const userId = user.id;
-    const ext = (ttSelectedFile.name.split('.').pop() || '').toLowerCase();
-    const safeExt = ext ? `.${ext}` : '';
+    
+    // Handle case where user pasted text without uploading a file
+    const sourceFileName = ttSelectedFile?.name || 'pasted-text.txt';
+    const ext = (sourceFileName.split('.').pop() || 'txt').toLowerCase();
+    const safeExt = `.${ext}`;
+    const baseName = sourceFileName.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9\u0600-\u06FF\s_-]/g, '').trim().slice(0, 50) || 'document';
+    const readablePdfName = `${baseName}-${ttTargetLabel}-translated.pdf`;
     const sourcePath = `${userId}/${id}/source${safeExt}`;
-    const pdfPath = `${userId}/${id}/translated.pdf`;
+    const pdfPath = `${userId}/${id}/${readablePdfName}`;
     const previewPath = `${userId}/${id}/preview.png`;
 
-    const uploadSource = await supabase.storage.from('translations').upload(sourcePath, ttSelectedFile, {
-      upsert: true,
-      contentType: ttSelectedFile.type || undefined,
-    });
-    if (uploadSource.error) throw uploadSource.error;
+    // Upload source file or create a text file from pasted text
+    if (ttSelectedFile) {
+      const uploadSource = await supabase.storage.from('translations').upload(sourcePath, ttSelectedFile, {
+        upsert: true,
+        contentType: ttSelectedFile.type || undefined,
+      });
+      if (uploadSource.error) throw uploadSource.error;
+    } else {
+      // Create a text file from the original text
+      const textBlob = new Blob([ttText], { type: 'text/plain' });
+      const uploadSource = await supabase.storage.from('translations').upload(sourcePath, textBlob, {
+        upsert: true,
+        contentType: 'text/plain',
+      });
+      if (uploadSource.error) throw uploadSource.error;
+    }
 
     const uploadPdf = await supabase.storage.from('translations').upload(pdfPath, pdfBlob, {
       upsert: true,
@@ -509,8 +528,8 @@ export default function TextTranslateTab() {
     const { error: insertError } = await supabase.from('user_translations').insert({
       user_id: userId,
       target_language: ttTarget,
-      source_filename: ttSelectedFile.name,
-      source_mime_type: ttSelectedFile.type || null,
+      source_filename: sourceFileName,
+      source_mime_type: ttSelectedFile?.type || 'text/plain',
       source_storage_path: sourcePath,
       source_text_length: ttText.trim().length,
       translated_text: translatedText,
@@ -521,7 +540,6 @@ export default function TextTranslateTab() {
     if (insertError) throw insertError;
 
     await loadMyTranslations();
-    setTtActiveTab('document');
   };
 
   const doTextTranslate = async () => {
@@ -724,127 +742,114 @@ export default function TextTranslateTab() {
       )}
 
       {ttSectionTab === 'results' && (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {!ttResult && (
-            <div className="text-xs text-muted-foreground">
-              {language === 'ar' ? 'قم بالترجمة أولاً لرؤية النتائج' : 'Translate first to see results'}
+            <div className="text-center py-8">
+              <div className="text-muted-foreground">
+                {language === 'ar' ? 'قم بالترجمة أولاً لرؤية النتائج' : 'Translate first to see results'}
+              </div>
+              <button
+                type="button"
+                onClick={() => setTtSectionTab('input')}
+                className="mt-3 h-10 px-6 rounded-xl text-sm font-medium btn-secondary-enhanced btn-3d-pop active:scale-95"
+              >
+                {language === 'ar' ? '← العودة للإدخال' : '← Back to Input'}
+              </button>
             </div>
           )}
 
           {ttResult && (
-            <div className="space-y-3">
-              <div
-                className="grid grid-cols-2 gap-2 p-1 rounded-2xl enhanced-card"
-                role="tablist"
-                aria-label={language === 'ar' ? 'نتائج الترجمة' : 'Translation results'}
-              >
+            <div className="space-y-4">
+              {/* Editable Translation Result */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-semibold" htmlFor="tt-result-text">
+                    {language === 'ar' ? 'النص المترجم' : 'Translated Text'}
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] px-2 py-1 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium">
+                      {language === 'ar' ? '✏️ قابل للتعديل' : '✏️ Editable'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => ttResult && navigator.clipboard.writeText(ttResult)}
+                      className="h-8 px-3 rounded-lg text-xs font-medium btn-secondary-enhanced active:scale-95 flex items-center gap-1"
+                    >
+                      <Copy className="h-3.5 w-3.5" /> {language === 'ar' ? 'نسخ' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+                <div className="text-[11px] text-muted-foreground mb-1">
+                  {language === 'ar' 
+                    ? 'يمكنك تعديل النص أدناه قبل الحفظ إذا كان هناك أي أخطاء في الترجمة'
+                    : 'You can edit the text below before saving if there are any translation errors'}
+                </div>
+                <textarea
+                  id="tt-result-text"
+                  value={ttResult}
+                  onChange={(e) => setTtResult(e.target.value)}
+                  dir="auto"
+                  className="w-full min-h-40 rounded-xl border-2 border-blue-500/30 focus:border-blue-500 input-enhanced p-4 transition-colors"
+                  placeholder={language === 'ar' ? 'النص المترجم...' : 'Translated text...'}
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-3">
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!ttResult.trim()) return;
+                      setTtGeneratingDoc(true);
+                      setTtDocError('');
+                      try {
+                        await uploadAndSaveTranslation(ttResult);
+                        setTtSectionTab('my');
+                      } catch (e: any) {
+                        setTtDocError(e?.message || (language === 'ar' ? 'فشل الحفظ' : 'Failed to save'));
+                        console.error(e);
+                      } finally {
+                        setTtGeneratingDoc(false);
+                      }
+                    }}
+                    disabled={ttGeneratingDoc || !ttResult.trim()}
+                    className="flex-1 h-12 rounded-2xl border border-transparent text-sm font-semibold text-white btn-enhanced disabled:opacity-60 active:scale-95"
+                  >
+                    {ttGeneratingDoc ? (
+                      <span className="inline-flex items-center justify-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {language === 'ar' ? 'جاري الحفظ...' : 'Saving...'}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center justify-center gap-2">
+                        💾 {language === 'ar' ? 'حفظ في ترجماتي' : 'Save to My Translations'}
+                      </span>
+                    )}
+                  </button>
+                </div>
+                
+                <div className="text-[11px] text-center text-muted-foreground">
+                  {language === 'ar' 
+                    ? 'بعد الحفظ، يمكنك تحميل PDF أو مشاركة الترجمة من تبويب "ترجماتي"'
+                    : 'After saving, you can download PDF or share from the "My" tab'}
+                </div>
+
+                {ttDocError && <div className="text-xs text-red-600 text-center">{ttDocError}</div>}
+              </div>
+
+              {/* Back to Input */}
+              <div className="pt-2 border-t border-border/50">
                 <button
                   type="button"
-                  onClick={() => setTtActiveTab('text')}
-                  role="tab"
-                  aria-selected={ttActiveTab === 'text'}
-                  className={`h-11 rounded-xl border text-sm font-medium transition-all
-                    ${ttActiveTab === 'text'
-                      ? 'btn-enhanced btn-3d-pop text-white border-transparent'
-                      : 'border-border bg-transparent hover:bg-black/5 dark:hover:bg-white/10'}
-                    active:scale-95
-                  `}
+                  onClick={() => setTtSectionTab('input')}
+                  className="w-full h-10 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition active:scale-95"
                 >
-                  {language === 'ar' ? 'نص (سريع)' : 'Text (Fast)'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTtActiveTab('document')}
-                  role="tab"
-                  aria-selected={ttActiveTab === 'document'}
-                  className={`h-11 rounded-xl border text-sm font-medium transition-all
-                    ${ttActiveTab === 'document'
-                      ? 'btn-enhanced btn-3d-pop text-white border-transparent'
-                      : 'border-border bg-transparent hover:bg-black/5 dark:hover:bg-white/10'}
-                    active:scale-95
-                  `}
-                >
-                  {language === 'ar' ? 'مستند (يحافظ على الشكل)' : 'Document (Keep Layout)'}
+                  {language === 'ar' ? '← ترجمة نص جديد' : '← Translate New Text'}
                 </button>
               </div>
 
-              {ttActiveTab === 'text' && (
-                <div className="relative">
-                  <label className="text-sm font-medium mb-1 block" htmlFor="tt-result-text">
-                    {language === 'ar' ? 'النتيجة' : 'Result'}
-                  </label>
-                  <textarea
-                    id="tt-result-text"
-                    readOnly
-                    value={ttResult}
-                    className="w-full min-h-32 rounded-xl border border-border input-enhanced p-4"
-                  />
-                </div>
-              )}
-
-              {ttActiveTab === 'document' && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!ttResult.trim()) return;
-                        setTtGeneratingDoc(true);
-                        setTtDocError('');
-                        try {
-                          await uploadAndSaveTranslation(ttResult);
-                          setTtSectionTab('my');
-                        } catch (e: any) {
-                          setTtDocError(e?.message || (language === 'ar' ? 'فشل إنشاء المستند' : 'Failed to generate document'));
-                          console.error(e);
-                        } finally {
-                          setTtGeneratingDoc(false);
-                        }
-                      }}
-                      disabled={ttGeneratingDoc || !ttSelectedFile || !ttResult.trim()}
-                      className="flex-1 h-11 rounded-2xl border border-transparent text-sm font-semibold text-white btn-enhanced disabled:opacity-60 active:scale-95"
-                    >
-                      {ttGeneratingDoc ? (
-                        <span className="inline-flex items-center gap-2">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          {language === 'ar' ? 'جاري إنشاء وحفظ PDF...' : 'Creating & saving PDF...'}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-2">
-                          <PenLine className="h-5 w-5" />
-                          {language === 'ar' ? 'إنشاء PDF وحفظه' : 'Generate & Save PDF'}
-                        </span>
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!ttTranslatedPdfUrl) return;
-                        const a = document.createElement('a');
-                        a.href = ttTranslatedPdfUrl;
-                        a.download = 'translation.pdf';
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                      }}
-                      disabled={!ttTranslatedPdfUrl}
-                      className="h-11 px-4 rounded-xl text-sm font-medium btn-secondary-enhanced btn-3d-pop disabled:opacity-60 active:scale-95"
-                    >
-                      {language === 'ar' ? 'تحميل' : 'Download'}
-                    </button>
-                  </div>
-                  {ttDocError && <div className="text-xs text-red-600">{ttDocError}</div>}
-                  {ttPreviewUrl && (
-                    <div className="enhanced-card rounded-2xl p-3">
-                      <div className="text-xs text-muted-foreground mb-2">
-                        {language === 'ar' ? 'معاينة صغيرة' : 'Small preview'}
-                      </div>
-                      <img src={ttPreviewUrl} alt="preview" className="w-full rounded-lg border border-border/60" />
-                    </div>
-                  )}
-                  <div ref={ttRenderRef} style={{ position: 'absolute', left: '-9999px', top: 0 }} />
-                </div>
-              )}
+              <div ref={ttRenderRef} style={{ position: 'absolute', left: '-9999px', top: 0 }} />
             </div>
           )}
         </div>
@@ -882,67 +887,66 @@ export default function TextTranslateTab() {
             ) : ttMyTranslations.length === 0 ? (
               <div className="text-xs text-muted-foreground">{language === 'ar' ? 'لا توجد ترجمات محفوظة بعد' : 'No saved translations yet'}</div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-3">
                 {ttMyTranslations.map((row) => {
                   const urls = ttSignedUrls[row.id] || {};
                   return (
-                    <div key={row.id} className="enhanced-card rounded-2xl p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="text-xs font-medium line-clamp-1">
-                            {row.source_filename || (language === 'ar' ? 'ملف' : 'File')}
-                          </div>
-                          <div className="text-[11px] text-muted-foreground">
-                            {new Date(row.created_at).toLocaleString()} · {language === 'ar' ? 'إلى' : 'to'} {row.target_language}
-                          </div>
+                    <div key={row.id} className="enhanced-card rounded-2xl p-3 space-y-2">
+                      <div>
+                        <div className="text-sm font-medium line-clamp-1">
+                          {row.source_filename || (language === 'ar' ? 'ملف' : 'File')}
                         </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              openTranslatedTextPageForRow(row);
-                            }}
-                            className="h-9 px-3 rounded-xl text-xs font-medium btn-secondary-enhanced btn-3d-pop active:scale-95"
-                          >
-                            {language === 'ar' ? 'عرض النص' : 'View Text'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              const signedUrl = urls.pdfUrl;
-                              if (!signedUrl) {
-                                await ensureSignedUrlsForRows(
-                                  [{ id: row.id, translated_pdf_storage_path: row.translated_pdf_storage_path }],
-                                  { forcePdf: true }
-                                );
-                              }
-                              const nextUrl = (ttSignedUrls[row.id]?.pdfUrl || urls.pdfUrl) as string | undefined;
-                              if (!nextUrl) return;
-                              const fallbackName = (row.source_filename || 'translation').replace(/\.[^/.]+$/, '');
-                              const outName = `${fallbackName}-translated.pdf`;
-                              await downloadFromSignedUrl(nextUrl, outName);
-                            }}
-                            className="h-9 px-3 rounded-xl text-xs font-semibold text-white btn-enhanced btn-3d-pop active:scale-95"
-                          >
-                            {language === 'ar' ? 'تنزيل PDF' : 'Download PDF'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              requestDeleteMyTranslationRow({
-                                id: row.id,
-                                source_filename: row.source_filename,
-                                translated_pdf_storage_path: row.translated_pdf_storage_path,
-                                preview_image_storage_path: row.preview_image_storage_path,
-                              });
-                            }}
-                            disabled={ttDeletingTranslationId === row.id}
-                            className="h-9 px-3 rounded-xl text-xs font-semibold bg-red-600 text-white hover:bg-red-700 btn-3d-pop disabled:opacity-60 active:scale-95 inline-flex items-center gap-2"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            {language === 'ar' ? 'حذف' : 'Delete'}
-                          </button>
+                        <div className="text-[11px] text-muted-foreground">
+                          {new Date(row.created_at).toLocaleString()} · {language === 'ar' ? 'إلى' : 'to'} {row.target_language}
                         </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            openTranslatedTextPageForRow(row);
+                          }}
+                          className="h-9 px-3 rounded-xl text-xs font-medium btn-secondary-enhanced btn-3d-pop active:scale-95"
+                        >
+                          {language === 'ar' ? 'عرض' : 'View'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const signedUrl = urls.pdfUrl;
+                            if (!signedUrl) {
+                              await ensureSignedUrlsForRows(
+                                [{ id: row.id, translated_pdf_storage_path: row.translated_pdf_storage_path }],
+                                { forcePdf: true }
+                              );
+                            }
+                            const nextUrl = (ttSignedUrls[row.id]?.pdfUrl || urls.pdfUrl) as string | undefined;
+                            if (!nextUrl) return;
+                            const fallbackName = (row.source_filename || 'translation').replace(/\.[^/.]+$/, '');
+                            const outName = `${fallbackName}-translated.pdf`;
+                            await downloadFromSignedUrl(nextUrl, outName);
+                          }}
+                          className="h-9 px-3 rounded-xl text-xs font-semibold text-white btn-enhanced btn-3d-pop active:scale-95"
+                        >
+                          {language === 'ar' ? 'تنزيل' : 'Download'}
+                        </button>
+                        <button
+                          type="button"
+                          title={language === 'ar' ? 'حذف' : 'Delete'}
+                          aria-label={language === 'ar' ? 'حذف' : 'Delete'}
+                          onClick={() => {
+                            requestDeleteMyTranslationRow({
+                              id: row.id,
+                              source_filename: row.source_filename,
+                              translated_pdf_storage_path: row.translated_pdf_storage_path,
+                              preview_image_storage_path: row.preview_image_storage_path,
+                            });
+                          }}
+                          disabled={ttDeletingTranslationId === row.id}
+                          className="h-9 w-9 rounded-xl text-xs font-semibold bg-red-600 text-white hover:bg-red-700 btn-3d-pop disabled:opacity-60 active:scale-95 inline-flex items-center justify-center"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
                     </div>
                   );

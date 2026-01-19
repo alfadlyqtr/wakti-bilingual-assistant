@@ -403,8 +403,144 @@ export default function ProjectDetail() {
   const autoFixTimerRef = useRef<NodeJS.Timeout | null>(null);
   const autoFixTriggeredRef = useRef<boolean>(false);
   const autoFixAttemptsRef = useRef<Map<string, number>>(new Map()); // Track fix attempts per error
+  const autoFixCooldownRef = useRef<number>(0); // Cooldown timestamp - no auto-fix until this time
   const MAX_GEMINI_ATTEMPTS = 3; // Attempts 1-3 use Gemini
   const FIXER_ATTEMPT = 4; // Attempt 4 uses Claude Opus 4 (The Fixer)
+  
+  // ========================================================================
+  // 🔍 ERROR CLASSIFICATION SYSTEM (from Open Lovable)
+  // Classifies errors for smarter auto-fix strategies
+  // ========================================================================
+  type ErrorType = 'missing-package' | 'syntax-error' | 'jsx-error' | 'undefined-error' | 'type-error' | 'not-rendered' | 'react-router-error' | 'unknown';
+  
+  const classifyError = useCallback((error: string): { type: ErrorType; packages?: string[]; hint?: string } => {
+    const message = error.toLowerCase();
+    
+    // 🚨 REACT ROUTER ERRORS - Must wrap App in BrowserRouter
+    // Common error: "Cannot destructure property 'basename' of 'React.useContext(...)' as it is null"
+    if ((message.includes('basename') && message.includes('usecontext')) ||
+        (message.includes('usenavigate') && message.includes('context')) ||
+        (message.includes('uselocation') && message.includes('null')) ||
+        (message.includes('useparams') && message.includes('null')) ||
+        (message.includes('link') && message.includes('router') && message.includes('context'))) {
+      return {
+        type: 'react-router-error',
+        hint: 'CRITICAL: App uses react-router-dom (Link, useNavigate, etc.) but is NOT wrapped in <BrowserRouter>. ' +
+              'Fix index.js: import { BrowserRouter } from "react-router-dom"; then wrap <App /> in <BrowserRouter><App /></BrowserRouter>'
+      };
+    }
+    
+    // Missing package/module errors
+    if (message.includes('failed to resolve import') || 
+        message.includes('cannot find module') || 
+        message.includes('module not found') ||
+        message.includes('is not installed')) {
+      // Extract package names
+      const packages: string[] = [];
+      const importMatches = error.matchAll(/(?:failed to resolve import|cannot find module|module not found)[^'"]*['"]([^'"]+)['"]/gi);
+      for (const match of importMatches) packages.push(match[1]);
+      return { 
+        type: 'missing-package', 
+        packages,
+        hint: packages.length > 0 ? `Install or import: ${packages.join(', ')}` : 'Check import statements'
+      };
+    }
+    
+    // JSX/closing tag errors
+    if (message.includes('expected corresponding jsx closing tag') ||
+        message.includes('unterminated jsx') ||
+        message.includes('adjacent jsx elements')) {
+      return { 
+        type: 'jsx-error',
+        hint: 'Check JSX tags are properly opened and closed. Wrap multiple elements in a fragment <></>'
+      };
+    }
+    
+    // Syntax errors
+    if (message.includes('syntax error') || 
+        message.includes('unexpected token') || 
+        message.includes('parsing error') ||
+        message.includes('unexpected identifier')) {
+      return { 
+        type: 'syntax-error',
+        hint: 'Check for missing brackets, commas, or semicolons'
+      };
+    }
+    
+    // Undefined/null errors (common AI mistake)
+    if (message.includes('cannot read properties of undefined') ||
+        message.includes('cannot read property') ||
+        message.includes('is not defined') ||
+        message.includes('is undefined')) {
+      const propMatch = error.match(/reading '([^']+)'/i) || error.match(/property '([^']+)'/i);
+      return { 
+        type: 'undefined-error',
+        hint: propMatch ? `Check if "${propMatch[1]}" exists before accessing it` : 'Check for null/undefined values'
+      };
+    }
+    
+    // Type errors
+    if (message.includes('type error') || 
+        message.includes('is not a function') ||
+        message.includes('is not assignable')) {
+      return { 
+        type: 'type-error',
+        hint: 'Check data types and function calls'
+      };
+    }
+    
+    // Not rendered (sandbox showing default page)
+    if (message.includes('not rendered') || 
+        message.includes('sandbox ready') ||
+        message.includes('default page')) {
+      return { 
+        type: 'not-rendered',
+        hint: 'App failed to render - check App.js exports and imports'
+      };
+    }
+    
+    return { type: 'unknown', hint: 'Unknown error - read the file and fix the issue' };
+  }, []);
+  
+  // ========================================================================
+  // 🔒 SINGLE-AGENT LOCK SYSTEM - Prevents race conditions
+  // Only ONE agent operation can run at a time. When one starts, others are blocked.
+  // ========================================================================
+  type AgentType = 'user-chat' | 'auto-fix' | 'fixer' | 'revert' | null;
+  const activeAgentRef = useRef<AgentType>(null);
+  const activeAgentAbortRef = useRef<AbortController | null>(null);
+  
+  const acquireAgentLock = useCallback((agentType: AgentType): boolean => {
+    if (activeAgentRef.current && activeAgentRef.current !== agentType) {
+      console.log(`[Agent Lock] ❌ BLOCKED: ${agentType} cannot start - ${activeAgentRef.current} is running`);
+      return false;
+    }
+    console.log(`[Agent Lock] ✅ ACQUIRED: ${agentType}`);
+    activeAgentRef.current = agentType;
+    return true;
+  }, []);
+  
+  const releaseAgentLock = useCallback((agentType: AgentType) => {
+    if (activeAgentRef.current === agentType) {
+      console.log(`[Agent Lock] 🔓 RELEASED: ${agentType}`);
+      activeAgentRef.current = null;
+      activeAgentAbortRef.current = null;
+    }
+  }, []);
+  
+  const forceReleaseAllLocks = useCallback(() => {
+    console.log(`[Agent Lock] ⚠️ FORCE RELEASE ALL - was: ${activeAgentRef.current}`);
+    if (activeAgentAbortRef.current) {
+      activeAgentAbortRef.current.abort();
+    }
+    activeAgentRef.current = null;
+    activeAgentAbortRef.current = null;
+    setAiEditing(false);
+    setIsGenerating(false);
+    setFixerInProgress(false);
+    setAutoFixCountdown(null);
+    autoFixTriggeredRef.current = false;
+  }, []);
   
   // Stop generation functionality
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -416,8 +552,9 @@ export default function ProjectDetail() {
       abortControllerRef.current = null;
     }
     setIsStopping(true);
-    setAiEditing(false);
-    setIsGenerating(false);
+    
+    // 🔒 Release all agent locks and reset all states
+    forceReleaseAllLocks();
     setThinkingStartTime(null);
     setGenerationSteps([]);
     
@@ -430,7 +567,7 @@ export default function ProjectDetail() {
     
     // Reset stopping state after a moment
     setTimeout(() => setIsStopping(false), 500);
-  }, [isRTL]);
+  }, [isRTL, forceReleaseAllLocks]);
 
   // Pagination for chat messages - show last N messages, then "Show More"
   const MESSAGES_PER_PAGE = 10;
@@ -828,6 +965,27 @@ export default function ProjectDetail() {
       toast.error(isRTL ? 'لا توجد نسخة احتياطية متاحة' : 'No snapshot available for this point');
       return;
     }
+    
+    // 🔒 CRITICAL: Force release all locks and STOP all auto-fix activity
+    forceReleaseAllLocks();
+    
+    // 🔒 CRITICAL: Clear ALL auto-fix state to prevent re-triggering
+    setCrashReport(null);
+    setAutoFixExhausted(false);
+    setAutoFixCountdown(null);
+    autoFixTriggeredRef.current = false;
+    autoFixAttemptsRef.current.clear(); // Clear all attempt tracking
+    autoFixCooldownRef.current = Date.now() + 10000; // 🔒 10 second cooldown after revert
+    if (autoFixTimerRef.current) {
+      clearInterval(autoFixTimerRef.current);
+      autoFixTimerRef.current = null;
+    }
+    
+    // 🔒 Acquire revert lock
+    if (!acquireAgentLock('revert')) {
+      toast.error(isRTL ? 'يرجى الانتظار حتى ينتهي العمل الحالي' : 'Please wait for current operation to finish');
+      return;
+    }
 
     try {
       setIsGenerating(true);
@@ -896,6 +1054,7 @@ export default function ProjectDetail() {
       toast.error(isRTL ? 'فشل في استعادة الحالة' : 'Failed to restore state');
     } finally {
       setIsGenerating(false);
+      releaseAgentLock('revert'); // 🔒 Release revert lock
     }
   };
 
@@ -2617,6 +2776,18 @@ ${convertToGlobalComponent(content, componentName)}
 
   // Self-healing: Handle runtime crash detection from Sandpack
   const handleRuntimeCrash = useCallback((errorMsg: string) => {
+    // 🔒 Skip if any agent is currently running (prevents auto-fix during revert)
+    if (activeAgentRef.current) {
+      console.log(`[Auto-Fix] ⏸️ Skipping - agent "${activeAgentRef.current}" is running`);
+      return;
+    }
+    
+    // 🔒 Skip if in cooldown period (after revert)
+    if (Date.now() < autoFixCooldownRef.current) {
+      console.log(`[Auto-Fix] ⏸️ Skipping - in cooldown period (${Math.ceil((autoFixCooldownRef.current - Date.now()) / 1000)}s remaining)`);
+      return;
+    }
+    
     // Skip if already processing or same error
     if (autoFixTriggeredRef.current || crashReport === errorMsg) return;
     
@@ -2704,6 +2875,13 @@ ${convertToGlobalComponent(content, componentName)}
     const error = errorToFix || crashReport;
     if (!error) return;
     
+    // 🔒 AGENT LOCK: Try to acquire lock for auto-fix
+    const agentType = 'auto-fix';
+    if (!acquireAgentLock(agentType)) {
+      console.log('[Auto-Fix] ❌ Cannot start - another agent is running');
+      return; // Another agent is running, don't start auto-fix
+    }
+    
     // Normalize error for tracking
     const errorKey = error.replace(/:\d+:\d+/g, '').replace(/line \d+/gi, '').trim().substring(0, 200);
     const attemptNumber = (autoFixAttemptsRef.current.get(errorKey) || 0) + 1;
@@ -2717,6 +2895,7 @@ ${convertToGlobalComponent(content, componentName)}
       setAutoFixExhausted(true);
       setCrashReport(error);
       autoFixTriggeredRef.current = false;
+      releaseAgentLock(agentType); // 🔒 Release lock
       return;
     }
 
@@ -2734,6 +2913,13 @@ ${convertToGlobalComponent(content, componentName)}
     // ATTEMPT 4: THE FIXER (Claude Opus 4) - Final attempt before recovery UI
     // ========================================================================
     if (attemptNumber === FIXER_ATTEMPT) {
+      // 🔒 Switch lock to fixer
+      releaseAgentLock(agentType);
+      if (!acquireAgentLock('fixer')) {
+        console.log('[Auto-Fix] ❌ Cannot start Fixer - another agent is running');
+        return;
+      }
+      
       console.log('[Auto-Fix] 🔧 Calling THE FIXER (Claude Opus 4) - Final attempt');
       setFixerInProgress(true);
       setCrashReport(null);
@@ -2815,6 +3001,7 @@ ${convertToGlobalComponent(content, componentName)}
       }
       
       autoFixTriggeredRef.current = false;
+      releaseAgentLock('fixer'); // 🔒 Release fixer lock
       return;
     }
     
@@ -2823,50 +3010,126 @@ ${convertToGlobalComponent(content, componentName)}
     // ========================================================================
     const isRetry = attemptNumber > 1;
     
-    // Smart fix prompt with specific instructions based on error type
+    // 🔍 Use error classification system for smarter fix prompts
+    const errorClassification = classifyError(error);
+    console.log(`[Auto-Fix] Error classified as: ${errorClassification.type}`, errorClassification);
+    
+    // Generate fix instructions based on error type
     let fixInstructions = '';
     
-    // Detect error type and provide specific fix instructions
-    if (error.includes('ModuleNotFoundError') || error.includes('Could not find module')) {
-      const moduleMatch = error.match(/['"]([^'"]+)['"]/);
-      const moduleName = moduleMatch ? moduleMatch[1] : 'the module';
-      fixInstructions = `
-**ERROR TYPE: Missing Module/File**
+    switch (errorClassification.type) {
+      case 'missing-package':
+        const packages = errorClassification.packages?.join(', ') || 'the module';
+        fixInstructions = `
+**ERROR TYPE: Missing Module/Package** 🔴
+**Hint:** ${errorClassification.hint}
 
-The file ${moduleName} doesn't exist or the import path is wrong.
+The import "${packages}" failed - file doesn't exist or path is wrong.
 
 **FIX STEPS:**
 1. Use list_files to see what files exist
 2. Use read_file to check the import statement
 3. Either CREATE the missing file or FIX the import path
-4. Make sure the component is exported correctly`;
-    } else if (error.includes('is not defined') || error.includes('ReferenceError')) {
-      const varMatch = error.match(/(\w+) is not defined/);
-      const varName = varMatch ? varMatch[1] : 'variable';
-      fixInstructions = `
-**ERROR TYPE: Undefined Variable/Function**
+4. Make sure the component is exported correctly (export default)`;
+        break;
+        
+      case 'jsx-error':
+        fixInstructions = `
+**ERROR TYPE: JSX Syntax Error** 🔴
+**Hint:** ${errorClassification.hint}
 
-${varName} is used but not defined or imported.
+JSX tags are not properly matched or closed.
 
 **FIX STEPS:**
-1. Use read_file to see the current imports
-2. If it's a React hook (useState, useEffect, etc.) - add to React import
-3. If it's a component - import it from the correct file
-4. If it's a variable - define it before using it`;
-    } else if (error.includes('SyntaxError') || error.includes('Unexpected token')) {
-      fixInstructions = `
-**ERROR TYPE: Syntax Error**
+1. Use read_file to see the file with the error
+2. Find the unclosed or mismatched JSX tag
+3. Make sure every <Tag> has a matching </Tag> or is self-closing <Tag />
+4. Wrap multiple adjacent elements in a fragment: <> ... </>`;
+        break;
+        
+      case 'syntax-error':
+        fixInstructions = `
+**ERROR TYPE: Syntax Error** 🔴
+**Hint:** ${errorClassification.hint}
 
 There's invalid JavaScript/JSX syntax.
 
 **FIX STEPS:**
 1. Use read_file to see the file with the error
-2. Look for missing closing brackets, braces, or parentheses
+2. Look for missing closing brackets }, braces ], or parentheses )
 3. Check for missing commas in objects/arrays
-4. Make sure JSX tags are properly closed`;
-    } else {
-      fixInstructions = `
-**ERROR TYPE: Runtime Error**
+4. Check for missing semicolons or extra characters`;
+        break;
+        
+      case 'undefined-error':
+        fixInstructions = `
+**ERROR TYPE: Undefined Property/Variable** 🔴
+**Hint:** ${errorClassification.hint}
+
+Code is trying to access a property on undefined/null.
+
+**FIX STEPS:**
+1. Use read_file to see the code around the error
+2. Add optional chaining: obj?.property instead of obj.property
+3. Add null checks: if (obj) { ... }
+4. Make sure data is initialized before use`;
+        break;
+        
+      case 'type-error':
+        fixInstructions = `
+**ERROR TYPE: Type Error** 🔴
+**Hint:** ${errorClassification.hint}
+
+Wrong data type or calling non-function as function.
+
+**FIX STEPS:**
+1. Use read_file to see the code
+2. Check if you're calling a function that doesn't exist
+3. Verify the data structure matches what you expect
+4. Add type checks if needed`;
+        break;
+        
+      case 'not-rendered':
+        fixInstructions = `
+**ERROR TYPE: App Not Rendering** 🔴
+**Hint:** ${errorClassification.hint}
+
+The app failed to render - likely an export or import issue.
+
+**FIX STEPS:**
+1. Use read_file on /App.js to check the export
+2. Make sure it has: export default App;
+3. Check all imports are valid
+4. Verify the component returns valid JSX`;
+        break;
+        
+      case 'react-router-error':
+        fixInstructions = `
+**ERROR TYPE: React Router Context Missing** 🔴🔴🔴
+**Hint:** ${errorClassification.hint}
+
+The app uses react-router-dom components (Link, useNavigate, Route, etc.) but the App is NOT wrapped in <BrowserRouter>.
+
+**THIS IS A CRITICAL ERROR - FIX IMMEDIATELY:**
+
+1. Use read_file on /index.js (or /src/index.js)
+2. Add this import at the top: import { BrowserRouter } from "react-router-dom";
+3. Wrap <App /> like this:
+   
+   root.render(
+     <BrowserRouter>
+       <App />
+     </BrowserRouter>
+   );
+
+**DO NOT** try to remove Link/Route from App.js - that breaks navigation!
+**DO** wrap the entire app in BrowserRouter in index.js.`;
+        break;
+        
+      default:
+        fixInstructions = `
+**ERROR TYPE: Runtime Error** 🔴
+**Hint:** ${errorClassification.hint || 'Read the file and fix the issue'}
 
 **FIX STEPS:**
 1. Use read_file to see the file causing the error
@@ -3669,6 +3932,13 @@ ${fixInstructions}
     const userMessage = wizardPrompt || chatInput.trim();
     if (!userMessage && attachedImages.length === 0 || aiEditing) return;
     
+    // 🔒 AGENT LOCK: Try to acquire lock for user chat
+    if (!acquireAgentLock('user-chat')) {
+      console.log('[Chat] ❌ Cannot start - another agent is running');
+      toast.error(isRTL ? 'يرجى الانتظار حتى ينتهي العمل الحالي' : 'Please wait for current operation to finish');
+      return;
+    }
+    
     if (!wizardPrompt) setChatInput('');
     
     const skipFormWizardDetection = skipFormWizardRef.current;
@@ -4274,23 +4544,119 @@ ${fixInstructions}
           const actualChangedFiles = changedFilesList.length > 0 ? changedFilesList : [];
           const hasActualChanges = actualChangedFiles.length > 0;
           
+          // Generate a friendly response message based on what was done
+          const generateFriendlyResponse = (summary: string, files: string[], userMsg: string) => {
+            const msgLower = userMsg.toLowerCase();
+            if (files.length === 0) return isRTL ? 'لم أجد ما يمكن تغييره.' : "I couldn't find anything to change.";
+            
+            // Try to make it conversational based on the action
+            if (msgLower.includes('remove') || msgLower.includes('delete') || msgLower.includes('احذف') || msgLower.includes('أزل')) {
+              return isRTL ? `تم! أزلت ما طلبته من ${files.join(', ')}.` : `Done! I removed what you asked from ${files.join(', ')}.`;
+            }
+            if (msgLower.includes('add') || msgLower.includes('أضف')) {
+              return isRTL ? `تم! أضفت التغييرات إلى ${files.join(', ')}.` : `Done! I added the changes to ${files.join(', ')}.`;
+            }
+            if (msgLower.includes('change') || msgLower.includes('update') || msgLower.includes('غيّر') || msgLower.includes('عدّل')) {
+              return isRTL ? `تم! عدّلت ${files.join(', ')}.` : `Done! I updated ${files.join(', ')}.`;
+            }
+            if (msgLower.includes('fix') || msgLower.includes('أصلح')) {
+              return isRTL ? `تم الإصلاح في ${files.join(', ')}.` : `Fixed! Changes made to ${files.join(', ')}.`;
+            }
+            // Default
+            return isRTL ? `تم تطبيق التغييرات على ${files.join(', ')}.` : `Changes applied to ${files.join(', ')}.`;
+          };
+          
           assistantMsg = JSON.stringify({
             type: 'execution_result',
             title: hasActualChanges ? (isRTL ? 'تم التطبيق' : 'Applied') : (isRTL ? 'لم يتم التغيير' : 'No changes made'),
+            response: hasActualChanges ? generateFriendlyResponse(summaryText, actualChangedFiles, userMessage) : undefined,
             summary: hasActualChanges ? summaryText : (isRTL ? 'لم يتم إجراء تغييرات على الملفات' : 'No file changes were made. The AI may have misunderstood the request.'),
             files: actualChangedFiles,
             noChanges: !hasActualChanges
           });
+          
+          // 🎯 Generate dynamic suggestions for code mode too (not just chat mode)
+          const generateCodeModeSuggestions = (files: string[], userMsg: string) => {
+            const msgLower = userMsg.toLowerCase();
+            const suggestions: string[] = [];
+            
+            if (msgLower.includes('header') || msgLower.includes('nav') || msgLower.includes('رأس')) {
+              suggestions.push(isRTL ? 'غيّر لون الهيدر' : 'Change header color');
+              suggestions.push(isRTL ? 'أضف رابط جديد' : 'Add a new link');
+            } else if (msgLower.includes('button') || msgLower.includes('زر')) {
+              suggestions.push(isRTL ? 'غيّر لون الزر' : 'Change button color');
+              suggestions.push(isRTL ? 'أضف تأثير hover' : 'Add hover effect');
+            } else if (msgLower.includes('image') || msgLower.includes('صورة')) {
+              suggestions.push(isRTL ? 'غيّر حجم الصورة' : 'Resize the image');
+              suggestions.push(isRTL ? 'أضف صورة أخرى' : 'Add another image');
+            } else if (msgLower.includes('color') || msgLower.includes('لون')) {
+              suggestions.push(isRTL ? 'غيّر لون آخر' : 'Change another color');
+              suggestions.push(isRTL ? 'أضف تدرج' : 'Add a gradient');
+            } else if (msgLower.includes('remove') || msgLower.includes('delete') || msgLower.includes('احذف')) {
+              suggestions.push(isRTL ? 'أزل شيء آخر' : 'Remove something else');
+              suggestions.push(isRTL ? 'تراجع عن التغيير' : 'Undo this change');
+            } else {
+              // Default suggestions
+              suggestions.push(isRTL ? 'أضف ميزة جديدة' : 'Add a new feature');
+              suggestions.push(isRTL ? 'حسّن التصميم' : 'Improve the design');
+            }
+            return suggestions;
+          };
+          
+          if (hasActualChanges) {
+            setDynamicSuggestions(generateCodeModeSuggestions(actualChangedFiles, userMessage));
+          }
           
           // Update tool usage count for Lovable-style indicator
           setToolsUsedCount(prev => prev + (changedFilesList.length || 1));
           
           setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
           await delay(250);
-        } else {
+        } else if (agentResult?.message) {
+          // 🔧 FIX: Agent returned a chat response (question/info) instead of making edits
+          // This happens when user asks a question like "do we have a products page?"
+          assistantMsg = agentResult.message;
+          setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
+          await delay(250);
+          
+          // 🎯 Generate context-aware suggestions based on AI's RESPONSE, not user's message
+          const generateChatResponseSuggestions = (aiResponse: string, userMsg: string) => {
+            const responseLower = aiResponse.toLowerCase();
+            const msgLower = userMsg.toLowerCase();
+            const suggestions: string[] = [];
+            
+            // If AI confirmed something exists, suggest using/editing it
+            if (responseLower.includes('yes') || responseLower.includes('you have') || responseLower.includes('located at')) {
+              if (responseLower.includes('product') || msgLower.includes('product')) {
+                suggestions.push(isRTL ? 'افتح صفحة المنتجات' : 'Open the products page');
+                suggestions.push(isRTL ? 'عدّل صفحة المنتجات' : 'Edit the products page');
+              } else if (responseLower.includes('page') || responseLower.includes('.js')) {
+                suggestions.push(isRTL ? 'افتح هذه الصفحة' : 'Open this page');
+                suggestions.push(isRTL ? 'عدّل هذه الصفحة' : 'Edit this page');
+              }
+            }
+            // If AI said something doesn't exist, suggest creating it
+            else if (responseLower.includes('no') || responseLower.includes("don't have") || responseLower.includes('not found')) {
+              if (msgLower.includes('product')) {
+                suggestions.push(isRTL ? 'أنشئ صفحة منتجات' : 'Create a products page');
+              } else if (msgLower.includes('page')) {
+                suggestions.push(isRTL ? 'أنشئ هذه الصفحة' : 'Create this page');
+              }
+            }
+            
+            // Default follow-ups for informational responses
+            if (suggestions.length === 0) {
+              suggestions.push(isRTL ? 'أخبرني المزيد' : 'Tell me more');
+              suggestions.push(isRTL ? 'ساعدني في تعديله' : 'Help me edit it');
+            }
+            
+            return suggestions;
+          };
+          
+          setDynamicSuggestions(generateChatResponseSuggestions(agentResult.message, userMessage));
+        } else if (agentResult?.jobId) {
           // Fallback: If there's a jobId, use the old polling method
-          const jobId = agentResult?.jobId as string | undefined;
-          if (!jobId) throw new Error('Agent mode failed - no result returned');
+          const jobId = agentResult.jobId as string;
 
           setGenerationSteps(prev => prev.map((s, i) => 
             i === 0 ? { ...s, status: 'completed' } : 
@@ -4341,6 +4707,9 @@ ${fixInstructions}
           
           setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
           await delay(250);
+        } else {
+          // No result, no message, no jobId - this is a real error
+          throw new Error('Agent mode failed - no result returned');
         }
       }
 
@@ -4371,7 +4740,65 @@ ${fixInstructions}
       const generateContextualSuggestions = (msg: string): string[] => {
         const msgLower = msg.toLowerCase();
         
-        // Parse the AI response to find what was changed and suggest relevant follow-ups
+        // 🎯 PRIORITY 1: Check if AI asked a question with options (emoji-prefixed lines)
+        // Pattern: Lines starting with emoji like 🔍, 🔗, 📝, ✨, etc. followed by text
+        const optionPatterns = [
+          /[🔍🔗📝✨🎨💡🔧⚡🚀📦🎯✅❌🔄📋🛠️]\s*([^\n?]+)\??/g,
+          /[-•]\s*([^\n?]+)\??/g, // Bullet points
+        ];
+        
+        const extractedOptions: string[] = [];
+        for (const pattern of optionPatterns) {
+          const matches = msg.matchAll(pattern);
+          for (const match of matches) {
+            const option = match[1].trim();
+            // Clean up the option text - remove trailing punctuation and "?" 
+            const cleanOption = option.replace(/[?？]$/, '').trim();
+            if (cleanOption.length > 3 && cleanOption.length < 60 && !extractedOptions.includes(cleanOption)) {
+              extractedOptions.push(cleanOption);
+            }
+          }
+        }
+        
+        // If we found question options, use them as chips (max 3)
+        if (extractedOptions.length >= 2) {
+          console.log('[Contextual Chips] Found AI question options:', extractedOptions);
+          return extractedOptions.slice(0, 3);
+        }
+        
+        // 🎯 PRIORITY 2: Check for "Would you like me to..." patterns
+        const wouldYouLikeMatch = msg.match(/would you like (?:me to |to )?(.+?)\?/i);
+        if (wouldYouLikeMatch) {
+          const action = wouldYouLikeMatch[1].trim();
+          return [
+            `Yes, ${action}`,
+            isRTL ? 'لا، شكراً' : 'No, thanks'
+          ];
+        }
+        
+        // 🎯 PRIORITY 3: Parse the AI response to find what was changed and suggest relevant follow-ups
+        
+        // Products/Shop page mentioned
+        if (msgLower.includes('product') || msgLower.includes('shop') || msgLower.includes('منتج')) {
+          return [
+            isRTL ? 'أضف المنتجات للهيدر' : 'Add products link to header',
+            isRTL ? 'اعرض صفحة المنتجات' : 'Show me the products page'
+          ];
+        }
+        // Page/file mentioned
+        if (msgLower.includes('page') || msgLower.includes('.js') || msgLower.includes('.jsx') || msgLower.includes('صفحة')) {
+          return [
+            isRTL ? 'أضف رابط للصفحة' : 'Add link to this page',
+            isRTL ? 'افتح الصفحة' : 'Open this page'
+          ];
+        }
+        // Navigation/routing mentioned
+        if (msgLower.includes('route') || msgLower.includes('navigation') || msgLower.includes('link') || msgLower.includes('رابط')) {
+          return [
+            isRTL ? 'أضف رابط جديد' : 'Add a new link',
+            isRTL ? 'أصلح الروابط' : 'Fix the links'
+          ];
+        }
         if (msgLower.includes('gradient') || msgLower.includes('color') || msgLower.includes('لون')) {
           return [
             isRTL ? 'أضف تأثير ظل' : 'Add shadow effect',
@@ -4467,6 +4894,8 @@ ${fixInstructions}
       thinkingStartTimeRef.current = null;
       setAiEditing(false);
       setThinkingStartTime(null);
+      releaseAgentLock('user-chat'); // 🔒 Release lock when chat completes
+      releaseAgentLock('auto-fix'); // 🔒 Also release auto-fix lock (in case this was triggered by auto-fix)
     }
   };
 
@@ -6195,6 +6624,10 @@ ${fixInstructions}
                           if (parsed?.type === 'booking_form_wizard' || parsed?.type === 'contact_form_wizard' || parsed?.type === 'product_form_card') {
                             return null;
                           }
+                          // 🎯 HIDE chips when there's a plan card with "Implement Plan" button
+                          if (parsed?.type === 'plan') {
+                            return null;
+                          }
                           if (parsed?.type === 'execution_result' && typeof parsed.summary === 'string') {
                             responseContent = parsed.summary;
                           }
@@ -6206,12 +6639,20 @@ ${fixInstructions}
                           <QuickActionButtons
                             responseContent={responseContent}
                             isRTL={isRTL}
-                            onActionClick={(prompt) => {
+                            dynamicSuggestions={dynamicSuggestions}
+                            onActionClick={async (prompt) => {
                               if (prompt.includes('Change the images') || prompt.includes('غير الصور')) {
                                 setIsChangingCarouselImages(true);
                                 openStockPhotoSelector('stock', true);
                               } else {
+                                // 🎯 Auto-switch to Code mode and execute immediately
+                                setLeftPanelMode('code');
                                 setChatInput(prompt);
+                                // Small delay to let state update, then submit
+                                setTimeout(() => {
+                                  const form = document.querySelector('form[data-chat-form]') as HTMLFormElement;
+                                  if (form) form.requestSubmit();
+                                }, 100);
                               }
                             }}
                           />
@@ -6313,7 +6754,7 @@ ${fixInstructions}
                       </div>
                     )}
 
-                    <form onSubmit={handleChatSubmit} className={cn(
+                    <form data-chat-form onSubmit={handleChatSubmit} className={cn(
                       "flex items-end gap-2 bg-muted/30 dark:bg-white/5 border rounded-2xl p-1.5 transition-all",
                       leftPanelMode === 'chat'
                         ? "border-emerald-500/40 dark:border-emerald-500/30 focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500/20"
@@ -6580,7 +7021,7 @@ ${fixInstructions}
             }>
               {(codeContent || Object.keys(generatedFiles).length > 0) ? (
                 <div className="w-full h-full flex items-center justify-center relative">
-                  <MatrixOverlay isVisible={aiEditing} />
+                  <MatrixOverlay isVisible={aiEditing && leftPanelMode === 'code'} />
                   <div className={cn(
                     "h-full w-full transition-all flex flex-col overflow-hidden",
                     deviceView === 'desktop' && "max-w-full",

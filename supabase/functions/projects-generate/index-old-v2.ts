@@ -44,10 +44,8 @@ import {
   morphFastApply,
   morphEditFile,
   smartSearchReplace,
-  parseMorphEdits,
   type MorphApplyInput,
   type MorphApplyResult,
-  type MorphEditBlock,
   // 🔍 Morph Warp Grep - AI-Powered Code Search
   morphWarpGrep,
   type WarpGrepResult
@@ -2870,47 +2868,6 @@ The user attached a screenshot. I analyzed it and found these text anchors:
       console.log(`[Agent Mode] OPTIMIZED: Sending ${fileCount} file NAMES only (not content)`);
       console.log(`[Agent Mode] Files: ${fileList.substring(0, 200)}...`);
       
-      // ========================================================================
-      // 🚀 CRITICAL FILES PRE-READ: Auto-read index.js and App.js for context
-      // This prevents the AI from making mistakes like double BrowserRouter
-      // ========================================================================
-      let criticalFilesContext = '';
-      const criticalPaths = ['/index.js', '/src/index.js', '/src/main.jsx', '/App.js', '/src/App.js', '/src/App.jsx'];
-      
-      const { data: criticalFiles } = await supabase
-        .from('project_files')
-        .select('path, content')
-        .eq('project_id', projectId)
-        .in('path', criticalPaths);
-      
-      if (criticalFiles && criticalFiles.length > 0) {
-        criticalFilesContext = `\n\n📋 CRITICAL PROJECT FILES (PRE-LOADED FOR CONTEXT):\n`;
-        criticalFilesContext += `⚠️ IMPORTANT: Review these files BEFORE making any routing or structure changes!\n\n`;
-        
-        for (const file of criticalFiles) {
-          // Check for existing router setup
-          const hasRouter = file.content?.includes('BrowserRouter') || file.content?.includes('HashRouter');
-          const hasRoutes = file.content?.includes('<Routes') || file.content?.includes('<Route');
-          const hasLink = file.content?.includes('<Link') || file.content?.includes('useNavigate');
-          
-          criticalFilesContext += `--- ${file.path} ---\n`;
-          criticalFilesContext += `${file.content?.substring(0, 2000) || '(empty)'}\n`;
-          
-          if (hasRouter) {
-            criticalFilesContext += `⚠️ NOTE: This file ALREADY has BrowserRouter - DO NOT add another one!\n`;
-          }
-          if (hasRoutes) {
-            criticalFilesContext += `⚠️ NOTE: This file has Routes/Route - check existing routes before adding new ones.\n`;
-          }
-          if (hasLink) {
-            criticalFilesContext += `⚠️ NOTE: This file uses Link/useNavigate - requires BrowserRouter wrapper.\n`;
-          }
-          criticalFilesContext += `\n`;
-        }
-        
-        console.log(`[Agent Mode] 📋 Pre-loaded ${criticalFiles.length} critical files for context`);
-      }
-      
       // Extract inspect selection from debug context for precise element targeting
       let inspectSelectionContext = '';
       if (agentDebugContext.consoleLogs && agentDebugContext.consoleLogs.length > 0) {
@@ -3008,7 +2965,6 @@ Match the className and innerText to find it in the code.
       // Prepare the initial user message with FILE LIST ONLY (not content)
       let userMessageContent = `📁 PROJECT FILES (${fileCount} files):
 ${fileList}
-${criticalFilesContext}
 ${intentGuidance}
 ⚠️ IMPORTANT: Use the read_file tool to view file contents before editing.
 Use list_files to see directory structure.
@@ -3221,72 +3177,6 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
           const textPart = content.parts?.find((p: any) => p.text);
           if (textPart) {
             console.log(`[Agent Mode] Got text response (no tools): ${textPart.text.substring(0, 100)}...`);
-            
-            // 🚀 MORPH FAST APPLY: Check for <edit> blocks in the response
-            const morphEdits = parseMorphEdits(textPart.text);
-            if (morphEdits.length > 0) {
-              console.log(`[Agent Mode] 🚀 Found ${morphEdits.length} <edit> blocks, applying via Morph Fast Apply...`);
-              
-              for (const edit of morphEdits) {
-                try {
-                  // Read the current file content
-                  const { data: fileData } = await supabase
-                    .from('project_files')
-                    .select('content')
-                    .eq('project_id', projectId)
-                    .eq('path', edit.targetFile.startsWith('/') ? edit.targetFile : `/${edit.targetFile}`)
-                    .maybeSingle();
-                  
-                  if (!fileData?.content) {
-                    console.error(`[Morph] File not found: ${edit.targetFile}`);
-                    toolCallsLog.push({
-                      tool: 'morph_edit_auto',
-                      args: { path: edit.targetFile },
-                      result: { success: false, error: 'File not found' }
-                    });
-                    continue;
-                  }
-                  
-                  // Apply via Morph Fast Apply
-                  const morphResult = await morphFastApply({
-                    originalCode: fileData.content,
-                    codeEdit: edit.update,
-                    instructions: edit.instructions,
-                    filepath: edit.targetFile
-                  });
-                  
-                  if (morphResult.success && morphResult.mergedCode) {
-                    // Write the merged code back
-                    const normalizedPath = edit.targetFile.startsWith('/') ? edit.targetFile : `/${edit.targetFile}`;
-                    await supabase
-                      .from('project_files')
-                      .update({ content: morphResult.mergedCode })
-                      .eq('project_id', projectId)
-                      .eq('path', normalizedPath);
-                    
-                    console.log(`[Morph] ✅ Applied edit to ${edit.targetFile}`);
-                    toolCallsLog.push({
-                      tool: 'morph_edit_auto',
-                      args: { path: edit.targetFile, instructions: edit.instructions },
-                      result: { success: true, method: 'morph', changes: morphResult.changes }
-                    });
-                    
-                    // Update file cache
-                    fileContentCache.set(normalizedPath, morphResult.mergedCode);
-                    filesRead.add(normalizedPath);
-                  } else {
-                    console.error(`[Morph] Failed to apply edit to ${edit.targetFile}: ${morphResult.error}`);
-                    toolCallsLog.push({
-                      tool: 'morph_edit_auto',
-                      args: { path: edit.targetFile },
-                      result: { success: false, error: morphResult.error }
-                    });
-                  }
-                } catch (err) {
-                  console.error(`[Morph] Exception applying edit to ${edit.targetFile}:`, err);
-                }
-              }
-            }
           }
           
           // 🚀 AUTO-SEARCH FALLBACK: If model skips tools on early iterations, WE run them automatically
@@ -3379,7 +3269,7 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
             messages.push({
               role: "user",
               parts: [{
-                text: autoSearchContext + `\n\nNow proceed with the user's request using the information above. Use morph_edit with '// ... existing code ...' markers - it handles fuzzy matching and is more reliable than search_replace.`
+                text: autoSearchContext + `\n\nNow proceed with the user's request using the information above. Use search_replace with EXACT code from the file content shown.`
               }]
             });
             
@@ -3414,13 +3304,7 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
           // ========================================================================
           const targetPath = args?.path ? (args.path.startsWith('/') ? args.path : `/${args.path}`) : null;
           
-          // ========================================================================
-          // 🚀 MORPH DOCS WORKFLOW ENFORCEMENT: Search → Read → Edit → Verify
-          // All edit tools (morph_edit, search_replace, write_file, insert_code)
-          // ========================================================================
-          const isEditTool = name === 'morph_edit' || name === 'search_replace' || name === 'write_file' || name === 'insert_code';
-          
-          if (isEditTool && targetPath) {
+          if ((name === 'search_replace' || name === 'write_file' || name === 'insert_code') && targetPath) {
             // 🔒 HARD BLOCK: Reject edits to files that don't exist in the project (unless write_file for new file)
             const isNewFileCreation = name === 'write_file' && !knownFiles.has(targetPath);
             
@@ -3450,24 +3334,17 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
               knownFiles.add(targetPath);
             }
             
-            // 🔒 MORPH DOCS ENFORCEMENT: MUST read_file BEFORE any edit (morph_edit, search_replace, insert_code)
-            // Per Morph docs: "Always read files before editing to understand the structure"
-            // This is the #1 reason for failed edits - AI doesn't know the current file state
-            if (!filesRead.has(targetPath) && !isNewFileCreation && (name === 'morph_edit' || name === 'search_replace' || name === 'insert_code')) {
-              console.error(`[Agent Mode] 🚫 BLOCKED: ${name} on ${targetPath} without reading first!`);
-              
-              const toolHint = name === 'morph_edit' 
-                ? `Step 1: read_file("${targetPath}") → Step 2: Understand structure → Step 3: morph_edit with '// ... existing code ...' markers`
-                : name === 'search_replace'
-                ? `Step 1: read_file("${targetPath}") → Step 2: Copy EXACT code → Step 3: search_replace`
-                : `Step 1: read_file("${targetPath}") → Step 2: Find insertion point → Step 3: insert_code`;
+            // 🔒 HARD ENFORCEMENT: Block edit if file wasn't read first
+            // This prevents the AI from making blind edits that break code
+            if (!filesRead.has(targetPath) && !isNewFileCreation && name === 'search_replace') {
+              console.error(`[Agent Mode] 🚫 BLOCKED: search_replace on ${targetPath} without reading first!`);
               
               const blockResult = {
-                error: `BLOCKED: Per Morph docs workflow, you MUST read_file("${targetPath}") BEFORE using ${name}. ` +
-                  `This ensures you understand the file structure and have accurate code to work with.`,
-                hint: toolHint,
-                blocked: true,
-                workflow: '🔍 Search → 📖 Read → ✏️ Edit → ✅ Verify'
+                error: `BLOCKED: You must read_file("${targetPath}") BEFORE using search_replace on it. ` +
+                  `This ensures you have the exact current code to match against. ` +
+                  `Call read_file first, then retry your search_replace with the exact code from the file.`,
+                hint: `Step 1: read_file("${targetPath}") → Step 2: Copy exact code → Step 3: search_replace`,
+                blocked: true
               };
               
               toolCallsLog.push({ tool: name, args, result: blockResult });
@@ -3477,9 +3354,9 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
               continue; // Skip to next function call - force AI to read first
             }
             
-            // Soft warning for write_file on existing files without reading
-            if (!filesRead.has(targetPath) && !isNewFileCreation && name === 'write_file') {
-              console.warn(`[Agent Mode] ⚠️ WARNING: write_file on existing ${targetPath} without reading first - may overwrite important code!`);
+            // Soft warning for other edit tools (write_file, insert_code)
+            if (!filesRead.has(targetPath) && !isNewFileCreation && name !== 'search_replace') {
+              console.warn(`[Agent Mode] ⚠️ WARNING: ${name} on ${targetPath} without reading first`);
             }
             
             // 🚀 SOFT VALIDATION REDIRECT: If search string not in target file, find the right file automatically
@@ -3574,7 +3451,7 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
             }
           }
           
-          if ((name === 'search_replace' || name === 'write_file' || name === 'insert_code' || name === 'morph_edit') && targetPath && result.success) {
+          if ((name === 'search_replace' || name === 'write_file' || name === 'insert_code') && targetPath && result.success) {
             filesEdited.add(targetPath);
             lastEditPath = targetPath;
             editVerificationPending = true;
@@ -3592,41 +3469,6 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
               result.renderPathWarning = `⚠️ WARNING: File "${targetPath}" is NOT imported by App.js or any active component. ` +
                 `Changes to this file will have NO visible effect. Consider editing a file that IS imported, or add an import to App.js.`;
               result.activeFiles = [...activeRenderPath].slice(0, 10);
-            }
-            
-            // 🔒 REACT ROUTER VALIDATION: Check if <Link> was added but BrowserRouter is missing
-            if (targetPath.includes('App.js') || targetPath.includes('App.jsx') || targetPath.includes('App.tsx')) {
-              const { data: appData } = await supabase
-                .from('project_files')
-                .select('content')
-                .eq('project_id', projectId)
-                .eq('path', targetPath)
-                .maybeSingle();
-              
-              const { data: indexData } = await supabase
-                .from('project_files')
-                .select('content')
-                .eq('project_id', projectId)
-                .or('path.eq./index.js,path.eq./index.jsx,path.eq./index.tsx,path.eq./src/index.js,path.eq./src/index.jsx,path.eq./src/index.tsx,path.eq./src/main.jsx,path.eq./src/main.tsx')
-                .maybeSingle();
-              
-              if (appData?.content && indexData?.content) {
-                const appContent = appData.content;
-                const indexContent = indexData.content;
-                
-                // Check if App uses react-router-dom components
-                const usesRouterComponents = /\b(Link|NavLink|Route|Routes|useNavigate|useParams|useLocation)\b/.test(appContent);
-                const hasBrowserRouter = /\b(BrowserRouter|HashRouter|MemoryRouter|Router)\b/.test(indexContent);
-                
-                if (usesRouterComponents && !hasBrowserRouter) {
-                  console.error(`[Agent Mode] 🚫 REACT ROUTER ERROR: App uses router components but index.js missing BrowserRouter!`);
-                  result.routerWarning = `⚠️ CRITICAL: You added react-router-dom components (Link, Route, etc.) to App.js but index.js is missing <BrowserRouter>! ` +
-                    `This WILL crash the app. You MUST wrap <App /> in <BrowserRouter> in index.js. ` +
-                    `Fix: import { BrowserRouter } from 'react-router-dom'; then <BrowserRouter><App /></BrowserRouter>`;
-                  result.autoFixRequired = true;
-                  result.autoFixType = 'missing-browser-router';
-                }
-              }
             }
           }
           
