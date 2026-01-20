@@ -229,6 +229,11 @@ CRITICAL SIDEBAR RULES:
     prompt += `FIELDS (in order):
 ${fields.map((f, i) => `${i + 1}. ${f.label} (${f.type}) - ${f.required ? 'REQUIRED' : 'optional'}`).join('\n')}
 
+VALIDATION (CRITICAL):
+- For email fields, use the shared helper: validateEmail from /src/utils/validations.ts
+- Do NOT write custom regex for email validation (regex escaping has caused bugs)
+- If validateEmail returns a message, show it as the error
+
 DESIGN:
 - Border style: ${borderRadius}
 - Color scheme: ${colorScheme} (use ${colorScheme}-500 for primary buttons and accents)

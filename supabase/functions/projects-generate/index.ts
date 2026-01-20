@@ -50,7 +50,19 @@ import {
   type MorphEditBlock,
   // 🔍 Morph Warp Grep - AI-Powered Code Search
   morphWarpGrep,
-  type WarpGrepResult
+  type WarpGrepResult,
+  // 🎯 UPGRADE #1: Auto "Explain What Changed" Report
+  generateChangeReport,
+  type ChangeReport,
+  type ChangeReportEntry,
+  // 🔒 UPGRADE #2: Multi-file Safety Guardrails
+  checkMultiFileGuardrails,
+  type MultiFileGuardrail,
+  type MultiFileChecklistItem,
+  // 🧪 UPGRADE #3: Smoke-Test Runner
+  runSmokeTests,
+  type SmokeTestResult,
+  type SmokeTestItem
 } from "./agentTools.ts";
 
 // ============================================================================
@@ -1434,6 +1446,30 @@ You are an elite React Expert creating premium UI applications.
 2.  **In-Memory CRUD**: Make "Add", "Edit", and "Delete" work in React state.
 3.  **No External Routing**: Use state-based navigation: \`const [page, setPage] = useState('home');\`.
 
+### REACT ROUTER RULES (CRITICAL - PREVENTS CRASHES)
+If you MUST use react-router-dom (Link, Route, Routes, useNavigate, useLocation, useParams):
+1. **ALWAYS wrap App with BrowserRouter** - Either in index.js OR inside App.js itself
+2. **NEVER call useLocation/useNavigate outside Router context** - These hooks MUST be inside a component wrapped by BrowserRouter
+3. **PREFERRED PATTERN**: Keep Router inside App.js to avoid context issues:
+   \`\`\`jsx
+   // App.js - SAFE pattern
+   import { BrowserRouter, Routes, Route } from 'react-router-dom';
+   
+   function AppContent() {
+     const location = useLocation(); // Safe - inside Router
+     return <div>...</div>;
+   }
+   
+   export default function App() {
+     return (
+       <BrowserRouter>
+         <AppContent />
+       </BrowserRouter>
+     );
+   }
+   \`\`\`
+4. **AVOID**: Putting BrowserRouter in index.js and useLocation in App.js top-level - this can cause race conditions in Sandpack.
+
 ### PART 3: ALLOWED PACKAGES (CRITICAL)
 You may ONLY import from these packages (they are pre-installed):
 - react, react-dom
@@ -1540,6 +1576,12 @@ IMPORTANT FORM REQUIREMENTS:
 - Add form validation before submit (required fields, email format)
 - Clear form fields after successful submission
 - formName should describe the form purpose: "contact", "quote", "newsletter", "feedback", "waitlist"
+
+### CRITICAL: NO SUPABASE CLIENT IN USER PROJECTS
+1. NEVER import or use @supabase/supabase-js in generated user projects.
+2. NEVER add supabaseUrl or supabaseAnonKey to frontend code.
+3. ALWAYS use the project-backend-api endpoint for products, items, orders, cart, forms, and data.
+4. If the user asks for a shop/products/items page, fetch via project-backend-api with projectId.
 `;
 
 // ============================================================================
@@ -3620,9 +3662,91 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
                 
                 if (usesRouterComponents && !hasBrowserRouter) {
                   console.error(`[Agent Mode] 🚫 REACT ROUTER ERROR: App uses router components but index.js missing BrowserRouter!`);
-                  result.routerWarning = `⚠️ CRITICAL: You added react-router-dom components (Link, Route, etc.) to App.js but index.js is missing <BrowserRouter>! ` +
-                    `This WILL crash the app. You MUST wrap <App /> in <BrowserRouter> in index.js. ` +
-                    `Fix: import { BrowserRouter } from 'react-router-dom'; then <BrowserRouter><App /></BrowserRouter>`;
+                  console.log(`[Agent Mode] 🔧 AUTO-FIX: Applying BrowserRouter fix automatically...`);
+                  
+                  // ========================================================================
+                  // 🔧 AUTO-FIX: Automatically wrap App with BrowserRouter in index.js
+                  // This implements Option 1 (Agent Auto-Fix) + Option 3 (Error Boundary Auto-Retry)
+                  // ========================================================================
+                  try {
+                    // Find the index.js path
+                    const { data: indexFile } = await supabase
+                      .from('project_files')
+                      .select('path, content')
+                      .eq('project_id', projectId)
+                      .or('path.eq./index.js,path.eq./index.jsx,path.eq./index.tsx,path.eq./src/index.js,path.eq./src/index.jsx,path.eq./src/index.tsx,path.eq./src/main.jsx,path.eq./src/main.tsx')
+                      .maybeSingle();
+                    
+                    if (indexFile?.content) {
+                      let fixedIndexContent = indexFile.content;
+                      const indexPath = indexFile.path;
+                      
+                      // Check if BrowserRouter import already exists
+                      if (!fixedIndexContent.includes('BrowserRouter')) {
+                        // Add BrowserRouter import
+                        if (fixedIndexContent.includes("from 'react-router-dom'")) {
+                          // Add to existing import
+                          fixedIndexContent = fixedIndexContent.replace(
+                            /import\s*\{([^}]+)\}\s*from\s*['"]react-router-dom['"]/,
+                            (_match, imports) => `import { BrowserRouter, ${imports.trim()} } from 'react-router-dom'`
+                          );
+                        } else {
+                          // Add new import after React import
+                          fixedIndexContent = fixedIndexContent.replace(
+                            /(import\s+React.*?['"];?\n)/,
+                            `$1import { BrowserRouter } from 'react-router-dom';\n`
+                          );
+                        }
+                      }
+                      
+                      // Wrap <App /> with <BrowserRouter>
+                      // Handle various render patterns
+                      if (!fixedIndexContent.includes('<BrowserRouter>')) {
+                        // Pattern 1: root.render(<App />)
+                        fixedIndexContent = fixedIndexContent.replace(
+                          /root\.render\(\s*<App\s*\/>\s*\)/g,
+                          'root.render(<BrowserRouter><App /></BrowserRouter>)'
+                        );
+                        // Pattern 2: ReactDOM.render(<App />, ...)
+                        fixedIndexContent = fixedIndexContent.replace(
+                          /ReactDOM\.render\(\s*<App\s*\/>\s*,/g,
+                          'ReactDOM.render(<BrowserRouter><App /></BrowserRouter>,'
+                        );
+                        // Pattern 3: render(<App />)
+                        fixedIndexContent = fixedIndexContent.replace(
+                          /render\(\s*<App\s*\/>\s*\)/g,
+                          'render(<BrowserRouter><App /></BrowserRouter>)'
+                        );
+                      }
+                      
+                      // Save the fixed file
+                      if (fixedIndexContent !== indexFile.content) {
+                        const { error: updateError } = await supabase
+                          .from('project_files')
+                          .update({ content: fixedIndexContent, updated_at: new Date().toISOString() })
+                          .eq('project_id', projectId)
+                          .eq('path', indexPath);
+                        
+                        if (!updateError) {
+                          console.log(`[Agent Mode] ✅ AUTO-FIX SUCCESS: Added BrowserRouter to ${indexPath}`);
+                          result.autoFixApplied = true;
+                          result.autoFixMessage = `✅ Auto-fixed: Added BrowserRouter wrapper to ${indexPath}`;
+                          result.autoFixedFiles = [indexPath];
+                        } else {
+                          console.error(`[Agent Mode] ❌ AUTO-FIX FAILED: ${updateError.message}`);
+                          result.autoFixApplied = false;
+                          result.autoFixError = updateError.message;
+                        }
+                      }
+                    }
+                  } catch (autoFixError) {
+                    console.error(`[Agent Mode] ❌ AUTO-FIX ERROR:`, autoFixError);
+                    result.autoFixApplied = false;
+                    result.autoFixError = String(autoFixError);
+                  }
+                  
+                  // Still set the warning for visibility
+                  result.routerWarning = `⚠️ Router issue detected and auto-fixed. If you still see errors, ensure useLocation/useNavigate are inside a component wrapped by BrowserRouter.`;
                   result.autoFixRequired = true;
                   result.autoFixType = 'missing-browser-router';
                 }
@@ -3884,13 +4008,15 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
         console.error(`[Agent Mode] 🔒 SAFETY BLOCK: Agent completed with ZERO meaningful tool calls!`);
         console.error(`[Agent Mode] All calls: ${toolCallsLog.map(tc => tc.tool).join(', ')}`);
         return new Response(JSON.stringify({
+          ok: true,
           mode: 'agent',
           result: {
+            success: false,
             summary: 'The AI Coder failed to explore the codebase. Please try again with a more specific request.',
             filesChanged: [],
             error: 'NO_TOOL_CALLS'
           }
-        }), { headers: corsHeaders, status: 200 });
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 });
       }
       
       // ========================================================================
@@ -3925,17 +4051,20 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
           }
           
           return new Response(JSON.stringify({
+            ok: true,
             mode: 'agent',
             result: {
+              success: true,
               type: 'clarification_needed',
               title: 'Which element do you mean?',
               message: 'I found multiple elements that could match your request. Please specify which one you want to change:',
               candidates: candidateDetails.slice(0, 5),
               candidateFiles: grepCandidateFiles.slice(0, 5),
               suggestion: 'You can click on the element in the preview to select it precisely, or describe it more specifically.',
-              filesChanged: []
+              filesChanged: [],
+              summary: 'Clarification needed'
             }
-          }), { headers: corsHeaders, status: 200 });
+          }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 });
         }
       }
       
@@ -4040,6 +4169,31 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
         }
       });
       
+      // ========================================================================
+      // 🎯 UPGRADE #1: Generate "What Changed" Report
+      // ========================================================================
+      const changeReport = generateChangeReport(toolCallsLog, prompt);
+      console.log(`[Agent Mode] 📋 Change Report: ${changeReport.title} - ${changeReport.summary}`);
+      
+      // ========================================================================
+      // 🔒 UPGRADE #2: Multi-file Safety Guardrails Check
+      // ========================================================================
+      const multiFileGuardrail = checkMultiFileGuardrails(filesEdited, toolCallsLog, allFilesCache);
+      if (multiFileGuardrail.triggered) {
+        console.log(`[Agent Mode] 🔒 Multi-file guardrail: ${multiFileGuardrail.message}`);
+      }
+      
+      // ========================================================================
+      // 🧪 UPGRADE #3: Run Smoke Tests on Changed Files
+      // ========================================================================
+      const smokeTestResult = runSmokeTests([...filesEdited], allFilesCache);
+      if (!smokeTestResult.passed) {
+        console.warn(`[Agent Mode] 🧪 Smoke test FAILED: ${smokeTestResult.criticalErrors.join(', ')}`);
+        resultWarnings.push(...smokeTestResult.criticalErrors);
+      } else if (smokeTestResult.warnings.length > 0) {
+        console.log(`[Agent Mode] 🧪 Smoke test passed with ${smokeTestResult.warnings.length} warning(s)`);
+      }
+      
       const result: AgentResult = {
         success: true,
         summary: taskCompleteResult?.summary || `Agent completed after ${toolCallsLog.length} tool calls`,
@@ -4066,7 +4220,11 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
           blocked: styleChangeBlocked,
           blockedReason: styleBlockReason || colorValidation.message || undefined
         },
-        warnings: resultWarnings
+        warnings: resultWarnings,
+        // 🎯 NEW: Premium Upgrades
+        changeReport,
+        multiFileGuardrail,
+        smokeTestResult
       };
       
       console.log(`[Agent Mode] Completed. Files changed: ${result.filesChanged.join(', ')}`);

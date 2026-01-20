@@ -4498,6 +4498,40 @@ ${fixInstructions}
         // AGENT MODE: Returns results directly (no job polling needed!)
         const agentResult = startRes.data;
         
+        // 🔧 DEBUG: Log what we received from the edge function
+        console.log('[AI Coder] Agent result received:', JSON.stringify({
+          ok: agentResult?.ok,
+          mode: agentResult?.mode,
+          hasResult: !!agentResult?.result,
+          resultSuccess: agentResult?.result?.success,
+          hasMessage: !!agentResult?.message,
+          hasJobId: !!agentResult?.jobId,
+          error: agentResult?.error
+        }));
+        
+        // 🔧 FIX: Handle ok: false responses from the edge function
+        if (agentResult?.ok === false) {
+          throw new Error(agentResult.error || 'Agent request failed');
+        }
+        
+        // 🔧 FIX: Handle result.success: false (agent explored but couldn't complete)
+        if (agentResult?.mode === 'agent' && agentResult?.result?.success === false) {
+          const errorMsg = agentResult.result.error || agentResult.result.summary || 'Agent could not complete the request';
+          throw new Error(errorMsg);
+        }
+
+        // 🔒 HARD-BLOCK: If smoke tests fail, auto-fix immediately (no bad output shown)
+        if (agentResult?.mode === 'agent' && agentResult?.result?.smokeTestResult && !agentResult.result.smokeTestResult.passed) {
+          const criticalErrors = agentResult.result.smokeTestResult.criticalErrors || [];
+          const smokeError = criticalErrors.length > 0
+            ? `Smoke test failed: ${criticalErrors.join(' | ')}`
+            : 'Smoke test failed: Fix required before showing output.';
+          toast.error(isRTL ? 'تم اكتشاف خطأ تلقائيًا - جاري الإصلاح' : 'Auto-detected issue - fixing now');
+          setCrashReport(smokeError);
+          triggerAutoFix(smokeError);
+          return;
+        }
+        
         if (agentResult?.mode === 'agent' && agentResult?.result) {
           // Agent mode completed synchronously - load updated files
           setGenerationSteps(prev => prev.map((s, i) => 

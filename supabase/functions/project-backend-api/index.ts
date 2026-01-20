@@ -64,6 +64,20 @@ function generateOrderNumber(): string {
   return `ORD-${timestamp}-${random}`;
 }
 
+function validateEmail(email: string): string | null {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  if (!email || email.trim() === '') {
+    return 'Email cannot be empty';
+  }
+
+  if (!emailRegex.test(email)) {
+    return 'Please enter a valid email address';
+  }
+
+  return null;
+}
+
 // Validate that project backend is enabled and origin is allowed
 async function validateRequest(projectId: string, origin: string | null): Promise<{ valid: boolean; error?: string; ownerId?: string }> {
   console.log(`[project-backend-api] Validating request for project ${projectId}, origin: ${origin}`);
@@ -125,6 +139,14 @@ async function createOwnerNotification(
 // Handle form submissions
 async function handleFormSubmit(projectId: string, ownerId: string, formName: string, data: Record<string, unknown>, origin: string | null) {
   console.log(`[project-backend-api] Form submit: ${formName}`, data);
+
+  const submittedEmail = typeof data.email === 'string' ? data.email : null;
+  if (submittedEmail) {
+    const emailError = validateEmail(submittedEmail);
+    if (emailError) {
+      throw new Error(emailError);
+    }
+  }
   
   const { data: result, error } = await supabase
     .from('project_form_submissions')

@@ -783,6 +783,73 @@ export async function morphWarpGrep(
 }
 
 // ============================================================================
+// 🔧 UDIFF GENERATION - For post-edit verification (Morph recommendation)
+// Pattern: apply first, verify after - pass UDiff back to agent on errors
+// ============================================================================
+
+/**
+ * Generate a unified diff between original and modified code
+ * Used for verification after edits (Morph best practice)
+ */
+function generateUDiff(original: string, modified: string, filename: string): string {
+  const originalLines = original.split('\n');
+  const modifiedLines = modified.split('\n');
+  
+  const diff: string[] = [];
+  diff.push(`--- a/${filename}`);
+  diff.push(`+++ b/${filename}`);
+  
+  // Simple line-by-line diff (not full Myers algorithm, but sufficient for verification)
+  let i = 0, j = 0;
+  let hunkStart = -1;
+  let hunkLines: string[] = [];
+  
+  const flushHunk = () => {
+    if (hunkLines.length > 0 && hunkStart >= 0) {
+      const removedCount = hunkLines.filter(l => l.startsWith('-')).length;
+      const addedCount = hunkLines.filter(l => l.startsWith('+')).length;
+      const contextCount = hunkLines.filter(l => l.startsWith(' ')).length;
+      diff.push(`@@ -${hunkStart + 1},${removedCount + contextCount} +${hunkStart + 1},${addedCount + contextCount} @@`);
+      diff.push(...hunkLines);
+      hunkLines = [];
+      hunkStart = -1;
+    }
+  };
+  
+  while (i < originalLines.length || j < modifiedLines.length) {
+    if (i < originalLines.length && j < modifiedLines.length && originalLines[i] === modifiedLines[j]) {
+      // Context line (unchanged)
+      if (hunkLines.length > 0) {
+        hunkLines.push(` ${originalLines[i]}`);
+        // Flush if we have 3+ context lines after changes
+        const lastChangeIdx = Math.max(
+          hunkLines.map((l, idx) => l.startsWith('-') || l.startsWith('+') ? idx : -1).reduce((a, b) => Math.max(a, b), -1)
+        );
+        if (hunkLines.length - lastChangeIdx > 3) {
+          flushHunk();
+        }
+      }
+      i++;
+      j++;
+    } else if (i < originalLines.length && (j >= modifiedLines.length || originalLines[i] !== modifiedLines[j])) {
+      // Removed line
+      if (hunkStart < 0) hunkStart = i;
+      hunkLines.push(`-${originalLines[i]}`);
+      i++;
+    } else if (j < modifiedLines.length) {
+      // Added line
+      if (hunkStart < 0) hunkStart = Math.max(0, i - 1);
+      hunkLines.push(`+${modifiedLines[j]}`);
+      j++;
+    }
+  }
+  
+  flushHunk();
+  
+  return diff.length > 2 ? diff.join('\n') : '(no changes)';
+}
+
+// ============================================================================
 // 🚀 MORPH FAST APPLY - Intelligent Code Merging (from Open Lovable)
 // Uses Morph LLM API for 10,500+ tokens/sec code merging with 98% accuracy
 // Docs: https://docs.morphllm.com/sdk/components/fast-apply
@@ -803,10 +870,12 @@ export interface MorphApplyResult {
     linesRemoved: number;
     linesModified: number;
   };
-  udiff?: string;            // Unified diff
+  udiff?: string;            // Unified diff for verification
   error?: string;
   model?: string;            // Which Morph model was used
   tokensUsed?: number;
+  retryAttempt?: number;     // Which retry attempt this was (0 = first try)
+  contextLines?: number;     // How many context lines were used
 }
 
 // ============================================================================
@@ -927,6 +996,9 @@ export async function morphFastApply(input: MorphApplyInput): Promise<MorphApply
     const linesAdded = Math.max(0, mergedLines - originalLines);
     const linesRemoved = Math.max(0, originalLines - mergedLines);
     
+    // Generate UDiff for verification (Morph recommendation: verify after, not before)
+    const udiff = generateUDiff(input.originalCode, mergedCode, input.filepath || 'file');
+    
     console.log(`[Morph] Success: +${linesAdded} -${linesRemoved} lines`);
     
     return {
@@ -937,6 +1009,7 @@ export async function morphFastApply(input: MorphApplyInput): Promise<MorphApply
         linesRemoved,
         linesModified: Math.min(linesAdded, linesRemoved)
       },
+      udiff,
       model: data.model || "auto",
       tokensUsed: data.usage?.total_tokens
     };
@@ -1045,14 +1118,23 @@ export async function smartSearchReplace(
 /**
  * Direct Morph edit - for when AI uses "// ... existing code ..." markers
  * This is the preferred edit format for Morph
+ * 
+ * MORPH BEST PRACTICE: Retry with more context on failure
+ * 1. First try with the provided code edit
+ * 2. If failed, re-read file and add more surrounding context
+ * 3. Simplify complex edits into smaller chunks
  */
 export async function morphEditFile(
   projectId: string,
   filepath: string,
   instructions: string,
   codeEdit: string,  // Code with "// ... existing code ..." markers
-  supabase: ReturnType<typeof createClient>
+  supabase: ReturnType<typeof createClient>,
+  options?: { maxRetries?: number; contextLines?: number }
 ): Promise<MorphApplyResult & { filepath: string }> {
+  
+  const maxRetries = options?.maxRetries ?? 2;
+  const baseContextLines = options?.contextLines ?? 5;
   
   // Read current file
   const { data, error: readError } = await supabase
@@ -1070,30 +1152,127 @@ export async function morphEditFile(
     return { success: false, error: `File not found: ${filepath}`, filepath };
   }
   
-  // Call Morph Fast Apply
-  const morphResult = await morphFastApply({
-    originalCode: data.content,
-    codeEdit,
-    instructions,
-    filepath
-  });
+  const originalContent = data.content;
+  let lastError: string | undefined;
+  let lastUdiff: string | undefined;
   
-  if (!morphResult.success || !morphResult.mergedCode) {
-    return { ...morphResult, filepath };
+  // Retry loop with increasing context
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const contextLines = baseContextLines + (attempt * 5); // Increase context each retry
+    
+    // On retry, try to add more context around the edit
+    let enhancedCodeEdit = codeEdit;
+    if (attempt > 0) {
+      console.log(`[MorphEdit] Retry ${attempt}/${maxRetries} with ${contextLines} context lines`);
+      enhancedCodeEdit = addContextToEdit(originalContent, codeEdit, contextLines);
+    }
+    
+    // Call Morph Fast Apply
+    const morphResult = await morphFastApply({
+      originalCode: originalContent,
+      codeEdit: enhancedCodeEdit,
+      instructions: attempt > 0 
+        ? `${instructions} (Retry ${attempt}: providing more context)`
+        : instructions,
+      filepath
+    });
+    
+    if (morphResult.success && morphResult.mergedCode) {
+      // Verify the merge looks reasonable (basic sanity check)
+      const originalLines = originalContent.split('\n').length;
+      const mergedLines = morphResult.mergedCode.split('\n').length;
+      const lineDiff = Math.abs(mergedLines - originalLines);
+      
+      // If the change is too drastic (>50% of file), warn but still apply
+      if (lineDiff > originalLines * 0.5) {
+        console.warn(`[MorphEdit] Large change detected: ${lineDiff} lines diff (${Math.round(lineDiff/originalLines*100)}% of file)`);
+      }
+      
+      // Write merged content
+      const { error: writeError } = await supabase
+        .from('project_files')
+        .update({ content: morphResult.mergedCode })
+        .eq('project_id', projectId)
+        .eq('path', filepath);
+      
+      if (writeError) {
+        return { success: false, error: writeError.message, filepath };
+      }
+      
+      return { 
+        ...morphResult, 
+        filepath,
+        retryAttempt: attempt,
+        contextLines
+      };
+    }
+    
+    // Store error for potential return
+    lastError = morphResult.error;
+    lastUdiff = morphResult.udiff;
+    
+    // If this was the last attempt, break
+    if (attempt === maxRetries) {
+      break;
+    }
+    
+    // Small delay before retry
+    await new Promise(resolve => setTimeout(resolve, 500));
   }
   
-  // Write merged content
-  const { error: writeError } = await supabase
-    .from('project_files')
-    .update({ content: morphResult.mergedCode })
-    .eq('project_id', projectId)
-    .eq('path', filepath);
+  // All retries failed - return with UDiff for debugging
+  return { 
+    success: false, 
+    error: `Edit failed after ${maxRetries + 1} attempts: ${lastError}`,
+    udiff: lastUdiff,
+    filepath,
+    retryAttempt: maxRetries
+  };
+}
+
+/**
+ * Add more context lines around the edit markers
+ * This helps Morph understand where to place the changes
+ */
+function addContextToEdit(originalContent: string, codeEdit: string, contextLines: number): string {
+  const lines = originalContent.split('\n');
+  const editLines = codeEdit.split('\n');
   
-  if (writeError) {
-    return { success: false, error: writeError.message, filepath };
+  // Find non-marker lines in the edit
+  const significantLines = editLines.filter(line => 
+    !line.includes('// ... existing code ...') && 
+    line.trim().length > 0
+  );
+  
+  if (significantLines.length === 0) {
+    return codeEdit;
   }
   
-  return { ...morphResult, filepath };
+  // Try to find where these lines might go in the original
+  const firstSignificant = significantLines[0].trim();
+  let matchIndex = -1;
+  
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].includes(firstSignificant) || 
+        (firstSignificant.length > 10 && lines[i].trim().startsWith(firstSignificant.substring(0, 10)))) {
+      matchIndex = i;
+      break;
+    }
+  }
+  
+  if (matchIndex >= 0) {
+    // Add context before and after
+    const startIdx = Math.max(0, matchIndex - contextLines);
+    const endIdx = Math.min(lines.length, matchIndex + contextLines);
+    
+    const contextBefore = lines.slice(startIdx, matchIndex).join('\n');
+    const contextAfter = lines.slice(matchIndex + 1, endIdx).join('\n');
+    
+    // Rebuild edit with more context
+    return `// ... existing code ...\n${contextBefore}\n${codeEdit}\n${contextAfter}\n// ... existing code ...`;
+  }
+  
+  return codeEdit;
 }
 
 export interface EditIntent {
@@ -2476,16 +2655,25 @@ Before creating a new component/page:
 - ✅ UI shows the change
 - ✅ Route + nav done (if page)
 
-## 🔍 MORPH DOCS WORKFLOW: SEARCH → READ → EDIT → VERIFY (MANDATORY!)
+## MORPH DOCS WORKFLOW: SEARCH → READ → EDIT → VERIFY (MANDATORY!)
 
 **This workflow is ENFORCED by the system. Skipping steps will cause your edits to be BLOCKED.**
 
-### Step 1: 🔍 SEARCH - Find the code
+## TOOL NAME MAPPING (DOCS → WAKTI AI CODER)
+
+- **codebase_search** → **grep_search** (use list_files for discovery if needed)
+- **read_file** → **read_file**
+- **edit_file** → **morph_edit**
+- **list_dir** → **list_files**
+
+**Same workflow, different tool names. Results are the same.**
+
+### Step 1: SEARCH - Find the code
 \`\`\`
 grep_search({ query: "button color" })  // Find where the code lives
 \`\`\`
 
-### Step 2: 📖 READ - Understand the structure (REQUIRED before editing!)
+### Step 2: READ - Understand the structure (REQUIRED before editing!)
 \`\`\`
 read_file({ path: "/App.js" })  // Get full context - BLOCKED if you skip this!
 \`\`\`
@@ -2521,6 +2709,7 @@ task_complete({ summary: "Changed button color to red in App.js" })
 5. **NEVER IGNORE USER INSTRUCTIONS** - Follow exactly what they said
 6. **NEVER MAKE UP IMPORTS** - Check what imports already exist
 7. **NEVER BREAK WORKING CODE** - If it works, don't touch it unless asked
+8. **NEVER WRITE CUSTOM EMAIL REGEX** - Always use validateEmail from /src/utils/validations.ts
 
 ## 🔍 VERIFICATION RULES - MANDATORY BEFORE CLAIMING SUCCESS
 
@@ -4092,13 +4281,13 @@ export async function executeToolCall(
   }
 }
 
-// Agent result interface - Enhanced for Phase 5: Better debugging
+// Agent result interface - Enhanced for Phase 5: Better debugging + Premium Upgrades
 export interface AgentResult {
   success: boolean;
   summary: string;
   filesChanged: string[];
   iterations: number;
-  toolCalls: Array<{ tool: string; result: any }>;
+  toolCalls: Array<{ tool: string; result: unknown }>;
   error?: string;
   // Phase 5: Enhanced debugging info
   renderPathStatus?: {
@@ -4127,6 +4316,10 @@ export interface AgentResult {
     blockedReason?: string;
   };
   warnings: string[];
+  // 🎯 Premium Upgrades (9/10+ features)
+  changeReport?: ChangeReport;           // UPGRADE #1: Human-readable "What Changed" report
+  multiFileGuardrail?: MultiFileGuardrail; // UPGRADE #2: Multi-file safety checks
+  smokeTestResult?: SmokeTestResult;     // UPGRADE #3: Quick lint/syntax validation
 }
 
 // Format tools for Gemini API
@@ -4138,4 +4331,566 @@ export function getGeminiToolsConfig() {
       parameters: tool.parameters
     }))
   };
+}
+
+// ============================================================================
+// 🎯 UPGRADE #1: AUTO "EXPLAIN WHAT CHANGED" REPORT
+// Generates a human-readable summary of all changes made during agent session
+// ============================================================================
+
+export interface ChangeReportEntry {
+  file: string;
+  action: 'created' | 'modified' | 'deleted';
+  description: string;
+  linesChanged?: number;
+  keyChanges?: string[];
+}
+
+export interface ChangeReport {
+  title: string;
+  summary: string;
+  changes: ChangeReportEntry[];
+  totalFilesChanged: number;
+  warnings?: string[];
+}
+
+/**
+ * Generate a human-readable "What Changed" report from tool call logs
+ * This solves the user trust issue: "What did it actually do?"
+ */
+export function generateChangeReport(
+  toolCallsLog: Array<{ tool: string; args: Record<string, unknown>; result: Record<string, unknown> }>,
+  userPrompt: string
+): ChangeReport {
+  const changes: ChangeReportEntry[] = [];
+  const filesProcessed = new Set<string>();
+  
+  for (const tc of toolCallsLog) {
+    const { tool, args, result } = tc;
+    
+    if (!result?.success) continue;
+    
+    const filePath = (args?.path || result?.path) as string;
+    if (!filePath) continue;
+    
+    // Skip duplicate entries for same file
+    const fileKey = `${tool}:${filePath}`;
+    if (filesProcessed.has(fileKey)) continue;
+    filesProcessed.add(fileKey);
+    
+    switch (tool) {
+      case 'write_file': {
+        const content = args?.content as string || '';
+        const isNew = !result?.existed;
+        changes.push({
+          file: filePath,
+          action: isNew ? 'created' : 'modified',
+          description: isNew 
+            ? `Created new file with ${content.split('\n').length} lines`
+            : `Rewrote file (${content.split('\n').length} lines)`,
+          linesChanged: content.split('\n').length,
+          keyChanges: extractKeyChanges(content, tool)
+        });
+        break;
+      }
+      
+      case 'search_replace': {
+        const search = args?.search as string || '';
+        const replace = args?.replace as string || '';
+        const searchLines = search.split('\n').length;
+        const replaceLines = replace.split('\n').length;
+        const diff = replaceLines - searchLines;
+        
+        changes.push({
+          file: filePath,
+          action: 'modified',
+          description: diff > 0 
+            ? `Added ${diff} line(s)` 
+            : diff < 0 
+              ? `Removed ${Math.abs(diff)} line(s)` 
+              : `Modified ${searchLines} line(s)`,
+          linesChanged: Math.abs(diff) || searchLines,
+          keyChanges: extractKeyChanges(replace, tool)
+        });
+        break;
+      }
+      
+      case 'morph_edit': {
+        const codeEdit = args?.code_edit as string || '';
+        changes.push({
+          file: filePath,
+          action: 'modified',
+          description: `Intelligent merge edit`,
+          keyChanges: extractKeyChanges(codeEdit, tool)
+        });
+        break;
+      }
+      
+      case 'insert_code': {
+        const code = args?.code as string || '';
+        changes.push({
+          file: filePath,
+          action: 'modified',
+          description: `Inserted ${code.split('\n').length} line(s)`,
+          linesChanged: code.split('\n').length,
+          keyChanges: extractKeyChanges(code, tool)
+        });
+        break;
+      }
+      
+      case 'delete_file': {
+        changes.push({
+          file: filePath,
+          action: 'deleted',
+          description: 'File deleted'
+        });
+        break;
+      }
+    }
+  }
+  
+  // Generate summary
+  const created = changes.filter(c => c.action === 'created').length;
+  const modified = changes.filter(c => c.action === 'modified').length;
+  const deleted = changes.filter(c => c.action === 'deleted').length;
+  
+  const summaryParts: string[] = [];
+  if (created > 0) summaryParts.push(`${created} file(s) created`);
+  if (modified > 0) summaryParts.push(`${modified} file(s) modified`);
+  if (deleted > 0) summaryParts.push(`${deleted} file(s) deleted`);
+  
+  return {
+    title: generateReportTitle(userPrompt, changes),
+    summary: summaryParts.length > 0 ? summaryParts.join(', ') : 'No changes made',
+    changes,
+    totalFilesChanged: changes.length
+  };
+}
+
+/**
+ * Extract key changes from code for human-readable summary
+ */
+function extractKeyChanges(code: string, _tool: string): string[] {
+  const keyChanges: string[] = [];
+  
+  // Detect imports added
+  const importMatches = code.match(/import\s+.*from\s+['"][^'"]+['"]/g);
+  if (importMatches && importMatches.length > 0) {
+    keyChanges.push(`Added ${importMatches.length} import(s)`);
+  }
+  
+  // Detect function definitions
+  const funcMatches = code.match(/function\s+\w+|const\s+\w+\s*=\s*\([^)]*\)\s*=>/g);
+  if (funcMatches && funcMatches.length > 0) {
+    keyChanges.push(`Added/modified ${funcMatches.length} function(s)`);
+  }
+  
+  // Detect component definitions
+  const componentMatches = code.match(/export\s+(default\s+)?function\s+\w+|const\s+\w+\s*=\s*\(\)\s*=>\s*\{/g);
+  if (componentMatches && componentMatches.length > 0) {
+    keyChanges.push(`Component definition changed`);
+  }
+  
+  // Detect style changes
+  const styleMatches = code.match(/className=["'][^"']*["']|style=\{/g);
+  if (styleMatches && styleMatches.length > 0) {
+    keyChanges.push(`Styling updated`);
+  }
+  
+  // Detect route changes
+  if (code.includes('<Route') || code.includes('useNavigate') || code.includes('<Link')) {
+    keyChanges.push(`Routing modified`);
+  }
+  
+  return keyChanges.slice(0, 3); // Limit to 3 key changes
+}
+
+/**
+ * Generate a human-readable title for the change report
+ */
+function generateReportTitle(userPrompt: string, changes: ChangeReportEntry[]): string {
+  const promptLower = userPrompt.toLowerCase();
+  
+  // Try to extract action from prompt
+  if (promptLower.includes('add') || promptLower.includes('create')) {
+    const target = changes.find(c => c.action === 'created')?.file.split('/').pop() || 'feature';
+    return `✅ Added ${target}`;
+  }
+  
+  if (promptLower.includes('fix') || promptLower.includes('bug')) {
+    return `🔧 Bug fix applied`;
+  }
+  
+  if (promptLower.includes('change') || promptLower.includes('update') || promptLower.includes('modify')) {
+    return `✏️ Changes applied`;
+  }
+  
+  if (promptLower.includes('remove') || promptLower.includes('delete')) {
+    return `🗑️ Removed content`;
+  }
+  
+  if (promptLower.includes('style') || promptLower.includes('color') || promptLower.includes('design')) {
+    return `🎨 Styling updated`;
+  }
+  
+  // Default
+  return changes.length > 0 ? `✅ ${changes.length} file(s) updated` : `ℹ️ Task completed`;
+}
+
+// ============================================================================
+// 🔒 UPGRADE #2: MULTI-FILE SAFETY GUARDRAILS
+// Require explicit confirmation or checklist for edits touching >2 files
+// ============================================================================
+
+export interface MultiFileGuardrail {
+  triggered: boolean;
+  fileCount: number;
+  files: string[];
+  checklist: MultiFileChecklistItem[];
+  requiresConfirmation: boolean;
+  message?: string;
+}
+
+export interface MultiFileChecklistItem {
+  item: string;
+  status: 'pending' | 'verified' | 'warning' | 'error';
+  details?: string;
+}
+
+/**
+ * Check if multi-file edit guardrails should be triggered
+ * Returns a checklist of items to verify before proceeding
+ */
+export function checkMultiFileGuardrails(
+  filesEdited: Set<string>,
+  toolCallsLog: Array<{ tool: string; args: Record<string, unknown>; result: Record<string, unknown> }>,
+  allFilesCache: Record<string, string>
+): MultiFileGuardrail {
+  const fileCount = filesEdited.size;
+  const files = [...filesEdited];
+  
+  // Only trigger for >2 files
+  if (fileCount <= 2) {
+    return {
+      triggered: false,
+      fileCount,
+      files,
+      checklist: [],
+      requiresConfirmation: false
+    };
+  }
+  
+  const checklist: MultiFileChecklistItem[] = [];
+  
+  // Check 1: All imports updated?
+  const newComponents = files.filter(f => 
+    f.includes('/components/') || f.includes('/pages/')
+  );
+  if (newComponents.length > 0) {
+    const appJsEdited = files.some(f => f.includes('App.'));
+    checklist.push({
+      item: 'New components imported in App.js',
+      status: appJsEdited ? 'verified' : 'warning',
+      details: appJsEdited 
+        ? `App.js was modified` 
+        : `${newComponents.length} component(s) created but App.js not modified`
+    });
+  }
+  
+  // Check 2: Routes added for new pages?
+  const newPages = files.filter(f => f.includes('/pages/'));
+  if (newPages.length > 0) {
+    const hasRouteChanges = toolCallsLog.some(tc => {
+      const content = (tc.args?.content || tc.args?.replace || '') as string;
+      return content.includes('<Route') || content.includes('path=');
+    });
+    checklist.push({
+      item: 'Routes added for new pages',
+      status: hasRouteChanges ? 'verified' : 'warning',
+      details: hasRouteChanges 
+        ? `Route definitions found` 
+        : `${newPages.length} page(s) may not have routes`
+    });
+  }
+  
+  // Check 3: No orphan files?
+  const orphanFiles: string[] = [];
+  for (const file of files) {
+    if (file.includes('App.') || file.includes('index.')) continue;
+    
+    // Check if this file is imported anywhere
+    let isImported = false;
+    for (const [_, content] of Object.entries(allFilesCache)) {
+      const fileName = file.split('/').pop()?.replace(/\.(js|jsx|ts|tsx)$/, '');
+      if (fileName && content.includes(fileName)) {
+        isImported = true;
+        break;
+      }
+    }
+    if (!isImported) orphanFiles.push(file);
+  }
+  
+  if (orphanFiles.length > 0) {
+    checklist.push({
+      item: 'No orphan files',
+      status: 'warning',
+      details: `${orphanFiles.length} file(s) may not be imported: ${orphanFiles.slice(0, 2).join(', ')}`
+    });
+  } else {
+    checklist.push({
+      item: 'No orphan files',
+      status: 'verified',
+      details: 'All files appear to be imported'
+    });
+  }
+  
+  // Check 4: Consistent styling?
+  const hasStyleFiles = files.some(f => f.endsWith('.css') || f.endsWith('.scss'));
+  const hasInlineStyles = toolCallsLog.some(tc => {
+    const content = (tc.args?.content || tc.args?.replace || '') as string;
+    return content.includes('className=') || content.includes('style={');
+  });
+  
+  if (hasStyleFiles || hasInlineStyles) {
+    checklist.push({
+      item: 'Styling consistency',
+      status: 'pending',
+      details: 'Review styling changes for consistency'
+    });
+  }
+  
+  const hasWarnings = checklist.some(c => c.status === 'warning' || c.status === 'error');
+  
+  return {
+    triggered: true,
+    fileCount,
+    files,
+    checklist,
+    requiresConfirmation: hasWarnings,
+    message: hasWarnings 
+      ? `⚠️ Multi-file edit (${fileCount} files) has ${checklist.filter(c => c.status === 'warning').length} warning(s)`
+      : `✅ Multi-file edit (${fileCount} files) passed all checks`
+  };
+}
+
+// ============================================================================
+// 🧪 UPGRADE #3: SMOKE-TEST RUNNER (Quick Lint/Build Check)
+// Run basic validation after changes to catch obvious errors
+// ============================================================================
+
+export interface SmokeTestResult {
+  passed: boolean;
+  tests: SmokeTestItem[];
+  criticalErrors: string[];
+  warnings: string[];
+}
+
+export interface SmokeTestItem {
+  name: string;
+  passed: boolean;
+  message?: string;
+}
+
+/**
+ * Run quick smoke tests on changed files
+ * Catches obvious errors before user sees them
+ */
+export function runSmokeTests(
+  filesChanged: string[],
+  allFilesCache: Record<string, string>
+): SmokeTestResult {
+  const tests: SmokeTestItem[] = [];
+  const criticalErrors: string[] = [];
+  const warnings: string[] = [];
+  
+  for (const filePath of filesChanged) {
+    const content = allFilesCache[filePath];
+    if (!content) continue;
+    
+    const fileName = filePath.split('/').pop() || filePath;
+    
+    // Test 1: Syntax validation (basic bracket matching)
+    const bracketTest = validateBrackets(content);
+    tests.push({
+      name: `${fileName}: Bracket matching`,
+      passed: bracketTest.valid,
+      message: bracketTest.valid ? undefined : bracketTest.error
+    });
+    if (!bracketTest.valid) {
+      criticalErrors.push(`${fileName}: ${bracketTest.error}`);
+    }
+    
+    // Test 2: JSX tag matching (for .jsx/.tsx files)
+    if (filePath.match(/\.(jsx|tsx)$/)) {
+      const jsxTest = validateJSXTags(content);
+      tests.push({
+        name: `${fileName}: JSX tags`,
+        passed: jsxTest.valid,
+        message: jsxTest.valid ? undefined : jsxTest.error
+      });
+      if (!jsxTest.valid) {
+        criticalErrors.push(`${fileName}: ${jsxTest.error}`);
+      }
+    }
+    
+    // Test 3: Import validation
+    const importTest = validateImports(content, filePath);
+    tests.push({
+      name: `${fileName}: Imports`,
+      passed: importTest.valid,
+      message: importTest.valid ? undefined : importTest.error
+    });
+    if (!importTest.valid && importTest.critical) {
+      criticalErrors.push(`${fileName}: ${importTest.error}`);
+    } else if (!importTest.valid) {
+      warnings.push(`${fileName}: ${importTest.error}`);
+    }
+
+    // Test 4: Forbidden Supabase client usage in user projects
+    const forbiddenSupabaseUsage = /@supabase\/supabase-js|supabaseAnonKey|supabaseUrl/.test(content);
+    tests.push({
+      name: `${fileName}: Forbidden Supabase client usage`,
+      passed: !forbiddenSupabaseUsage,
+      message: forbiddenSupabaseUsage
+        ? 'Do not use supabase-js or anon keys in frontend. Use project-backend-api instead.'
+        : undefined
+    });
+    if (forbiddenSupabaseUsage) {
+      criticalErrors.push(`${fileName}: Forbidden Supabase client usage detected`);
+    }
+    
+    // Test 5: No console.log in production (warning only)
+    if (content.includes('console.log(')) {
+      warnings.push(`${fileName}: Contains console.log statements`);
+    }
+  }
+  
+  return {
+    passed: criticalErrors.length === 0,
+    tests,
+    criticalErrors,
+    warnings
+  };
+}
+
+/**
+ * Validate bracket matching in code
+ */
+function validateBrackets(code: string): { valid: boolean; error?: string } {
+  const stack: string[] = [];
+  const pairs: Record<string, string> = { ')': '(', ']': '[', '}': '{' };
+  const opens = new Set(['(', '[', '{']);
+  const closes = new Set([')', ']', '}']);
+  
+  let inString = false;
+  let stringChar = '';
+  let inComment = false;
+  let inMultiComment = false;
+  
+  for (let i = 0; i < code.length; i++) {
+    const char = code[i];
+    const nextChar = code[i + 1];
+    const prevChar = code[i - 1];
+    
+    // Handle strings
+    if ((char === '"' || char === "'" || char === '`') && prevChar !== '\\') {
+      if (!inString) {
+        inString = true;
+        stringChar = char;
+      } else if (char === stringChar) {
+        inString = false;
+      }
+      continue;
+    }
+    
+    if (inString) continue;
+    
+    // Handle comments
+    if (char === '/' && nextChar === '/') {
+      inComment = true;
+      continue;
+    }
+    if (inComment && char === '\n') {
+      inComment = false;
+      continue;
+    }
+    if (inComment) continue;
+    
+    if (char === '/' && nextChar === '*') {
+      inMultiComment = true;
+      continue;
+    }
+    if (char === '*' && nextChar === '/') {
+      inMultiComment = false;
+      i++; // Skip the /
+      continue;
+    }
+    if (inMultiComment) continue;
+    
+    // Check brackets
+    if (opens.has(char)) {
+      stack.push(char);
+    } else if (closes.has(char)) {
+      const expected = pairs[char];
+      const actual = stack.pop();
+      if (actual !== expected) {
+        return { valid: false, error: `Mismatched bracket: expected '${expected}' but found '${char}'` };
+      }
+    }
+  }
+  
+  if (stack.length > 0) {
+    return { valid: false, error: `Unclosed bracket: '${stack[stack.length - 1]}'` };
+  }
+  
+  return { valid: true };
+}
+
+/**
+ * Validate JSX tag matching
+ */
+function validateJSXTags(code: string): { valid: boolean; error?: string } {
+  // Simple check: count opening and closing tags
+  const openingTags = code.match(/<[A-Z][a-zA-Z0-9]*(?:\s|>)/g) || [];
+  const closingTags = code.match(/<\/[A-Z][a-zA-Z0-9]*>/g) || [];
+  const selfClosing = code.match(/<[A-Z][a-zA-Z0-9]*[^>]*\/>/g) || [];
+  
+  // Account for self-closing tags
+  const expectedClosing = openingTags.length - selfClosing.length;
+  
+  if (closingTags.length < expectedClosing - 2) { // Allow some tolerance
+    return { 
+      valid: false, 
+      error: `Possible unclosed JSX tags (${openingTags.length} opening, ${closingTags.length} closing)` 
+    };
+  }
+  
+  return { valid: true };
+}
+
+/**
+ * Validate imports
+ */
+function validateImports(code: string, _filePath: string): { valid: boolean; error?: string; critical?: boolean } {
+  // Check for common import errors
+  const imports = code.match(/import\s+.*from\s+['"][^'"]+['"]/g) || [];
+  
+  for (const imp of imports) {
+    // Check for duplicate imports
+    const importPath = imp.match(/from\s+['"]([^'"]+)['"]/)?.[1];
+    if (importPath) {
+      const duplicates = imports.filter(i => i.includes(`'${importPath}'`) || i.includes(`"${importPath}"`));
+      if (duplicates.length > 1) {
+        return { valid: false, error: `Duplicate import from '${importPath}'`, critical: false };
+      }
+    }
+  }
+  
+  // Check for React import in JSX files
+  if (code.includes('<') && code.includes('/>') && !code.includes("from 'react'") && !code.includes('from "react"')) {
+    // Modern React doesn't require import, so just warn
+    return { valid: true };
+  }
+  
+  return { valid: true };
 }
