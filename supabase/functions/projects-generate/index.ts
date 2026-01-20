@@ -266,6 +266,13 @@ interface BackendContext {
   // Chat & Comments
   chatRoomsCount?: number;
   commentsCount?: number;
+  // Customer Engagement
+  reviewsCount?: number;
+  formsCount?: number;
+  customerDataCount?: number;
+  reviews?: Array<{ rating: number; text: string; productId?: string }>;
+  forms?: Array<{ id: string; name: string; fields: Array<{ name: string; type: string }> }>;
+  customerData?: Array<{ userId: string; preferences: Record<string, any> }>;
 }
 
 // Debug context from the AI Coder debug system
@@ -983,8 +990,8 @@ Sample products: ${backendContext.products.slice(0, 5).map(p => `${p.name} ($${p
 Orders: ${backendContext.ordersCount || 0}
 API Actions:
 - GET products: { projectId, action: 'collection/products' }
-- Add to cart: { projectId, action: 'cart/add', data: { productId, quantity, sessionId } }
-- Create order: { projectId, action: 'order/create', data: { items, customer, total } }
+- Add to cart: { projectId, action: 'cart/add', data: { sessionId, siteUserId?, item: { id, name, price, quantity, collectionItemId } } }
+- Create order: { projectId, action: 'order/create', data: { items, buyerInfo, totalAmount?, notes?, siteUserId?, sessionId? } }
 ` : `=== E-COMMERCE (NOT SET UP) ===
 No products added yet. If user wants a shop, generate code with placeholders and tell them to add products in Backend → Shop → Inventory.
 `}
@@ -995,11 +1002,21 @@ Available: ${backendContext.services.slice(0, 5).map(s => `${s.name} (${s.durati
 Bookings: ${backendContext.bookingsCount || 0}
 API Actions:
 - GET services: { projectId, action: 'collection/services' }
-- Check availability: { projectId, action: 'booking/get-available-slots', data: { serviceId, date } }
-- Create booking: { projectId, action: 'booking/create', data: { serviceId, date, time, customer } }
+- Check availability: { projectId, action: 'booking/check', data: { date, startTime?, endTime? } }
+- Create booking: { projectId, action: 'booking/create', data: { serviceName, date, startTime?, endTime?, duration?, customerInfo, siteUserId?, notes? } }
 ` : `=== BOOKINGS (NOT SET UP) ===
 No services added yet. If user wants appointments, generate code with placeholders and tell them to add services in Backend → Bookings → Services.
 `}
+
+=== CUSTOMER ENGAGEMENT ===
+Reviews: (use collection/reviews)
+Forms: action 'submit' (saved to Inbox)
+Customer Data: (use collection/customer_data)
+
+API Actions:
+- Create review: { projectId, action: 'collection/reviews', data: { rating, text, productId?, authorName? } }
+- Submit form: { projectId, action: 'submit', formName: 'contact' | 'quote' | 'newsletter', data: { ...fields } }
+- Save customer notes: { projectId, action: 'collection/customer_data', data: { customerName, phone?, email?, notes?, preferences? } }
 
 ${(backendContext.chatRoomsCount || 0) > 0 || (backendContext.commentsCount || 0) > 0 ? `=== SOCIAL FEATURES ===
 Chat Rooms: ${backendContext.chatRoomsCount || 0}
@@ -1590,20 +1607,26 @@ IMPORTANT FORM REQUIREMENTS:
 
 // Foundation bricks: pre-configured backend building blocks (not limiting templates)
 const FOUNDATION_BRICKS = [
+  // E-commerce core
   'products',
-  'items',
   'categories',
   'orders',
   'cart_items',
-  'notes',
-  'tasks',
-  'events',
+
+  // Services core
   'services',
   'bookings',
+
+  // Customer engagement
   'messages',
-  'reviews',
+  'comments',
+  'reviews',        // NEW: Social proof, ratings, testimonials
+  'forms',          // NEW: Contact forms, quote requests
+  'customer_data',  // NEW: Preferences, notes, history
+
+  // Infrastructure
   'users',
-  'posts'
+  'items'
 ];
 
 // ============================================================================
@@ -1742,7 +1765,9 @@ const getProducts = async () => {
     'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api' +
     '?projectId={{PROJECT_ID}}&action=collection/products'
   );
-  return response.json();
+  // Returns: { items: [{ id, data, created_at, ... }] }
+  const data = await response.json();
+  return data.items;
 };
 \`\`\`
 
@@ -1781,11 +1806,12 @@ export default function Products() {
     const fetchProducts = async () => {
       try {
         const response = await fetch(
-          \`\${BACKEND_URL}?projectId=\${PROJECT_ID}&action=collection/products\`
+          BACKEND_URL + '?projectId=' + PROJECT_ID + '&action=collection/products'
         );
         const data = await response.json();
-        if (data.ok && data.data) {
-          setProducts(data.data);
+        // project-backend-api returns: { items: [{ id, data }] }
+        if (data && Array.isArray(data.items)) {
+          setProducts(data.items);
         } else {
           setError('Failed to load products');
         }
@@ -1814,14 +1840,14 @@ export default function Products() {
             transition={{ delay: index * 0.1 }}
             className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden"
           >
-            {product.image_url && (
-              <img src={product.image_url} alt={product.name} className="w-full h-48 object-cover" />
+            {product.data?.image_url && (
+              <img src={product.data.image_url} alt={product.data?.name} className="w-full h-48 object-cover" />
             )}
             <div className="p-4">
-              <h3 className="text-lg font-semibold">{product.name}</h3>
-              <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">{product.description}</p>
+              <h3 className="text-lg font-semibold">{product.data?.name}</h3>
+              <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">{product.data?.description}</p>
               <div className="flex justify-between items-center mt-4">
-                <span className="text-xl font-bold">\${product.price}</span>
+                <span className="text-xl font-bold">{product.data?.price}</span>
                 <button className="bg-primary text-white px-4 py-2 rounded-lg flex items-center gap-2">
                   <ShoppingBag className="w-4 h-4" /> Add to Cart
                 </button>

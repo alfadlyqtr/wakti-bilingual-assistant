@@ -113,6 +113,14 @@ interface BusinessCardData {
   nameStyle?: TextStyle;
   titleStyle?: TextStyle;
   companyStyle?: TextStyle;
+  // Icon styling
+  iconStyle?: {
+    showBackground?: boolean;
+    backgroundColor?: string;
+    iconColor?: string;
+    useBrandColors?: boolean;
+    colorIntensity?: number; // 0-100, default 50
+  };
 }
 
 interface SocialLink {
@@ -766,45 +774,6 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
 
     return (
       <div className="space-y-6">
-        {/* Added Links - For Reordering Only */}
-        {(formData.socialLinks || []).length > 0 && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-foreground">{t.addedLinks}</h3>
-              <p className="text-xs text-muted-foreground">{t.holdToReorder}</p>
-            </div>
-            
-            <div className="space-y-2">
-              {(formData.socialLinks || []).map((link) => {
-                const platform = SOCIAL_PLATFORMS.find(p => p.type === link.type);
-                const Icon = platform?.icon || Link2;
-                
-                return (
-                  <div
-                    key={link.id}
-                    className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/10"
-                  >
-                    <GripVertical className="w-5 h-5 text-muted-foreground cursor-grab" />
-                    <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
-                      <Icon className="w-5 h-5 text-foreground" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-foreground">{platform?.label}</p>
-                      <p className="text-xs text-muted-foreground truncate">{link.url}</p>
-                    </div>
-                    <button
-                      onClick={() => handleGridIconClick(platform!)}
-                      className="p-2 hover:bg-white/10 rounded-full transition-colors"
-                    >
-                      <Share2 className="w-4 h-4 text-muted-foreground" />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
         {/* All Links Grid */}
         <div className="space-y-3">
           <div className="flex items-center gap-2">
@@ -1555,6 +1524,156 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
         </div>
       </div>
 
+      {/* Icon Styling */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Link2 className="w-4 h-4 text-[hsl(142,76%,55%)]" />
+          <h3 className="text-sm font-semibold text-[#060541] dark:text-[#f2f2f2]">{isRTL ? 'تنسيق الأيقونات' : 'Icon styling'}</h3>
+        </div>
+        
+        <div className="p-4 rounded-xl bg-[#fcfefd] dark:bg-[#0c0f14]/80 border border-[#060541]/10 dark:border-white/10 space-y-4">
+          {/* Use Brand Colors Toggle */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-[#060541] dark:text-[#f2f2f2]">
+                {isRTL ? 'استخدام ألوان العلامات التجارية' : 'Use brand colors'}
+              </p>
+              <p className="text-[10px] text-[#606062] dark:text-[#858384]">
+                {isRTL ? 'ألوان افتراضية لكل منصة' : 'Default colors for each platform'}
+              </p>
+            </div>
+            <Switch
+              checked={formData.iconStyle?.useBrandColors !== false}
+              onCheckedChange={(checked) => updateField('iconStyle', {
+                ...formData.iconStyle,
+                useBrandColors: checked,
+              })}
+            />
+          </div>
+
+          {/* Icon Background Toggle */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-[#060541] dark:text-[#f2f2f2]">
+                {isRTL ? 'خلفية الأيقونة' : 'Icon background'}
+              </p>
+              <p className="text-[10px] text-[#606062] dark:text-[#858384]">
+                {isRTL ? 'دائرة خلف الأيقونة مع ظل' : 'Circle behind icon with shadow'}
+              </p>
+            </div>
+            <Switch
+              checked={formData.iconStyle?.showBackground ?? true}
+              onCheckedChange={(checked) => updateField('iconStyle', {
+                ...formData.iconStyle,
+                showBackground: checked,
+              })}
+            />
+          </div>
+
+          {/* Background Color (only if showBackground is true) */}
+          {(formData.iconStyle?.showBackground ?? true) && (
+            <div>
+              <p className="text-[11px] font-semibold text-[#060541] dark:text-[#f2f2f2] mb-2">
+                {isRTL ? 'لون الخلفية' : 'Background color'}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { id: 'black', color: '#000000', label: 'Black' },
+                  { id: 'white', color: '#ffffff', label: 'White' },
+                  { id: 'gray', color: '#6b7280', label: 'Gray' },
+                  { id: 'blue', color: '#3b82f6', label: 'Blue' },
+                  { id: 'purple', color: '#8b5cf6', label: 'Purple' },
+                  { id: 'transparent', color: 'transparent', label: 'None' },
+                ].map((bg) => (
+                  <button
+                    key={bg.id}
+                    onClick={() => updateField('iconStyle', {
+                      ...formData.iconStyle,
+                      backgroundColor: bg.color,
+                    })}
+                    className={`w-8 h-8 rounded-full border-2 transition-all ${
+                      (formData.iconStyle?.backgroundColor || '#000000') === bg.color
+                        ? 'border-[hsl(142,76%,55%)] scale-110 ring-2 ring-[hsl(142,76%,55%)]/30'
+                        : 'border-white/60 dark:border-white/30'
+                    } ${bg.id === 'transparent' ? 'bg-gradient-to-br from-gray-200 to-gray-400 dark:from-gray-600 dark:to-gray-800' : ''}`}
+                    style={{ backgroundColor: bg.id !== 'transparent' ? bg.color : undefined }}
+                    title={bg.label}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Color Intensity Slider */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[11px] font-semibold text-[#060541] dark:text-[#f2f2f2]">
+                {isRTL ? 'شفافية الخلفية' : 'BG opacity'}
+              </p>
+              <span className="text-[10px] text-[#606062] dark:text-[#858384]">
+                {formData.iconStyle?.colorIntensity ?? 50}%
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={formData.iconStyle?.colorIntensity ?? 50}
+              disabled={!((formData.iconStyle?.showBackground ?? true))}
+              onChange={(e) => updateField('iconStyle', {
+                ...formData.iconStyle,
+                colorIntensity: parseInt(e.target.value),
+              })}
+              className={`w-full h-1.5 bg-[#060541]/10 dark:bg-white/10 rounded-lg appearance-none ${
+                (formData.iconStyle?.showBackground ?? true) ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'
+              }`}
+              id="color-intensity-slider"
+              title="BG opacity"
+              aria-label={isRTL ? 'شفافية الخلفية' : 'BG opacity'}
+            />
+            <label htmlFor="color-intensity-slider" className="sr-only">
+              {isRTL ? 'شفافية الخلفية' : 'BG opacity'}
+            </label>
+          </div>
+
+          {/* Custom Icon Color (only if not using brand colors) */}
+          {formData.iconStyle?.useBrandColors === false && (
+            <div>
+              <p className="text-[11px] font-semibold text-[#060541] dark:text-[#f2f2f2] mb-2">
+                {isRTL ? 'لون الأيقونة' : 'Icon color'}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { id: 'white', color: '#ffffff', label: 'White' },
+                  { id: 'black', color: '#000000', label: 'Black' },
+                  { id: 'blue', color: '#3b82f6', label: 'Blue' },
+                  { id: 'green', color: '#22c55e', label: 'Green' },
+                  { id: 'purple', color: '#8b5cf6', label: 'Purple' },
+                  { id: 'pink', color: '#ec4899', label: 'Pink' },
+                  { id: 'orange', color: '#f97316', label: 'Orange' },
+                  { id: 'red', color: '#ef4444', label: 'Red' },
+                ].map((ic) => (
+                  <button
+                    key={ic.id}
+                    onClick={() => updateField('iconStyle', {
+                      ...formData.iconStyle,
+                      iconColor: ic.color,
+                    })}
+                    className={`w-8 h-8 rounded-full border-2 transition-all ${
+                      (formData.iconStyle?.iconColor || '#ffffff') === ic.color
+                        ? 'border-[hsl(142,76%,55%)] scale-110 ring-2 ring-[hsl(142,76%,55%)]/30'
+                        : 'border-white/60 dark:border-white/30'
+                    }`}
+                    style={{ backgroundColor: ic.color }}
+                    title={ic.label}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Text Customization */}
       <div className="space-y-3">
         <div className="flex items-center gap-2">
@@ -1628,9 +1747,10 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
         <button
           type="button"
           onClick={onBack}
-          className="p-2 -ml-2 rounded-full hover:bg-white/10 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 -ml-2 rounded-xl bg-gradient-to-r from-[#060541]/10 to-[#060541]/5 dark:from-white/10 dark:to-white/5 hover:from-[#060541]/20 hover:to-[#060541]/10 dark:hover:from-white/20 dark:hover:to-white/10 border border-[#060541]/10 dark:border-white/10 transition-all active:scale-95"
         >
-          <ArrowLeft className={`w-6 h-6 ${isRTL ? 'rotate-180' : ''}`} />
+          <ArrowLeft className={`w-4 h-4 ${isRTL ? 'rotate-180' : ''}`} />
+          <span className="text-sm font-medium">{isRTL ? 'بطاقاتي' : 'My Cards'}</span>
         </button>
         <h1 className="text-lg font-bold">{t.builder}</h1>
         <div className="flex items-center gap-2">
@@ -1779,6 +1899,15 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
           ? 'bottom-3 right-3'
           : 'top-3 right-3';
 
+  // Icon style settings with defaults
+  const iconStyle = {
+    showBackground: data.iconStyle?.showBackground ?? true,
+    backgroundColor: data.iconStyle?.backgroundColor || '#000000',
+    iconColor: data.iconStyle?.iconColor || '#ffffff',
+    useBrandColors: data.iconStyle?.useBrandColors !== false,
+    colorIntensity: data.iconStyle?.colorIntensity ?? 50,
+  };
+
   // Helper to get all active links for display with brand colors
   const activeLinks = [
     ...(data.phone ? [{ type: 'phone', url: data.phone, icon: Phone, label: 'Phone', color: '#22c55e' }] : []),
@@ -1796,6 +1925,32 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
       };
     })
   ];
+
+  // Helper to get icon color based on settings
+  const getIconColor = (brandColor: string) => {
+    // Get base color
+    const baseColor = iconStyle.useBrandColors ? brandColor : (iconStyle.iconColor || '#ffffff');
+    return baseColor;
+  };
+
+  const getIconBackgroundColor = (color: string) => {
+    if (!color || color === 'transparent') return 'transparent';
+
+    const alphaRaw = (iconStyle.colorIntensity ?? 50) / 100;
+    const alpha = Math.max(0, Math.min(1, alphaRaw));
+
+    if (!color.startsWith('#')) return color;
+
+    const hex = color.length === 4
+      ? `#${color[1]}${color[1]}${color[2]}${color[2]}${color[3]}${color[3]}`
+      : color;
+
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
   
   // STYLE 1: Geometric Mosaic - Pink triangles, centered avatar overlapping
   if (template.headerStyle === 'mosaic') {
@@ -1901,11 +2056,25 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
           </div>
         )}
         
-        {/* All Active Links - Brand Colors, No BG */}
-        <div className="flex flex-wrap justify-center gap-4 mt-4 px-4 w-full">
+        {/* All Active Links - Customizable */}
+        <div className="flex flex-wrap justify-center gap-3 mt-4 px-4 w-full">
           {activeLinks.map((link, i) => (
-            <div key={i} className="w-8 h-8 flex items-center justify-center hover:scale-125 transition-transform cursor-pointer">
-              <link.icon className="w-5 h-5" style={{ color: link.color }} />
+            <div 
+              key={i} 
+              className={`flex items-center justify-center hover:scale-110 transition-transform cursor-pointer ${
+                iconStyle.showBackground 
+                  ? 'w-9 h-9 rounded-full shadow-md' 
+                  : 'w-8 h-8'
+              }`}
+              style={iconStyle.showBackground ? { 
+                backgroundColor: getIconBackgroundColor(iconStyle.backgroundColor),
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+              } : undefined}
+            >
+              <link.icon 
+                className={iconStyle.showBackground ? 'w-4 h-4' : 'w-5 h-5'} 
+                style={{ color: getIconColor(link.color) }} 
+              />
             </div>
           ))}
         </div>
@@ -1978,12 +2147,12 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
           </p>
         </div>
         
-        {/* Contact Info List - Brand Colors */}
+        {/* Contact Info List - Customizable */}
         <div className="w-full flex items-center justify-center mt-4 px-4 mb-4">
           <ul className="flex flex-col items-start gap-2 text-xs font-semibold text-[#434955] w-full max-w-[240px]">
             {activeLinks.map((link, i) => (
               <li key={i} className="inline-flex gap-2 items-center border-b border-dotted border-stone-700/30 pb-1 w-full truncate">
-                <link.icon className="w-4 h-4 shrink-0" style={{ color: link.color }} />
+                <link.icon className="w-4 h-4 shrink-0" style={{ color: getIconColor(link.color) }} />
                 <p className="truncate">{link.url}</p>
               </li>
             ))}
@@ -2054,13 +2223,16 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
           )}
         </div>
         
-        {/* Contact Grid - Brand Colors */}
+        {/* Contact Grid - Customizable */}
         <div className="z-40 w-full mt-2">
           <div className="grid grid-cols-2 gap-x-2 gap-y-2 w-full">
             {activeLinks.map((link, i) => (
               <div key={i} className="flex items-center gap-2 overflow-hidden bg-white/10 p-1.5 rounded-lg backdrop-blur-sm">
-                <div className="p-1 bg-white flex items-center justify-center rounded-full shrink-0">
-                  <link.icon className="h-3 w-3" style={{ color: link.color }} />
+                <div 
+                  className="p-1 flex items-center justify-center rounded-full shrink-0"
+                  style={iconStyle.showBackground ? { backgroundColor: getIconBackgroundColor(iconStyle.backgroundColor) } : { backgroundColor: 'white' }}
+                >
+                  <link.icon className="h-3 w-3" style={{ color: getIconColor(link.color) }} />
                 </div>
                 <p className="font-semibold text-[10px] text-white truncate">{link.url}</p>
               </div>
@@ -2120,12 +2292,15 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
           )}
         </div>
         
-        {/* Contact Info & Socials - Brand Colors */}
+        {/* Contact Info & Socials - Customizable */}
         <div className="px-5 py-4 space-y-3 flex-1">
           {activeLinks.map((link, i) => (
             <div key={i} className="flex items-center gap-3 text-sm border-b border-white/5 pb-2 last:border-0" style={{ color: minimalColors.muted }}>
-              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-white/10">
-                <link.icon className="w-4 h-4" style={{ color: link.color }} />
+              <div 
+                className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+                style={iconStyle.showBackground ? { backgroundColor: getIconBackgroundColor(iconStyle.backgroundColor) } : { backgroundColor: 'rgba(255,255,255,0.1)' }}
+              >
+                <link.icon className="w-4 h-4" style={{ color: getIconColor(link.color) }} />
               </div>
               <span className="truncate">{link.url}</span>
             </div>
@@ -2188,12 +2363,15 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
         )}
       </div>
       
-      {/* All Links - Brand Colors */}
+      {/* All Links - Customizable */}
       <div className="px-5 py-4 space-y-3 flex-1">
         {activeLinks.map((link, i) => (
           <div key={i} className="flex items-center gap-3 text-sm p-2 rounded-lg hover:bg-black/5 transition-colors" style={{ color: cleanColors.muted }}>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-gray-100">
-              <link.icon className="w-4 h-4" style={{ color: link.color }} />
+            <div 
+              className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+              style={iconStyle.showBackground ? { backgroundColor: getIconBackgroundColor(iconStyle.backgroundColor) } : { backgroundColor: '#f3f4f6' }}
+            >
+              <link.icon className="w-4 h-4" style={{ color: getIconColor(link.color) }} />
             </div>
             <span className="truncate">{link.url}</span>
           </div>
@@ -2208,4 +2386,5 @@ const CardPreview: React.FC<{ data: BusinessCardData }> = ({ data }) => {
   return <CardPreviewLive data={data} />;
 };
 
+export { CardPreviewLive };
 export default BusinessCardBuilder;

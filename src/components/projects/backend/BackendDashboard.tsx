@@ -22,17 +22,44 @@ import { BackendCommentsTab } from './tabs/BackendCommentsTab';
 import { BackendRolesTab } from './tabs/BackendRolesTab';
 
 // Feature tab configuration with icons and colors
-const FEATURE_TABS = [
+const BASE_FEATURE_TABS = [
   { id: 'uploads', icon: Upload, label: 'Uploads', labelAr: 'الملفات', color: 'from-blue-500 to-cyan-500', bgColor: 'bg-blue-500/10', textColor: 'text-blue-500' },
   { id: 'inbox', icon: Mail, label: 'Inbox', labelAr: 'الرسائل', color: 'from-amber-500 to-orange-500', bgColor: 'bg-amber-500/10', textColor: 'text-amber-500' },
-  { id: 'data', icon: Database, label: 'Data', labelAr: 'البيانات', color: 'from-emerald-500 to-green-500', bgColor: 'bg-emerald-500/10', textColor: 'text-emerald-500' },
-  { id: 'users', icon: Users, label: 'Users', labelAr: 'المستخدمون', color: 'from-violet-500 to-purple-500', bgColor: 'bg-violet-500/10', textColor: 'text-violet-500' },
   { id: 'shop', icon: ShoppingCart, label: 'Shop', labelAr: 'المتجر', color: 'from-pink-500 to-rose-500', bgColor: 'bg-pink-500/10', textColor: 'text-pink-500' },
-  { id: 'bookings', icon: Calendar, label: 'Bookings', labelAr: 'الحجوزات', color: 'from-indigo-500 to-blue-500', bgColor: 'bg-indigo-500/10', textColor: 'text-indigo-500' },
-  { id: 'chat', icon: MessageCircle, label: 'Chat', labelAr: 'الدردشة', color: 'from-teal-500 to-cyan-500', bgColor: 'bg-teal-500/10', textColor: 'text-teal-500' },
-  { id: 'comments', icon: MessageSquare, label: 'Comments', labelAr: 'التعليقات', color: 'from-orange-500 to-amber-500', bgColor: 'bg-orange-500/10', textColor: 'text-orange-500' },
-  { id: 'roles', icon: Shield, label: 'Roles', labelAr: 'الصلاحيات', color: 'from-red-500 to-pink-500', bgColor: 'bg-red-500/10', textColor: 'text-red-500' },
+  { id: 'accounts', icon: Users, label: 'Accounts', labelAr: 'الحسابات', color: 'from-violet-500 to-purple-500', bgColor: 'bg-violet-500/10', textColor: 'text-violet-500' },
 ];
+
+const ADVANCED_FEATURE_TAB = { id: 'advanced', icon: Database, label: 'Advanced', labelAr: 'متقدم', color: 'from-emerald-500 to-green-500', bgColor: 'bg-emerald-500/10', textColor: 'text-emerald-500' };
+
+const isAdvancedEnabled = () => {
+  try {
+    if (typeof window === 'undefined') return false;
+    const params = new URLSearchParams(window.location.search);
+    return params.get('advanced') === '1';
+  } catch {
+    return false;
+  }
+};
+
+type InboxInnerTab = 'submissions' | 'bookings' | 'reviews' | 'messages' | 'comments';
+
+const INBOX_TABS: Array<{ id: InboxInnerTab; icon: any; label: string; labelAr: string }> = [
+  { id: 'submissions', icon: Mail, label: 'Submissions', labelAr: 'الطلبات' },
+  { id: 'bookings', icon: Calendar, label: 'Bookings', labelAr: 'الحجوزات' },
+  { id: 'reviews', icon: Star, label: 'Reviews', labelAr: 'التقييمات' },
+  { id: 'messages', icon: MessageCircle, label: 'Messages', labelAr: 'الرسائل' },
+  { id: 'comments', icon: MessageSquare, label: 'Comments', labelAr: 'التعليقات' },
+];
+
+type AccountsInnerTab = 'users' | 'customers' | 'roles';
+
+const ACCOUNTS_TABS: Array<{ id: AccountsInnerTab; icon: any; label: string; labelAr: string }> = [
+  { id: 'users', icon: Users, label: 'Users', labelAr: 'المستخدمون' },
+  { id: 'customers', icon: FileText, label: 'Customers', labelAr: 'العملاء' },
+  { id: 'roles', icon: Shield, label: 'Roles', labelAr: 'الصلاحيات' },
+];
+
+type ShopInnerMode = 'shop' | 'advanced';
 
 interface BackendDashboardProps {
   projectId: string;
@@ -52,12 +79,35 @@ interface BackendStatus {
 }
 
 export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabChange, initialShopInnerTab, refreshKey }: BackendDashboardProps) {
+  const advancedEnabled = isAdvancedEnabled();
+  const FEATURE_TABS = advancedEnabled ? [...BASE_FEATURE_TABS, ADVANCED_FEATURE_TAB] : BASE_FEATURE_TABS;
+
   const [loading, setLoading] = useState(true);
   const [enabling, setEnabling] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [backendStatus, setBackendStatus] = useState<BackendStatus | null>(null);
-  const resolveTab = (tab?: string) => (FEATURE_TABS.some(t => t.id === tab) ? tab! : 'uploads');
+  const resolveTab = (tab?: string) => {
+    if (!tab) return 'uploads';
+    if (FEATURE_TABS.some(t => t.id === tab)) return tab;
+    if (tab === 'bookings' || tab === 'chat' || tab === 'comments' || tab === 'reviews') return 'inbox';
+    if (tab === 'users' || tab === 'customers' || tab === 'roles') return 'accounts';
+    if (tab === 'data') return advancedEnabled ? 'advanced' : 'uploads';
+    return 'uploads';
+  };
   const [activeTab, setActiveTab] = useState(resolveTab(initialTab));
+  const [inboxInnerTab, setInboxInnerTab] = useState<InboxInnerTab>(() => {
+    if (initialTab === 'bookings') return 'bookings';
+    if (initialTab === 'chat') return 'messages';
+    if (initialTab === 'comments') return 'comments';
+    if (initialTab === 'reviews') return 'reviews';
+    return 'submissions';
+  });
+  const [accountsInnerTab, setAccountsInnerTab] = useState<AccountsInnerTab>(() => {
+    if (initialTab === 'users') return 'users';
+    if (initialTab === 'roles') return 'roles';
+    return 'customers';
+  });
+  const [shopInnerMode, setShopInnerMode] = useState<ShopInnerMode>('shop');
   
   // Data states
   const [submissions, setSubmissions] = useState<any[]>([]);
@@ -77,6 +127,13 @@ export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabCh
   useEffect(() => {
     if (initialTab) {
       setActiveTab(resolveTab(initialTab));
+      if (initialTab === 'bookings') setInboxInnerTab('bookings');
+      if (initialTab === 'chat') setInboxInnerTab('messages');
+      if (initialTab === 'comments') setInboxInnerTab('comments');
+      if (initialTab === 'reviews') setInboxInnerTab('reviews');
+      if (initialTab === 'users') setAccountsInnerTab('users');
+      if (initialTab === 'customers') setAccountsInnerTab('customers');
+      if (initialTab === 'roles') setAccountsInnerTab('roles');
     }
   }, [initialTab]);
 
@@ -136,6 +193,12 @@ export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabCh
         if (!grouped[item.collection_name]) grouped[item.collection_name] = [];
         grouped[item.collection_name].push(item);
       });
+
+      // Ensure key collections exist even if empty (so tabs can show empty states)
+      if (!grouped['reviews']) grouped['reviews'] = [];
+      if (!grouped['customer_data']) grouped['customer_data'] = [];
+      if (!grouped['products']) grouped['products'] = [];
+      if (!grouped['categories']) grouped['categories'] = [];
       setCollections(grouped);
       
       // Fetch collection schemas
@@ -414,19 +477,21 @@ export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabCh
 
   const unreadCount = submissions.filter(s => s.status === 'unread').length;
   const collectionsCount = Object.keys(collections).reduce((sum, key) => sum + collections[key].length, 0);
+  const pendingBookingsCount = bookings.filter(b => b.status === 'pending').length;
+  const reviewsCount = (collections['reviews'] || []).length;
+  const inboxBadgeCount = unreadCount + pendingBookingsCount + reviewsCount + chatRooms.length + comments.length;
+  const customersCount = (collections['customer_data'] || []).length;
+  const rolesCount = siteUsers.filter(u => u.role && u.role !== 'customer').length;
+  const accountsBadgeCount = siteUsers.length + customersCount + rolesCount;
 
   // Get badge count for each tab
   const getBadgeCount = (tabId: string) => {
     switch (tabId) {
       case 'uploads': return uploads.length;
-      case 'inbox': return unreadCount;
-      case 'data': return collectionsCount;
-      case 'users': return siteUsers.length;
+      case 'inbox': return inboxBadgeCount;
       case 'shop': return orders.length;
-      case 'bookings': return bookings.length;
-      case 'chat': return chatRooms.length;
-      case 'comments': return comments.length;
-      case 'roles': return siteUsers.filter(u => u.role && u.role !== 'customer').length;
+      case 'accounts': return accountsBadgeCount;
+      case 'advanced': return collectionsCount;
       default: return 0;
     }
   };
@@ -479,7 +544,7 @@ export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabCh
                 <span className="text-muted-foreground/50">•</span>
                 <span className="text-amber-500 flex items-center gap-0.5">
                   <Zap className="h-3 w-3" />
-                  {isRTL ? '9 ميزات' : '9 Features'}
+                  {isRTL ? `${FEATURE_TABS.length} ميزات` : `${FEATURE_TABS.length} Features`}
                 </span>
               </div>
             </div>
@@ -559,7 +624,7 @@ export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabCh
           </div>
           
           {/* Desktop: Grid Layout */}
-          <div className="hidden md:grid md:grid-cols-9 gap-1.5">
+          <div className="hidden md:grid md:grid-cols-[repeat(auto-fit,minmax(0,1fr))] gap-1.5">
             {FEATURE_TABS.map((tab) => {
               const Icon = tab.icon;
               const count = getBadgeCount(tab.id);
@@ -606,16 +671,223 @@ export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabCh
           )}
           
           {activeTab === 'inbox' && (
-            <BackendInboxTab 
-              submissions={submissions}
-              isRTL={isRTL}
-              onDelete={handleDeleteSubmission}
-              onMarkRead={handleMarkRead}
-            />
+            <div className={cn("space-y-4", isRTL && "rtl")}>
+              <div className={cn("flex items-center justify-between gap-3 flex-wrap", isRTL && "flex-row-reverse")}>
+                <div className={cn("flex items-center gap-2 flex-wrap", isRTL && "flex-row-reverse")}>
+                  {INBOX_TABS.map((tab) => {
+                    const Icon = tab.icon;
+                    const isActive = inboxInnerTab === tab.id;
+
+                    const count =
+                      tab.id === 'submissions' ? unreadCount :
+                      tab.id === 'bookings' ? pendingBookingsCount :
+                      tab.id === 'reviews' ? reviewsCount :
+                      tab.id === 'messages' ? chatRooms.length :
+                      comments.length;
+
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setInboxInnerTab(tab.id)}
+                        className={cn(
+                          "px-3 py-1.5 rounded-full text-xs font-medium transition-all inline-flex items-center gap-1.5",
+                          isActive
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                        )}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                        <span>{isRTL ? tab.labelAr : tab.label}</span>
+                        <span className="opacity-80">({count})</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {inboxInnerTab === 'submissions' && (
+                <BackendInboxTab
+                  submissions={submissions}
+                  isRTL={isRTL}
+                  onDelete={handleDeleteSubmission}
+                  onMarkRead={handleMarkRead}
+                />
+              )}
+
+              {inboxInnerTab === 'bookings' && (
+                <BackendBookingsTab
+                  bookings={bookings}
+                  projectId={projectId}
+                  isRTL={isRTL}
+                  onRefresh={fetchAllData}
+                />
+              )}
+
+              {inboxInnerTab === 'reviews' && (
+                <BackendDataTab
+                  collections={{ reviews: collections['reviews'] || [] }}
+                  schemas={{ reviews: collectionSchemas['reviews'] }}
+                  projectId={projectId}
+                  isRTL={isRTL}
+                  onAdd={handleAddItem}
+                  onEdit={handleEditItem}
+                  onDelete={handleDeleteItem}
+                  onExport={handleExport}
+                />
+              )}
+
+              {inboxInnerTab === 'messages' && (
+                <BackendChatTab
+                  rooms={chatRooms}
+                  projectId={projectId}
+                  isRTL={isRTL}
+                  onRefresh={fetchAllData}
+                />
+              )}
+
+              {inboxInnerTab === 'comments' && (
+                <BackendCommentsTab
+                  comments={comments}
+                  projectId={projectId}
+                  isRTL={isRTL}
+                  onRefresh={fetchAllData}
+                />
+              )}
+            </div>
           )}
           
-          {activeTab === 'data' && (
-            <BackendDataTab 
+          {activeTab === 'shop' && (
+            <div className={cn("space-y-4", isRTL && "rtl")}>
+              <div className={cn("flex items-center justify-between gap-3 flex-wrap", isRTL && "flex-row-reverse")}>
+                <div className={cn("flex items-center gap-2 flex-wrap", isRTL && "flex-row-reverse")}>
+                  <button
+                    onClick={() => setShopInnerMode('shop')}
+                    className={cn(
+                      "px-3 py-1.5 rounded-full text-xs font-medium transition-all inline-flex items-center gap-1.5",
+                      shopInnerMode === 'shop'
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                    )}
+                  >
+                    <ShoppingCart className="h-3.5 w-3.5" />
+                    <span>{isRTL ? 'المتجر' : 'Shop'}</span>
+                  </button>
+                  <button
+                    onClick={() => setShopInnerMode('advanced')}
+                    className={cn(
+                      "px-3 py-1.5 rounded-full text-xs font-medium transition-all inline-flex items-center gap-1.5",
+                      shopInnerMode === 'advanced'
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                    )}
+                  >
+                    <Database className="h-3.5 w-3.5" />
+                    <span>{isRTL ? 'متقدم' : 'Advanced'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {shopInnerMode === 'shop' && (
+                <BackendShopTab
+                  orders={orders}
+                  inventory={collections['products'] || []}
+                  projectId={projectId}
+                  isRTL={isRTL}
+                  onRefresh={fetchAllData}
+                  initialInnerTab={initialShopInnerTab}
+                />
+              )}
+
+              {shopInnerMode === 'advanced' && (
+                <BackendDataTab
+                  collections={{
+                    products: collections['products'] || [],
+                    categories: collections['categories'] || [],
+                  }}
+                  schemas={{
+                    products: collectionSchemas['products'],
+                    categories: collectionSchemas['categories'],
+                  }}
+                  projectId={projectId}
+                  isRTL={isRTL}
+                  onAdd={handleAddItem}
+                  onEdit={handleEditItem}
+                  onDelete={handleDeleteItem}
+                  onExport={handleExport}
+                />
+              )}
+            </div>
+          )}
+
+          {activeTab === 'accounts' && (
+            <div className={cn("space-y-4", isRTL && "rtl")}>
+              <div className={cn("flex items-center justify-between gap-3 flex-wrap", isRTL && "flex-row-reverse")}>
+                <div className={cn("flex items-center gap-2 flex-wrap", isRTL && "flex-row-reverse")}>
+                  {ACCOUNTS_TABS.map((tab) => {
+                    const Icon = tab.icon;
+                    const isActive = accountsInnerTab === tab.id;
+
+                    const count =
+                      tab.id === 'users' ? siteUsers.length :
+                      tab.id === 'customers' ? customersCount :
+                      rolesCount;
+
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setAccountsInnerTab(tab.id)}
+                        className={cn(
+                          "px-3 py-1.5 rounded-full text-xs font-medium transition-all inline-flex items-center gap-1.5",
+                          isActive
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                        )}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                        <span>{isRTL ? tab.labelAr : tab.label}</span>
+                        <span className="opacity-80">({count})</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {accountsInnerTab === 'users' && (
+                <BackendUsersTab
+                  users={siteUsers}
+                  isRTL={isRTL}
+                  onSuspend={handleSuspendUser}
+                  onActivate={handleActivateUser}
+                  onDelete={handleDeleteUser}
+                />
+              )}
+
+              {accountsInnerTab === 'customers' && (
+                <BackendDataTab
+                  collections={{ customer_data: collections['customer_data'] || [] }}
+                  schemas={{ customer_data: collectionSchemas['customer_data'] }}
+                  projectId={projectId}
+                  isRTL={isRTL}
+                  onAdd={handleAddItem}
+                  onEdit={handleEditItem}
+                  onDelete={handleDeleteItem}
+                  onExport={handleExport}
+                />
+              )}
+
+              {accountsInnerTab === 'roles' && (
+                <BackendRolesTab
+                  users={siteUsers}
+                  projectId={projectId}
+                  isRTL={isRTL}
+                  onRefresh={fetchAllData}
+                />
+              )}
+            </div>
+          )}
+
+          {activeTab === 'advanced' && (
+            <BackendDataTab
               collections={collections}
               schemas={collectionSchemas}
               projectId={projectId}
@@ -624,63 +896,6 @@ export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabCh
               onEdit={handleEditItem}
               onDelete={handleDeleteItem}
               onExport={handleExport}
-            />
-          )}
-          
-          {activeTab === 'users' && (
-            <BackendUsersTab 
-              users={siteUsers}
-              isRTL={isRTL}
-              onSuspend={handleSuspendUser}
-              onActivate={handleActivateUser}
-              onDelete={handleDeleteUser}
-            />
-          )}
-          
-          {activeTab === 'shop' && (
-            <BackendShopTab 
-              orders={orders}
-              inventory={collections['products'] || []}
-              projectId={projectId}
-              isRTL={isRTL}
-              onRefresh={fetchAllData}
-              initialInnerTab={initialShopInnerTab}
-            />
-          )}
-          
-          {activeTab === 'bookings' && (
-            <BackendBookingsTab 
-              bookings={bookings}
-              projectId={projectId}
-              isRTL={isRTL}
-              onRefresh={fetchAllData}
-            />
-          )}
-          
-          {activeTab === 'chat' && (
-            <BackendChatTab 
-              rooms={chatRooms}
-              projectId={projectId}
-              isRTL={isRTL}
-              onRefresh={fetchAllData}
-            />
-          )}
-          
-          {activeTab === 'comments' && (
-            <BackendCommentsTab 
-              comments={comments}
-              projectId={projectId}
-              isRTL={isRTL}
-              onRefresh={fetchAllData}
-            />
-          )}
-          
-          {activeTab === 'roles' && (
-            <BackendRolesTab 
-              users={siteUsers}
-              projectId={projectId}
-              isRTL={isRTL}
-              onRefresh={fetchAllData}
             />
           )}
         </div>

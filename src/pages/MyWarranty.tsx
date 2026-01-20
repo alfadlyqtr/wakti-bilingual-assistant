@@ -1,16 +1,17 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, useLayoutEffect } from 'react';
 import { BusinessCardWizard } from '@/components/business-card/BusinessCardWizard';
-import { BusinessCardBuilder } from '@/components/business-card/BusinessCardBuilder';
+import { BusinessCardBuilder, CardPreviewLive } from '@/components/business-card/BusinessCardBuilder';
 import { CardCreatedCelebration } from '@/components/business-card/CardCreatedCelebration';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import ShareButton from '@/components/ui/ShareButton';
 import { 
   Shield, Plus, SortAsc, Camera, Upload, X, 
   ChevronLeft, Trash2, FileText, MessageCircle, Calendar,
   Tag, Clock, CheckCircle, AlertTriangle, XCircle, Loader2,
-  Edit2, ExternalLink, CreditCard, User, FolderOpen, ChevronDown
+  Edit2, ExternalLink, CreditCard, User, FolderOpen, ChevronDown, Phone, Mail, Globe, MapPin, Link2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -51,6 +52,158 @@ interface WarrantyItem {
 
 type ViewMode = 'list' | 'detail' | 'add' | 'categories' | 'ask';
 
+interface SocialLink {
+  id: string;
+  type: string;
+  url: string;
+  label?: string;
+}
+
+interface TextStyle {
+  fontSize?: number;
+  fontWeight?: 'normal' | 'medium' | 'semibold' | 'bold';
+  color?: string;
+}
+
+const CompactCardPreview: React.FC<{ data: BusinessCardData }> = ({ data }) => {
+  const template = (data.template || 'geometric');
+
+  const headerBg = (() => {
+    if (template === 'minimal') return data.minimalColors?.header || '#12161f';
+    if (template === 'clean') return data.cleanColors?.header || '#e9ceb0';
+    if (template === 'fashion') return data.fashionColors?.curve || '#7c7a79';
+    if (template === 'professional') return data.professionalColors?.band || '#1d4ed8';
+    // geometric
+    const light = data.mosaicColors?.light || '#93c5fd';
+    const mid = data.mosaicColors?.mid || '#60a5fa';
+    const dark = data.mosaicColors?.dark || '#2563eb';
+    return `linear-gradient(135deg, ${light} 0%, ${mid} 50%, ${dark} 100%)`;
+  })();
+
+  const bg = (() => {
+    if (template === 'minimal') return data.minimalColors?.background || '#0b0f14';
+    if (template === 'clean') return data.cleanColors?.background || '#ffffff';
+    return '#ffffff';
+  })();
+
+  const text = (() => {
+    if (template === 'minimal') return data.minimalColors?.text || '#f2f2f2';
+    if (template === 'clean') return data.cleanColors?.text || '#060541';
+    return '#111827';
+  })();
+
+  const muted = (() => {
+    if (template === 'minimal') return data.minimalColors?.muted || 'rgba(242,242,242,0.7)';
+    if (template === 'clean') return data.cleanColors?.muted || '#606062';
+    return '#6b7280';
+  })();
+
+  const photoShapeClass = data.photoShape === 'square' ? 'rounded-xl' : 'rounded-full';
+  const photoShapeInnerClass = data.photoShape === 'square' ? 'rounded-lg' : 'rounded-full';
+
+  const iconStyle = {
+    showBackground: data.iconStyle?.showBackground ?? true,
+    backgroundColor: data.iconStyle?.backgroundColor || '#000000',
+    iconColor: data.iconStyle?.iconColor || '#ffffff',
+    useBrandColors: data.iconStyle?.useBrandColors !== false,
+    colorIntensity: data.iconStyle?.colorIntensity ?? 50,
+  };
+
+  const activeLinks = [
+    ...(data.phone ? [{ type: 'phone', url: data.phone, icon: Phone, color: '#22c55e' }] : []),
+    ...(data.email ? [{ type: 'email', url: data.email, icon: Mail, color: '#ef4444' }] : []),
+    ...(data.website ? [{ type: 'website', url: data.website, icon: Globe, color: '#3b82f6' }] : []),
+    ...(data.address ? [{ type: 'address', url: data.address, icon: MapPin, color: '#f97316' }] : []),
+    ...(data.socialLinks || []).map((link) => ({
+      type: link.type,
+      url: link.url,
+      icon: Link2,
+      color: '#6b7280'
+    }))
+  ].filter(l => (l.url || '').trim().length > 0).slice(0, 6);
+
+  const getIconColor = (brandColor: string) => {
+    const baseColor = iconStyle.useBrandColors ? brandColor : (iconStyle.iconColor || '#ffffff');
+    return baseColor;
+  };
+
+  const getIconBackgroundColor = (color: string) => {
+    if (!color || color === 'transparent') return 'transparent';
+
+    const alphaRaw = (iconStyle.colorIntensity ?? 50) / 100;
+    const alpha = Math.max(0, Math.min(1, alphaRaw));
+
+    if (!color.startsWith('#')) return color;
+
+    const hex = color.length === 4
+      ? `#${color[1]}${color[1]}${color[2]}${color[2]}${color[3]}${color[3]}`
+      : color;
+
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+
+  const name = `${data.firstName || ''} ${data.lastName || ''}`.trim() || 'Your Name';
+  const title = (data.jobTitle || '').trim();
+
+  return (
+    <div className="w-full rounded-2xl overflow-hidden" style={{ background: bg }}>
+      <div className="relative h-20">
+        {data.coverPhotoUrl ? (
+          <img src={data.coverPhotoUrl} alt="Cover" className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full" style={{ background: headerBg as any }} />
+        )}
+        {data.logoUrl ? (
+          <div className="absolute top-2 right-2 w-8 h-8 rounded-lg bg-white/90 p-1 shadow-sm">
+            <img src={data.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+          </div>
+        ) : null}
+      </div>
+
+      <div className="px-4 pb-4">
+        <div className="-mt-8 flex justify-center">
+          <div className={`w-16 h-16 ${photoShapeClass} bg-white p-1 shadow-lg`}>
+            <div className={`w-full h-full ${photoShapeInnerClass} overflow-hidden bg-white`}>
+              {data.profilePhotoUrl ? (
+                <img src={data.profilePhotoUrl} alt="" className="w-full h-full object-contain" />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-blue-400 to-purple-600 flex items-center justify-center">
+                  <User className="w-7 h-7 text-white" />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-2 text-center">
+          <p className="text-base font-semibold truncate" style={{ color: text }}>{name}</p>
+          {title ? (
+            <p className="text-xs truncate" style={{ color: muted }}>{title}</p>
+          ) : null}
+        </div>
+
+        {activeLinks.length > 0 ? (
+          <div className="mt-3 flex flex-wrap justify-center gap-2">
+            {activeLinks.map((l, i) => (
+              <div
+                key={`${l.type}-${i}`}
+                className={`flex items-center justify-center ${iconStyle.showBackground ? 'w-8 h-8 rounded-full' : 'w-7 h-7'}`}
+                style={iconStyle.showBackground ? { backgroundColor: getIconBackgroundColor(iconStyle.backgroundColor) } : undefined}
+              >
+                <l.icon className={iconStyle.showBackground ? 'w-3.5 h-3.5' : 'w-4 h-4'} style={{ color: getIconColor(l.color) }} />
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+};
+
 interface BusinessCardData {
   firstName: string;
   lastName: string;
@@ -61,7 +214,127 @@ interface BusinessCardData {
   website: string;
   logoUrl: string;
   profilePhotoUrl: string;
+  coverPhotoUrl?: string;
+  department?: string;
+  headline?: string;
+  address?: string;
+  socialLinks?: SocialLink[];
+  template?: 'geometric' | 'professional' | 'fashion' | 'minimal' | 'clean';
+  primaryColor?: string;
+  mosaicPaletteId?: string;
+  mosaicColors?: {
+    light?: string;
+    mid?: string;
+    dark?: string;
+    deepest?: string;
+  };
+  professionalColors?: {
+    band?: string;
+    ring?: string;
+    line?: string;
+    lineHeight?: number;
+    bandHeight?: number;
+  };
+  fashionColors?: {
+    curve?: string;
+    star?: string;
+    starGlow?: boolean;
+  };
+  minimalColors?: {
+    background?: string;
+    header?: string;
+    accent?: string;
+    text?: string;
+    muted?: string;
+  };
+  cleanColors?: {
+    background?: string;
+    header?: string;
+    accent?: string;
+    text?: string;
+    muted?: string;
+  };
+  logoPosition?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  photoShape?: 'circle' | 'square';
+  // Text styling
+  nameStyle?: TextStyle;
+  titleStyle?: TextStyle;
+  companyStyle?: TextStyle;
+  // Icon styling
+  iconStyle?: {
+    showBackground?: boolean;
+    backgroundColor?: string;
+    iconColor?: string;
+    useBrandColors?: boolean;
+    colorIntensity?: number;
+  };
 }
+
+const ScaledCardPreview: React.FC<{ data: BusinessCardData }> = ({ data }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const scaledRef = useRef<HTMLDivElement>(null);
+
+  const [scale, setScale] = useState(0.9);
+  const [box, setBox] = useState<{ width: number; height: number } | null>(null);
+
+  const measureScale = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const containerWidth = container.clientWidth;
+    const baseWidth = 300;
+    const maxScale = 0.9;
+    const next = Math.min(maxScale, containerWidth / baseWidth);
+    setScale(next);
+  }, []);
+
+  const measureBox = useCallback(() => {
+    const el = scaledRef.current;
+    if (!el) return;
+
+    const rect = el.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+
+    setBox({ width: rect.width, height: rect.height });
+  }, []);
+
+  useLayoutEffect(() => {
+    measureScale();
+  }, [measureScale, data]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const ro = new ResizeObserver(() => {
+      measureScale();
+    });
+
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [measureScale]);
+
+  useLayoutEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      measureBox();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [measureBox, scale, data]);
+
+  return (
+    <div ref={containerRef} className="w-full">
+      <div className="mx-auto" style={box ? { width: box.width, height: box.height } : undefined}>
+        <div
+          ref={scaledRef}
+          className="inline-block"
+          style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}
+        >
+          <CardPreviewLive data={data} />
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const translations = {
   en: {
@@ -227,6 +500,13 @@ const MyWarranty: React.FC = () => {
   const t = translations[language] || translations.en;
   const isRTL = language === 'ar';
 
+  const getPublicBaseUrl = useCallback(() => {
+    if (typeof window === 'undefined') return 'https://wakti.ai';
+    const origin = window.location.origin;
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) return 'https://wakti.ai';
+    return origin;
+  }, []);
+
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [mainTab, setMainTab] = useState<'docs' | 'card' | 'cv'>('docs');
   const [activeTab, setActiveTab] = useState<'warranties' | 'ask'>('warranties');
@@ -272,14 +552,18 @@ const MyWarranty: React.FC = () => {
   const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
   const [documentToView, setDocumentToView] = useState<{ url: string; type: 'image' | 'pdf' } | null>(null);
 
-  // Business Card state
-  const [businessCard, setBusinessCard] = useState<BusinessCardData | null>(null);
+  // Business Card state - supports up to 2 cards
+  const [businessCards, setBusinessCards] = useState<(BusinessCardData & { cardSlot: number; cardName: string; shareSlug?: string })[]>([]);
+  const [activeCardSlot, setActiveCardSlot] = useState<number>(1);
   const [showCardWizard, setShowCardWizard] = useState(false);
   const [showCardBuilder, setShowCardBuilder] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [isLoadingCard, setIsLoadingCard] = useState(true);
   const [cardInnerTab, setCardInnerTab] = useState<'mycard' | 'collected'>('mycard');
   const [collectedCards, setCollectedCards] = useState<any[]>([]);
+  
+  // Get current active card
+  const businessCard = businessCards.find(c => c.cardSlot === activeCardSlot) || null;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -1142,13 +1426,12 @@ const MyWarranty: React.FC = () => {
     if (!user) return;
     
     try {
-      // Generate a unique share slug
-      const shareSlug = `${data.firstName.toLowerCase()}-${Date.now().toString(36)}`;
-      
-      const { error } = await supabase
+      const { data: saved, error } = await (supabase as any)
         .from('user_business_cards')
         .upsert({
           user_id: user.id,
+          card_slot: activeCardSlot,
+          card_name: activeCardSlot === 1 ? 'Primary Card' : 'Secondary Card',
           first_name: data.firstName,
           last_name: data.lastName || null,
           email: data.email || null,
@@ -1158,12 +1441,23 @@ const MyWarranty: React.FC = () => {
           website: data.website || null,
           logo_url: data.logoUrl || null,
           profile_photo_url: data.profilePhotoUrl || null,
-          share_slug: shareSlug,
-        }, { onConflict: 'user_id' });
+        }, { onConflict: 'user_id,card_slot' })
+        .select('share_slug, card_slot, card_name')
+        .maybeSingle();
 
       if (error) throw error;
 
-      setBusinessCard(data);
+      // Add to business cards array with slot info
+      const newCard = {
+        ...data,
+        cardSlot: activeCardSlot,
+        cardName: activeCardSlot === 1 ? 'Primary Card' : 'Secondary Card',
+        shareSlug: (saved as any)?.share_slug || undefined,
+      };
+      setBusinessCards(prev => {
+        const filtered = prev.filter(c => c.cardSlot !== activeCardSlot);
+        return [...filtered, newCard];
+      });
       setShowCardWizard(false);
       setShowCelebration(true); // Show celebration popup first
     } catch (error) {
@@ -1176,50 +1470,60 @@ const MyWarranty: React.FC = () => {
     }
   };
 
-  // Fetch existing business card
+  // Fetch existing business cards (supports up to 2)
   const fetchBusinessCard = useCallback(async () => {
     if (!user) return;
     
     setIsLoadingCard(true);
     try {
-      const { data, error } = await supabase
+      // Fetch all cards for this user (up to 2)
+      const { data, error } = await (supabase as any)
         .from('user_business_cards')
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .order('card_slot', { ascending: true });
 
-      if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows
+      if (error) throw error;
 
-      if (data) {
-        setBusinessCard({
-          firstName: data.first_name,
-          lastName: data.last_name || '',
-          email: data.email || '',
-          phone: data.phone || '',
-          companyName: data.company_name || '',
-          jobTitle: data.job_title || '',
-          website: data.website || '',
-          logoUrl: data.logo_url || '',
-          profilePhotoUrl: data.profile_photo_url || '',
-          coverPhotoUrl: data.cover_photo_url || '',
-          department: data.department || '',
-          headline: data.headline || '',
-          address: data.address || '',
-          socialLinks: data.social_links || [],
-          template: data.template || 'geometric',
-          primaryColor: data.primary_color || '#6366f1',
-          mosaicPaletteId: data.mosaic_palette_id || 'rose',
-          mosaicColors: data.mosaic_colors || undefined,
-          professionalColors: data.professional_colors || undefined,
-          fashionColors: data.fashion_colors || undefined,
-          minimalColors: data.minimal_colors || undefined,
-          cleanColors: data.clean_colors || undefined,
-          logoPosition: data.logo_position || 'top-right',
-          photoShape: data.photo_shape || 'circle',
-          nameStyle: data.name_style || undefined,
-          titleStyle: data.title_style || undefined,
-          companyStyle: data.company_style || undefined,
-        } as any);
+      if (data && data.length > 0) {
+        const cards = data.map((row: any, index: number) => ({
+          firstName: row.first_name,
+          lastName: row.last_name || '',
+          email: row.email || '',
+          phone: row.phone || '',
+          companyName: row.company_name || '',
+          jobTitle: row.job_title || '',
+          website: row.website || '',
+          logoUrl: row.logo_url || '',
+          profilePhotoUrl: row.profile_photo_url || '',
+          coverPhotoUrl: row.cover_photo_url || '',
+          department: row.department || '',
+          headline: row.headline || '',
+          address: row.address || '',
+          socialLinks: row.social_links || [],
+          template: row.template || 'geometric',
+          primaryColor: row.primary_color || '#6366f1',
+          mosaicPaletteId: row.mosaic_palette_id || 'rose',
+          mosaicColors: row.mosaic_colors || undefined,
+          professionalColors: row.professional_colors || undefined,
+          fashionColors: row.fashion_colors || undefined,
+          minimalColors: row.minimal_colors || undefined,
+          cleanColors: row.clean_colors || undefined,
+          logoPosition: row.logo_position || 'top-right',
+          photoShape: row.photo_shape || 'circle',
+          nameStyle: row.name_style || undefined,
+          titleStyle: row.title_style || undefined,
+          companyStyle: row.company_style || undefined,
+          iconStyle: row.icon_style || undefined,
+          cardSlot: row.card_slot || (index + 1),
+          cardName: row.card_name || (index === 0 ? 'Primary Card' : 'Secondary Card'),
+          shareSlug: row.share_slug || undefined,
+        }));
+        setBusinessCards(cards as any);
+        // Set active slot to first card's slot
+        if (cards.length > 0) {
+          setActiveCardSlot(cards[0].cardSlot);
+        }
       }
     } catch (error) {
       console.error('Error fetching business card:', error);
@@ -1238,7 +1542,7 @@ const MyWarranty: React.FC = () => {
     if (!user) return;
     
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('user_business_cards')
         .update({
           first_name: data.firstName,
@@ -1268,11 +1572,26 @@ const MyWarranty: React.FC = () => {
           name_style: (data as any).nameStyle || null,
           title_style: (data as any).titleStyle || null,
           company_style: (data as any).companyStyle || null,
+          icon_style: (data as any).iconStyle || null,
+          card_slot: activeCardSlot,
+          card_name: activeCardSlot === 1 ? 'Primary Card' : 'Secondary Card',
         })
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .eq('card_slot', activeCardSlot);
 
       if (error) throw error;
-      setBusinessCard(data);
+      // Update the card in the businessCards array
+      const existingShareSlug = businessCards.find(c => c.cardSlot === activeCardSlot)?.shareSlug;
+      const updatedCard = {
+        ...data,
+        cardSlot: activeCardSlot,
+        cardName: activeCardSlot === 1 ? 'Primary Card' : 'Secondary Card',
+        shareSlug: existingShareSlug,
+      };
+      setBusinessCards(prev => {
+        const filtered = prev.filter(c => c.cardSlot !== activeCardSlot);
+        return [...filtered, updatedCard as any];
+      });
     } catch (error) {
       console.error('Error updating business card:', error);
       throw error;
@@ -1291,139 +1610,148 @@ const MyWarranty: React.FC = () => {
       );
     }
 
-    // No card yet - show create CTA
-    if (!businessCard) {
-      return (
-        <div className="flex flex-col h-full bg-gradient-to-b from-background via-background to-blue-500/5">
-          {/* Hero Section */}
-          <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
-            {/* Floating cards illustration */}
-            <div className="relative w-64 h-48 mb-8">
-              {/* Background cards */}
-              <div className="absolute top-4 left-4 w-44 h-28 rounded-2xl bg-gradient-to-br from-orange-400/30 to-pink-500/30 transform -rotate-12 shadow-xl" />
-              <div className="absolute top-2 right-4 w-44 h-28 rounded-2xl bg-gradient-to-br from-emerald-400/30 to-teal-500/30 transform rotate-6 shadow-xl" />
-              {/* Main card */}
-              <div className="absolute top-8 left-1/2 -translate-x-1/2 w-52 h-32 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-2xl shadow-blue-500/30 flex flex-col items-center justify-center p-4">
-                <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center mb-2">
-                  <User className="w-6 h-6 text-white" />
-                </div>
-                <div className="h-2 w-24 bg-white/40 rounded-full mb-1" />
-                <div className="h-1.5 w-16 bg-white/30 rounded-full" />
-              </div>
-            </div>
+    const cardLimitReached = businessCards.length >= 2;
+    const hasCards = businessCards.length > 0;
 
-            <h1 className="text-2xl font-bold text-foreground text-center mb-3">
-              {isRTL ? 'أنشئ بطاقتك الرقمية' : 'Create Your Digital Card'}
-            </h1>
-            <p className="text-muted-foreground text-center max-w-xs mb-8">
-              {isRTL 
-                ? 'شارك معلوماتك المهنية بسهولة مع أي شخص في ثوانٍ'
-                : 'Share your professional info with anyone in seconds'}
-            </p>
-
-            <Button
-              onClick={() => setShowCardWizard(true)}
-              className="h-14 px-8 text-lg font-semibold rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg shadow-blue-500/25 transition-all active:scale-95"
-            >
-              <CreditCard className="w-5 h-5 mr-2" />
-              {isRTL ? 'إنشاء بطاقة العمل' : 'Create Business Card'}
-            </Button>
-          </div>
-        </div>
-      );
-    }
-
-    // Has card - show card preview (TODO: implement card builder/preview)
     return (
-      <div className="flex flex-col h-full bg-gradient-to-b from-background via-background to-blue-500/5 px-4 py-6">
-        <div className="text-center mb-6">
-          <h2 className="text-xl font-bold text-foreground">{isRTL ? 'بطاقتي' : 'My Card'}</h2>
-          <p className="text-sm text-muted-foreground">{isRTL ? 'معاينة بطاقتك الرقمية' : 'Preview your digital card'}</p>
-        </div>
-
-        {/* Card Preview */}
-        <div className="mx-auto w-full max-w-sm">
-          <div className="rounded-3xl bg-gradient-to-br from-blue-500 to-purple-600 p-6 shadow-2xl shadow-blue-500/30">
-            {/* Logo */}
-            {businessCard.logoUrl && (
-              <div className="flex justify-end mb-4">
-                <img src={businessCard.logoUrl} alt="Logo" className="h-10 w-auto object-contain" />
+      <div className="flex flex-col h-full bg-gradient-to-b from-background via-background to-blue-500/5 px-4 py-6 overflow-y-auto">
+        {/* Header with stacked cards illustration */}
+        <div className="flex flex-col items-center mb-6">
+          {/* Floating cards illustration - always show */}
+          <div className="relative w-56 h-40 mb-4">
+            {/* Background cards */}
+            <div className="absolute top-3 left-3 w-36 h-24 rounded-2xl bg-gradient-to-br from-orange-400/30 to-pink-500/30 transform -rotate-12 shadow-lg" />
+            <div className="absolute top-1 right-3 w-36 h-24 rounded-2xl bg-gradient-to-br from-emerald-400/30 to-teal-500/30 transform rotate-6 shadow-lg" />
+            {/* Main card */}
+            <div className="absolute top-6 left-1/2 -translate-x-1/2 w-44 h-28 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-2xl shadow-blue-500/30 flex flex-col items-center justify-center p-3">
+              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center mb-1.5">
+                <User className="w-5 h-5 text-white" />
               </div>
-            )}
-
-            {/* Profile */}
-            <div className="flex items-center gap-4 mb-6">
-              {businessCard.profilePhotoUrl ? (
-                <img
-                  src={businessCard.profilePhotoUrl}
-                  alt="Profile"
-                  className="w-16 h-16 rounded-full object-cover border-2 border-white/30"
-                />
-              ) : (
-                <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center">
-                  <User className="w-8 h-8 text-white/70" />
-                </div>
-              )}
-              <div>
-                <h3 className="text-xl font-bold text-white">
-                  {businessCard.firstName} {businessCard.lastName}
-                </h3>
-                {businessCard.jobTitle && (
-                  <p className="text-white/80 text-sm">{businessCard.jobTitle}</p>
-                )}
-                {businessCard.companyName && (
-                  <p className="text-white/60 text-xs">{businessCard.companyName}</p>
-                )}
-              </div>
-            </div>
-
-            {/* Contact Info */}
-            <div className="space-y-2">
-              {businessCard.email && (
-                <div className="flex items-center gap-3 text-white/90 text-sm">
-                  <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-                    <span className="text-xs">✉️</span>
-                  </div>
-                  {businessCard.email}
-                </div>
-              )}
-              {businessCard.phone && (
-                <div className="flex items-center gap-3 text-white/90 text-sm">
-                  <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-                    <span className="text-xs">📞</span>
-                  </div>
-                  {businessCard.phone}
-                </div>
-              )}
-              {businessCard.website && (
-                <div className="flex items-center gap-3 text-white/90 text-sm">
-                  <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-                    <span className="text-xs">🌐</span>
-                  </div>
-                  {businessCard.website}
-                </div>
-              )}
+              <div className="h-1.5 w-20 bg-white/40 rounded-full mb-1" />
+              <div className="h-1 w-14 bg-white/30 rounded-full" />
             </div>
           </div>
+
+          <h1 className="text-xl font-bold text-foreground text-center mb-1">
+            {isRTL ? 'بطاقاتي الرقمية' : 'My Digital Cards'}
+          </h1>
+          <p className="text-sm text-muted-foreground text-center">
+            {isRTL 
+              ? `${businessCards.length} من 2 بطاقات`
+              : `${businessCards.length} of 2 cards`}
+          </p>
         </div>
 
-        {/* Actions */}
-        <div className="mt-6 flex gap-3 justify-center">
+        {/* Cards Grid - Mobile First */}
+        {hasCards && (
+          <div className="space-y-4 mb-6">
+            {businessCards.map((card, index) => (
+              <div
+                key={card.cardSlot}
+                className={`relative rounded-2xl overflow-hidden border transition-all ${
+                  activeCardSlot === card.cardSlot
+                    ? 'border-blue-500/50 shadow-lg shadow-blue-500/20'
+                    : 'border-white/10 hover:border-white/20'
+                }`}
+              >
+                {/* Card Header */}
+                <div className="flex items-center justify-between p-3 bg-white/5">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                      index === 0 
+                        ? 'bg-gradient-to-br from-blue-500 to-purple-600' 
+                        : 'bg-gradient-to-br from-emerald-500 to-teal-600'
+                    }`}>
+                      <CreditCard className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">
+                        {card.cardName || (index === 0 ? (isRTL ? 'البطاقة الرئيسية' : 'Primary Card') : (isRTL ? 'البطاقة الثانوية' : 'Secondary Card'))}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {card.firstName} {card.lastName}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setActiveCardSlot(card.cardSlot);
+                        setShowCardBuilder(true);
+                      }}
+                      className="h-8 px-2 rounded-lg"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div
+                  className="p-3 cursor-pointer"
+                  onClick={() => setActiveCardSlot(card.cardSlot)}
+                >
+                  <ScaledCardPreview data={card} />
+                </div>
+
+                {/* Card Actions */}
+                <div className="flex gap-2 p-3 pt-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setActiveCardSlot(card.cardSlot);
+                      setShowCardBuilder(true);
+                    }}
+                    className="flex-1 h-9 rounded-xl text-xs"
+                  >
+                    <Edit2 className="w-3.5 h-3.5 mr-1.5" />
+                    {isRTL ? 'تعديل' : 'Edit'}
+                  </Button>
+                  <div className="flex items-center justify-center w-12">
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <ShareButton
+                        size="sm"
+                        shareUrl={`${getPublicBaseUrl()}/card/${card.shareSlug || ''}`}
+                        shareTitle={isRTL ? 'بطاقتي من Wakti' : 'My Wakti Business Card'}
+                        shareDescription={isRTL ? 'افتح بطاقتي الرقمية' : 'Open my digital card'}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Create New Card Button */}
+        <div className="mt-auto pb-4">
           <Button
-            variant="outline"
-            onClick={() => setShowCardBuilder(true)}
-            className="rounded-xl"
-          >
-            <Edit2 className="w-4 h-4 mr-2" />
-            {isRTL ? 'تعديل' : 'Edit Card'}
-          </Button>
-          <Button
-            className="rounded-xl bg-gradient-to-r from-blue-500 to-purple-600"
             onClick={() => {
-              toast({ title: 'Coming soon', description: 'Share feature coming soon!' });
+              if (!cardLimitReached) {
+                setActiveCardSlot(businessCards.length + 1);
+                setShowCardWizard(true);
+              }
             }}
+            disabled={cardLimitReached}
+            className={`w-full h-14 text-base font-semibold rounded-2xl transition-all active:scale-[0.98] ${
+              cardLimitReached
+                ? 'bg-gray-500/20 text-muted-foreground cursor-not-allowed'
+                : 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg shadow-blue-500/25'
+            }`}
           >
-            {isRTL ? 'مشاركة' : 'Share'}
+            {cardLimitReached ? (
+              <>
+                <AlertTriangle className="w-5 h-5 mr-2 opacity-60" />
+                {isRTL ? 'تم الوصول للحد الأقصى (2 بطاقات)' : 'Card limit reached (2 cards)'}
+              </>
+            ) : (
+              <>
+                <Plus className="w-5 h-5 mr-2" />
+                {isRTL ? 'إنشاء بطاقة جديدة' : 'Create New Card'}
+              </>
+            )}
           </Button>
         </div>
       </div>

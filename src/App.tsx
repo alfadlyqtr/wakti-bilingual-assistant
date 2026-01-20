@@ -104,6 +104,7 @@ import Journal from "./pages/Journal";
 import MusicStudio from "./pages/MusicStudio";
 import MusicShare from "./pages/MusicShare";
 import VideoShare from "./pages/VideoShare";
+import BusinessCardShare from "./pages/BusinessCardShare";
 import LettersCreate from "./pages/LettersCreate";
 import LettersWaiting from "./pages/LettersWaiting";
 import LettersJoin from "./pages/LettersJoin";
@@ -200,6 +201,9 @@ function App() {
 
                 {/* Public presentation share player */}
                 <Route path="/p/:token" element={<PresentationSharePlayer />} />
+
+                {/* Public business card share */}
+                <Route path="/card/:shareSlug" element={<BusinessCardShare />} />
                 
                 {/* Maw3d public view */}
                 <Route path="/maw3d/:shortId" element={<Maw3dView />} />
