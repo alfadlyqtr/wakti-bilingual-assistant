@@ -774,8 +774,38 @@ Apply these styles consistently throughout the entire design.`;
     
     try {
       setDeleting(projectId);
+
+      // 1. Clean up Storage (project-uploads)
+      // We must clean up storage BEFORE deleting the project because we need the project ID/User ID path
+      if (user?.id) {
+        try {
+          const projectPath = `${user.id}/${projectId}`;
+          const { data: files } = await supabase.storage
+            .from('project-uploads')
+            .list(projectPath);
+
+          if (files && files.length > 0) {
+            const paths = files.map(f => `${projectPath}/${f.name}`);
+            const { error: removeError } = await supabase.storage
+              .from('project-uploads')
+              .remove(paths);
+            
+            if (removeError) {
+              console.error('Failed to cleanup storage:', removeError);
+            } else {
+              console.log(`Cleaned up ${files.length} files from storage`);
+            }
+          }
+        } catch (storageErr) {
+          console.error('Storage cleanup exception:', storageErr);
+          // Continue with DB deletion even if storage cleanup fails
+        }
+      }
+
+      // 2. Delete Database Records
       await (supabase.from('project_files' as any).delete().eq('project_id', projectId) as any);
       await (supabase.from('projects' as any).delete().eq('id', projectId) as any);
+      
       setProjects((prev) => prev.filter((p) => p.id !== projectId));
       setDeleteConfirmId(null);
       setDeleteConfirmText('');

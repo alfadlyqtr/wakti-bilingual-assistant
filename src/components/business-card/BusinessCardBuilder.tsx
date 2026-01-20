@@ -136,23 +136,93 @@ interface BusinessCardBuilderProps {
   onBack: () => void;
 }
 
-// Social platforms config with brand colors
+// TRUE Brand SVG Icons with official brand colors
+const BrandIcons = {
+  // WhatsApp - Official green with phone icon
+  whatsapp: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+    </svg>
+  ),
+  // Instagram - Gradient background with camera icon
+  instagram: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+    </svg>
+  ),
+  // Facebook - Official blue F
+  facebook: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+    </svg>
+  ),
+  // Twitter/X - Official X logo
+  twitter: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+    </svg>
+  ),
+  // LinkedIn - Official blue in
+  linkedin: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+    </svg>
+  ),
+  // YouTube - Official red play button
+  youtube: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+    </svg>
+  ),
+  // Telegram - Official paper plane
+  telegram: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+    </svg>
+  ),
+  // TikTok - Official music note logo
+  tiktok: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/>
+    </svg>
+  ),
+  // Snapchat - Official ghost
+  snapchat: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12.206.793c.99 0 4.347.276 5.93 3.821.529 1.193.403 3.219.299 4.847l-.003.06c-.012.18-.022.345-.03.51.075.045.203.09.401.09.3-.016.659-.12 1.033-.301.165-.088.344-.104.464-.104.182 0 .359.029.509.09.45.149.734.479.734.838.015.449-.39.839-1.213 1.168-.089.029-.209.075-.344.119-.45.135-1.139.36-1.333.81-.09.224-.061.524.12.868l.015.015c.06.136 1.526 3.475 4.791 4.014.255.044.435.27.42.509 0 .075-.015.149-.045.225-.24.569-1.273.988-3.146 1.271-.059.091-.12.375-.164.57-.029.179-.074.36-.134.553-.076.271-.27.405-.555.405h-.03c-.135 0-.313-.031-.538-.074-.36-.075-.765-.135-1.273-.135-.3 0-.599.015-.913.074-.6.104-1.123.464-1.723.884-.853.599-1.826 1.288-3.294 1.288-.06 0-.119-.015-.18-.015h-.149c-1.468 0-2.427-.675-3.279-1.288-.599-.42-1.107-.779-1.707-.884-.314-.045-.629-.074-.928-.074-.54 0-.958.089-1.272.149-.211.043-.391.074-.54.074-.374 0-.523-.224-.583-.42-.061-.192-.09-.389-.135-.567-.046-.181-.105-.494-.166-.57-1.918-.222-2.95-.642-3.189-1.226-.031-.063-.052-.15-.055-.225-.015-.243.165-.465.42-.509 3.264-.54 4.73-3.879 4.791-4.02l.016-.029c.18-.345.224-.645.119-.869-.195-.434-.884-.658-1.332-.809-.121-.029-.24-.074-.346-.119-1.107-.435-1.257-.93-1.197-1.273.09-.479.674-.793 1.168-.793.146 0 .27.029.383.074.42.194.789.3 1.104.3.234 0 .384-.06.465-.105l-.046-.569c-.098-1.626-.225-3.651.307-4.837C7.392 1.077 10.739.807 11.727.807l.419-.015h.06z"/>
+    </svg>
+  ),
+  // GitHub - Official octocat mark
+  github: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>
+    </svg>
+  ),
+  // Calendly - Calendar icon
+  calendly: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M19.655 14.262c.281-.281.663-.438 1.061-.438h1.284c-.088 2.052-.858 3.973-2.197 5.511a9.036 9.036 0 0 1-5.197 2.972 9.036 9.036 0 0 1-5.942-.872 9.036 9.036 0 0 1-4.163-4.163 9.036 9.036 0 0 1-.872-5.942 9.036 9.036 0 0 1 2.972-5.197 9.036 9.036 0 0 1 5.511-2.197v1.284c0 .398-.157.78-.438 1.061-.281.281-.438.663-.438 1.061 0 .398.157.78.438 1.061.281.281.663.438 1.061.438h3c.398 0 .78-.157 1.061-.438.281-.281.438-.663.438-1.061V4.5c0-.398-.157-.78-.438-1.061A1.5 1.5 0 0 0 15 3h-3c-.398 0-.78.157-1.061.438-.281.281-.438.663-.438 1.061v.284A10.536 10.536 0 0 0 4.783 7.22a10.536 10.536 0 0 0-3.437 6.03 10.536 10.536 0 0 0 1.012 6.906 10.536 10.536 0 0 0 4.836 4.836 10.536 10.536 0 0 0 6.906 1.012 10.536 10.536 0 0 0 6.03-3.437 10.536 10.536 0 0 0 2.437-5.718h-.284c-.398 0-.78.157-1.061.438-.281.281-.663.438-1.061.438-.398 0-.78-.157-1.061-.438a1.5 1.5 0 0 1-.438-1.061c0-.398.157-.78.438-1.061z"/>
+    </svg>
+  ),
+};
+
+// Social platforms config with brand colors and TRUE brand icons
 const SOCIAL_PLATFORMS = [
-  { type: 'phone', icon: Phone, label: 'Phone Number', placeholder: '+1234567890', color: '#22c55e' },
-  { type: 'email', icon: Mail, label: 'Email', placeholder: 'email@example.com', color: '#ef4444' },
-  { type: 'website', icon: Globe, label: 'Website', placeholder: 'https://...', color: '#3b82f6' },
-  { type: 'linkedin', icon: Linkedin, label: 'LinkedIn', placeholder: 'linkedin.com/in/...', color: '#0A66C2' },
-  { type: 'instagram', icon: Instagram, label: 'Instagram', placeholder: '@username', color: '#E4405F' },
-  { type: 'twitter', icon: Twitter, label: 'X (Twitter)', placeholder: '@username', color: '#000000' },
-  { type: 'facebook', icon: Facebook, label: 'Facebook', placeholder: 'facebook.com/...', color: '#1877F2' },
-  { type: 'youtube', icon: Youtube, label: 'YouTube', placeholder: 'youtube.com/...', color: '#FF0000' },
-  { type: 'whatsapp', icon: MessageCircle, label: 'WhatsApp', placeholder: '+1234567890', color: '#25D366' },
-  { type: 'telegram', icon: Send, label: 'Telegram', placeholder: '@username', color: '#26A5E4' },
-  { type: 'github', icon: Github, label: 'GitHub', placeholder: 'github.com/...', color: '#181717' },
-  { type: 'calendly', icon: Calendar, label: 'Calendly', placeholder: 'calendly.com/...', color: '#006BFF' },
-  { type: 'tiktok', icon: Sparkles, label: 'TikTok', placeholder: '@username', color: '#000000' },
-  { type: 'snapchat', icon: Camera, label: 'Snapchat', placeholder: '@username', color: '#FFFC00' },
-  { type: 'address', icon: MapPin, label: 'Address', placeholder: '123 Main St...', color: '#f97316' },
+  { type: 'phone', icon: Phone, label: 'Phone Number', placeholder: '+1234567890', color: '#22c55e', brandIcon: null },
+  { type: 'email', icon: Mail, label: 'Email', placeholder: 'email@example.com', color: '#ef4444', brandIcon: null },
+  { type: 'website', icon: Globe, label: 'Website', placeholder: 'https://...', color: '#3b82f6', brandIcon: null },
+  { type: 'linkedin', icon: Linkedin, label: 'LinkedIn', placeholder: 'linkedin.com/in/...', color: '#0A66C2', brandIcon: BrandIcons.linkedin },
+  { type: 'instagram', icon: Instagram, label: 'Instagram', placeholder: '@username', color: '#E4405F', brandIcon: BrandIcons.instagram, gradient: 'linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)' },
+  { type: 'twitter', icon: Twitter, label: 'X (Twitter)', placeholder: '@username', color: '#000000', brandIcon: BrandIcons.twitter },
+  { type: 'facebook', icon: Facebook, label: 'Facebook', placeholder: 'facebook.com/...', color: '#1877F2', brandIcon: BrandIcons.facebook },
+  { type: 'youtube', icon: Youtube, label: 'YouTube', placeholder: 'youtube.com/...', color: '#FF0000', brandIcon: BrandIcons.youtube },
+  { type: 'whatsapp', icon: MessageCircle, label: 'WhatsApp', placeholder: '+1234567890', color: '#25D366', brandIcon: BrandIcons.whatsapp },
+  { type: 'telegram', icon: Send, label: 'Telegram', placeholder: '@username', color: '#26A5E4', brandIcon: BrandIcons.telegram },
+  { type: 'github', icon: Github, label: 'GitHub', placeholder: 'github.com/...', color: '#181717', brandIcon: BrandIcons.github },
+  { type: 'calendly', icon: Calendar, label: 'Calendly', placeholder: 'calendly.com/...', color: '#006BFF', brandIcon: BrandIcons.calendly },
+  { type: 'tiktok', icon: Sparkles, label: 'TikTok', placeholder: '@username', color: '#000000', brandIcon: BrandIcons.tiktok },
+  { type: 'snapchat', icon: Camera, label: 'Snapchat', placeholder: '@username', color: '#FFFC00', brandIcon: BrandIcons.snapchat },
+  { type: 'address', icon: MapPin, label: 'Address', placeholder: '123 Main St...', color: '#f97316', brandIcon: null },
 ];
 
 // Card templates - Premium designs matching reference screenshots
@@ -692,6 +762,15 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
             onChange={(e) => updateField('website', e.target.value)}
             placeholder="https://"
             className="bg-[#060541]/5 dark:bg-white/5 border-0 border-b-2 border-[#060541]/20 dark:border-white/20 rounded-none h-10 text-center focus:ring-0 focus:border-[hsl(142,76%,55%)] text-[#060541] dark:text-[#f2f2f2] placeholder:text-[#858384]"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-xs text-center text-[#606062] dark:text-[#858384] block font-medium">{t.address}</label>
+          <Input
+            value={formData.address || ''}
+            onChange={(e) => updateField('address', e.target.value)}
+            className="bg-[#060541]/5 dark:bg-white/5 border-0 border-b-2 border-[#060541]/20 dark:border-white/20 rounded-none h-10 text-center focus:ring-0 focus:border-[hsl(142,76%,55%)] text-[#060541] dark:text-[#f2f2f2]"
           />
         </div>
       </div>
@@ -1908,20 +1987,22 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
     colorIntensity: data.iconStyle?.colorIntensity ?? 50,
   };
 
-  // Helper to get all active links for display with brand colors
+  // Helper to get all active links for display with TRUE brand icons and colors
   const activeLinks = [
-    ...(data.phone ? [{ type: 'phone', url: data.phone, icon: Phone, label: 'Phone', color: '#22c55e' }] : []),
-    ...(data.email ? [{ type: 'email', url: data.email, icon: Mail, label: 'Email', color: '#ef4444' }] : []),
-    ...(data.website ? [{ type: 'website', url: data.website, icon: Globe, label: 'Website', color: '#3b82f6' }] : []),
-    ...(data.address ? [{ type: 'address', url: data.address, icon: MapPin, label: 'Address', color: '#f97316' }] : []),
+    ...(data.phone ? [{ type: 'phone', url: data.phone, icon: Phone, brandIcon: null, label: 'Phone', color: '#22c55e', gradient: null }] : []),
+    ...(data.email ? [{ type: 'email', url: data.email, icon: Mail, brandIcon: null, label: 'Email', color: '#ef4444', gradient: null }] : []),
+    ...(data.website ? [{ type: 'website', url: data.website, icon: Globe, brandIcon: null, label: 'Website', color: '#3b82f6', gradient: null }] : []),
+    ...(data.address ? [{ type: 'address', url: data.address, icon: MapPin, brandIcon: null, label: 'Address', color: '#f97316', gradient: null }] : []),
     ...(data.socialLinks || []).map(link => {
       const platform = SOCIAL_PLATFORMS.find(p => p.type === link.type);
       return {
         type: link.type,
         url: link.url,
         icon: platform?.icon || Link2,
+        brandIcon: (platform as any)?.brandIcon || null,
         label: platform?.label || link.label || 'Link',
-        color: platform?.color || '#6b7280'
+        color: platform?.color || '#6b7280',
+        gradient: (platform as any)?.gradient || null
       };
     })
   ];
@@ -1950,6 +2031,14 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
     const b = parseInt(hex.slice(5, 7), 16);
 
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+
+  const getLinkHref = (link: { type: string; url: string }) => {
+    if (link.type === 'phone') return `tel:${link.url}`;
+    if (link.type === 'email') return `mailto:${link.url}`;
+    if (link.type === 'address') return `https://maps.google.com/?q=${encodeURIComponent(link.url)}`;
+    if (!link.url.startsWith('http')) return `https://${link.url}`;
+    return link.url;
   };
   
   // STYLE 1: Geometric Mosaic - Pink triangles, centered avatar overlapping
@@ -2047,6 +2136,21 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
           >
             {data.jobTitle || 'Web Development'}
           </p>
+          {data.companyName && (
+            <p className="text-xs mt-1 font-medium opacity-80" style={{ color: data.companyStyle?.color || '#000' }}>
+              {data.companyName}
+            </p>
+          )}
+          {data.department && (
+            <p className="text-xs opacity-70" style={{ color: data.titleStyle?.color || '#78858F' }}>
+              {data.department}
+            </p>
+          )}
+          {data.headline && (
+            <p className="text-[11px] mt-2 italic px-2 opacity-80" style={{ color: data.nameStyle?.color || '#000' }}>
+              {data.headline}
+            </p>
+          )}
         </div>
         
         {/* Logo */}
@@ -2056,27 +2160,32 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
           </div>
         )}
         
-        {/* All Active Links - Customizable */}
-        <div className="flex flex-wrap justify-center gap-3 mt-4 px-4 w-full">
-          {activeLinks.map((link, i) => (
-            <div 
-              key={i} 
-              className={`flex items-center justify-center hover:scale-110 transition-transform cursor-pointer ${
-                iconStyle.showBackground 
-                  ? 'w-9 h-9 rounded-full shadow-md' 
-                  : 'w-8 h-8'
-              }`}
-              style={iconStyle.showBackground ? { 
-                backgroundColor: getIconBackgroundColor(iconStyle.backgroundColor),
-                boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
-              } : undefined}
-            >
-              <link.icon 
-                className={iconStyle.showBackground ? 'w-4 h-4' : 'w-5 h-5'} 
-                style={{ color: getIconColor(link.color) }} 
-              />
-            </div>
-          ))}
+        {/* All Active Links - TRUE Brand Icons ONLY */}
+        <div className="flex flex-wrap justify-center gap-3 mt-4 px-6 w-full mb-6">
+          {activeLinks.map((link, i) => {
+            const BrandIcon = link.brandIcon;
+            return (
+              <a 
+                key={i}
+                href={getLinkHref(link)}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={link.label || link.type}
+                className="transition-transform hover:scale-110"
+              >
+                <div 
+                  className="w-10 h-10 rounded-full shadow-sm flex items-center justify-center"
+                  style={{ background: link.gradient || link.color }}
+                >
+                  {BrandIcon ? (
+                    <BrandIcon className="w-5 h-5" style={{ color: '#ffffff' }} />
+                  ) : (
+                    <link.icon className="w-5 h-5" style={{ color: '#ffffff' }} />
+                  )}
+                </div>
+              </a>
+            );
+          })}
         </div>
       </div>
     );
@@ -2145,18 +2254,49 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
           >
             {(data.jobTitle || 'DEVELOPER').toUpperCase()}
           </p>
+          {data.companyName && (
+            <p className="text-xs mt-1 font-bold opacity-90" style={{ color: data.companyStyle?.color || '#434955' }}>
+              {(data.companyName).toUpperCase()}
+            </p>
+          )}
+          {data.department && (
+            <p className="text-[10px] mt-0.5 opacity-80" style={{ color: data.titleStyle?.color || '#434955' }}>
+              {(data.department).toUpperCase()}
+            </p>
+          )}
+          {data.headline && (
+            <p className="text-xs mt-2 italic opacity-90 px-2 leading-tight" style={{ color: data.nameStyle?.color || '#434955' }}>
+              {data.headline}
+            </p>
+          )}
         </div>
         
-        {/* Contact Info List - Customizable */}
-        <div className="w-full flex items-center justify-center mt-4 px-4 mb-4">
-          <ul className="flex flex-col items-start gap-2 text-xs font-semibold text-[#434955] w-full max-w-[240px]">
-            {activeLinks.map((link, i) => (
-              <li key={i} className="inline-flex gap-2 items-center border-b border-dotted border-stone-700/30 pb-1 w-full truncate">
-                <link.icon className="w-4 h-4 shrink-0" style={{ color: getIconColor(link.color) }} />
-                <p className="truncate">{link.url}</p>
-              </li>
-            ))}
-          </ul>
+        {/* Contact Info - TRUE Brand Icons ONLY */}
+        <div className="flex flex-wrap justify-center gap-3 mt-4 px-4 mb-4">
+          {activeLinks.map((link, i) => {
+            const BrandIcon = link.brandIcon;
+            return (
+              <a 
+                key={i}
+                href={getLinkHref(link)}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={link.label || link.type}
+                className="transition-transform hover:scale-110"
+              >
+                <div 
+                  className="w-10 h-10 rounded-full shadow-sm flex items-center justify-center"
+                  style={{ background: link.gradient || link.color }}
+                >
+                  {BrandIcon ? (
+                    <BrandIcon className="w-5 h-5" style={{ color: '#ffffff' }} />
+                  ) : (
+                    <link.icon className="w-5 h-5" style={{ color: '#ffffff' }} />
+                  )}
+                </div>
+              </a>
+            );
+          })}
         </div>
         
         {/* Bottom blue bar */}
@@ -2203,14 +2343,16 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
         <div className="absolute rounded-full z-20 left-1/2 top-[44%] h-[110%] w-[110%] -translate-x-1/2" style={{ backgroundColor: fashionColors.curve }} />
         
         {/* Title */}
-        <div className="uppercase text-center leading-none z-40">
-          <p 
-            className={`font-bold text-xl tracking-wider ${getTextStyleClasses(data.companyStyle)}`}
-            style={{ color: data.companyStyle?.color || '#6b7280' }}
-          >
-            {data.companyName || 'Fashion'}
-          </p>
-        </div>
+        {data.companyName && (
+          <div className="uppercase text-center leading-none z-40">
+            <p 
+              className={`font-bold text-xl tracking-wider ${getTextStyleClasses(data.companyStyle)}`}
+              style={{ color: data.companyStyle?.color || '#6b7280' }}
+            >
+              {data.companyName}
+            </p>
+          </div>
+        )}
         
         {/* Photo */}
         <div className={`w-[180px] aspect-square bg-white z-40 ${photoShapeClass} overflow-hidden shadow-lg`}>
@@ -2222,22 +2364,49 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
             </div>
           )}
         </div>
+
+        {/* Name & Details - Added to Fashion template */}
+        <div className="z-40 text-center mt-1 px-4 w-full">
+          <h3 className={`font-bold text-lg ${getTextStyleClasses(data.nameStyle)}`} style={{ color: data.nameStyle?.color || '#333' }}>
+            {data.firstName} {data.lastName}
+          </h3>
+          <p className={`text-sm ${getTextStyleClasses(data.titleStyle)}`} style={{ color: data.titleStyle?.color || '#666' }}>
+            {data.jobTitle}
+          </p>
+          {data.department && (
+            <p className="text-xs text-gray-500 mt-0.5">{data.department}</p>
+          )}
+          {data.headline && (
+            <p className="text-xs mt-1 italic text-gray-600">{data.headline}</p>
+          )}
+        </div>
         
-        {/* Contact Grid - Customizable */}
-        <div className="z-40 w-full mt-2">
-          <div className="grid grid-cols-2 gap-x-2 gap-y-2 w-full">
-            {activeLinks.map((link, i) => (
-              <div key={i} className="flex items-center gap-2 overflow-hidden bg-white/10 p-1.5 rounded-lg backdrop-blur-sm">
+        {/* Contact Icons - TRUE Brand Icons ONLY */}
+        <div className="z-40 flex flex-wrap justify-center gap-3 mt-2">
+          {activeLinks.map((link, i) => {
+            const BrandIcon = link.brandIcon;
+            return (
+              <a 
+                key={i} 
+                href={getLinkHref(link)}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={link.label || link.type}
+                className="transition-transform hover:scale-110"
+              >
                 <div 
-                  className="p-1 flex items-center justify-center rounded-full shrink-0"
-                  style={iconStyle.showBackground ? { backgroundColor: getIconBackgroundColor(iconStyle.backgroundColor) } : { backgroundColor: 'white' }}
+                  className="w-10 h-10 rounded-full shadow-sm flex items-center justify-center"
+                  style={{ background: link.gradient || link.color }}
                 >
-                  <link.icon className="h-3 w-3" style={{ color: getIconColor(link.color) }} />
+                  {BrandIcon ? (
+                    <BrandIcon className="w-5 h-5" style={{ color: '#ffffff' }} />
+                  ) : (
+                    <link.icon className="w-5 h-5" style={{ color: '#ffffff' }} />
+                  )}
                 </div>
-                <p className="font-semibold text-[10px] text-white truncate">{link.url}</p>
-              </div>
-            ))}
-          </div>
+              </a>
+            );
+          })}
         </div>
       </div>
     );
@@ -2290,21 +2459,40 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
           {data.companyName && (
             <p className="text-xs mt-1 opacity-70" style={{ color: minimalColors.muted }}>{data.companyName}</p>
           )}
+          {data.department && (
+            <p className="text-xs mt-0.5 opacity-60" style={{ color: minimalColors.muted }}>{data.department}</p>
+          )}
+          {data.headline && (
+            <p className="text-xs mt-2 italic opacity-80" style={{ color: minimalColors.text }}>{data.headline}</p>
+          )}
         </div>
         
-        {/* Contact Info & Socials - Customizable */}
-        <div className="px-5 py-4 space-y-3 flex-1">
-          {activeLinks.map((link, i) => (
-            <div key={i} className="flex items-center gap-3 text-sm border-b border-white/5 pb-2 last:border-0" style={{ color: minimalColors.muted }}>
-              <div 
-                className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-                style={iconStyle.showBackground ? { backgroundColor: getIconBackgroundColor(iconStyle.backgroundColor) } : { backgroundColor: 'rgba(255,255,255,0.1)' }}
+        {/* Contact Icons - TRUE Brand Icons ONLY */}
+        <div className="flex flex-wrap justify-center gap-3 px-5 py-4">
+          {activeLinks.map((link, i) => {
+            const BrandIcon = link.brandIcon;
+            return (
+              <a 
+                key={i} 
+                href={getLinkHref(link)}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={link.label || link.type}
+                className="transition-transform hover:scale-110"
               >
-                <link.icon className="w-4 h-4" style={{ color: getIconColor(link.color) }} />
-              </div>
-              <span className="truncate">{link.url}</span>
-            </div>
-          ))}
+                <div 
+                  className="w-10 h-10 rounded-full shadow-sm flex items-center justify-center"
+                  style={{ background: link.gradient || link.color }}
+                >
+                  {BrandIcon ? (
+                    <BrandIcon className="w-5 h-5" style={{ color: '#ffffff' }} />
+                  ) : (
+                    <link.icon className="w-5 h-5" style={{ color: '#ffffff' }} />
+                  )}
+                </div>
+              </a>
+            );
+          })}
         </div>
       </div>
     );
@@ -2361,21 +2549,40 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
         {data.companyName && (
           <p className="text-xs mt-1" style={{ color: cleanColors.muted }}>{data.companyName}</p>
         )}
+        {data.department && (
+          <p className="text-xs mt-0.5 opacity-80" style={{ color: cleanColors.muted }}>{data.department}</p>
+        )}
+        {data.headline && (
+          <p className="text-xs mt-2 italic opacity-80" style={{ color: cleanColors.text }}>{data.headline}</p>
+        )}
       </div>
       
-      {/* All Links - Customizable */}
-      <div className="px-5 py-4 space-y-3 flex-1">
-        {activeLinks.map((link, i) => (
-          <div key={i} className="flex items-center gap-3 text-sm p-2 rounded-lg hover:bg-black/5 transition-colors" style={{ color: cleanColors.muted }}>
-            <div 
-              className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-              style={iconStyle.showBackground ? { backgroundColor: getIconBackgroundColor(iconStyle.backgroundColor) } : { backgroundColor: '#f3f4f6' }}
+      {/* All Links - TRUE Brand Icons ONLY */}
+      <div className="flex flex-wrap justify-center gap-3 px-5 py-4">
+        {activeLinks.map((link, i) => {
+          const BrandIcon = link.brandIcon;
+          return (
+            <a 
+              key={i} 
+              href={getLinkHref(link)}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={link.label || link.type}
+              className="transition-transform hover:scale-110"
             >
-              <link.icon className="w-4 h-4" style={{ color: getIconColor(link.color) }} />
-            </div>
-            <span className="truncate">{link.url}</span>
-          </div>
-        ))}
+              <div 
+                className="w-10 h-10 rounded-full shadow-sm flex items-center justify-center"
+                style={{ background: link.gradient || link.color }}
+              >
+                {BrandIcon ? (
+                  <BrandIcon className="w-5 h-5" style={{ color: '#ffffff' }} />
+                ) : (
+                  <link.icon className="w-5 h-5" style={{ color: '#ffffff' }} />
+                )}
+              </div>
+            </a>
+          );
+        })}
       </div>
     </div>
   );
