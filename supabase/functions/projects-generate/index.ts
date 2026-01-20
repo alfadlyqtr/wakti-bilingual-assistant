@@ -973,6 +973,10 @@ API: https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
 - Uploads: ${backendContext.uploadsCount} files
 - Users: ${backendContext.siteUsersCount} registered
 
+FOUNDATION BRICKS (ALWAYS AVAILABLE):
+- Collections you can use anytime: ${FOUNDATION_BRICKS.join(', ')}
+- You may create new collections if the user asks for something else
+
 ${backendContext.hasShopSetup ? `=== E-COMMERCE (ACTIVE) ===
 Products: ${backendContext.productsCount || 0} items${backendContext.products && backendContext.products.length > 0 ? `
 Sample products: ${backendContext.products.slice(0, 5).map(p => `${p.name} ($${p.price})`).join(', ')}` : ''}
@@ -1584,6 +1588,24 @@ IMPORTANT FORM REQUIREMENTS:
 4. If the user asks for a shop/products/items page, fetch via project-backend-api with projectId.
 `;
 
+// Foundation bricks: pre-configured backend building blocks (not limiting templates)
+const FOUNDATION_BRICKS = [
+  'products',
+  'items',
+  'categories',
+  'orders',
+  'cart_items',
+  'notes',
+  'tasks',
+  'events',
+  'services',
+  'bookings',
+  'messages',
+  'reviews',
+  'users',
+  'posts'
+];
+
 // ============================================================================
 // SYSTEM PROMPTS
 // ============================================================================
@@ -1686,6 +1708,10 @@ The project has access to a simple backend API. Use it when users need:
 
 **API Endpoint:** https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
 
+**FOUNDATION BRICKS (ALWAYS AVAILABLE):**
+- Collections you can use anytime: ${FOUNDATION_BRICKS.join(', ')}
+- You may create new collections if the user asks for something else
+
 **⚠️ CRITICAL - PROJECT ID:**
 - The projectId placeholder is: {{PROJECT_ID}}
 - It will be AUTO-REPLACED with the real project ID after generation
@@ -1735,6 +1761,85 @@ const createProduct = async (productData) => {
   return response.json();
 };
 \`\`\`
+
+**4. PRODUCTS PAGE TEMPLATE (USE THIS EXACT PATTERN):**
+When creating a products/shop page, ALWAYS fetch from the backend API. NEVER use placeholder data.
+\`\`\`jsx
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { ShoppingBag, Loader2 } from 'lucide-react';
+
+const BACKEND_URL = 'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api';
+const PROJECT_ID = '{{PROJECT_ID}}'; // AUTO-INJECTED
+
+export default function Products() {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const response = await fetch(
+          \`\${BACKEND_URL}?projectId=\${PROJECT_ID}&action=collection/products\`
+        );
+        const data = await response.json();
+        if (data.ok && data.data) {
+          setProducts(data.data);
+        } else {
+          setError('Failed to load products');
+        }
+      } catch (err) {
+        setError('Failed to load products');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProducts();
+  }, []);
+
+  if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin" /></div>;
+  if (error) return <div className="text-center py-20 text-red-500">{error}</div>;
+  if (products.length === 0) return <div className="text-center py-20">No products available</div>;
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold mb-8">Our Products</h1>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {products.map((product, index) => (
+          <motion.div
+            key={product.id || index}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.1 }}
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden"
+          >
+            {product.image_url && (
+              <img src={product.image_url} alt={product.name} className="w-full h-48 object-cover" />
+            )}
+            <div className="p-4">
+              <h3 className="text-lg font-semibold">{product.name}</h3>
+              <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">{product.description}</p>
+              <div className="flex justify-between items-center mt-4">
+                <span className="text-xl font-bold">\${product.price}</span>
+                <button className="bg-primary text-white px-4 py-2 rounded-lg flex items-center gap-2">
+                  <ShoppingBag className="w-4 h-4" /> Add to Cart
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+}
+\`\`\`
+
+🚨 CRITICAL: When user asks for products page:
+- ALWAYS use the template above
+- ALWAYS fetch from backend API (not hardcoded data)
+- ALWAYS display product.image_url, product.name, product.description, product.price
+- NEVER show "No description available" or "Price: $N/A" placeholders
 
 Only use the backend API when users explicitly ask for backend functionality like forms, data storage, or authentication.
 Do NOT add backend calls unless the user requests it.`;
@@ -2353,6 +2458,20 @@ The backend is **ENABLED** for this project. Here's what's available:
 - 📝 **Form Submissions:** ${backendContext.formSubmissionsCount} received
 - 📤 **Uploaded Files:** ${backendContext.uploadsCount} files
 - 👥 **Site Users:** ${backendContext.siteUsersCount} registered
+
+**FOUNDATION BRICKS (ALWAYS AVAILABLE):**
+- Collections you can use anytime: ${FOUNDATION_BRICKS.join(', ')}
+- You may create new collections if the user asks for something else
+
+${backendContext.hasShopSetup ? `**=== E-COMMERCE (ACTIVE) ===**
+- Products: ${backendContext.productsCount || 0} items${backendContext.products && backendContext.products.length > 0 ? `
+- Sample products: ${backendContext.products.slice(0, 5).map(p => `${p.name} ($${p.price})`).join(', ')}` : ''}
+- Orders: ${backendContext.ordersCount || 0}` : ''}
+
+${backendContext.hasBookingsSetup ? `**=== BOOKINGS (ACTIVE) ===**
+- Services: ${backendContext.servicesCount || 0}${backendContext.services && backendContext.services.length > 0 ? `
+- Available services: ${backendContext.services.slice(0, 5).map(s => `${s.name} (${s.duration}min, $${s.price})`).join(', ')}` : ''}
+- Bookings: ${backendContext.bookingsCount || 0}` : ''}
 
 **API Endpoint:** https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
 
@@ -4610,16 +4729,14 @@ Return ONLY the JSON object. No explanation.`;
         const usesBackend = Object.values(files).some(content => 
           content.includes('project-backend-api')
         );
-        if (usesBackend) {
-          console.log(`[Create Mode] Project uses backend API, auto-enabling...`);
-          await supabase.from('project_backends').upsert({
-            project_id: projectId,
-            user_id: userId,
-            enabled: true,
-            enabled_at: new Date().toISOString(),
-            features: { forms: true }
-          }, { onConflict: 'project_id' });
-        }
+        console.log(`[Create Mode] Enabling backend foundation for project...`);
+        await supabase.from('project_backends').upsert({
+          project_id: projectId,
+          user_id: userId,
+          enabled: true,
+          enabled_at: new Date().toISOString(),
+          features: { forms: true }
+        }, { onConflict: 'project_id' });
 
         await replaceProjectFiles(supabase, projectId, files);
         await updateJob(supabase, job.id, { status: 'succeeded', result_summary: summary || 'Created.', error: null });

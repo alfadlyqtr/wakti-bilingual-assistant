@@ -2875,6 +2875,9 @@ ${convertToGlobalComponent(content, componentName)}
     const error = errorToFix || crashReport;
     if (!error) return;
     
+    // 🔓 Force release any existing lock if we're in a critical auto-fix state
+    forceReleaseAllLocks();
+    
     // 🔒 AGENT LOCK: Try to acquire lock for auto-fix
     const agentType = 'auto-fix';
     if (!acquireAgentLock(agentType)) {
@@ -3174,6 +3177,10 @@ ${fixInstructions}
     // Send fix request
     setChatInput(fixPrompt);
     
+    // 🔓 Release lock immediately so the user/system can submit the form
+    // The form submission itself will re-acquire the 'user-chat' lock
+    releaseAgentLock('auto-fix');
+
     // Trigger submit
     setTimeout(() => {
       const form = document.querySelector('form');
@@ -3933,10 +3940,34 @@ ${fixInstructions}
     if (!userMessage && attachedImages.length === 0 || aiEditing) return;
     
     // 🔒 AGENT LOCK: Try to acquire lock for user chat
+    // SPECIAL CASE: Auto-Fix prompts act as a "skeleton key" and always bypass locks
+    const isAutoFixPrompt = userMessage.includes('🔧 **AUTO-FIX');
+    
     if (!acquireAgentLock('user-chat')) {
-      console.log('[Chat] ❌ Cannot start - another agent is running');
-      toast.error(isRTL ? 'يرجى الانتظار حتى ينتهي العمل الحالي' : 'Please wait for current operation to finish');
-      return;
+      if (isAutoFixPrompt) {
+          console.log('[Chat] ⚠️ Auto-Fix prompt detected - FORCE RELEASING LOCK');
+          forceReleaseAllLocks();
+          // Retry acquisition
+          if (!acquireAgentLock('user-chat')) {
+             console.error('[Chat] Failed to acquire lock even after force release');
+             return;
+          }
+      } else {
+        // STALE LOCK DETECTION: If blocked but NOT processing anything, force-break lock
+        // Relaxed check: Only check isGenerating (aiEditing might be stuck true)
+        if (!isGenerating) {
+            console.log(`[Chat] ⚠️ Detected STALE lock "${activeAgentRef.current}" - FORCE RELEASING`);
+            forceReleaseAllLocks();
+            if (!acquireAgentLock('user-chat')) {
+                toast.error(isRTL ? 'يرجى الانتظار حتى ينتهي العمل الحالي' : 'Please wait for current operation to finish');
+                return;
+            }
+        } else {
+            console.log('[Chat] ❌ Cannot start - another agent is running');
+            toast.error(isRTL ? 'يرجى الانتظار حتى ينتهي العمل الحالي' : 'Please wait for current operation to finish');
+            return;
+        }
+      }
     }
     
     if (!wizardPrompt) setChatInput('');

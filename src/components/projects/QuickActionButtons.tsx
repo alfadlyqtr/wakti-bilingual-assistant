@@ -125,12 +125,28 @@ const generateActionsFromResponse = (content: string): QuickAction[] => {
     );
   }
 
-  // Products/Shop page mentioned
+  // Products/Shop page mentioned - SMART: Check if actions were already done
   if (lowerContent.includes('product') || lowerContent.includes('shop') || lowerContent.includes('inventory')) {
-    actions.push(
-      { id: 'link-products', label: 'Add products link to header', labelAr: 'أضف رابط المنتجات للهيدر', icon: <Plus className="w-3.5 h-3.5" />, prompt: 'Add a link to the products page in the header navigation', category: 'features' },
-      { id: 'show-products', label: 'Show products page', labelAr: 'اعرض صفحة المنتجات', icon: <Zap className="w-3.5 h-3.5" />, prompt: 'Show me the products page in the preview', category: 'features' }
-    );
+    // Check if header link was already added (case-insensitive, multiple patterns)
+    const headerLinkDone = (lowerContent.includes('added') || lowerContent.includes('changes applied')) && 
+                           (lowerContent.includes('header') || lowerContent.includes('navigation') || lowerContent.includes('nav') || lowerContent.includes('app.js'));
+    // Check if products page was already created/modified (case-insensitive)
+    const productsPageDone = lowerContent.includes('products.js') || 
+                             lowerContent.includes('/products') ||
+                             lowerContent.includes('products page') ||
+                             (lowerContent.includes('changes applied') && lowerContent.includes('product'));
+    
+    // If products page was modified, suggest backend fetch and styling improvements
+    if (productsPageDone) {
+      actions.push({ id: 'fetch-products', label: 'Fetch products from backend', labelAr: 'اجلب المنتجات من الباك اند', icon: <Database className="w-3.5 h-3.5" />, prompt: 'Make sure the products page fetches real product data from the backend API including images, prices, and descriptions', category: 'backend' });
+      actions.push({ id: 'style-products', label: 'Improve products design', labelAr: 'حسّن تصميم المنتجات', icon: <Palette className="w-3.5 h-3.5" />, prompt: 'Improve the visual design of the products page with better cards and hover effects', category: 'design' });
+    } else {
+      // Only suggest these if products page doesn't exist yet
+      if (!headerLinkDone) {
+        actions.push({ id: 'link-products', label: 'Add products link to header', labelAr: 'أضف رابط المنتجات للهيدر', icon: <Plus className="w-3.5 h-3.5" />, prompt: 'Add a link to the products page in the header navigation', category: 'features' });
+      }
+      actions.push({ id: 'show-products', label: 'Show products page', labelAr: 'اعرض صفحة المنتجات', icon: <Zap className="w-3.5 h-3.5" />, prompt: 'Show me the products page in the preview', category: 'features' });
+    }
   }
 
   // Page/File mentioned

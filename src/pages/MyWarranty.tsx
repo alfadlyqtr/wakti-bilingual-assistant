@@ -1201,7 +1201,25 @@ const MyWarranty: React.FC = () => {
           website: data.website || '',
           logoUrl: data.logo_url || '',
           profilePhotoUrl: data.profile_photo_url || '',
-        });
+          coverPhotoUrl: data.cover_photo_url || '',
+          department: data.department || '',
+          headline: data.headline || '',
+          address: data.address || '',
+          socialLinks: data.social_links || [],
+          template: data.template || 'geometric',
+          primaryColor: data.primary_color || '#6366f1',
+          mosaicPaletteId: data.mosaic_palette_id || 'rose',
+          mosaicColors: data.mosaic_colors || undefined,
+          professionalColors: data.professional_colors || undefined,
+          fashionColors: data.fashion_colors || undefined,
+          minimalColors: data.minimal_colors || undefined,
+          cleanColors: data.clean_colors || undefined,
+          logoPosition: data.logo_position || 'top-right',
+          photoShape: data.photo_shape || 'circle',
+          nameStyle: data.name_style || undefined,
+          titleStyle: data.title_style || undefined,
+          companyStyle: data.company_style || undefined,
+        } as any);
       }
     } catch (error) {
       console.error('Error fetching business card:', error);
@@ -1232,8 +1250,24 @@ const MyWarranty: React.FC = () => {
           website: data.website || null,
           logo_url: data.logoUrl || null,
           profile_photo_url: data.profilePhotoUrl || null,
-          template: (data as any).template || 'modern',
+          cover_photo_url: (data as any).coverPhotoUrl || null,
+          department: (data as any).department || null,
+          headline: (data as any).headline || null,
+          address: (data as any).address || null,
+          template: (data as any).template || 'geometric',
           social_links: (data as any).socialLinks || [],
+          primary_color: (data as any).primaryColor || '#6366f1',
+          mosaic_palette_id: (data as any).mosaicPaletteId || 'rose',
+          mosaic_colors: (data as any).mosaicColors || null,
+          professional_colors: (data as any).professionalColors || null,
+          fashion_colors: (data as any).fashionColors || null,
+          minimal_colors: (data as any).minimalColors || null,
+          clean_colors: (data as any).cleanColors || null,
+          logo_position: (data as any).logoPosition || 'top-right',
+          photo_shape: (data as any).photoShape || 'circle',
+          name_style: (data as any).nameStyle || null,
+          title_style: (data as any).titleStyle || null,
+          company_style: (data as any).companyStyle || null,
         })
         .eq('user_id', user.id);
 

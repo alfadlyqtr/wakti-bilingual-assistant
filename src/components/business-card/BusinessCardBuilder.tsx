@@ -1,10 +1,13 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { toast } from '@/hooks/use-toast';
+import { Switch } from '@/components/ui/switch';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
 import {
   ArrowLeft,
   Save,
@@ -15,6 +18,7 @@ import {
   QrCode,
   Mail,
   Phone,
+  Power,
   Globe,
   Building2,
   MapPin,
@@ -124,23 +128,23 @@ interface BusinessCardBuilderProps {
   onBack: () => void;
 }
 
-// Social platforms config
+// Social platforms config with brand colors
 const SOCIAL_PLATFORMS = [
-  { type: 'phone', icon: Phone, label: 'Phone Number', placeholder: '+1234567890' },
-  { type: 'email', icon: Mail, label: 'Email', placeholder: 'email@example.com' },
-  { type: 'website', icon: Globe, label: 'Website', placeholder: 'https://...' },
-  { type: 'linkedin', icon: Linkedin, label: 'LinkedIn', placeholder: 'linkedin.com/in/...' },
-  { type: 'instagram', icon: Instagram, label: 'Instagram', placeholder: '@username' },
-  { type: 'twitter', icon: Twitter, label: 'X (Twitter)', placeholder: '@username' },
-  { type: 'facebook', icon: Facebook, label: 'Facebook', placeholder: 'facebook.com/...' },
-  { type: 'youtube', icon: Youtube, label: 'YouTube', placeholder: 'youtube.com/...' },
-  { type: 'whatsapp', icon: MessageCircle, label: 'WhatsApp', placeholder: '+1234567890' },
-  { type: 'telegram', icon: Send, label: 'Telegram', placeholder: '@username' },
-  { type: 'github', icon: Github, label: 'GitHub', placeholder: 'github.com/...' },
-  { type: 'calendly', icon: Calendar, label: 'Calendly', placeholder: 'calendly.com/...' },
-  { type: 'tiktok', icon: Sparkles, label: 'TikTok', placeholder: '@username' },
-  { type: 'snapchat', icon: Camera, label: 'Snapchat', placeholder: '@username' },
-  { type: 'address', icon: MapPin, label: 'Address', placeholder: '123 Main St...' },
+  { type: 'phone', icon: Phone, label: 'Phone Number', placeholder: '+1234567890', color: '#22c55e' },
+  { type: 'email', icon: Mail, label: 'Email', placeholder: 'email@example.com', color: '#ef4444' },
+  { type: 'website', icon: Globe, label: 'Website', placeholder: 'https://...', color: '#3b82f6' },
+  { type: 'linkedin', icon: Linkedin, label: 'LinkedIn', placeholder: 'linkedin.com/in/...', color: '#0A66C2' },
+  { type: 'instagram', icon: Instagram, label: 'Instagram', placeholder: '@username', color: '#E4405F' },
+  { type: 'twitter', icon: Twitter, label: 'X (Twitter)', placeholder: '@username', color: '#000000' },
+  { type: 'facebook', icon: Facebook, label: 'Facebook', placeholder: 'facebook.com/...', color: '#1877F2' },
+  { type: 'youtube', icon: Youtube, label: 'YouTube', placeholder: 'youtube.com/...', color: '#FF0000' },
+  { type: 'whatsapp', icon: MessageCircle, label: 'WhatsApp', placeholder: '+1234567890', color: '#25D366' },
+  { type: 'telegram', icon: Send, label: 'Telegram', placeholder: '@username', color: '#26A5E4' },
+  { type: 'github', icon: Github, label: 'GitHub', placeholder: 'github.com/...', color: '#181717' },
+  { type: 'calendly', icon: Calendar, label: 'Calendly', placeholder: 'calendly.com/...', color: '#006BFF' },
+  { type: 'tiktok', icon: Sparkles, label: 'TikTok', placeholder: '@username', color: '#000000' },
+  { type: 'snapchat', icon: Camera, label: 'Snapchat', placeholder: '@username', color: '#FFFC00' },
+  { type: 'address', icon: MapPin, label: 'Address', placeholder: '123 Main St...', color: '#f97316' },
 ];
 
 // Card templates - Premium designs matching reference screenshots
@@ -348,6 +352,14 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
     photoShape: initialData.photoShape || 'circle',
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(false);
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout>();
+  
+  // Link Modal State
+  const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+  const [selectedPlatform, setSelectedPlatform] = useState<{ type: string; label: string; icon: any; placeholder?: string } | null>(null);
+  const [linkModalValue, setLinkModalValue] = useState('');
+  const [isLinkActive, setIsLinkActive] = useState(true);
 
   // File input refs for image uploads
   const coverPhotoRef = useRef<HTMLInputElement>(null);
@@ -369,6 +381,20 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
   const updateField = useCallback((field: keyof BusinessCardData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   }, []);
+
+  // Auto-save effect
+  useEffect(() => {
+    if (!autoSaveEnabled) return;
+
+    const timeoutId = setTimeout(() => {
+      onSave(formData);
+      toast.success(isRTL ? 'تم الحفظ التلقائي!' : 'Auto-saved!', {
+        description: isRTL ? 'تم حفظ التغييرات تلقائياً' : 'Changes saved automatically',
+      });
+    }, 3000);
+
+    return () => clearTimeout(timeoutId);
+  }, [formData, autoSaveEnabled, onSave, isRTL]);
 
   const addSocialLink = useCallback((type: string) => {
     const platform = SOCIAL_PLATFORMS.find(p => p.type === type);
@@ -407,15 +433,12 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
     setIsSaving(true);
     try {
       await onSave(formData);
-      toast({
-        title: isRTL ? 'تم الحفظ!' : 'Saved!',
+      toast.success(isRTL ? 'تم الحفظ!' : 'Saved!', {
         description: isRTL ? 'تم حفظ بطاقتك بنجاح' : 'Your card has been saved successfully',
       });
     } catch (error) {
-      toast({
-        title: isRTL ? 'خطأ' : 'Error',
+      toast.error(isRTL ? 'خطأ' : 'Error', {
         description: isRTL ? 'فشل في حفظ البطاقة' : 'Failed to save card',
-        variant: 'destructive',
       });
     } finally {
       setIsSaving(false);
@@ -667,14 +690,83 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
     </div>
   );
 
+
+  const handleGridIconClick = (platform: typeof SOCIAL_PLATFORMS[0]) => {
+    let currentValue = '';
+    let isActive = false;
+
+    if (platform.type === 'phone') currentValue = formData.phone;
+    else if (platform.type === 'email') currentValue = formData.email;
+    else if (platform.type === 'website') currentValue = formData.website;
+    else if (platform.type === 'address') currentValue = formData.address || '';
+    else {
+      const socialLink = (formData.socialLinks || []).find(l => l.type === platform.type);
+      if (socialLink) {
+        currentValue = socialLink.url;
+        isActive = true;
+      }
+    }
+
+    if (['phone', 'email', 'website', 'address'].includes(platform.type)) {
+      isActive = !!currentValue;
+    }
+
+    setSelectedPlatform(platform);
+    setLinkModalValue(currentValue);
+    setIsLinkActive(isActive);
+    setIsLinkModalOpen(true);
+  };
+
+  const handleSaveLinkFromModal = () => {
+    if (!selectedPlatform) return;
+
+    const type = selectedPlatform.type;
+    const value = linkModalValue;
+
+    if (['phone', 'email', 'website', 'address'].includes(type)) {
+      if (isLinkActive) {
+        setFormData(prev => ({ ...prev, [type]: value }));
+      } else {
+        setFormData(prev => ({ ...prev, [type]: '' }));
+      }
+    } else {
+      if (isLinkActive) {
+         const existingIndex = (formData.socialLinks || []).findIndex(l => l.type === type);
+         if (existingIndex >= 0) {
+             const newLinks = [...(formData.socialLinks || [])];
+             newLinks[existingIndex] = { ...newLinks[existingIndex], url: value };
+             setFormData(prev => ({ ...prev, socialLinks: newLinks }));
+         } else {
+             const newLink: SocialLink = {
+               id: `${type}-${Date.now()}`,
+               type,
+               url: value,
+               label: selectedPlatform.label,
+             };
+             setFormData(prev => ({ ...prev, socialLinks: [...(prev.socialLinks || []), newLink] }));
+         }
+      } else {
+         setFormData(prev => ({
+           ...prev,
+           socialLinks: (prev.socialLinks || []).filter(l => l.type !== type),
+         }));
+      }
+    }
+    setIsLinkModalOpen(false);
+  };
+
   // Render Links Tab
   const renderLinksTab = () => {
-    const addedTypes = new Set((formData.socialLinks || []).map(l => l.type));
-    const availablePlatforms = SOCIAL_PLATFORMS.filter(p => !addedTypes.has(p.type));
+    // Determine active links for visual state in grid
+    const activeTypes = new Set((formData.socialLinks || []).map(l => l.type));
+    if (formData.phone) activeTypes.add('phone');
+    if (formData.email) activeTypes.add('email');
+    if (formData.website) activeTypes.add('website');
+    if (formData.address) activeTypes.add('address');
 
     return (
       <div className="space-y-6">
-        {/* Added Links */}
+        {/* Added Links - For Reordering Only */}
         {(formData.socialLinks || []).length > 0 && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -697,55 +789,131 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
                       <Icon className="w-5 h-5 text-foreground" />
                     </div>
                     <div className="flex-1">
-                      <Input
-                        value={link.url}
-                        onChange={(e) => updateSocialLink(link.id, e.target.value)}
-                        placeholder={platform?.placeholder}
-                        className="bg-transparent border-0 border-b border-white/10 rounded-none px-0 h-8 focus-visible:ring-0"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">{platform?.label}</p>
+                      <p className="text-sm font-medium text-foreground">{platform?.label}</p>
+                      <p className="text-xs text-muted-foreground truncate">{link.url}</p>
                     </div>
                     <button
-                      onClick={() => removeSocialLink(link.id)}
-                      aria-label={isRTL ? 'حذف الرابط' : 'Remove link'}
-                      title={isRTL ? 'حذف الرابط' : 'Remove link'}
+                      onClick={() => handleGridIconClick(platform!)}
                       className="p-2 hover:bg-white/10 rounded-full transition-colors"
                     >
-                      <X className="w-4 h-4 text-muted-foreground" />
+                      <Share2 className="w-4 h-4 text-muted-foreground" />
                     </button>
                   </div>
                 );
               })}
-
             </div>
           </div>
         )}
 
-        {/* Available Links */}
+        {/* All Links Grid */}
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-foreground">{t.tapToAdd}</h3>
-            <Plus className="w-4 h-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold text-foreground">{t.availableLinks}</h3>
           </div>
           
           <div className="grid grid-cols-3 gap-3">
-            {availablePlatforms.map((platform) => {
+            {SOCIAL_PLATFORMS.map((platform) => {
               const Icon = platform.icon;
+              
+              // Check active state
+              let coreValue = '';
+              if (platform.type === 'phone') coreValue = formData.phone;
+              else if (platform.type === 'email') coreValue = formData.email;
+              else if (platform.type === 'website') coreValue = formData.website;
+              else if (platform.type === 'address') coreValue = formData.address || '';
+              else {
+                const sl = (formData.socialLinks || []).find(l => l.type === platform.type);
+                if (sl) coreValue = sl.url;
+              }
+
+              const isActive = !!coreValue;
+
               return (
                 <button
                   key={platform.type}
-                  onClick={() => addSocialLink(platform.type)}
-                  className="flex flex-col items-center gap-2 p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all active:scale-95"
+                  onClick={() => handleGridIconClick(platform)}
+                  className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-all active:scale-95 ${
+                    isActive
+                      ? 'bg-green-500/10 border-green-500/50 hover:bg-green-500/20 shadow-[0_0_15px_rgba(34,197,94,0.3)]'
+                      : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
+                  }`}
                 >
-                  <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center">
-                    <Icon className="w-6 h-6 text-foreground" />
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ${
+                    isActive ? 'bg-green-500/20 shadow-[0_0_10px_rgba(34,197,94,0.5)] scale-110' : 'bg-white/10'
+                  }`}>
+                    <Icon className={`w-6 h-6 ${isActive ? 'text-green-500 drop-shadow-[0_0_5px_rgba(34,197,94,0.8)]' : 'text-foreground'}`} />
                   </div>
-                  <span className="text-xs text-muted-foreground text-center">{platform.label}</span>
+                  <div className="text-center w-full">
+                    <span className={`text-xs block ${isActive ? 'text-green-500 font-medium' : 'text-muted-foreground'}`}>
+                      {platform.label}
+                    </span>
+                    {isActive && (
+                      <div className="mt-1 flex flex-col items-center animate-in fade-in slide-in-from-bottom-1">
+                        <span className="text-[10px] text-green-500/80 font-medium">
+                          {isRTL ? 'نشط' : 'Active'}
+                        </span>
+                        <span className="text-[10px] text-green-500/60 truncate max-w-[100px] block" title={coreValue}>
+                          {coreValue}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </button>
               );
             })}
           </div>
         </div>
+
+        {/* Link Edit Modal */}
+        <Dialog open={isLinkModalOpen} onOpenChange={setIsLinkModalOpen}>
+          <DialogContent className="sm:max-w-[425px] bg-[#fcfefd] dark:bg-[#0c0f14] border-white/10">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                {selectedPlatform && (
+                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                    <selectedPlatform.icon className="w-4 h-4 text-primary" />
+                  </div>
+                )}
+                <span>{selectedPlatform?.label}</span>
+              </DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-6 py-4">
+              <div className="flex items-center justify-between space-x-2">
+                <Label htmlFor="link-active" className="flex flex-col space-y-1">
+                  <span>{isRTL ? 'تفعيل' : 'Enable'}</span>
+                  <span className="font-normal text-xs text-muted-foreground">
+                    {isRTL ? 'إظهار هذا الرابط في البطاقة' : 'Show this link on your card'}
+                  </span>
+                </Label>
+                <Switch
+                  id="link-active"
+                  checked={isLinkActive}
+                  onCheckedChange={setIsLinkActive}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="link-url">
+                  {selectedPlatform?.type === 'phone' ? (isRTL ? 'رقم الهاتف' : 'Phone Number') :
+                   selectedPlatform?.type === 'email' ? (isRTL ? 'البريد الإلكتروني' : 'Email Address') :
+                   selectedPlatform?.type === 'address' ? (isRTL ? 'العنوان' : 'Address') :
+                   (isRTL ? 'الرابط / المعرف' : 'URL / Username')}
+                </Label>
+                <Input
+                  id="link-url"
+                  value={linkModalValue}
+                  onChange={(e) => setLinkModalValue(e.target.value)}
+                  placeholder={selectedPlatform?.placeholder}
+                  className="bg-secondary/50"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="submit" onClick={handleSaveLinkFromModal} className="w-full">
+                {isRTL ? 'حفظ التغييرات' : 'Save Changes'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   };
@@ -1466,17 +1634,44 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
         </button>
         <h1 className="text-lg font-bold">{t.builder}</h1>
         <div className="flex items-center gap-2">
+          {/* Auto-save toggle */}
+          <button
+            onClick={() => setAutoSaveEnabled(!autoSaveEnabled)}
+            className={`px-2 py-1.5 rounded-lg text-[10px] font-medium transition-all ${
+              autoSaveEnabled
+                ? 'bg-green-500/20 text-green-600 border border-green-500/30'
+                : 'bg-[#060541]/10 dark:bg-white/10 text-[#606062] dark:text-[#858384]'
+            }`}
+          >
+            {autoSaveEnabled ? (
+              <>
+                <Check className="w-3 h-3 inline mr-1" />
+                {isRTL ? 'تلقائي' : 'Auto'}
+              </>
+            ) : (
+              <>
+                <Power className="w-3 h-3 inline mr-1" />
+                {isRTL ? 'يدوي' : 'Manual'}
+              </>
+            )}
+          </button>
           <Button
             variant="ghost"
             size="sm"
             onClick={handleSave}
             disabled={isSaving}
-            className="text-blue-400"
+            className="gap-2 px-3 text-xs font-semibold text-white bg-gradient-to-r from-[#060541] via-[hsl(260,70%,25%)] to-[#060541] shadow-[0_0_16px_rgba(6,5,65,0.35)] hover:shadow-[0_0_24px_rgba(6,5,65,0.5)] hover:-translate-y-0.5 active:translate-y-0"
           >
             {isSaving ? (
-              <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+              <>
+                <div className="w-4 h-4 border-2 border-white/70 border-t-transparent rounded-full animate-spin" />
+                <span>{isRTL ? 'جارٍ الحفظ' : 'Saving'}</span>
+              </>
             ) : (
-              <Save className="w-5 h-5" />
+              <>
+                <Save className="w-4 h-4" />
+                <span>{t.save}</span>
+              </>
             )}
           </Button>
         </div>
@@ -1583,13 +1778,31 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
         : data.logoPosition === 'bottom-right'
           ? 'bottom-3 right-3'
           : 'top-3 right-3';
+
+  // Helper to get all active links for display with brand colors
+  const activeLinks = [
+    ...(data.phone ? [{ type: 'phone', url: data.phone, icon: Phone, label: 'Phone', color: '#22c55e' }] : []),
+    ...(data.email ? [{ type: 'email', url: data.email, icon: Mail, label: 'Email', color: '#ef4444' }] : []),
+    ...(data.website ? [{ type: 'website', url: data.website, icon: Globe, label: 'Website', color: '#3b82f6' }] : []),
+    ...(data.address ? [{ type: 'address', url: data.address, icon: MapPin, label: 'Address', color: '#f97316' }] : []),
+    ...(data.socialLinks || []).map(link => {
+      const platform = SOCIAL_PLATFORMS.find(p => p.type === link.type);
+      return {
+        type: link.type,
+        url: link.url,
+        icon: platform?.icon || Link2,
+        label: platform?.label || link.label || 'Link',
+        color: platform?.color || '#6b7280'
+      };
+    })
+  ];
   
   // STYLE 1: Geometric Mosaic - Pink triangles, centered avatar overlapping
   if (template.headerStyle === 'mosaic') {
     return (
-      <div className="w-[300px] h-[384px] mx-auto rounded-[20px] bg-white shadow-xl flex flex-col items-center relative">
+      <div className="w-[300px] min-h-[384px] mx-auto rounded-[20px] bg-white shadow-xl flex flex-col items-center relative pb-6">
         {/* Mosaic Header */}
-        <div className="w-full h-[192px] rounded-t-[20px] overflow-hidden">
+        <div className="w-full h-[192px] rounded-t-[20px] overflow-hidden shrink-0">
           {data.coverPhotoUrl ? (
             <img src={data.coverPhotoUrl} alt="Cover" className="w-full h-full object-cover" />
           ) : (
@@ -1653,7 +1866,7 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
         </div>
         
         {/* Avatar - Centered, overlapping */}
-        <div className={`absolute w-[114px] h-[114px] bg-white ${photoShapeClass} flex justify-center items-center`} style={{ top: 'calc(50% - 57px)' }}>
+        <div className={`absolute w-[114px] h-[114px] bg-white ${photoShapeClass} flex justify-center items-center z-10`} style={{ top: '135px' }}>
           <div className={`w-[100px] h-[100px] ${photoShapeInnerClass} overflow-hidden bg-white`}>
             {data.profilePhotoUrl ? (
               <img src={data.profilePhotoUrl} alt="" className="w-full h-full object-contain" />
@@ -1666,43 +1879,35 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
         </div>
         
         {/* Name & Title */}
-        <h3 
-          className={`mt-[60px] text-lg font-medium ${getTextStyleClasses(data.nameStyle)}`}
-          style={{ color: data.nameStyle?.color || '#000' }}
-        >
-          {data.firstName || 'Cameron'} {data.lastName || 'Williamson'}
-        </h3>
-        <p 
-          className={`mt-2 text-[15px] ${getTextStyleClasses(data.titleStyle)}`}
-          style={{ color: data.titleStyle?.color || '#78858F' }}
-        >
-          {data.jobTitle || 'Web Development'}
-        </p>
+        <div className="mt-[60px] text-center px-4 w-full">
+          <h3 
+            className={`text-lg font-medium ${getTextStyleClasses(data.nameStyle)}`}
+            style={{ color: data.nameStyle?.color || '#000' }}
+          >
+            {data.firstName || 'Cameron'} {data.lastName || 'Williamson'}
+          </h3>
+          <p 
+            className={`mt-1 text-[15px] ${getTextStyleClasses(data.titleStyle)}`}
+            style={{ color: data.titleStyle?.color || '#78858F' }}
+          >
+            {data.jobTitle || 'Web Development'}
+          </p>
+        </div>
         
         {/* Logo */}
         {data.logoUrl && (
-          <div className={`absolute ${logoPositionClass} w-10 h-10 rounded-lg bg-white/90 p-1 shadow-sm`}>
+          <div className={`absolute ${logoPositionClass} w-10 h-10 rounded-lg bg-white/90 p-1 shadow-sm z-20`}>
             <img src={data.logoUrl} alt="Logo" className="w-full h-full object-contain" />
           </div>
         )}
         
-        {/* Contact Info */}
-        <div className="flex items-center gap-3 mt-4">
-          {data.phone && (
-            <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
-              <Phone className="w-4 h-4 text-gray-700" />
+        {/* All Active Links - Brand Colors, No BG */}
+        <div className="flex flex-wrap justify-center gap-4 mt-4 px-4 w-full">
+          {activeLinks.map((link, i) => (
+            <div key={i} className="w-8 h-8 flex items-center justify-center hover:scale-125 transition-transform cursor-pointer">
+              <link.icon className="w-5 h-5" style={{ color: link.color }} />
             </div>
-          )}
-          {data.email && (
-            <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
-              <Mail className="w-4 h-4 text-gray-700" />
-            </div>
-          )}
-          {data.website && (
-            <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
-              <Globe className="w-4 h-4 text-gray-700" />
-            </div>
-          )}
+          ))}
         </div>
       </div>
     );
@@ -1711,7 +1916,7 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
   // STYLE 2: Professional - Blue bands with avatar, contact list
   if (template.headerStyle === 'professional') {
     return (
-      <div className="w-[300px] mx-auto rounded-lg shadow-xl overflow-hidden bg-white flex flex-col items-center relative">
+      <div className="w-[300px] mx-auto rounded-lg shadow-xl overflow-hidden bg-white flex flex-col items-center relative min-h-[400px]">
         {/* Cover Photo Background (optional) */}
         {data.coverPhotoUrl && (
           <div className="absolute inset-0 h-24 opacity-20">
@@ -1758,7 +1963,7 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
         </div>
         
         {/* Name & Title */}
-        <div className="text-center leading-4 mt-2">
+        <div className="text-center leading-4 mt-2 px-2">
           <p 
             className={`text-xl font-serif font-semibold ${getTextStyleClasses(data.nameStyle)}`}
             style={{ color: data.nameStyle?.color || '#434955' }}
@@ -1773,38 +1978,20 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
           </p>
         </div>
         
-        {/* Contact Info */}
-        <div className="w-full flex items-center justify-center mt-3">
-          <ul className="flex flex-col items-start gap-2 text-xs font-semibold text-[#434955] pb-3">
-            {data.phone && (
-              <li className="inline-flex gap-2 items-center border-b border-dotted border-stone-700 pb-1">
-                <Phone className="w-4 h-4 fill-stone-700" />
-                <p>{data.phone}</p>
+        {/* Contact Info List - Brand Colors */}
+        <div className="w-full flex items-center justify-center mt-4 px-4 mb-4">
+          <ul className="flex flex-col items-start gap-2 text-xs font-semibold text-[#434955] w-full max-w-[240px]">
+            {activeLinks.map((link, i) => (
+              <li key={i} className="inline-flex gap-2 items-center border-b border-dotted border-stone-700/30 pb-1 w-full truncate">
+                <link.icon className="w-4 h-4 shrink-0" style={{ color: link.color }} />
+                <p className="truncate">{link.url}</p>
               </li>
-            )}
-            {data.email && (
-              <li className="inline-flex gap-2 items-center border-b border-dotted border-stone-700 pb-1">
-                <Mail className="w-4 h-4 fill-stone-700" />
-                <p>{data.email}</p>
-              </li>
-            )}
-            {data.website && (
-              <li className="inline-flex gap-2 items-center border-b border-dotted border-stone-700 pb-1">
-                <Globe className="w-4 h-4 fill-stone-700" />
-                <p>{data.website}</p>
-              </li>
-            )}
-            {data.address && (
-              <li className="inline-flex gap-2 items-center pb-1">
-                <MapPin className="w-4 h-4 fill-stone-700" />
-                <p>{data.address}</p>
-              </li>
-            )}
+            ))}
           </ul>
         </div>
         
         {/* Bottom blue bar */}
-        <div className="w-full h-3" style={{ backgroundColor: professionalColors.band }} />
+        <div className="w-full h-3 mt-auto" style={{ backgroundColor: professionalColors.band }} />
       </div>
     );
   }
@@ -1812,7 +1999,7 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
   // STYLE 3: Fashion - White top, gray curved bottom with star decoration
   if (template.headerStyle === 'fashion') {
     return (
-      <div className="w-[300px] mx-auto rounded-lg shadow-xl overflow-hidden bg-white flex flex-col items-center py-8 px-6 gap-3 relative">
+      <div className="w-[300px] mx-auto rounded-lg shadow-xl overflow-hidden bg-white flex flex-col items-center py-8 px-6 gap-3 relative min-h-[450px]">
         {/* Cover Photo Background (optional) */}
         {data.coverPhotoUrl && (
           <div className="absolute inset-0 opacity-10">
@@ -1857,7 +2044,7 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
         </div>
         
         {/* Photo */}
-        <div className={`w-[180px] aspect-square bg-white z-40 ${photoShapeClass} overflow-hidden`}>
+        <div className={`w-[180px] aspect-square bg-white z-40 ${photoShapeClass} overflow-hidden shadow-lg`}>
           {data.profilePhotoUrl ? (
             <img src={data.profilePhotoUrl} alt="" className={`w-full h-full object-contain ${photoShapeInnerClass}`} />
           ) : (
@@ -1867,33 +2054,17 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
           )}
         </div>
         
-        {/* Contact */}
-        <div className="z-40 flex flex-row justify-between items-end gap-10 w-full">
-          <div className="flex flex-col items-start gap-1">
-            {data.phone && (
-              <div className="inline-flex gap-3 items-center">
-                <div className="p-1 bg-white flex items-center justify-center rounded-full">
-                  <Phone className="h-3 w-3 fill-gray-800" />
+        {/* Contact Grid - Brand Colors */}
+        <div className="z-40 w-full mt-2">
+          <div className="grid grid-cols-2 gap-x-2 gap-y-2 w-full">
+            {activeLinks.map((link, i) => (
+              <div key={i} className="flex items-center gap-2 overflow-hidden bg-white/10 p-1.5 rounded-lg backdrop-blur-sm">
+                <div className="p-1 bg-white flex items-center justify-center rounded-full shrink-0">
+                  <link.icon className="h-3 w-3" style={{ color: link.color }} />
                 </div>
-                <p className="font-semibold text-xs text-white">{data.phone}</p>
+                <p className="font-semibold text-[10px] text-white truncate">{link.url}</p>
               </div>
-            )}
-            {data.email && (
-              <div className="inline-flex gap-3 items-center">
-                <div className="p-1 bg-white flex items-center justify-center rounded-full">
-                  <Mail className="h-3 w-3 fill-gray-800" />
-                </div>
-                <p className="font-semibold text-xs text-white">{data.email}</p>
-              </div>
-            )}
-            {data.website && (
-              <div className="inline-flex gap-3 items-center">
-                <div className="p-1 bg-white flex items-center justify-center rounded-full">
-                  <Globe className="h-3 w-3 fill-gray-800" />
-                </div>
-                <p className="font-semibold text-xs text-white">{data.website}</p>
-              </div>
-            )}
+            ))}
           </div>
         </div>
       </div>
@@ -1903,9 +2074,9 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
   // STYLE 4: Minimal Dark - All black elegant card
   if (template.headerStyle === 'minimal') {
     return (
-      <div className="w-[300px] mx-auto rounded-[20px] shadow-2xl overflow-hidden flex flex-col" style={{ backgroundColor: minimalColors.background }}>
+      <div className="w-[300px] mx-auto rounded-[20px] shadow-2xl overflow-hidden flex flex-col min-h-[400px]" style={{ backgroundColor: minimalColors.background }}>
         {/* Header with cover */}
-        <div className="h-24 relative" style={{ backgroundColor: minimalColors.header }}>
+        <div className="h-24 relative shrink-0" style={{ backgroundColor: minimalColors.header }}>
           {data.coverPhotoUrl && (
             <img src={data.coverPhotoUrl} alt="Cover" className="w-full h-full object-cover opacity-50" />
           )}
@@ -1918,8 +2089,8 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
         </div>
         
         {/* Avatar */}
-        <div className="flex justify-center mt-4">
-          <div className={`w-28 h-28 ${photoShapeClass} border-4 bg-white p-1`} style={{ borderColor: minimalColors.accent }}>
+        <div className="flex justify-center -mt-14 relative z-10">
+          <div className={`w-28 h-28 ${photoShapeClass} border-4 bg-white p-1 shadow-lg`} style={{ borderColor: minimalColors.accent }}>
             {data.profilePhotoUrl ? (
               <img src={data.profilePhotoUrl} alt="" className={`w-full h-full object-contain ${photoShapeInnerClass}`} />
             ) : (
@@ -1945,53 +2116,28 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
             {data.jobTitle || 'Job Title'}
           </p>
           {data.companyName && (
-            <p className="text-xs mt-1" style={{ color: minimalColors.muted }}>{data.companyName}</p>
+            <p className="text-xs mt-1 opacity-70" style={{ color: minimalColors.muted }}>{data.companyName}</p>
           )}
         </div>
         
-        {/* Contact Info */}
-        <div className="px-5 py-4 space-y-2">
-          {data.phone && (
-            <div className="flex items-center gap-3 text-sm" style={{ color: minimalColors.muted }}>
-              <Phone className="w-4 h-4" />
-              <span>{data.phone}</span>
+        {/* Contact Info & Socials - Brand Colors */}
+        <div className="px-5 py-4 space-y-3 flex-1">
+          {activeLinks.map((link, i) => (
+            <div key={i} className="flex items-center gap-3 text-sm border-b border-white/5 pb-2 last:border-0" style={{ color: minimalColors.muted }}>
+              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-white/10">
+                <link.icon className="w-4 h-4" style={{ color: link.color }} />
+              </div>
+              <span className="truncate">{link.url}</span>
             </div>
-          )}
-          {data.email && (
-            <div className="flex items-center gap-3 text-sm" style={{ color: minimalColors.muted }}>
-              <Mail className="w-4 h-4" />
-              <span>{data.email}</span>
-            </div>
-          )}
-          {data.website && (
-            <div className="flex items-center gap-3 text-sm" style={{ color: minimalColors.muted }}>
-              <Globe className="w-4 h-4" />
-              <span>{data.website}</span>
-            </div>
-          )}
+          ))}
         </div>
-        
-        {/* Social Links */}
-        {(data.socialLinks || []).length > 0 && (
-          <div className="flex items-center justify-center gap-3 pb-5 pt-3 mx-5" style={{ borderTop: `1px solid ${minimalColors.accent}` }}>
-            {(data.socialLinks || []).slice(0, 5).map((link) => {
-              const platform = SOCIAL_PLATFORMS.find(p => p.type === link.type);
-              const Icon = platform?.icon || Link2;
-              return (
-                <div key={link.id} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: minimalColors.accent }}>
-                  <Icon className="w-4 h-4" style={{ color: minimalColors.text }} />
-                </div>
-              );
-            })}
-          </div>
-        )}
       </div>
     );
   }
   
   // STYLE 5: Clean White - Minimal white card with actual data
   return (
-    <div className="w-[300px] mx-auto rounded-[20px] shadow-xl overflow-hidden flex flex-col relative" style={{ backgroundColor: cleanColors.background }}>
+    <div className="w-[300px] mx-auto rounded-[20px] shadow-xl overflow-hidden flex flex-col relative min-h-[400px]" style={{ backgroundColor: cleanColors.background }}>
       {/* Logo */}
       {data.logoUrl && (
         <div className={`absolute ${logoPositionClass} w-10 h-10 rounded-lg bg-white/90 p-1 shadow-sm z-10`}>
@@ -2000,7 +2146,7 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
       )}
       
       {/* Header */}
-      <div className="h-28 relative flex items-center justify-center" style={{ backgroundColor: cleanColors.header }}>
+      <div className="h-28 relative flex items-center justify-center shrink-0" style={{ backgroundColor: cleanColors.header }}>
         {data.coverPhotoUrl ? (
           <img src={data.coverPhotoUrl} alt="Cover" className="w-full h-full object-cover" />
         ) : (
@@ -2011,8 +2157,8 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
       </div>
       
       {/* Avatar */}
-      <div className="flex justify-start px-5 mt-6">
-        <div className={`w-16 h-16 ${photoShapeClass} border-4 overflow-hidden bg-white shadow-lg`} style={{ borderColor: cleanColors.accent }}>
+      <div className="flex justify-start px-5 -mt-8 relative z-10">
+        <div className={`w-20 h-20 ${photoShapeClass} border-4 overflow-hidden bg-white shadow-lg`} style={{ borderColor: cleanColors.accent }}>
           {data.profilePhotoUrl ? (
             <img src={data.profilePhotoUrl} alt="" className={`w-full h-full object-contain ${photoShapeInnerClass}`} />
           ) : (
@@ -2042,42 +2188,17 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
         )}
       </div>
       
-      {/* Contact Info */}
-      <div className="px-5 py-4 space-y-2">
-        {data.phone && (
-          <div className="flex items-center gap-3 text-sm" style={{ color: cleanColors.muted }}>
-            <Phone className="w-4 h-4" />
-            <span>{data.phone}</span>
+      {/* All Links - Brand Colors */}
+      <div className="px-5 py-4 space-y-3 flex-1">
+        {activeLinks.map((link, i) => (
+          <div key={i} className="flex items-center gap-3 text-sm p-2 rounded-lg hover:bg-black/5 transition-colors" style={{ color: cleanColors.muted }}>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-gray-100">
+              <link.icon className="w-4 h-4" style={{ color: link.color }} />
+            </div>
+            <span className="truncate">{link.url}</span>
           </div>
-        )}
-        {data.email && (
-          <div className="flex items-center gap-3 text-sm" style={{ color: cleanColors.muted }}>
-            <Mail className="w-4 h-4" />
-            <span>{data.email}</span>
-          </div>
-        )}
-        {data.website && (
-          <div className="flex items-center gap-3 text-sm" style={{ color: cleanColors.muted }}>
-            <Globe className="w-4 h-4" />
-            <span>{data.website}</span>
-          </div>
-        )}
+        ))}
       </div>
-      
-      {/* Social Links */}
-      {(data.socialLinks || []).length > 0 && (
-        <div className="flex items-center gap-2 px-5 pb-4">
-          {(data.socialLinks || []).slice(0, 5).map((link) => {
-            const platform = SOCIAL_PLATFORMS.find(p => p.type === link.type);
-            const Icon = platform?.icon || Link2;
-            return (
-              <div key={link.id} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: cleanColors.header }}>
-                <Icon className="w-4 h-4" style={{ color: cleanColors.muted }} />
-              </div>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 };

@@ -18,15 +18,24 @@ const Toaster = ({ ...props }: ToasterProps) => {
       className="toaster group"
       toastOptions={{
         style: {
-          background: theme === 'dark' ? 'hsl(0 0% 3.9%)' : 'hsl(0 0% 100%)',
-          border: theme === 'dark' ? '1px solid hsl(0 0% 14.9%)' : '1px solid hsl(0 0% 89.1%)',
-          color: theme === 'dark' ? 'hsl(0 0% 98%)' : 'hsl(0 0% 3.9%)',
+          background:
+            theme === 'dark'
+              ? 'linear-gradient(135deg, rgba(12,15,20,0.9) 0%, rgba(20,24,32,0.85) 45%, rgba(12,15,20,0.9) 100%)'
+              : 'linear-gradient(135deg, rgba(252,254,253,0.9) 0%, rgba(245,247,248,0.85) 45%, rgba(252,254,253,0.9) 100%)',
+          border:
+            theme === 'dark'
+              ? '1px solid rgba(96,96,98,0.35)'
+              : '1px solid rgba(6,5,65,0.12)',
+          color: theme === 'dark' ? '#f2f2f2' : '#060541',
+          backdropFilter: 'blur(14px)',
+          WebkitBackdropFilter: 'blur(14px)',
         },
         classNames: {
-          toast: "group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg",
-          description: "group-[.toast]:text-muted-foreground",
-          actionButton: "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
-          cancelButton: "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",
+          toast:
+            'group toast rounded-xl border shadow-[0_8px_30px_rgba(0,0,0,0.25)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.5)]',
+          description: 'group-[.toast]:text-muted-foreground',
+          actionButton: 'group-[.toast]:bg-primary group-[.toast]:text-primary-foreground',
+          cancelButton: 'group-[.toast]:bg-muted group-[.toast]:text-muted-foreground',
         },
       }}
       {...props}
