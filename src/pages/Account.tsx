@@ -55,9 +55,10 @@ const TrialCountdown = ({ startAt, language, onSubscribeClick }: { startAt: stri
       }
       
       setIsExpired(false);
-      const minutes = Math.floor(diff / 60000);
+      const hours = Math.floor(diff / 3600000);
+      const minutes = Math.floor((diff % 3600000) / 60000);
       const seconds = Math.floor((diff % 60000) / 1000);
-      setTimeLeft(`${minutes}:${seconds.toString().padStart(2, '0')}`);
+      setTimeLeft(`${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
     };
     
     calculateTimeLeft();
