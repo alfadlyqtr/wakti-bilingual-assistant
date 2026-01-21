@@ -41,7 +41,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { prompt, theme, hasAssets } = await req.json();
+    const { prompt, theme, themeInstructions, hasAssets } = await req.json();
 
     if (!prompt || typeof prompt !== "string") {
       return new Response(
@@ -58,12 +58,13 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const themeDesc = themeDescriptions[theme] || '';
+    // Use passed themeInstructions if available, otherwise fall back to simple description
+    const themeDesc = themeInstructions || themeDescriptions[theme] || '';
     const assetInfo = hasAssets 
       ? '\n\nThe user has uploaded images that should be used prominently in the design (as hero image, logo, or featured content).'
       : '';
 
-    console.log("[EMP] Enhancing prompt with theme:", theme, themeDesc);
+    console.log("[EMP] Enhancing prompt with theme:", theme, themeInstructions ? "(full instructions)" : themeDesc);
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",

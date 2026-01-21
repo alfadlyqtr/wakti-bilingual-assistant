@@ -1,5 +1,4 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { setBusinessCardWidget, isWidgetSupported } from '@/integrations/natively/widgetBridge';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -1863,6 +1862,18 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
     const loadingToast = toast.loading(isRTL ? 'جاري إنشاء بطاقة المحفظة...' : 'Generating wallet pass...');
     
     try {
+      // Generate QR code as base64 for the pass
+      const svgElement = qrRef.current?.querySelector('svg');
+      let qrCodeBase64 = '';
+      
+      if (svgElement) {
+        const clonedSvg = svgElement.cloneNode(true) as SVGElement;
+        clonedSvg.setAttribute('width', '300');
+        clonedSvg.setAttribute('height', '300');
+        const svgData = new XMLSerializer().serializeToString(clonedSvg);
+        qrCodeBase64 = btoa(unescape(encodeURIComponent(svgData)));
+      }
+
       const cardUrl = `${window.location.origin}/card/${formData.firstName.toLowerCase()}-${formData.lastName.toLowerCase()}`;
       
       const { data, error } = await supabase.functions.invoke('generate-wallet-pass', {
@@ -1876,6 +1887,9 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
             jobTitle: formData.jobTitle,
             website: formData.website,
             cardUrl,
+            qrCodeBase64,
+            profilePhotoUrl: formData.profilePhotoUrl,
+            logoUrl: formData.logoUrl,
           }
         }
       });
@@ -1885,27 +1899,27 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
       if (error) throw error;
 
       if (data?.success && data?.data) {
-        // Download the vCard/pass file
+        // Download the .pkpass file
         const binaryString = atob(data.data);
         const bytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) {
           bytes[i] = binaryString.charCodeAt(i);
         }
-        const blob = new Blob([bytes], { type: data.mimeType || 'text/vcard' });
+        const blob = new Blob([bytes], { type: data.mimeType || 'application/vnd.apple.pkpass' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = data.filename || `${formData.firstName}_${formData.lastName}.vcf`;
+        link.download = data.filename || `${formData.firstName}_${formData.lastName}.pkpass`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
 
-        toast.success(isRTL ? 'تم تحميل بطاقة جهات الاتصال!' : 'Contact card downloaded!', {
-          description: data.message || (isRTL ? 'افتح الملف لإضافته إلى جهات الاتصال' : 'Open the file to add to your contacts')
+        toast.success(isRTL ? 'تم إنشاء بطاقة المحفظة!' : 'Wallet pass created!', {
+          description: isRTL ? 'افتح الملف لإضافته إلى المحفظة' : 'Open the file to add to Wallet'
         });
       } else {
-        throw new Error('Failed to generate pass');
+        throw new Error(data?.message || 'Failed to generate pass');
       }
     } catch (error) {
       toast.dismiss(loadingToast);
@@ -1914,43 +1928,95 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
     }
   };
 
-  const handleSetAsWidget = () => {
-    const cardUrl = `${window.location.origin}/card/${formData.firstName.toLowerCase()}-${formData.lastName.toLowerCase()}`;
-    
-    if (!isWidgetSupported()) {
-      // Not in native app - show instructions
-      toast.info(isRTL ? 'استخدم تطبيق Wakti' : 'Use the Wakti App', {
-        description: isRTL 
-          ? 'لإضافة الويدجت، افتح هذه الصفحة في تطبيق Wakti على هاتفك'
-          : 'To add a widget, open this page in the Wakti app on your phone'
-      });
-      return;
-    }
-
-    toast.loading(isRTL ? 'جاري إعداد الويدجت...' : 'Setting up widget...');
-
-    setBusinessCardWidget(
-      {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        company: formData.companyName,
-        cardUrl,
-      },
-      (result) => {
-        toast.dismiss();
-        if (result.status === 'SUCCESS') {
-          toast.success(isRTL ? 'تم إعداد الويدجت!' : 'Widget configured!', {
-            description: isRTL 
-              ? 'أضف ويدجت Wakti من شاشتك الرئيسية'
-              : 'Add the Wakti widget from your home screen'
-          });
-        } else {
-          toast.error(isRTL ? 'فشل في إعداد الويدجت' : 'Failed to set up widget', {
-            description: result.error
-          });
-        }
+  const handleSetAsWidget = async () => {
+    try {
+      const svgElement = qrRef.current?.querySelector('svg');
+      if (!svgElement) {
+        toast.error(isRTL ? 'لم يتم العثور على رمز QR' : 'QR code not found');
+        return;
       }
-    );
+
+      // Clone and resize SVG for better widget quality
+      const clonedSvg = svgElement.cloneNode(true) as SVGElement;
+      clonedSvg.setAttribute('width', '512');
+      clonedSvg.setAttribute('height', '512');
+      
+      const svgData = new XMLSerializer().serializeToString(clonedSvg);
+      const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+      const svgUrl = URL.createObjectURL(svgBlob);
+
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      
+      img.onload = async () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        
+        if (ctx) {
+          // White background
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, 512, 512);
+          ctx.drawImage(img, 0, 0, 512, 512);
+          
+          canvas.toBlob(async (blob) => {
+            if (blob) {
+              const fileName = `${formData.firstName}_${formData.lastName}_QR.png`;
+              const pngFile = new File([blob], fileName, { type: 'image/png' });
+              
+              // Use native share to save to Photos (iOS)
+              if (navigator.share && (navigator as any).canShare?.({ files: [pngFile] })) {
+                try {
+                  await navigator.share({
+                    files: [pngFile],
+                    title: isRTL ? 'رمز QR للبطاقة' : 'Business Card QR Code',
+                  });
+                  toast.success(isRTL ? 'احفظ الصورة ثم أضفها كويدجت صور' : 'Save to Photos, then add as Photo Widget', {
+                    description: isRTL 
+                      ? 'اضغط مطولاً على الشاشة الرئيسية > أضف ويدجت > الصور'
+                      : 'Long press home screen > Add Widget > Photos'
+                  });
+                } catch (shareErr) {
+                  // User cancelled or share failed - fallback to download
+                  downloadQrAsFile(blob, fileName);
+                }
+              } else {
+                // Fallback: download the file
+                downloadQrAsFile(blob, fileName);
+              }
+            }
+          }, 'image/png');
+        }
+        URL.revokeObjectURL(svgUrl);
+      };
+
+      img.onerror = () => {
+        toast.error(isRTL ? 'فشل في إنشاء صورة QR' : 'Failed to generate QR image');
+        URL.revokeObjectURL(svgUrl);
+      };
+
+      img.src = svgUrl;
+    } catch (error) {
+      console.error('Widget setup error:', error);
+      toast.error(isRTL ? 'فشل في إعداد الويدجت' : 'Failed to set up widget');
+    }
+  };
+
+  const downloadQrAsFile = (blob: Blob, fileName: string) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success(isRTL ? 'تم تحميل صورة QR' : 'QR image downloaded', {
+      description: isRTL 
+        ? 'أضفها كويدجت صور على شاشتك الرئيسية'
+        : 'Add it as a Photo Widget on your home screen'
+    });
   };
 
   // Render QR Code Tab
@@ -1989,35 +2055,23 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
           {t.downloadQr}
         </Button>
 
-        {/* Apple Wallet Action */}
+        {/* Add to Apple Wallet */}
         <Button 
           onClick={handleAddToWallet}
-          className="w-full h-12 bg-black text-white hover:bg-gray-900 border border-gray-800"
+          className="w-full h-12 bg-black text-white hover:bg-gray-900"
         >
           <Smartphone className="w-5 h-5 mr-2" />
-          Add to Apple Wallet
+          {isRTL ? 'إضافة إلى المحفظة' : 'Add to Apple Wallet'}
         </Button>
-      </div>
 
-      {/* Widget Section */}
-      <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/20">
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center shrink-0">
-            <LayoutGrid className="w-5 h-5 text-blue-400" />
-          </div>
-          <div className="flex-1">
-            <h4 className="font-semibold text-foreground">{t.addToWidget}</h4>
-            <p className="text-sm text-muted-foreground mt-1">{t.widgetHint}</p>
-            <Button 
-              size="sm"
-              variant="outline"
-              onClick={handleSetAsWidget}
-              className="mt-3 w-full border-blue-500/30 text-blue-600 hover:bg-blue-500/10"
-            >
-              Set as Phone Widget
-            </Button>
-          </div>
-        </div>
+        {/* Save to Photos for Widget */}
+        <Button 
+          onClick={handleSetAsWidget}
+          className="w-full h-12 bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+        >
+          <LayoutGrid className="w-5 h-5 mr-2" />
+          {isRTL ? 'حفظ للويدجت' : 'Save for Widget'}
+        </Button>
       </div>
     </div>
   );

@@ -23,7 +23,7 @@ import { BackendRolesTab } from './tabs/BackendRolesTab';
 
 // Feature tab configuration with icons and colors
 const BASE_FEATURE_TABS = [
-  { id: 'uploads', icon: Upload, label: 'Uploads', labelAr: 'الملفات', color: 'from-blue-500 to-cyan-500', bgColor: 'bg-blue-500/10', textColor: 'text-blue-500' },
+  { id: 'uploads', icon: Upload, label: 'Media', labelAr: 'الوسائط', color: 'from-blue-500 to-cyan-500', bgColor: 'bg-blue-500/10', textColor: 'text-blue-500' },
   { id: 'inbox', icon: Mail, label: 'Inbox', labelAr: 'الرسائل', color: 'from-amber-500 to-orange-500', bgColor: 'bg-amber-500/10', textColor: 'text-amber-500' },
   { id: 'shop', icon: ShoppingCart, label: 'Shop', labelAr: 'المتجر', color: 'from-pink-500 to-rose-500', bgColor: 'bg-pink-500/10', textColor: 'text-pink-500' },
   { id: 'accounts', icon: Users, label: 'Accounts', labelAr: 'الحسابات', color: 'from-violet-500 to-purple-500', bgColor: 'bg-violet-500/10', textColor: 'text-violet-500' },

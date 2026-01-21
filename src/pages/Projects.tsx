@@ -183,6 +183,13 @@ export default function Projects() {
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isEnhancing, setIsEnhancing] = useState(false);
+  const [showEmpTooltip, setShowEmpTooltip] = useState(() => {
+    // Show tooltip only on first visit (check localStorage)
+    if (typeof window !== 'undefined') {
+      return !localStorage.getItem('wakti_emp_tooltip_seen');
+    }
+    return false;
+  });
 
   // Get username from profile
   const userName = user?.user_metadata?.username || 
@@ -518,10 +525,12 @@ Apply these styles consistently throughout the entire design.`;
     
     setIsEnhancing(true);
     try {
+      const themeInstructions = getSelectedThemeInstructions();
       const response = await supabase.functions.invoke('projects-enhance-prompt', {
         body: {
           prompt: prompt,
           theme: selectedTheme,
+          themeInstructions: themeInstructions || undefined,
           hasAssets: attachedFiles.length > 0,
         },
       });
@@ -946,22 +955,61 @@ Apply these styles consistently throughout the entire design.`;
                   <span className="text-xs hidden sm:inline">{isRTL ? 'إرفاق' : 'Attach'}</span>
                 </Button>
 
-                {/* EMP - Enhance My Prompt Button */}
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="gap-1.5 text-muted-foreground hover:text-foreground hover:bg-purple-500/10"
-                  onClick={enhancePrompt}
-                  disabled={generating || isEnhancing || !prompt.trim() || projects.length >= MAX_PROJECTS}
-                  title={isRTL ? 'تحسين الطلب' : 'Enhance My Prompt'}
-                >
-                  {isEnhancing ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="h-4 w-4 text-purple-500" />
+                {/* EMP - Enhance My Prompt Button with Pulsing Dot & Tooltip */}
+                <div className="relative">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="gap-1.5 text-muted-foreground hover:text-foreground hover:bg-purple-500/10 relative"
+                    onClick={() => {
+                      // Dismiss tooltip on first click
+                      if (showEmpTooltip) {
+                        setShowEmpTooltip(false);
+                        localStorage.setItem('wakti_emp_tooltip_seen', 'true');
+                      }
+                      enhancePrompt();
+                    }}
+                    disabled={generating || isEnhancing || !prompt.trim() || projects.length >= MAX_PROJECTS}
+                    title={isRTL ? 'تحسين الطلب' : 'Enhance My Prompt'}
+                  >
+                    {isEnhancing ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4 text-purple-500" />
+                        {/* Pulsing dot indicator */}
+                        {prompt.trim() && !generating && (
+                          <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-purple-500"></span>
+                          </span>
+                        )}
+                      </>
+                    )}
+                    <span className="text-xs hidden sm:inline">{isRTL ? 'تحسين' : 'EMP'}</span>
+                  </Button>
+                  
+                  {/* One-time tooltip for first-time users */}
+                  {showEmpTooltip && prompt.trim() && !generating && (
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                      <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-xs px-3 py-2 rounded-lg shadow-lg whitespace-nowrap relative">
+                        <span>{isRTL ? '✨ اضغط لتحسين طلبك!' : '✨ Click to enhance your prompt!'}</span>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowEmpTooltip(false);
+                            localStorage.setItem('wakti_emp_tooltip_seen', 'true');
+                          }}
+                          className="ml-2 text-white/70 hover:text-white"
+                        >
+                          ×
+                        </button>
+                        {/* Arrow pointing down */}
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-purple-600"></div>
+                      </div>
+                    </div>
                   )}
-                  <span className="text-xs hidden sm:inline">{isRTL ? 'تحسين' : 'EMP'}</span>
-                </Button>
+                </div>
 
                 {/* Theme Selector - Lovable Style */}
                 <div className="relative">

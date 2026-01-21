@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { Upload, FileImage, FileText, File, Download, Trash2, Eye, X, ImageIcon, FolderOpen, LayoutGrid, List } from 'lucide-react';
+import React, { useState, useCallback, useMemo } from 'react';
+import { Upload, FileImage, FileText, File, Download, Trash2, Eye, X, ImageIcon, FolderOpen, LayoutGrid, List, Music, Video, Image as ImageIconLucide } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -34,6 +34,18 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
   const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [mediaType, setMediaType] = useState<'image' | 'audio' | 'video' | 'all'>('image');
+
+  const filteredUploads = useMemo(() => {
+    return uploads.filter(upload => {
+      if (mediaType === 'all') return true;
+      const type = upload.file_type?.toLowerCase() || '';
+      if (mediaType === 'image') return type.startsWith('image/');
+      if (mediaType === 'audio') return type.startsWith('audio/');
+      if (mediaType === 'video') return type.startsWith('video/');
+      return false;
+    });
+  }, [uploads, mediaType]);
 
   const totalSize = uploads.reduce((sum, u) => sum + (u.size_bytes || 0), 0);
   const maxSize = 50 * 1024 * 1024; // 50MB limit
@@ -41,8 +53,11 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
 
   const getFileIcon = (fileType: string | null) => {
     if (!fileType) return File;
-    if (fileType.startsWith('image/')) return FileImage;
-    if (fileType.includes('pdf') || fileType.includes('document')) return FileText;
+    const type = fileType.toLowerCase();
+    if (type.startsWith('image/')) return FileImage;
+    if (type.startsWith('audio/')) return Music;
+    if (type.startsWith('video/')) return Video;
+    if (type.includes('pdf') || type.includes('document')) return FileText;
     return File;
   };
 
@@ -142,10 +157,12 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
     onDrop,
     accept: {
       'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'],
+      'audio/*': ['.mp3', '.wav', '.ogg', '.m4a'],
+      'video/*': ['.mp4', '.webm', '.ogg', '.mov'],
       'application/pdf': ['.pdf'],
       'text/*': ['.txt', '.css', '.js', '.json'],
     },
-    maxSize: 10 * 1024 * 1024, // 10MB per file
+    maxSize: 50 * 1024 * 1024, // Increased to 50MB for video
   });
 
   const handleDownload = (upload: UploadedFile) => {
@@ -203,6 +220,49 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
         </div>
       </div>
 
+      {/* Media Type Tabs */}
+      <div className="flex items-center gap-2 p-1 bg-muted/30 rounded-xl w-fit">
+        <button
+          onClick={() => setMediaType('image')}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
+            mediaType === 'image' 
+              ? "bg-background text-foreground shadow-sm" 
+              : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+          )}
+        >
+          <ImageIconLucide className="h-4 w-4" />
+          {isRTL ? 'الصور' : 'Images'}
+          <span className="text-[10px] opacity-60">({uploads.filter(u => u.file_type?.startsWith('image/')).length})</span>
+        </button>
+        <button
+          onClick={() => setMediaType('audio')}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
+            mediaType === 'audio' 
+              ? "bg-background text-foreground shadow-sm" 
+              : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+          )}
+        >
+          <Music className="h-4 w-4" />
+          {isRTL ? 'الصوت' : 'Audio'}
+          <span className="text-[10px] opacity-60">({uploads.filter(u => u.file_type?.startsWith('audio/')).length})</span>
+        </button>
+        <button
+          onClick={() => setMediaType('video')}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
+            mediaType === 'video' 
+              ? "bg-background text-foreground shadow-sm" 
+              : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+          )}
+        >
+          <Video className="h-4 w-4" />
+          {isRTL ? 'الفيديو' : 'Video'}
+          <span className="text-[10px] opacity-60">({uploads.filter(u => u.file_type?.startsWith('video/')).length})</span>
+        </button>
+      </div>
+
       {/* Upload Zone - Smaller & Compact */}
       <div
         {...getRootProps()}
@@ -241,13 +301,13 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
       </div>
 
       {/* View Toggle + Files */}
-      {uploads.length === 0 ? (
+      {filteredUploads.length === 0 ? (
         <div className="text-center py-12">
           <div className="w-16 h-16 mx-auto mb-3 rounded-xl bg-gradient-to-br from-muted/50 to-muted/30 flex items-center justify-center">
             <FolderOpen className="h-8 w-8 text-muted-foreground/50" />
           </div>
           <p className="text-muted-foreground text-sm">
-            {isRTL ? 'لا توجد ملفات مرفوعة بعد' : 'No files uploaded yet'}
+            {isRTL ? 'لا توجد ملفات في هذا القسم' : 'No files found in this section'}
           </p>
         </div>
       ) : (
@@ -255,7 +315,7 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
           {/* View Toggle */}
           <div className={cn("flex items-center justify-between mb-3", isRTL && "flex-row-reverse")}>
             <span className="text-xs text-muted-foreground">
-              {uploads.length} {isRTL ? 'ملف' : uploads.length === 1 ? 'file' : 'files'}
+              {filteredUploads.length} {isRTL ? 'ملف' : filteredUploads.length === 1 ? 'file' : 'files'}
             </span>
             <ToggleGroup type="single" value={viewMode} onValueChange={(v) => v && setViewMode(v as 'grid' | 'list')}>
               <ToggleGroupItem value="grid" size="sm" className="h-8 w-8 p-0">
@@ -270,7 +330,7 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
           {/* Grid View */}
           {viewMode === 'grid' && (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
-              {uploads.map((upload) => {
+              {filteredUploads.map((upload) => {
                 const FileIcon = getFileIcon(upload.file_type);
                 const isImg = isImage(upload.file_type);
                 const publicUrl = getFileUrl(upload);
@@ -349,7 +409,7 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
           {/* List View */}
           {viewMode === 'list' && (
             <div className="space-y-1.5">
-              {uploads.map((upload) => {
+              {filteredUploads.map((upload) => {
                 const FileIcon = getFileIcon(upload.file_type);
                 const isImg = isImage(upload.file_type);
                 const publicUrl = getFileUrl(upload);

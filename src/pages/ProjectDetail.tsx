@@ -3583,7 +3583,10 @@ ${fixInstructions}
   };
 
   // Upload attached images to storage and return public URLs
-  const uploadAttachedImagesToStorage = async (images: Array<{ file: File; preview: string; pdfDataUrl?: string }>): Promise<string[]> => {
+  const uploadAttachedImagesToStorage = async (
+    images: Array<{ file: File; preview: string; pdfDataUrl?: string }>,
+    skipDbInsert = false
+  ): Promise<string[]> => {
     if (!id || !user?.id) return images.map(i => i.preview); // Fallback to base64
     
     setIsUploadingAttachedImages(true);
@@ -3618,18 +3621,20 @@ ${fixInstructions}
           const publicUrl = urlData?.publicUrl;
           
           if (publicUrl) {
-            // Save to project_uploads table for "My Photos"
-            await supabase.from('project_uploads').insert({
-              project_id: id,
-              user_id: user.id,
-              filename: safeFilename,
-              storage_path: storagePath,
-              file_type: img.file.type,
-              size_bytes: img.file.size
-            });
+            // ONLY Save to project_uploads table if NOT a chat attachment (screenshot/context)
+            if (!skipDbInsert) {
+              await supabase.from('project_uploads').insert({
+                project_id: id,
+                user_id: user.id,
+                filename: safeFilename,
+                storage_path: storagePath,
+                file_type: img.file.type,
+                size_bytes: img.file.size
+              });
+            }
             
             uploadedUrls.push(publicUrl);
-            console.log('[Auto-Upload] Uploaded image:', publicUrl);
+            console.log(`[Auto-Upload] Uploaded image (${skipDbInsert ? 'context only' : 'saved to media'}):`, publicUrl);
           } else {
             uploadedUrls.push(img.preview); // Fallback
           }
@@ -4346,7 +4351,8 @@ ${fixInstructions}
         });
       } else {
         // Auto-upload images to get permanent URLs (for use in the project)
-        const uploadedUrls = await uploadAttachedImagesToStorage(attachedImages);
+        // 🔒 FIX: Skip DB insert for chat attachments (screenshots/context) so Media tab stays clean
+        const uploadedUrls = await uploadAttachedImagesToStorage(attachedImages, true);
         userImages = uploadedUrls.map((url, idx) => {
           const img = attachedImages[idx];
           if (img?.pdfDataUrl) {
