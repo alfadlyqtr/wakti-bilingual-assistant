@@ -8,7 +8,8 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { isWidgetSupported, setBusinessCardWidget, openWidgetSettings } from '@/integrations/natively/widgetBridge';
+import { isWidgetSupported, setBusinessCardWidget, openWidgetSettings } from "../../integrations/natively/widgetBridge";
+import { isWalletSupported, addBusinessCardToWallet } from "../../integrations/natively/walletBridge";
 import { QRCodeSVG } from 'qrcode.react';
 import { 
   ArrowLeft,
@@ -1867,7 +1868,7 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
     }
 
     try {
-      // Show a temporary loading indicator
+      // Show a loading indicator
       const loadingToastId = toast.loading(isRTL ? 'جارٍ إنشاء بطاقة المحفظة...' : 'Preparing Apple Wallet pass...');
       
       const cardUrl = `${window.location.origin}/card/${encodeURIComponent(formData.firstName.toLowerCase())}-${encodeURIComponent(formData.lastName.toLowerCase())}`;
@@ -1886,34 +1887,49 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
         logoUrl: formData.logoUrl || '',
       };
       
-      // Encode the data as base64 for URL parameter with better Unicode handling
-      const jsonString = JSON.stringify(cardData);
-      // First encode with encodeURIComponent to handle Unicode properly
-      const encodedJson = encodeURIComponent(jsonString);
-      // Then encode to base64
-      const encodedData = btoa(unescape(encodedJson));
-      
-      // Build the direct URL to the Edge Function
-      const passUrl = `https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-wallet-pass?data=${encodeURIComponent(encodedData)}`;
-      
-      // This is how Blinq handles it - simple location change
-      // The key is to dismiss any toast that might be blocking the wallet UI
-      setTimeout(() => {
-        // Remove loading toast before redirecting
-        toast.dismiss(loadingToastId);
+      // Check if we're running in the Natively wrapper with Wallet support
+      if (isWalletSupported()) {
+        // Use the native SDK to add to wallet directly
+        console.log('Using Natively Wallet SDK');
+        addBusinessCardToWallet(cardData, (result) => {
+          // Dismiss loading indicator
+          toast.dismiss(loadingToastId);
+          
+          if (result.status === 'SUCCESS') {
+            toast.success(isRTL ? 'تمت إضافة البطاقة إلى المحفظة' : 'Card added to Apple Wallet');
+          } else {
+            toast.error(result.error || (isRTL ? 'فشل في إضافة البطاقة إلى المحفظة' : 'Failed to add card to wallet'));
+          }
+        });
+      } else {
+        // Fallback to web approach for browser users
+        console.log('Falling back to web approach');
+        // Encode the data as base64 for URL parameter
+        const jsonString = JSON.stringify(cardData);
+        const encodedJson = encodeURIComponent(jsonString);
+        const encodedData = btoa(unescape(encodedJson));
         
-        // Create and click a temporary link (this is more reliable than location.href)
-        const link = document.createElement('a');
-        link.href = passUrl;
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
+        // Build the direct URL to the Edge Function
+        const passUrl = `https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-wallet-pass?data=${encodeURIComponent(encodedData)}`;
         
-        // Fallback if the above doesn't trigger iOS Wallet
         setTimeout(() => {
-          window.location.href = passUrl;
-        }, 100);
-      }, 500); // Short delay to ensure toast dismissal
+          // Remove loading toast before redirecting
+          toast.dismiss(loadingToastId);
+          
+          // For web users, we'll try using a normal anchor tag instead of changing location
+          const link = document.createElement('a');
+          link.href = passUrl;
+          link.setAttribute('download', `${formData.firstName}_${formData.lastName}.pkpass`);
+          link.style.display = 'none';
+          document.body.appendChild(link);
+          link.click();
+          
+          // Add a fallback for Safari
+          setTimeout(() => {
+            window.location.href = passUrl;
+          }, 100);
+        }, 300);
+      }
     } catch (error) {
       console.error('Wallet pass error:', error);
       toast.error(isRTL ? 'فشل في إنشاء بطاقة المحفظة' : 'Failed to generate wallet pass');
