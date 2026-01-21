@@ -1867,6 +1867,9 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
     }
 
     try {
+      // Show a temporary loading indicator
+      const loadingToastId = toast.loading(isRTL ? 'جارٍ إنشاء بطاقة المحفظة...' : 'Preparing Apple Wallet pass...');
+      
       const cardUrl = `${window.location.origin}/card/${encodeURIComponent(formData.firstName.toLowerCase())}-${encodeURIComponent(formData.lastName.toLowerCase())}`;
       
       // Prepare card data for the pass
@@ -1883,16 +1886,34 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
         logoUrl: formData.logoUrl || '',
       };
       
-      // Encode the data as base64 for URL parameter (handle Unicode properly)
+      // Encode the data as base64 for URL parameter with better Unicode handling
       const jsonString = JSON.stringify(cardData);
-      const encodedData = btoa(unescape(encodeURIComponent(jsonString)));
+      // First encode with encodeURIComponent to handle Unicode properly
+      const encodedJson = encodeURIComponent(jsonString);
+      // Then encode to base64
+      const encodedData = btoa(unescape(encodedJson));
       
       // Build the direct URL to the Edge Function
       const passUrl = `https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-wallet-pass?data=${encodeURIComponent(encodedData)}`;
       
-      // CRITICAL FIX: On iOS, direct location change works more reliably than window.open for wallet passes
-      // This is how Blinq does it - they directly redirect rather than opening in new tab
-      window.location.href = passUrl;
+      // This is how Blinq handles it - simple location change
+      // The key is to dismiss any toast that might be blocking the wallet UI
+      setTimeout(() => {
+        // Remove loading toast before redirecting
+        toast.dismiss(loadingToastId);
+        
+        // Create and click a temporary link (this is more reliable than location.href)
+        const link = document.createElement('a');
+        link.href = passUrl;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        
+        // Fallback if the above doesn't trigger iOS Wallet
+        setTimeout(() => {
+          window.location.href = passUrl;
+        }, 100);
+      }, 500); // Short delay to ensure toast dismissal
     } catch (error) {
       console.error('Wallet pass error:', error);
       toast.error(isRTL ? 'فشل في إنشاء بطاقة المحفظة' : 'Failed to generate wallet pass');
