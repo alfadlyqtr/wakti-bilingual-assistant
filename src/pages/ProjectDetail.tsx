@@ -7744,4 +7744,13 @@ ${fixInstructions}
             if (nextFiles) {
               setGeneratedFiles(nextFiles);
               setCodeContent(nextFiles['/App.js'] || '');
-              toast.info(isRTL ? 'تم ال
+              toast.info(isRTL ? 'تم الإعادة' : 'Redone');
+            }
+          }}
+        />
+      )}
+      </>
+      )}
+    </div>
+  );
+}
