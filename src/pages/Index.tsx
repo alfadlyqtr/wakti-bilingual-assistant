@@ -465,14 +465,7 @@ export default function Index() {
                   <div className="liquid-glass-card relative bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-700 rounded-2xl p-6 text-white shadow-2xl">
                     
                     <div className="relative z-10 flex flex-col items-center text-center">
-                      {/* 3-day free trial badge - Catchy gradient with glow */}
-                      <div className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-400 via-orange-400 to-yellow-400 text-[#060541] rounded-full px-4 py-2 mb-4 shadow-[0_0_20px_rgba(251,191,36,0.5)]">
-                        <Star className="h-4 w-4 fill-current" />
-                        <span className="text-xs font-black tracking-wider uppercase">
-                          {language === "en" ? "🎉 3-DAY FREE TRIAL" : "🎉 تجربة مجانية 3 أيام"}
-                        </span>
-                      </div>
-                      
+                                            
                       {/* Price */}
                       <p className="text-5xl lg:text-6xl font-black mb-2" dir="ltr">
                         {MONTHLY_PRICE_QAR}<span className="text-3xl font-bold ml-1">{language === "en" ? "QAR" : "ر.ق"}</span>
@@ -714,14 +707,7 @@ export default function Index() {
                     <div className="absolute inset-[2px] rounded-[22px] border-2 border-[#e9ceb0]/40"></div>
                     
                     <div className="relative z-10 flex flex-col items-center text-center">
-                      {/* 3-day free trial badge - Catchy gradient with glow */}
-                      <div className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-400 via-orange-400 to-yellow-400 text-[#060541] rounded-full px-5 py-2.5 mb-6 shadow-[0_0_20px_rgba(251,191,36,0.5)]">
-                        <Star className="h-5 w-5 fill-current" />
-                        <span className="text-sm font-black tracking-wider uppercase">
-                          {language === "en" ? "🎉 3-DAY FREE TRIAL" : "🎉 تجربة مجانية 3 أيام"}
-                        </span>
-                      </div>
-                      
+                                            
                       {/* Price */}
                       <p className="text-7xl lg:text-8xl font-black mb-2" dir="ltr">
                         {MONTHLY_PRICE_QAR}<span className="text-4xl font-bold ml-1">{language === "en" ? "QAR" : "ر.ق"}</span>

@@ -320,13 +320,7 @@ export default function Home() {
                       {t("perfectForEveryone", language)}
                     </p>
 
-                    {/* 3-day free trial badge */}
-                    <div className="inline-flex items-center gap-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-full px-6 py-3 border shadow-sm mb-12">
-                      <span className="text-base font-medium text-muted-foreground">
-                        {language === "en" ? "3-day free trial, then" : "تجربة مجانية 3 أيام، ثم"}
-                      </span>
-                    </div>
-                  </motion.div>
+                                      </motion.div>
 
                   <motion.div
                     variants={itemVariants}

@@ -83,8 +83,8 @@ const TrialCountdown = ({ startAt, language, onSubscribeClick }: { startAt: stri
         <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-lg px-4 py-3">
           <p className="text-sm font-medium text-purple-600 dark:text-purple-400">
             {language === 'en'
-              ? '✨ Subscribe now & get 3 more free days!'
-              : '✨ اشترك الآن واحصل على 3 أيام مجانية إضافية!'
+              ? '✨ Subscribe now to enjoy Wakti AI!'
+              : '✨ اشترك الآن للاستمتاع بـ Wakti AI!'
             }
           </p>
         </div>

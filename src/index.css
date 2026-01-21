@@ -925,12 +925,27 @@ textarea::placeholder {
 
 /* --- THE GREAT SIMPLIFICATION --- */
 
-/* 1. GLOBAL SETUP: Allow inner content to scroll; hide horizontal overflow only. */
-html, body, #root {
-  overflow-x: hidden;
-  overflow-y: auto; /* Changed from visible to auto for Android Chrome */
-  min-height: 100dvh;
-  height: auto; /* Changed from 100dvh to auto - allows content to expand */
+/* 1. GLOBAL SETUP: FORCE SCROLLING - especially for Honor phones */
+html {
+  overflow-x: hidden !important;
+  overflow-y: scroll !important; /* FORCE scroll mode */
+  height: 100% !important;
+  position: relative !important;
+}
+
+body {
+  overflow-x: hidden !important;
+  overflow-y: scroll !important; /* FORCE scroll mode */
+  height: auto !important; /* Allow expansion */
+  min-height: 100% !important;
+  position: relative !important;
+}
+
+#root {
+  overflow-x: hidden !important;
+  overflow-y: visible !important; /* Let body handle scroll */
+  height: auto !important; /* Allow expansion */
+  min-height: 100% !important;
 }
 
 /* 2. DEFAULT LAYOUT: For all pages that use <main> (e.g., Dashboard) */
