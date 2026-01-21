@@ -1093,14 +1093,13 @@ Return ONLY a valid JSON object with the structure shown in the system prompt.`;
   return { files, summary: summary || "Updated." };
 }
 
-async function callGPT41MiniMissingFiles(
+async function callGeminiMissingFiles(
   missingPaths: string[],
   changedFiles: Record<string, string>,
   existingFiles: Record<string, string>,
   originalUserPrompt: string
 ): Promise<Record<string, string>> {
-  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-  if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY missing");
+  const model = 'gemini-2.0-flash'; // Optimized for speed/cost
 
   const MAX_FILE_CHARS = 4000;
   const contextFiles: Record<string, string> = {};
@@ -1133,7 +1132,7 @@ RULES:
 3. Only return the missing files - do not return existing files.
 4. ONLY use lucide-react for icons. Never use react-icons or heroicons.
 
-OUTPUT FORMAT:
+OUTPUT FORMAT (STRICT JSON):
 {
   "/components/Example.jsx": "import React from 'react';\\n..."
 }`;
@@ -1144,40 +1143,11 @@ MISSING FILES (return these exact paths):\n${missingPaths.join('\n')}
 
 CONTEXT:\n${filesStr}\n\nORIGINAL REQUEST:\n${originalUserPrompt}`;
 
-  console.log(`[GPT-4.1-mini] Generating ${missingPaths.length} missing files`);
+  console.log(`[Gemini Missing Files] Generating ${missingPaths.length} missing files using ${model}`);
 
-  const response = await withTimeout(fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${OPENAI_API_KEY}`
-    },
-    body: JSON.stringify({
-      model: "gpt-4.1-mini",
-      max_tokens: 4096,
-      temperature: 0.2,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userMsg }
-      ],
-    }),
-  }), 45000, 'GPT41_MISSING');
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("[GPT-4.1-mini missing files] API Error:", response.status, errorText);
-    throw new Error(`OpenAI API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  let content = data.choices?.[0]?.message?.content || "";
-  content = content.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
-  const jsonStart = content.indexOf('{');
-  const jsonEnd = content.lastIndexOf('}');
-  if (jsonStart !== -1 && jsonEnd !== -1) content = content.substring(jsonStart, jsonEnd + 1);
-  content = fixUnescapedNewlines(content);
-
-  const parsed = JSON.parse(content);
+  const text = await callGeminiWithModel(model, systemPrompt, userMsg, true);
+  
+  const parsed = JSON.parse(text);
   const filesObj = (parsed && typeof parsed === 'object') ? (parsed as Record<string, unknown>) : {};
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(filesObj)) {
@@ -1186,6 +1156,10 @@ CONTEXT:\n${filesStr}\n\nORIGINAL REQUEST:\n${originalUserPrompt}`;
   }
 
   return out;
+}
+
+async function _callGeminiFlashLite(systemPrompt: string, userPrompt: string): Promise<string> {
+  return await callGeminiWithModel('gemini-2.5-flash-lite', systemPrompt, userPrompt, false);
 }
 
 function extractJsonObject(text: string): string {
@@ -4281,8 +4255,8 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
           console.log(`[Agent Mode] SAFETY NET: Found ${missing.length} missing files: ${missing.join(', ')}`);
           
           try {
-            // Auto-generate missing files using GPT-4.1-mini
-            const generatedMissing = await callGPT41MiniMissingFiles(missing, currentFiles, {}, prompt);
+            // Auto-generate missing files using Gemini
+            const generatedMissing = await callGeminiMissingFiles(missing, currentFiles, {}, prompt);
             
             // Write the generated files
             for (const [path, content] of Object.entries(generatedMissing)) {
@@ -4832,7 +4806,7 @@ Return ONLY the JSON object. No explanation.`;
 
       if (missing.length > 0) {
         console.log(`[Edit validation] Missing referenced files detected: ${missing.join(', ')}`);
-        const generatedMissing = await callGPT41MiniMissingFiles(missing, changedFiles, existingFiles, userPrompt);
+        const generatedMissing = await callGeminiMissingFiles(missing, changedFiles, existingFiles, userPrompt);
         finalFilesToUpsert = { ...finalFilesToUpsert, ...generatedMissing };
 
         const missingAfter = findMissingReferencedFiles({ changedFiles: finalFilesToUpsert, existingFiles });

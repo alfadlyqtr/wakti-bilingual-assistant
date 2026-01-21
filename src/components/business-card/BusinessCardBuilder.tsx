@@ -1793,36 +1793,84 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
     </div>
   );
 
-  const handleDownloadQr = () => {
-    const svg = document.querySelector('.qr-container svg') as SVGElement;
-    if (!svg) return;
-    const svgData = new XMLSerializer().serializeToString(svg);
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    const img = new Image();
-    img.onload = () => {
-      canvas.width = img.width;
-      canvas.height = img.height;
-      ctx?.drawImage(img, 0, 0);
-      const pngFile = canvas.toDataURL('image/png');
-      const downloadLink = document.createElement('a');
-      downloadLink.download = `${formData.firstName}_QR.png`;
-      downloadLink.href = pngFile;
-      downloadLink.click();
-    };
-    img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
-    toast.success("QR Code downloaded!");
+  const qrRef = useRef<HTMLDivElement>(null);
+
+  const handleDownloadQr = async () => {
+    try {
+      const svgElement = qrRef.current?.querySelector('svg');
+      if (!svgElement) {
+        toast.error("Could not find QR code");
+        return;
+      }
+
+      // Clone the SVG to avoid modifying the original
+      const clonedSvg = svgElement.cloneNode(true) as SVGElement;
+      
+      // Set explicit dimensions
+      clonedSvg.setAttribute('width', '400');
+      clonedSvg.setAttribute('height', '400');
+      
+      const svgData = new XMLSerializer().serializeToString(clonedSvg);
+      const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+      const svgUrl = URL.createObjectURL(svgBlob);
+
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 400;
+        canvas.height = 400;
+        const ctx = canvas.getContext('2d');
+        
+        if (ctx) {
+          // White background
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, 400, 400);
+          ctx.drawImage(img, 0, 0, 400, 400);
+          
+          canvas.toBlob((blob) => {
+            if (blob) {
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `${formData.firstName || 'Wakti'}_QR_Code.png`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              URL.revokeObjectURL(url);
+              toast.success(isRTL ? 'تم تحميل رمز QR!' : 'QR Code downloaded!');
+            }
+          }, 'image/png');
+        }
+        URL.revokeObjectURL(svgUrl);
+      };
+
+      img.onerror = () => {
+        toast.error("Failed to generate QR image");
+        URL.revokeObjectURL(svgUrl);
+      };
+
+      img.src = svgUrl;
+    } catch (error) {
+      console.error('QR Download error:', error);
+      toast.error("Failed to download QR code");
+    }
   };
 
   const handleAddToWallet = () => {
-    toast.info("Generating your Apple Wallet pass...", {
-      description: "This will add the card to your personal Apple Wallet for offline sharing."
+    toast.info(isRTL ? 'قريباً...' : 'Coming Soon!', {
+      description: isRTL 
+        ? 'ميزة Apple Wallet قيد التطوير. ستتمكن قريباً من إضافة بطاقتك إلى المحفظة!'
+        : 'Apple Wallet integration is coming soon. You\'ll be able to add your card to Wallet for instant sharing!'
     });
   };
 
   const handleSetAsWidget = () => {
-    toast.success("Widget preview updated!", {
-      description: "Open the Wakti AI app on your home screen to add this card as a widget."
+    toast.info(isRTL ? 'قريباً...' : 'Coming Soon!', {
+      description: isRTL 
+        ? 'ميزة الويدجت قيد التطوير. ستتمكن قريباً من إضافة رمز QR إلى شاشتك الرئيسية!'
+        : 'Widget feature is coming soon. You\'ll be able to add your QR code to your home screen!'
     });
   };
 
@@ -1833,7 +1881,7 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
       
       {/* QR Code Display */}
       <div className="flex flex-col items-center p-6 rounded-2xl bg-white border border-gray-200">
-        <div className="w-48 h-48 bg-gray-100 rounded-xl flex items-center justify-center qr-container">
+        <div ref={qrRef} className="w-48 h-48 bg-gray-100 rounded-xl flex items-center justify-center">
           <QRCodeSVG 
             value={`${window.location.origin}/card/${formData.firstName.toLowerCase()}-${formData.lastName.toLowerCase()}`}
             size={160}
