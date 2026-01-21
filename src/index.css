@@ -412,7 +412,7 @@ textarea::placeholder {
   
   /* Enhanced draggable widgets */
   .widget-draggable {
-    touch-action: none;
+    touch-action: pan-y; /* Allow vertical scrolling while dragging horizontally */
     user-select: none;
     transition: all 0.3s ease;
   }
@@ -556,7 +556,7 @@ textarea::placeholder {
     will-change: transform;
     padding-bottom: env(safe-area-inset-bottom, 0px) !important;
     pointer-events: auto !important;
-    touch-action: none;
+    touch-action: manipulation; /* Allow scrolling, prevent double-tap zoom */
     user-select: none;
   }
 
