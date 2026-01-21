@@ -5,11 +5,13 @@ import { JSZip } from "https://deno.land/x/jszip@0.11.0/mod.ts";
 import forge from "npm:node-forge@1.3.1";
 
 // CORS headers configured to ensure proper handling on iOS devices
+// Extended CORS headers to ensure iOS Safari handles the response correctly
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-  "Access-Control-Expose-Headers": "Content-Type, Content-Disposition, Content-Length",
+  "Access-Control-Expose-Headers": "Content-Type, Content-Disposition, Content-Length, Cache-Control, Pragma, Expires",
+  "Access-Control-Allow-Credentials": "true"
 };
 
 interface BusinessCardData {
@@ -48,10 +50,21 @@ serve(async (req) => {
         return new Response("Missing data parameter", { status: 400 });
       }
       try {
-        // Decode Unicode-safe base64 (encoded with encodeURIComponent + btoa on frontend)
-        const decoded = atob(dataParam);
-        const jsonString = decodeURIComponent(escape(decoded));
+        // Handle URL-safe base64 encoding and properly decode for Unicode
+        // This is more resilient to encoding issues that can occur with btoa/atob
+        let jsonString;
+        try {
+          // First try the Unicode-safe approach with escape/unescape
+          const decoded = atob(dataParam);
+          jsonString = decodeURIComponent(escape(decoded));
+        } catch (_decodeErr) {
+          // If that fails, try direct base64 decode (fallback)
+          console.log("First decode method failed, trying fallback");
+          const decoded = atob(dataParam.replace(/-/g, '+').replace(/_/g, '/'));
+          jsonString = decoded;
+        }
         cardData = JSON.parse(jsonString);
+        console.log("Successfully decoded card data:", cardData.firstName, cardData.lastName);
       } catch (e) {
         console.error("Failed to decode data:", e);
         return new Response("Invalid data parameter", { status: 400 });
@@ -93,6 +106,8 @@ serve(async (req) => {
     const uint8Array = new Uint8Array(pkpassData);
     
     // iOS expects a proper binary response with these exact headers to trigger the native wallet UI
+    // Important: iOS Safari needs exact headers to trigger the native Wallet UI
+    // Return with very specific headers that iOS needs to recognize as a Wallet pass
     return new Response(uint8Array, {
       status: 200,
       headers: {
@@ -100,8 +115,10 @@ serve(async (req) => {
         "Content-Type": "application/vnd.apple.pkpass",
         "Content-Disposition": `attachment; filename="${filename}"`,
         "Content-Length": uint8Array.length.toString(),
-        // Ensure caching headers don't interfere with wallet detection
-        "Cache-Control": "no-cache"
+        // Prevent caching to ensure fresh content
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+        "Expires": "0"
       }
     });
     

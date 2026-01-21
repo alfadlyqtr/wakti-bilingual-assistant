@@ -3,7 +3,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>WAKTI</title>
     <meta name="description" content="Wakti AI" />
     <meta name="author" content="WAKTI" />
@@ -25,7 +25,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
     
-    <!-- PWA viewport handled by meta tag in head -->
+    <!-- Prevent scaling -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     
     <!-- Mobile webapp capability -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -34,9 +35,6 @@
     <meta name="apple-itunes-app" content="app-id=6755150700" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="theme-color" content="#0c0f14" />
-    
-    <!-- PWA Support -->
-    <link rel="manifest" href="/manifest.json" />
 
     <!-- Natively SDK (required for native features inside Natively shell) -->
     <script
@@ -103,19 +101,6 @@
           try { fb.parentNode.removeChild(fb); } catch (e) {}
         }
       });
-    </script>
-    
-    <!-- PWA Service Worker Registration - won't interfere with Natively push notifications -->
-    <script>
-      // Only register service worker outside of Natively environment
-      // This ensures it doesn't conflict with native app functionality
-      if ('serviceWorker' in navigator && !window.natively) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/service-worker.js')
-            .then(reg => console.log('PWA service worker registered'))
-            .catch(err => console.log('PWA service worker registration failed:', err));
-        });
-      }
     </script>
   </body>
 </html>
