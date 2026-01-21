@@ -1867,13 +1867,50 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
       return;
     }
 
+    // Show a dialog explaining that Wallet integration requires Safari browser
+    const walletDialog = {
+      title: isRTL ? 'إضافة إلى محفظة آبل' : 'Add to Apple Wallet',
+      message: isRTL 
+        ? 'لإضافة البطاقة إلى محفظة آبل، يجب عليك:'
+        : 'To add your card to Apple Wallet:',
+      steps: isRTL
+        ? [
+            '1. افتح متصفح سفاري',
+            '2. قم بزيارة wakti.app في سفاري',
+            '3. انتقل إلى نفس هذه الشاشة',
+            '4. اضغط "إضافة إلى المحفظة"'
+          ]
+        : [
+            '1. Open Safari browser',
+            '2. Visit wakti.app in Safari',
+            '3. Navigate to this same screen',
+            '4. Tap "Add to Apple Wallet"'
+          ],
+      note: isRTL
+        ? 'ملاحظة: يعمل هذا فقط في متصفح سفاري على أجهزة آيفون (وليس في التطبيق المغلف).'
+        : 'Note: This only works in Safari browser on iOS devices (not in wrapped app).'
+    };
+
+    // Show instructions as a success toast with description
+    toast.success(walletDialog.message, {
+      description: (
+        <div className="space-y-2 text-sm">
+          <ul className="space-y-1">
+            {walletDialog.steps.map((step, index) => (
+              <li key={index}>{step}</li>
+            ))}
+          </ul>
+          <p className="pt-1 text-xs opacity-80">{walletDialog.note}</p>
+        </div>
+      ),
+      duration: 10000, // Show for 10 seconds
+    });
+
+    // Still allow the download to happen for testing/advanced users
     try {
-      // Show a loading indicator
-      const loadingToastId = toast.loading(isRTL ? 'جارٍ إنشاء بطاقة المحفظة...' : 'Preparing Apple Wallet pass...');
-      
+      // Prepare card data for the pass
       const cardUrl = `${window.location.origin}/card/${encodeURIComponent(formData.firstName.toLowerCase())}-${encodeURIComponent(formData.lastName.toLowerCase())}`;
       
-      // Prepare card data for the pass
       const cardData = {
         firstName: formData.firstName,
         lastName: formData.lastName,
@@ -1889,12 +1926,9 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
       
       // Check if we're running in the Natively wrapper with Wallet support
       if (isWalletSupported()) {
-        // Use the native SDK to add to wallet directly
+        // This condition won't be true until Natively implements wallet support
         console.log('Using Natively Wallet SDK');
-        addBusinessCardToWallet(cardData, (result) => {
-          // Dismiss loading indicator
-          toast.dismiss(loadingToastId);
-          
+        addBusinessCardToWallet(cardData, (result) => {          
           if (result.status === 'SUCCESS') {
             toast.success(isRTL ? 'تمت إضافة البطاقة إلى المحفظة' : 'Card added to Apple Wallet');
           } else {
@@ -1902,37 +1936,28 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
           }
         });
       } else {
-        // Fallback to web approach for browser users
-        console.log('Falling back to web approach');
-        // Encode the data as base64 for URL parameter
+        // Allow advanced users to download the .pkpass file directly
+        // This might work in some cases (Safari on iOS when not in the app)
         const jsonString = JSON.stringify(cardData);
         const encodedJson = encodeURIComponent(jsonString);
         const encodedData = btoa(unescape(encodedJson));
         
-        // Build the direct URL to the Edge Function
+        // Create a small download button in the toast
         const passUrl = `https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-wallet-pass?data=${encodeURIComponent(encodedData)}`;
         
+        // Start a silent download in the background (for advanced users)
         setTimeout(() => {
-          // Remove loading toast before redirecting
-          toast.dismiss(loadingToastId);
-          
-          // For web users, we'll try using a normal anchor tag instead of changing location
           const link = document.createElement('a');
           link.href = passUrl;
           link.setAttribute('download', `${formData.firstName}_${formData.lastName}.pkpass`);
           link.style.display = 'none';
           document.body.appendChild(link);
           link.click();
-          
-          // Add a fallback for Safari
-          setTimeout(() => {
-            window.location.href = passUrl;
-          }, 100);
-        }, 300);
+          document.body.removeChild(link);
+        }, 3000); // Wait a bit so user can read the instructions first
       }
     } catch (error) {
       console.error('Wallet pass error:', error);
-      toast.error(isRTL ? 'فشل في إنشاء بطاقة المحفظة' : 'Failed to generate wallet pass');
     }
   };
 
