@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { isWidgetSupported, setBusinessCardWidget, openWidgetSettings } from '@/integrations/natively/widgetBridge';
 import { QRCodeSVG } from 'qrcode.react';
 import { 
   ArrowLeft,
@@ -1858,15 +1859,13 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
     }
   };
 
-  const handleAddToWallet = async () => {
+  const handleAddToWallet = () => {
     // Validate required fields
     if (!formData.firstName || !formData.lastName) {
       toast.error(isRTL ? 'يرجى إدخال الاسم الأول والأخير' : 'Please enter first and last name');
       return;
     }
 
-    const loadingToast = toast.loading(isRTL ? 'جاري إنشاء بطاقة المحفظة...' : 'Generating wallet pass...');
-    
     try {
       const cardUrl = `${window.location.origin}/card/${encodeURIComponent(formData.firstName.toLowerCase())}-${encodeURIComponent(formData.lastName.toLowerCase())}`;
       
@@ -1891,17 +1890,10 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
       // Build the direct URL to the Edge Function
       const passUrl = `https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-wallet-pass?data=${encodeURIComponent(encodedData)}`;
       
-      toast.dismiss(loadingToast);
-      
-      // Open in new tab/window - iOS Safari will show the native Add to Wallet dialog
-      window.open(passUrl, '_blank');
-      
-      toast.success(isRTL ? 'جاري فتح المحفظة...' : 'Opening wallet pass...', {
-        description: isRTL ? 'اضغط "إضافة" لحفظ البطاقة' : 'Tap "Add" to save the card'
-      });
-      
+      // CRITICAL FIX: On iOS, direct location change works more reliably than window.open for wallet passes
+      // This is how Blinq does it - they directly redirect rather than opening in new tab
+      window.location.href = passUrl;
     } catch (error) {
-      toast.dismiss(loadingToast);
       console.error('Wallet pass error:', error);
       toast.error(isRTL ? 'فشل في إنشاء بطاقة المحفظة' : 'Failed to generate wallet pass');
     }
@@ -1909,73 +1901,101 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
 
   const handleSetAsWidget = async () => {
     try {
-      const svgElement = qrRef.current?.querySelector('svg');
-      if (!svgElement) {
-        toast.error(isRTL ? 'لم يتم العثور على رمز QR' : 'QR code not found');
-        return;
-      }
-
-      // Clone and resize SVG for better widget quality
-      const clonedSvg = svgElement.cloneNode(true) as SVGElement;
-      clonedSvg.setAttribute('width', '512');
-      clonedSvg.setAttribute('height', '512');
+      const cardUrl = `${window.location.origin}/card/${encodeURIComponent(formData.firstName.toLowerCase())}-${encodeURIComponent(formData.lastName.toLowerCase())}`;
       
-      const svgData = new XMLSerializer().serializeToString(clonedSvg);
-      const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-      const svgUrl = URL.createObjectURL(svgBlob);
+      // Check if Natively Widget SDK is available (user is in native app)
+      if (isWidgetSupported()) {
+        // This is how Blinq does it - using the native SDK to create real widgets
+        // Set the widget data for the business card
+        setBusinessCardWidget({
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          company: formData.companyName,
+          cardUrl: cardUrl
+        }, (result) => {
+          if (result.status === 'SUCCESS') {
+            // Open the iOS widget picker
+            openWidgetSettings((settingsResult) => {
+              if (settingsResult.status === 'SUCCESS') {
+                toast.success(isRTL ? 'تم إعداد الويدجت بنجاح!' : 'Widget set up successfully!');
+              } else {
+                toast.error(settingsResult.error || (isRTL ? 'فشل في فتح إعدادات الويدجت' : 'Failed to open widget settings'));
+              }
+            });
+          } else {
+            toast.error(result.error || (isRTL ? 'فشل في إعداد الويدجت' : 'Failed to set up widget'));
+          }
+        });
+      } else {
+        // Fallback for web: generate QR image for photo widget
+        const svgElement = qrRef.current?.querySelector('svg');
+        if (!svgElement) {
+          toast.error(isRTL ? 'لم يتم العثور على رمز QR' : 'QR code not found');
+          return;
+        }
 
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      
-      img.onload = async () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 512;
-        const ctx = canvas.getContext('2d');
+        // Clone and resize SVG for better widget quality
+        const clonedSvg = svgElement.cloneNode(true) as SVGElement;
+        clonedSvg.setAttribute('width', '512');
+        clonedSvg.setAttribute('height', '512');
         
-        if (ctx) {
-          // White background
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, 512, 512);
-          ctx.drawImage(img, 0, 0, 512, 512);
+        const svgData = new XMLSerializer().serializeToString(clonedSvg);
+        const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+        const svgUrl = URL.createObjectURL(svgBlob);
+
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        
+        img.onload = async () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 512;
+          canvas.height = 512;
+          const ctx = canvas.getContext('2d');
           
-          canvas.toBlob(async (blob) => {
-            if (blob) {
-              const fileName = `${formData.firstName}_${formData.lastName}_QR.png`;
-              const pngFile = new File([blob], fileName, { type: 'image/png' });
-              
-              // Use native share to save to Photos (iOS)
-              if (navigator.share && (navigator as any).canShare?.({ files: [pngFile] })) {
-                try {
-                  await navigator.share({
-                    files: [pngFile],
-                    title: isRTL ? 'رمز QR للبطاقة' : 'Business Card QR Code',
-                  });
-                  toast.success(isRTL ? 'احفظ الصورة ثم أضفها كويدجت صور' : 'Save to Photos, then add as Photo Widget', {
-                    description: isRTL 
-                      ? 'اضغط مطولاً على الشاشة الرئيسية > أضف ويدجت > الصور'
-                      : 'Long press home screen > Add Widget > Photos'
-                  });
-                } catch (shareErr) {
-                  // User cancelled or share failed - fallback to download
+          if (ctx) {
+            // White background
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, 512, 512);
+            ctx.drawImage(img, 0, 0, 512, 512);
+            
+            canvas.toBlob(async (blob) => {
+              if (blob) {
+                const fileName = `${formData.firstName}_${formData.lastName}_QR.png`;
+                const pngFile = new File([blob], fileName, { type: 'image/png' });
+                
+                // Use native share to save to Photos (iOS)
+                if (navigator.share && (navigator as any).canShare?.({ files: [pngFile] })) {
+                  try {
+                    await navigator.share({
+                      files: [pngFile],
+                      title: isRTL ? 'رمز QR للبطاقة' : 'Business Card QR Code',
+                    });
+                    toast.success(isRTL ? 'احفظ الصورة ثم أضفها كويدجت صور' : 'Save to Photos, then add as Photo Widget', {
+                      description: isRTL 
+                        ? 'اضغط مطولاً على الشاشة الرئيسية > أضف ويدجت > الصور'
+                        : 'Long press home screen > Add Widget > Photos'
+                    });
+                  } catch (shareErr) {
+                    // User cancelled or share failed - fallback to download
+                    downloadQrAsFile(blob, fileName);
+                  }
+                } else {
+                  // Fallback: download the file
                   downloadQrAsFile(blob, fileName);
                 }
-              } else {
-                // Fallback: download the file
-                downloadQrAsFile(blob, fileName);
               }
-            }
-          }, 'image/png');
-        }
-        URL.revokeObjectURL(svgUrl);
-      };
+            }, 'image/png');
+          }
+          URL.revokeObjectURL(svgUrl);
+        };
 
-      img.onerror = () => {
-        toast.error(isRTL ? 'فشل في إنشاء صورة QR' : 'Failed to generate QR image');
-        URL.revokeObjectURL(svgUrl);
-      };
+        img.onerror = () => {
+          toast.error(isRTL ? 'فشل في إنشاء صورة QR' : 'Failed to generate QR image');
+          URL.revokeObjectURL(svgUrl);
+        };
 
-      img.src = svgUrl;
+        img.src = svgUrl;
+      }
     } catch (error) {
       console.error('Widget setup error:', error);
       toast.error(isRTL ? 'فشل في إعداد الويدجت' : 'Failed to set up widget');
