@@ -46,8 +46,12 @@ serve(async (req) => {
         return new Response("Missing data parameter", { status: 400 });
       }
       try {
-        cardData = JSON.parse(atob(dataParam));
-      } catch {
+        // Decode Unicode-safe base64 (encoded with encodeURIComponent + btoa on frontend)
+        const decoded = atob(dataParam);
+        const jsonString = decodeURIComponent(escape(decoded));
+        cardData = JSON.parse(jsonString);
+      } catch (e) {
+        console.error("Failed to decode data:", e);
         return new Response("Invalid data parameter", { status: 400 });
       }
     } else {

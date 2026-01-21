@@ -1859,34 +1859,49 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
   };
 
   const handleAddToWallet = async () => {
+    // Validate required fields
+    if (!formData.firstName || !formData.lastName) {
+      toast.error(isRTL ? 'يرجى إدخال الاسم الأول والأخير' : 'Please enter first and last name');
+      return;
+    }
+
+    const loadingToast = toast.loading(isRTL ? 'جاري إنشاء بطاقة المحفظة...' : 'Generating wallet pass...');
+    
     try {
-      const cardUrl = `${window.location.origin}/card/${formData.firstName.toLowerCase()}-${formData.lastName.toLowerCase()}`;
+      const cardUrl = `${window.location.origin}/card/${encodeURIComponent(formData.firstName.toLowerCase())}-${encodeURIComponent(formData.lastName.toLowerCase())}`;
       
       // Prepare card data for the pass
       const cardData = {
         firstName: formData.firstName,
         lastName: formData.lastName,
-        email: formData.email,
-        phone: formData.phone,
-        company: formData.companyName,
-        jobTitle: formData.jobTitle,
-        website: formData.website,
+        email: formData.email || '',
+        phone: formData.phone || '',
+        company: formData.companyName || '',
+        jobTitle: formData.jobTitle || '',
+        website: formData.website || '',
         cardUrl,
-        profilePhotoUrl: formData.profilePhotoUrl,
-        logoUrl: formData.logoUrl,
+        profilePhotoUrl: formData.profilePhotoUrl || '',
+        logoUrl: formData.logoUrl || '',
       };
       
-      // Encode the data as base64 for URL parameter
-      const encodedData = btoa(JSON.stringify(cardData));
+      // Encode the data as base64 for URL parameter (handle Unicode properly)
+      const jsonString = JSON.stringify(cardData);
+      const encodedData = btoa(unescape(encodeURIComponent(jsonString)));
       
       // Build the direct URL to the Edge Function
-      // iOS will intercept this and show the native "Add to Wallet" UI
       const passUrl = `https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-wallet-pass?data=${encodeURIComponent(encodedData)}`;
       
-      // Open the URL - iOS Safari will show the native Add to Wallet dialog
-      window.location.href = passUrl;
+      toast.dismiss(loadingToast);
+      
+      // Open in new tab/window - iOS Safari will show the native Add to Wallet dialog
+      window.open(passUrl, '_blank');
+      
+      toast.success(isRTL ? 'جاري فتح المحفظة...' : 'Opening wallet pass...', {
+        description: isRTL ? 'اضغط "إضافة" لحفظ البطاقة' : 'Tap "Add" to save the card'
+      });
       
     } catch (error) {
+      toast.dismiss(loadingToast);
       console.error('Wallet pass error:', error);
       toast.error(isRTL ? 'فشل في إنشاء بطاقة المحفظة' : 'Failed to generate wallet pass');
     }
