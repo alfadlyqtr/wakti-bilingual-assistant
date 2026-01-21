@@ -4813,6 +4813,76 @@ ${fixInstructions}
       const generateContextualSuggestions = (msg: string): string[] => {
         const msgLower = msg.toLowerCase();
         
+        // 🚀 NEW: Check if this is a project creation completion message
+        if (msgLower.includes('project is ready') || 
+            msgLower.includes('finished building') || 
+            msgLower.includes('all files have been created') ||
+            msgLower.includes('successfully created') ||
+            (msgLower.includes('ready') && msgLower.includes('publish'))) {
+          
+          console.log('[Contextual Chips] Detected project creation completion');
+          
+          // Get file paths to detect what was created
+          const fileList = Object.keys(generatedFiles || {});
+          const fileContent = Object.values(generatedFiles || {}).join(' ').toLowerCase();
+          
+          // Check for barber shop specific content
+          const isBarberShop = fileContent.includes('barber') || 
+                             fileContent.includes('haircut') || 
+                             fileContent.includes('salon');
+                             
+          // Check for specific page types
+          const hasBookingPage = fileList.some(f => /booking|appointment|schedule/i.test(f)) || 
+                              fileContent.includes('book') || 
+                              fileContent.includes('appointment');
+                              
+          const hasContactPage = fileList.some(f => /contact|inquiry/i.test(f)) || 
+                             fileContent.includes('contact us') || 
+                             fileContent.includes('get in touch');
+                             
+          const hasProductsPage = fileList.some(f => /product|shop|store/i.test(f)) || 
+                              fileContent.includes('product') || 
+                              fileContent.includes('shop') ||
+                              fileContent.includes('service');
+          
+          // Build activation chips based on detected content
+          const activationChips: string[] = [];
+          
+          // Barber shop specific suggestions
+          if (isBarberShop) {
+            if (hasBookingPage) {
+              activationChips.push('✨ Configure booking system');
+            }
+            
+            if (hasProductsPage) {
+              activationChips.push('💈 Set up barber services');
+            }
+          } else {
+            // Generic suggestions
+            if (hasBookingPage) {
+              activationChips.push('✨ Configure booking system');
+            }
+            
+            if (hasProductsPage) {
+              activationChips.push('🛍️ Set up product inventory');
+            }
+          }
+          
+          if (hasContactPage) {
+            activationChips.push('📧 Configure contact form');
+          }
+          
+          // Always add these general suggestions
+          if (activationChips.length < 3) {
+            activationChips.push('How do I customize the styles?');
+          }
+          
+          if (activationChips.length > 0) {
+            console.log('[Contextual Chips] Adding activation chips:', activationChips);
+            return activationChips;
+          }
+        }
+        
         // 🎯 PRIORITY 1: Check if AI asked a question with options (emoji-prefixed lines)
         // Pattern: Lines starting with emoji like 🔍, 🔗, 📝, ✨, etc. followed by text
         const optionPatterns = [
@@ -6714,7 +6784,20 @@ ${fixInstructions}
                             isRTL={isRTL}
                             dynamicSuggestions={dynamicSuggestions}
                             onActionClick={async (prompt) => {
-                              if (prompt.includes('Change the images') || prompt.includes('غير الصور')) {
+                              // Handle activation chips for configuration wizards
+                              if (prompt.includes('✨ Configure booking')) {
+                                // Show the booking wizard
+                                setShowBookingWizard(true);
+                                return;
+                              } else if (prompt.includes('💈 Set up barber services') || prompt.includes('🛍️ Set up product')) {
+                                // Show the product form card
+                                setShowProductFormCard(true);
+                                return;
+                              } else if (prompt.includes('📧 Configure contact')) {
+                                // Show the contact form wizard
+                                setShowContactWizard(true);
+                                return;
+                              } else if (prompt.includes('Change the images') || prompt.includes('غير الصور')) {
                                 setIsChangingCarouselImages(true);
                                 openStockPhotoSelector('stock', true);
                               } else {
