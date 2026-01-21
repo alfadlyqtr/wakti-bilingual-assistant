@@ -4,10 +4,12 @@ import { crypto } from "https://deno.land/std@0.168.0/crypto/mod.ts";
 import { JSZip } from "https://deno.land/x/jszip@0.11.0/mod.ts";
 import forge from "npm:node-forge@1.3.1";
 
+// CORS headers configured to ensure proper handling on iOS devices
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+  "Access-Control-Expose-Headers": "Content-Type, Content-Disposition, Content-Length",
 };
 
 interface BusinessCardData {
@@ -87,14 +89,24 @@ serve(async (req) => {
 
     // Return the .pkpass file directly with proper headers
     // This is what makes iOS show the native "Add to Wallet" UI
-    return new Response(new Uint8Array(pkpassData), {
+    // We must use Uint8Array for the body, not ArrayBuffer, to ensure proper iOS handling
+    const uint8Array = new Uint8Array(pkpassData);
+    
+    // iOS expects a proper binary response with these exact headers to trigger the native wallet UI
+    return new Response(uint8Array, {
+      status: 200,
       headers: {
         ...corsHeaders,
         "Content-Type": "application/vnd.apple.pkpass",
         "Content-Disposition": `attachment; filename="${filename}"`,
-        "Content-Length": pkpassData.length.toString(),
+        "Content-Length": uint8Array.length.toString(),
+        // Ensure caching headers don't interfere with wallet detection
+        "Cache-Control": "no-cache"
       }
     });
+    
+    // Note: iOS Safari intercepts responses with Content-Type: application/vnd.apple.pkpass
+    // and displays the native "Add to Wallet" UI automatically
 
   } catch (error) {
     console.error("Error generating wallet pass:", error);

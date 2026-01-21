@@ -1,0 +1,23 @@
+{
+  "name": "Wakti AI",
+  "short_name": "Wakti",
+  "description": "Your intelligent digital partner for modern life",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0c0f14",
+  "theme_color": "#0c0f14",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/assets/wakti-eye-soft.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon"
+    }
+  ]
+}
