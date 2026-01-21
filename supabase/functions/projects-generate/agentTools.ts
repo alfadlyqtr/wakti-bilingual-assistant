@@ -2518,6 +2518,8 @@ Before doing ANYTHING, classify the request:
 - If it's not imported and rendered, it doesn't exist.
 - **I will ALWAYS fetch data from the backend, never hardcode.**
 - **I will PROACTIVELY initialize backend collections when building features that need data.**
+- **I will ALWAYS use Freepik API for images - NEVER placeholder URLs like picsum, unsplash, or via.placeholder.**
+- **For EVERY image in my code, I MUST first call the freepik/images action to get real stock photos.**
 
 ## 🚀 PROACTIVE BACKEND INITIALIZATION (MANDATORY)
 

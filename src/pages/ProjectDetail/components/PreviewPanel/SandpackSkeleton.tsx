@@ -158,21 +158,6 @@ function EnhancedProjectLoader({ isRTL = false }) {
   );
 }
 
-  // Waiting state (no files yet)
-  return (
-    <div className="absolute inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center">
-      <div className="relative">
-        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-          <Code2 className="w-6 h-6 text-white animate-pulse" />
-        </div>
-      </div>
-      <p className="mt-6 text-sm text-gray-400 animate-pulse">
-        {isRTL ? 'في انتظار الكود...' : 'Waiting for code...'}
-      </p>
-    </div>
-  );
-}
-
 /**
  * Skeleton loader for the preview panel during Sandpack initialization
  */
