@@ -190,7 +190,7 @@ export function useUserProfile() {
       const start = profile?.free_access_start_at ? Date.parse(profile.free_access_start_at) : null;
       if (start == null) return false; // NOT STARTED = not grace, not expired
       const elapsedMin = Math.floor((Date.now() - start) / 60000);
-      return elapsedMin < 30;
+      return elapsedMin < 1440; // 24 hours
     },
     get hasTrialStarted() {
       return profile?.free_access_start_at != null;
@@ -204,7 +204,7 @@ export function useUserProfile() {
       const start = profile?.free_access_start_at ? Date.parse(profile.free_access_start_at) : null;
       if (start == null) return false; // not set counts as grace, not expired
       const elapsedMin = Math.floor((Date.now() - start) / 60000);
-      return elapsedMin >= 30;
+      return elapsedMin >= 1440; // 24 hours
     }
   };
 }

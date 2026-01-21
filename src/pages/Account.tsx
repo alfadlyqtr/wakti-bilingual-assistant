@@ -35,7 +35,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { restorePurchases } from "@/integrations/natively/purchasesBridge";
 
-// TrialCountdown Component - Shows remaining time of 30-minute trial
+// TrialCountdown Component - Shows remaining time of 24-hour trial
 // When trial ends, shows friendly message with subscribe CTA
 // Includes its own header - parent should NOT show "Free Trial Active" separately
 const TrialCountdown = ({ startAt, language, onSubscribeClick }: { startAt: string; language: string; onSubscribeClick?: () => void }) => {
@@ -45,7 +45,7 @@ const TrialCountdown = ({ startAt, language, onSubscribeClick }: { startAt: stri
   useEffect(() => {
     const calculateTimeLeft = () => {
       const start = new Date(startAt).getTime();
-      const trialEnd = start + (30 * 60 * 1000); // 30 minutes
+      const trialEnd = start + (24 * 60 * 60 * 1000); // 24 hours
       const now = Date.now();
       const diff = trialEnd - now;
       
@@ -222,7 +222,8 @@ export default function Account() {
         .eq('id', user.id)
         .single();
 
-      if (profileError) throw profileError;
+      // Handle new user case - profile may not exist yet (PGRST116)
+      if (profileError && profileError.code !== 'PGRST116') throw profileError;
 
       const { data: subscriptions, error: subsError } = await supabase
         .from('subscriptions')
@@ -912,7 +913,7 @@ export default function Account() {
                     {subscriptionData?.profile && !subscriptionData.profile.is_subscribed && subscriptionData.profile.free_access_start_at && (() => {
                       // Calculate if trial is still active
                       const start = new Date(subscriptionData.profile.free_access_start_at).getTime();
-                      const trialEnd = start + (30 * 60 * 1000); // 30 minutes
+                      const trialEnd = start + (24 * 60 * 60 * 1000); // 24 hours
                       const isTrialActive = Date.now() < trialEnd;
                       
                       return (

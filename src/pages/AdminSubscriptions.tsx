@@ -87,7 +87,7 @@ export default function AdminSubscriptions() {
         p_minutes: minutes,
       });
       if (error) throw error;
-      toast.success(action === 'reset' ? `Reset 30-min trial for ${user.email}` : `Extended trial by ${minutes} minutes for ${user.email}`);
+      toast.success(action === 'reset' ? `Reset 24-hour trial for ${user.email}` : `Extended trial by ${minutes} minutes for ${user.email}`);
       await loadData();
     } catch (err: any) {
       console.error('Adjust trial failed:', err);
@@ -707,7 +707,7 @@ export default function AdminSubscriptions() {
                       )}
                     </div>
 
-                    {/* 30-Minute Trial Management (unsubscribed only) */}
+                    {/* 24-Hour Trial Management (unsubscribed only) */}
                     {!user.is_subscribed && (
                       <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
                         <Button

@@ -208,7 +208,7 @@ function CustomPaywallModal({ open, onOpenChange }: CustomPaywallModalProps) {
   const copy = {
     en: {
       title: 'WAKTI AI',
-      subtitle: 'Your 30-minute trial has ended. Subscribe to continue.',
+      subtitle: 'Your 24-hour trial has ended. Subscribe to continue.',
       features: [
         'WAKTI AI',
         'WAKTI AI Search',
@@ -477,7 +477,7 @@ function WelcomeTrialPopup() {
       // Refetch profile to get updated data from database
       await refetch();
       
-      toast.success('Your 30-minute trial has started!');
+      toast.success('Your 24-hour trial has started!');
     } catch (error) {
       console.error('Error starting trial:', error);
       toast.error('Failed to start trial. Please try again.');
@@ -503,12 +503,12 @@ function WelcomeTrialPopup() {
         </DialogHeader>
         <div className="space-y-4 py-4">
           <p className="text-center text-muted-foreground">
-            Enjoy <strong>30 minutes of full access</strong> to explore all features. After that, subscribe to continue using Wakti AI.
+            Enjoy <strong>24 hours of full access</strong> to explore all features. After that, subscribe to continue using Wakti AI.
           </p>
           <div className="flex items-center justify-center gap-2 p-3 bg-primary/10 rounded-lg">
             <Clock className="w-5 h-5 text-primary" />
             <span className="font-semibold text-primary">
-              30 minute free trial
+              24 hour free trial
             </span>
           </div>
         </div>
