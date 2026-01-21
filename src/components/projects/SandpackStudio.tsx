@@ -6,6 +6,7 @@ import {
   SandpackPreview,
   useSandpack,
 } from "@codesandbox/sandpack-react";
+import { SandpackErrorBoundary } from "./SandpackErrorBoundary";
 import { SandpackErrorListener } from "./SandpackErrorListener";
 import { SandpackConsolePanel } from "./SandpackConsolePanel";
 import { CollapsibleFileTree } from "./CollapsibleFileTree";
@@ -696,11 +697,19 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                       isRTL={isRTL}
                     />
                   )}
-
-                  <InspectablePreview 
-                    elementSelectMode={elementSelectMode}
-                    onElementSelect={onElementSelect}
-                  />
+                  
+                  {/* Error Boundary to prevent entire app crash from broken components */}
+                  <SandpackErrorBoundary
+                    onError={(error) => {
+                      console.error('[SandpackStudio] React Error Boundary caught error:', error);
+                      onRuntimeError?.(error.message);
+                    }}
+                  >
+                    <InspectablePreview 
+                      elementSelectMode={elementSelectMode}
+                      onElementSelect={onElementSelect}
+                    />
+                  </SandpackErrorBoundary>
 
                   {/* Visual Mode Indicator - pointer-events-none so it doesn't block clicks */}
                   {elementSelectMode && (

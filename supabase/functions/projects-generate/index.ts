@@ -2804,28 +2804,53 @@ ${filesStr}`;
       // Use smart model selection - Flash-Lite for simple Q&A, Flash for code changes, Pro for vision
       const selectedChatModel = chatModelSelection.model;
       
-      const chatResponse = await withTimeout(
-        fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${selectedChatModel}:generateContent`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-goog-api-key": GEMINI_API_KEY,
-            },
-            body: JSON.stringify({
-              contents: [{ role: "user", parts: contentParts }],
-              systemInstruction: { parts: [{ text: chatSystemPrompt }] },
-              generationConfig: {
-                temperature: 0.7,
-                maxOutputTokens: 8192,
-              },
-            }),
+      // Retry logic for chat mode - up to 2 attempts with increased timeout
+      let chatResponse: Response | null = null;
+      let lastError: Error | null = null;
+      const maxRetries = 2;
+      const chatTimeout = 90000; // 90 seconds (increased from 60s)
+      
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`[Chat Mode] Attempt ${attempt}/${maxRetries} with ${chatTimeout/1000}s timeout`);
+          chatResponse = await withTimeout(
+            fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${selectedChatModel}:generateContent`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-goog-api-key": GEMINI_API_KEY,
+                },
+                body: JSON.stringify({
+                  contents: [{ role: "user", parts: contentParts }],
+                  systemInstruction: { parts: [{ text: chatSystemPrompt }] },
+                  generationConfig: {
+                    temperature: 0.7,
+                    maxOutputTokens: 8192,
+                  },
+                }),
+              }
+            ),
+            chatTimeout,
+            'GEMINI_CHAT'
+          );
+          break; // Success, exit retry loop
+        } catch (err) {
+          lastError = err instanceof Error ? err : new Error(String(err));
+          console.warn(`[Chat Mode] Attempt ${attempt} failed: ${lastError.message}`);
+          if (attempt < maxRetries && lastError.message.includes('TIMEOUT')) {
+            console.log(`[Chat Mode] Retrying after timeout...`);
+            await new Promise(r => setTimeout(r, 1000)); // Wait 1s before retry
+          } else {
+            throw lastError;
           }
-        ),
-        60000,
-        'GEMINI_CHAT'
-      );
+        }
+      }
+      
+      if (!chatResponse) {
+        throw lastError || new Error('Chat request failed after retries');
+      }
       
       // Log credit usage for chat mode
       const chatInputText = chatSystemPrompt + fullPrompt + filesStr;
