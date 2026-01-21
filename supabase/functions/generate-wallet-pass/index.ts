@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { encode as base64Encode, decode as base64Decode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
+import { decode as base64Decode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 import { crypto } from "https://deno.land/std@0.168.0/crypto/mod.ts";
 import { JSZip } from "https://deno.land/x/jszip@0.11.0/mod.ts";
 import forge from "npm:node-forge@1.3.1";
@@ -7,7 +7,7 @@ import forge from "npm:node-forge@1.3.1";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
 
 interface BusinessCardData {
@@ -36,7 +36,24 @@ serve(async (req) => {
   }
 
   try {
-    const { cardData } = await req.json() as { cardData: BusinessCardData };
+    let cardData: BusinessCardData;
+    
+    // Support both GET (direct URL for iOS) and POST (from frontend)
+    if (req.method === "GET") {
+      const url = new URL(req.url);
+      const dataParam = url.searchParams.get("data");
+      if (!dataParam) {
+        return new Response("Missing data parameter", { status: 400 });
+      }
+      try {
+        cardData = JSON.parse(atob(dataParam));
+      } catch {
+        return new Response("Invalid data parameter", { status: 400 });
+      }
+    } else {
+      const body = await req.json();
+      cardData = body.cardData;
+    }
 
     if (!cardData || !cardData.firstName || !cardData.lastName) {
       return new Response(
@@ -52,96 +69,28 @@ serve(async (req) => {
     const WWDR_CERT_BASE64 = Deno.env.get("APPLE_WWDR_CERTIFICATE_BASE64");
 
     if (!PASS_TYPE_ID || !TEAM_ID || !PASS_CERT_BASE64 || !WWDR_CERT_BASE64) {
-      console.log("Apple Wallet certificates not configured. Returning setup instructions.");
+      console.log("Apple Wallet certificates not configured.");
       return new Response(
-        JSON.stringify({
-          success: false,
-          error: "certificates_not_configured",
-          message: "Apple Wallet certificates need to be configured in Supabase secrets.",
-          instructions: {
-            step1: "Go to Apple Developer Portal > Certificates, Identifiers & Profiles",
-            step2: "Create a Pass Type ID (e.g., pass.ai.wakti.businesscard)",
-            step3: "Create a Pass Type ID Certificate and download it",
-            step4: "Export the certificate as .p12 and convert to base64",
-            step5: "Add these secrets to Supabase: APPLE_PASS_TYPE_ID, APPLE_TEAM_ID, APPLE_PASS_CERTIFICATE_BASE64, APPLE_PASS_CERTIFICATE_PASSWORD, APPLE_WWDR_CERTIFICATE_BASE64"
-          }
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const passJson = createPassJson(cardData, PASS_TYPE_ID, TEAM_ID);
-    
-    const zip = new JSZip();
-    
-    const passJsonString = JSON.stringify(passJson, null, 2);
-    zip.addFile("pass.json", new TextEncoder().encode(passJsonString));
-
-    const iconData = await createSimpleIcon(87, WAKTI_COLORS.background);
-    const icon2xData = await createSimpleIcon(174, WAKTI_COLORS.background);
-    const icon3xData = await createSimpleIcon(261, WAKTI_COLORS.background);
-    
-    zip.addFile("icon.png", iconData);
-    zip.addFile("icon@2x.png", icon2xData);
-    zip.addFile("icon@3x.png", icon3xData);
-
-    const logoData = await createSimpleIcon(160, WAKTI_COLORS.background);
-    const logo2xData = await createSimpleIcon(320, WAKTI_COLORS.background);
-    
-    zip.addFile("logo.png", logoData);
-    zip.addFile("logo@2x.png", logo2xData);
-
-    const manifest: Record<string, string> = {};
-    
-    for (const [filename, fileData] of Object.entries(zip.files())) {
-      if (fileData instanceof Uint8Array) {
-        const hash = await crypto.subtle.digest("SHA-1", fileData);
-        manifest[filename] = Array.from(new Uint8Array(hash))
-          .map(b => b.toString(16).padStart(2, '0'))
-          .join('');
-      }
-    }
-    
-    const passJsonHash = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(passJsonString));
-    manifest["pass.json"] = Array.from(new Uint8Array(passJsonHash))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-
-    const manifestString = JSON.stringify(manifest);
-    zip.addFile("manifest.json", new TextEncoder().encode(manifestString));
-
-    try {
-      console.log("Starting signing process...");
-      const signature = signManifest(
-        manifestString,
-        PASS_CERT_BASE64,
-        PASS_CERT_PASSWORD || "",
-        WWDR_CERT_BASE64
-      );
-      zip.addFile("signature", signature);
-      console.log("Signature added successfully.");
-    } catch (signError) {
-      console.error("Signing failed:", signError);
-      return new Response(
-        JSON.stringify({ error: "Failed to sign wallet pass", details: String(signError) }),
+        JSON.stringify({ error: "certificates_not_configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    
-    const pkpassData = await zip.generateAsync({ type: "uint8array" });
-    const pkpassBase64 = base64Encode(pkpassData);
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        type: "pkpass",
-        data: pkpassBase64,
-        filename: `${cardData.firstName}_${cardData.lastName}.pkpass`,
-        mimeType: "application/vnd.apple.pkpass",
-        message: "Wallet pass created successfully"
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    // Generate the .pkpass file
+    const pkpassData = await generatePkpass(cardData, PASS_TYPE_ID, TEAM_ID, PASS_CERT_BASE64, PASS_CERT_PASSWORD || "", WWDR_CERT_BASE64);
+    
+    const filename = `${cardData.firstName}_${cardData.lastName}.pkpass`;
+
+    // Return the .pkpass file directly with proper headers
+    // This is what makes iOS show the native "Add to Wallet" UI
+    return new Response(new Uint8Array(pkpassData), {
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/vnd.apple.pkpass",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Content-Length": pkpassData.length.toString(),
+      }
+    });
 
   } catch (error) {
     console.error("Error generating wallet pass:", error);
@@ -151,6 +100,72 @@ serve(async (req) => {
     );
   }
 });
+
+async function generatePkpass(
+  cardData: BusinessCardData,
+  passTypeId: string,
+  teamId: string,
+  p12Base64: string,
+  p12Password: string,
+  wwdrBase64: string
+): Promise<Uint8Array> {
+  const passJson = createPassJson(cardData, passTypeId, teamId);
+  const zip = new JSZip();
+  
+  const passJsonString = JSON.stringify(passJson, null, 2);
+  zip.addFile("pass.json", new TextEncoder().encode(passJsonString));
+
+  // Create proper PNG icons with Wakti branding
+  const iconData = createColoredPng(29, 29, [6, 5, 65]);
+  const icon2xData = createColoredPng(58, 58, [6, 5, 65]);
+  const icon3xData = createColoredPng(87, 87, [6, 5, 65]);
+  
+  zip.addFile("icon.png", iconData);
+  zip.addFile("icon@2x.png", icon2xData);
+  zip.addFile("icon@3x.png", icon3xData);
+
+  const logoData = createColoredPng(160, 50, [6, 5, 65]);
+  const logo2xData = createColoredPng(320, 100, [6, 5, 65]);
+  
+  zip.addFile("logo.png", logoData);
+  zip.addFile("logo@2x.png", logo2xData);
+
+  // If there's a thumbnail/profile photo URL, we could fetch it here
+  // For now, create a placeholder thumbnail
+  const thumbData = createColoredPng(90, 90, [6, 5, 65]);
+  const thumb2xData = createColoredPng(180, 180, [6, 5, 65]);
+  zip.addFile("thumbnail.png", thumbData);
+  zip.addFile("thumbnail@2x.png", thumb2xData);
+
+  // Build manifest with SHA1 hashes
+  const manifest: Record<string, string> = {};
+  const filesToHash = [
+    { name: "pass.json", data: new TextEncoder().encode(passJsonString) },
+    { name: "icon.png", data: iconData },
+    { name: "icon@2x.png", data: icon2xData },
+    { name: "icon@3x.png", data: icon3xData },
+    { name: "logo.png", data: logoData },
+    { name: "logo@2x.png", data: logo2xData },
+    { name: "thumbnail.png", data: thumbData },
+    { name: "thumbnail@2x.png", data: thumb2xData },
+  ];
+
+  for (const file of filesToHash) {
+    const hash = await crypto.subtle.digest("SHA-1", file.data);
+    manifest[file.name] = Array.from(new Uint8Array(hash))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+
+  const manifestString = JSON.stringify(manifest);
+  zip.addFile("manifest.json", new TextEncoder().encode(manifestString));
+
+  // Sign the manifest
+  const signature = signManifest(manifestString, p12Base64, p12Password, wwdrBase64);
+  zip.addFile("signature", signature);
+
+  return await zip.generateAsync({ type: "uint8array" });
+}
 
 function signManifest(manifest: string, p12Base64: string, p12Password: string, wwdrBase64: string): Uint8Array {
   const p12Der = base64Decode(p12Base64);
@@ -256,17 +271,148 @@ function createPassJson(data: BusinessCardData, passTypeId: string, teamId: stri
   };
 }
 
-function createSimpleIcon(size: number, color: string): Promise<Uint8Array> {
-  // Return a minimal valid PNG
-  // In a real app, this would generate an image of the requested size and color
-  return Promise.resolve(new Uint8Array([
-    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-    0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-    0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89,
-    0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54,
-    0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01,
-    0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44,
-    0xAE, 0x42, 0x60, 0x82
-  ]));
+// Generate a simple colored PNG image
+// This creates a valid PNG with the specified dimensions and RGB color
+function createColoredPng(width: number, height: number, rgb: [number, number, number]): Uint8Array {
+  // For simplicity, we'll create a minimal valid PNG
+  // Apple Wallet requires proper PNGs but accepts simple solid color images
+  
+  // PNG file structure:
+  // - 8-byte signature
+  // - IHDR chunk (image header)
+  // - IDAT chunk (image data - compressed)
+  // - IEND chunk (image end)
+  
+  const signature = new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+  
+  // IHDR chunk
+  const ihdrData = new Uint8Array(13);
+  const ihdrView = new DataView(ihdrData.buffer);
+  ihdrView.setUint32(0, width, false);  // width
+  ihdrView.setUint32(4, height, false); // height
+  ihdrData[8] = 8;  // bit depth
+  ihdrData[9] = 2;  // color type (RGB)
+  ihdrData[10] = 0; // compression
+  ihdrData[11] = 0; // filter
+  ihdrData[12] = 0; // interlace
+  
+  const ihdrChunk = createPngChunk("IHDR", ihdrData);
+  
+  // Create raw image data (RGB, no filter)
+  const rawData = new Uint8Array(height * (1 + width * 3));
+  for (let y = 0; y < height; y++) {
+    const rowStart = y * (1 + width * 3);
+    rawData[rowStart] = 0; // filter byte (none)
+    for (let x = 0; x < width; x++) {
+      const pixelStart = rowStart + 1 + x * 3;
+      rawData[pixelStart] = rgb[0];     // R
+      rawData[pixelStart + 1] = rgb[1]; // G
+      rawData[pixelStart + 2] = rgb[2]; // B
+    }
+  }
+  
+  // Compress with deflate (using a simple uncompressed deflate block)
+  const compressedData = deflateUncompressed(rawData);
+  const idatChunk = createPngChunk("IDAT", compressedData);
+  
+  // IEND chunk
+  const iendChunk = createPngChunk("IEND", new Uint8Array(0));
+  
+  // Combine all parts
+  const png = new Uint8Array(signature.length + ihdrChunk.length + idatChunk.length + iendChunk.length);
+  let offset = 0;
+  png.set(signature, offset); offset += signature.length;
+  png.set(ihdrChunk, offset); offset += ihdrChunk.length;
+  png.set(idatChunk, offset); offset += idatChunk.length;
+  png.set(iendChunk, offset);
+  
+  return png;
+}
+
+function createPngChunk(type: string, data: Uint8Array): Uint8Array {
+  const chunk = new Uint8Array(4 + 4 + data.length + 4);
+  const view = new DataView(chunk.buffer);
+  
+  // Length
+  view.setUint32(0, data.length, false);
+  
+  // Type
+  for (let i = 0; i < 4; i++) {
+    chunk[4 + i] = type.charCodeAt(i);
+  }
+  
+  // Data
+  chunk.set(data, 8);
+  
+  // CRC32
+  const crcData = new Uint8Array(4 + data.length);
+  for (let i = 0; i < 4; i++) {
+    crcData[i] = type.charCodeAt(i);
+  }
+  crcData.set(data, 4);
+  const crc = crc32(crcData);
+  view.setUint32(8 + data.length, crc, false);
+  
+  return chunk;
+}
+
+function deflateUncompressed(data: Uint8Array): Uint8Array {
+  // Create uncompressed deflate stream (zlib format)
+  // Header: 0x78 0x01 (deflate, no compression)
+  // Then uncompressed blocks
+  
+  const maxBlockSize = 65535;
+  const numBlocks = Math.ceil(data.length / maxBlockSize);
+  const outputSize = 2 + numBlocks * 5 + data.length + 4; // header + block headers + data + adler32
+  const output = new Uint8Array(outputSize);
+  
+  output[0] = 0x78; // CMF
+  output[1] = 0x01; // FLG (no dict, fastest)
+  
+  let outPos = 2;
+  let inPos = 0;
+  
+  for (let i = 0; i < numBlocks; i++) {
+    const isLast = i === numBlocks - 1;
+    const blockSize = Math.min(maxBlockSize, data.length - inPos);
+    
+    output[outPos++] = isLast ? 0x01 : 0x00; // BFINAL + BTYPE=00 (no compression)
+    output[outPos++] = blockSize & 0xFF;
+    output[outPos++] = (blockSize >> 8) & 0xFF;
+    output[outPos++] = (~blockSize) & 0xFF;
+    output[outPos++] = ((~blockSize) >> 8) & 0xFF;
+    
+    output.set(data.subarray(inPos, inPos + blockSize), outPos);
+    outPos += blockSize;
+    inPos += blockSize;
+  }
+  
+  // Adler-32 checksum
+  const adler = adler32(data);
+  output[outPos++] = (adler >> 24) & 0xFF;
+  output[outPos++] = (adler >> 16) & 0xFF;
+  output[outPos++] = (adler >> 8) & 0xFF;
+  output[outPos++] = adler & 0xFF;
+  
+  return output.subarray(0, outPos);
+}
+
+function crc32(data: Uint8Array): number {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < data.length; i++) {
+    crc ^= data[i];
+    for (let j = 0; j < 8; j++) {
+      crc = (crc >>> 1) ^ (crc & 1 ? 0xEDB88320 : 0);
+    }
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+function adler32(data: Uint8Array): number {
+  let a = 1, b = 0;
+  for (let i = 0; i < data.length; i++) {
+    a = (a + data[i]) % 65521;
+    b = (b + a) % 65521;
+  }
+  return ((b << 16) | a) >>> 0;
 }

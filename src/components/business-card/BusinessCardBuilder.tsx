@@ -1859,70 +1859,34 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
   };
 
   const handleAddToWallet = async () => {
-    const loadingToast = toast.loading(isRTL ? 'جاري إنشاء بطاقة المحفظة...' : 'Generating wallet pass...');
-    
     try {
-      // Generate QR code as base64 for the pass
-      const svgElement = qrRef.current?.querySelector('svg');
-      let qrCodeBase64 = '';
-      
-      if (svgElement) {
-        const clonedSvg = svgElement.cloneNode(true) as SVGElement;
-        clonedSvg.setAttribute('width', '300');
-        clonedSvg.setAttribute('height', '300');
-        const svgData = new XMLSerializer().serializeToString(clonedSvg);
-        qrCodeBase64 = btoa(unescape(encodeURIComponent(svgData)));
-      }
-
       const cardUrl = `${window.location.origin}/card/${formData.firstName.toLowerCase()}-${formData.lastName.toLowerCase()}`;
       
-      const { data, error } = await supabase.functions.invoke('generate-wallet-pass', {
-        body: {
-          cardData: {
-            firstName: formData.firstName,
-            lastName: formData.lastName,
-            email: formData.email,
-            phone: formData.phone,
-            company: formData.companyName,
-            jobTitle: formData.jobTitle,
-            website: formData.website,
-            cardUrl,
-            qrCodeBase64,
-            profilePhotoUrl: formData.profilePhotoUrl,
-            logoUrl: formData.logoUrl,
-          }
-        }
-      });
-
-      toast.dismiss(loadingToast);
-
-      if (error) throw error;
-
-      if (data?.success && data?.data) {
-        // Download the .pkpass file
-        const binaryString = atob(data.data);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        const blob = new Blob([bytes], { type: data.mimeType || 'application/vnd.apple.pkpass' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = data.filename || `${formData.firstName}_${formData.lastName}.pkpass`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-
-        toast.success(isRTL ? 'تم إنشاء بطاقة المحفظة!' : 'Wallet pass created!', {
-          description: isRTL ? 'افتح الملف لإضافته إلى المحفظة' : 'Open the file to add to Wallet'
-        });
-      } else {
-        throw new Error(data?.message || 'Failed to generate pass');
-      }
+      // Prepare card data for the pass
+      const cardData = {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+        company: formData.companyName,
+        jobTitle: formData.jobTitle,
+        website: formData.website,
+        cardUrl,
+        profilePhotoUrl: formData.profilePhotoUrl,
+        logoUrl: formData.logoUrl,
+      };
+      
+      // Encode the data as base64 for URL parameter
+      const encodedData = btoa(JSON.stringify(cardData));
+      
+      // Build the direct URL to the Edge Function
+      // iOS will intercept this and show the native "Add to Wallet" UI
+      const passUrl = `https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-wallet-pass?data=${encodeURIComponent(encodedData)}`;
+      
+      // Open the URL - iOS Safari will show the native Add to Wallet dialog
+      window.location.href = passUrl;
+      
     } catch (error) {
-      toast.dismiss(loadingToast);
       console.error('Wallet pass error:', error);
       toast.error(isRTL ? 'فشل في إنشاء بطاقة المحفظة' : 'Failed to generate wallet pass');
     }
