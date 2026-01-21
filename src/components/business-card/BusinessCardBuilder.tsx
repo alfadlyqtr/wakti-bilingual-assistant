@@ -1931,6 +1931,7 @@ const getTextStyleClasses = (style?: TextStyle): string => {
 
 // Live Card Preview Component - 5 Premium Business Card Designs
 const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
+  const [isFlipped, setIsFlipped] = useState(false);
   const template = CARD_TEMPLATES.find(t => t.id === data.template) || CARD_TEMPLATES[0];
   const mosaicPalette = MOSAIC_PALETTES.find(p => p.id === (data.mosaicPaletteId || 'rose')) || MOSAIC_PALETTES[0];
   const mosaicColors = {
@@ -2007,32 +2008,6 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
     })
   ];
 
-  // Helper to get icon color based on settings
-  const getIconColor = (brandColor: string) => {
-    // Get base color
-    const baseColor = iconStyle.useBrandColors ? brandColor : (iconStyle.iconColor || '#ffffff');
-    return baseColor;
-  };
-
-  const getIconBackgroundColor = (color: string) => {
-    if (!color || color === 'transparent') return 'transparent';
-
-    const alphaRaw = (iconStyle.colorIntensity ?? 50) / 100;
-    const alpha = Math.max(0, Math.min(1, alphaRaw));
-
-    if (!color.startsWith('#')) return color;
-
-    const hex = color.length === 4
-      ? `#${color[1]}${color[1]}${color[2]}${color[2]}${color[3]}${color[3]}`
-      : color;
-
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  };
-
   const getLinkHref = (link: { type: string; url: string }) => {
     if (link.type === 'phone') return `tel:${link.url}`;
     if (link.type === 'email') return `mailto:${link.url}`;
@@ -2040,437 +2015,581 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
     if (!link.url.startsWith('http')) return `https://${link.url}`;
     return link.url;
   };
-  
-  // STYLE 1: Geometric Mosaic - Pink triangles, centered avatar overlapping
-  if (template.headerStyle === 'mosaic') {
-    return (
-      <div className="w-[300px] min-h-[384px] mx-auto rounded-[20px] bg-white shadow-xl flex flex-col items-center relative pb-6">
-        {/* Mosaic Header */}
-        <div className="w-full h-[192px] rounded-t-[20px] overflow-hidden shrink-0">
-          {data.coverPhotoUrl ? (
-            <img src={data.coverPhotoUrl} alt="Cover" className="w-full h-full object-cover" />
-          ) : (
-            <svg className="w-full h-full" viewBox="0 0 300 192" preserveAspectRatio="none">
-              {/* Row 1 */}
-              <polygon points="0,0 50,0 25,40" fill={mosaicColors.light} />
-              <polygon points="50,0 25,40 75,40" fill={mosaicColors.mid} />
-              <polygon points="50,0 100,0 75,40" fill={mosaicColors.dark} />
-              <polygon points="100,0 75,40 125,40" fill={mosaicColors.mid} />
-              <polygon points="100,0 150,0 125,40" fill={mosaicColors.light} />
-              <polygon points="150,0 125,40 175,40" fill={mosaicColors.mid} />
-              <polygon points="150,0 200,0 175,40" fill={mosaicColors.dark} />
-              <polygon points="200,0 175,40 225,40" fill={mosaicColors.mid} />
-              <polygon points="200,0 250,0 225,40" fill={mosaicColors.light} />
-              <polygon points="250,0 225,40 275,40" fill={mosaicColors.dark} />
-              <polygon points="250,0 300,0 275,40" fill={mosaicColors.mid} />
-              <polygon points="300,0 275,40 300,40" fill={mosaicColors.light} />
-              {/* Row 2 */}
-              <polygon points="0,40 25,40 0,80" fill={mosaicColors.dark} />
-              <polygon points="25,40 0,80 50,80" fill={mosaicColors.mid} />
-              <polygon points="25,40 75,40 50,80" fill={mosaicColors.deepest} />
-              <polygon points="75,40 50,80 100,80" fill={mosaicColors.dark} />
-              <polygon points="75,40 125,40 100,80" fill={mosaicColors.mid} />
-              <polygon points="125,40 100,80 150,80" fill={mosaicColors.deepest} />
-              <polygon points="125,40 175,40 150,80" fill={mosaicColors.dark} />
-              <polygon points="175,40 150,80 200,80" fill={mosaicColors.mid} />
-              <polygon points="175,40 225,40 200,80" fill={mosaicColors.dark} />
-              <polygon points="225,40 200,80 250,80" fill={mosaicColors.deepest} />
-              <polygon points="225,40 275,40 250,80" fill={mosaicColors.mid} />
-              <polygon points="275,40 250,80 300,80" fill={mosaicColors.dark} />
-              {/* Row 3 */}
-              <polygon points="0,80 50,80 25,120" fill={mosaicColors.dark} />
-              <polygon points="50,80 25,120 75,120" fill={mosaicColors.deepest} />
-              <polygon points="50,80 100,80 75,120" fill={mosaicColors.mid} />
-              <polygon points="100,80 75,120 125,120" fill={mosaicColors.dark} />
-              <polygon points="100,80 150,80 125,120" fill={mosaicColors.deepest} />
-              <polygon points="150,80 125,120 175,120" fill={mosaicColors.mid} />
-              <polygon points="150,80 200,80 175,120" fill={mosaicColors.dark} />
-              <polygon points="200,80 175,120 225,120" fill={mosaicColors.deepest} />
-              <polygon points="200,80 250,80 225,120" fill={mosaicColors.mid} />
-              <polygon points="250,80 225,120 275,120" fill={mosaicColors.dark} />
-              <polygon points="250,80 300,80 275,120" fill={mosaicColors.deepest} />
-              <polygon points="300,80 275,120 300,120" fill={mosaicColors.mid} />
-              {/* Row 4 */}
-              <polygon points="0,120 25,120 0,160" fill={mosaicColors.deepest} />
-              <polygon points="25,120 0,160 50,160" fill={mosaicColors.dark} />
-              <polygon points="25,120 75,120 50,160" fill={mosaicColors.deepest} />
-              <polygon points="75,120 50,160 100,160" fill={mosaicColors.dark} />
-              <polygon points="75,120 125,120 100,160" fill={mosaicColors.deepest} />
-              <polygon points="125,120 100,160 150,160" fill={mosaicColors.dark} />
-              <polygon points="125,120 175,120 150,160" fill={mosaicColors.deepest} />
-              <polygon points="175,120 150,160 200,160" fill={mosaicColors.dark} />
-              <polygon points="175,120 225,120 200,160" fill={mosaicColors.deepest} />
-              <polygon points="225,120 200,160 250,160" fill={mosaicColors.dark} />
-              <polygon points="225,120 275,120 250,160" fill={mosaicColors.deepest} />
-              <polygon points="275,120 250,160 300,160" fill={mosaicColors.dark} />
-              {/* Bottom row */}
-              <rect x="0" y="160" width="300" height="32" fill={mosaicColors.deepest} />
-            </svg>
-          )}
-        </div>
-        
-        {/* Avatar - Centered, overlapping */}
-        <div className={`absolute w-[114px] h-[114px] bg-white ${photoShapeClass} flex justify-center items-center z-10`} style={{ top: '135px' }}>
-          <div className={`w-[100px] h-[100px] ${photoShapeInnerClass} overflow-hidden bg-white`}>
-            {data.profilePhotoUrl ? (
-              <img src={data.profilePhotoUrl} alt="" className="w-full h-full object-contain" />
+
+  // Helper to get the OUTER background circle (bigger circle behind the icon)
+  const getOuterBgStyle = () => {
+    if (!iconStyle.showBackground) {
+      return 'transparent';
+    }
+    const opacity = iconStyle.colorIntensity / 100;
+    const hex = iconStyle.backgroundColor.replace('#', '');
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+  };
+
+  const handleFlip = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsFlipped(!isFlipped);
+  };
+
+  const renderFront = () => {
+    if (template.headerStyle === 'mosaic') {
+      // STYLE 1: Geometric Mosaic
+      return (
+        <div className="w-full h-full rounded-[20px] bg-white flex flex-col items-center relative pb-6 overflow-hidden">
+          {/* Mosaic Header */}
+          <div className="w-full h-[192px] rounded-t-[20px] overflow-hidden shrink-0">
+            {data.coverPhotoUrl ? (
+              <img src={data.coverPhotoUrl} alt="Cover" className="w-full h-full object-cover" />
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center">
-                <User className="w-12 h-12 text-white" />
-              </div>
+              <svg className="w-full h-full" viewBox="0 0 300 192" preserveAspectRatio="none">
+                {/* Row 1 */}
+                <polygon points="0,0 50,0 25,40" fill={mosaicColors.light} />
+                <polygon points="50,0 25,40 75,40" fill={mosaicColors.mid} />
+                <polygon points="50,0 100,0 75,40" fill={mosaicColors.dark} />
+                <polygon points="100,0 75,40 125,40" fill={mosaicColors.mid} />
+                <polygon points="100,0 150,0 125,40" fill={mosaicColors.light} />
+                <polygon points="150,0 125,40 175,40" fill={mosaicColors.mid} />
+                <polygon points="150,0 200,0 175,40" fill={mosaicColors.dark} />
+                <polygon points="200,0 175,40 225,40" fill={mosaicColors.mid} />
+                <polygon points="200,0 250,0 225,40" fill={mosaicColors.light} />
+                <polygon points="250,0 225,40 275,40" fill={mosaicColors.dark} />
+                <polygon points="250,0 300,0 275,40" fill={mosaicColors.mid} />
+                <polygon points="300,0 275,40 300,40" fill={mosaicColors.light} />
+                {/* Row 2 */}
+                <polygon points="0,40 25,40 0,80" fill={mosaicColors.dark} />
+                <polygon points="25,40 0,80 50,80" fill={mosaicColors.mid} />
+                <polygon points="25,40 75,40 50,80" fill={mosaicColors.deepest} />
+                <polygon points="75,40 50,80 100,80" fill={mosaicColors.dark} />
+                <polygon points="75,40 125,40 100,80" fill={mosaicColors.mid} />
+                <polygon points="125,40 100,80 150,80" fill={mosaicColors.deepest} />
+                <polygon points="125,40 175,40 150,80" fill={mosaicColors.dark} />
+                <polygon points="175,40 150,80 200,80" fill={mosaicColors.mid} />
+                <polygon points="175,40 225,40 200,80" fill={mosaicColors.dark} />
+                <polygon points="225,40 200,80 250,80" fill={mosaicColors.deepest} />
+                <polygon points="225,40 275,40 250,80" fill={mosaicColors.mid} />
+                <polygon points="275,40 250,80 300,80" fill={mosaicColors.dark} />
+                {/* Row 3 */}
+                <polygon points="0,80 50,80 25,120" fill={mosaicColors.dark} />
+                <polygon points="50,80 25,120 75,120" fill={mosaicColors.deepest} />
+                <polygon points="50,80 100,80 75,120" fill={mosaicColors.mid} />
+                <polygon points="100,80 75,120 125,120" fill={mosaicColors.dark} />
+                <polygon points="100,80 150,80 125,120" fill={mosaicColors.deepest} />
+                <polygon points="150,80 125,120 175,120" fill={mosaicColors.mid} />
+                <polygon points="150,80 200,80 175,120" fill={mosaicColors.dark} />
+                <polygon points="200,80 175,120 225,120" fill={mosaicColors.deepest} />
+                <polygon points="200,80 250,80 225,120" fill={mosaicColors.mid} />
+                <polygon points="250,80 225,120 275,120" fill={mosaicColors.dark} />
+                <polygon points="250,80 300,80 275,120" fill={mosaicColors.deepest} />
+                <polygon points="300,80 275,120 300,120" fill={mosaicColors.mid} />
+                {/* Row 4 */}
+                <polygon points="0,120 25,120 0,160" fill={mosaicColors.deepest} />
+                <polygon points="25,120 0,160 50,160" fill={mosaicColors.dark} />
+                <polygon points="25,120 75,120 50,160" fill={mosaicColors.deepest} />
+                <polygon points="75,120 50,160 100,160" fill={mosaicColors.dark} />
+                <polygon points="75,120 125,120 100,160" fill={mosaicColors.deepest} />
+                <polygon points="125,120 100,160 150,160" fill={mosaicColors.dark} />
+                <polygon points="125,120 175,120 150,160" fill={mosaicColors.deepest} />
+                <polygon points="175,120 150,160 200,160" fill={mosaicColors.dark} />
+                <polygon points="175,120 225,120 200,160" fill={mosaicColors.deepest} />
+                <polygon points="225,120 200,160 250,160" fill={mosaicColors.dark} />
+                <polygon points="225,120 275,120 250,160" fill={mosaicColors.deepest} />
+                <polygon points="275,120 250,160 300,160" fill={mosaicColors.dark} />
+                {/* Bottom row */}
+                <rect x="0" y="160" width="300" height="32" fill={mosaicColors.deepest} />
+              </svg>
             )}
           </div>
-        </div>
-        
-        {/* Name & Title */}
-        <div className="mt-[60px] text-center px-4 w-full">
-          <h3 
-            className={`text-lg font-medium ${getTextStyleClasses(data.nameStyle)}`}
-            style={{ color: data.nameStyle?.color || '#000' }}
-          >
-            {data.firstName || 'Cameron'} {data.lastName || 'Williamson'}
-          </h3>
-          <p 
-            className={`mt-1 text-[15px] ${getTextStyleClasses(data.titleStyle)}`}
-            style={{ color: data.titleStyle?.color || '#78858F' }}
-          >
-            {data.jobTitle || 'Web Development'}
-          </p>
-          {data.companyName && (
-            <p className="text-xs mt-1 font-medium opacity-80" style={{ color: data.companyStyle?.color || '#000' }}>
-              {data.companyName}
-            </p>
-          )}
-          {data.department && (
-            <p className="text-xs opacity-70" style={{ color: data.titleStyle?.color || '#78858F' }}>
-              {data.department}
-            </p>
-          )}
-          {data.headline && (
-            <p className="text-[11px] mt-2 italic px-2 opacity-80" style={{ color: data.nameStyle?.color || '#000' }}>
-              {data.headline}
-            </p>
-          )}
-        </div>
-        
-        {/* Logo */}
-        {data.logoUrl && (
-          <div className={`absolute ${logoPositionClass} w-10 h-10 rounded-lg bg-white/90 p-1 shadow-sm z-20`}>
-            <img src={data.logoUrl} alt="Logo" className="w-full h-full object-contain" />
-          </div>
-        )}
-        
-        {/* All Active Links - TRUE Brand Icons ONLY */}
-        <div className="flex flex-wrap justify-center gap-3 mt-4 px-6 w-full mb-6">
-          {activeLinks.map((link, i) => {
-            const BrandIcon = link.brandIcon;
-            return (
-              <a 
-                key={i}
-                href={getLinkHref(link)}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={link.label || link.type}
-                className="transition-transform hover:scale-110"
-              >
-                <div 
-                  className="w-10 h-10 rounded-full shadow-sm flex items-center justify-center"
-                  style={{ background: link.gradient || link.color }}
-                >
-                  {BrandIcon ? (
-                    <BrandIcon className="w-5 h-5" style={{ color: '#ffffff' }} />
-                  ) : (
-                    <link.icon className="w-5 h-5" style={{ color: '#ffffff' }} />
-                  )}
-                </div>
-              </a>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-  
-  // STYLE 2: Professional - Blue bands with avatar, contact list
-  if (template.headerStyle === 'professional') {
-    return (
-      <div className="w-[300px] mx-auto rounded-lg shadow-xl overflow-hidden bg-white flex flex-col items-center relative min-h-[400px]">
-        {/* Cover Photo Background (optional) */}
-        {data.coverPhotoUrl && (
-          <div className="absolute inset-0 h-24 opacity-20">
-            <img src={data.coverPhotoUrl} alt="Cover" className="w-full h-full object-cover" />
-          </div>
-        )}
-
-        {/* Logo */}
-        {data.logoUrl && (
-          <div className={`absolute ${logoPositionClass} w-8 h-8 rounded-md bg-white/90 p-1 shadow-sm z-50`}>
-            <img src={data.logoUrl} alt="Logo" className="w-full h-full object-contain" />
-          </div>
-        )}
-
-        {/* Avatar section with blue bands */}
-        <div className="w-full pt-5 flex items-center justify-center flex-col gap-1">
-          <div className="w-full flex items-center justify-center relative">
-            {/* Top blue band */}
-            <div
-              className="absolute w-full top-4"
-              style={{ backgroundColor: professionalColors.line, height: `${professionalColors.lineHeight}px` }}
-            />
-            {/* Bottom blue band */}
-            <div
-              className="absolute w-full bottom-4"
-              style={{ backgroundColor: professionalColors.line, height: `${professionalColors.lineHeight}px` }}
-            />
-            {/* Avatar */}
-            <div className={`w-36 h-36 z-40 ${photoShapeClass} overflow-hidden bg-white border-4`} style={{ borderColor: professionalColors.ring }}>
+          
+          {/* Avatar - Centered, overlapping */}
+          <div className={`absolute w-[114px] h-[114px] bg-white ${photoShapeClass} flex justify-center items-center z-10`} style={{ top: '135px' }}>
+            <div className={`w-[100px] h-[100px] ${photoShapeInnerClass} overflow-hidden bg-white`}>
               {data.profilePhotoUrl ? (
-                <img src={data.profilePhotoUrl} alt="" className={`w-full h-full object-contain ${photoShapeInnerClass}`} />
+                <img src={data.profilePhotoUrl} alt="" className="w-full h-full object-contain" />
               ) : (
-                <div className="w-full h-full bg-[#58b0e0] flex items-center justify-center">
-                  <User className="w-16 h-16 text-white" />
+                <div className="w-full h-full bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center">
+                  <User className="w-12 h-12 text-white" />
                 </div>
               )}
             </div>
-            {/* Blue background behind avatar */}
-            <div
-              className="absolute z-10 w-full"
-              style={{ backgroundColor: professionalColors.band, height: `${professionalColors.bandHeight}%` }}
-            />
           </div>
-        </div>
-        
-        {/* Name & Title */}
-        <div className="text-center leading-4 mt-2 px-2">
-          <p 
-            className={`text-xl font-serif font-semibold ${getTextStyleClasses(data.nameStyle)}`}
-            style={{ color: data.nameStyle?.color || '#434955' }}
-          >
-            {(data.firstName || 'ANNA').toUpperCase()} {(data.lastName || 'WILSON').toUpperCase()}
-          </p>
-          <p 
-            className={`text-sm font-semibold mt-1 ${getTextStyleClasses(data.titleStyle)}`}
-            style={{ color: data.titleStyle?.color || '#434955' }}
-          >
-            {(data.jobTitle || 'DEVELOPER').toUpperCase()}
-          </p>
-          {data.companyName && (
-            <p className="text-xs mt-1 font-bold opacity-90" style={{ color: data.companyStyle?.color || '#434955' }}>
-              {(data.companyName).toUpperCase()}
+          
+          {/* Name & Title */}
+          <div className="mt-[60px] text-center px-4 w-full">
+            <h3 
+              className={`text-lg font-medium ${getTextStyleClasses(data.nameStyle)}`}
+              style={{ color: data.nameStyle?.color || '#000' }}
+            >
+              {data.firstName || 'Cameron'} {data.lastName || 'Williamson'}
+            </h3>
+            <p 
+              className={`mt-1 text-[15px] ${getTextStyleClasses(data.titleStyle)}`}
+              style={{ color: data.titleStyle?.color || '#78858F' }}
+            >
+              {data.jobTitle || 'Web Development'}
             </p>
+            {data.companyName && (
+              <p className="text-xs mt-1 font-medium opacity-80" style={{ color: data.companyStyle?.color || '#000' }}>
+                {data.companyName}
+              </p>
+            )}
+            {data.department && (
+              <p className="text-xs opacity-70" style={{ color: data.titleStyle?.color || '#78858F' }}>
+                {data.department}
+              </p>
+            )}
+            {data.headline && (
+              <p className="text-[11px] mt-2 italic px-2 opacity-80" style={{ color: data.nameStyle?.color || '#000' }}>
+                {data.headline}
+              </p>
+            )}
+          </div>
+          
+          {/* Logo */}
+          {data.logoUrl && (
+            <div className={`absolute ${logoPositionClass} w-10 h-10 rounded-lg bg-white/90 p-1 shadow-sm z-20`}>
+              <img src={data.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+            </div>
           )}
-          {data.department && (
-            <p className="text-[10px] mt-0.5 opacity-80" style={{ color: data.titleStyle?.color || '#434955' }}>
-              {(data.department).toUpperCase()}
-            </p>
-          )}
-          {data.headline && (
-            <p className="text-xs mt-2 italic opacity-90 px-2 leading-tight" style={{ color: data.nameStyle?.color || '#434955' }}>
-              {data.headline}
-            </p>
-          )}
-        </div>
-        
-        {/* Contact Info - TRUE Brand Icons ONLY */}
-        <div className="flex flex-wrap justify-center gap-3 mt-4 px-4 mb-4">
-          {activeLinks.map((link, i) => {
-            const BrandIcon = link.brandIcon;
-            return (
-              <a 
-                key={i}
-                href={getLinkHref(link)}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={link.label || link.type}
-                className="transition-transform hover:scale-110"
-              >
-                <div 
-                  className="w-10 h-10 rounded-full shadow-sm flex items-center justify-center"
-                  style={{ background: link.gradient || link.color }}
+          
+          {/* All Active Links - with outer background circle */}
+          <div className="flex flex-wrap justify-center gap-3 mt-4 px-6 w-full mb-6">
+            {activeLinks.map((link, i) => {
+              const BrandIcon = link.brandIcon;
+              const outerBg = getOuterBgStyle();
+              return (
+                <a 
+                  key={i}
+                  href={getLinkHref(link)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={link.label || link.type}
+                  className="transition-transform hover:scale-110 relative"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  {BrandIcon ? (
-                    <BrandIcon className="w-5 h-5" style={{ color: '#ffffff' }} />
-                  ) : (
-                    <link.icon className="w-5 h-5" style={{ color: '#ffffff' }} />
+                  {/* Outer background circle (halo) */}
+                  {iconStyle.showBackground && (
+                    <div 
+                      className="absolute inset-0 w-12 h-12 -m-1 rounded-full"
+                      style={{ background: outerBg }}
+                    />
                   )}
-                </div>
-              </a>
-            );
-          })}
-        </div>
-        
-        {/* Bottom blue bar */}
-        <div className="w-full h-3 mt-auto" style={{ backgroundColor: professionalColors.band }} />
-      </div>
-    );
-  }
-  
-  // STYLE 3: Fashion - White top, gray curved bottom with star decoration
-  if (template.headerStyle === 'fashion') {
-    return (
-      <div className="w-[300px] mx-auto rounded-lg shadow-xl overflow-hidden bg-white flex flex-col items-center py-8 px-6 gap-3 relative min-h-[450px]">
-        {/* Cover Photo Background (optional) */}
-        {data.coverPhotoUrl && (
-          <div className="absolute inset-0 opacity-10">
-            <img src={data.coverPhotoUrl} alt="Cover" className="w-full h-full object-cover" />
+                  {/* Icon circle with brand colors */}
+                  <div 
+                    className="relative w-10 h-10 rounded-full shadow-sm flex items-center justify-center"
+                    style={{ background: link.gradient || link.color }}
+                  >
+                    {BrandIcon ? (
+                      <BrandIcon className="w-5 h-5" style={{ color: '#ffffff' }} />
+                    ) : (
+                      <link.icon className="w-5 h-5" style={{ color: '#ffffff' }} />
+                    )}
+                  </div>
+                </a>
+              );
+            })}
           </div>
-        )}
-        
+        </div>
+      );
+    }
+
+    // STYLE 2: Professional
+    if (template.headerStyle === 'professional') {
+      return (
+        <div className="w-full h-full rounded-lg bg-white flex flex-col items-center relative overflow-hidden">
+          {/* Cover Photo Background (optional) */}
+          {data.coverPhotoUrl && (
+            <div className="absolute inset-0 h-24 opacity-20">
+              <img src={data.coverPhotoUrl} alt="Cover" className="w-full h-full object-cover" />
+            </div>
+          )}
+
+          {/* Logo */}
+          {data.logoUrl && (
+            <div className={`absolute ${logoPositionClass} w-8 h-8 rounded-md bg-white/90 p-1 shadow-sm z-50`}>
+              <img src={data.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+            </div>
+          )}
+
+          {/* Avatar section with blue bands */}
+          <div className="w-full pt-5 flex items-center justify-center flex-col gap-1">
+            <div className="w-full flex items-center justify-center relative">
+              {/* Top blue band */}
+              <div
+                className="absolute w-full top-4"
+                style={{ backgroundColor: professionalColors.line, height: `${professionalColors.lineHeight}px` }}
+              />
+              {/* Bottom blue band */}
+              <div
+                className="absolute w-full bottom-4"
+                style={{ backgroundColor: professionalColors.line, height: `${professionalColors.lineHeight}px` }}
+              />
+              {/* Avatar */}
+              <div className={`w-36 h-36 z-40 ${photoShapeClass} overflow-hidden bg-white border-4`} style={{ borderColor: professionalColors.ring }}>
+                {data.profilePhotoUrl ? (
+                  <img src={data.profilePhotoUrl} alt="" className={`w-full h-full object-contain ${photoShapeInnerClass}`} />
+                ) : (
+                  <div className="w-full h-full bg-[#58b0e0] flex items-center justify-center">
+                    <User className="w-16 h-16 text-white" />
+                  </div>
+                )}
+              </div>
+              {/* Blue background behind avatar */}
+              <div
+                className="absolute z-10 w-full"
+                style={{ backgroundColor: professionalColors.band, height: `${professionalColors.bandHeight}%` }}
+              />
+            </div>
+          </div>
+          
+          {/* Name & Title */}
+          <div className="text-center leading-4 mt-2 px-2">
+            <p 
+              className={`text-xl font-serif font-semibold ${getTextStyleClasses(data.nameStyle)}`}
+              style={{ color: data.nameStyle?.color || '#434955' }}
+            >
+              {(data.firstName || 'ANNA').toUpperCase()} {(data.lastName || 'WILSON').toUpperCase()}
+            </p>
+            <p 
+              className={`text-sm font-semibold mt-1 ${getTextStyleClasses(data.titleStyle)}`}
+              style={{ color: data.titleStyle?.color || '#434955' }}
+            >
+              {(data.jobTitle || 'DEVELOPER').toUpperCase()}
+            </p>
+            {data.companyName && (
+              <p className="text-xs mt-1 font-bold opacity-90" style={{ color: data.companyStyle?.color || '#434955' }}>
+                {(data.companyName).toUpperCase()}
+              </p>
+            )}
+            {data.department && (
+              <p className="text-[10px] mt-0.5 opacity-80" style={{ color: data.titleStyle?.color || '#434955' }}>
+                {(data.department).toUpperCase()}
+              </p>
+            )}
+            {data.headline && (
+              <p className="text-xs mt-2 italic opacity-90 px-2 leading-tight" style={{ color: data.nameStyle?.color || '#434955' }}>
+                {data.headline}
+              </p>
+            )}
+          </div>
+          
+          {/* Contact Info - with outer background circle */}
+          <div className="flex flex-wrap justify-center gap-3 mt-4 px-4 mb-4">
+            {activeLinks.map((link, i) => {
+              const BrandIcon = link.brandIcon;
+              const outerBg = getOuterBgStyle();
+              return (
+                <a 
+                  key={i}
+                  href={getLinkHref(link)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={link.label || link.type}
+                  className="transition-transform hover:scale-110 relative"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {iconStyle.showBackground && (
+                    <div 
+                      className="absolute inset-0 w-12 h-12 -m-1 rounded-full"
+                      style={{ background: outerBg }}
+                    />
+                  )}
+                  <div 
+                    className="relative w-10 h-10 rounded-full shadow-sm flex items-center justify-center"
+                    style={{ background: link.gradient || link.color }}
+                  >
+                    {BrandIcon ? (
+                      <BrandIcon className="w-5 h-5" style={{ color: '#ffffff' }} />
+                    ) : (
+                      <link.icon className="w-5 h-5" style={{ color: '#ffffff' }} />
+                    )}
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+          
+          {/* Bottom blue bar */}
+          <div className="w-full h-3 mt-auto" style={{ backgroundColor: professionalColors.band }} />
+        </div>
+      );
+    }
+
+    // STYLE 3: Fashion
+    if (template.headerStyle === 'fashion') {
+      return (
+        <div className="w-full h-full rounded-lg bg-white flex flex-col items-center py-8 px-6 gap-3 relative overflow-hidden">
+          {/* Cover Photo Background (optional) */}
+          {data.coverPhotoUrl && (
+            <div className="absolute inset-0 opacity-10">
+              <img src={data.coverPhotoUrl} alt="Cover" className="w-full h-full object-cover" />
+            </div>
+          )}
+          
+          {/* Logo */}
+          {data.logoUrl && (
+            <div className={`absolute ${logoPositionClass} w-10 h-10 rounded-lg bg-white/90 p-1 shadow-sm z-50`}>
+              <img src={data.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+            </div>
+          )}
+          
+          {/* Decorative star */}
+          <div className="absolute -left-[40%] top-0">
+            <svg 
+              className="rotate-[24deg]" 
+              height="200" 
+              width="200" 
+              viewBox="0 0 24 24" 
+              style={{ 
+                fill: fashionColors.star,
+                filter: fashionColors.starGlow ? `drop-shadow(0 0 12px ${fashionColors.star}) drop-shadow(0 0 24px ${fashionColors.star})` : 'none',
+              }}
+            >
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+            </svg>
+          </div>
+          
+          {/* Gray curved background */}
+          <div className="absolute rounded-full z-20 left-1/2 top-[44%] h-[110%] w-[110%] -translate-x-1/2" style={{ backgroundColor: fashionColors.curve }} />
+          
+          {/* Title */}
+          {data.companyName && (
+            <div className="uppercase text-center leading-none z-40">
+              <p 
+                className={`font-bold text-xl tracking-wider ${getTextStyleClasses(data.companyStyle)}`}
+                style={{ color: data.companyStyle?.color || '#6b7280' }}
+              >
+                {data.companyName}
+              </p>
+            </div>
+          )}
+          
+          {/* Photo */}
+          <div className={`w-[180px] aspect-square bg-white z-40 ${photoShapeClass} overflow-hidden shadow-lg`}>
+            {data.profilePhotoUrl ? (
+              <img src={data.profilePhotoUrl} alt="" className={`w-full h-full object-contain ${photoShapeInnerClass}`} />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center">
+                <User className="w-20 h-20 text-white/70" />
+              </div>
+            )}
+          </div>
+
+          {/* Name & Details - Added to Fashion template */}
+          <div className="z-40 text-center mt-1 px-4 w-full">
+            <h3 className={`font-bold text-lg ${getTextStyleClasses(data.nameStyle)}`} style={{ color: data.nameStyle?.color || '#333' }}>
+              {data.firstName} {data.lastName}
+            </h3>
+            <p className={`text-sm ${getTextStyleClasses(data.titleStyle)}`} style={{ color: data.titleStyle?.color || '#666' }}>
+              {data.jobTitle}
+            </p>
+            {data.department && (
+              <p className="text-xs text-gray-500 mt-0.5">{data.department}</p>
+            )}
+            {data.headline && (
+              <p className="text-xs mt-1 italic text-gray-600">{data.headline}</p>
+            )}
+          </div>
+          
+          {/* Contact Icons - with outer background circle */}
+          <div className="z-40 flex flex-wrap justify-center gap-3 mt-2">
+            {activeLinks.map((link, i) => {
+              const BrandIcon = link.brandIcon;
+              const outerBg = getOuterBgStyle();
+              return (
+                <a 
+                  key={i} 
+                  href={getLinkHref(link)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={link.label || link.type}
+                  className="transition-transform hover:scale-110 relative"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {iconStyle.showBackground && (
+                    <div 
+                      className="absolute inset-0 w-12 h-12 -m-1 rounded-full"
+                      style={{ background: outerBg }}
+                    />
+                  )}
+                  <div 
+                    className="relative w-10 h-10 rounded-full shadow-sm flex items-center justify-center"
+                    style={{ background: link.gradient || link.color }}
+                  >
+                    {BrandIcon ? (
+                      <BrandIcon className="w-5 h-5" style={{ color: '#ffffff' }} />
+                    ) : (
+                      <link.icon className="w-5 h-5" style={{ color: '#ffffff' }} />
+                    )}
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    // STYLE 4: Minimal Dark
+    if (template.headerStyle === 'minimal') {
+      return (
+        <div className="w-full h-full rounded-[20px] bg-white flex flex-col overflow-hidden" style={{ backgroundColor: minimalColors.background }}>
+          {/* Header with cover */}
+          <div className="h-24 relative shrink-0" style={{ backgroundColor: minimalColors.header }}>
+            {data.coverPhotoUrl && (
+              <img src={data.coverPhotoUrl} alt="Cover" className="w-full h-full object-cover opacity-50" />
+            )}
+            {/* Logo */}
+            {data.logoUrl && (
+              <div className={`absolute ${logoPositionClass} w-10 h-10 rounded-lg bg-white/10 p-1`}>
+                <img src={data.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+              </div>
+            )}
+          </div>
+          
+          {/* Avatar */}
+          <div className="flex justify-center -mt-14 relative z-10">
+            <div className={`w-28 h-28 ${photoShapeClass} border-4 bg-white p-1 shadow-lg`} style={{ borderColor: minimalColors.accent }}>
+              {data.profilePhotoUrl ? (
+                <img src={data.profilePhotoUrl} alt="" className={`w-full h-full object-contain ${photoShapeInnerClass}`} />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <User className="w-12 h-12" style={{ color: minimalColors.muted }} />
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Name & Title */}
+          <div className="text-center mt-3 px-5">
+            <h3 
+              className={`text-xl font-light tracking-wide ${getTextStyleClasses(data.nameStyle)}`}
+              style={{ color: data.nameStyle?.color || minimalColors.text }}
+            >
+              {data.firstName || 'Your'} {data.lastName || 'Name'}
+            </h3>
+            <p 
+              className={`text-sm mt-1 tracking-wider uppercase ${getTextStyleClasses(data.titleStyle)}`}
+              style={{ color: data.titleStyle?.color || minimalColors.muted }}
+            >
+              {data.jobTitle || 'Job Title'}
+            </p>
+            {data.companyName && (
+              <p className="text-xs mt-1 opacity-70" style={{ color: minimalColors.muted }}>{data.companyName}</p>
+            )}
+            {data.department && (
+              <p className="text-xs mt-0.5 opacity-60" style={{ color: minimalColors.muted }}>{data.department}</p>
+            )}
+            {data.headline && (
+              <p className="text-xs mt-2 italic opacity-80" style={{ color: minimalColors.text }}>{data.headline}</p>
+            )}
+          </div>
+          
+          {/* Contact Icons - with outer background circle */}
+          <div className="flex flex-wrap justify-center gap-3 px-5 py-4">
+            {activeLinks.map((link, i) => {
+              const BrandIcon = link.brandIcon;
+              const outerBg = getOuterBgStyle();
+              return (
+                <a 
+                  key={i} 
+                  href={getLinkHref(link)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={link.label || link.type}
+                  className="transition-transform hover:scale-110 relative"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {iconStyle.showBackground && (
+                    <div 
+                      className="absolute inset-0 w-12 h-12 -m-1 rounded-full"
+                      style={{ background: outerBg }}
+                    />
+                  )}
+                  <div 
+                    className="relative w-10 h-10 rounded-full shadow-sm flex items-center justify-center"
+                    style={{ background: link.gradient || link.color }}
+                  >
+                    {BrandIcon ? (
+                      <BrandIcon className="w-5 h-5" style={{ color: '#ffffff' }} />
+                    ) : (
+                      <link.icon className="w-5 h-5" style={{ color: '#ffffff' }} />
+                    )}
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    // STYLE 5: Clean White
+    return (
+      <div className="w-full h-full rounded-[20px] bg-white flex flex-col relative overflow-hidden" style={{ backgroundColor: cleanColors.background }}>
         {/* Logo */}
         {data.logoUrl && (
-          <div className={`absolute ${logoPositionClass} w-10 h-10 rounded-lg bg-white/90 p-1 shadow-sm z-50`}>
+          <div className={`absolute ${logoPositionClass} w-10 h-10 rounded-lg bg-white/90 p-1 shadow-sm z-10`}>
             <img src={data.logoUrl} alt="Logo" className="w-full h-full object-contain" />
           </div>
         )}
         
-        {/* Decorative star */}
-        <div className="absolute -left-[40%] top-0">
-          <svg 
-            className="rotate-[24deg]" 
-            height="200" 
-            width="200" 
-            viewBox="0 0 24 24" 
-            style={{ 
-              fill: fashionColors.star,
-              filter: fashionColors.starGlow ? `drop-shadow(0 0 12px ${fashionColors.star}) drop-shadow(0 0 24px ${fashionColors.star})` : 'none',
-            }}
-          >
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-          </svg>
-        </div>
-        
-        {/* Gray curved background */}
-        <div className="absolute rounded-full z-20 left-1/2 top-[44%] h-[110%] w-[110%] -translate-x-1/2" style={{ backgroundColor: fashionColors.curve }} />
-        
-        {/* Title */}
-        {data.companyName && (
-          <div className="uppercase text-center leading-none z-40">
-            <p 
-              className={`font-bold text-xl tracking-wider ${getTextStyleClasses(data.companyStyle)}`}
-              style={{ color: data.companyStyle?.color || '#6b7280' }}
-            >
-              {data.companyName}
-            </p>
-          </div>
-        )}
-        
-        {/* Photo */}
-        <div className={`w-[180px] aspect-square bg-white z-40 ${photoShapeClass} overflow-hidden shadow-lg`}>
-          {data.profilePhotoUrl ? (
-            <img src={data.profilePhotoUrl} alt="" className={`w-full h-full object-contain ${photoShapeInnerClass}`} />
+        {/* Header */}
+        <div className="h-28 relative flex items-center justify-center shrink-0" style={{ backgroundColor: cleanColors.header }}>
+          {data.coverPhotoUrl ? (
+            <img src={data.coverPhotoUrl} alt="Cover" className="w-full h-full object-cover" />
           ) : (
-            <div className="w-full h-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center">
-              <User className="w-20 h-20 text-white/70" />
-            </div>
-          )}
-        </div>
-
-        {/* Name & Details - Added to Fashion template */}
-        <div className="z-40 text-center mt-1 px-4 w-full">
-          <h3 className={`font-bold text-lg ${getTextStyleClasses(data.nameStyle)}`} style={{ color: data.nameStyle?.color || '#333' }}>
-            {data.firstName} {data.lastName}
-          </h3>
-          <p className={`text-sm ${getTextStyleClasses(data.titleStyle)}`} style={{ color: data.titleStyle?.color || '#666' }}>
-            {data.jobTitle}
-          </p>
-          {data.department && (
-            <p className="text-xs text-gray-500 mt-0.5">{data.department}</p>
-          )}
-          {data.headline && (
-            <p className="text-xs mt-1 italic text-gray-600">{data.headline}</p>
-          )}
-        </div>
-        
-        {/* Contact Icons - TRUE Brand Icons ONLY */}
-        <div className="z-40 flex flex-wrap justify-center gap-3 mt-2">
-          {activeLinks.map((link, i) => {
-            const BrandIcon = link.brandIcon;
-            return (
-              <a 
-                key={i} 
-                href={getLinkHref(link)}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={link.label || link.type}
-                className="transition-transform hover:scale-110"
-              >
-                <div 
-                  className="w-10 h-10 rounded-full shadow-sm flex items-center justify-center"
-                  style={{ background: link.gradient || link.color }}
-                >
-                  {BrandIcon ? (
-                    <BrandIcon className="w-5 h-5" style={{ color: '#ffffff' }} />
-                  ) : (
-                    <link.icon className="w-5 h-5" style={{ color: '#ffffff' }} />
-                  )}
-                </div>
-              </a>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-  
-  // STYLE 4: Minimal Dark - All black elegant card
-  if (template.headerStyle === 'minimal') {
-    return (
-      <div className="w-[300px] mx-auto rounded-[20px] shadow-2xl overflow-hidden flex flex-col min-h-[400px]" style={{ backgroundColor: minimalColors.background }}>
-        {/* Header with cover */}
-        <div className="h-24 relative shrink-0" style={{ backgroundColor: minimalColors.header }}>
-          {data.coverPhotoUrl && (
-            <img src={data.coverPhotoUrl} alt="Cover" className="w-full h-full object-cover opacity-50" />
-          )}
-          {/* Logo */}
-          {data.logoUrl && (
-            <div className={`absolute ${logoPositionClass} w-10 h-10 rounded-lg bg-white/10 p-1`}>
-              <img src={data.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: cleanColors.accent }}>
+              <ImageIcon className="w-5 h-5 text-white" />
             </div>
           )}
         </div>
         
         {/* Avatar */}
-        <div className="flex justify-center -mt-14 relative z-10">
-          <div className={`w-28 h-28 ${photoShapeClass} border-4 bg-white p-1 shadow-lg`} style={{ borderColor: minimalColors.accent }}>
+        <div className="flex justify-start px-5 -mt-8 relative z-10">
+          <div className={`w-20 h-20 ${photoShapeClass} border-4 overflow-hidden bg-white shadow-lg`} style={{ borderColor: cleanColors.accent }}>
             {data.profilePhotoUrl ? (
               <img src={data.profilePhotoUrl} alt="" className={`w-full h-full object-contain ${photoShapeInnerClass}`} />
             ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <User className="w-12 h-12" style={{ color: minimalColors.muted }} />
+              <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: cleanColors.header }}>
+                <User className="w-8 h-8" style={{ color: cleanColors.muted }} />
               </div>
             )}
           </div>
         </div>
         
         {/* Name & Title */}
-        <div className="text-center mt-3 px-5">
+        <div className="px-5 mt-3">
           <h3 
-            className={`text-xl font-light tracking-wide ${getTextStyleClasses(data.nameStyle)}`}
-            style={{ color: data.nameStyle?.color || minimalColors.text }}
+            className={`text-lg font-semibold ${getTextStyleClasses(data.nameStyle)}`}
+            style={{ color: data.nameStyle?.color || cleanColors.text }}
           >
             {data.firstName || 'Your'} {data.lastName || 'Name'}
           </h3>
           <p 
-            className={`text-sm mt-1 tracking-wider uppercase ${getTextStyleClasses(data.titleStyle)}`}
-            style={{ color: data.titleStyle?.color || minimalColors.muted }}
+            className={`text-sm mt-1 ${getTextStyleClasses(data.titleStyle)}`}
+            style={{ color: data.titleStyle?.color || cleanColors.muted }}
           >
             {data.jobTitle || 'Job Title'}
           </p>
           {data.companyName && (
-            <p className="text-xs mt-1 opacity-70" style={{ color: minimalColors.muted }}>{data.companyName}</p>
+            <p className="text-xs mt-1" style={{ color: cleanColors.muted }}>{data.companyName}</p>
           )}
           {data.department && (
-            <p className="text-xs mt-0.5 opacity-60" style={{ color: minimalColors.muted }}>{data.department}</p>
+            <p className="text-xs mt-0.5 opacity-80" style={{ color: cleanColors.muted }}>{data.department}</p>
           )}
           {data.headline && (
-            <p className="text-xs mt-2 italic opacity-80" style={{ color: minimalColors.text }}>{data.headline}</p>
+            <p className="text-xs mt-2 italic opacity-80" style={{ color: cleanColors.text }}>{data.headline}</p>
           )}
         </div>
         
-        {/* Contact Icons - TRUE Brand Icons ONLY */}
+        {/* All Links - with outer background circle */}
         <div className="flex flex-wrap justify-center gap-3 px-5 py-4">
           {activeLinks.map((link, i) => {
             const BrandIcon = link.brandIcon;
+            const outerBg = getOuterBgStyle();
             return (
               <a 
                 key={i} 
@@ -2478,10 +2597,17 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={link.label || link.type}
-                className="transition-transform hover:scale-110"
+                className="transition-transform hover:scale-110 relative"
+                onClick={(e) => e.stopPropagation()}
               >
+                {iconStyle.showBackground && (
+                  <div 
+                    className="absolute inset-0 w-12 h-12 -m-1 rounded-full"
+                    style={{ background: outerBg }}
+                  />
+                )}
                 <div 
-                  className="w-10 h-10 rounded-full shadow-sm flex items-center justify-center"
+                  className="relative w-10 h-10 rounded-full shadow-sm flex items-center justify-center"
                   style={{ background: link.gradient || link.color }}
                 >
                   {BrandIcon ? (
@@ -2496,101 +2622,68 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
         </div>
       </div>
     );
-  }
-  
-  // STYLE 5: Clean White - Minimal white card with actual data
-  return (
-    <div className="w-[300px] mx-auto rounded-[20px] shadow-xl overflow-hidden flex flex-col relative min-h-[400px]" style={{ backgroundColor: cleanColors.background }}>
-      {/* Logo */}
-      {data.logoUrl && (
-        <div className={`absolute ${logoPositionClass} w-10 h-10 rounded-lg bg-white/90 p-1 shadow-sm z-10`}>
-          <img src={data.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+  };
+
+  const renderBack = () => {
+    return (
+      <div className="w-full h-full rounded-[20px] bg-white shadow-xl flex flex-col items-center justify-center relative p-6 overflow-hidden">
+        {/* Simple QR Code placeholder or brand logo */}
+        <div className="w-32 h-32 bg-gray-100 rounded-xl flex items-center justify-center border-2 border-dashed border-gray-300">
+          <QrCode className="w-16 h-16 text-gray-400" />
         </div>
-      )}
-      
-      {/* Header */}
-      <div className="h-28 relative flex items-center justify-center shrink-0" style={{ backgroundColor: cleanColors.header }}>
-        {data.coverPhotoUrl ? (
-          <img src={data.coverPhotoUrl} alt="Cover" className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: cleanColors.accent }}>
-            <ImageIcon className="w-5 h-5 text-white" />
-          </div>
-        )}
-      </div>
-      
-      {/* Avatar */}
-      <div className="flex justify-start px-5 -mt-8 relative z-10">
-        <div className={`w-20 h-20 ${photoShapeClass} border-4 overflow-hidden bg-white shadow-lg`} style={{ borderColor: cleanColors.accent }}>
-          {data.profilePhotoUrl ? (
-            <img src={data.profilePhotoUrl} alt="" className={`w-full h-full object-contain ${photoShapeInnerClass}`} />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: cleanColors.header }}>
-              <User className="w-8 h-8" style={{ color: cleanColors.muted }} />
-            </div>
+        <div className="mt-6 text-center">
+          <p className="text-sm font-medium text-gray-600">Scan to save contact</p>
+          {data.companyName && (
+            <p className="text-xs text-gray-400 mt-1 uppercase tracking-widest">{data.companyName}</p>
           )}
         </div>
+        
+        {/* Background decorative elements */}
+        <div className="absolute top-0 right-0 w-32 h-32 -mr-16 -mt-16 bg-gray-50 rounded-full opacity-50" />
+        <div className="absolute bottom-0 left-0 w-24 h-24 -ml-12 -mb-12 bg-gray-50 rounded-full opacity-50" />
       </div>
-      
-      {/* Name & Title */}
-      <div className="px-5 mt-3">
-        <h3 
-          className={`text-lg font-semibold ${getTextStyleClasses(data.nameStyle)}`}
-          style={{ color: data.nameStyle?.color || cleanColors.text }}
-        >
-          {data.firstName || 'Your'} {data.lastName || 'Name'}
-        </h3>
-        <p 
-          className={`text-sm mt-1 ${getTextStyleClasses(data.titleStyle)}`}
-          style={{ color: data.titleStyle?.color || cleanColors.muted }}
-        >
-          {data.jobTitle || 'Job Title'}
-        </p>
-        {data.companyName && (
-          <p className="text-xs mt-1" style={{ color: cleanColors.muted }}>{data.companyName}</p>
-        )}
-        {data.department && (
-          <p className="text-xs mt-0.5 opacity-80" style={{ color: cleanColors.muted }}>{data.department}</p>
-        )}
-        {data.headline && (
-          <p className="text-xs mt-2 italic opacity-80" style={{ color: cleanColors.text }}>{data.headline}</p>
-        )}
-      </div>
-      
-      {/* All Links - TRUE Brand Icons ONLY */}
-      <div className="flex flex-wrap justify-center gap-3 px-5 py-4">
-        {activeLinks.map((link, i) => {
-          const BrandIcon = link.brandIcon;
-          return (
-            <a 
-              key={i} 
-              href={getLinkHref(link)}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={link.label || link.type}
-              className="transition-transform hover:scale-110"
-            >
-              <div 
-                className="w-10 h-10 rounded-full shadow-sm flex items-center justify-center"
-                style={{ background: link.gradient || link.color }}
-              >
-                {BrandIcon ? (
-                  <BrandIcon className="w-5 h-5" style={{ color: '#ffffff' }} />
-                ) : (
-                  <link.icon className="w-5 h-5" style={{ color: '#ffffff' }} />
-                )}
-              </div>
-            </a>
-          );
-        })}
+    );
+  };
+
+  // Flip button - tiny icon at bottom right corner of the card
+  const FlipButton = () => (
+    <button 
+      onClick={handleFlip}
+      className="absolute bottom-2 right-2 z-30 w-6 h-6 bg-white/80 rounded-full shadow-sm flex items-center justify-center text-gray-500 hover:text-[#060541] hover:bg-white transition-all active:scale-90"
+      aria-label="Flip card"
+    >
+      <svg 
+        className={`w-3 h-3 transition-transform duration-300 ${isFlipped ? 'rotate-180' : ''}`} 
+        viewBox="0 0 24 24" 
+        fill="none" 
+        stroke="currentColor" 
+        strokeWidth="2" 
+        strokeLinecap="round" 
+        strokeLinejoin="round"
+      >
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+        <path d="M3 3v5h5" />
+      </svg>
+    </button>
+  );
+
+  return (
+    <div className="w-[300px] h-[400px] mx-auto perspective-1000 relative overflow-visible">
+      <div className={`card-flip-container ${isFlipped ? 'flipped' : ''}`}>
+        {/* Front Side */}
+        <div className="card-flip-front shadow-xl overflow-hidden">
+          {renderFront()}
+          <FlipButton />
+        </div>
+
+        {/* Back Side */}
+        <div className="card-flip-back shadow-xl overflow-hidden">
+          {renderBack()}
+          <FlipButton />
+        </div>
       </div>
     </div>
   );
-};
-
-// Card Preview Component for Style Tab (alias)
-const CardPreview: React.FC<{ data: BusinessCardData }> = ({ data }) => {
-  return <CardPreviewLive data={data} />;
 };
 
 export { CardPreviewLive };
