@@ -2212,7 +2212,6 @@ body.keyboard-visible {
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
   border-radius: 20px;
-  overflow: hidden;
 }
 
 .card-flip-front {

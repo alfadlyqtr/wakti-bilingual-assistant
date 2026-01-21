@@ -966,68 +966,94 @@ ${uploadedAssets.map(a => `- **${a.filename}** (${a.file_type || 'file'}): ${a.u
 When user says "my photo", "my image", "uploaded image", "profile picture", use the appropriate URL from above.\n`
     : '';
 
-  // Build backend context section - EXPANDED for full AI coder awareness
+  // Build backend context section - "BRICK FOUNDATION + LEGO FREEDOM" philosophy
   const backendContextStr = backendContext?.enabled ? `
 
-🗄️ PROJECT BACKEND (ENABLED):
+🗄️ PROJECT BACKEND (PRE-CONFIGURED & READY TO USE):
 API: https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
 
-=== DATA OVERVIEW ===
+=== 🧱 THE LEGO PHILOSOPHY ===
+Think of this like building with Lego:
+- **BRICKS (Foundation):** Pre-configured building blocks that ALWAYS work. No setup needed.
+- **FREEDOM:** You can build ANY kind of "house" using these bricks + custom pieces.
+- **RELIABILITY:** The backend is already connected. Just use it. No API keys, no config.
+
+=== 📦 YOUR BUILDING BLOCKS (Always Available) ===
+These collections are pre-installed and ready: ${FOUNDATION_BRICKS.join(', ')}
+- Use them directly: { projectId, action: 'collection/[name]' }
+- Need something custom? Create it: { projectId, action: 'collection/my_custom_thing', data: {...} }
+
+=== 📊 CURRENT DATA ===
 - Collections: ${backendContext.collections.length > 0 
-  ? backendContext.collections.map(c => `${c.name}(${c.itemCount})`).join(', ') 
-  : 'None'}
+  ? backendContext.collections.map(c => c.name + '(' + c.itemCount + ')').join(', ') 
+  : 'None yet - they auto-create on first use!'}
 - Forms: ${backendContext.formSubmissionsCount} submissions
 - Uploads: ${backendContext.uploadsCount} files
 - Users: ${backendContext.siteUsersCount} registered
 
-FOUNDATION BRICKS (ALWAYS AVAILABLE):
-- Collections you can use anytime: ${FOUNDATION_BRICKS.join(', ')}
-- You may create new collections if the user asks for something else
-
-${backendContext.hasShopSetup ? `=== E-COMMERCE (ACTIVE) ===
+${backendContext.hasShopSetup ? `=== 🛒 E-COMMERCE (ACTIVE) ===
 Products: ${backendContext.productsCount || 0} items${backendContext.products && backendContext.products.length > 0 ? `
-Sample products: ${backendContext.products.slice(0, 5).map(p => `${p.name} ($${p.price})`).join(', ')}` : ''}
+Sample: ${backendContext.products.slice(0, 5).map(p => p.name + ' ($' + p.price + ')').join(', ')}` : ''}
 Orders: ${backendContext.ordersCount || 0}
-API Actions:
-- GET products: { projectId, action: 'collection/products' }
-- Add to cart: { projectId, action: 'cart/add', data: { sessionId, siteUserId?, item: { id, name, price, quantity, collectionItemId } } }
-- Create order: { projectId, action: 'order/create', data: { items, buyerInfo, totalAmount?, notes?, siteUserId?, sessionId? } }
-` : `=== E-COMMERCE (NOT SET UP) ===
-No products added yet. If user wants a shop, generate code with placeholders and tell them to add products in Backend → Shop → Inventory.
+
+**EXACT API CONTRACTS (copy-paste ready):**
+GET products:  { projectId: "{{PROJECT_ID}}", action: "collection/products" }
+Add to cart:   { projectId: "{{PROJECT_ID}}", action: "cart/add", data: { sessionId: "guest-xxx", item: { id, name, price, quantity } } }
+View cart:     { projectId: "{{PROJECT_ID}}", action: "cart/get", data: { sessionId: "guest-xxx" } }
+Create order:  { projectId: "{{PROJECT_ID}}", action: "order/create", data: { items: [...], buyerInfo: { name, email, phone }, totalAmount: 99.99 } }
+` : `=== 🛒 E-COMMERCE (Ready to Activate) ===
+No products yet. When user wants a shop:
+1. Generate beautiful product grid with loading/empty states
+2. Fetch from: { projectId, action: "collection/products" }
+3. Show CTA: "Add products in Backend → Shop → Inventory"
 `}
 
-${backendContext.hasBookingsSetup ? `=== BOOKINGS (ACTIVE) ===
+${backendContext.hasBookingsSetup ? `=== 📅 BOOKINGS (ACTIVE) ===
 Services: ${backendContext.servicesCount || 0}${backendContext.services && backendContext.services.length > 0 ? `
-Available: ${backendContext.services.slice(0, 5).map(s => `${s.name} (${s.duration}min, $${s.price})`).join(', ')}` : ''}
+Available: ${backendContext.services.slice(0, 5).map(s => s.name + ' (' + s.duration + 'min, $' + s.price + ')').join(', ')}` : ''}
 Bookings: ${backendContext.bookingsCount || 0}
-API Actions:
-- GET services: { projectId, action: 'collection/services' }
-- Check availability: { projectId, action: 'booking/check', data: { date, startTime?, endTime? } }
-- Create booking: { projectId, action: 'booking/create', data: { serviceName, date, startTime?, endTime?, duration?, customerInfo, siteUserId?, notes? } }
-` : `=== BOOKINGS (NOT SET UP) ===
-No services added yet. If user wants appointments, generate code with placeholders and tell them to add services in Backend → Bookings → Services.
+
+**EXACT API CONTRACTS (copy-paste ready):**
+GET services:      { projectId: "{{PROJECT_ID}}", action: "collection/services" }
+Check availability: { projectId: "{{PROJECT_ID}}", action: "booking/check", data: { date: "2025-01-15", startTime: "10:00" } }
+Create booking:    { projectId: "{{PROJECT_ID}}", action: "booking/create", data: { serviceName: "Haircut", date: "2025-01-15", startTime: "10:00", customerInfo: { name, email, phone } } }
+` : `=== 📅 BOOKINGS (Ready to Activate) ===
+No services yet. When user wants appointments:
+1. Generate booking form with date/time picker
+2. Fetch services from: { projectId, action: "collection/services" }
+3. Show CTA: "Add services in Backend → Bookings → Services"
 `}
 
-=== CUSTOMER ENGAGEMENT ===
-Reviews: (use collection/reviews)
-Forms: action 'submit' (saved to Inbox)
-Customer Data: (use collection/customer_data)
+=== 🔐 USER AUTH (Built-in) ===
+**EXACT API CONTRACTS:**
+Signup: { projectId: "{{PROJECT_ID}}", action: "auth/signup", data: { email, password, name } }
+Login:  { projectId: "{{PROJECT_ID}}", action: "auth/login", data: { email, password } }
+Me:     { projectId: "{{PROJECT_ID}}", action: "auth/me", data: { token: "..." } }
 
-API Actions:
-- Create review: { projectId, action: 'collection/reviews', data: { rating, text, productId?, authorName? } }
-- Submit form: { projectId, action: 'submit', formName: 'contact' | 'quote' | 'newsletter', data: { ...fields } }
-- Save customer notes: { projectId, action: 'collection/customer_data', data: { customerName, phone?, email?, notes?, preferences? } }
+=== 💬 CUSTOMER ENGAGEMENT ===
+**EXACT API CONTRACTS:**
+Submit form:   { projectId: "{{PROJECT_ID}}", action: "submit", formName: "contact", data: { name, email, message } }
+Add review:    { projectId: "{{PROJECT_ID}}", action: "collection/reviews", data: { rating: 5, text: "Great!", authorName: "John" } }
+Save customer: { projectId: "{{PROJECT_ID}}", action: "collection/customer_data", data: { customerName, email, notes } }
 
-${(backendContext.chatRoomsCount || 0) > 0 || (backendContext.commentsCount || 0) > 0 ? `=== SOCIAL FEATURES ===
-Chat Rooms: ${backendContext.chatRoomsCount || 0}
-Comments: ${backendContext.commentsCount || 0}
+${(backendContext.chatRoomsCount || 0) > 0 || (backendContext.commentsCount || 0) > 0 ? `=== 💬 SOCIAL (Active) ===
+Chat Rooms: ${backendContext.chatRoomsCount || 0} | Comments: ${backendContext.commentsCount || 0}
 ` : ''}
 
-IMPORTANT FOR AI CODER:
-1. If user wants dynamic content (products, services), fetch from API - don't hardcode
-2. If backend data is empty, generate attractive placeholders with CTAs like "Add your products in the Backend dashboard"
-3. Use proper loading states while fetching data
-4. Handle empty states gracefully with helpful guidance
+=== 🎨 UI FREEDOM (Build Any "House") ===
+The foundation is set. Now build whatever the user wants:
+- **Bento Grids:** Use Tailwind grid-cols-2/3/4 with varying spans
+- **Glassmorphism:** backdrop-blur-xl bg-white/5 border-white/10
+- **Gradients:** bg-gradient-to-r from-purple-500 to-pink-500
+- **Animations:** framer-motion for everything
+- **Custom Layouts:** Split screens, asymmetric grids, magazine layouts
+
+=== ⚡ GOLDEN RULES ===
+1. **ALWAYS fetch from API** - Never hardcode products/services/data
+2. **ALWAYS show loading states** - Skeleton loaders while fetching
+3. **ALWAYS handle empty states** - Beautiful CTAs when no data
+4. **ALWAYS use {{PROJECT_ID}}** - It's auto-injected, just use it
+5. **NEVER guess API formats** - Use the EXACT contracts above
 ` : '';
 
   const userMessage = `CURRENT CODEBASE:

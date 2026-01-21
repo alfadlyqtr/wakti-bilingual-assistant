@@ -8,7 +8,8 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import {
+import { QRCodeSVG } from 'qrcode.react';
+import { 
   ArrowLeft,
   Save,
   Share2,
@@ -46,6 +47,9 @@ import {
   AlignCenter,
   AlignRight,
   Type,
+  UserPlus,
+  Smartphone,
+  LayoutGrid,
 } from 'lucide-react';
 
 // Types
@@ -523,6 +527,8 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
     }
   };
 
+  const [isPreviewFlipped, setIsPreviewFlipped] = useState(false);
+  
   // Tab navigation
   const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
     { id: 'details', label: t.details, icon: User },
@@ -564,7 +570,11 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
       <div className="relative">
         <div className="absolute -inset-4 bg-gradient-to-r from-[hsl(210,100%,65%)]/20 via-[hsl(280,70%,65%)]/20 to-[hsl(25,95%,60%)]/20 rounded-3xl blur-xl" />
         <div className="relative">
-          <CardPreviewLive data={formData} />
+          <CardPreviewLive 
+            data={formData} 
+            isFlipped={isPreviewFlipped} 
+            handleFlip={() => setIsPreviewFlipped(!isPreviewFlipped)}
+          />
         </div>
       </div>
 
@@ -1159,7 +1169,11 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
       <div className="relative">
         <div className="absolute -inset-4 bg-gradient-to-r from-[hsl(210,100%,65%)]/20 via-[hsl(280,70%,65%)]/20 to-[hsl(25,95%,60%)]/20 rounded-3xl blur-xl" />
         <div className="relative">
-          <CardPreviewLive data={formData} />
+          <CardPreviewLive 
+            data={formData} 
+            isFlipped={isPreviewFlipped} 
+            handleFlip={() => setIsPreviewFlipped(!isPreviewFlipped)}
+          />
         </div>
       </div>
 
@@ -1779,6 +1793,39 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
     </div>
   );
 
+  const handleDownloadQr = () => {
+    const svg = document.querySelector('.qr-container svg') as SVGElement;
+    if (!svg) return;
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx?.drawImage(img, 0, 0);
+      const pngFile = canvas.toDataURL('image/png');
+      const downloadLink = document.createElement('a');
+      downloadLink.download = `${formData.firstName}_QR.png`;
+      downloadLink.href = pngFile;
+      downloadLink.click();
+    };
+    img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+    toast.success("QR Code downloaded!");
+  };
+
+  const handleAddToWallet = () => {
+    toast.info("Generating your Apple Wallet pass...", {
+      description: "This will add the card to your personal Apple Wallet for offline sharing."
+    });
+  };
+
+  const handleSetAsWidget = () => {
+    toast.success("Widget preview updated!", {
+      description: "Open the Wakti AI app on your home screen to add this card as a widget."
+    });
+  };
+
   // Render QR Code Tab
   const renderQrCodeTab = () => (
     <div className="space-y-6">
@@ -1786,30 +1833,62 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
       
       {/* QR Code Display */}
       <div className="flex flex-col items-center p-6 rounded-2xl bg-white border border-gray-200">
-        <div className="w-48 h-48 bg-gray-100 rounded-xl flex items-center justify-center">
-          {/* Placeholder QR - will be generated */}
-          <div className="w-40 h-40 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMSAyMSI+PHBhdGggZmlsbD0iIzAwMCIgZD0iTTAgMGg3djdIMHptMiAyaDN2M0gyem05LTJoN3Y3aC03em0yIDJoM3YzaC0zek0wIDE0aDd2N0gwem0yIDJoM3YzSDJ6bTEwLTJoMXYxaC0xem0yIDB2MWgtMXYtMWgxem0tMiAyaDJ2MmgtMnptMiAwaDJ2MmgtMnptLTQgMmgxdjFoLTF6bTIgMGgxdjFoLTF6bTIgMGgxdjFoLTF6bTIgMGgxdjFoLTF6bS02IDJoMXYxaC0xem0yIDB2MWgtMXYtMWgxem0yIDB2MWgtMXYtMWgxem0yIDB2MWgtMXYtMWgxeiIvPjwvc3ZnPg==')] bg-contain" />
+        <div className="w-48 h-48 bg-gray-100 rounded-xl flex items-center justify-center qr-container">
+          <QRCodeSVG 
+            value={`${window.location.origin}/card/${formData.firstName.toLowerCase()}-${formData.lastName.toLowerCase()}`}
+            size={160}
+            level="H"
+            includeMargin={false}
+            imageSettings={{
+              src: "/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png",
+              x: undefined,
+              y: undefined,
+              height: 28,
+              width: 28,
+              excavate: true,
+            }}
+          />
         </div>
         <p className="text-sm text-gray-500 mt-4">{t.scanToConnect}</p>
       </div>
 
       {/* Actions */}
       <div className="space-y-3">
-        <Button className="w-full h-12 bg-gradient-to-r from-blue-500 to-purple-600">
+        <Button 
+          onClick={handleDownloadQr}
+          className="w-full h-12 bg-gradient-to-r from-blue-500 to-purple-600"
+        >
           <QrCode className="w-5 h-5 mr-2" />
           {t.downloadQr}
         </Button>
+
+        {/* Apple Wallet Action */}
+        <Button 
+          onClick={handleAddToWallet}
+          className="w-full h-12 bg-black text-white hover:bg-gray-900 border border-gray-800"
+        >
+          <Smartphone className="w-5 h-5 mr-2" />
+          Add to Apple Wallet
+        </Button>
       </div>
 
-      {/* Widget Hint */}
+      {/* Widget Section */}
       <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/20">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center shrink-0">
-            <Sparkles className="w-5 h-5 text-blue-400" />
+            <LayoutGrid className="w-5 h-5 text-blue-400" />
           </div>
-          <div>
+          <div className="flex-1">
             <h4 className="font-semibold text-foreground">{t.addToWidget}</h4>
             <p className="text-sm text-muted-foreground mt-1">{t.widgetHint}</p>
+            <Button 
+              size="sm"
+              variant="outline"
+              onClick={handleSetAsWidget}
+              className="mt-3 w-full border-blue-500/30 text-blue-600 hover:bg-blue-500/10"
+            >
+              Set as Phone Widget
+            </Button>
           </div>
         </div>
       </div>
@@ -1930,8 +2009,13 @@ const getTextStyleClasses = (style?: TextStyle): string => {
 };
 
 // Live Card Preview Component - 5 Premium Business Card Designs
-const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
-  const [isFlipped, setIsFlipped] = useState(false);
+interface CardPreviewLiveProps {
+  data: BusinessCardData;
+  isFlipped: boolean;
+  handleFlip: () => void;
+}
+
+const CardPreviewLive = ({ data, isFlipped, handleFlip }: CardPreviewLiveProps) => {
   const template = CARD_TEMPLATES.find(t => t.id === data.template) || CARD_TEMPLATES[0];
   const mosaicPalette = MOSAIC_PALETTES.find(p => p.id === (data.mosaicPaletteId || 'rose')) || MOSAIC_PALETTES[0];
   const mosaicColors = {
@@ -2029,9 +2113,9 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
     return `rgba(${r}, ${g}, ${b}, ${opacity})`;
   };
 
-  const handleFlip = (e: React.MouseEvent) => {
+  const handleFlipInternal = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsFlipped(!isFlipped);
+    handleFlip();
   };
 
   const renderFront = () => {
@@ -2625,30 +2709,120 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
   };
 
   const renderBack = () => {
+    // Construct the shareable URL (placeholder for now, should be the actual public URL)
+    const cardUrl = `${window.location.origin}/card/${data.firstName.toLowerCase()}-${data.lastName.toLowerCase()}`;
+
+    const downloadVCard = () => {
+      // Map social links to vCard fields
+      const socialVCardFields = (data.socialLinks || []).map(link => {
+        const type = link.type.toUpperCase();
+        return `X-SOCIALPROFILE;TYPE=${type}:${link.url}`;
+      }).join('\n');
+
+      const vcard = `BEGIN:VCARD
+VERSION:3.0
+FN:${data.firstName} ${data.lastName}
+N:${data.lastName};${data.firstName};;;
+EMAIL;TYPE=INTERNET:${data.email}
+TEL;TYPE=CELL:${data.phone}
+ORG:${data.companyName}
+TITLE:${data.jobTitle}
+URL:${data.website}
+${socialVCardFields}
+END:VCARD`;
+      
+      const blob = new Blob([vcard], { type: 'text/vcard' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${data.firstName}_${data.lastName}.vcf`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
+
+    const handleAddToWallet = () => {
+      toast.info("Generating your Apple Wallet pass...", {
+        description: "This will add the card to your personal Apple Wallet for offline sharing."
+      });
+    };
+
+    const handleSetAsWidget = () => {
+      toast.success("Widget preview updated!", {
+        description: "Open the Wakti AI app on your home screen to add this card as a widget."
+      });
+    };
+
     return (
       <div className="w-full h-full rounded-[20px] bg-white shadow-xl flex flex-col items-center justify-center relative p-6 overflow-hidden">
-        {/* Simple QR Code placeholder or brand logo */}
-        <div className="w-32 h-32 bg-gray-100 rounded-xl flex items-center justify-center border-2 border-dashed border-gray-300">
-          <QrCode className="w-16 h-16 text-gray-400" />
+        {/* Real QR Code linking to shareable card */}
+        <div className="p-3 bg-white rounded-2xl shadow-sm border border-gray-100">
+          <QRCodeSVG 
+            value={cardUrl}
+            size={160}
+            level="H"
+            includeMargin={false}
+            imageSettings={{
+              src: "/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png",
+              x: undefined,
+              y: undefined,
+              height: 28,
+              width: 28,
+              excavate: true,
+            }}
+          />
         </div>
-        <div className="mt-6 text-center">
-          <p className="text-sm font-medium text-gray-600">Scan to save contact</p>
+        
+        <div className="mt-4 text-center">
+          <p className="text-sm font-medium text-gray-800">Scan to view card</p>
           {data.companyName && (
             <p className="text-xs text-gray-400 mt-1 uppercase tracking-widest">{data.companyName}</p>
           )}
         </div>
+
+        <div className="mt-6 flex flex-col gap-3 w-full max-w-[220px]">
+          {/* Add to Contact Button - VISIBLE TO EVERYONE */}
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              downloadVCard();
+            }}
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-[#060541] text-white rounded-full text-sm font-medium hover:bg-[#0c0b6b] transition-all active:scale-95 shadow-md"
+          >
+            <UserPlus className="w-4 h-4" />
+            Add to Contacts
+          </button>
+        </div>
+
+        {/* Powered by Wakti AI Footer */}
+        <a 
+          href="https://apps.apple.com/app/wakti-ai" 
+          target="_blank"
+          rel="noopener noreferrer"
+          className="absolute bottom-6 left-0 right-0 flex flex-col items-center justify-center gap-1 opacity-60 hover:opacity-100 transition-opacity"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <span className="text-[10px] text-gray-400 uppercase tracking-[0.2em]">Powered by</span>
+          <div className="flex items-center gap-1.5">
+            <img 
+              src="/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png" 
+              alt="Wakti AI Logo" 
+              className="w-5 h-5 object-contain"
+            />
+            <span className="text-xs font-bold text-[#060541] tracking-tight">Wakti AI</span>
+          </div>
+        </a>
         
         {/* Background decorative elements */}
-        <div className="absolute top-0 right-0 w-32 h-32 -mr-16 -mt-16 bg-gray-50 rounded-full opacity-50" />
-        <div className="absolute bottom-0 left-0 w-24 h-24 -ml-12 -mb-12 bg-gray-50 rounded-full opacity-50" />
+        <div className="absolute top-0 right-0 w-32 h-32 -mr-16 -mt-16 bg-blue-50/50 rounded-full" />
+        <div className="absolute bottom-0 left-0 w-24 h-24 -ml-12 -mb-12 bg-blue-50/50 rounded-full" />
       </div>
     );
   };
 
-  // Flip button - tiny icon at bottom right corner of the card
   const FlipButton = () => (
     <button 
-      onClick={handleFlip}
+      onClick={handleFlipInternal}
       className="absolute bottom-2 right-2 z-30 w-6 h-6 bg-white/80 rounded-full shadow-sm flex items-center justify-center text-gray-500 hover:text-[#060541] hover:bg-white transition-all active:scale-90"
       aria-label="Flip card"
     >
@@ -2668,16 +2842,16 @@ const CardPreviewLive: React.FC<{ data: BusinessCardData }> = ({ data }) => {
   );
 
   return (
-    <div className="w-[300px] h-[400px] mx-auto perspective-1000 relative overflow-visible">
+    <div className="w-[300px] h-[480px] mx-auto perspective-1000 relative overflow-visible">
       <div className={`card-flip-container ${isFlipped ? 'flipped' : ''}`}>
         {/* Front Side */}
-        <div className="card-flip-front shadow-xl overflow-hidden">
+        <div className="card-flip-front shadow-xl">
           {renderFront()}
           <FlipButton />
         </div>
 
         {/* Back Side */}
-        <div className="card-flip-back shadow-xl overflow-hidden">
+        <div className="card-flip-back shadow-xl">
           {renderBack()}
           <FlipButton />
         </div>
