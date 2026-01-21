@@ -1520,11 +1520,54 @@ NO useTranslation hook unless explicitly requested. Just simple English text.
 Extract a meaningful project name from the user's request and use it in document.title and any header branding.
 Examples: "landing page for wife moza" → "MoziLove", "portfolio for photographer" → "PhotoPortfolio"
 
-### PART 6: IMAGE IDS
-ONLY use these Unsplash IDs:
-- Luxury: 1523170335258-f5ed11844a49, 1515562141207-7a88fb7ce338, 1617038220319-276d3cf663c6
-- Tech: 1519389950473-47ba0277781c, 1551288049-bebda4e38f71, 1531297422935-40280f32a347
-- Abstract: 1618005182384-a83a8bd57fbe, 1550684848-fac1c5b4e853, 1620121692634-99a437207985
+### PART 6: STOCK IMAGES (FREEPIK API - MANDATORY)
+**⚠️ NEVER use placeholder URLs like picsum, unsplash, or via.placeholder!**
+
+For EVERY image in your code, you MUST use the Freepik API to get real stock photos.
+Generate a utility function that fetches images from Freepik:
+
+\`\`\`jsx
+// In your App.js or a utils file, add this helper:
+const BACKEND_URL = "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api";
+
+const fetchStockImages = async (query, limit = 5) => {
+  try {
+    const res = await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        projectId: '{{PROJECT_ID}}',
+        action: 'freepik/images',
+        data: { query, limit }
+      })
+    });
+    const data = await res.json();
+    return data.images?.map(img => img.url) || [];
+  } catch (err) {
+    console.error('Failed to fetch images:', err);
+    return [];
+  }
+};
+
+// Usage in component:
+const [heroImage, setHeroImage] = useState('');
+useEffect(() => {
+  fetchStockImages('barber shop interior').then(imgs => setHeroImage(imgs[0] || ''));
+}, []);
+\`\`\`
+
+**IMAGE QUERY EXAMPLES BY BUSINESS TYPE:**
+- Barber shop: "barber shop interior", "haircut styles", "barber chair", "men grooming"
+- Restaurant: "restaurant interior", "food plating", "chef cooking"
+- Fitness: "gym equipment", "personal training", "fitness class"
+- Salon: "beauty salon", "hair styling", "nail art"
+- Real estate: "modern house exterior", "luxury apartment", "home interior"
+
+**RULES:**
+1. Query MUST match the business context (not generic "business" or "team")
+2. Use different queries for different sections (hero, about, services, etc.)
+3. NEVER hardcode image URLs - always fetch from Freepik API
+4. Show loading skeleton while images load
 
 ### OUTPUT FORMAT:
 Return ONLY a valid JSON object. No markdown fences. No explanation.
@@ -1597,6 +1640,59 @@ IMPORTANT FORM REQUIREMENTS:
 - Add form validation before submit (required fields, email format)
 - Clear form fields after successful submission
 - formName should describe the form purpose: "contact", "quote", "newsletter", "feedback", "waitlist"
+
+### PART 8: BOOKING/APPOINTMENT SYSTEM
+When the user asks for booking, appointments, scheduling (barber, salon, spa, clinic, etc.):
+
+\`\`\`jsx
+const BACKEND_URL = "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api";
+
+// Booking form state
+const [booking, setBooking] = useState({ 
+  name: '', email: '', phone: '', 
+  service: '', date: '', time: '', notes: '' 
+});
+const [loading, setLoading] = useState(false);
+const [success, setSuccess] = useState(false);
+
+const handleBooking = async (e) => {
+  e.preventDefault();
+  setLoading(true);
+  try {
+    const res = await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        projectId: '{{PROJECT_ID}}',
+        action: 'booking/create',
+        data: {
+          serviceName: booking.service,
+          date: booking.date,
+          startTime: booking.time,
+          customerInfo: { name: booking.name, email: booking.email, phone: booking.phone },
+          notes: booking.notes
+        }
+      })
+    });
+    if (res.ok) {
+      setSuccess(true);
+      setBooking({ name: '', email: '', phone: '', service: '', date: '', time: '', notes: '' });
+    }
+  } catch (err) {
+    console.error('Booking failed:', err);
+  } finally {
+    setLoading(false);
+  }
+};
+\`\`\`
+
+BOOKING UI REQUIREMENTS:
+- Multi-step form: 1) Select Service → 2) Pick Date/Time → 3) Enter Details
+- Show service cards with name, duration, and price
+- Date picker with available dates highlighted
+- Time slots grid showing available times
+- Summary panel showing selected service, date, time before confirmation
+- Success animation after booking confirmed
 
 ### CRITICAL: NO SUPABASE CLIENT IN USER PROJECTS
 1. NEVER import or use @supabase/supabase-js in generated user projects.

@@ -592,6 +592,9 @@ export default function ProjectDetail() {
   
   // AMP (Amplify) state
   const [isAmplifying, setIsAmplifying] = useState(false);
+  
+  // Celebratory modal for project completion
+  const [showProjectCompleteModal, setShowProjectCompleteModal] = useState(false);
 
   // Element selection mode - for "Send Element" feature (Visual Inspector)
   const [elementSelectMode, setElementSelectMode] = useState(false);
@@ -1238,10 +1241,23 @@ export default function ProjectDetail() {
       }
       const backendCta = backendCtaLines.length > 0 ? `\n\n${backendCtaLines.join('\n')}` : '';
 
-      // Save assistant message to DB with snapshot (remind user to save thumbnail)
+      // Save assistant message to DB with snapshot
       const assistantMsg = isRTL 
-        ? `لقد انتهيت من بناء مشروعك! ألقِ نظرة على المعاينة. 📸 اضغط على زر "حفظ صورة" لحفظ صورة مصغرة.${backendCta}` 
-        : `I've finished building your project! Take a look at the preview. 📸 Click 'Save Thumbnail' to save a thumbnail.${backendCta}`;
+        ? `لقد انتهيت من بناء مشروعك! ألقِ نظرة على المعاينة. ✨ يمكنك الآن تعديله أو نشره.${backendCta}` 
+        : `I've finished building your project! Take a look at the preview. ✨ You can now edit or publish it.${backendCta}`;
+      
+      // Show celebratory modal with confetti
+      setShowProjectCompleteModal(true);
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 }
+      });
+      
+      // Auto-dismiss after 3 seconds
+      setTimeout(() => {
+        setShowProjectCompleteModal(false);
+      }, 3000);
       const { data: assistantMsgData, error: assistError } = await supabase
         .from('project_chat_messages' as any)
         .insert({ 
@@ -5091,6 +5107,23 @@ ${fixInstructions}
 
   return (
     <div className={cn("h-full w-full flex flex-col bg-background overflow-hidden pt-[var(--app-header-h)] md:pt-0", isRTL && "rtl")}>
+
+      {/* 🎉 Celebratory Modal for Project Completion */}
+      {showProjectCompleteModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl p-8 shadow-2xl shadow-indigo-500/30 animate-in zoom-in-95 duration-500 max-w-sm mx-4 text-center">
+            <div className="w-20 h-20 mx-auto mb-4 bg-white/20 rounded-full flex items-center justify-center">
+              <Check className="w-10 h-10 text-white" />
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-2">
+              {isRTL ? '🎉 مشروعك جاهز!' : '🎉 Project Ready!'}
+            </h2>
+            <p className="text-white/80 text-sm">
+              {isRTL ? 'يمكنك الآن تعديله أو نشره' : 'You can now edit or publish it'}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Server Tab Content */}
       {mainTab === 'server' ? (
