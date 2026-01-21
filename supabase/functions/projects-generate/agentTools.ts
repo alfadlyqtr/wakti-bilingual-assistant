@@ -2526,12 +2526,12 @@ Before doing ANYTHING, classify the request:
 Before writing ANY frontend code for data-driven features, I MUST initialize the backend:
 
 1. **DETECT INTENT**: Analyze the user prompt for these keywords:
-   - "Shop/Store/Products" → Create `products`, `categories`, `orders` collections.
-   - "Booking/Appointment/Schedule/Barber" → Create `bookings`, `services` collections.
-   - "Contact/Inquiry/Message" → Create `messages` collection.
-   - "Menu/Restaurant" → Create `menu_items`, `categories` collections.
-   - "Portfolio/Gallery" → Create `gallery_items` collection.
-   - "Blog/Articles" → Create `posts`, `categories` collections.
+   - "Shop/Store/Products" → Create products, categories, orders collections.
+   - "Booking/Appointment/Schedule/Barber" → Create bookings, services collections.
+   - "Contact/Inquiry/Message" → Create messages collection.
+   - "Menu/Restaurant" → Create menu_items, categories collections.
+   - "Portfolio/Gallery" → Create gallery_items collection.
+   - "Blog/Articles" → Create posts, categories collections.
 
 2. **TWO-STAGE APPROACH**:
    - STAGE 1: Generate basic page skeleton with proper routing and structure first
@@ -3273,23 +3273,10 @@ You MUST search for images that match the SPECIFIC context of what you're buildi
 
 **⚠️ PHASE 1 REQUIREMENT:** Before writing a SINGLE line of HTML/JSX that includes any image, you MUST:
 
-```javascript
-// Example: For barber shop hero section
-const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    projectId: '{{PROJECT_ID}}',
-    action: 'freepik/images',
-    data: { 
-      query: 'professional barber shop interior',  // CONTEXTUAL QUERY REQUIRED
-      limit: 5 
-    }
-  })
-});
-const { images } = await response.json();
-const heroImage = images[0].url; // MUST use this URL in your HTML/JSX
-```
+Use the backend_cli tool with action "freepik/images" to fetch real stock photos:
+- Call: backend_cli({ action: "freepik/images", data: { query: "professional barber shop interior", limit: 5 } })
+- Response contains: { images: [{ url: "https://...", title: "..." }] }
+- Use the returned URLs in your HTML/JSX - NEVER placeholder URLs
 
 **⚠️ IMAGE RULES (ENFORCED):**
 

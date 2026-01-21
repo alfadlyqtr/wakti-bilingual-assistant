@@ -268,7 +268,7 @@ textarea::placeholder {
     background: var(--gradient-background);
     /* Use dynamic viewport units that work with mobile keyboards */
     min-height: 100dvh;
-    height: 100dvh;
+    height: auto; /* Changed from 100dvh to auto for Android Chrome scrolling */
     overscroll-behavior-y: contain;
   }
 
@@ -291,7 +291,7 @@ textarea::placeholder {
     width: 100%;
     max-width: none;
     min-height: 100dvh;
-    height: 100dvh;
+    height: auto; /* Changed from 100dvh to auto for Android Chrome scrolling */
   }
 
   body.keyboard-visible #root {
@@ -315,7 +315,7 @@ textarea::placeholder {
   .mobile-container {
     @apply max-w-md w-full mx-auto min-h-screen flex flex-col;
     background: var(--gradient-background);
-    height: 100dvh;
+    height: auto; /* Changed from 100dvh to auto for Android Chrome scrolling */
     min-height: 100dvh;
   }
 
@@ -928,8 +928,9 @@ textarea::placeholder {
 /* 1. GLOBAL SETUP: Allow inner content to scroll; hide horizontal overflow only. */
 html, body, #root {
   overflow-x: hidden;
-  overflow-y: visible;
-  height: 100dvh;
+  overflow-y: auto; /* Changed from visible to auto for Android Chrome */
+  min-height: 100dvh;
+  height: auto; /* Changed from 100dvh to auto - allows content to expand */
 }
 
 /* 2. DEFAULT LAYOUT: For all pages that use <main> (e.g., Dashboard) */
@@ -1593,9 +1594,11 @@ body.keyboard-visible {
   @supports (-webkit-touch-callout: none) {
   html, body {
     position: static; /* was fixed: blocked scrolling */
-    overflow: visible; /* was hidden: blocked scrolling */
+    overflow-y: auto; /* Changed from visible to auto for scrolling */
+    overflow-x: hidden;
     width: 100%;
-    height: 100dvh;
+    height: auto; /* Changed from 100dvh to auto */
+    min-height: 100dvh;
   }
 
   body.keyboard-visible {
@@ -1604,9 +1607,11 @@ body.keyboard-visible {
 
   #root {
     position: relative;
-    overflow: visible; /* allow inner scrollers like <main> */
+    overflow-y: auto; /* Changed from visible to auto */
+    overflow-x: hidden;
     width: 100%;
-    height: 100dvh;
+    height: auto; /* Changed from 100dvh to auto */
+    min-height: 100dvh;
   }
   body.keyboard-visible #root {
     height: var(--visual-viewport-height, 100vh);
