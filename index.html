@@ -37,7 +37,6 @@
     
     <!-- PWA Support -->
     <link rel="manifest" href="/manifest.json" />
-    <link rel="stylesheet" href="/pwa-fix.css" />
 
     <!-- Natively SDK (required for native features inside Natively shell) -->
     <script
@@ -115,13 +114,6 @@
           navigator.serviceWorker.register('/service-worker.js')
             .then(reg => console.log('PWA service worker registered'))
             .catch(err => console.log('PWA service worker registration failed:', err));
-          
-          // Detect if running as installed PWA and add html class
-          if (window.matchMedia('(display-mode: standalone)').matches ||
-              window.navigator.standalone === true) {
-            document.documentElement.classList.add('pwa');
-            console.log('Running in PWA mode - applying scroll fixes');
-          }
         });
       }
     </script>
