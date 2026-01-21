@@ -167,12 +167,14 @@ const ThinkingTimerDisplay: React.FC<{ startTime: number; isRTL: boolean }> = ({
 };
 
 export default function ProjectDetail() {
+  console.log('[ProjectDetail] Component mounting...');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { language } = useTheme();
   const { user, session } = useAuth();
   const debugContext = useDebugContext();
+  console.log('[ProjectDetail] Hooks initialized, id:', id);
   const isRTL = language === 'ar';
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -7742,13 +7744,4 @@ ${fixInstructions}
             if (nextFiles) {
               setGeneratedFiles(nextFiles);
               setCodeContent(nextFiles['/App.js'] || '');
-              toast.info(isRTL ? 'تم الإعادة' : 'Redone');
-            }
-          }}
-        />
-      )}
-      </>
-      )}
-    </div>
-  );
-}
+              toast.info(isRTL ? 'تم ال

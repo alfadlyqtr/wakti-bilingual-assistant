@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { setBusinessCardWidget, isWidgetSupported } from '@/integrations/natively/widgetBridge';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -1858,20 +1859,98 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
     }
   };
 
-  const handleAddToWallet = () => {
-    toast.info(isRTL ? 'قريباً...' : 'Coming Soon!', {
-      description: isRTL 
-        ? 'ميزة Apple Wallet قيد التطوير. ستتمكن قريباً من إضافة بطاقتك إلى المحفظة!'
-        : 'Apple Wallet integration is coming soon. You\'ll be able to add your card to Wallet for instant sharing!'
-    });
+  const handleAddToWallet = async () => {
+    const loadingToast = toast.loading(isRTL ? 'جاري إنشاء بطاقة المحفظة...' : 'Generating wallet pass...');
+    
+    try {
+      const cardUrl = `${window.location.origin}/card/${formData.firstName.toLowerCase()}-${formData.lastName.toLowerCase()}`;
+      
+      const { data, error } = await supabase.functions.invoke('generate-wallet-pass', {
+        body: {
+          cardData: {
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            email: formData.email,
+            phone: formData.phone,
+            company: formData.companyName,
+            jobTitle: formData.jobTitle,
+            website: formData.website,
+            cardUrl,
+          }
+        }
+      });
+
+      toast.dismiss(loadingToast);
+
+      if (error) throw error;
+
+      if (data?.success && data?.data) {
+        // Download the vCard/pass file
+        const binaryString = atob(data.data);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: data.mimeType || 'text/vcard' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = data.filename || `${formData.firstName}_${formData.lastName}.vcf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        toast.success(isRTL ? 'تم تحميل بطاقة جهات الاتصال!' : 'Contact card downloaded!', {
+          description: data.message || (isRTL ? 'افتح الملف لإضافته إلى جهات الاتصال' : 'Open the file to add to your contacts')
+        });
+      } else {
+        throw new Error('Failed to generate pass');
+      }
+    } catch (error) {
+      toast.dismiss(loadingToast);
+      console.error('Wallet pass error:', error);
+      toast.error(isRTL ? 'فشل في إنشاء بطاقة المحفظة' : 'Failed to generate wallet pass');
+    }
   };
 
   const handleSetAsWidget = () => {
-    toast.info(isRTL ? 'قريباً...' : 'Coming Soon!', {
-      description: isRTL 
-        ? 'ميزة الويدجت قيد التطوير. ستتمكن قريباً من إضافة رمز QR إلى شاشتك الرئيسية!'
-        : 'Widget feature is coming soon. You\'ll be able to add your QR code to your home screen!'
-    });
+    const cardUrl = `${window.location.origin}/card/${formData.firstName.toLowerCase()}-${formData.lastName.toLowerCase()}`;
+    
+    if (!isWidgetSupported()) {
+      // Not in native app - show instructions
+      toast.info(isRTL ? 'استخدم تطبيق Wakti' : 'Use the Wakti App', {
+        description: isRTL 
+          ? 'لإضافة الويدجت، افتح هذه الصفحة في تطبيق Wakti على هاتفك'
+          : 'To add a widget, open this page in the Wakti app on your phone'
+      });
+      return;
+    }
+
+    toast.loading(isRTL ? 'جاري إعداد الويدجت...' : 'Setting up widget...');
+
+    setBusinessCardWidget(
+      {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        company: formData.companyName,
+        cardUrl,
+      },
+      (result) => {
+        toast.dismiss();
+        if (result.status === 'SUCCESS') {
+          toast.success(isRTL ? 'تم إعداد الويدجت!' : 'Widget configured!', {
+            description: isRTL 
+              ? 'أضف ويدجت Wakti من شاشتك الرئيسية'
+              : 'Add the Wakti widget from your home screen'
+          });
+        } else {
+          toast.error(isRTL ? 'فشل في إعداد الويدجت' : 'Failed to set up widget', {
+            description: result.error
+          });
+        }
+      }
+    );
   };
 
   // Render QR Code Tab
