@@ -103,9 +103,14 @@ import {
   DetectedFeature, 
   FeatureType,
   getNextWizardFeature,
-  featureToWizardType,
-  createFeatureSummary 
+  getNonWizardFeatures,
+  generateStructuredPrompt,
+  createFeatureSummary
 } from '@/utils/requestAnalyzer';
+import {
+  detectChatIntent,
+  ChatIntent
+} from '@/utils/chatIntents';
 import { FreepikService } from '@/services/FreepikService';
 
 // Lovable-style components
@@ -4167,8 +4172,37 @@ ${fixInstructions}
     skipUserMessageSaveRef.current = false;
     
     if (!skipFormWizardDetection) {
-      // ===== STEP 0: MULTI-FEATURE REQUEST ANALYSIS =====
-      // Analyze the request to detect multiple features and handle them sequentially
+      // ===== STEP 0: CHECK IF THIS IS A CHAT REQUEST =====
+      // Before analyzing as a build request, check if user just wants to chat/use existing features
+      const { intent, action } = detectChatIntent(userMessage);
+      
+      if (intent !== 'none') {
+        // This is a chat request - handle it directly
+        setChatMessages(prev => [...prev, {
+          id: `user-${Date.now()}`,
+          role: 'user',
+          content: userMessage
+        }]);
+
+        if (action) {
+          // Handle the action
+          if (action.type === 'open_modal' && action.payload?.component === 'SmartMediaManager') {
+            setSmartMediaInitialTab(action.payload.props.initialTab);
+            setShowSmartMediaManager(true);
+          }
+
+          // Add AI response
+          setChatMessages(prev => [...prev, {
+            id: `assistant-${Date.now()}`,
+            role: 'assistant',
+            content: isRTL ? action.response.ar : action.response.en
+          }]);
+        }
+        return;
+      }
+
+      // ===== STEP 1: MULTI-FEATURE REQUEST ANALYSIS =====
+      // If not a chat request, analyze it as a build/edit request
       const analysis = analyzeRequest(userMessage);
       
       if (analysis.isMultiFeature && analysis.features.length >= 2) {
