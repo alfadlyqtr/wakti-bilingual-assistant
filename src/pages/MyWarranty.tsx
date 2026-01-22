@@ -11,7 +11,7 @@ import {
   Shield, Plus, SortAsc, Camera, Upload, X, 
   ChevronLeft, Trash2, FileText, MessageCircle, Calendar,
   Tag, Clock, CheckCircle, AlertTriangle, XCircle, Loader2,
-  Edit2, ExternalLink, CreditCard, User, FolderOpen, ChevronDown, Phone, Mail, Globe, MapPin, Link2
+  Edit2, ExternalLink, CreditCard, User, FolderOpen, ChevronDown, Phone, Mail, Globe, MapPin, Link2, Send
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -366,7 +366,7 @@ const translations = {
     filterAll: 'All',
     filterExpiring: 'Expiring',
     filterExpired: 'Expired',
-    addNew: 'Add Document',
+    addNew: 'Add Doc',
     sort: 'Sort',
     expiredItems: 'Expired Items',
     willExpireOn: 'Expires',
@@ -414,6 +414,29 @@ const translations = {
     save: 'Save',
     saveFile: 'Save File',
     cancel: 'Cancel',
+    pdfDocument: 'PDF Document',
+    aiAnalyzed: 'AI Analyzed',
+    noDocument: 'No document',
+    uploadedDocuments: 'Uploaded Documents',
+    files: 'files',
+    primary: 'Primary',
+    completeDetails: 'Complete Details',
+    waktiSummary: 'Wakti Summary',
+    aiPowered: 'AI-powered analysis',
+    fieldsDiscovered: 'fields discovered',
+    extractedData: 'Extracted Data',
+    noTagsYet: 'No tags yet',
+    noReceipt: 'No receipt available',
+    searchingDocs: 'Searching your documents...',
+    analyzingText: 'Analyzing...',
+    fullAccess: 'Full Access',
+    myDigitalCards: 'My Digital Cards',
+    cardsOf: 'of 2 cards',
+    primaryCard: 'Primary Card',
+    secondaryCard: 'Secondary Card',
+    noCardsCollected: 'No Cards Collected',
+    scanOthers: 'Scan other people\'s cards to save them here',
+    scanCard: 'Scan a Card',
   },
   ar: {
     title: 'مستنداتي',
@@ -444,7 +467,7 @@ const translations = {
     filterAll: 'الكل',
     filterExpiring: 'قريب الانتهاء',
     filterExpired: 'منتهي',
-    addNew: 'إضافة مستند',
+    addNew: 'إضافة',
     sort: 'ترتيب',
     expiredItems: 'مستندات منتهية',
     willExpireOn: 'ينتهي',
@@ -492,7 +515,143 @@ const translations = {
     save: 'حفظ',
     saveFile: 'حفظ الملف',
     cancel: 'إلغاء',
+    pdfDocument: 'مستند PDF',
+    aiAnalyzed: 'تم التحليل بالذكاء الاصطناعي',
+    noDocument: 'لا يوجد مستند',
+    uploadedDocuments: 'المستندات المرفوعة',
+    files: 'ملفات',
+    primary: 'الأساسية',
+    completeDetails: 'التفاصيل الكاملة',
+    waktiSummary: 'ملخص وقتي',
+    aiPowered: 'تم التحليل بالذكاء الاصطناعي',
+    fieldsDiscovered: 'حقل مكتشف',
+    extractedData: 'البيانات المستخرجة',
+    noTagsYet: 'لا توجد تصنيفات',
+    noReceipt: 'لا يوجد إيصال',
+    searchingDocs: 'جاري البحث في مستنداتك...',
+    analyzingText: 'جاري التحليل...',
+    fullAccess: 'وصول كامل',
+    myDigitalCards: 'بطاقاتي الرقمية',
+    cardsOf: 'من 2 بطاقات',
+    primaryCard: 'البطاقة الرئيسية',
+    secondaryCard: 'البطاقة الثانوية',
+    noCardsCollected: 'لا توجد بطاقات محفوظة',
+    scanOthers: 'امسح بطاقات الآخرين لحفظها هنا',
+    scanCard: 'مسح بطاقة',
   },
+};
+
+// Field label translations for extracted data
+const fieldLabelTranslations: Record<string, string> = {
+  // Document info
+  serial_number: 'الرقم التسلسلي',
+  document_type: 'نوع المستند',
+  issuing_country: 'بلد الإصدار',
+  issue_date: 'تاريخ الإصدار',
+  expiry_date: 'تاريخ الانتهاء',
+  document_number: 'رقم المستند',
+  reference_number: 'رقم المرجع',
+  policy_number: 'رقم الوثيقة',
+  certificate_number: 'رقم الشهادة',
+  license_number: 'رقم الرخصة',
+  permit_number: 'رقم التصريح',
+  registration_number: 'رقم التسجيل',
+  file_number: 'رقم الملف',
+  // Personal info
+  full_name: 'الاسم الكامل',
+  full_name_arabic: 'الاسم بالعربية',
+  first_name: 'الاسم الأول',
+  last_name: 'اسم العائلة',
+  father_name: 'اسم الأب',
+  date_of_birth: 'تاريخ الميلاد',
+  place_of_birth: 'مكان الميلاد',
+  nationality: 'الجنسية',
+  gender: 'الجنس',
+  marital_status: 'الحالة الاجتماعية',
+  occupation: 'المهنة',
+  employer: 'جهة العمل',
+  national_id: 'رقم الهوية',
+  passport_number: 'رقم الجواز',
+  civil_id: 'الرقم المدني',
+  blood_type: 'فصيلة الدم',
+  // Contact info
+  phone: 'الهاتف',
+  mobile: 'الجوال',
+  email: 'البريد الإلكتروني',
+  address: 'العنوان',
+  city: 'المدينة',
+  country: 'الدولة',
+  postal_code: 'الرمز البريدي',
+  po_box: 'صندوق البريد',
+  // Vehicle info
+  make: 'الشركة المصنعة',
+  model: 'الموديل',
+  year: 'السنة',
+  color: 'اللون',
+  plate_number: 'رقم اللوحة',
+  chassis_number: 'رقم الشاسيه',
+  engine_number: 'رقم المحرك',
+  vin: 'رقم الهيكل',
+  vehicle_type: 'نوع المركبة',
+  fuel_type: 'نوع الوقود',
+  seating_capacity: 'عدد المقاعد',
+  // Insurance info
+  insurer_name: 'اسم شركة التأمين',
+  policy_holder: 'حامل الوثيقة',
+  coverage_type: 'نوع التغطية',
+  coverage_amount: 'مبلغ التغطية',
+  premium_amount: 'قسط التأمين',
+  deductible: 'التحمل',
+  start_date: 'تاريخ البداية',
+  end_date: 'تاريخ النهاية',
+  beneficiary_name: 'اسم المستفيد',
+  // Financial info
+  amount: 'المبلغ',
+  total_amount: 'المبلغ الإجمالي',
+  currency: 'العملة',
+  payment_method: 'طريقة الدفع',
+  bank_name: 'اسم البنك',
+  account_number: 'رقم الحساب',
+  // Product info
+  product_name: 'اسم المنتج',
+  brand: 'العلامة التجارية',
+  manufacturer: 'الشركة المصنعة',
+  warranty_period: 'فترة الضمان',
+  purchase_date: 'تاريخ الشراء',
+  // Company info
+  company_name: 'اسم الشركة',
+  trade_license: 'الرخصة التجارية',
+  tax_id: 'الرقم الضريبي',
+  // Common fields
+  status: 'الحالة',
+  type: 'النوع',
+  category: 'الفئة',
+  description: 'الوصف',
+  notes: 'ملاحظات',
+  remarks: 'ملاحظات',
+  validity: 'الصلاحية',
+  valid_from: 'صالح من',
+  valid_to: 'صالح حتى',
+  issued_by: 'صادر من',
+  issuing_authority: 'الجهة المصدرة',
+  provider: 'المزود',
+  title: 'العنوان',
+  name: 'الاسم',
+};
+
+// Helper function to translate field labels
+const translateFieldLabel = (key: string, isRTL: boolean): string => {
+  if (!isRTL) {
+    // English: format the key nicely
+    return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+  // Arabic: look up translation or format key
+  const lowerKey = key.toLowerCase();
+  if (fieldLabelTranslations[lowerKey]) {
+    return fieldLabelTranslations[lowerKey];
+  }
+  // Fallback: format the key nicely (for untranslated fields)
+  return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 };
 
 const MyWarranty: React.FC = () => {
@@ -538,6 +697,7 @@ const MyWarranty: React.FC = () => {
 
   const [newTagsInput, setNewTagsInput] = useState('');
   const [detailTagsInput, setDetailTagsInput] = useState('');
+  const [docSide, setDocSide] = useState<'front' | 'back' | 'both'>('front'); // Document side selector
   const [isEditingTags, setIsEditingTags] = useState(false);
   const [isSavingTags, setIsSavingTags] = useState(false);
   
@@ -766,6 +926,77 @@ const MyWarranty: React.FC = () => {
       setIsAnalyzing(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
       if (cameraInputRef.current) cameraInputRef.current.value = '';
+    }
+  };
+
+  // Handle manual analyze (Send button)
+  const handleAnalyzeDocument = async () => {
+    if (!user || !newItem.image_url) return;
+    
+    setIsAnalyzing(true);
+    
+    try {
+      // Collect all image URLs
+      const allImageUrls = [newItem.image_url, ...newItem.additional_images];
+      
+      // Fetch images and convert to base64
+      const base64Images: string[] = [];
+      for (const url of allImageUrls) {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1]);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+        base64Images.push(base64);
+      }
+
+      const { data: aiData, error: aiError } = await supabase.functions.invoke('my-warranty-ai', {
+        body: {
+          mode: 'extract',
+          images: base64Images,
+          mimeType: newItem.file_type === 'pdf' ? 'application/pdf' : 'image/jpeg',
+          language: isRTL ? 'ar' : 'en',
+        },
+      });
+
+      if (aiError) throw aiError;
+      
+      if (aiData?.success && aiData?.data) {
+        const extracted = aiData.data;
+        const fullExtractedData: Record<string, unknown> = {
+          ...(extracted.extracted_data || {}),
+          raw_ocr_text: extracted.raw_ocr_text || extracted.notes || '',
+        };
+        const richSummary = extracted.ai_summary || buildRichSummary(extracted);
+
+        setNewItem(prev => ({
+          ...prev,
+          title: extracted.title || prev.title,
+          provider: extracted.provider || prev.provider,
+          category: extracted.category || prev.category,
+          purchase_date: extracted.purchase_date || prev.purchase_date,
+          expiry_date: extracted.expiry_date || prev.expiry_date,
+          ref_number: extracted.ref_number || prev.ref_number,
+          support_contact: extracted.support_contact || prev.support_contact,
+          extracted_data: fullExtractedData,
+          ai_summary: richSummary,
+        }));
+      }
+    } catch (error) {
+      console.error('Analysis error:', error);
+      toast({
+        title: isRTL ? 'خطأ' : 'Error',
+        description: isRTL ? 'فشل تحليل المستند' : 'Failed to analyze document',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -1034,7 +1265,7 @@ const MyWarranty: React.FC = () => {
               <img 
                 src={rawUrl} 
                 alt={item.product_name} 
-                className="w-full h-full object-cover"
+                className="document-preview w-full h-full object-contain bg-black/20 transition-all duration-300" 
                 onError={(e) => {
                   (e.target as HTMLImageElement).style.display = 'none';
                 }}
@@ -1097,58 +1328,41 @@ const MyWarranty: React.FC = () => {
 
   // Render List View
   const renderWarrantiesTab = () => (
-    <div className="flex flex-col h-full">
-      <div className="px-4 pt-4 pb-3 solid-bg">
+    <div className="flex flex-col h-full w-full overflow-x-hidden">
+      <div className="px-4 pt-4 pb-3 solid-bg w-full overflow-x-hidden">
         {/* Hero Section - Beautiful intro */}
-        <div className="relative mb-6 p-5 rounded-2xl overflow-hidden bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-emerald-500/10 border border-white/10">
+        <div className="relative mb-6 p-5 rounded-2xl overflow-hidden bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-emerald-500/10 border border-white/10 w-full">
           {/* Decorative elements */}
           <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/20 to-transparent rounded-full blur-2xl" />
           <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-emerald-500/20 to-transparent rounded-full blur-2xl" />
           
-          <div className="relative z-10">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center shadow-lg">
-                <FolderOpen className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-foreground">{t.docsHeroTitle}</h1>
-                <p className="text-xs text-muted-foreground">{warranties.length} {t.items}</p>
-              </div>
-            </div>
-            
-            <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-              {t.docsHeroSubtitle}
-            </p>
-            
-            {/* Feature pills */}
-            <div className="flex flex-wrap gap-2">
-              <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-blue-500/15 text-blue-400 border border-blue-500/20">
-                🪪 {t.docsFeature1}
-              </span>
-              <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
-                🛡️ {t.docsFeature2}
-              </span>
-              <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-purple-500/15 text-purple-400 border border-purple-500/20">
-                📋 {t.docsFeature3}
-              </span>
-              <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-orange-500/15 text-orange-400 border border-orange-500/20">
-                📝 {t.docsFeature4}
-              </span>
-            </div>
+          <div className="relative z-10 flex flex-wrap gap-2">
+            <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-blue-500/15 text-blue-400 border border-blue-500/20 whitespace-nowrap">
+              🪪 {t.docsFeature1}
+            </span>
+            <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 whitespace-nowrap">
+              🛡️ {t.docsFeature2}
+            </span>
+            <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-purple-500/15 text-purple-400 border border-purple-500/20 whitespace-nowrap">
+              📋 {t.docsFeature3}
+            </span>
+            <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-orange-500/15 text-orange-400 border border-orange-500/20 whitespace-nowrap">
+              📝 {t.docsFeature4}
+            </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 mb-4 overflow-x-auto scrollbar-hide py-1">
+        <div className="flex items-center gap-2 mb-4 overflow-x-auto scrollbar-hide py-1 w-full no-scrollbar">
           {/* Plus button moved to the filter row */}
           {viewMode !== 'add' && viewMode !== 'detail' && viewMode !== 'ask' && mainTab === 'docs' && activeTab === 'warranties' && warranties.length > 0 && (
             <button
               type="button"
               onClick={() => setViewMode('add')}
-              className="h-9 px-3 rounded-full btn-enhanced flex items-center justify-center active:scale-95 transition shrink-0 shadow-lg"
+              className="h-9 px-3 rounded-full btn-enhanced flex items-center justify-center gap-1.5 active:scale-95 transition shrink-0 shadow-lg"
               aria-label={t.addNew}
             >
               <Plus className="w-4 h-4 text-white" />
-              <span className="ml-1.5 text-xs font-bold text-white">{t.addNew}</span>
+              <span className="text-xs font-bold text-white">{t.addNew}</span>
             </button>
           )}
           <div className="w-px h-6 bg-white/10 shrink-0 mx-1" />
@@ -1730,10 +1944,10 @@ const MyWarranty: React.FC = () => {
                       setActiveCardSlot(card.cardSlot);
                       setShowCardBuilder(true);
                     }}
-                    className="flex-1 h-9 rounded-xl text-xs"
+                    className="flex-1 h-9 rounded-xl text-xs flex items-center justify-center gap-1.5"
                   >
-                    <Edit2 className="w-3.5 h-3.5 mr-1.5" />
-                    {isRTL ? 'تعديل' : 'Edit'}
+                    <Edit2 className="w-3.5 h-3.5" />
+                    <span>{isRTL ? 'تعديل' : 'Edit'}</span>
                   </Button>
                   <div className="flex items-center justify-center w-12">
                     <div onClick={(e) => e.stopPropagation()}>
@@ -1761,7 +1975,7 @@ const MyWarranty: React.FC = () => {
               }
             }}
             disabled={cardLimitReached}
-            className={`w-full h-14 text-base font-semibold rounded-2xl transition-all active:scale-[0.98] ${
+            className={`w-full h-14 text-base font-semibold rounded-2xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 ${
               cardLimitReached
                 ? 'bg-gray-500/20 text-muted-foreground cursor-not-allowed'
                 : 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg shadow-blue-500/25'
@@ -1769,13 +1983,13 @@ const MyWarranty: React.FC = () => {
           >
             {cardLimitReached ? (
               <>
-                <AlertTriangle className="w-5 h-5 mr-2 opacity-60" />
-                {isRTL ? 'تم الوصول للحد الأقصى (2 بطاقات)' : 'Card limit reached (2 cards)'}
+                <AlertTriangle className="w-5 h-5 opacity-60" />
+                <span>{isRTL ? 'تم الوصول للحد الأقصى (2 بطاقات)' : 'Card limit reached (2 cards)'}</span>
               </>
             ) : (
               <>
-                <Plus className="w-5 h-5 mr-2" />
-                {isRTL ? 'إنشاء بطاقة جديدة' : 'Create New Card'}
+                <Plus className="w-5 h-5" />
+                <span>{isRTL ? 'إنشاء بطاقة جديدة' : 'Create New Card'}</span>
               </>
             )}
           </Button>
@@ -1910,9 +2124,9 @@ const MyWarranty: React.FC = () => {
   );
 
   const renderDocsTabContent = () => (
-    <div className="flex flex-col h-full">
-      <div className="px-4 pt-2 pb-2">
-        <div className="flex items-center gap-2">
+    <div className="flex flex-col h-full w-full overflow-x-hidden">
+      <div className="px-4 pt-2 pb-2 w-full">
+        <div className="flex items-center gap-2 w-full">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'warranties' | 'ask')} className="flex-1">
             <TabsList className="bg-white/5 border border-white/10 w-full">
               <TabsTrigger value="warranties">{t.warrantiesTab}</TabsTrigger>
@@ -1931,9 +2145,9 @@ const MyWarranty: React.FC = () => {
   );
 
   const renderMainView = () => (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full w-full overflow-x-hidden">
       {/* Main 3-Tab Navigation */}
-      <div className="px-4 pt-4 pb-2 solid-bg border-b border-white/10">
+      <div className="px-4 pt-4 pb-2 solid-bg border-b border-white/10 w-full">
         <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as 'docs' | 'card' | 'cv')}>
           <TabsList className="w-full bg-white/5 border border-white/10 grid grid-cols-3 h-12">
             <TabsTrigger value="docs" className="flex flex-col items-center justify-center gap-0.5 py-1">
@@ -1963,10 +2177,10 @@ const MyWarranty: React.FC = () => {
 
   // Render Add View
   const renderAddView = () => (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-4 border-b border-white/10">
-        <Button variant="ghost" size="icon" onClick={() => {
+    <div className="flex flex-col h-full w-full overflow-x-hidden" dir="ltr">
+      {/* Header - Always LTR layout, back button always on left */}
+      <div className="flex items-center gap-3 px-4 py-4 border-b border-white/10 w-full">
+        <Button variant="ghost" size="sm" onClick={() => {
           // Clear form when going back
           setNewItem({
             title: '',
@@ -1989,13 +2203,13 @@ const MyWarranty: React.FC = () => {
           if (cameraInputRef.current) cameraInputRef.current.value = '';
           if (fileInputRef.current) fileInputRef.current.value = '';
           setViewMode('list');
-        }}>
-          <ChevronLeft className="w-5 h-5" />
+        }} className="h-10 px-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all active:scale-95 flex items-center justify-center">
+          <span className="text-sm font-medium">{t.back}</span>
         </Button>
-        <h1 className="text-xl font-bold text-foreground">{t.addNew}</h1>
+        <h1 className="text-xl font-bold text-foreground flex-1" dir={isRTL ? 'rtl' : 'ltr'}>{t.addNew}</h1>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 pb-32">
+      <div className="flex-1 overflow-y-auto px-4 py-4 pb-32 w-full" dir={isRTL ? 'rtl' : 'ltr'}>
         {isAnalyzing ? (
           <div className="flex flex-col items-center justify-center py-20">
             {/* Premium Wakti AI Loader */}
@@ -2105,11 +2319,11 @@ const MyWarranty: React.FC = () => {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-xs text-red-400 hover:text-red-300 hover:bg-red-400/10"
+                    className="text-xs text-red-400 hover:text-red-300 hover:bg-red-400/10 flex items-center gap-1"
                     onClick={() => setNewItem(prev => ({ ...prev, image_url: '', receipt_url: '', additional_images: [], file_type: '' }))}
                   >
-                    <X className="w-3 h-3 mr-1" />
-                    {isRTL ? 'مسح الكل' : 'Clear All'}
+                    <X className="w-3 h-3" />
+                    <span>{isRTL ? 'مسح الكل' : 'Clear All'}</span>
                   </Button>
                 </div>
 
@@ -2159,6 +2373,16 @@ const MyWarranty: React.FC = () => {
                     <span className="text-[10px] font-bold text-muted-foreground uppercase">{isRTL ? 'إضافة' : 'Add'}</span>
                   </button>
                 </div>
+
+                {/* Send Button */}
+                <Button
+                  onClick={handleAnalyzeDocument}
+                  disabled={isAnalyzing}
+                  className="w-full mt-4 h-12 rounded-xl btn-enhanced text-white font-bold text-base flex items-center justify-center gap-2"
+                >
+                  <Send className="w-5 h-5" />
+                  {isRTL ? 'إرسال للتحليل' : 'Send for Analysis'}
+                </Button>
               </div>
             )}
 
@@ -2254,7 +2478,7 @@ const MyWarranty: React.FC = () => {
       {!isAnalyzing && newItem.extracted_data && Object.keys(newItem.extracted_data).length > 0 && (
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-xl border-t border-white/10 pb-safe">
           <Button
-            className="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white font-bold py-3"
+            className="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white font-bold py-3 flex items-center justify-center gap-2"
             onClick={async () => {
               await handleSave();
               // Clear form after successful save
@@ -2284,8 +2508,8 @@ const MyWarranty: React.FC = () => {
               fetchData();
             }}
           >
-            <CheckCircle className="w-5 h-5 mr-2" />
-            {t.saveFile}
+            <CheckCircle className="w-5 h-5" />
+            <span>{t.saveFile}</span>
           </Button>
         </div>
       )}
@@ -2332,8 +2556,8 @@ const MyWarranty: React.FC = () => {
       const strVal = String(val).trim();
       if (!strVal || strVal === '-' || strVal === 'null' || strVal.length > 100) return;
       
-      // Format key nicely
-      const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      // Format key nicely with translation support
+      const label = translateFieldLabel(key, isRTL);
       const icon = iconMap[key.toLowerCase()] || '📌';
       chips.push({ label, value: strVal, icon });
     });
@@ -2352,43 +2576,39 @@ const MyWarranty: React.FC = () => {
     const userTags = getUserTags(selectedItem);
 
     return (
-      <div className="flex flex-col h-full">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-4 border-b border-white/10">
+      <div className="flex flex-col h-full w-full overflow-x-hidden" dir="ltr">
+        {/* Header - Always LTR layout, back button always on left */}
+        <div className="flex items-center justify-between px-4 py-4 border-b border-white/10 w-full">
           <Button 
             variant="ghost" 
             size="sm" 
             onClick={() => setViewMode('list')}
-            className="flex items-center gap-1.5 h-10 px-3 -ml-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all active:scale-95 group"
+            className="flex items-center gap-2 h-10 px-4 rounded-2xl bg-gradient-to-r from-white/10 to-white/5 border border-white/20 hover:border-white/30 hover:from-white/15 hover:to-white/10 transition-all active:scale-95 shadow-lg shadow-black/10"
           >
-            <ChevronLeft className="w-5 h-5 transition-transform group-hover:-translate-x-0.5" />
-            <span className="text-sm font-medium">{isRTL ? 'عودة' : 'Back'}</span>
+            <ChevronLeft className="w-4 h-4" />
+            <span className="text-sm font-medium tracking-wide">{t.back}</span>
           </Button>
-          <h1 className="text-lg font-bold text-foreground text-center flex-1 mx-2 truncate">{selectedItem.product_name}</h1>
-          <div className="w-10" />
+          <h1 className="text-lg font-bold text-foreground text-center flex-1 mx-2 truncate" dir={isRTL ? 'rtl' : 'ltr'}>{selectedItem.product_name}</h1>
+          <div className="w-16" />
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4 pb-32">
+        <div className="flex-1 overflow-y-auto px-4 py-4 pb-32 w-full" dir={isRTL ? 'rtl' : 'ltr'}>
           {/* Document Preview - Compact */}
           <div className="w-full mb-5">
             <div className="flex items-center justify-between mb-2">
               <h4 className="text-sm font-medium text-foreground">{isRTL ? 'المستند' : 'Document'}</h4>
-              {selectedItem.receipt_url && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => window.open(selectedItem.receipt_url, '_blank')}
-                  className="text-xs h-7 px-2"
-                >
-                  <ExternalLink className="w-3 h-3 mr-1" />
-                  {isRTL ? 'فتح' : 'Open'}
-                </Button>
-              )}
             </div>
-            <div className="w-full h-[200px] rounded-xl overflow-hidden bg-white/5 border border-white/10 cursor-pointer hover:border-blue-500/50 transition-all"
+            <div 
+              className="group relative w-full rounded-xl overflow-hidden bg-white/5 border border-white/10 cursor-zoom-in transition-all hover:shadow-xl hover:border-white/20"
+              style={{
+                height: 'var(--preview-height, 200px)',
+                '--preview-height': '200px',
+              }}
               onClick={() => {
-                const url = selectedItem.receipt_url || selectedItem.image_url;
-                if (url) window.open(url, '_blank');
+                const img = document.querySelector('.document-preview') as HTMLElement;
+                if (img) {
+                  img.classList.toggle('expanded');
+                }
               }}
             >
               {(() => {
@@ -2397,64 +2617,61 @@ const MyWarranty: React.FC = () => {
                 
                 if (rawUrl && !isPdf) {
                   return (
-                    <img 
-                      src={rawUrl} 
-                      alt={selectedItem.product_name} 
-                      className="w-full h-full object-contain bg-black/20" 
-                    />
+                    <div className="relative w-full h-full">
+                      <img 
+                        src={rawUrl} 
+                        alt={selectedItem.product_name} 
+                        className="document-preview w-full h-full object-contain bg-black/20 transition-all duration-300" 
+                      />
+                      {selectedItem.receipt_url && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(selectedItem.receipt_url, '_blank');
+                          }}
+                          className="absolute top-3 right-3 bg-black/40 hover:bg-black/60 text-white border border-white/20 backdrop-blur-sm"
+                        >
+                          <ExternalLink className="w-4 h-4 mr-1.5" />
+                          {isRTL ? 'فتح' : 'Open'}
+                        </Button>
+                      )}
+                    </div>
                   );
                 } else if (isPdf) {
                   return (
                     <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-red-500/5">
                       <FileText className="w-12 h-12 text-red-400" />
-                      <p className="text-foreground font-medium text-sm">PDF Document</p>
-                      <p className="text-xs text-blue-400">✓ AI Analyzed</p>
+                      <p className="text-foreground font-medium text-sm">{t.pdfDocument}</p>
+                      <p className="text-xs text-blue-400">✓ {t.aiAnalyzed}</p>
                     </div>
                   );
                 } else {
                   return (
                     <div className="w-full h-full flex flex-col items-center justify-center gap-2">
                       <Shield className="w-12 h-12 text-foreground/20" />
-                      <span className="text-xs text-muted-foreground">No document</span>
+                      <span className="text-xs text-muted-foreground">{t.noDocument}</span>
                     </div>
                   );
                 }
               })()}
             </div>
           </div>
-
-          {/* Progress Bar */}
-          {timeRemaining && (
-            <div className="mb-5">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className={`text-sm font-semibold ${timeRemaining.textColor}`}>
-                  {timeRemaining.text}
-                </span>
-              </div>
-              <div className="h-2.5 bg-white/10 rounded-full overflow-hidden">
-                <div 
-                  className={`h-full ${timeRemaining.color} rounded-full transition-all`}
-                  style={{ width: `${timeRemaining.progress}%` }}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* AI Summary Section - Premium Card at Top */}
+          {/* AI Summary Section */}
           {aiSummary && (
             <div className="mb-5">
               <div className="relative p-4 rounded-2xl overflow-hidden bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-cyan-500/10 border border-blue-500/20">
                 <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-blue-500/20 to-transparent rounded-full blur-2xl" />
                 <div className="absolute bottom-0 left-0 w-20 h-20 bg-gradient-to-tr from-purple-500/20 to-transparent rounded-full blur-2xl" />
-                
                 <div className="relative z-10">
                   <div className="flex items-center gap-2 mb-3">
                     <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center shadow-lg">
                       <MessageCircle className="w-5 h-5 text-white" />
                     </div>
                     <div>
-                      <h4 className="text-sm font-bold text-foreground">{isRTL ? 'ملخص وقتي' : 'Wakti Summary'}</h4>
-                      <p className="text-[10px] text-muted-foreground">{isRTL ? 'تم التحليل بالذكاء الاصطناعي' : 'AI-powered analysis'}</p>
+                      <h4 className="text-sm font-bold text-foreground">{t.waktiSummary}</h4>
+                      <p className="text-[10px] text-muted-foreground">{t.aiPowered}</p>
                     </div>
                   </div>
                   <p className="text-sm text-foreground/90 leading-relaxed">{aiSummary}</p>
@@ -2466,7 +2683,7 @@ const MyWarranty: React.FC = () => {
           {/* Categorized Extracted Data - Dynamic Cards */}
           {(() => {
             const ed = extracted as Record<string, unknown>;
-            
+      
             // Category config with icons, colors, and labels
             const categoryConfig: Record<string, { icon: string; color: string; labelEn: string; labelAr: string }> = {
               document_info: { icon: '📄', color: 'blue', labelEn: 'Document Information', labelAr: 'معلومات المستند' },
@@ -2526,92 +2743,25 @@ const MyWarranty: React.FC = () => {
                       <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-2xl shadow-lg ${colors.iconBg} border border-white/20 group-hover:scale-110 transition-transform duration-300`}>
                         {config.icon}
                       </div>
-                      <div className="text-left">
+                      <div className="text-left" dir={isRTL ? 'rtl' : 'ltr'}>
                         <h5 className={`text-sm font-black uppercase tracking-widest ${isCollapsed ? 'text-foreground' : colors.text} transition-colors duration-300 drop-shadow-sm`}>
                           {isRTL ? config.labelAr : config.labelEn}
                         </h5>
                         <p className={`text-[10px] font-black uppercase tracking-tighter ${isCollapsed ? 'text-muted-foreground' : 'text-foreground/70'}`}>
-                          {fields.length} {isRTL ? 'حقل مكتشف' : 'fields discovered'}
+                          {fields.length} {fields.length === 1 ? (isRTL ? 'حقل' : 'field') : (isRTL ? 'حقول' : 'fields')} {isRTL ? 'مكتشفة' : 'discovered'}
                         </p>
                       </div>
                     </div>
-
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-500 shadow-sm ${isCollapsed ? 'bg-white/10 text-foreground' : `${colors.iconBg} ${colors.text} rotate-180`}`}>
-                      <ChevronDown className="w-5 h-5 stroke-[3px]" />
+                    
+                    <div className={`transition-transform duration-200 ${isCollapsed ? '' : 'rotate-180'}`}>
+                      <ChevronDown className="w-5 h-5 text-muted-foreground" />
                     </div>
                   </button>
-
+                  
                   {!isCollapsed && (
-                    <div className="p-6 pt-2 grid grid-cols-2 md:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
-                      {fields.map(([key, val], idx) => {
-                        const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                        const value = String(val);
-                        const isLongValue = value.length > 35;
-                        const isMonoValue = key.includes('number') || key.includes('_no') || key.includes('_id') || 
-                                           key.includes('chassis') || key.includes('plate') || key.includes('vin') ||
-                                           key.includes('iban') || key.includes('serial');
-                        
-                        return (
-                          <div 
-                            key={`${key}-${idx}`} 
-                            className={`p-4 rounded-2xl ${colors.fieldBg} border ${colors.fieldBorder} hover:bg-white/5 transition-all duration-200 shadow-sm group/field`}
-                          >
-                            <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest mb-2 opacity-80 group-hover/field:opacity-100 transition-opacity">{label}</p>
-                            <p className={`text-[14px] font-bold text-foreground break-words leading-tight ${isMonoValue ? 'font-mono text-[13px] tracking-tighter text-blue-500 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md inline-block' : ''}`}>
-                              {value}
-                            </p>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            };
-            
-            // If data is categorized, render category cards
-            if (hasCategorizedData) {
-              return (
-                <div className="mb-5">
-                  {Object.keys(categoryConfig).map(catKey => {
-                    const catData = ed[catKey] as Record<string, unknown> | undefined;
-                    if (!catData || typeof catData !== 'object') return null;
-                    return renderCategoryCard(catKey, catData);
-                  })}
-                </div>
-              );
-            }
-            
-            // Fallback: If data is flat (not categorized), show all fields in one card
-            const skipKeys = ['raw_ocr_text', 'raw_text', 'user_tags', 'ai_summary', 'summary'];
-            const allFields = Object.entries(ed).filter(([key, val]) => {
-              if (skipKeys.includes(key)) return false;
-              if (!val || val === 'null' || val === '-') return false;
-              if (typeof val === 'object') return false;
-              const strVal = String(val).trim();
-              if (!strVal || strVal.length > 200) return false;
-              return true;
-            });
-            
-            if (allFields.length === 0) return null;
-            
-            return (
-              <div className="mb-5">
-                <div className="rounded-xl bg-white/5 border border-white/10 overflow-hidden">
-                  <button 
-                    onClick={() => toggleSection('additional_info')}
-                    className="w-full px-4 py-3 bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border-b border-white/10 flex items-center justify-between hover:opacity-90 transition-all"
-                  >
-                    <h5 className="text-xs font-bold text-blue-400 uppercase tracking-wide flex items-center gap-2">
-                      <span>📋</span> {isRTL ? 'البيانات المستخرجة' : 'Extracted Data'}
-                      <span className="text-[10px] font-normal opacity-70">({allFields.length})</span>
-                    </h5>
-                    <ChevronDown className={`w-4 h-4 text-blue-400 transition-transform ${collapsedSections.additional_info ? '-rotate-90' : ''}`} />
-                  </button>
-                  {!collapsedSections.additional_info && (
                     <div className="p-4 grid grid-cols-2 gap-3">
-                      {allFields.map(([key, val], idx) => {
-                        const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                      {fields.map(([key, val], idx) => {
+                        const label = translateFieldLabel(key, isRTL);
                         const value = String(val);
                         const isLongValue = value.length > 35;
                         const isMonoValue = key.includes('number') || key.includes('_no') || key.includes('_id') || 
@@ -2628,6 +2778,54 @@ const MyWarranty: React.FC = () => {
                       })}
                     </div>
                   )}
+                </div>
+              );
+            };
+
+            // Render the categorized data
+            if (hasCategorizedData) {
+              return (
+                <>
+                  {Object.entries(categoryConfig).map(([key]) => {
+                    const data = ed[key];
+                    if (data && typeof data === 'object') {
+                      return renderCategoryCard(key, data as Record<string, unknown>);
+                    }
+                    return null;
+                  })}
+                </>
+              );
+            }
+
+            // Fallback for non-categorized data
+            const allFields = Object.entries(ed).filter(([key, val]) => {
+              if (key === 'user_tags') return false;
+              if (!val || val === 'null' || val === '-' || val === '') return false;
+              if (typeof val === 'object') return false;
+              return true;
+            });
+
+            if (allFields.length === 0) return null;
+
+            return (
+              <div className="rounded-2xl border border-white/10 bg-white/5 mb-4 overflow-hidden">
+                <div className="p-4 grid grid-cols-2 gap-3">
+                  {allFields.map(([key, val], idx) => {
+                    const label = translateFieldLabel(key, isRTL);
+                    const value = String(val);
+                    const isLongValue = value.length > 35;
+                    const isMonoValue = key.includes('number') || key.includes('_no') || key.includes('_id') || 
+                                       key.includes('chassis') || key.includes('plate') || key.includes('vin');
+                    
+                    return (
+                      <div key={`${key}-${idx}`} className={isLongValue ? 'col-span-2' : ''}>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">{label}</p>
+                        <p className={`text-sm font-semibold text-foreground ${isMonoValue ? 'font-mono text-xs' : ''}`}>
+                          {value}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -2730,7 +2928,7 @@ const MyWarranty: React.FC = () => {
           {/* View Receipt Button */}
           {selectedItem.receipt_url && (
             <Button
-              className="w-full mb-3 bg-gradient-to-r from-blue-500 to-cyan-500"
+              className="w-full mb-3 bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center gap-2"
               onClick={() => {
                 const rawUrl = (selectedItem.receipt_url || '').trim();
                 if (!rawUrl) {
@@ -2748,33 +2946,33 @@ const MyWarranty: React.FC = () => {
                 setIsDocumentModalOpen(true);
               }}
             >
-              <FileText className="w-4 h-4 mr-2" />
-              {t.viewReceipt}
+              <FileText className="w-4 h-4" />
+              <span>{t.viewReceipt}</span>
             </Button>
           )}
 
           {/* Ask Wakti Button */}
           <Button
             variant="outline"
-            className="w-full mb-3"
+            className="w-full mb-3 flex items-center justify-center gap-2"
             onClick={() => {
               setAskQuestion('');
               setAskMessages([]);
               setViewMode('ask');
             }}
           >
-            <MessageCircle className="w-4 h-4 mr-2" />
-            {t.askWakti}
+            <MessageCircle className="w-4 h-4" />
+            <span>{t.askWakti}</span>
           </Button>
 
           {/* Delete Button */}
           <Button
             variant="ghost"
-            className="w-full text-red-400 hover:text-red-300 hover:bg-red-500/10"
+            className="w-full text-red-400 hover:text-red-300 hover:bg-red-500/10 flex items-center justify-center gap-2"
             onClick={() => handleDelete(selectedItem.id)}
           >
-            <Trash2 className="w-4 h-4 mr-2" />
-            {t.deleteItem}
+            <Trash2 className="w-4 h-4" />
+            <span>{t.deleteItem}</span>
           </Button>
         </div>
       </div>
@@ -2783,20 +2981,20 @@ const MyWarranty: React.FC = () => {
 
   // Render Ask View (dedicated view for asking questions about a warranty)
   const renderAskView = () => (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-4 border-b border-white/10 shrink-0">
-        <Button variant="ghost" size="icon" onClick={() => setViewMode('detail')}>
-          <ChevronLeft className="w-5 h-5" />
+    <div className="flex flex-col h-full w-full overflow-x-hidden" dir="ltr">
+      {/* Header - Always LTR layout, back button always on left */}
+      <div className="flex items-center gap-3 px-4 py-4 border-b border-white/10 shrink-0 w-full">
+        <Button variant="ghost" size="sm" onClick={() => setViewMode('detail')} className="h-10 px-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all active:scale-95 flex items-center justify-center">
+          <span className="text-sm font-medium">{t.back}</span>
         </Button>
-        <div>
-          <h1 className="text-xl font-bold text-foreground">{t.askWakti}</h1>
-          <p className="text-sm text-muted-foreground">{selectedItem?.product_name}</p>
+        <div className="flex-1" dir={isRTL ? 'rtl' : 'ltr'}>
+          <h1 className="text-xl font-bold text-foreground truncate">{t.askWakti}</h1>
+          <p className="text-sm text-muted-foreground truncate">{selectedItem?.product_name}</p>
         </div>
       </div>
 
       {/* Scrollable Chat Area */}
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      <div className="flex-1 overflow-y-auto px-4 py-4 w-full" dir={isRTL ? 'rtl' : 'ltr'}>
         {selectedItem && (
           <div className="space-y-4">
             {selectedItem.ai_summary && (
@@ -2846,12 +3044,12 @@ const MyWarranty: React.FC = () => {
           />
 
           <Button
-            className="w-full bg-gradient-to-r from-blue-500 to-cyan-500"
+            className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center gap-2"
             onClick={handleAskWakti}
             disabled={isAsking || !askQuestion.trim()}
           >
-            {isAsking ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <MessageCircle className="w-4 h-4 mr-2" />}
-            {isAsking ? (isRTL ? 'جاري التحليل...' : 'Analyzing...') : t.send}
+            {isAsking ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageCircle className="w-4 h-4" />}
+            <span>{isAsking ? (isRTL ? 'جاري التحليل...' : 'Analyzing...') : t.send}</span>
           </Button>
         </div>
       </div>
@@ -2861,10 +3059,12 @@ const MyWarranty: React.FC = () => {
   // Main render
   return (
     <div
-      className="h-full w-full bg-background"
-      style={{ direction: isRTL ? 'rtl' : 'ltr' }}
+      className="h-full w-full bg-background overflow-x-hidden overflow-y-auto relative"
+      dir={isRTL ? 'rtl' : 'ltr'}
     >
-      {viewMode === 'add' ? renderAddView() : viewMode === 'detail' ? renderDetailView() : viewMode === 'ask' ? renderAskView() : renderMainView()}
+      <div className="flex flex-col h-full w-full max-w-full">
+        {viewMode === 'add' ? renderAddView() : viewMode === 'detail' ? renderDetailView() : viewMode === 'ask' ? renderAskView() : renderMainView()}
+      </div>
 
       {/* Removed floating plus button from bottom center */}
 
@@ -2899,11 +3099,13 @@ const MyWarranty: React.FC = () => {
                   />
                 </div>
               ) : (
-                <img
-                  src={documentToView.url}
-                  alt="Document"
-                  className="max-w-full max-h-full object-contain rounded-lg"
-                />
+                <div className="w-full h-full overflow-auto p-4">
+                  <img
+                    src={documentToView.url}
+                    alt="Document"
+                    className="max-w-none max-h-none object-contain rounded-lg mx-auto"
+                  />
+                </div>
               )}
             </div>
           </div>

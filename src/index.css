@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Document Preview Animation */
+.document-preview {
+  transform-origin: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.document-preview.expanded {
+  transform: scale(1.75);
+  z-index: 50;
+}
+
 @layer base {
   :root {
     /* Light theme - Enhanced with vibrant artistic touches */
@@ -124,6 +135,19 @@
     /* Allow page content to scroll; keep only horizontal hidden */
     overflow-x: hidden;
     overflow-y: visible;
+    /* RTL fix - prevent content clipping */
+    width: 100%;
+    max-width: 100vw;
+  }
+
+  /* RTL layout fix - ensure main content doesn't clip */
+  main, [dir="rtl"], [dir="ltr"] {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  :root {
     /* Desktop sidebar sizes */
     --sidebar-width: 220px;
     --sidebar-mini-width: 70px;

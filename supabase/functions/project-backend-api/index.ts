@@ -1210,21 +1210,28 @@ async function handleFreepik(action: string, _projectId: string, _ownerId: strin
 
       const result = await response.json();
       
-      // Transform to simpler format for AI
+      // Transform to simpler format for AI - using correct API response structure
+      // API returns: item.image.source.url (not source_url)
       const images = (result.data || []).map((item: any) => ({
         id: item.id,
         title: item.title,
-        url: item.image?.source_url || item.preview?.url,
-        thumbnail: item.thumbnails?.[0]?.url || item.image?.source_url,
-        author: item.author?.name,
-        type: item.type,
-        premium: item.is_premium,
-      }));
+        url: item.image?.source?.url || item.image?.source_url || '',
+        thumbnail: item.image?.source?.url || '',
+        size: item.image?.source?.size || '',
+        orientation: item.image?.orientation || 'horizontal',
+        type: item.image?.type || 'photo',
+        author: item.author?.name || 'Freepik',
+        authorAvatar: item.author?.avatar || '',
+        freepikUrl: item.url || '',
+        downloads: item.stats?.downloads || 0,
+        likes: item.stats?.likes || 0,
+      })).filter((img: any) => img.url); // Filter out items without valid URLs
 
       return { 
         images, 
-        total: result.meta?.pagination?.total || images.length,
-        page: result.meta?.pagination?.current_page || page,
+        total: result.meta?.total || images.length,
+        page: result.meta?.current_page || page,
+        lastPage: result.meta?.last_page || 1,
       };
     }
 

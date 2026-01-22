@@ -92,9 +92,11 @@ import { ContactFormWizard, ContactFormConfig } from '@/components/projects/Cont
 import { ProductWizard, Product, ProductDisplayConfig } from '@/components/projects/ProductWizard';
 import { AuthWizard, AuthConfig } from '@/components/projects/AuthWizard';
 import { MediaWizard, MediaConfig } from '@/components/projects/MediaWizard';
+import { SmartMediaManager } from '@/components/projects/SmartMediaManager';
 import { detectWizardType, WizardType } from '@/components/projects/wizards';
 import { ProductFormCard } from '@/components/projects/ProductFormCard';
 import { FeatureSummaryCard } from '@/components/projects/FeatureSummaryCard';
+import { BackendConnectionsSummary } from '@/components/projects/BackendConnectionsSummary';
 import { 
   analyzeRequest, 
   AnalyzedRequest, 
@@ -266,6 +268,8 @@ export default function ProjectDetail() {
   const [showProductWizard, setShowProductWizard] = useState(false);
   const [showAuthWizard, setShowAuthWizard] = useState(false);
   const [showMediaWizard, setShowMediaWizard] = useState(false);
+  const [showSmartMediaManager, setShowSmartMediaManager] = useState(false);
+  const [smartMediaInitialTab, setSmartMediaInitialTab] = useState<'site' | 'stock' | 'upload'>('site');
   const [showProductFormCard, setShowProductFormCard] = useState(false);
   const [activeProductCardId, setActiveProductCardId] = useState<string | null>(null);
   const [pendingFormPrompt, setPendingFormPrompt] = useState('');
@@ -1281,31 +1285,72 @@ export default function ProjectDetail() {
       const backendContextForCreate = backendContext || await fetchBackendContext();
 
       // Option A: start job then poll
-      const startRes = await supabase.functions.invoke('projects-generate', {
-        body: {
-          action: 'start',
-          projectId: id,
-          mode: 'create',
-          prompt: finalPrompt,
-          theme,
-          assets,
-          userInstructions: customThemeInstructions,
-          backendContext: backendContextForCreate || undefined,
-          debugContext: debugContext?.getDebugContextForAgent?.(),
-        },
-      });
+      // NOTE: Complex multi-feature projects may cause 504 Gateway Timeout
+      // The job still runs in the background, so we poll for the latest job status
+      let jobId: string | undefined;
+      
+      try {
+        const startRes = await supabase.functions.invoke('projects-generate', {
+          body: {
+            action: 'start',
+            projectId: id,
+            mode: 'create',
+            prompt: finalPrompt,
+            theme,
+            assets,
+            userInstructions: customThemeInstructions,
+            backendContext: backendContextForCreate || undefined,
+            debugContext: debugContext?.getDebugContextForAgent?.(),
+          },
+        });
 
-      if (startRes.error) {
-        throw new Error(startRes.error.message || 'Failed to start generation');
+        if (startRes.error) {
+          // Check if it's a gateway timeout - job may still be running
+          const isTimeout = startRes.error.message?.includes('504') || 
+                           startRes.error.message?.includes('timeout') ||
+                           startRes.error.message?.includes('Gateway');
+          if (!isTimeout) {
+            throw new Error(startRes.error.message || 'Failed to start generation');
+          }
+          console.log('[Create Mode] Gateway timeout detected, will poll for job status...');
+        } else {
+          const startData: any = startRes.data;
+          if (!startData?.ok && !startData?.jobId) {
+            throw new Error(startData?.error || 'Failed to start generation');
+          }
+          jobId = startData?.jobId as string | undefined;
+        }
+      } catch (fetchErr: any) {
+        // Network errors or timeouts - job may still be running in background
+        const errMsg = fetchErr?.message || '';
+        const isTimeout = errMsg.includes('504') || errMsg.includes('timeout') || errMsg.includes('Gateway') || errMsg.includes('Failed to fetch');
+        if (!isTimeout) {
+          throw fetchErr;
+        }
+        console.log('[Create Mode] Request failed (likely timeout), will poll for job status...');
       }
 
-      const startData: any = startRes.data;
-      if (!startData?.ok) {
-        throw new Error(startData?.error || 'Failed to start generation');
+      // If we didn't get a jobId, poll for the latest job for this project
+      if (!jobId) {
+        console.log('[Create Mode] No jobId received, polling for latest job...');
+        // Wait a moment for the job to be created in DB
+        await delay(2000);
+        
+        // Query for the latest job for this project
+        const { data: latestJobs } = await supabase
+          .from('project_generation_jobs')
+          .select('id, status')
+          .eq('project_id', id)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        
+        if (latestJobs && latestJobs.length > 0) {
+          jobId = latestJobs[0].id;
+          console.log(`[Create Mode] Found latest job: ${jobId}, status: ${latestJobs[0].status}`);
+        } else {
+          throw new Error('No job found after timeout - generation may have failed to start');
+        }
       }
-
-      const jobId = startData?.jobId as string | undefined;
-      if (!jobId) throw new Error('Generation did not return a jobId');
 
       await pollJobUntilDone(jobId);
 
@@ -1581,27 +1626,48 @@ export default function ProjectDetail() {
     }
   };
 
-  const pollJobUntilDone = async (jobId: string, timeoutMs: number = 180000): Promise<GenerationJob> => {
+  const pollJobUntilDone = async (jobId: string, timeoutMs: number = 300000): Promise<GenerationJob> => {
+    // Increased timeout to 5 minutes (300s) for complex multi-feature projects
     const start = Date.now();
+    let pollCount = 0;
     while (Date.now() - start < timeoutMs) {
-      const res = await supabase.functions.invoke('projects-generate', {
-        body: { action: 'status', jobId }
-      });
+      pollCount++;
+      try {
+        const res = await supabase.functions.invoke('projects-generate', {
+          body: { action: 'status', jobId }
+        });
 
-      if (res.error) {
-        throw new Error(res.error.message || 'Failed to check job status');
+        if (res.error) {
+          // Don't fail immediately on status check errors - may be transient
+          console.warn(`[Poll ${pollCount}] Status check error: ${res.error.message}`);
+          await delay(2000);
+          continue;
+        }
+
+        const job = (res.data?.job || null) as GenerationJob | null;
+        if (!job) {
+          console.warn(`[Poll ${pollCount}] Job not found yet, retrying...`);
+          await delay(2000);
+          continue;
+        }
+
+        if (job.status === 'succeeded') {
+          console.log(`[Poll ${pollCount}] Job succeeded!`);
+          return job;
+        }
+        if (job.status === 'failed') throw new Error(job.error || 'Generation failed');
+
+        // Job still running
+        console.log(`[Poll ${pollCount}] Job status: ${job.status}, waiting...`);
+        await delay(1500); // Slightly longer delay between polls
+      } catch (pollErr: any) {
+        // Network errors during polling - retry
+        console.warn(`[Poll ${pollCount}] Poll error: ${pollErr.message}, retrying...`);
+        await delay(2000);
       }
-
-      const job = (res.data?.job || null) as GenerationJob | null;
-      if (!job) throw new Error('Job not found');
-
-      if (job.status === 'succeeded') return job;
-      if (job.status === 'failed') throw new Error(job.error || 'Generation failed');
-
-      await delay(900);
     }
 
-    throw new Error('Generation timed out');
+    throw new Error('Generation timed out after 5 minutes');
   };
 
   const loadFilesFromDb = async (projectId: string): Promise<Record<string, string>> => {
@@ -4361,12 +4427,62 @@ ${fixInstructions}
         return;
       }
 
-      // MEDIA WIZARD DETECTION - Show wizard for file upload requests
-      const mediaWizardPatterns = /\b(add|create|build|make|need|want|show|display).*(upload|file.?upload|image.?upload|media|gallery|dropzone)\s*(component|section|area)?/i;
-      const mediaWizardAltPatterns = /\b(upload|file.?upload|dropzone|gallery)\s*(component|section|area|form)\b/i;
-      const hasMediaWizardRequest = mediaWizardPatterns.test(userMessage) || mediaWizardAltPatterns.test(userMessage);
+      // 🎯 SMART MEDIA DETECTION - Show images, don't try to edit code
+      const showGalleryPattern = /\b(show|see|view|what|which|list)\s*(all\s*)?(the\s*)?(images?|photos?|pictures?|gallery)\b/i;
+      const galleryAltPattern = /\b(images?|photos?|pictures?|gallery)\s*(on|in|of)\s*(the|this)?\s*(site|page|website)\b/i;
+      const stockPhotoPattern = /\b(search|find|browse|get|freepik|stock)\s*(images?|photos?|pictures?)\b/i;
+      
+      // Intent 3: User wants to upload → Show SmartMediaManager with "upload" tab
+      const uploadPatterns = /\b(upload|add\s*my|my\s*own)\s*(images?|photos?|pictures?|files?)/i;
+      
+      // Intent 4: User wants to BUILD an upload component → Show old MediaWizard
+      const buildUploadComponent = /\b(add|create|build|make)\s*(upload|file.?upload|dropzone)\s*(component|section|area|form)\b/i;
 
-      if (hasMediaWizardRequest) {
+      const isGalleryQuery = showGalleryPattern.test(userMessage) || galleryAltPattern.test(userMessage);
+      const isStockSearch = stockPhotoPattern.test(userMessage);
+      const isUploadRequest = uploadPatterns.test(userMessage);
+      const isBuildUploadComponent = buildUploadComponent.test(userMessage);
+
+      // Show SmartMediaManager for gallery/stock/upload requests (NOT the old wizard)
+      if (isGalleryQuery || isStockSearch || isUploadRequest) {
+        // Determine which tab to open
+        let initialTab: 'site' | 'stock' | 'upload' = 'site';
+        if (isStockSearch) initialTab = 'stock';
+        else if (isUploadRequest) initialTab = 'upload';
+        
+        setSmartMediaInitialTab(initialTab);
+        setShowSmartMediaManager(true);
+        
+        // Add user message to chat
+        setChatMessages(prev => [...prev, {
+          id: `user-${Date.now()}`,
+          role: 'user',
+          content: userMessage
+        }]);
+        
+        // Add friendly response based on intent
+        const responseContent = isRTL 
+          ? isGalleryQuery
+            ? `🖼️ **إليك جميع الصور في موقعك!**\n\nيمكنك:\n• عرض الصور\n• تحميل الصور\n• نسخ روابط الصور`
+            : isStockSearch
+            ? `🔍 **جاري البحث عن صور مجانية...**\n\nيمكنك:\n• البحث عن صور Freepik\n• معاينة النتائج\n• إدراج الصور في موقعك`
+            : `⬆️ **جاهز لرفع الصور!**\n\nيمكنك:\n• رفع الصور من جهازك\n• عرض الصور المرفوعة\n• إدارة الصور المرفوعة`
+          : isGalleryQuery
+            ? `🖼️ **Here are all images on your site!**\n\nYou can:\n• View all images\n• Download images\n• Copy image URLs`
+            : isStockSearch
+            ? `🔍 **Searching free stock photos...**\n\nYou can:\n• Search Freepik photos\n• Preview results\n• Insert into your site`
+            : `⬆️ **Ready to upload!**\n\nYou can:\n• Upload from your device\n• View uploaded images\n• Manage your uploads`;
+        
+        setChatMessages(prev => [...prev, {
+          id: `assistant-media-${Date.now()}`,
+          role: 'assistant',
+          content: responseContent
+        }]);
+        return;
+      }
+
+      // Show old MediaWizard ONLY for building upload components
+      if (isBuildUploadComponent) {
         setPendingFormPrompt(userMessage);
         setShowMediaWizard(true);
 
@@ -6758,15 +6874,24 @@ ${fixInstructions}
                   }
 
                   // EXECUTION RESPONSE FORMAT: Clean Lovable-style format
-                  // Detect structured execution_result OR clarification_needed OR verbose execution response
+                  // Detect structured execution_result OR clarification_needed OR feature_summary OR verbose execution response
                   let executionResult: { type: string; title: string; response?: string; summary: string; files: string[] } | null = null;
                   let clarificationResult: { type: string; title: string; message: string; candidates: Array<{ file: string; preview: string; line?: number }>; suggestion: string } | null = null;
+                  let featureSummaryForDisplay: { type: string; analysis: any; summary: string } | null = null;
                   try {
                     const parsed = JSON.parse(msg.content);
                     if (parsed.type === 'execution_result') {
                       executionResult = parsed;
                     } else if (parsed.type === 'clarification_needed') {
                       clarificationResult = parsed;
+                    } else if (parsed.type === 'feature_summary') {
+                      // Convert feature_summary JSON to friendly message
+                      featureSummaryForDisplay = parsed;
+                      const features = parsed.analysis?.features || [];
+                      const featureList = features.map((f: any) => `• ${f.description}`).join('\n');
+                      displayContent = isRTL 
+                        ? `🔍 **تحليل طلبك:**\n\n${featureList || parsed.summary || 'جاري تحليل الطلب...'}\n\n_جاري العمل على ذلك..._`
+                        : `🔍 **Analyzing your request:**\n\n${featureList || parsed.summary || 'Processing your request...'}\n\n_Working on it..._`;
                     }
                   } catch { /* not JSON */ }
                   
@@ -7085,6 +7210,36 @@ ${fixInstructions}
                                 <RefreshCw className="h-3 w-3" />
                                 {isRTL ? 'استعادة' : 'Restore'}
                               </button>
+                            );
+                          }
+                          return null;
+                        })()
+                      )}
+                      
+                      {/* Backend Connections Summary - Show after "project is ready" messages */}
+                      {msg.role === 'assistant' && generatedFiles && Object.keys(generatedFiles).length > 0 && (
+                        (() => {
+                          const msgLower = (msg.content || '').toLowerCase();
+                          const isProjectReady = msgLower.includes('project is ready') || 
+                                                msgLower.includes('your project is ready') ||
+                                                msgLower.includes('تم إنشاء مشروعك') ||
+                                                (msgLower.includes('ready') && msgLower.includes('publish'));
+                          
+                          if (isProjectReady) {
+                            return (
+                              <BackendConnectionsSummary
+                                generatedFiles={generatedFiles}
+                                isRTL={isRTL}
+                                onConfigureClick={(connectionId) => {
+                                  // Trigger the appropriate wizard based on connection type
+                                  if (connectionId === 'booking') setShowBookingWizard(true);
+                                  else if (connectionId === 'products') setShowProductWizard(true);
+                                  else if (connectionId === 'auth') setShowAuthWizard(true);
+                                  else if (connectionId === 'media') setShowMediaWizard(true);
+                                  else if (connectionId === 'contact') setShowContactWizard(true);
+                                }}
+                                className="mt-3 w-full"
+                              />
                             );
                           }
                           return null;
@@ -8270,6 +8425,25 @@ ${fixInstructions}
           initialTab={photoSelectorInitialTab}
           showOnlyUserPhotos={photoSelectorShowOnlyUserPhotos}
         />
+      )}
+
+      {/* Smart Media Manager Modal */}
+      {showSmartMediaManager && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <SmartMediaManager
+            projectId={id || ''}
+            generatedFiles={generatedFiles}
+            initialTab={smartMediaInitialTab}
+            isRTL={isRTL}
+            onInsertImage={(url, alt) => {
+              // Insert image into the site code
+              const insertPrompt = `Insert this image into the site: ${url}`;
+              setChatInput(insertPrompt);
+              setShowSmartMediaManager(false);
+            }}
+            onClose={() => setShowSmartMediaManager(false)}
+          />
+        </div>
       )}
 
       {/* Image Source Buttons are now rendered inline in chat messages */}

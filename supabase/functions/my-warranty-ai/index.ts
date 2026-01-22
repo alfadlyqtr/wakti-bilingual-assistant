@@ -13,9 +13,11 @@ interface ExtractRequest {
   mode: "extract" | "qa";
   imageBase64?: string;
   pdfBase64?: string;
+  images?: string[]; // Support for multiple images
   mimeType?: string;
   question?: string;
   warrantyContext?: string;
+  language?: "en" | "ar"; // Language for AI responses
 }
 
 interface ExtractedWarranty {
@@ -267,7 +269,7 @@ Group fields into these categories in extracted_data. Extract EVERY field you ca
 },
 
 === AI SUMMARY INSTRUCTIONS ===
-Write EXACTLY 2 paragraphs summarizing this document:
+Write EXACTLY 2 paragraphs summarizing this document. Write the summary in {language === 'ar' ? 'Arabic' : 'English'}:
 
 PARAGRAPH 1: What is this document and who does it belong to? Include the document type, issuer/provider, the person or entity it's for, and the main reference numbers.
 
@@ -321,9 +323,9 @@ serve(async (req) => {
     }
 
     const body: ExtractRequest = await req.json();
-    const { mode, imageBase64, pdfBase64, mimeType, question, warrantyContext } = body;
+    const { mode, imageBase64, pdfBase64, images, mimeType, question, warrantyContext } = body;
 
-    console.log(`[my-warranty-ai] Mode: ${mode}, mimeType: ${mimeType}`);
+    console.log(`[my-warranty-ai] Mode: ${mode}, mimeType: ${mimeType}, images count: ${images?.length || 0}`);
 
     let requestBody: {
       contents: Array<{
@@ -333,28 +335,37 @@ serve(async (req) => {
     };
 
     if (mode === "extract") {
-      if (!imageBase64 && !pdfBase64) {
+      // Support both single image (imageBase64) and multiple images (images array)
+      const imageArray = images && images.length > 0 ? images : (imageBase64 ? [imageBase64] : (pdfBase64 ? [pdfBase64] : []));
+      
+      if (imageArray.length === 0) {
         console.error("[my-warranty-ai] No document provided for extraction");
         throw new Error("No document provided for extraction");
       }
 
-      const documentData = imageBase64 || pdfBase64 || '';
       const documentMimeType = mimeType || (pdfBase64 ? "application/pdf" : "image/jpeg");
 
-      console.log(`[my-warranty-ai] Preparing Gemini request for extraction. Mime: ${documentMimeType}`);
+      console.log(`[my-warranty-ai] Preparing Gemini request for extraction. Mime: ${documentMimeType}, Images: ${imageArray.length}`);
+
+      // Build parts array with prompt and all images
+      const parts: Array<{ text?: string; inline_data?: { mime_type: string; data: string } }> = [
+        { text: EXTRACTION_PROMPT }
+      ];
+      
+      // Add all images to the request
+      for (const imgData of imageArray) {
+        parts.push({
+          inline_data: {
+            mime_type: documentMimeType,
+            data: imgData,
+          },
+        });
+      }
 
       requestBody = {
         contents: [
           {
-            parts: [
-              { text: EXTRACTION_PROMPT },
-              {
-                inline_data: {
-                  mime_type: documentMimeType,
-                  data: documentData,
-                },
-              },
-            ],
+            parts: parts,
           },
         ],
         generationConfig: {

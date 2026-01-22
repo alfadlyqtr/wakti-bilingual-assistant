@@ -1,6 +1,9 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// Declare EdgeRuntime for background task support
+declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void } | undefined;
 import { validateProjectCSS, formatCSSWarnings, getCSSInheritanceGuidelines, type CSSWarning } from "../_shared/cssValidator.ts";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
 import { 
@@ -1538,7 +1541,15 @@ Examples: "landing page for wife moza" → "MoziLove", "portfolio for photograph
 
 \`\`\`jsx
 // /utils/stockImages.js - REQUIRED FILE - MUST BE CREATED
+import React from 'react';
+
 const BACKEND_URL = "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api";
+
+// Fallback placeholder generator - ALWAYS works
+const getPlaceholder = (query, width = 400, height = 300) => {
+  const text = encodeURIComponent(query.split(' ').slice(0, 3).join(' '));
+  return \`https://placehold.co/\${width}x\${height}/1a1a2e/eaeaea?text=\${text}\`;
+};
 
 export const fetchStockImages = async (query, limit = 5) => {
   try {
@@ -1552,40 +1563,52 @@ export const fetchStockImages = async (query, limit = 5) => {
       })
     });
     const data = await res.json();
-    return data.images?.map(img => img.url) || [];
+    const images = data.images?.map(img => img.url) || [];
+    // If no images returned, use placeholders
+    if (images.length === 0) {
+      return Array(limit).fill(null).map(() => getPlaceholder(query));
+    }
+    return images;
   } catch (err) {
     console.error('Failed to fetch images:', err);
-    return [];
+    // Return placeholders on error
+    return Array(limit).fill(null).map(() => getPlaceholder(query));
   }
 };
 
 export const useStockImage = (query) => {
-  const [image, setImage] = React.useState('');
+  const [image, setImage] = React.useState(getPlaceholder(query));
   const [loading, setLoading] = React.useState(true);
   
   React.useEffect(() => {
     fetchStockImages(query, 1).then(imgs => {
-      setImage(imgs[0] || '');
+      setImage(imgs[0] || getPlaceholder(query));
       setLoading(false);
     });
   }, [query]);
   
   return { image, loading };
 };
+
+// For static images that don't need API call
+export const getStaticPlaceholder = getPlaceholder;
 \`\`\`
 
 **MANDATORY USAGE PATTERN - EVERY COMPONENT WITH IMAGES:**
 \`\`\`jsx
-import { fetchStockImages, useStockImage } from '../utils/stockImages';
+import { fetchStockImages, useStockImage, getStaticPlaceholder } from '../utils/stockImages';
 
-// Option 1: Hook for single images
+// Option 1: Hook for single images (with automatic fallback)
 const { image: heroImage, loading } = useStockImage('barber shop interior');
 
-// Option 2: Multiple images
+// Option 2: Multiple images (with automatic fallback)
 const [images, setImages] = useState([]);
 useEffect(() => {
   fetchStockImages('barber services', 6).then(setImages);
 }, []);
+
+// Option 3: Static placeholder (no API call needed)
+<img src={getStaticPlaceholder('haircut', 400, 300)} alt="Haircut" />
 \`\`\`
 
 **IMAGE QUERY EXAMPLES BY BUSINESS TYPE:**
@@ -1596,12 +1619,12 @@ useEffect(() => {
 - Real estate: "modern house exterior", "luxury apartment", "home interior"
 
 **STRICT RULES:**
-1. ALWAYS create /utils/stockImages.js - NO EXCEPTIONS
-2. ALWAYS import and use fetchStockImages or useStockImage for ANY image
+1. ALWAYS create /utils/stockImages.js FIRST before any component - NO EXCEPTIONS
+2. ALWAYS import and use fetchStockImages, useStockImage, or getStaticPlaceholder for ANY image
 3. Query MUST match the business context (not generic "business" or "team")
 4. Use different queries for different sections (hero, about, services, etc.)
-5. Show loading skeleton/spinner while images load
-6. NEVER use any URL that doesn't come from fetchStockImages
+5. Images will ALWAYS show something (placeholder if API fails) - no broken images
+6. NEVER use hardcoded URLs like picsum, unsplash, or via.placeholder
 
 ### OUTPUT FORMAT:
 Return ONLY a valid JSON object. No markdown fences. No explanation.

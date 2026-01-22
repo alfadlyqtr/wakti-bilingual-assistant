@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Palette, Zap, Shield, Smartphone, Database, Sparkles } from 'lucide-react';
+import { Plus, Palette, Zap, Shield, Smartphone, Database, Sparkles, Play, Settings, Eye, Paintbrush } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from 'react-i18next';
 
@@ -48,10 +48,106 @@ const extractQuestionOptions = (content: string): QuickAction[] => {
   return options.slice(0, 3); // Max 3 question options
 };
 
+// 🎯 PRIORITY 0: Detect project creation completion and return post-generation chips
+const detectProjectCreation = (content: string): QuickAction[] | null => {
+  const lowerContent = content.toLowerCase();
+  
+  // Patterns that indicate project was just created/generated
+  const creationPatterns = [
+    'project is ready',
+    'finished building',
+    'all files have been created',
+    'successfully created',
+    'your website is ready',
+    'project has been generated',
+    'here\'s your',
+    'i\'ve created',
+    'i have created',
+    'the site is now ready',
+    'generation complete'
+  ];
+  
+  const isProjectCreation = creationPatterns.some(p => lowerContent.includes(p));
+  
+  if (!isProjectCreation) return null;
+  
+  console.log('[QuickActionButtons] Detected project creation - showing post-generation chips');
+  
+  // Detect what features were created
+  const hasBooking = lowerContent.includes('booking') || lowerContent.includes('appointment') || lowerContent.includes('schedule');
+  const hasShop = lowerContent.includes('shop') || lowerContent.includes('product') || lowerContent.includes('store');
+  const hasContact = lowerContent.includes('contact') || lowerContent.includes('form');
+  const hasGallery = lowerContent.includes('gallery') || lowerContent.includes('portfolio');
+  
+  const postGenActions: QuickAction[] = [];
+  
+  // Always suggest testing/preview first
+  postGenActions.push({
+    id: 'preview-mobile',
+    label: 'Preview on Mobile',
+    labelAr: 'معاينة على الجوال',
+    icon: <Smartphone className="w-3.5 h-3.5" />,
+    prompt: 'Show me how this looks on mobile',
+    category: 'mobile'
+  });
+  
+  // Feature-specific suggestions
+  if (hasBooking) {
+    postGenActions.push({
+      id: 'test-booking',
+      label: 'Test Booking Flow',
+      labelAr: 'اختبر نظام الحجز',
+      icon: <Play className="w-3.5 h-3.5" />,
+      prompt: 'Let me test the booking system - walk me through making a booking',
+      category: 'features'
+    });
+  }
+  
+  if (hasShop) {
+    postGenActions.push({
+      id: 'configure-products',
+      label: 'Add Real Products',
+      labelAr: 'أضف منتجات حقيقية',
+      icon: <Database className="w-3.5 h-3.5" />,
+      prompt: 'Help me add real products to the shop with prices and images',
+      category: 'backend'
+    });
+  }
+  
+  if (hasContact) {
+    postGenActions.push({
+      id: 'test-contact',
+      label: 'Test Contact Form',
+      labelAr: 'اختبر نموذج الاتصال',
+      icon: <Play className="w-3.5 h-3.5" />,
+      prompt: 'Let me test the contact form submission',
+      category: 'features'
+    });
+  }
+  
+  // Always suggest customization
+  postGenActions.push({
+    id: 'customize-theme',
+    label: 'Customize Colors',
+    labelAr: 'تخصيص الألوان',
+    icon: <Paintbrush className="w-3.5 h-3.5" />,
+    prompt: 'Change the color scheme to match my brand',
+    category: 'design'
+  });
+  
+  return postGenActions.slice(0, 4);
+};
+
 // Generate context-aware actions based on AI response content
 // Returns EMPTY array if no strong match found (no static fallback)
 const generateActionsFromResponse = (content: string): QuickAction[] => {
-  // 🎯 FIRST: Check if AI asked a question with options
+  // 🎯 PRIORITY 0: Check if this is a project creation completion
+  const postGenActions = detectProjectCreation(content);
+  if (postGenActions) {
+    return postGenActions;
+  }
+  
+  // 🎯 PRIORITY 1: Check if AI asked a question with options
   const questionOptions = extractQuestionOptions(content);
   if (questionOptions.length >= 2) {
     console.log('[QuickActionButtons] Found AI question options:', questionOptions.map(o => o.label));
@@ -61,8 +157,9 @@ const generateActionsFromResponse = (content: string): QuickAction[] => {
   const actions: QuickAction[] = [];
   const lowerContent = content.toLowerCase();
 
-  // Navigation-related actions
-  if (lowerContent.includes('navigation') || lowerContent.includes('nav') || lowerContent.includes('menu') || lowerContent.includes('header')) {
+  // Navigation-related actions - but NOT if it's a project creation message
+  if ((lowerContent.includes('navigation') || lowerContent.includes('nav') || lowerContent.includes('menu') || lowerContent.includes('header')) &&
+      !lowerContent.includes('created') && !lowerContent.includes('generated') && !lowerContent.includes('ready')) {
     actions.push(
       { id: 'mobile-menu', label: 'Add Mobile Menu', labelAr: 'إضافة قائمة الجوال', icon: <Smartphone className="w-3.5 h-3.5" />, prompt: 'Add a responsive mobile hamburger menu with smooth animations', category: 'mobile' },
       { id: 'search', label: 'Add Search', labelAr: 'إضافة بحث', icon: <Zap className="w-3.5 h-3.5" />, prompt: 'Add a search functionality to the navigation', category: 'features' }
@@ -149,11 +246,44 @@ const generateActionsFromResponse = (content: string): QuickAction[] => {
     }
   }
 
-  // Page/File mentioned
-  if (lowerContent.includes('page') || lowerContent.includes('.js') || lowerContent.includes('.tsx') || lowerContent.includes('file')) {
+  // 🎯 SMART DETECTION: What did the AI actually DO? Suggest logical next steps
+  
+  // Detect if AI fixed something
+  const fixedSomething = lowerContent.includes('fixed') || lowerContent.includes('resolved') || 
+                         lowerContent.includes('corrected') || lowerContent.includes('repaired');
+  if (fixedSomething) {
     actions.push(
-      { id: 'add-link', label: 'Add link to this page', labelAr: 'أضف رابط لهذه الصفحة', icon: <Plus className="w-3.5 h-3.5" />, prompt: 'Add a navigation link to this page', category: 'features' },
-      { id: 'edit-page', label: 'Edit this page', labelAr: 'عدّل هذه الصفحة', icon: <Zap className="w-3.5 h-3.5" />, prompt: 'Make changes to this page', category: 'features' }
+      { id: 'test-fix', label: 'Test the fix', labelAr: 'اختبر الإصلاح', icon: <Play className="w-3.5 h-3.5" />, prompt: 'Let me test if the fix works correctly', category: 'features' },
+      { id: 'preview-changes', label: 'Preview changes', labelAr: 'معاينة التغييرات', icon: <Eye className="w-3.5 h-3.5" />, prompt: 'Show me the updated preview', category: 'design' }
+    );
+  }
+  
+  // Detect if AI added/created something new
+  const addedSomething = lowerContent.includes('added') || lowerContent.includes('created') || 
+                         lowerContent.includes('implemented') || lowerContent.includes('built');
+  if (addedSomething && !fixedSomething) {
+    actions.push(
+      { id: 'preview-new', label: 'Preview it', labelAr: 'معاينة', icon: <Eye className="w-3.5 h-3.5" />, prompt: 'Show me what you added in the preview', category: 'design' },
+      { id: 'customize-new', label: 'Customize it', labelAr: 'تخصيص', icon: <Settings className="w-3.5 h-3.5" />, prompt: 'Let me customize what you just added', category: 'design' }
+    );
+  }
+  
+  // Detect if AI changed styling/colors
+  const changedStyle = lowerContent.includes('color') || lowerContent.includes('style') || 
+                       lowerContent.includes('theme') || lowerContent.includes('design');
+  if (changedStyle && !addedSomething && !fixedSomething) {
+    actions.push(
+      { id: 'try-different', label: 'Try different colors', labelAr: 'جرب ألوان مختلفة', icon: <Palette className="w-3.5 h-3.5" />, prompt: 'Try a different color scheme', category: 'design' },
+      { id: 'apply-everywhere', label: 'Apply to whole site', labelAr: 'طبق على الموقع كله', icon: <Paintbrush className="w-3.5 h-3.5" />, prompt: 'Apply this style consistently across the whole site', category: 'design' }
+    );
+  }
+  
+  // Detect if there's an issue with images
+  const imageIssue = lowerContent.includes('image') && (lowerContent.includes('broken') || lowerContent.includes('missing') || lowerContent.includes('not showing'));
+  if (imageIssue) {
+    actions.push(
+      { id: 'fix-images', label: 'Fix broken images', labelAr: 'أصلح الصور المكسورة', icon: <Zap className="w-3.5 h-3.5" />, prompt: 'Fix all the broken images on the site', category: 'features' },
+      { id: 'add-stock-images', label: 'Add stock photos', labelAr: 'أضف صور من المكتبة', icon: <Plus className="w-3.5 h-3.5" />, prompt: 'Replace broken images with stock photos from Freepik', category: 'design' }
     );
   }
 
