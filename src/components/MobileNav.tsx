@@ -128,41 +128,43 @@ export function MobileNav({
                       : "hover:bg-accent/10"
                   )}
                 >
-                  <div className={cn(
-                    "relative transition-all duration-300",
-                    isActive && "nav-icon-active"
-                  )}>
-                    <IconComponent 
-                      className={cn(
-                        "h-6 w-6 transition-all duration-300",
-                        item.colorClass,
-                        isActive 
-                          ? "scale-110 brightness-125" 
-                          : "group-hover:scale-110 group-hover:brightness-110"
-                      )} 
-                    />
-                    {/* Real Badge System - Only show when data exists */}
-                    {item.badgeType && badgeStates[item.badgeType]?.show && (
-                      <div className={cn(
-                        "absolute -top-2 -right-2 min-w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center px-1 border-2 border-background z-10",
-                        badgeStates[item.badgeType].priority === 'high' && "animate-pulse bg-orange-500"
-                      )}>
-                        {badgeStates[item.badgeType].count}
-                      </div>
-                    )}
-                    {isActive && (
-                      <div className="absolute inset-0 rounded-full animate-glow-pulse opacity-50" />
-                    )}
+                  <div className="flex flex-col items-center justify-center gap-1">
+                    <div className={cn(
+                      "relative transition-all duration-300",
+                      isActive && "nav-icon-active"
+                    )}>
+                      <IconComponent 
+                        className={cn(
+                          "h-6 w-6 transition-all duration-300",
+                          item.colorClass,
+                          isActive 
+                            ? "scale-110 brightness-125" 
+                            : "group-hover:scale-110 group-hover:brightness-110"
+                        )} 
+                      />
+                      {/* Real Badge System - Only show when data exists */}
+                      {item.badgeType && badgeStates[item.badgeType]?.show && (
+                        <div className={cn(
+                          "absolute -top-2 -right-2 min-w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center px-1 border-2 border-background z-10",
+                          badgeStates[item.badgeType].priority === 'high' && "animate-pulse bg-orange-500"
+                        )}>
+                          {badgeStates[item.badgeType].count}
+                        </div>
+                      )}
+                      {isActive && (
+                        <div className="absolute inset-0 rounded-full animate-glow-pulse opacity-50" />
+                      )}
+                    </div>
+                    <span className={cn(
+                      "text-xs font-medium transition-all duration-300",
+                      item.path === '/tasjeel' ? "text-cyan-500" : "",
+                      isActive 
+                        ? "text-foreground font-semibold" 
+                        : "text-muted-foreground group-hover:text-foreground"
+                    )}>
+                      {item.name}
+                    </span>
                   </div>
-                  <span className={cn(
-                    "text-xs font-medium transition-all duration-300",
-                    item.path === '/tasjeel' ? "text-cyan-500" : "",
-                    isActive 
-                      ? "text-foreground font-semibold" 
-                      : "text-muted-foreground group-hover:text-foreground"
-                  )}>
-                    {item.name}
-                  </span>
                   {isActive && (
                     <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-8 h-0.5 bg-gradient-vibrant rounded-full animate-shimmer" />
                   )}

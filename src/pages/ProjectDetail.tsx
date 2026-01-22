@@ -89,7 +89,21 @@ import { StockPhotoSelector } from '@/components/projects/StockPhotoSelector';
 import { ImageSourceButtons, ImageSourceChoice } from '@/components/projects/ImageSourceButtons';
 import { BookingFormWizard, BookingFormConfig, BookingService } from '@/components/projects/BookingFormWizard';
 import { ContactFormWizard, ContactFormConfig } from '@/components/projects/ContactFormWizard';
+import { ProductWizard, Product, ProductDisplayConfig } from '@/components/projects/ProductWizard';
+import { AuthWizard, AuthConfig } from '@/components/projects/AuthWizard';
+import { MediaWizard, MediaConfig } from '@/components/projects/MediaWizard';
+import { detectWizardType, WizardType } from '@/components/projects/wizards';
 import { ProductFormCard } from '@/components/projects/ProductFormCard';
+import { FeatureSummaryCard } from '@/components/projects/FeatureSummaryCard';
+import { 
+  analyzeRequest, 
+  AnalyzedRequest, 
+  DetectedFeature, 
+  FeatureType,
+  getNextWizardFeature,
+  featureToWizardType,
+  createFeatureSummary 
+} from '@/utils/requestAnalyzer';
 import { FreepikService } from '@/services/FreepikService';
 
 // Lovable-style components
@@ -249,11 +263,19 @@ export default function ProjectDetail() {
   // Booking/Contact Form Wizard state
   const [showBookingWizard, setShowBookingWizard] = useState(false);
   const [showContactWizard, setShowContactWizard] = useState(false);
+  const [showProductWizard, setShowProductWizard] = useState(false);
+  const [showAuthWizard, setShowAuthWizard] = useState(false);
+  const [showMediaWizard, setShowMediaWizard] = useState(false);
   const [showProductFormCard, setShowProductFormCard] = useState(false);
   const [activeProductCardId, setActiveProductCardId] = useState<string | null>(null);
   const [pendingFormPrompt, setPendingFormPrompt] = useState('');
   const skipFormWizardRef = useRef(false);
   const skipUserMessageSaveRef = useRef(false);
+  
+  // Multi-feature request analyzer state
+  const [analyzedRequest, setAnalyzedRequest] = useState<AnalyzedRequest | null>(null);
+  const [wizardConfigs, setWizardConfigs] = useState<Record<string, any>>({});
+  const [showFeatureSummary, setShowFeatureSummary] = useState(false);
 
   // Clarifying questions modal state
   const [showClarifyingQuestions, setShowClarifyingQuestions] = useState(false);
@@ -284,6 +306,84 @@ export default function ProjectDetail() {
       .join('\n');
     return `${basePrompt}\n\nUser preferences:\n${answerText}`;
   }, []);
+  
+  // Helper to advance to next wizard in multi-feature queue
+  const advanceToNextWizard = useCallback((completedFeatureType: FeatureType, config: any) => {
+    if (!analyzedRequest) return false;
+    
+    // Store the completed wizard config
+    setWizardConfigs(prev => ({ ...prev, [completedFeatureType]: config }));
+    
+    // Find the next wizard feature
+    const wizardFeatures = analyzedRequest.features.filter(f => f.requiresWizard);
+    const currentIdx = wizardFeatures.findIndex(f => f.type === completedFeatureType);
+    const nextIdx = currentIdx + 1;
+    
+    if (nextIdx < wizardFeatures.length) {
+      const nextFeature = wizardFeatures[nextIdx];
+      const wizardType = featureToWizardType(nextFeature.type);
+      
+      console.log('[ProjectDetail] Advancing to next wizard:', nextFeature.type, wizardType);
+      
+      // Update the analyzed request index
+      setAnalyzedRequest(prev => prev ? {
+        ...prev,
+        currentFeatureIndex: prev.currentFeatureIndex + 1
+      } : null);
+      
+      // Trigger the next wizard
+      if (wizardType === 'booking') setShowBookingWizard(true);
+      else if (wizardType === 'product') setShowProductWizard(true);
+      else if (wizardType === 'auth') setShowAuthWizard(true);
+      else if (wizardType === 'media') setShowMediaWizard(true);
+      else if (wizardType === 'contact') setShowContactWizard(true);
+      
+      // Add wizard message to chat
+      const wizardContent = JSON.stringify({
+        type: `${wizardType}_wizard`,
+        prompt: pendingFormPrompt
+      });
+      setChatMessages(prev => [...prev, {
+        id: `${wizardType}-wizard-${Date.now()}`,
+        role: 'assistant',
+        content: wizardContent
+      }]);
+      
+      return true; // More wizards to go
+    }
+    
+    return false; // All wizards completed
+  }, [analyzedRequest, pendingFormPrompt]);
+  
+  // Helper to generate final prompt after all wizards complete
+  const generateFinalMultiFeaturePrompt = useCallback((allConfigs: Record<string, any>) => {
+    if (!analyzedRequest) return pendingFormPrompt;
+    
+    const lines: string[] = [
+      `Create a complete ${analyzedRequest.businessType} website with the following configured features:`,
+      ''
+    ];
+    
+    for (const feature of analyzedRequest.features) {
+      const config = allConfigs[feature.type];
+      lines.push(`## ${feature.description}`);
+      if (config) {
+        lines.push('Configuration:');
+        lines.push(JSON.stringify(config, null, 2));
+      } else {
+        lines.push('(Auto-generate with sensible defaults)');
+      }
+      lines.push('');
+    }
+    
+    lines.push('## Additional Requirements:');
+    lines.push('- Use consistent styling across all pages');
+    lines.push('- Implement proper navigation between all sections');
+    lines.push('- Use the Midnight dark theme');
+    lines.push('- Make it fully responsive');
+    
+    return lines.join('\n');
+  }, [analyzedRequest, pendingFormPrompt]);
 
   useEffect(() => {
     return () => {
@@ -4001,6 +4101,65 @@ ${fixInstructions}
     skipUserMessageSaveRef.current = false;
     
     if (!skipFormWizardDetection) {
+      // ===== STEP 0: MULTI-FEATURE REQUEST ANALYSIS =====
+      // Analyze the request to detect multiple features and handle them sequentially
+      const analysis = analyzeRequest(userMessage);
+      
+      if (analysis.isMultiFeature && analysis.features.length >= 2) {
+        // This is a complex multi-feature request - handle it intelligently
+        console.log('[ProjectDetail] Multi-feature request detected:', analysis);
+        
+        // Save the analysis for sequential wizard processing
+        setAnalyzedRequest(analysis);
+        setPendingFormPrompt(userMessage);
+        setWizardConfigs({});
+        
+        // Save user message to DB
+        const { data: wizardUserMsg, error: wizardUserErr } = await supabase
+          .from('project_chat_messages' as any)
+          .insert({ project_id: id, role: 'user', content: userMessage } as any)
+          .select()
+          .single();
+        
+        if (wizardUserErr) console.error('Error saving user message:', wizardUserErr);
+        if (wizardUserMsg) {
+          setChatMessages(prev => [...prev, wizardUserMsg as any]);
+        } else {
+          setChatMessages(prev => [...prev, {
+            id: `user-${Date.now()}`,
+            role: 'user',
+            content: userMessage
+          }]);
+        }
+        
+        // Create feature summary message
+        const featureSummaryContent = JSON.stringify({
+          type: 'feature_summary',
+          analysis: analysis,
+          summary: createFeatureSummary(analysis)
+        });
+        
+        const { data: summaryMsg, error: summaryErr } = await supabase
+          .from('project_chat_messages' as any)
+          .insert({ project_id: id, role: 'assistant', content: featureSummaryContent } as any)
+          .select()
+          .single();
+        
+        if (summaryErr) console.error('Error saving feature summary:', summaryErr);
+        if (summaryMsg) {
+          setChatMessages(prev => [...prev, summaryMsg as any]);
+        } else {
+          setChatMessages(prev => [...prev, {
+            id: `feature-summary-${Date.now()}`,
+            role: 'assistant',
+            content: featureSummaryContent
+          }]);
+        }
+        
+        setShowFeatureSummary(true);
+        return;
+      }
+      
       // ===== STEP 1: FORM WIZARD DETECTION (ALWAYS FIRST - before any image logic) =====
       // BOOKING FORM DETECTION - Show wizard instead of direct AI call
       // Broader pattern to catch more variations
@@ -4104,8 +4263,154 @@ ${fixInstructions}
         return;
       }
 
-      // PRODUCT FORM DETECTION - Show add-product card instead of direct AI call
-      // Option 1: only trigger for explicit add/create/new product intent
+      // PRODUCT/SHOP WIZARD DETECTION - Show wizard for e-commerce/shop requests
+      const productWizardPatterns = /\b(add|create|build|make|need|want|show|display).*(shop|store|e-?commerce|product\s*(page|grid|list|catalog)|catalog|inventory)\b/i;
+      const productWizardAltPatterns = /\b(shop|store|e-?commerce|product\s*catalog)\b/i;
+      const hasProductWizardRequest = productWizardPatterns.test(userMessage) || productWizardAltPatterns.test(userMessage);
+
+      if (hasProductWizardRequest) {
+        setPendingFormPrompt(userMessage);
+        setShowProductWizard(true);
+
+        const { data: wizardUserMsg, error: wizardUserErr } = await supabase
+          .from('project_chat_messages' as any)
+          .insert({ project_id: id, role: 'user', content: userMessage } as any)
+          .select()
+          .single();
+
+        if (wizardUserErr) console.error('Error saving user message:', wizardUserErr);
+        if (wizardUserMsg) {
+          setChatMessages(prev => [...prev, wizardUserMsg as any]);
+        } else {
+          setChatMessages(prev => [...prev, {
+            id: `user-${Date.now()}`,
+            role: 'user',
+            content: userMessage
+          }]);
+        }
+
+        const productWizardContent = JSON.stringify({
+          type: 'product_wizard',
+          prompt: userMessage
+        });
+        const { data: productAssistantMsg, error: productAssistantErr } = await supabase
+          .from('project_chat_messages' as any)
+          .insert({ project_id: id, role: 'assistant', content: productWizardContent } as any)
+          .select()
+          .single();
+
+        if (productAssistantErr) console.error('Error saving product wizard message:', productAssistantErr);
+        if (productAssistantMsg) {
+          setChatMessages(prev => [...prev, productAssistantMsg as any]);
+        } else {
+          setChatMessages(prev => [...prev, {
+            id: `product-wizard-${Date.now()}`,
+            role: 'assistant',
+            content: productWizardContent
+          }]);
+        }
+        return;
+      }
+
+      // AUTH WIZARD DETECTION - Show wizard for login/signup requests
+      const authWizardPatterns = /\b(add|create|build|make|need|want|show|display).*(login|signup|sign.?up|sign.?in|register|auth|authentication)\s*(page|form|screen)?/i;
+      const authWizardAltPatterns = /\b(login|signup|sign.?up|sign.?in|register|authentication)\s*(page|form|screen)\b/i;
+      const hasAuthWizardRequest = authWizardPatterns.test(userMessage) || authWizardAltPatterns.test(userMessage);
+
+      if (hasAuthWizardRequest) {
+        setPendingFormPrompt(userMessage);
+        setShowAuthWizard(true);
+
+        const { data: wizardUserMsg, error: wizardUserErr } = await supabase
+          .from('project_chat_messages' as any)
+          .insert({ project_id: id, role: 'user', content: userMessage } as any)
+          .select()
+          .single();
+
+        if (wizardUserErr) console.error('Error saving user message:', wizardUserErr);
+        if (wizardUserMsg) {
+          setChatMessages(prev => [...prev, wizardUserMsg as any]);
+        } else {
+          setChatMessages(prev => [...prev, {
+            id: `user-${Date.now()}`,
+            role: 'user',
+            content: userMessage
+          }]);
+        }
+
+        const authWizardContent = JSON.stringify({
+          type: 'auth_wizard',
+          prompt: userMessage
+        });
+        const { data: authAssistantMsg, error: authAssistantErr } = await supabase
+          .from('project_chat_messages' as any)
+          .insert({ project_id: id, role: 'assistant', content: authWizardContent } as any)
+          .select()
+          .single();
+
+        if (authAssistantErr) console.error('Error saving auth wizard message:', authAssistantErr);
+        if (authAssistantMsg) {
+          setChatMessages(prev => [...prev, authAssistantMsg as any]);
+        } else {
+          setChatMessages(prev => [...prev, {
+            id: `auth-wizard-${Date.now()}`,
+            role: 'assistant',
+            content: authWizardContent
+          }]);
+        }
+        return;
+      }
+
+      // MEDIA WIZARD DETECTION - Show wizard for file upload requests
+      const mediaWizardPatterns = /\b(add|create|build|make|need|want|show|display).*(upload|file.?upload|image.?upload|media|gallery|dropzone)\s*(component|section|area)?/i;
+      const mediaWizardAltPatterns = /\b(upload|file.?upload|dropzone|gallery)\s*(component|section|area|form)\b/i;
+      const hasMediaWizardRequest = mediaWizardPatterns.test(userMessage) || mediaWizardAltPatterns.test(userMessage);
+
+      if (hasMediaWizardRequest) {
+        setPendingFormPrompt(userMessage);
+        setShowMediaWizard(true);
+
+        const { data: wizardUserMsg, error: wizardUserErr } = await supabase
+          .from('project_chat_messages' as any)
+          .insert({ project_id: id, role: 'user', content: userMessage } as any)
+          .select()
+          .single();
+
+        if (wizardUserErr) console.error('Error saving user message:', wizardUserErr);
+        if (wizardUserMsg) {
+          setChatMessages(prev => [...prev, wizardUserMsg as any]);
+        } else {
+          setChatMessages(prev => [...prev, {
+            id: `user-${Date.now()}`,
+            role: 'user',
+            content: userMessage
+          }]);
+        }
+
+        const mediaWizardContent = JSON.stringify({
+          type: 'media_wizard',
+          prompt: userMessage
+        });
+        const { data: mediaAssistantMsg, error: mediaAssistantErr } = await supabase
+          .from('project_chat_messages' as any)
+          .insert({ project_id: id, role: 'assistant', content: mediaWizardContent } as any)
+          .select()
+          .single();
+
+        if (mediaAssistantErr) console.error('Error saving media wizard message:', mediaAssistantErr);
+        if (mediaAssistantMsg) {
+          setChatMessages(prev => [...prev, mediaAssistantMsg as any]);
+        } else {
+          setChatMessages(prev => [...prev, {
+            id: `media-wizard-${Date.now()}`,
+            role: 'assistant',
+            content: mediaWizardContent
+          }]);
+        }
+        return;
+      }
+
+      // PRODUCT FORM DETECTION - Show add-product card for single product add
       const productFormPatterns = /\b(add|create|new)\s+(product|item)\b/i;
       const productFormAltPatterns = /\b(add|create)\s+(inventory|product)\b/i;
       const hasProductFormRequest = productFormPatterns.test(userMessage) || productFormAltPatterns.test(userMessage);
@@ -5669,6 +5974,35 @@ ${fixInstructions}
                           onComplete={async (config, structuredPrompt) => {
                             setShowBookingWizard(false);
                             setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            
+                            // Check if this is part of a multi-feature request
+                            if (analyzedRequest && analyzedRequest.isMultiFeature) {
+                              const hasMoreWizards = advanceToNextWizard('booking', config);
+                              if (hasMoreWizards) {
+                                // Don't trigger generation yet - more wizards to configure
+                                return;
+                              }
+                              // All wizards done - generate final prompt with all configs
+                              const allConfigs = { ...wizardConfigs, booking: config };
+                              const finalPrompt = generateFinalMultiFeaturePrompt(allConfigs);
+                              
+                              setPendingFormPrompt('');
+                              setAnalyzedRequest(null);
+                              setWizardConfigs({});
+                              skipFormWizardRef.current = true;
+                              skipUserMessageSaveRef.current = true;
+                              wizardPromptRef.current = finalPrompt;
+                              
+                              requestAnimationFrame(() => {
+                                const form = document.querySelector('form[class*="flex items-end gap-2"]');
+                                if (form) {
+                                  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                                }
+                              });
+                              return;
+                            }
+                            
+                            // Single feature request - original behavior
                             setPendingFormPrompt('');
                             skipFormWizardRef.current = true;
                             skipUserMessageSaveRef.current = true;
@@ -5690,10 +6024,8 @@ ${fixInstructions}
                               }]);
                             }
                             
-                            // Use ref to pass prompt directly to handleChatSubmit (bypasses state async)
                             wizardPromptRef.current = structuredPrompt;
                             
-                            // Trigger form submit - handleChatSubmit will read from wizardPromptRef
                             requestAnimationFrame(() => {
                               const form = document.querySelector('form[class*="flex items-end gap-2"]');
                               if (form) {
@@ -5704,14 +6036,41 @@ ${fixInstructions}
                           onCancel={() => {
                             setShowBookingWizard(false);
                             setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            if (analyzedRequest) {
+                              setAnalyzedRequest(null);
+                              setWizardConfigs({});
+                            }
                           }}
                           onSkipWizard={async () => {
                             setShowBookingWizard(false);
                             setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            
+                            // Check if this is part of a multi-feature request
+                            if (analyzedRequest && analyzedRequest.isMultiFeature) {
+                              const hasMoreWizards = advanceToNextWizard('booking', null);
+                              if (hasMoreWizards) return;
+                              
+                              // All wizards done
+                              const finalPrompt = generateFinalMultiFeaturePrompt(wizardConfigs);
+                              setPendingFormPrompt('');
+                              setAnalyzedRequest(null);
+                              setWizardConfigs({});
+                              skipFormWizardRef.current = true;
+                              skipUserMessageSaveRef.current = true;
+                              wizardPromptRef.current = finalPrompt;
+                              
+                              requestAnimationFrame(() => {
+                                const form = document.querySelector('form[class*="flex items-end gap-2"]');
+                                if (form) {
+                                  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                                }
+                              });
+                              return;
+                            }
+                            
                             skipFormWizardRef.current = true;
                             skipUserMessageSaveRef.current = true;
                             
-                            // Use original prompt directly - let AI handle it
                             const prompt = pendingFormPrompt || 'Create a booking form';
                             setPendingFormPrompt('');
                             wizardPromptRef.current = prompt;
@@ -5743,52 +6102,404 @@ ${fixInstructions}
                           onComplete={async (config, structuredPrompt) => {
                             setShowContactWizard(false);
                             setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            
+                            // Multi-feature queue handling
+                            if (analyzedRequest && analyzedRequest.isMultiFeature) {
+                              const hasMoreWizards = advanceToNextWizard('contact', config);
+                              if (hasMoreWizards) return;
+                              
+                              const allConfigs = { ...wizardConfigs, contact: config };
+                              const finalPrompt = generateFinalMultiFeaturePrompt(allConfigs);
+                              setPendingFormPrompt('');
+                              setAnalyzedRequest(null);
+                              setWizardConfigs({});
+                              skipFormWizardRef.current = true;
+                              skipUserMessageSaveRef.current = true;
+                              wizardPromptRef.current = finalPrompt;
+                              
+                              requestAnimationFrame(() => {
+                                const form = document.querySelector('form[class*="flex items-end gap-2"]');
+                                if (form) form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                              });
+                              return;
+                            }
+                            
                             setPendingFormPrompt('');
                             skipFormWizardRef.current = true;
                             skipUserMessageSaveRef.current = true;
-                            
-                            const { data: wizardAssistantMsg, error: wizardAssistantErr } = await supabase
-                              .from('project_chat_messages' as any)
-                              .insert({ project_id: id, role: 'assistant', content: structuredPrompt } as any)
-                              .select()
-                              .single();
-                            
-                            if (wizardAssistantErr) console.error('Error saving assistant message:', wizardAssistantErr);
-                            if (wizardAssistantMsg) {
-                              setChatMessages(prev => [...prev, wizardAssistantMsg as any]);
-                            } else {
-                              setChatMessages(prev => [...prev, {
-                                id: `assistant-${Date.now()}`,
-                                role: 'assistant',
-                                content: structuredPrompt
-                              }]);
-                            }
-                            
-                            // Use ref to pass prompt directly to handleChatSubmit (bypasses state async)
                             wizardPromptRef.current = structuredPrompt;
-                            
-                            // Trigger form submit - handleChatSubmit will read from wizardPromptRef
                             requestAnimationFrame(() => {
                               const form = document.querySelector('form[class*="flex items-end gap-2"]');
-                              if (form) {
-                                form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-                              }
+                              if (form) form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
                             });
                           }}
                           onCancel={() => {
                             setShowContactWizard(false);
                             setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            if (analyzedRequest) { setAnalyzedRequest(null); setWizardConfigs({}); }
                           }}
                           onSkipWizard={async () => {
                             setShowContactWizard(false);
                             setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            
+                            if (analyzedRequest && analyzedRequest.isMultiFeature) {
+                              const hasMoreWizards = advanceToNextWizard('contact', null);
+                              if (hasMoreWizards) return;
+                              const finalPrompt = generateFinalMultiFeaturePrompt(wizardConfigs);
+                              setPendingFormPrompt('');
+                              setAnalyzedRequest(null);
+                              setWizardConfigs({});
+                              skipFormWizardRef.current = true;
+                              skipUserMessageSaveRef.current = true;
+                              wizardPromptRef.current = finalPrompt;
+                              requestAnimationFrame(() => {
+                                const form = document.querySelector('form[class*="flex items-end gap-2"]');
+                                if (form) form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                              });
+                              return;
+                            }
+                            
                             skipFormWizardRef.current = true;
                             skipUserMessageSaveRef.current = true;
-                            
-                            // Use original prompt directly - let AI handle it
                             const prompt = pendingFormPrompt || 'Create a contact form';
                             setPendingFormPrompt('');
                             wizardPromptRef.current = prompt;
+                            requestAnimationFrame(() => {
+                              const form = document.querySelector('form[class*="flex items-end gap-2"]');
+                              if (form) form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                            });
+                          }}
+                        />
+                      </div>
+                    );
+                  }
+                  
+                  // PRODUCT WIZARD - Inline wizard in chat
+                  let productWizardData: { type: string; prompt: string } | null = null;
+                  try {
+                    const parsed = JSON.parse(msg.content);
+                    if (parsed.type === 'product_wizard') productWizardData = parsed;
+                  } catch {}
+                  
+                  if (productWizardData && showProductWizard) {
+                    const existingProducts: Product[] = (backendContext?.products || []).map((p: any, idx: number) => ({
+                      id: `product-${idx}`,
+                      name: p.name,
+                      price: p.price,
+                      description: p.description || '',
+                      category: p.category || 'Featured',
+                      inStock: p.inStock ?? true
+                    }));
+                    
+                    return (
+                      <div key={i} className="flex flex-col items-start w-full animate-in fade-in slide-in-from-bottom-1 duration-300">
+                        <ProductWizard
+                          existingProducts={existingProducts}
+                          originalPrompt={pendingFormPrompt}
+                          onComplete={async (config, structuredPrompt, newProducts) => {
+                            setShowProductWizard(false);
+                            setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            
+                            // Multi-feature queue handling
+                            if (analyzedRequest && analyzedRequest.isMultiFeature) {
+                              const hasMoreWizards = advanceToNextWizard('products', config);
+                              if (hasMoreWizards) return;
+                              
+                              const allConfigs = { ...wizardConfigs, products: config };
+                              const finalPrompt = generateFinalMultiFeaturePrompt(allConfigs);
+                              setPendingFormPrompt('');
+                              setAnalyzedRequest(null);
+                              setWizardConfigs({});
+                              skipFormWizardRef.current = true;
+                              skipUserMessageSaveRef.current = true;
+                              wizardPromptRef.current = finalPrompt;
+                              
+                              requestAnimationFrame(() => {
+                                const form = document.querySelector('form[class*="flex items-end gap-2"]');
+                                if (form) form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                              });
+                              return;
+                            }
+                            
+                            setPendingFormPrompt('');
+                            skipFormWizardRef.current = true;
+                            skipUserMessageSaveRef.current = true;
+                            wizardPromptRef.current = structuredPrompt;
+                            requestAnimationFrame(() => {
+                              const form = document.querySelector('form[class*="flex items-end gap-2"]');
+                              if (form) form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                            });
+                          }}
+                          onCancel={() => {
+                            setShowProductWizard(false);
+                            setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            if (analyzedRequest) { setAnalyzedRequest(null); setWizardConfigs({}); }
+                          }}
+                          onSkipWizard={async () => {
+                            setShowProductWizard(false);
+                            setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            
+                            if (analyzedRequest && analyzedRequest.isMultiFeature) {
+                              const hasMoreWizards = advanceToNextWizard('products', null);
+                              if (hasMoreWizards) return;
+                              const finalPrompt = generateFinalMultiFeaturePrompt(wizardConfigs);
+                              setPendingFormPrompt('');
+                              setAnalyzedRequest(null);
+                              setWizardConfigs({});
+                              skipFormWizardRef.current = true;
+                              skipUserMessageSaveRef.current = true;
+                              wizardPromptRef.current = finalPrompt;
+                              requestAnimationFrame(() => {
+                                const form = document.querySelector('form[class*="flex items-end gap-2"]');
+                                if (form) form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                              });
+                              return;
+                            }
+                            
+                            skipFormWizardRef.current = true;
+                            skipUserMessageSaveRef.current = true;
+                            const prompt = pendingFormPrompt || 'Create a product catalog';
+                            setPendingFormPrompt('');
+                            wizardPromptRef.current = prompt;
+                            requestAnimationFrame(() => {
+                              const form = document.querySelector('form[class*="flex items-end gap-2"]');
+                              if (form) form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                            });
+                          }}
+                        />
+                      </div>
+                    );
+                  }
+                  
+                  // AUTH WIZARD - Inline wizard in chat
+                  let authWizardData: { type: string; prompt: string } | null = null;
+                  try {
+                    const parsed = JSON.parse(msg.content);
+                    if (parsed.type === 'auth_wizard') authWizardData = parsed;
+                  } catch {}
+                  
+                  if (authWizardData && showAuthWizard) {
+                    return (
+                      <div key={i} className="flex flex-col items-start w-full animate-in fade-in slide-in-from-bottom-1 duration-300">
+                        <AuthWizard
+                          originalPrompt={pendingFormPrompt}
+                          onComplete={async (config, structuredPrompt) => {
+                            setShowAuthWizard(false);
+                            setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            
+                            // Multi-feature queue handling
+                            if (analyzedRequest && analyzedRequest.isMultiFeature) {
+                              const hasMoreWizards = advanceToNextWizard('auth', config);
+                              if (hasMoreWizards) return;
+                              
+                              const allConfigs = { ...wizardConfigs, auth: config };
+                              const finalPrompt = generateFinalMultiFeaturePrompt(allConfigs);
+                              setPendingFormPrompt('');
+                              setAnalyzedRequest(null);
+                              setWizardConfigs({});
+                              skipFormWizardRef.current = true;
+                              skipUserMessageSaveRef.current = true;
+                              wizardPromptRef.current = finalPrompt;
+                              
+                              requestAnimationFrame(() => {
+                                const form = document.querySelector('form[class*="flex items-end gap-2"]');
+                                if (form) form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                              });
+                              return;
+                            }
+                            
+                            setPendingFormPrompt('');
+                            skipFormWizardRef.current = true;
+                            skipUserMessageSaveRef.current = true;
+                            wizardPromptRef.current = structuredPrompt;
+                            requestAnimationFrame(() => {
+                              const form = document.querySelector('form[class*="flex items-end gap-2"]');
+                              if (form) form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                            });
+                          }}
+                          onCancel={() => {
+                            setShowAuthWizard(false);
+                            setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            if (analyzedRequest) { setAnalyzedRequest(null); setWizardConfigs({}); }
+                          }}
+                          onSkipWizard={async () => {
+                            setShowAuthWizard(false);
+                            setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            
+                            if (analyzedRequest && analyzedRequest.isMultiFeature) {
+                              const hasMoreWizards = advanceToNextWizard('auth', null);
+                              if (hasMoreWizards) return;
+                              const finalPrompt = generateFinalMultiFeaturePrompt(wizardConfigs);
+                              setPendingFormPrompt('');
+                              setAnalyzedRequest(null);
+                              setWizardConfigs({});
+                              skipFormWizardRef.current = true;
+                              skipUserMessageSaveRef.current = true;
+                              wizardPromptRef.current = finalPrompt;
+                              requestAnimationFrame(() => {
+                                const form = document.querySelector('form[class*="flex items-end gap-2"]');
+                                if (form) form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                              });
+                              return;
+                            }
+                            
+                            skipFormWizardRef.current = true;
+                            skipUserMessageSaveRef.current = true;
+                            const prompt = pendingFormPrompt || 'Create a login page';
+                            setPendingFormPrompt('');
+                            wizardPromptRef.current = prompt;
+                            requestAnimationFrame(() => {
+                              const form = document.querySelector('form[class*="flex items-end gap-2"]');
+                              if (form) form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                            });
+                          }}
+                        />
+                      </div>
+                    );
+                  }
+                  
+                  // MEDIA WIZARD - Inline wizard in chat
+                  let mediaWizardData: { type: string; prompt: string } | null = null;
+                  try {
+                    const parsed = JSON.parse(msg.content);
+                    if (parsed.type === 'media_wizard') mediaWizardData = parsed;
+                  } catch {}
+                  
+                  if (mediaWizardData && showMediaWizard) {
+                    return (
+                      <div key={i} className="flex flex-col items-start w-full animate-in fade-in slide-in-from-bottom-1 duration-300">
+                        <MediaWizard
+                          originalPrompt={pendingFormPrompt}
+                          onComplete={async (config, structuredPrompt) => {
+                            setShowMediaWizard(false);
+                            setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            
+                            // Multi-feature queue handling
+                            if (analyzedRequest && analyzedRequest.isMultiFeature) {
+                              const hasMoreWizards = advanceToNextWizard('media', config);
+                              if (hasMoreWizards) return;
+                              
+                              const allConfigs = { ...wizardConfigs, media: config };
+                              const finalPrompt = generateFinalMultiFeaturePrompt(allConfigs);
+                              setPendingFormPrompt('');
+                              setAnalyzedRequest(null);
+                              setWizardConfigs({});
+                              skipFormWizardRef.current = true;
+                              skipUserMessageSaveRef.current = true;
+                              wizardPromptRef.current = finalPrompt;
+                              
+                              requestAnimationFrame(() => {
+                                const form = document.querySelector('form[class*="flex items-end gap-2"]');
+                                if (form) form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                              });
+                              return;
+                            }
+                            
+                            setPendingFormPrompt('');
+                            skipFormWizardRef.current = true;
+                            skipUserMessageSaveRef.current = true;
+                            wizardPromptRef.current = structuredPrompt;
+                            requestAnimationFrame(() => {
+                              const form = document.querySelector('form[class*="flex items-end gap-2"]');
+                              if (form) form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                            });
+                          }}
+                          onCancel={() => {
+                            setShowMediaWizard(false);
+                            setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            if (analyzedRequest) { setAnalyzedRequest(null); setWizardConfigs({}); }
+                          }}
+                          onSkipWizard={async () => {
+                            setShowMediaWizard(false);
+                            setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            
+                            if (analyzedRequest && analyzedRequest.isMultiFeature) {
+                              const hasMoreWizards = advanceToNextWizard('media', null);
+                              if (hasMoreWizards) return;
+                              const finalPrompt = generateFinalMultiFeaturePrompt(wizardConfigs);
+                              setPendingFormPrompt('');
+                              setAnalyzedRequest(null);
+                              setWizardConfigs({});
+                              skipFormWizardRef.current = true;
+                              skipUserMessageSaveRef.current = true;
+                              wizardPromptRef.current = finalPrompt;
+                              requestAnimationFrame(() => {
+                                const form = document.querySelector('form[class*="flex items-end gap-2"]');
+                                if (form) form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                              });
+                              return;
+                            }
+                            
+                            skipFormWizardRef.current = true;
+                            skipUserMessageSaveRef.current = true;
+                            const prompt = pendingFormPrompt || 'Create a file upload component';
+                            setPendingFormPrompt('');
+                            wizardPromptRef.current = prompt;
+                            requestAnimationFrame(() => {
+                              const form = document.querySelector('form[class*="flex items-end gap-2"]');
+                              if (form) form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                            });
+                          }}
+                        />
+                      </div>
+                    );
+                  }
+                  
+                  // FEATURE SUMMARY CARD - Multi-feature request analysis
+                  let featureSummaryData: { type: string; analysis: AnalyzedRequest; summary: string } | null = null;
+                  try {
+                    const parsed = JSON.parse(msg.content);
+                    if (parsed.type === 'feature_summary') featureSummaryData = parsed;
+                  } catch {}
+                  
+                  if (featureSummaryData && showFeatureSummary) {
+                    return (
+                      <div key={i} className="flex flex-col items-start w-full animate-in fade-in slide-in-from-bottom-1 duration-300">
+                        <FeatureSummaryCard
+                          analysis={featureSummaryData.analysis}
+                          currentFeatureIndex={analyzedRequest?.currentFeatureIndex || 0}
+                          isRTL={isRTL}
+                          onStartConfiguration={() => {
+                            // Start with the first wizard that needs configuration
+                            setShowFeatureSummary(false);
+                            setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            
+                            if (analyzedRequest) {
+                              const nextFeature = getNextWizardFeature(analyzedRequest);
+                              if (nextFeature) {
+                                const wizardType = featureToWizardType(nextFeature.type);
+                                console.log('[ProjectDetail] Starting wizard for:', nextFeature.type, wizardType);
+                                
+                                // Trigger the appropriate wizard
+                                if (wizardType === 'booking') setShowBookingWizard(true);
+                                else if (wizardType === 'product') setShowProductWizard(true);
+                                else if (wizardType === 'auth') setShowAuthWizard(true);
+                                else if (wizardType === 'media') setShowMediaWizard(true);
+                                else if (wizardType === 'contact') setShowContactWizard(true);
+                                
+                                // Save wizard message to chat
+                                const wizardContent = JSON.stringify({
+                                  type: `${wizardType}_wizard`,
+                                  prompt: pendingFormPrompt
+                                });
+                                setChatMessages(prev => [...prev, {
+                                  id: `${wizardType}-wizard-${Date.now()}`,
+                                  role: 'assistant',
+                                  content: wizardContent
+                                }]);
+                              }
+                            }
+                          }}
+                          onSkipWizards={async () => {
+                            // Skip all wizards and let AI generate everything
+                            setShowFeatureSummary(false);
+                            setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            setAnalyzedRequest(null);
+                            
+                            // Trigger AI generation with original prompt
+                            skipFormWizardRef.current = true;
+                            skipUserMessageSaveRef.current = true;
+                            wizardPromptRef.current = pendingFormPrompt;
                             
                             requestAnimationFrame(() => {
                               const form = document.querySelector('form[class*="flex items-end gap-2"]');

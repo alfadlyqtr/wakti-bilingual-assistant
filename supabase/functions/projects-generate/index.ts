@@ -430,6 +430,8 @@ async function callGeminiWithModel(
             maxOutputTokens: 65536,
             ...(jsonMode ? { responseMimeType: "application/json" } : {}),
           },
+          // NOTE: Grounding disabled - causes issues with JSON mode responses
+          // tools: [{ googleSearch: {} }],
         }),
       }
     ),
@@ -1520,17 +1522,25 @@ NO useTranslation hook unless explicitly requested. Just simple English text.
 Extract a meaningful project name from the user's request and use it in document.title and any header branding.
 Examples: "landing page for wife moza" → "MoziLove", "portfolio for photographer" → "PhotoPortfolio"
 
-### PART 6: STOCK IMAGES (FREEPIK API - MANDATORY)
-**⚠️ NEVER use placeholder URLs like picsum, unsplash, or via.placeholder!**
+### PART 6: STOCK IMAGES (FREEPIK API - MANDATORY - ZERO TOLERANCE)
+**🚨 CRITICAL: THIS IS NON-NEGOTIABLE - FAILURE TO USE FREEPIK = BROKEN PROJECT 🚨**
 
-For EVERY image in your code, you MUST use the Freepik API to get real stock photos.
-Generate a utility function that fetches images from Freepik:
+**BANNED IMAGE SOURCES (WILL CAUSE PROJECT FAILURE):**
+- ❌ picsum.photos - BANNED
+- ❌ unsplash.com - BANNED  
+- ❌ via.placeholder.com - BANNED
+- ❌ placeholder.com - BANNED
+- ❌ placehold.it - BANNED
+- ❌ Any hardcoded image URL - BANNED
+- ❌ Empty src="" - BANNED
+
+**MANDATORY: You MUST create /utils/stockImages.js in EVERY project:**
 
 \`\`\`jsx
-// In your App.js or a utils file, add this helper:
+// /utils/stockImages.js - REQUIRED FILE - MUST BE CREATED
 const BACKEND_URL = "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api";
 
-const fetchStockImages = async (query, limit = 5) => {
+export const fetchStockImages = async (query, limit = 5) => {
   try {
     const res = await fetch(BACKEND_URL, {
       method: 'POST',
@@ -1549,10 +1559,32 @@ const fetchStockImages = async (query, limit = 5) => {
   }
 };
 
-// Usage in component:
-const [heroImage, setHeroImage] = useState('');
+export const useStockImage = (query) => {
+  const [image, setImage] = React.useState('');
+  const [loading, setLoading] = React.useState(true);
+  
+  React.useEffect(() => {
+    fetchStockImages(query, 1).then(imgs => {
+      setImage(imgs[0] || '');
+      setLoading(false);
+    });
+  }, [query]);
+  
+  return { image, loading };
+};
+\`\`\`
+
+**MANDATORY USAGE PATTERN - EVERY COMPONENT WITH IMAGES:**
+\`\`\`jsx
+import { fetchStockImages, useStockImage } from '../utils/stockImages';
+
+// Option 1: Hook for single images
+const { image: heroImage, loading } = useStockImage('barber shop interior');
+
+// Option 2: Multiple images
+const [images, setImages] = useState([]);
 useEffect(() => {
-  fetchStockImages('barber shop interior').then(imgs => setHeroImage(imgs[0] || ''));
+  fetchStockImages('barber services', 6).then(setImages);
 }, []);
 \`\`\`
 
@@ -1563,11 +1595,13 @@ useEffect(() => {
 - Salon: "beauty salon", "hair styling", "nail art"
 - Real estate: "modern house exterior", "luxury apartment", "home interior"
 
-**RULES:**
-1. Query MUST match the business context (not generic "business" or "team")
-2. Use different queries for different sections (hero, about, services, etc.)
-3. NEVER hardcode image URLs - always fetch from Freepik API
-4. Show loading skeleton while images load
+**STRICT RULES:**
+1. ALWAYS create /utils/stockImages.js - NO EXCEPTIONS
+2. ALWAYS import and use fetchStockImages or useStockImage for ANY image
+3. Query MUST match the business context (not generic "business" or "team")
+4. Use different queries for different sections (hero, about, services, etc.)
+5. Show loading skeleton/spinner while images load
+6. NEVER use any URL that doesn't come from fetchStockImages
 
 ### OUTPUT FORMAT:
 Return ONLY a valid JSON object. No markdown fences. No explanation.
@@ -2828,6 +2862,7 @@ ${filesStr}`;
                   generationConfig: {
                     temperature: 0.7,
                     maxOutputTokens: 8192,
+                    responseMimeType: "application/json", // Add JSON MIME type for consistent format handling
                   },
                 }),
               }
@@ -4652,6 +4687,7 @@ Call task_complete when finished.`;
                   generationConfig: {
                     temperature: 0.1, // Lower temp for precise execution
                     maxOutputTokens: 8192,
+                    responseMimeType: "application/json", // Add JSON MIME type for function calling
                   },
                 }),
               }

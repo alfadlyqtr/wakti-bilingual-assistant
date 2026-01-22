@@ -53,10 +53,11 @@ export interface BookingFormConfig {
 
 interface BookingFormWizardProps {
   services: BookingService[];
-  onComplete: (config: BookingFormConfig, structuredPrompt: string) => void;
+  onComplete: (config: BookingFormConfig, structuredPrompt: string, newServices?: BookingService[]) => void;
   onCancel: () => void;
   onSkipWizard: () => void; // Let AI handle it directly
   originalPrompt: string;
+  projectId?: string; // For saving services to backend
 }
 
 const DEFAULT_FIELDS: FormField[] = [
@@ -69,15 +70,19 @@ const DEFAULT_FIELDS: FormField[] = [
   { id: 'notes', name: 'notes', type: 'textarea', required: false, label: 'Notes', labelAr: 'ملاحظات' },
 ];
 
-export function BookingFormWizard({ services, onComplete, onCancel, onSkipWizard, originalPrompt }: BookingFormWizardProps) {
+export function BookingFormWizard({ services, onComplete, onCancel, onSkipWizard, originalPrompt, projectId }: BookingFormWizardProps) {
   const { language } = useTheme();
   const isRTL = language === 'ar';
   
-  const [step, setStep] = useState(services.length > 0 ? 1 : 2);
-  const totalSteps = services.length > 0 ? 4 : 3;
+  // Always show service step - either to select existing or create new
+  const [step, setStep] = useState(1);
+  const totalSteps = 4;
   
-  // Step 1: Service Selection
+  // Step 1: Service Selection OR Creation
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [localServices, setLocalServices] = useState<BookingService[]>(services);
+  const [showAddService, setShowAddService] = useState(false);
+  const [newService, setNewService] = useState<Partial<BookingService>>({ name: '', duration: 30, price: 0 });
   
   // Step 2: Form Style
   const [formStyle, setFormStyle] = useState<'single' | 'multi-step' | 'sidebar'>('single');
@@ -110,11 +115,31 @@ export function BookingFormWizard({ services, onComplete, onCancel, onSkipWizard
   };
 
   const handleSelectAll = () => {
-    if (selectedServices.length === services.length) {
+    if (selectedServices.length === localServices.length) {
       setSelectedServices([]);
     } else {
-      setSelectedServices(services.map(s => s.id));
+      setSelectedServices(localServices.map(s => s.id));
     }
+  };
+
+  const handleAddNewService = () => {
+    if (!newService.name?.trim()) return;
+    const id = `new_${Date.now()}`;
+    const service: BookingService = {
+      id,
+      name: newService.name.trim(),
+      duration: newService.duration || 30,
+      price: newService.price || 0
+    };
+    setLocalServices(prev => [...prev, service]);
+    setSelectedServices(prev => [...prev, id]);
+    setNewService({ name: '', duration: 30, price: 0 });
+    setShowAddService(false);
+  };
+
+  const handleRemoveService = (serviceId: string) => {
+    setLocalServices(prev => prev.filter(s => s.id !== serviceId));
+    setSelectedServices(prev => prev.filter(id => id !== serviceId));
   };
 
   const handleFieldToggle = (fieldId: string, key: 'required') => {
@@ -171,8 +196,11 @@ export function BookingFormWizard({ services, onComplete, onCancel, onSkipWizard
       }
     };
 
+    // Get newly created services (those with id starting with 'new_')
+    const newlyCreatedServices = localServices.filter(s => s.id.startsWith('new_'));
+
     // Build structured prompt
-    const selectedServiceDetails = services.filter(s => selectedServices.includes(s.id));
+    const selectedServiceDetails = localServices.filter(s => selectedServices.includes(s.id));
     const hasServices = selectedServiceDetails.length > 0;
     const isMultiStep = formStyle === 'multi-step';
     
@@ -257,7 +285,8 @@ ${!hasServices ? '- Do NOT add any service selection UI - the form has NO servic
 
 Original request: ${originalPrompt}`;
 
-    onComplete(config, prompt);
+    // Pass newly created services to parent for backend saving
+    onComplete(config, prompt, newlyCreatedServices.length > 0 ? newlyCreatedServices : undefined);
   };
 
   const formStyles = [
@@ -267,65 +296,137 @@ Original request: ${originalPrompt}`;
   ];
 
   const renderStep = () => {
-    // Step 1: Service Selection (only if services exist)
-    if (services.length > 0 && step === 1) {
+    // Step 1: Service Selection OR Creation
+    if (step === 1) {
       return (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium">
-                {isRTL ? 'اختيار الخدمات (اختياري)' : 'Select services (optional)'}
+                {isRTL ? 'خدماتك' : 'Your Services'}
               </p>
               <p className="text-xs text-muted-foreground">
-                {isRTL ? 'يمكنك عدم الاختيار أو اختيار أكثر من خدمة' : 'Choose none or multiple services'}
+                {isRTL ? 'أضف أو اختر الخدمات للحجز' : 'Add or select services for booking'}
               </p>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleSelectAll}
-              className="text-xs"
-            >
-              {selectedServices.length === services.length 
-                ? (isRTL ? 'إلغاء الكل' : 'Deselect All')
-                : (isRTL ? 'تحديد الكل' : 'Select All')
-              }
-            </Button>
+            {localServices.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleSelectAll}
+                className="text-xs"
+              >
+                {selectedServices.length === localServices.length 
+                  ? (isRTL ? 'إلغاء الكل' : 'Deselect All')
+                  : (isRTL ? 'تحديد الكل' : 'Select All')
+                }
+              </Button>
+            )}
           </div>
           
-          <div className="space-y-2 max-h-48 overflow-y-auto">
-            {services.map(service => (
-              <div
-                key={service.id}
-                onClick={() => handleServiceToggle(service.id)}
-                className={cn(
-                  "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all",
-                  selectedServices.includes(service.id)
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-primary/50"
-                )}
-              >
-                <Checkbox
-                  checked={selectedServices.includes(service.id)}
-                  onCheckedChange={() => handleServiceToggle(service.id)}
-                />
+          {/* Add New Service Form */}
+          {showAddService ? (
+            <div className="p-3 rounded-lg border border-primary/30 bg-primary/5 space-y-3">
+              <p className="text-xs font-medium text-primary">
+                {isRTL ? 'إضافة خدمة جديدة' : 'Add New Service'}
+              </p>
+              <Input
+                placeholder={isRTL ? 'اسم الخدمة' : 'Service name'}
+                value={newService.name || ''}
+                onChange={(e) => setNewService(prev => ({ ...prev, name: e.target.value }))}
+                className="h-8 text-sm"
+              />
+              <div className="flex gap-2">
                 <div className="flex-1">
-                  <p className="text-sm font-medium">{service.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {service.duration} {isRTL ? 'دقيقة' : 'min'} • {service.price} QAR
-                  </p>
+                  <Label className="text-[10px] text-muted-foreground">{isRTL ? 'المدة (دقيقة)' : 'Duration (min)'}</Label>
+                  <Input
+                    type="number"
+                    value={newService.duration || 30}
+                    onChange={(e) => setNewService(prev => ({ ...prev, duration: parseInt(e.target.value) || 30 }))}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="flex-1">
+                  <Label className="text-[10px] text-muted-foreground">{isRTL ? 'السعر (ر.ق)' : 'Price (QAR)'}</Label>
+                  <Input
+                    type="number"
+                    value={newService.price || 0}
+                    onChange={(e) => setNewService(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+                    className="h-8 text-sm"
+                  />
                 </div>
               </div>
-            ))}
-          </div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => setShowAddService(false)} className="flex-1 h-8 text-xs">
+                  {isRTL ? 'إلغاء' : 'Cancel'}
+                </Button>
+                <Button size="sm" onClick={handleAddNewService} disabled={!newService.name?.trim()} className="flex-1 h-8 text-xs bg-primary">
+                  <Plus className="h-3 w-3 mr-1" />
+                  {isRTL ? 'إضافة' : 'Add'}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAddService(true)}
+              className="w-full h-9 border-dashed text-xs"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              {isRTL ? 'إضافة خدمة جديدة' : 'Add New Service'}
+            </Button>
+          )}
+          
+          {localServices.length > 0 ? (
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {localServices.map(service => (
+                <div
+                  key={service.id}
+                  onClick={() => handleServiceToggle(service.id)}
+                  className={cn(
+                    "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all",
+                    selectedServices.includes(service.id)
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-primary/50"
+                  )}
+                >
+                  <Checkbox
+                    checked={selectedServices.includes(service.id)}
+                    onCheckedChange={() => handleServiceToggle(service.id)}
+                  />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">{service.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {service.duration} {isRTL ? 'دقيقة' : 'min'} • {service.price} QAR
+                    </p>
+                  </div>
+                  {service.id.startsWith('new_') && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => { e.stopPropagation(); handleRemoveService(service.id); }}
+                      className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-6 text-muted-foreground">
+              <p className="text-sm">{isRTL ? 'لا توجد خدمات بعد' : 'No services yet'}</p>
+              <p className="text-xs mt-1">{isRTL ? 'أضف خدماتك أعلاه' : 'Add your services above'}</p>
+            </div>
+          )}
 
         </div>
       );
     }
 
     // Step 2: Form Style
-    const styleStep = services.length > 0 ? 2 : 1;
-    if (step === styleStep) {
+    if (step === 2) {
       return (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
@@ -356,8 +457,7 @@ Original request: ${originalPrompt}`;
     }
 
     // Step 3: Field Configuration
-    const fieldStep = services.length > 0 ? 3 : 2;
-    if (step === fieldStep) {
+    if (step === 3) {
       return (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
@@ -442,8 +542,7 @@ Original request: ${originalPrompt}`;
     }
 
     // Step 4: Design
-    const designStep = services.length > 0 ? 4 : 3;
-    if (step === designStep) {
+    if (step === 4) {
       return (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
@@ -605,14 +704,14 @@ Original request: ${originalPrompt}`;
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => step === (services.length > 0 ? 1 : 1) ? onCancel() : setStep(s => s - 1)}
+            onClick={() => step === 1 ? onCancel() : setStep(s => s - 1)}
             className="text-xs"
           >
             {isRTL ? <ChevronRight className="h-4 w-4 mr-1" /> : <ChevronLeft className="h-4 w-4 mr-1" />}
-            {step === (services.length > 0 ? 1 : 1) ? (isRTL ? 'إلغاء' : 'Cancel') : (isRTL ? 'السابق' : 'Back')}
+            {step === 1 ? (isRTL ? 'إلغاء' : 'Cancel') : (isRTL ? 'السابق' : 'Back')}
           </Button>
           
-          {step === (services.length > 0 ? 1 : 1) && (
+          {step === 1 && (
             <Button
               variant="outline"
               size="sm"

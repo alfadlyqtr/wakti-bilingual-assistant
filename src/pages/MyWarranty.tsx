@@ -346,7 +346,7 @@ const translations = {
     askTab: 'Ask Wakti AI',
     // Main tabs
     myDocsTab: 'My Docs',
-    myCardTab: 'My Card',
+    myCardTab: 'Business Cards',
     myCVTab: 'My CV',
     // Docs hero
     docsHeroTitle: 'Your Smart Document Vault',
@@ -385,6 +385,8 @@ const translations = {
     notes: 'Notes',
     viewReceipt: 'View Document',
     deleteItem: 'Delete',
+    back: 'Back',
+    edit: 'Edit',
     askWakti: 'Ask Wakti AI',
     askEmptyTitle: 'Ask about any document',
     askEmptyHint: 'Try questions like:',
@@ -409,7 +411,6 @@ const translations = {
     noItems: 'No documents yet',
     addFirst: 'Add your first document',
     optional: 'Optional',
-    back: 'Back',
     save: 'Save',
     saveFile: 'Save File',
     cancel: 'Cancel',
@@ -462,6 +463,8 @@ const translations = {
     notes: 'ملاحظات',
     viewReceipt: 'عرض المستند',
     deleteItem: 'حذف',
+    back: 'رجوع',
+    edit: 'تعديل',
     askWakti: 'اسأل وقتي الذكي',
     askEmptyTitle: 'اسأل عن أي مستند',
     askEmptyHint: 'جرّب أسئلة مثل:',
@@ -486,7 +489,6 @@ const translations = {
     noItems: 'لا توجد مستندات بعد',
     addFirst: 'أضف أول مستند لك',
     optional: 'اختياري',
-    back: 'رجوع',
     save: 'حفظ',
     saveFile: 'حفظ الملف',
     cancel: 'إلغاء',
@@ -517,19 +519,18 @@ const MyWarranty: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   
-  // Add form state
   const [newItem, setNewItem] = useState({
-    product_name: '',
-    purchase_date: '',
-    expiry_date: '',
-    warranty_months: '',
-    notes: '',
+    title: '',
     provider: '',
+    category: '',
+    purchase_date: '',
+    warranty_period: '',
+    expiry_date: '',
     ref_number: '',
     support_contact: '',
-    category_name: '',
-    image_url: '',
-    receipt_url: '',
+    image_url: '', // Primary image
+    receipt_url: '', // Backup for primary
+    additional_images: [] as string[], // NEW: For front/back or multi-page
     file_type: '' as 'image' | 'pdf' | '',
     extracted_data: {} as Record<string, unknown>,
     ai_summary: '',
@@ -539,6 +540,26 @@ const MyWarranty: React.FC = () => {
   const [detailTagsInput, setDetailTagsInput] = useState('');
   const [isEditingTags, setIsEditingTags] = useState(false);
   const [isSavingTags, setIsSavingTags] = useState(false);
+  
+  // Collapsible sections state - all collapsed by default
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
+    document_info: true,
+    personal_info: true,
+    contact_info: true,
+    vehicle_info: true,
+    insurance_info: true,
+    financial_info: true,
+    product_info: true,
+    medical_info: true,
+    property_info: true,
+    education_info: true,
+    employment_info: true,
+    company_info: true,
+    additional_info: true,
+  });
+  const toggleSection = (section: string) => {
+    setCollapsedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
 
   // Ask Wakti state
   const [askQuestion, setAskQuestion] = useState('');
@@ -574,7 +595,6 @@ const MyWarranty: React.FC = () => {
     
     setIsLoading(true);
     try {
-      // Fetch warranties
       const { data: warData, error: warError } = await (supabase as any)
         .from('user_warranties')
         .select('*')
@@ -617,109 +637,141 @@ const MyWarranty: React.FC = () => {
     }
   };
 
+  // Build a rich summary from extracted data when AI doesn't provide one
+  const buildRichSummary = (extracted: any): string => {
+    const parts: string[] = [];
+    const ed = (extracted.extracted_data || {}) as Record<string, unknown>;
+    
+    if (extracted.title) parts.push(`📄 ${extracted.title}`);
+    if (extracted.provider) parts.push(`🏢 Issued by ${extracted.provider}`);
+    const holder = (ed.personal_info as any)?.full_name || ed.holder_name || ed.insured_name || ed.full_name;
+    if (holder) parts.push(`👤 For: ${holder}`);
+    const vi = ed.vehicle_info as any;
+    const vehicle = vi ? [vi.make, vi.model, vi.year].filter(Boolean).join(' ') : null;
+    if (vehicle) parts.push(`🚗 Vehicle: ${vehicle}`);
+    if (vi?.chassis_number) parts.push(`🔧 Chassis: ${vi.chassis_number}`);
+    if (vi?.plate_number) parts.push(`🔢 Plate: ${vi.plate_number}`);
+    if (extracted.purchase_date && extracted.expiry_date) {
+      parts.push(`📅 Valid: ${extracted.purchase_date} to ${extracted.expiry_date}`);
+    }
+    const fi = ed.financial_info as any;
+    if (fi?.total_amount) {
+      parts.push(`💰 Amount: ${fi.total_amount} ${fi.currency || ''}`);
+    }
+    if (extracted.support_contact) parts.push(`📞 Contact: ${extracted.support_contact}`);
+    
+    return parts.length > 0 ? parts.join('\n') : 'Document analyzed and saved.';
+  };
+
   // Handle file upload
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>, isCamera: boolean = false) => {
-    const file = event.target.files?.[0];
-    if (!file || !user) return;
+    const files = event.target.files;
+    if (!files || files.length === 0 || !user) return;
 
-    // CLEAR all old state before starting new upload
-    setNewItem({
-      product_name: '',
-      purchase_date: '',
-      expiry_date: '',
-      warranty_months: '',
-      notes: '',
-      provider: '',
-      ref_number: '',
-      support_contact: '',
-      category_name: '',
-      image_url: '',
-      receipt_url: '',
-      file_type: '',
-      extracted_data: {},
-      ai_summary: '',
-    });
-    
     setIsAnalyzing(true);
     setViewMode('add');
 
     try {
-      // Convert to base64
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = reader.result as string;
-          resolve(result.split(',')[1]);
+      const newImages: string[] = [];
+      const base64Images: string[] = [];
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1]);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
+        const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const fileName = `${user.id}/${Date.now()}_${i}_${sanitizedName}`;
+        const { error: uploadError } = await supabase.storage
+          .from('warranty-docs')
+          .upload(fileName, file);
+
+        if (uploadError) throw uploadError;
+
+        const { data: urlData } = supabase.storage
+          .from('warranty-docs')
+          .getPublicUrl(fileName);
+        
+        newImages.push(urlData.publicUrl);
+        base64Images.push(base64);
+      }
+
+      setNewItem(prev => {
+        const updatedImages = [...prev.additional_images];
+        let primaryImage = prev.image_url;
+
+        if (!primaryImage) {
+          primaryImage = newImages[0];
+          updatedImages.push(...newImages.slice(1));
+        } else {
+          updatedImages.push(...newImages);
+        }
+
+        return {
+          ...prev,
+          image_url: primaryImage,
+          receipt_url: primaryImage,
+          additional_images: updatedImages,
+          file_type: files[0].type.includes('pdf') ? 'pdf' : 'image'
         };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
       });
 
-      const isPdf = file.type === 'application/pdf';
-      const mimeType = file.type;
-
-      // Upload to storage - sanitize filename to avoid URL issues
-      const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const fileName = `${user.id}/${Date.now()}_${sanitizedName}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('warranty-docs')
-        .upload(fileName, file);
-
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage
-        .from('warranty-docs')
-        .getPublicUrl(fileName);
-      
-      console.log('[MyWarranty] Uploaded file URL:', urlData.publicUrl);
-
-      // Call AI extraction
       const { data: aiData, error: aiError } = await supabase.functions.invoke('my-warranty-ai', {
         body: {
           mode: 'extract',
-          imageBase64: isPdf ? undefined : base64,
-          pdfBase64: isPdf ? base64 : undefined,
-          mimeType,
+          images: base64Images,
+          mimeType: files[0].type,
         },
       });
 
       if (aiError) throw aiError;
-
+      
       if (aiData?.success && aiData?.data) {
         const extracted = aiData.data;
-        
-        setNewItem({
-          product_name: extracted.title || '',
-          purchase_date: extracted.purchase_date || '',
-          expiry_date: extracted.expiry_date || '',
-          warranty_months: extracted.warranty_period ? extracted.warranty_period.toString() : '',
-          notes: extracted.notes || '',
-          provider: extracted.provider || '',
-          ref_number: extracted.ref_number || '',
-          support_contact: extracted.support_contact || '',
-          category_name: '',
-          image_url: isPdf ? '' : urlData.publicUrl.trim(),
-          receipt_url: urlData.publicUrl.trim(),
-          file_type: isPdf ? 'pdf' : 'image',
-          extracted_data: extracted,
-          ai_summary: `Provider: ${extracted.provider || 'N/A'}\nRef: ${extracted.ref_number || 'N/A'}\nContact: ${extracted.support_contact || 'N/A'}`,
-        });
+        const fullExtractedData: Record<string, unknown> = {
+          ...(extracted.extracted_data || {}),
+          raw_ocr_text: extracted.raw_ocr_text || extracted.notes || '',
+        };
+        const richSummary = extracted.ai_summary || buildRichSummary(extracted);
+
+        setNewItem(prev => ({
+          ...prev,
+          title: extracted.title || prev.title,
+          provider: extracted.provider || prev.provider,
+          category: extracted.category || prev.category,
+          purchase_date: extracted.purchase_date || prev.purchase_date,
+          expiry_date: extracted.expiry_date || prev.expiry_date,
+          ref_number: extracted.ref_number || prev.ref_number,
+          support_contact: extracted.support_contact || prev.support_contact,
+          extracted_data: fullExtractedData,
+          ai_summary: richSummary,
+        }));
       }
     } catch (error) {
-      console.error('Error processing file:', error);
+      console.error('Upload/Analysis error:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to analyze document',
+        title: isRTL ? 'خطأ' : 'Error',
+        description: isRTL ? 'فشل رفع أو تحليل المستند' : 'Failed to upload or analyze document',
         variant: 'destructive',
       });
     } finally {
       setIsAnalyzing(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (cameraInputRef.current) cameraInputRef.current.value = '';
     }
   };
 
-  // Save warranty
+  // Handle Save
   const handleSave = async () => {
-    if (!user || !newItem.product_name) return;
+    if (!user || !newItem.title) return;
 
     try {
       const parsedTags = newTagsInput
@@ -730,15 +782,16 @@ const MyWarranty: React.FC = () => {
       const extractedWithTags: Record<string, unknown> = {
         ...(newItem.extracted_data || {}),
         user_tags: parsedTags,
+        additional_images: newItem.additional_images,
       };
 
       const { error } = await (supabase as any).from('user_warranties').insert({
         user_id: user.id,
-        product_name: newItem.product_name,
+        product_name: newItem.title,
         purchase_date: newItem.purchase_date || null,
         expiry_date: newItem.expiry_date || null,
-        warranty_months: newItem.warranty_months ? parseInt(newItem.warranty_months) : null,
-        notes: newItem.notes || null,
+        warranty_months: newItem.warranty_period ? parseInt(newItem.warranty_period) : null,
+        notes: newItem.ai_summary || null,
         provider: newItem.provider || null,
         ref_number: newItem.ref_number || null,
         support_contact: newItem.support_contact || null,
@@ -752,22 +805,22 @@ const MyWarranty: React.FC = () => {
       if (error) throw error;
 
       toast({
-        title: 'Success',
-        description: 'Warranty saved successfully',
+        title: isRTL ? 'نجاح' : 'Success',
+        description: isRTL ? 'تم حفظ المستند بنجاح' : 'Document saved successfully',
       });
 
       setNewItem({
-        product_name: '',
-        purchase_date: '',
-        expiry_date: '',
-        warranty_months: '',
-        notes: '',
+        title: '',
         provider: '',
+        category: '',
+        purchase_date: '',
+        warranty_period: '',
+        expiry_date: '',
         ref_number: '',
         support_contact: '',
-        category_name: '',
         image_url: '',
         receipt_url: '',
+        additional_images: [],
         file_type: '',
         extracted_data: {},
         ai_summary: '',
@@ -776,10 +829,10 @@ const MyWarranty: React.FC = () => {
       setViewMode('list');
       fetchData();
     } catch (error) {
-      console.error('Error saving warranty:', error);
+      console.error('Error saving document:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to save warranty',
+        title: isRTL ? 'خطأ' : 'Error',
+        description: isRTL ? 'فشل حفظ المستند' : 'Failed to save document',
         variant: 'destructive',
       });
     }
@@ -822,166 +875,146 @@ const MyWarranty: React.FC = () => {
     return parseISO(dateValue).getTime();
   };
 
-  const getSuggestedDocs = (question: string) => {
-    const trimmed = question.trim().toLowerCase();
-    const tokens = trimmed.split(/[^a-z0-9\u0600-\u06FF]+/i).filter((t) => t.length > 2);
-    const hasExpiryIntent = /expire|expiry|valid|end|انتهاء|ينتهي|صالحة/.test(trimmed);
-
-    if (tokens.length === 0) {
-      return [...warranties]
-        .sort((a, b) => getDocSortValue(b) - getDocSortValue(a))
-        .slice(0, 3);
-    }
-
-    const scored = warranties
-      .map((doc) => {
-        const haystack = [
-          doc.product_name,
-          doc.provider,
-          doc.ref_number,
-          doc.notes,
-          doc.ai_summary,
-          JSON.stringify(doc.extracted_data || {}),
-        ]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase();
-
-        let score = 0;
-        tokens.forEach((token) => {
-          if (haystack.includes(token)) score += 2;
-        });
-        if (hasExpiryIntent && doc.expiry_date) score += 3;
-        return { doc, score };
-      })
-      .filter((entry) => entry.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .map((entry) => entry.doc);
-
-    if (scored.length > 0) return scored.slice(0, 3);
-
-    return [...warranties]
-      .sort((a, b) => getDocSortValue(b) - getDocSortValue(a))
-      .slice(0, 3);
+  // Get user tags from extracted_data
+  const getUserTags = (item: WarrantyItem): string[] => {
+    const ed = item.extracted_data || {};
+    const tags = (ed as any).user_tags;
+    if (Array.isArray(tags)) return tags;
+    return [];
   };
 
-  const smartPicks = useMemo(() => getSuggestedDocs(askQuestion), [askQuestion, warranties]);
-  const smartPickIds = useMemo(() => new Set(smartPicks.map((doc) => doc.id)), [smartPicks]);
-  const allDocIds = useMemo(() => warranties.map((doc) => doc.id), [warranties]);
+  // Build tag index for filtering
+  const tagIndex = useMemo(() => {
+    const index: Record<string, { count: number; thumbUrl?: string }> = {};
+    warranties.forEach((w) => {
+      const tags = getUserTags(w);
+      tags.forEach((tag) => {
+        if (!index[tag]) {
+          index[tag] = { count: 0, thumbUrl: w.receipt_url || w.image_url || undefined };
+        }
+        index[tag].count++;
+      });
+    });
+    return index;
+  }, [warranties]);
 
-  const isAllFilesSelected =
-    docScopeMode === 'manual' && selectedDocIds.length > 0 && selectedDocIds.length === allDocIds.length;
+  // Filter warranties by status and tag
+  const filteredWarrantiesByTag = useMemo(() => {
+    let filtered = warranties;
+    
+    // Filter by status
+    if (statusFilter === 'expiring') {
+      filtered = filtered.filter((w) => w.status === 'expiring_soon');
+    } else if (statusFilter === 'expired') {
+      filtered = filtered.filter((w) => w.status === 'expired');
+    }
+    
+    // Filter by tag
+    if (selectedTag) {
+      filtered = filtered.filter((w) => getUserTags(w).includes(selectedTag));
+    }
+    
+    return filtered;
+  }, [warranties, statusFilter, selectedTag]);
 
+  // Smart pick IDs for auto scope
+  const smartPickIds = useMemo(() => new Set<string>(), []);
+
+  // Check if all files are selected
+  const isAllFilesSelected = useMemo(() => {
+    return selectedDocIds.length === warranties.length && warranties.length > 0;
+  }, [selectedDocIds, warranties]);
+
+  // Handle auto scope selection
   const handleSelectAuto = () => {
     setDocScopeMode('auto');
     setSelectedDocIds([]);
   };
 
+  // Handle select all files
   const handleSelectAllFiles = () => {
     setDocScopeMode('manual');
-    setSelectedDocIds(allDocIds);
+    setSelectedDocIds(warranties.map((w) => w.id));
   };
 
+  // Handle toggle doc selection
   const handleToggleDoc = (docId: string) => {
     setDocScopeMode('manual');
-    setSelectedDocIds((prev) => {
-      const next = prev.includes(docId) ? prev.filter((id) => id !== docId) : [...prev, docId];
-      if (next.length === 0) {
-        setDocScopeMode('auto');
-      }
-      return next;
-    });
+    setSelectedDocIds((prev) =>
+      prev.includes(docId) ? prev.filter((id) => id !== docId) : [...prev, docId]
+    );
   };
 
-  // Ask Wakti - searches ALL documents
-  const handleAskWakti = async () => {
-    const trimmedQuestion = askQuestion.trim();
-    if (!trimmedQuestion || warranties.length === 0) return;
+  // Get suggested docs based on question
+  const getSuggestedDocs = useCallback((question: string): string[] => {
+    const q = question.toLowerCase();
+    const matches: string[] = [];
+    
+    warranties.forEach((w) => {
+      const name = (w.product_name || '').toLowerCase();
+      const provider = (w.provider || '').toLowerCase();
+      const summary = (w.ai_summary || '').toLowerCase();
+      
+      if (name.includes(q) || provider.includes(q) || summary.includes(q) || q.includes(name) || q.includes(provider)) {
+        matches.push(w.id);
+      }
+    });
+    
+    return matches.length > 0 ? matches : warranties.slice(0, 3).map((w) => w.id);
+  }, [warranties]);
 
+  // Handle Ask Wakti
+  const handleAskWakti = async () => {
+    if (!askQuestion.trim() || warranties.length === 0) return;
+    
     setIsAsking(true);
-    setAskMessages((prev) => [...prev, { role: 'user', content: trimmedQuestion }]);
+    const userMessage = askQuestion.trim();
+    setAskMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
+    setAskQuestion('');
     
     try {
-      const suggestedDocs = getSuggestedDocs(trimmedQuestion);
-      const scopedDocs =
-        docScopeMode === 'manual' && selectedDocIds.length > 0
-          ? warranties.filter((doc) => selectedDocIds.includes(doc.id))
-          : suggestedDocs.length > 0
-            ? suggestedDocs
-            : warranties;
-
-      // Build context from scoped documents
-      const allDocsContext = scopedDocs.map((doc) => ({
-        product_name: doc.product_name,
-        provider: doc.provider,
-        ref_number: doc.ref_number,
-        support_contact: doc.support_contact,
-        purchase_date: doc.purchase_date,
-        expiry_date: doc.expiry_date,
-        warranty_months: doc.warranty_months,
-        notes: doc.notes,
-        ai_summary: doc.ai_summary,
-        extracted_data: doc.extracted_data,
-      }));
-
+      // Determine which docs to use
+      let docsToUse: WarrantyItem[] = [];
+      
+      if (docScopeMode === 'auto') {
+        const suggestedIds = getSuggestedDocs(userMessage);
+        docsToUse = warranties.filter((w) => suggestedIds.includes(w.id));
+      } else {
+        docsToUse = selectedDocIds.length > 0
+          ? warranties.filter((w) => selectedDocIds.includes(w.id))
+          : warranties;
+      }
+      
+      // Build context from selected docs
+      const context = docsToUse.map((doc) => {
+        const ed = doc.extracted_data || {};
+        return `Document: ${doc.product_name}\nProvider: ${doc.provider || 'N/A'}\nExpiry: ${doc.expiry_date || 'N/A'}\nSummary: ${doc.ai_summary || 'N/A'}\nData: ${JSON.stringify(ed)}`;
+      }).join('\n\n---\n\n');
+      
       const { data, error } = await supabase.functions.invoke('my-warranty-ai', {
         body: {
-          mode: 'qa',
-          question: trimmedQuestion,
-          warrantyContext: JSON.stringify(allDocsContext),
+          mode: 'ask',
+          question: userMessage,
+          context,
         },
       });
-
+      
       if (error) throw error;
-
-      if (data?.success) {
-        setAskMessages((prev) => [...prev, { role: 'assistant', content: data.answer }]);
-        setAskQuestion('');
-      }
+      
+      const answer = data?.answer || data?.response || (isRTL ? 'عذراً، لم أتمكن من الإجابة.' : 'Sorry, I could not answer that.');
+      setAskMessages((prev) => [...prev, { role: 'assistant', content: answer }]);
     } catch (error) {
-      console.error('Error asking Wakti:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to get answer',
-        variant: 'destructive',
-      });
+      console.error('Ask error:', error);
+      setAskMessages((prev) => [...prev, { role: 'assistant', content: isRTL ? 'حدث خطأ. حاول مرة أخرى.' : 'An error occurred. Please try again.' }]);
     } finally {
       setIsAsking(false);
     }
   };
 
-  // Filter warranties
-  const filteredWarranties = warranties.filter((w) => {
-    if (statusFilter === 'expired') return w.status === 'expired';
-    if (statusFilter === 'expiring') return w.status === 'expiring_soon';
-    return true;
-  });
-
-  const getUserTags = (w: WarrantyItem): string[] => {
-    const raw = (w.extracted_data as Record<string, unknown> | null)?.user_tags;
-    if (!Array.isArray(raw)) return [];
-    return raw.map((x) => String(x)).map((s) => s.trim()).filter(Boolean);
-  };
-
-  const tagIndex = filteredWarranties.reduce<Record<string, { count: number; thumbUrl?: string }>>((acc, w) => {
-    const tags = getUserTags(w);
-    tags.forEach((tag) => {
-      if (!acc[tag]) acc[tag] = { count: 0 };
-      acc[tag].count += 1;
-      if (!acc[tag].thumbUrl && w.image_url) acc[tag].thumbUrl = w.image_url;
-    });
-    return acc;
-  }, {});
-
-  const filteredWarrantiesByTag = selectedTag
-    ? filteredWarranties.filter((w) => getUserTags(w).includes(selectedTag))
-    : filteredWarranties;
-
   // Render warranty card
   const renderWarrantyCard = (item: WarrantyItem) => {
     const timeRemaining = getTimeRemaining(item.expiry_date);
     const tags = getUserTags(item);
-    // Sanitize URL by removing leading spaces and properly trimming
     const rawUrl = (item.receipt_url || item.image_url || '').trim();
     const isPdf = item.file_type === 'pdf' || rawUrl.toLowerCase().endsWith('.pdf');
 
@@ -995,7 +1028,7 @@ const MyWarranty: React.FC = () => {
         className="enhanced-card p-4 mb-3 cursor-pointer active:scale-[0.98] transition-transform"
       >
         <div className="flex gap-4">
-          {/* Product Image */}
+          {/* Thumbnail */}
           <div className="w-20 h-20 rounded-xl overflow-hidden bg-white/5 border border-white/10 flex-shrink-0 relative">
             {rawUrl && !isPdf ? (
               <img 
@@ -1004,13 +1037,6 @@ const MyWarranty: React.FC = () => {
                 className="w-full h-full object-cover"
                 onError={(e) => {
                   (e.target as HTMLImageElement).style.display = 'none';
-                  const parent = (e.target as HTMLImageElement).parentElement;
-                  if (parent) {
-                    const fallback = document.createElement('div');
-                    fallback.className = 'w-full h-full flex items-center justify-center bg-white/5';
-                    fallback.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shield text-foreground/20"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>';
-                    parent.appendChild(fallback);
-                  }
                 }}
               />
             ) : isPdf ? (
@@ -1112,24 +1138,24 @@ const MyWarranty: React.FC = () => {
           </div>
         </div>
 
-        {/* Filter buttons */}
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <h2 className="text-sm font-semibold text-foreground">{t.title}</h2>
-          <Button variant="ghost" size="icon" className="text-muted-foreground h-8 w-8">
-            <SortAsc className="w-4 h-4" />
-          </Button>
-        </div>
-
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+        <div className="flex items-center gap-2 mb-4 overflow-x-auto scrollbar-hide py-1">
+          {/* Plus button moved to the filter row */}
+          {viewMode !== 'add' && viewMode !== 'detail' && viewMode !== 'ask' && mainTab === 'docs' && activeTab === 'warranties' && warranties.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setViewMode('add')}
+              className="h-9 px-3 rounded-full btn-enhanced flex items-center justify-center active:scale-95 transition shrink-0 shadow-lg"
+              aria-label={t.addNew}
+            >
+              <Plus className="w-4 h-4 text-white" />
+              <span className="ml-1.5 text-xs font-bold text-white">{t.addNew}</span>
+            </button>
+          )}
+          <div className="w-px h-6 bg-white/10 shrink-0 mx-1" />
           <Button
             type="button"
             variant={statusFilter === 'all' ? 'default' : 'outline'}
-            className={
-              'rounded-full h-9 ' +
-              (statusFilter === 'all'
-                ? 'btn-enhanced'
-                : '')
-            }
+            className="rounded-full h-9 shrink-0"
             onClick={() => setStatusFilter('all')}
           >
             {t.filterAll}
@@ -1138,7 +1164,7 @@ const MyWarranty: React.FC = () => {
             type="button"
             variant={statusFilter === 'expiring' ? 'default' : 'outline'}
             className={
-              'rounded-full h-9 ' +
+              'rounded-full h-9 shrink-0 ' +
               (statusFilter === 'expiring'
                 ? 'bg-orange-500/15 border border-orange-500/30 text-foreground hover:bg-orange-500/20'
                 : '')
@@ -1151,7 +1177,7 @@ const MyWarranty: React.FC = () => {
             type="button"
             variant={statusFilter === 'expired' ? 'default' : 'outline'}
             className={
-              'rounded-full h-9 ' +
+              'rounded-full h-9 shrink-0 ' +
               (statusFilter === 'expired'
                 ? 'bg-red-500/15 border border-red-500/30 text-foreground hover:bg-red-500/20'
                 : '')
@@ -1883,28 +1909,23 @@ const MyWarranty: React.FC = () => {
     </div>
   );
 
-  // Render Docs Tab Content (existing warranties + ask)
   const renderDocsTabContent = () => (
     <div className="flex flex-col h-full">
       <div className="px-4 pt-2 pb-2">
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'warranties' | 'ask')}>
-          <TabsList className="bg-white/5 border border-white/10">
-            <TabsTrigger value="warranties">{t.warrantiesTab}</TabsTrigger>
-            <TabsTrigger
-              value="ask"
-              className="border-2 border-blue-500/40 bg-gradient-to-r from-blue-500/15 to-purple-500/15 text-foreground shadow-[0_8px_24px_rgba(59,130,246,0.25)] hover:shadow-[0_10px_28px_rgba(99,102,241,0.35)] data-[state=active]:from-blue-500/30 data-[state=active]:to-purple-500/30 data-[state=active]:border-blue-400/60"
-            >
-              {t.askTab}
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="warranties" className="mt-3">
-            {renderWarrantiesTab()}
-          </TabsContent>
-          <TabsContent value="ask" className="mt-3">
-            {renderAskTab()}
-          </TabsContent>
-        </Tabs>
+        <div className="flex items-center gap-2">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'warranties' | 'ask')} className="flex-1">
+            <TabsList className="bg-white/5 border border-white/10 w-full">
+              <TabsTrigger value="warranties">{t.warrantiesTab}</TabsTrigger>
+              <TabsTrigger value="ask">{t.askTab}</TabsTrigger>
+            </TabsList>
+            <TabsContent value="warranties" className="mt-3">
+              {renderWarrantiesTab()}
+            </TabsContent>
+            <TabsContent value="ask" className="mt-3">
+              {renderAskTab()}
+            </TabsContent>
+          </Tabs>
+        </div>
       </div>
     </div>
   );
@@ -1914,18 +1935,18 @@ const MyWarranty: React.FC = () => {
       {/* Main 3-Tab Navigation */}
       <div className="px-4 pt-4 pb-2 solid-bg border-b border-white/10">
         <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as 'docs' | 'card' | 'cv')}>
-          <TabsList className="w-full bg-white/5 border border-white/10 grid grid-cols-3">
-            <TabsTrigger value="docs" className="flex items-center gap-2">
+          <TabsList className="w-full bg-white/5 border border-white/10 grid grid-cols-3 h-12">
+            <TabsTrigger value="docs" className="flex flex-col items-center justify-center gap-0.5 py-1">
               <FolderOpen className="w-4 h-4" />
-              <span className="hidden sm:inline">{t.myDocsTab}</span>
+              <span className="text-[10px] font-medium">{t.myDocsTab}</span>
             </TabsTrigger>
-            <TabsTrigger value="card" className="flex items-center gap-2">
+            <TabsTrigger value="card" className="flex flex-col items-center justify-center gap-0.5 py-1">
               <CreditCard className="w-4 h-4" />
-              <span className="hidden sm:inline">{t.myCardTab}</span>
+              <span className="text-[10px] font-medium">{t.myCardTab}</span>
             </TabsTrigger>
-            <TabsTrigger value="cv" className="flex items-center gap-2">
+            <TabsTrigger value="cv" className="flex flex-col items-center justify-center gap-0.5 py-1">
               <User className="w-4 h-4" />
-              <span className="hidden sm:inline">{t.myCVTab}</span>
+              <span className="text-[10px] font-medium">{t.myCVTab}</span>
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -1948,17 +1969,17 @@ const MyWarranty: React.FC = () => {
         <Button variant="ghost" size="icon" onClick={() => {
           // Clear form when going back
           setNewItem({
-            product_name: '',
-            purchase_date: '',
-            expiry_date: '',
-            warranty_months: '',
-            notes: '',
+            title: '',
             provider: '',
+            category: '',
+            purchase_date: '',
+            warranty_period: '',
+            expiry_date: '',
             ref_number: '',
             support_contact: '',
-            category_name: '',
             image_url: '',
             receipt_url: '',
+            additional_images: [],
             file_type: '',
             extracted_data: {},
             ai_summary: '',
@@ -1977,30 +1998,76 @@ const MyWarranty: React.FC = () => {
       <div className="flex-1 overflow-y-auto px-4 py-4 pb-32">
         {isAnalyzing ? (
           <div className="flex flex-col items-center justify-center py-20">
-            <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
-            <p className="text-muted-foreground">{t.analyzing}</p>
+            {/* Premium Wakti AI Loader */}
+            <div className="relative mb-8">
+              {/* Outer glow ring */}
+              <div className="absolute inset-0 rounded-full bg-gradient-to-r from-blue-500 via-purple-500 to-cyan-500 blur-xl opacity-40 animate-pulse" style={{ width: '120px', height: '120px', margin: '-10px' }} />
+              
+              {/* Scanning ring animation */}
+              <div className="relative w-24 h-24">
+                <svg className="w-full h-full animate-spin" style={{ animationDuration: '3s' }} viewBox="0 0 100 100">
+                  <defs>
+                    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#3b82f6" />
+                      <stop offset="50%" stopColor="#8b5cf6" />
+                      <stop offset="100%" stopColor="#06b6d4" />
+                    </linearGradient>
+                  </defs>
+                  <circle cx="50" cy="50" r="45" fill="none" stroke="url(#gradient)" strokeWidth="3" strokeLinecap="round" strokeDasharray="70 200" />
+                </svg>
+                
+                {/* Center eye icon */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center backdrop-blur-sm border border-white/10">
+                    <svg className="w-6 h-6 text-blue-400 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Status text with typing effect */}
+            <div className="text-center space-y-2">
+              <p className="text-lg font-semibold bg-gradient-to-r from-blue-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent">
+                {isRTL ? 'وقتي يقرأ مستندك...' : 'Wakti is reading your document...'}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {isRTL ? 'استخراج كل التفاصيل' : 'Extracting every detail'}
+              </p>
+            </div>
+            
+            {/* Progress dots */}
+            <div className="flex gap-1.5 mt-6">
+              <div className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+              <div className="w-2 h-2 rounded-full bg-purple-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+              <div className="w-2 h-2 rounded-full bg-cyan-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
           </div>
         ) : (
           <>
             {/* Upload Options */}
-            {!newItem.receipt_url && (
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <button
-                  onClick={() => cameraInputRef.current?.click()}
-                  className="enhanced-card p-6 flex flex-col items-center gap-3 active:scale-95 transition-transform"
-                >
-                  <Camera className="w-10 h-10 text-blue-400" />
-                  <span className="text-sm font-medium">{t.snapPhoto}</span>
-                </button>
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="enhanced-card p-6 flex flex-col items-center gap-3 active:scale-95 transition-transform"
-                >
-                  <Upload className="w-10 h-10 text-green-400" />
-                  <span className="text-sm font-medium">{t.uploadFile}</span>
-                </button>
-              </div>
-            )}
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <button
+                onClick={() => cameraInputRef.current?.click()}
+                className="enhanced-card p-6 flex flex-col items-center gap-3 active:scale-95 transition-transform"
+              >
+                <Camera className="w-10 h-10 text-blue-400" />
+                <span className="text-sm font-medium">
+                  {newItem.image_url ? (isRTL ? 'إضافة صورة أخرى' : 'Add Another Photo') : t.snapPhoto}
+                </span>
+              </button>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="enhanced-card p-6 flex flex-col items-center gap-3 active:scale-95 transition-transform"
+              >
+                <Upload className="w-10 h-10 text-green-400" />
+                <span className="text-sm font-medium">
+                  {newItem.image_url ? (isRTL ? 'رفع ملف آخر' : 'Upload Another File') : t.uploadFile}
+                </span>
+              </button>
+            </div>
 
             {/* Hidden file inputs */}
             <input
@@ -2008,6 +2075,7 @@ const MyWarranty: React.FC = () => {
               type="file"
               accept="image/*"
               capture="environment"
+              multiple
               className="hidden"
               onChange={(e) => handleFileSelect(e, true)}
               aria-label="Snap Photo"
@@ -2017,46 +2085,79 @@ const MyWarranty: React.FC = () => {
               ref={fileInputRef}
               type="file"
               accept="image/*,application/pdf"
+              multiple
               className="hidden"
               onChange={(e) => handleFileSelect(e, false)}
               aria-label="Upload Document"
               title="Upload Document"
             />
 
-            {/* Document Preview - LARGE & CLEAR */}
-            {(newItem.image_url || newItem.receipt_url) && (
+            {/* Document Preview - MULTI-IMAGE GRID */}
+            {(newItem.image_url || newItem.additional_images.length > 0) && (
               <div className="mb-6">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-sm font-medium text-foreground">{isRTL ? 'المستند' : 'Receipt'}</h4>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
+                    <span>🖼️</span> {isRTL ? 'المستندات المرفوعة' : 'Uploaded Documents'}
+                    <span className="text-[10px] font-normal text-muted-foreground bg-white/5 px-2 py-0.5 rounded-full">
+                      {1 + newItem.additional_images.length} {isRTL ? 'ملفات' : 'files'}
+                    </span>
+                  </h4>
                   <Button
-                    variant="destructive"
+                    variant="ghost"
                     size="sm"
-                    onClick={() => setNewItem(prev => ({ ...prev, image_url: '', receipt_url: '', file_type: '' }))}
+                    className="text-xs text-red-400 hover:text-red-300 hover:bg-red-400/10"
+                    onClick={() => setNewItem(prev => ({ ...prev, image_url: '', receipt_url: '', additional_images: [], file_type: '' }))}
                   >
                     <X className="w-3 h-3 mr-1" />
-                    {isRTL ? 'حذف' : 'Remove'}
+                    {isRTL ? 'مسح الكل' : 'Clear All'}
                   </Button>
                 </div>
-                <div className="relative w-full h-[400px] rounded-xl overflow-hidden bg-white/5 border-2 border-blue-500/30">
-                  {newItem.file_type === 'pdf' ? (
-                    <div className="w-full h-full flex flex-col items-center justify-center gap-4 bg-red-500/10">
-                      <FileText className="w-24 h-24 text-red-400" />
-                      <div className="text-center">
-                        <p className="text-foreground font-medium text-lg">PDF Document</p>
-                        <p className="text-xs text-blue-400 mt-2">✓ Uploaded & AI Analyzed</p>
-                      </div>
-                    </div>
-                  ) : (
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {/* Primary Image */}
+                  <div className="relative aspect-[3/4] rounded-xl overflow-hidden bg-white/5 border-2 border-blue-500/50 group">
                     <img 
-                      src={newItem.image_url || newItem.receipt_url} 
-                      alt="Receipt Preview" 
-                      className="w-full h-full object-contain bg-black/20"
-                      onError={(e) => {
-                        console.error('Image failed to load:', newItem.image_url || newItem.receipt_url);
-                        e.currentTarget.style.display = 'none';
-                      }}
+                      src={newItem.image_url} 
+                      alt="Front" 
+                      className="w-full h-full object-cover"
                     />
-                  )}
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <span className="text-[10px] font-bold text-white uppercase tracking-widest bg-blue-500 px-2 py-1 rounded">
+                        {isRTL ? 'الأساسية' : 'Primary'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Additional Images */}
+                  {newItem.additional_images.map((img, idx) => (
+                    <div key={idx} className="relative aspect-[3/4] rounded-xl overflow-hidden bg-white/5 border border-white/10 group animate-in zoom-in-95 duration-200">
+                      <img 
+                        src={img} 
+                        alt={`Page ${idx + 2}`} 
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        onClick={() => setNewItem(prev => ({
+                          ...prev,
+                          additional_images: prev.additional_images.filter((_, i) => i !== idx)
+                        }))}
+                        className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+
+                  {/* Add More Placeholder */}
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="relative aspect-[3/4] rounded-xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-2 hover:border-blue-500/50 hover:bg-blue-500/5 transition-all group"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <Plus className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase">{isRTL ? 'إضافة' : 'Add'}</span>
+                  </button>
                 </div>
               </div>
             )}
@@ -2158,17 +2259,17 @@ const MyWarranty: React.FC = () => {
               await handleSave();
               // Clear form after successful save
               setNewItem({
-                product_name: '',
-                purchase_date: '',
-                expiry_date: '',
-                warranty_months: '',
-                notes: '',
+                title: '',
                 provider: '',
+                category: '',
+                purchase_date: '',
+                warranty_period: '',
+                expiry_date: '',
                 ref_number: '',
                 support_contact: '',
-                category_name: '',
                 image_url: '',
                 receipt_url: '',
+                additional_images: [],
                 file_type: '',
                 extracted_data: {},
                 ai_summary: '',
@@ -2191,28 +2292,85 @@ const MyWarranty: React.FC = () => {
     </div>
   );
 
+  // Helper to build dynamic chips from extracted data
+  const buildDynamicChips = (item: WarrantyItem) => {
+    const chips: Array<{ label: string; value: string; icon?: string }> = [];
+    const extracted = (item.extracted_data || {}) as Record<string, unknown>;
+    
+    // Icon mapping for common fields
+    const iconMap: Record<string, string> = {
+      holder_name: '👤', insured_name: '👤', full_name: '👤', owner_name: '👤', name: '👤',
+      vehicle_make: '🚗', vehicle_model: '🚗', make: '🚗', model: '🚗',
+      vehicle_year: '📅', year: '📅', year_of_manufacture: '📅',
+      chassis_number: '🔧', chassis: '🔧', vin: '🔧',
+      plate_number: '🔢', plate: '🔢', license_plate: '🔢',
+      engine_type: '⚙️', engine: '⚙️', cylinders: '⚙️',
+      color: '🎨', vehicle_color: '🎨',
+      seats: '💺', no_of_seats: '💺', passengers: '💺',
+      coverage_type: '🛡️', policy_type: '🛡️', type_of_cover: '🛡️',
+      coverage_area: '🌍', geographical_area: '🌍',
+      premium_amount: '💰', total_amount: '💰', contribution: '💰', amount: '💰',
+      deductible: '💵', nationality: '🌐', address: '📍',
+      tel_no: '📞', phone: '📞', telephone: '📞',
+      id_no: '🆔', id_number: '🆔', policy_no: '📋', policy_number: '📋',
+      use_of_vehicle: '🚙', private: '🏠', commercial: '🏢',
+    };
+    
+    // Skip these internal/duplicate fields
+    const skipKeys = ['user_tags', 'raw_text', 'raw_ocr_text', 'ocr_text', 'summary', 'ai_summary', 
+      'title', 'provider', 'category', 'purchase_date', 'expiry_date', 'warranty_period', 
+      'ref_number', 'support_contact', 'notes'];
+    
+    // Add core fields first (from item itself, not extracted_data to avoid duplication)
+    if (item.provider) chips.push({ label: isRTL ? 'الجهة' : 'Issuer', value: item.provider, icon: '🏢' });
+    if (item.ref_number) chips.push({ label: isRTL ? 'المرجع' : 'Ref #', value: item.ref_number, icon: '📋' });
+    
+    // Dynamic fields from extracted_data
+    Object.entries(extracted).forEach(([key, val]) => {
+      if (skipKeys.includes(key.toLowerCase()) || !val) return;
+      if (typeof val === 'object') return;
+      const strVal = String(val).trim();
+      if (!strVal || strVal === '-' || strVal === 'null' || strVal.length > 100) return;
+      
+      // Format key nicely
+      const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      const icon = iconMap[key.toLowerCase()] || '📌';
+      chips.push({ label, value: strVal, icon });
+    });
+    
+    return chips;
+  };
+
   // Render Detail View
   const renderDetailView = () => {
     if (!selectedItem) return null;
     
     const timeRemaining = getTimeRemaining(selectedItem.expiry_date);
+    const dynamicChips = buildDynamicChips(selectedItem);
+    const extracted = (selectedItem.extracted_data || {}) as Record<string, unknown>;
+    const aiSummary = selectedItem.ai_summary || (extracted.summary as string) || '';
+    const userTags = getUserTags(selectedItem);
 
     return (
       <div className="flex flex-col h-full">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-4 border-b border-white/10">
-          <Button variant="ghost" size="icon" onClick={() => setViewMode('list')}>
-            <ChevronLeft className="w-5 h-5" />
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => setViewMode('list')}
+            className="flex items-center gap-1.5 h-10 px-3 -ml-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all active:scale-95 group"
+          >
+            <ChevronLeft className="w-5 h-5 transition-transform group-hover:-translate-x-0.5" />
+            <span className="text-sm font-medium">{isRTL ? 'عودة' : 'Back'}</span>
           </Button>
-          <h1 className="text-xl font-bold text-foreground">{selectedItem.product_name}</h1>
-          <Button variant="ghost" size="icon">
-            <Edit2 className="w-5 h-5" />
-          </Button>
+          <h1 className="text-lg font-bold text-foreground text-center flex-1 mx-2 truncate">{selectedItem.product_name}</h1>
+          <div className="w-10" />
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-4 pb-32">
-          {/* Document Preview - LARGE & PROMINENT */}
-          <div className="w-full mb-6">
+          {/* Document Preview - Compact */}
+          <div className="w-full mb-5">
             <div className="flex items-center justify-between mb-2">
               <h4 className="text-sm font-medium text-foreground">{isRTL ? 'المستند' : 'Document'}</h4>
               {selectedItem.receipt_url && (
@@ -2220,14 +2378,14 @@ const MyWarranty: React.FC = () => {
                   variant="ghost"
                   size="sm"
                   onClick={() => window.open(selectedItem.receipt_url, '_blank')}
-                  className="text-xs"
+                  className="text-xs h-7 px-2"
                 >
                   <ExternalLink className="w-3 h-3 mr-1" />
                   {isRTL ? 'فتح' : 'Open'}
                 </Button>
               )}
             </div>
-            <div className="w-full h-[400px] rounded-xl overflow-hidden bg-white/5 border border-white/10 cursor-pointer hover:border-blue-500/50 transition-all"
+            <div className="w-full h-[200px] rounded-xl overflow-hidden bg-white/5 border border-white/10 cursor-pointer hover:border-blue-500/50 transition-all"
               onClick={() => {
                 const url = selectedItem.receipt_url || selectedItem.image_url;
                 if (url) window.open(url, '_blank');
@@ -2247,20 +2405,17 @@ const MyWarranty: React.FC = () => {
                   );
                 } else if (isPdf) {
                   return (
-                    <div className="w-full h-full flex flex-col items-center justify-center gap-4 bg-red-500/5">
-                      <FileText className="w-24 h-24 text-red-400" />
-                      <div className="text-center">
-                        <p className="text-foreground font-medium text-lg">PDF Document</p>
-                        <p className="text-sm text-muted-foreground mt-2">Tap to open full document</p>
-                        <p className="text-xs text-blue-400 mt-1">✓ Saved & AI Analyzed</p>
-                      </div>
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-red-500/5">
+                      <FileText className="w-12 h-12 text-red-400" />
+                      <p className="text-foreground font-medium text-sm">PDF Document</p>
+                      <p className="text-xs text-blue-400">✓ AI Analyzed</p>
                     </div>
                   );
                 } else {
                   return (
-                    <div className="w-full h-full flex flex-col items-center justify-center gap-3">
-                      <Shield className="w-20 h-20 text-foreground/20" />
-                      <span className="text-sm text-muted-foreground">No document attached</span>
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-2">
+                      <Shield className="w-12 h-12 text-foreground/20" />
+                      <span className="text-xs text-muted-foreground">No document</span>
                     </div>
                   );
                 }
@@ -2270,13 +2425,13 @@ const MyWarranty: React.FC = () => {
 
           {/* Progress Bar */}
           {timeRemaining && (
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className={`text-sm font-medium ${timeRemaining.textColor}`}>
+            <div className="mb-5">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className={`text-sm font-semibold ${timeRemaining.textColor}`}>
                   {timeRemaining.text}
                 </span>
               </div>
-              <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+              <div className="h-2.5 bg-white/10 rounded-full overflow-hidden">
                 <div 
                   className={`h-full ${timeRemaining.color} rounded-full transition-all`}
                   style={{ width: `${timeRemaining.progress}%` }}
@@ -2285,56 +2440,215 @@ const MyWarranty: React.FC = () => {
             </div>
           )}
 
-          {/* Details Grid */}
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">{t.provider}</p>
-              <p className="font-medium truncate">{selectedItem.provider || '-'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">{t.refNumber}</p>
-              <p className="font-medium truncate">{selectedItem.ref_number || '-'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">{t.purchaseDate}</p>
-              <p className="font-medium">{selectedItem.purchase_date ? format(parseISO(selectedItem.purchase_date), 'MM/dd/yy') : '-'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">{t.expiryDate}</p>
-              <p className="font-medium">{selectedItem.expiry_date ? format(parseISO(selectedItem.expiry_date), 'MM/dd/yy') : '-'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">{t.warrantyMonths}</p>
-              <p className="font-medium">{selectedItem.warranty_months || '-'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">{t.supportContact}</p>
-              <p className="font-medium truncate">{selectedItem.support_contact || '-'}</p>
-            </div>
-          </div>
-
-          {/* Notes */}
-          {selectedItem.notes && (
-            <div className="mb-6">
-              <p className="text-xs text-muted-foreground mb-1">{t.notes}</p>
-              <p className="text-sm">{selectedItem.notes}</p>
+          {/* AI Summary Section - Premium Card at Top */}
+          {aiSummary && (
+            <div className="mb-5">
+              <div className="relative p-4 rounded-2xl overflow-hidden bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-cyan-500/10 border border-blue-500/20">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-blue-500/20 to-transparent rounded-full blur-2xl" />
+                <div className="absolute bottom-0 left-0 w-20 h-20 bg-gradient-to-tr from-purple-500/20 to-transparent rounded-full blur-2xl" />
+                
+                <div className="relative z-10">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center shadow-lg">
+                      <MessageCircle className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-foreground">{isRTL ? 'ملخص وقتي' : 'Wakti Summary'}</h4>
+                      <p className="text-[10px] text-muted-foreground">{isRTL ? 'تم التحليل بالذكاء الاصطناعي' : 'AI-powered analysis'}</p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-foreground/90 leading-relaxed">{aiSummary}</p>
+                </div>
+              </div>
             </div>
           )}
 
-          {/* Tags */}
-          <div className="mb-6">
+          {/* Categorized Extracted Data - Dynamic Cards */}
+          {(() => {
+            const ed = extracted as Record<string, unknown>;
+            
+            // Category config with icons, colors, and labels
+            const categoryConfig: Record<string, { icon: string; color: string; labelEn: string; labelAr: string }> = {
+              document_info: { icon: '📄', color: 'blue', labelEn: 'Document Information', labelAr: 'معلومات المستند' },
+              personal_info: { icon: '👤', color: 'emerald', labelEn: 'Personal Information', labelAr: 'المعلومات الشخصية' },
+              contact_info: { icon: '📞', color: 'cyan', labelEn: 'Contact Information', labelAr: 'معلومات الاتصال' },
+              vehicle_info: { icon: '🚗', color: 'blue', labelEn: 'Vehicle Information', labelAr: 'معلومات المركبة' },
+              insurance_info: { icon: '🛡️', color: 'purple', labelEn: 'Insurance Details', labelAr: 'تفاصيل التأمين' },
+              financial_info: { icon: '💰', color: 'amber', labelEn: 'Financial Details', labelAr: 'المعلومات المالية' },
+              product_info: { icon: '📦', color: 'orange', labelEn: 'Product Information', labelAr: 'معلومات المنتج' },
+              medical_info: { icon: '🏥', color: 'red', labelEn: 'Medical Information', labelAr: 'المعلومات الطبية' },
+              property_info: { icon: '🏠', color: 'teal', labelEn: 'Property Information', labelAr: 'معلومات العقار' },
+              education_info: { icon: '🎓', color: 'indigo', labelEn: 'Education Information', labelAr: 'المعلومات التعليمية' },
+              employment_info: { icon: '💼', color: 'slate', labelEn: 'Employment Information', labelAr: 'معلومات التوظيف' },
+              company_info: { icon: '🏢', color: 'violet', labelEn: 'Company Information', labelAr: 'معلومات الشركة' },
+              additional_info: { icon: '📝', color: 'gray', labelEn: 'Additional Information', labelAr: 'معلومات إضافية' },
+            };
+            
+            // Get color classes for 'sexy' headers with better contrast
+            const getColorClasses = (color: string) => ({
+              bg: `from-${color}-500/25 via-${color}-500/15 to-transparent`,
+              text: `text-${color}-500 dark:text-${color}-400`,
+              border: `border-${color}-500/40`,
+              iconBg: `bg-${color}-500/20`,
+              fieldBg: `bg-${color}-500/5`,
+              fieldBorder: `border-${color}-500/20`,
+            });
+            
+            // Check if extracted_data has categorized structure
+            const hasCategorizedData = Object.keys(categoryConfig).some(cat => 
+              ed[cat] && typeof ed[cat] === 'object' && Object.keys(ed[cat] as object).length > 0
+            );
+            
+            // Render a category card
+            const renderCategoryCard = (categoryKey: string, data: Record<string, unknown>) => {
+              const config = categoryConfig[categoryKey];
+              if (!config) return null;
+              
+              const fields = Object.entries(data).filter(([, val]) => {
+                if (!val || val === 'null' || val === '-' || val === '') return false;
+                return true;
+              });
+              
+              if (fields.length === 0) return null;
+              
+              const colors = getColorClasses(config.color);
+              const isCollapsed = collapsedSections[categoryKey];
+              
+              return (
+                <div key={categoryKey} className={`rounded-2xl border transition-all duration-300 mb-4 overflow-hidden ${isCollapsed ? 'bg-white/5 border-white/10' : `bg-white/[0.08] ${colors.border} shadow-xl`}`}>
+                  <button 
+                    onClick={() => toggleSection(categoryKey)}
+                    className={`w-full px-5 py-4 flex items-center justify-between hover:bg-white/5 active:scale-[0.99] transition-all duration-200 relative group`}
+                  >
+                    {!isCollapsed && <div className={`absolute inset-0 bg-gradient-to-r ${colors.bg} opacity-60`} />}
+                    
+                    <div className="flex items-center gap-4 relative z-10">
+                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-2xl shadow-lg ${colors.iconBg} border border-white/20 group-hover:scale-110 transition-transform duration-300`}>
+                        {config.icon}
+                      </div>
+                      <div className="text-left">
+                        <h5 className={`text-sm font-black uppercase tracking-widest ${isCollapsed ? 'text-foreground' : colors.text} transition-colors duration-300 drop-shadow-sm`}>
+                          {isRTL ? config.labelAr : config.labelEn}
+                        </h5>
+                        <p className={`text-[10px] font-black uppercase tracking-tighter ${isCollapsed ? 'text-muted-foreground' : 'text-foreground/70'}`}>
+                          {fields.length} {isRTL ? 'حقل مكتشف' : 'fields discovered'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-500 shadow-sm ${isCollapsed ? 'bg-white/10 text-foreground' : `${colors.iconBg} ${colors.text} rotate-180`}`}>
+                      <ChevronDown className="w-5 h-5 stroke-[3px]" />
+                    </div>
+                  </button>
+
+                  {!isCollapsed && (
+                    <div className="p-6 pt-2 grid grid-cols-2 md:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                      {fields.map(([key, val], idx) => {
+                        const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                        const value = String(val);
+                        const isLongValue = value.length > 35;
+                        const isMonoValue = key.includes('number') || key.includes('_no') || key.includes('_id') || 
+                                           key.includes('chassis') || key.includes('plate') || key.includes('vin') ||
+                                           key.includes('iban') || key.includes('serial');
+                        
+                        return (
+                          <div 
+                            key={`${key}-${idx}`} 
+                            className={`p-4 rounded-2xl ${colors.fieldBg} border ${colors.fieldBorder} hover:bg-white/5 transition-all duration-200 shadow-sm group/field`}
+                          >
+                            <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest mb-2 opacity-80 group-hover/field:opacity-100 transition-opacity">{label}</p>
+                            <p className={`text-[14px] font-bold text-foreground break-words leading-tight ${isMonoValue ? 'font-mono text-[13px] tracking-tighter text-blue-500 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md inline-block' : ''}`}>
+                              {value}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            };
+            
+            // If data is categorized, render category cards
+            if (hasCategorizedData) {
+              return (
+                <div className="mb-5">
+                  {Object.keys(categoryConfig).map(catKey => {
+                    const catData = ed[catKey] as Record<string, unknown> | undefined;
+                    if (!catData || typeof catData !== 'object') return null;
+                    return renderCategoryCard(catKey, catData);
+                  })}
+                </div>
+              );
+            }
+            
+            // Fallback: If data is flat (not categorized), show all fields in one card
+            const skipKeys = ['raw_ocr_text', 'raw_text', 'user_tags', 'ai_summary', 'summary'];
+            const allFields = Object.entries(ed).filter(([key, val]) => {
+              if (skipKeys.includes(key)) return false;
+              if (!val || val === 'null' || val === '-') return false;
+              if (typeof val === 'object') return false;
+              const strVal = String(val).trim();
+              if (!strVal || strVal.length > 200) return false;
+              return true;
+            });
+            
+            if (allFields.length === 0) return null;
+            
+            return (
+              <div className="mb-5">
+                <div className="rounded-xl bg-white/5 border border-white/10 overflow-hidden">
+                  <button 
+                    onClick={() => toggleSection('additional_info')}
+                    className="w-full px-4 py-3 bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border-b border-white/10 flex items-center justify-between hover:opacity-90 transition-all"
+                  >
+                    <h5 className="text-xs font-bold text-blue-400 uppercase tracking-wide flex items-center gap-2">
+                      <span>📋</span> {isRTL ? 'البيانات المستخرجة' : 'Extracted Data'}
+                      <span className="text-[10px] font-normal opacity-70">({allFields.length})</span>
+                    </h5>
+                    <ChevronDown className={`w-4 h-4 text-blue-400 transition-transform ${collapsedSections.additional_info ? '-rotate-90' : ''}`} />
+                  </button>
+                  {!collapsedSections.additional_info && (
+                    <div className="p-4 grid grid-cols-2 gap-3">
+                      {allFields.map(([key, val], idx) => {
+                        const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                        const value = String(val);
+                        const isLongValue = value.length > 35;
+                        const isMonoValue = key.includes('number') || key.includes('_no') || key.includes('_id') || 
+                                           key.includes('chassis') || key.includes('plate') || key.includes('vin');
+                        
+                        return (
+                          <div key={`${key}-${idx}`} className={isLongValue ? 'col-span-2' : ''}>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">{label}</p>
+                            <p className={`text-sm font-semibold text-foreground ${isMonoValue ? 'font-mono text-xs' : ''}`}>
+                              {value}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* User Tags with Edit */}
+          <div className="mb-5">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-muted-foreground">Tags</p>
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                {isRTL ? 'التصنيفات' : 'Tags'}
+              </h4>
               <Button
                 variant="ghost"
                 size="sm"
+                className="h-7 px-2 text-xs"
                 onClick={() => {
-                  const currentTags = getUserTags(selectedItem);
-                  setDetailTagsInput(currentTags.join(', '));
+                  setDetailTagsInput(userTags.join(', '));
                   setIsEditingTags(true);
                 }}
               >
-                Edit
+                {isRTL ? 'تعديل' : 'Edit'}
               </Button>
             </div>
 
@@ -2343,11 +2657,13 @@ const MyWarranty: React.FC = () => {
                 <Input
                   value={detailTagsInput}
                   onChange={(e) => setDetailTagsInput(e.target.value)}
+                  placeholder={isRTL ? 'أدخل التصنيفات مفصولة بفواصل' : 'Enter tags separated by commas'}
                   className="bg-white/5 border-white/10"
                 />
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
+                    size="sm"
                     className="flex-1"
                     onClick={() => {
                       setIsEditingTags(false);
@@ -2357,6 +2673,7 @@ const MyWarranty: React.FC = () => {
                     {t.cancel}
                   </Button>
                   <Button
+                    size="sm"
                     className="flex-1 bg-gradient-to-r from-blue-500 to-cyan-500"
                     onClick={async () => {
                       if (!user) return;
@@ -2397,11 +2714,11 @@ const MyWarranty: React.FC = () => {
               </div>
             ) : (
               <div className="flex gap-2 flex-wrap">
-                {getUserTags(selectedItem).length === 0 ? (
-                  <span className="text-sm text-muted-foreground">—</span>
+                {userTags.length === 0 ? (
+                  <span className="text-sm text-muted-foreground italic">{isRTL ? 'لا توجد تصنيفات' : 'No tags yet'}</span>
                 ) : (
-                  getUserTags(selectedItem).map((tag) => (
-                    <span key={tag} className="px-2 py-0.5 rounded-full text-xs bg-white/5 border border-white/10 text-foreground/80">
+                  userTags.map((tag) => (
+                    <span key={tag} className="px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 text-foreground/90">
                       {tag}
                     </span>
                   ))
@@ -2409,14 +2726,6 @@ const MyWarranty: React.FC = () => {
               </div>
             )}
           </div>
-
-          {/* AI Summary */}
-          {selectedItem.ai_summary && (
-            <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 mb-6">
-              <h4 className="text-sm font-medium text-blue-400 mb-2">AI Summary</h4>
-              <p className="text-sm text-muted-foreground">{selectedItem.ai_summary}</p>
-            </div>
-          )}
 
           {/* View Receipt Button */}
           {selectedItem.receipt_url && (
@@ -2557,19 +2866,7 @@ const MyWarranty: React.FC = () => {
     >
       {viewMode === 'add' ? renderAddView() : viewMode === 'detail' ? renderDetailView() : viewMode === 'ask' ? renderAskView() : renderMainView()}
 
-      {/* Center-bottom FAB (+) - Only show when on docs tab in warranties view */}
-      {viewMode !== 'add' && viewMode !== 'detail' && viewMode !== 'ask' && mainTab === 'docs' && activeTab === 'warranties' && warranties.length > 0 && (
-        <div className="fixed left-1/2 -translate-x-1/2 bottom-20 z-50">
-          <button
-            type="button"
-            onClick={() => setViewMode('add')}
-            className="w-14 h-14 rounded-full btn-enhanced flex items-center justify-center active:scale-95 transition"
-            aria-label={t.addNew}
-          >
-            <Plus className="w-7 h-7 text-white" />
-          </button>
-        </div>
-      )}
+      {/* Removed floating plus button from bottom center */}
 
       {/* Document Viewer Modal */}
       {isDocumentModalOpen && documentToView && (
