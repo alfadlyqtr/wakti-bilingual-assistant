@@ -33,8 +33,13 @@ import {
   PinIcon,
   Heart,
   Smartphone,
-  RefreshCw
+  RefreshCw,
+  ExternalLink,
+  Copy,
+  Check
 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Switch } from "@/components/ui/switch";
 import {
   isNativeCalendarAvailable,
@@ -57,6 +62,7 @@ import {
 
 export const UnifiedCalendar: React.FC = React.memo(() => {
   const { language, theme } = useTheme();
+  const { user } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [view, setView] = useState<CalendarView>('month');
@@ -72,7 +78,12 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
   const doubleTapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastTapRef = useRef<number>(0);
   
-  // Phone calendar sync state
+  // Calendar subscription state
+  const [calendarFeedToken, setCalendarFeedToken] = useState<string | null>(null);
+  const [showSubscribeDialog, setShowSubscribeDialog] = useState(false);
+  const [urlCopied, setUrlCopied] = useState(false);
+  
+  // Phone calendar sync state (legacy - keeping for now)
   const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(() => {
     try {
       return localStorage.getItem('wakti_calendar_auto_sync') === 'true';
@@ -98,6 +109,84 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
   useEffect(() => {
     setNativeCalendarAvailable(isNativeCalendarAvailable());
   }, []);
+  
+  // Fetch or generate calendar feed token
+  useEffect(() => {
+    const fetchOrCreateToken = async () => {
+      if (!user?.id) return;
+      
+      try {
+        // First, try to get existing token (using type assertion since column was just added)
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('calendar_feed_token')
+          .eq('id', user.id)
+          .single() as { data: { calendar_feed_token: string | null } | null; error: any };
+        
+        if (error) {
+          console.error('Error fetching calendar token:', error);
+          return;
+        }
+        
+        if (profile?.calendar_feed_token) {
+          setCalendarFeedToken(profile.calendar_feed_token);
+        } else {
+          // Generate a new token
+          const newToken = btoa(crypto.getRandomValues(new Uint8Array(32)).toString());
+          
+          const { error: updateError } = await supabase
+            .from('profiles')
+            .update({ calendar_feed_token: newToken } as any)
+            .eq('id', user.id);
+          
+          if (!updateError) {
+            setCalendarFeedToken(newToken);
+          }
+        }
+      } catch (err) {
+        console.error('Error with calendar token:', err);
+      }
+    };
+    
+    fetchOrCreateToken();
+  }, [user?.id]);
+  
+  // Generate the calendar subscription URL
+  const getCalendarSubscribeUrl = useCallback(() => {
+    if (!user?.id || !calendarFeedToken) return null;
+    const baseUrl = 'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/calendar-ics-feed';
+    return `${baseUrl}?user_id=${user.id}&token=${encodeURIComponent(calendarFeedToken)}`;
+  }, [user?.id, calendarFeedToken]);
+  
+  // Get webcal URL (for direct subscription)
+  const getWebcalUrl = useCallback(() => {
+    const httpUrl = getCalendarSubscribeUrl();
+    if (!httpUrl) return null;
+    return httpUrl.replace('https://', 'webcal://');
+  }, [getCalendarSubscribeUrl]);
+  
+  // Handle subscribe to calendar
+  const handleSubscribeToCalendar = useCallback(() => {
+    const webcalUrl = getWebcalUrl();
+    if (webcalUrl) {
+      window.location.href = webcalUrl;
+    }
+  }, [getWebcalUrl]);
+  
+  // Copy URL to clipboard
+  const handleCopyUrl = useCallback(async () => {
+    const url = getCalendarSubscribeUrl();
+    if (url) {
+      try {
+        await navigator.clipboard.writeText(url);
+        setUrlCopied(true);
+        toast.success(language === 'ar' ? 'تم نسخ الرابط' : 'URL copied!');
+        setTimeout(() => setUrlCopied(false), 2000);
+      } catch {
+        toast.error(language === 'ar' ? 'فشل النسخ' : 'Failed to copy');
+      }
+    }
+  }, [getCalendarSubscribeUrl, language]);
   
   // Use optimized calendar data hook to prevent freezing!
   const {
@@ -753,23 +842,17 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
       <div className="flex flex-col space-y-2 p-3">
         {/* Top bar with sync and date controls */}
         <div className="flex items-center justify-between w-full gap-2">
-          {/* Sync button - ALWAYS visible */}
+          {/* Subscribe to Calendar button */}
           <Button
             type="button"
             variant="default"
             size="sm"
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              if (isSyncing) return;
-              toast.info(language === 'ar' ? 'جاري المزامنة...' : 'Syncing...');
-              syncCalendars(syncDirection);
-            }}
-            disabled={isSyncing}
+            onClick={() => setShowSubscribeDialog(true)}
             className="flex items-center gap-1.5 min-w-[100px] bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95"
           >
-            <RefreshCw className={cn("h-4 w-4", isSyncing && "animate-spin")} />
+            <CalendarIcon className="h-4 w-4" />
             <span className="font-medium">
-              {language === 'ar' ? 'مزامنة' : 'Sync'}
+              {language === 'ar' ? 'اشتراك' : 'Subscribe'}
             </span>
           </Button>
           
@@ -894,98 +977,9 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
               <Plus className="h-6 w-6" />
             </Button>
             
-            {/* Floating Sync Button - positioned on left side */}
-            <Button 
-              variant="outline" 
-              size="icon" 
-              onClick={() => {
-                toast.info(language === 'ar' ? 'جاري المزامنة...' : 'Syncing...');
-                syncCalendars(syncDirection);
-              }}
-              disabled={isSyncing}
-              title={language === 'ar' ? 'مزامنة التقويم' : 'Sync Calendar'}
-              className="fixed bottom-24 left-4 z-10 rounded-full shadow-lg h-12 w-12 bg-blue-600 text-white hover:bg-blue-700"
-            >
-              <RefreshCw className={cn("h-6 w-6", isSyncing && "animate-spin")} />
-            </Button>
           </div>
         </div>
         
-        {/* Phone Calendar Sync Section */}
-        {nativeCalendarAvailable && (
-          <div className="flex flex-col p-3 rounded-lg bg-muted/50 border">
-            {/* Top row with sync button and auto toggle */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Smartphone className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">
-                  {language === 'ar' ? 'مزامنة التقويم' : 'Calendar Sync'}
-                </span>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                {/* Manual sync button */}
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => syncCalendars(syncDirection)}
-                  disabled={isSyncing}
-                  className="flex items-center gap-1 h-8 px-3"
-                >
-                  <RefreshCw className={cn("h-4 w-4", isSyncing && "animate-spin")} />
-                  <span>
-                    {language === 'ar' ? 'مزامنة' : 'Sync'}
-                  </span>
-                </Button>
-              </div>
-            </div>
-            
-            {/* Bottom row with direction controls */}
-            <div className="flex items-center justify-between mt-3 gap-2">
-              <div className="flex gap-2 flex-1">
-                <Button 
-                  variant={syncDirection === 'both' ? 'default' : 'outline'} 
-                  size="sm"
-                  onClick={() => handleSyncDirectionChange('both')}
-                  className="flex-1 h-8"
-                >
-                  <RefreshCw className="h-3 w-3 mr-1" />
-                  {language === 'ar' ? 'ثنائي' : 'Both'}
-                </Button>
-                
-                <Button 
-                  variant={syncDirection === 'to_phone' ? 'default' : 'outline'} 
-                  size="sm"
-                  onClick={() => handleSyncDirectionChange('to_phone')}
-                  className="flex-1 h-8"
-                >
-                  → {language === 'ar' ? 'إلى' : 'To'}
-                </Button>
-                
-                <Button 
-                  variant={syncDirection === 'from_phone' ? 'default' : 'outline'} 
-                  size="sm"
-                  onClick={() => handleSyncDirectionChange('from_phone')}
-                  className="flex-1 h-8"
-                >
-                  ← {language === 'ar' ? 'من' : 'From'}
-                </Button>
-              </div>
-              
-              {/* Auto-sync toggle */}
-              <div className="flex items-center gap-2 ml-2">
-                <span className="text-xs text-muted-foreground whitespace-nowrap">
-                  {language === 'ar' ? 'تلقائي' : 'Auto'}
-                </span>
-                <Switch
-                  checked={autoSyncEnabled}
-                  onCheckedChange={handleAutoSyncToggle}
-                  aria-label={language === 'ar' ? 'المزامنة التلقائية' : 'Auto-sync'}
-                />
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       <div
@@ -1035,6 +1029,73 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
         initialDate={selectedDate || new Date()}
         entry={editEntry}
       />
+
+      {/* Subscribe to Calendar Dialog */}
+      <Dialog open={showSubscribeDialog} onOpenChange={setShowSubscribeDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-center">
+              {language === 'ar' ? 'مزامنة التقويم مع هاتفك' : 'Sync Calendar to Your Phone'}
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <p className="text-sm text-muted-foreground text-center">
+              {language === 'ar' 
+                ? 'اشترك في تقويم Wakti لمزامنة المهام والتذكيرات والمواعيد تلقائياً مع تطبيق التقويم على هاتفك.'
+                : 'Subscribe to your Wakti calendar to automatically sync tasks, reminders, and appointments to your phone\'s calendar app.'}
+            </p>
+            
+            {/* Main Subscribe Button */}
+            <Button
+              onClick={handleSubscribeToCalendar}
+              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
+              size="lg"
+            >
+              <CalendarIcon className="h-5 w-5 mr-2" />
+              {language === 'ar' ? 'اشتراك في التقويم' : 'Subscribe to Calendar'}
+            </Button>
+            
+            {/* Copy URL Section */}
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground text-center">
+                {language === 'ar' ? 'أو انسخ الرابط يدوياً:' : 'Or copy the URL manually:'}
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={getCalendarSubscribeUrl() || ''}
+                  title={language === 'ar' ? 'رابط الاشتراك في التقويم' : 'Calendar subscription URL'}
+                  aria-label={language === 'ar' ? 'رابط الاشتراك في التقويم' : 'Calendar subscription URL'}
+                  className="flex-1 px-3 py-2 text-xs bg-muted rounded-md border truncate"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyUrl}
+                  className="shrink-0"
+                >
+                  {urlCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+            
+            {/* Instructions */}
+            <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+              <p className="text-xs font-medium">
+                {language === 'ar' ? 'كيفية الاشتراك يدوياً:' : 'How to manually subscribe:'}
+              </p>
+              <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                <li>{language === 'ar' ? 'انسخ الرابط أعلاه' : 'Copy the URL above'}</li>
+                <li>{language === 'ar' ? 'افتح تطبيق التقويم (Google Calendar, Apple Calendar, Outlook)' : 'Open your calendar app (Google Calendar, Apple Calendar, Outlook)'}</li>
+                <li>{language === 'ar' ? 'ابحث عن "الاشتراك في تقويم" أو "إضافة تقويم بالرابط"' : 'Look for "Subscribe to Calendar" or "Add Calendar by URL"'}</li>
+                <li>{language === 'ar' ? 'الصق الرابط واتبع التعليمات' : 'Paste the URL and follow the prompts'}</li>
+              </ol>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 });

@@ -878,24 +878,17 @@ const MyWarranty: React.FC = () => {
         newImages.push(urlData.publicUrl);
       }
 
-      // Create object URLs for immediate preview
-      const objectUrls = newImages.map(url => {
-        // If already a blob URL, use as is
-        if (url.startsWith('blob:')) return url;
-        // Otherwise create a new object URL
-        return URL.createObjectURL(new Blob([url], { type: 'image/jpeg' }));
-      });
-
+      // Use the Supabase public URLs directly for preview
       setNewItem(prev => {
         const updatedImages = [...prev.additional_images];
         let primaryImage = prev.image_url;
 
         // Handle first image vs additional images
         if (!primaryImage) {
-          primaryImage = objectUrls[0];
-          updatedImages.push(...objectUrls.slice(1));
+          primaryImage = newImages[0];
+          updatedImages.push(...newImages.slice(1));
         } else {
-          updatedImages.push(...objectUrls);
+          updatedImages.push(...newImages);
         }
 
         return {
