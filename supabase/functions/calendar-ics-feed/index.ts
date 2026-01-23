@@ -127,21 +127,21 @@ serve(async (req) => {
     const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
     const oneYearFromNow = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
 
-    // Fetch tasks
+    // Fetch tasks from tr_tasks table
     const { data: tasks } = await supabase
-      .from("tasks")
+      .from("tr_tasks")
       .select("*")
       .eq("user_id", userId)
       .gte("due_date", threeMonthsAgo.toISOString())
       .lte("due_date", oneYearFromNow.toISOString());
 
-    // Fetch reminders
+    // Fetch reminders from tr_reminders table
     const { data: reminders } = await supabase
-      .from("reminders")
+      .from("tr_reminders")
       .select("*")
       .eq("user_id", userId)
-      .gte("reminder_time", threeMonthsAgo.toISOString())
-      .lte("reminder_time", oneYearFromNow.toISOString());
+      .gte("due_date", threeMonthsAgo.toISOString())
+      .lte("due_date", oneYearFromNow.toISOString());
 
     // Fetch maw3d events
     const { data: maw3dEvents } = await supabase
@@ -151,13 +151,13 @@ serve(async (req) => {
       .gte("event_date", threeMonthsAgo.toISOString().split('T')[0])
       .lte("event_date", oneYearFromNow.toISOString().split('T')[0]);
 
-    // Fetch manual calendar entries
+    // Fetch events from events table
     const { data: manualEntries } = await supabase
-      .from("calendar_entries")
+      .from("events")
       .select("*")
       .eq("user_id", userId)
-      .gte("start_date", threeMonthsAgo.toISOString())
-      .lte("start_date", oneYearFromNow.toISOString());
+      .gte("event_date", threeMonthsAgo.toISOString())
+      .lte("event_date", oneYearFromNow.toISOString());
 
     // Build ICS content
     const events: string[] = [];
@@ -182,11 +182,11 @@ END:VEVENT`);
       }
     }
 
-    // Add reminders
+    // Add reminders (tr_reminders uses due_date, not reminder_time)
     if (reminders) {
       for (const reminder of reminders) {
-        if (!reminder.reminder_time) continue;
-        const reminderTime = new Date(reminder.reminder_time);
+        if (!reminder.due_date) continue;
+        const reminderTime = new Date(reminder.due_date);
         const uid = generateUID(reminder.id, "reminder");
         
         events.push(`BEGIN:VEVENT
@@ -195,7 +195,7 @@ DTSTAMP:${formatDateToICS(now)}
 DTSTART:${formatDateToICS(reminderTime)}
 DTEND:${formatDateToICS(new Date(reminderTime.getTime() + 30 * 60 * 1000))}
 SUMMARY:${escapeICS(reminder.title || 'Reminder')}
-DESCRIPTION:${escapeICS(reminder.description || '')}
+DESCRIPTION:${escapeICS(reminder.notes || '')}
 CATEGORIES:REMINDER
 BEGIN:VALARM
 ACTION:DISPLAY
@@ -245,13 +245,14 @@ END:VEVENT`);
       }
     }
 
-    // Add manual calendar entries
+    // Add events from events table (uses event_date, not start_date)
     if (manualEntries) {
       for (const entry of manualEntries) {
-        if (!entry.start_date) continue;
-        const startDate = new Date(entry.start_date);
-        const endDate = entry.end_date ? new Date(entry.end_date) : new Date(startDate.getTime() + 60 * 60 * 1000);
-        const uid = generateUID(entry.id, "manual");
+        if (!entry.event_date) continue;
+        const startDate = new Date(entry.event_date);
+        // Events table might have start_time and end_time
+        const endDate = entry.end_time ? new Date(entry.event_date + 'T' + entry.end_time) : new Date(startDate.getTime() + 60 * 60 * 1000);
+        const uid = generateUID(entry.id, "event");
         
         events.push(`BEGIN:VEVENT
 UID:${uid}
@@ -260,7 +261,7 @@ DTSTART:${formatDateToICS(startDate)}
 DTEND:${formatDateToICS(endDate)}
 SUMMARY:${escapeICS(entry.title || 'Event')}
 DESCRIPTION:${escapeICS(entry.description || '')}
-CATEGORIES:MANUAL
+CATEGORIES:EVENT
 END:VEVENT`);
       }
     }
