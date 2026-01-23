@@ -242,6 +242,52 @@ export default function SandpackStudio({
   const [consoleOpen, setConsoleOpen] = useState(false);
   const [fileTreeCollapsed, setFileTreeCollapsed] = useState(false);
   
+  // Remove Sandpack resize handle - it causes issues in preview-only mode
+  useEffect(() => {
+    const removeResizeHandles = () => {
+      // Target all possible resize handle elements
+      const selectors = [
+        '.sp-resize-handler',
+        '[class*="sp-resize"]',
+        '[class*="ResizeHandler"]',
+        '[data-resize-handle]',
+      ];
+      
+      selectors.forEach(selector => {
+        document.querySelectorAll(selector).forEach(el => {
+          (el as HTMLElement).style.display = 'none';
+          (el as HTMLElement).style.visibility = 'hidden';
+          (el as HTMLElement).style.width = '0';
+          (el as HTMLElement).style.height = '0';
+          (el as HTMLElement).style.pointerEvents = 'none';
+        });
+      });
+      
+      // Also target by title attribute (Arabic: "اسحب لتغيير العرض")
+      document.querySelectorAll('[title*="اسحب"], [title*="Drag"], [title*="resize"]').forEach(el => {
+        (el as HTMLElement).style.display = 'none';
+        (el as HTMLElement).style.visibility = 'hidden';
+      });
+    };
+    
+    // Run immediately and after a delay (for dynamic elements)
+    removeResizeHandles();
+    const timer1 = setTimeout(removeResizeHandles, 100);
+    const timer2 = setTimeout(removeResizeHandles, 500);
+    const timer3 = setTimeout(removeResizeHandles, 1000);
+    
+    // Also use MutationObserver to catch dynamically added elements
+    const observer = new MutationObserver(removeResizeHandles);
+    observer.observe(document.body, { childList: true, subtree: true });
+    
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+      observer.disconnect();
+    };
+  }, [viewMode]);
+  
   // Check if we have valid files (not just empty or placeholder)
   // Enhanced validation to catch HTML error pages and malformed responses
   const hasValidFiles = useMemo(() => {
@@ -652,18 +698,13 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
         {/* SANDPACK ENGINE */}
         <div className="flex-1 relative min-h-0 overflow-hidden flex flex-col">
           <div className="flex-1 min-h-0">
-            <SandpackLayout style={{ height: '100%', width: '100%', border: 'none', backgroundColor: '#0c0f14' }}>
-
-              {/* LEFT SIDE: COLLAPSIBLE FILE TREE */}
-              {(viewMode === 'code') && (
+            {/* CODE MODE: Use SandpackLayout for editor + file tree */}
+            {viewMode === 'code' && (
+              <SandpackLayout style={{ height: '100%', width: '100%', border: 'none', backgroundColor: '#0c0f14' }}>
                 <CollapsibleFileTree 
                   isCollapsed={fileTreeCollapsed}
                   onToggleCollapse={() => setFileTreeCollapsed(prev => !prev)}
                 />
-              )}
-
-              {/* CENTER: CODE EDITOR */}
-              {(viewMode === 'code') && (
                 <div className="flex-1 h-full min-w-0 border-r border-white/10 overflow-hidden">
                   <SandpackCodeEditor 
                     showTabs={false}
@@ -673,10 +714,11 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                     style={{ height: '100%', overflow: 'auto' }} 
                   />
                 </div>
-              )}
+              </SandpackLayout>
+            )}
 
-              {/* RIGHT: PREVIEW */}
-              {(viewMode === 'preview') && (
+            {/* PREVIEW MODE: Render preview OUTSIDE SandpackLayout to avoid resize handle */}
+            {viewMode === 'preview' && (
                 <div className="flex-1 h-full min-w-0 relative bg-black overflow-hidden group">
                   {/* CSS to hide the default Sandpack error screen and fix scrollbar styling */}
                   <style dangerouslySetInnerHTML={{ __html: `
@@ -690,16 +732,28 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                     .sp-preview-container iframe {
                       background-color: transparent !important;
                     }
-                    /* Hide Sandpack resize handles */
+                    /* AGGRESSIVE: Hide ALL Sandpack resize handles and drag elements */
                     .sp-resize-handler,
                     .sp-stack > .sp-resize-handler,
                     [class*="sp-resize"],
-                    [data-resize-handle] {
+                    [class*="resize-handler"],
+                    [class*="ResizeHandler"],
+                    [data-resize-handle],
+                    [draggable="true"],
+                    .sp-layout > div[style*="cursor: col-resize"],
+                    .sp-layout > div[style*="cursor: ew-resize"],
+                    div[title*="اسحب"],
+                    div[title*="Drag"],
+                    div[title*="resize"],
+                    div[title*="width"] {
                       display: none !important;
                       width: 0 !important;
                       height: 0 !important;
                       opacity: 0 !important;
+                      visibility: hidden !important;
                       pointer-events: none !important;
+                      position: absolute !important;
+                      left: -9999px !important;
                     }
                     /* Hide any vertical dividers/separators */
                     .sp-layout > .sp-stack + .sp-stack::before,
@@ -774,7 +828,6 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
               {onRuntimeError && (
                 <SandpackErrorListener onErrorDetected={onRuntimeError} />
               )}
-            </SandpackLayout>
           </div>
 
           {/* CONSOLE PANEL - Integrated at bottom */}

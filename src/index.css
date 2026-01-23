@@ -2287,3 +2287,27 @@ body.keyboard-visible {
   transform: rotateY(180deg);
   z-index: 1;
 }
+
+/* ============================================
+   SANDPACK RESIZE HANDLE - FORCE HIDE
+   ============================================ */
+.sp-resize-handler,
+.sp-layout .sp-resize-handler,
+[class*="sp-resize"],
+[class*="ResizeHandler"],
+[data-resize-handle],
+.sp-layout > div:not(.sp-stack):not(.sp-preview-container):not(.sp-code-editor) {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* Target the specific resize handle structure */
+.sp-layout > div[style*="position: absolute"],
+.sp-layout > div[style*="cursor"] {
+  display: none !important;
+  visibility: hidden !important;
+}

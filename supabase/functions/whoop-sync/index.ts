@@ -277,15 +277,16 @@ serve(async (req: Request) => {
         const asNumber = (v: any) => (typeof v === "number" ? v : null);
 
         if (cycles.length) {
-          const rows = cycles.map((item: any) => ({
+          const rows = cycles.map((item) => ({
             id: item.id,
             user_id: u.user_id,
             start: toDate(item.start),
             end: toDate(item.end),
+            avg_hr_bpm: asNumber(item.score?.average_heart_rate ?? item.avg_hr_bpm),
             day_strain: asNumber(item.score?.strain ?? item.day_strain),
-            avg_hr_bpm: asNumber(item.score?.average_heart_rate ?? item.avg_hr ?? item.avg_hr_bpm),
             training_load: asNumber(item.training_load ?? item.score?.training_load),
             data: item,
+            created_at_ts: new Date().toISOString(),
           }));
           console.log(`whoop-sync: Upserting ${rows.length} cycles for user ${u.user_id}`);
           const { error: errCycles, count } = await admin.from("whoop_cycles").upsert(rows, { onConflict: "id", count: 'exact' });
@@ -314,6 +315,7 @@ serve(async (req: Request) => {
             duration_sec: asNumber(item.duration ?? item.duration_sec ?? (item.score?.stage_summary?.total_in_bed_milli ? Math.round(item.score.stage_summary.total_in_bed_milli / 1000) : null)),
             performance_pct: asNumber(item.score?.sleep_performance_percentage ?? item.performance_pct),
             data: item,
+            created_at_ts: new Date().toISOString(),
           }));
           console.log(`whoop-sync: Upserting ${rows.length} sleeps (${new Set(rows.map(r => r.id)).size} unique IDs, from ${sleeps.length} raw) for user ${u.user_id}`);
           
@@ -346,6 +348,7 @@ serve(async (req: Request) => {
             strain: asNumber(item.score?.strain ?? item.strain),
             avg_hr_bpm: asNumber(item.score?.average_heart_rate ?? item.avg_hr_bpm),
             data: item,
+            created_at_ts: new Date().toISOString(),
           }));
           console.log(`whoop-sync: Upserting ${rows.length} workouts for user ${u.user_id}`);
           
@@ -386,6 +389,7 @@ serve(async (req: Request) => {
             hrv_ms: asNumber(item.score?.hrv_rmssd_milli ?? item.hrv_rmssd_milli ?? item.heart_rate_variability_rmssd_milli),
             rhr_bpm: asNumber(item.score?.resting_heart_rate ?? item.resting_heart_rate ?? item.rhr_bpm ?? item.rhr),
             data: item,
+            created_at_ts: new Date().toISOString(),
           }));
           console.log(`whoop-sync: Upserting ${rows.length} recoveries (${new Set(rows.map(r => r.sleep_id)).size} unique sleep_ids, from ${recoveries.length} raw) for user ${u.user_id}`);
           
