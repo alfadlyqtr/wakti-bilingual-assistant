@@ -168,6 +168,45 @@ export function SmartMediaManager({
       }
     });
 
+    // Save any new images to the backend
+    const saveNewImages = async () => {
+      const existingImages = await supabase
+        .from('project_images')
+        .select('url')
+        .eq('project_id', projectId);
+
+      if (existingImages.error) {
+        console.error('Error loading existing images:', existingImages.error);
+        return;
+      }
+
+      const existingUrls = new Set((existingImages.data || []).map(img => img.url));
+      const newImages = images.filter(img => !existingUrls.has(img.src));
+
+      if (newImages.length > 0) {
+        const { error } = await supabase.from('project_images').insert(
+          newImages.map(img => ({
+            project_id: projectId,
+            url: img.src,
+            alt_text: img.alt,
+            location: img.location,
+            file_path: img.file,
+            source: img.src.includes('placehold.co') ? 'placeholder' :
+                   img.src.includes('freepik.com') ? 'freepik' : 'site'
+          }))
+        );
+
+        if (error) {
+          console.error('Error saving images to backend:', error);
+          toast.error(isRTLMode ? 'فشل حفظ الصور' : 'Failed to save images');
+        } else {
+          console.log(`Saved ${newImages.length} new images to backend`);
+        }
+      }
+    };
+
+    // Save images and update state
+    saveNewImages();
     setSiteImages(images);
     setLoadingSiteImages(false);
   };

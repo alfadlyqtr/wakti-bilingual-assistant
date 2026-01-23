@@ -13,6 +13,8 @@ import {
   Tag, Clock, CheckCircle, AlertTriangle, XCircle, Loader2,
   Edit2, ExternalLink, CreditCard, User, FolderOpen, ChevronDown, Phone, Mail, Globe, MapPin, Link2, Send
 } from 'lucide-react';
+import { ArrowLeft, Camera, CreditCard, ExternalLink, FileText, FolderOpen, MessageCircle, Plus, Send, Shield, User, X } from 'lucide-react';
+import { ScannerOverlay } from '../components/ScannerOverlay';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -741,6 +743,7 @@ const MyWarranty: React.FC = () => {
   const [showCelebration, setShowCelebration] = useState(false);
   const [isLoadingCard, setIsLoadingCard] = useState(true);
   const [cardInnerTab, setCardInnerTab] = useState<'mycard' | 'collected'>('mycard');
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [collectedCards, setCollectedCards] = useState<any[]>([]);
   
   // Get current active card
@@ -2146,6 +2149,13 @@ const MyWarranty: React.FC = () => {
 
   const renderMainView = () => (
     <div className="flex flex-col h-full w-full overflow-x-hidden">
+      {/* Scanner Overlay */}
+      <ScannerOverlay 
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        isRTL={isRTL}
+      />
+
       {/* Main 3-Tab Navigation */}
       <div className="px-4 pt-4 pb-2 solid-bg border-b border-white/10 w-full">
         <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as 'docs' | 'card' | 'cv')}>
@@ -2264,7 +2274,15 @@ const MyWarranty: React.FC = () => {
             {/* Upload Options */}
             <div className="grid grid-cols-2 gap-4 mb-6">
               <button
-                onClick={() => cameraInputRef.current?.click()}
+                onClick={() => {
+                  // Check if device has camera access
+                  if (!('mediaDevices' in navigator)) {
+                    // Fallback to regular file input
+                    cameraInputRef.current?.click();
+                    return;
+                  }
+                  setIsScannerOpen(true);
+                }}
                 className="enhanced-card p-6 flex flex-col items-center gap-3 active:scale-95 transition-transform"
               >
                 <Camera className="w-10 h-10 text-blue-400" />
