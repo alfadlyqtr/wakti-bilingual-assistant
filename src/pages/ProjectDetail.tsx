@@ -4192,11 +4192,37 @@ ${fixInstructions}
           }
 
           // Add AI response
-          setChatMessages(prev => [...prev, {
-            id: `assistant-${Date.now()}`,
-            role: 'assistant',
-            content: isRTL ? action.response.ar : action.response.en
-          }]);
+          const response = isRTL ? action.response.ar : action.response.en;
+          
+          // Handle async responses
+          if (typeof response === 'function') {
+            // Show loading message
+            const loadingMsg = isRTL ? '🔍 جاري تحليل الصور...' : '🔍 Analyzing images...';
+            setChatMessages(prev => [...prev, {
+              id: `loading-${Date.now()}`,
+              role: 'assistant',
+              content: loadingMsg
+            }]);
+
+            // Get async response
+            response(id || '').then(finalResponse => {
+              setChatMessages(prev => {
+                const filtered = prev.filter(msg => !msg.id.startsWith('loading-'));
+                return [...filtered, {
+                  id: `assistant-${Date.now()}`,
+                  role: 'assistant',
+                  content: finalResponse
+                }];
+              });
+            });
+          } else {
+            // Handle sync responses
+            setChatMessages(prev => [...prev, {
+              id: `assistant-${Date.now()}`,
+              role: 'assistant',
+              content: response
+            }]);
+          }
         }
         return;
       }
