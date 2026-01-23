@@ -321,6 +321,7 @@ interface RequestBody {
     recentEdits?: string[];  // Files that were recently edited
     chatHistory?: string;  // Recent chat context
   };
+  lang?: 'ar' | 'en';  // Language for generated content
 }
 
 type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
@@ -1387,7 +1388,145 @@ async function upsertProjectFiles(supabase: SupabaseAdminClient, projectId: stri
   if (error) throw new Error(`DB_FILES_UPSERT_FAILED: ${error.message}`);
 }
 
+// Entity facts database for grounding
+const ENTITY_FACTS: Record<string, { name: string; colors: string[]; colorNames: string[]; nicknames?: string[]; keyPlayers?: string[]; achievements?: string[] }> = {
+  'qatar': {
+    name: 'Qatar National Football Team',
+    colors: ['#7B252A', '#FFFFFF'],
+    colorNames: ['maroon', 'white'],
+    nicknames: ['Al-Annabi', 'The Maroons'],
+    keyPlayers: ['Hassan Al-Haydos', 'Akram Afif', 'Almoez Ali'],
+    achievements: ['2019 AFC Asian Cup Champions']
+  },
+  'saudi': {
+    name: 'Saudi Arabia National Football Team',
+    colors: ['#006C35', '#FFFFFF'],
+    colorNames: ['green', 'white'],
+    nicknames: ['The Green Falcons'],
+  },
+  'uae': {
+    name: 'UAE National Football Team',
+    colors: ['#FF0000', '#FFFFFF', '#00732F', '#000000'],
+    colorNames: ['red', 'white', 'green', 'black'],
+    nicknames: ['The Whites'],
+  },
+  'barcelona': {
+    name: 'FC Barcelona',
+    colors: ['#A50044', '#004D98'],
+    colorNames: ['deep red', 'blue'],
+    nicknames: ['Barça', 'Blaugrana'],
+  },
+  'real_madrid': {
+    name: 'Real Madrid CF',
+    colors: ['#FFFFFF', '#00529F'],
+    colorNames: ['white', 'blue'],
+    nicknames: ['Los Blancos', 'The Whites'],
+  },
+};
+
+// Function to extract theme from user prompt
+function extractThemeFromPrompt(prompt: string): string {
+  
+  // Check for specific entity mentions
+  if (/qatar|qatari|العنابي/i.test(prompt)) {
+    const facts = ENTITY_FACTS.qatar;
+    return `QATAR NATIONAL TEAM THEME - MANDATORY COLORS:
+- Primary: Maroon (#7B252A) - Use for headers, buttons, accents
+- Secondary: White (#FFFFFF) - Use for text, backgrounds
+- Background: Dark slate bg-[#0c0f14] with maroon accents
+- Cards: bg-slate-900/50 with maroon border accents
+- Text: text-white with maroon highlights
+- Use these EXACT colors for the Qatar national team. Team nickname: ${facts.nicknames?.join(', ')}
+- Key players to feature: ${facts.keyPlayers?.join(', ')}
+- Achievement: ${facts.achievements?.[0]}`;
+  }
+  
+  if (/saudi|السعودية|الأخضر/i.test(prompt)) {
+    return `SAUDI ARABIA THEME - MANDATORY COLORS:
+- Primary: Green (#006C35) - Use for headers, buttons, accents
+- Secondary: White (#FFFFFF) - Use for text, backgrounds
+- Background: Dark with green accents
+- Use these EXACT colors for Saudi Arabia.`;
+  }
+  
+  if (/uae|emirates|الإمارات/i.test(prompt)) {
+    return `UAE THEME - MANDATORY COLORS:
+- Primary: Red (#FF0000), Green (#00732F), Black (#000000)
+- Secondary: White (#FFFFFF)
+- Use UAE flag colors appropriately.`;
+  }
+  
+  if (/barcelona|barça|برشلونة/i.test(prompt)) {
+    return `FC BARCELONA THEME - MANDATORY COLORS:
+- Primary: Deep Red (#A50044) and Blue (#004D98)
+- Use Blaugrana colors throughout.`;
+  }
+  
+  if (/real madrid|ريال مدريد/i.test(prompt)) {
+    return `REAL MADRID THEME - MANDATORY COLORS:
+- Primary: White (#FFFFFF) with Blue (#00529F) accents
+- Clean, elegant design befitting Los Blancos.`;
+  }
+  
+  // Check for color mentions in prompt
+  const colorMentions: string[] = [];
+  if (/maroon|عنابي/i.test(prompt)) colorMentions.push('maroon (#7B252A)');
+  if (/blue|أزرق/i.test(prompt)) colorMentions.push('blue (#3b82f6)');
+  if (/green|أخضر/i.test(prompt)) colorMentions.push('green (#10b981)');
+  if (/red|أحمر/i.test(prompt)) colorMentions.push('red (#ef4444)');
+  if (/purple|بنفسجي/i.test(prompt)) colorMentions.push('purple (#8b5cf6)');
+  if (/orange|برتقالي/i.test(prompt)) colorMentions.push('orange (#f97316)');
+  if (/pink|وردي/i.test(prompt)) colorMentions.push('pink (#ec4899)');
+  if (/gold|ذهبي/i.test(prompt)) colorMentions.push('gold (#eab308)');
+  if (/black|أسود/i.test(prompt)) colorMentions.push('black (#000000)');
+  if (/white|أبيض/i.test(prompt)) colorMentions.push('white (#FFFFFF)');
+  
+  if (colorMentions.length > 0) {
+    return `USER SPECIFIED COLORS - MANDATORY:
+- Use these colors mentioned in the prompt: ${colorMentions.join(', ')}
+- Background: Dark slate bg-[#0c0f14] (MUST BE DARK)
+- Apply the specified colors to headers, buttons, accents, and highlights
+- Ensure good contrast with dark background`;
+  }
+  
+  // Check for style/mood mentions
+  if (/modern|عصري/i.test(prompt)) {
+    return `MODERN STYLE THEME:
+- Clean lines, minimal design
+- Background: Dark slate bg-[#0c0f14]
+- Accent: Indigo (#6366f1) and Purple (#8b5cf6)
+- Modern sans-serif fonts, subtle shadows`;
+  }
+  
+  if (/elegant|أنيق|luxury|فاخر/i.test(prompt)) {
+    return `ELEGANT/LUXURY THEME:
+- Sophisticated design with gold accents
+- Background: Deep dark bg-[#0c0f14]
+- Accent: Gold (#eab308) and Cream
+- Classic fonts, subtle animations`;
+  }
+  
+  if (/playful|fun|مرح/i.test(prompt)) {
+    return `PLAYFUL THEME:
+- Vibrant, energetic design
+- Background: Dark with colorful accents
+- Multiple bright colors: Pink, Orange, Cyan
+- Rounded corners, bouncy animations`;
+  }
+  
+  // Default fallback - let AI decide based on context
+  return `CONTEXT-AWARE THEME:
+- Analyze the user's request and choose appropriate colors for the domain
+- For sports: Use team colors if identifiable
+- For restaurants: Warm, appetizing colors
+- For tech/business: Professional blues and grays
+- For creative: Vibrant, artistic colors
+- Background: Dark slate bg-[#0c0f14] (MUST BE DARK)
+- NEVER use white/light backgrounds`;
+}
+
 const THEME_PRESETS: Record<string, string> = {
+  'user_prompt': 'DYNAMIC - Will be extracted from user prompt',
   'wakti-dark': `DARK THEME - MANDATORY COLORS:
 - Background: bg-[#0c0f14] or bg-slate-950 (MUST BE DARK)
 - Cards: bg-slate-900/50 or bg-white/5 with backdrop-blur
@@ -2591,6 +2730,7 @@ serve(async (req: Request) => {
     const uploadedAssets = Array.isArray(body.uploadedAssets) ? body.uploadedAssets : [];
     const backendContext = body.backendContext;
     const debugContext = body.debugContext;  // NEW: Captured errors from preview
+    const lang = (body.lang || 'en').toString(); // Language for content generation (ar/en)
     
     // Build debug context section for prompts (OPTION B: Smart Error Context)
     const debugContextStr = debugContext && (debugContext.errors?.length > 0 || debugContext.networkErrors?.length > 0) ? `
@@ -4858,10 +4998,23 @@ Call task_complete when finished.`;
     const job = await createJob(supabase, { projectId, userId, mode: safeMode, prompt });
 
     try {
-      const selectedThemeDesc = THEME_PRESETS[theme || 'none'] || THEME_PRESETS['none'];
+      // Handle 'user_prompt' theme - extract colors/style from the user's prompt
+      let selectedThemeDesc: string;
+      if (theme === 'user_prompt' || !theme) {
+        selectedThemeDesc = extractThemeFromPrompt(prompt);
+        console.log(`[Theme] Extracted from prompt: ${selectedThemeDesc.substring(0, 100)}...`);
+      } else {
+        selectedThemeDesc = THEME_PRESETS[theme] || THEME_PRESETS['none'];
+      }
       // CRITICAL: Force theme instructions to be the most important rule
       const themeEnforcement = `\n\nCRITICAL STYLE RULES (MUST FOLLOW):\n${selectedThemeDesc}\nEnsure ALL components use these exact colors and vibe. DO NOT USE DEFAULT COLORS.`;
-      const finalSystemPrompt = BASE_SYSTEM_PROMPT.replace("{{THEME_INSTRUCTIONS}}", themeEnforcement);
+      
+      // Language instructions for content generation
+      const langInstructions = lang === 'ar' 
+        ? `\n\n🌍 LANGUAGE REQUIREMENT - ARABIC (العربية):\n- Generate ALL user-facing text content in Arabic\n- Use Arabic script for ALL labels, buttons, headings, descriptions, and placeholder text\n- Add dir="rtl" to the root element for proper RTL layout\n- Keep code comments and variable names in English\n- Example: Instead of "Welcome" use "مرحباً", instead of "Contact Us" use "تواصل معنا"`
+        : '';
+      
+      const finalSystemPrompt = BASE_SYSTEM_PROMPT.replace("{{THEME_INSTRUCTIONS}}", themeEnforcement) + langInstructions;
 
       // CREATE MODE: Generate new project from scratch
       if (safeMode === 'create') {

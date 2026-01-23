@@ -102,7 +102,10 @@ const THEMES: Array<{
   nameAr: string;
   colors: string[];
   settings?: ThemeSettings;
+  isDefault?: boolean;
 }> = [
+  // Add User Prompt as first option and set as default - no colors or settings since they come from prompt
+  { id: 'user_prompt', name: 'User Prompt', nameAr: 'من الطلب', colors: [], isDefault: true },
   // Default - let AI decide
   { id: 'none', name: 'Default', nameAr: 'افتراضي', colors: ['#6b7280', '#d1d5db'], settings: { fontStyle: 'modern', shadowStyle: 'soft', borderRadius: 'rounded', layoutStyle: 'cards', mood: 'professional' } },
   // Cool tones
@@ -154,7 +157,7 @@ export default function Projects() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [prompt, setPrompt] = useState('');
   const [generating, setGenerating] = useState(false);
-  const [selectedTheme, setSelectedTheme] = useState('none');
+  const [selectedTheme, setSelectedTheme] = useState('user_prompt');
   const [backendStatus, setBackendStatus] = useState<Record<string, boolean>>({});
   const [togglingBackend, setTogglingBackend] = useState<string | null>(null);
   const [showThemes, setShowThemes] = useState(false);
@@ -697,11 +700,11 @@ Apply these styles consistently throughout the entire design.`;
 
       // Step 2: Create placeholder file
       const placeholderHtml = `<!DOCTYPE html>
-<html>
+<html ${language === 'ar' ? 'dir="rtl" lang="ar"' : 'lang="en"'}>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Generating...</title>
+  <title>${isRTL ? 'جاري الإنشاء...' : 'Generating...'}</title>
   <style>
     body { 
       margin: 0; 
@@ -710,7 +713,7 @@ Apply these styles consistently throughout the entire design.`;
       align-items: center; 
       justify-content: center; 
       background: linear-gradient(135deg, hsl(210,100%,65%) 0%, hsl(280,70%,65%) 50%, hsl(25,95%,60%) 100%);
-      font-family: system-ui, sans-serif;
+      font-family: system-ui, -apple-system, 'Segoe UI', 'Noto Sans Arabic', sans-serif;
     }
     .loader {
       text-align: center;
@@ -731,7 +734,7 @@ Apply these styles consistently throughout the entire design.`;
 <body>
   <div class="loader">
     <div class="spinner"></div>
-    <h2>AI is creating your project...</h2>
+    <h2>${isRTL ? 'الذكاء الاصطناعي يقوم بإنشاء مشروعك...' : 'AI is creating your project...'}</h2>
     <p>${prompt.slice(0, 100)}${prompt.length > 100 ? '...' : ''}</p>
   </div>
 </body>
@@ -756,7 +759,9 @@ Apply these styles consistently throughout the entire design.`;
       const assetParams = assetUrls.length > 0 ? `&assets=${encodeURIComponent(JSON.stringify(assetUrls))}` : '';
       const themeInstructions = getSelectedThemeInstructions();
       const instructionsParam = themeInstructions ? `&themeInstructions=${encodeURIComponent(themeInstructions)}` : '';
-      navigate(`/projects/${projectData.id}?generating=true&prompt=${encodeURIComponent(prompt)}&theme=${selectedTheme}${assetParams}${instructionsParam}`);
+      // Pass language to ensure generated content matches user's language preference
+      const langParam = `&lang=${language}`;
+      navigate(`/projects/${projectData.id}?generating=true&prompt=${encodeURIComponent(prompt)}&theme=${selectedTheme}${assetParams}${instructionsParam}${langParam}`);
 
     } catch (err: any) {
       console.error('Error:', err);
@@ -1137,19 +1142,21 @@ Apply these styles consistently throughout the entire design.`;
                             >
                               <div className="flex items-center justify-between">
                                 <span className="font-medium">{isRTL ? t.nameAr : t.name}</span>
-                                {/* Color pills - Lovable style */}
-                                <div className="flex -space-x-0.5">
-                                  {t.colors.map((color, i) => (
-                                    <div 
-                                      key={i} 
-                                      className="w-3 h-3 rounded-full"
-                                      style={{ backgroundColor: color }}
-                                    />
-                                  ))}
-                                </div>
+                                {/* Color pills - only show for non-user-prompt themes */}
+                                {t.id !== 'user_prompt' && (
+                                  <div className="flex -space-x-0.5">
+                                    {t.colors.map((color, i) => (
+                                      <div 
+                                        key={i} 
+                                        className="w-3 h-3 rounded-full"
+                                        style={{ backgroundColor: color }}
+                                      />
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                               {/* Style preview - shows font, shadow, layout, mood */}
-                              {t.settings && t.id !== 'none' && (
+                              {t.settings && t.id !== 'none' && t.id !== 'user_prompt' && (
                                 <div className="flex flex-wrap gap-1 mt-1.5">
                                   <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted/80 text-muted-foreground">
                                     {t.settings.fontStyle}

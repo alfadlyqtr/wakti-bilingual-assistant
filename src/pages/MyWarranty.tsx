@@ -1424,9 +1424,9 @@ const MyWarranty: React.FC = () => {
   // Render List View
   const renderWarrantiesTab = () => (
     <div className="flex flex-col h-full w-full overflow-x-hidden">
-      <div className="px-4 pt-3 pb-3 w-full overflow-x-hidden">
-        {/* Filter Row */}
-        <div className="flex items-center gap-2 mb-3 overflow-x-auto scrollbar-hide py-1 w-full no-scrollbar">
+      <div className="px-4 pt-6 pb-3 w-full overflow-x-hidden">
+        {/* Filter Tabs */}
+        <div className="flex gap-4 px-4 mt-6 mb-4 overflow-x-auto hide-scrollbar">
           {/* Plus button moved to the filter row */}
           {viewMode !== 'add' && viewMode !== 'detail' && viewMode !== 'ask' && mainTab === 'docs' && activeTab === 'warranties' && warranties.length > 0 && (
             <button
@@ -2279,9 +2279,9 @@ const MyWarranty: React.FC = () => {
   const renderMainView = () => (
     <div className="flex flex-col h-full w-full overflow-x-hidden">
       {/* Main 3-Tab Navigation */}
-      <div className="px-4 pt-2 pb-1 solid-bg border-b border-white/10 w-full">
+      <div className="px-4 pt-safe pb-2 solid-bg border-b border-white/10 w-full">
         <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as 'docs' | 'card' | 'cv')}>
-          <TabsList className="w-full bg-white/5 border border-white/10 grid grid-cols-3 h-10">
+          <TabsList className="w-full bg-white/5 border border-white/10 grid grid-cols-3 h-12 mt-2">
             <TabsTrigger value="docs" className="flex flex-col items-center justify-center gap-0.5">
               <FolderOpen className="w-3.5 h-3.5" />
               <span className="text-[9px] font-medium leading-none">{t.myDocsTab}</span>

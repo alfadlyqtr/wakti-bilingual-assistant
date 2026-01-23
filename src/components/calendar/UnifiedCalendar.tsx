@@ -358,10 +358,7 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
 
   // Sync calendar entries to phone calendar
   const syncToPhoneCalendar = useCallback(async () => {
-    if (!nativeCalendarAvailable) {
-      toast.error(language === 'ar' ? 'مزامنة التقويم متاحة فقط في التطبيق' : 'Calendar sync is only available in the app');
-      return;
-    }
+    console.log('[CalendarSync] syncToPhoneCalendar called');
     
     setIsSyncing(true);
     const timezone = getUserTimezone();
@@ -593,17 +590,12 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
           : `Failed to sync ${failCount} events: ${lastError}`
       );
     }
-  }, [calendarEntries, nativeCalendarAvailable, language]);
+  }, [calendarEntries, language]);
 
   // Bidirectional calendar sync - handle both directions
   const syncCalendars = useCallback(async (direction: 'both' | 'to_phone' | 'from_phone' = 'both') => {
     console.log('[CalendarSync] Starting sync with direction:', direction);
-    
-    if (!nativeCalendarAvailable) {
-      console.error('[CalendarSync] Native calendar not available');
-      toast.error(language === 'ar' ? 'مزامنة التقويم متاحة فقط في التطبيق' : 'Calendar sync is only available in the app');
-      return;
-    }
+    console.log('[CalendarSync] nativeCalendarAvailable:', nativeCalendarAvailable);
     
     if (isSyncing) {
       console.log('[CalendarSync] Sync already in progress, skipping...');
@@ -614,34 +606,46 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     let syncSuccess = false;
     let toPhoneSuccess = false;
     let fromPhoneSuccess = false;
+    let errorMessage = '';
     
     try {
       // Send to phone (Wakti → Phone)
       if (direction === 'both' || direction === 'to_phone') {
         console.log('[CalendarSync] Syncing TO phone...');
-        await syncToPhoneCalendar();
-        toPhoneSuccess = true;
-        console.log('[CalendarSync] Sync TO phone completed');
+        try {
+          await syncToPhoneCalendar();
+          toPhoneSuccess = true;
+          console.log('[CalendarSync] Sync TO phone completed');
+        } catch (toPhoneError) {
+          console.error('[CalendarSync] Error syncing TO phone:', toPhoneError);
+          errorMessage = String(toPhoneError);
+        }
       }
       
       // Fetch from phone (Phone → Wakti)
       if (direction === 'both' || direction === 'from_phone') {
         console.log('[CalendarSync] Syncing FROM phone...');
-        await refreshCalendarData(); // This includes retrieveCalendarEventsIfSupported
-        fromPhoneSuccess = true;
-        console.log('[CalendarSync] Sync FROM phone completed');
+        try {
+          await refreshCalendarData(); // This includes retrieveCalendarEventsIfSupported
+          fromPhoneSuccess = true;
+          console.log('[CalendarSync] Sync FROM phone completed');
+        } catch (fromPhoneError) {
+          console.error('[CalendarSync] Error syncing FROM phone:', fromPhoneError);
+          if (!errorMessage) errorMessage = String(fromPhoneError);
+        }
       }
       
-      syncSuccess = (direction === 'both' && toPhoneSuccess && fromPhoneSuccess) ||
-                    (direction === 'to_phone' && toPhoneSuccess) ||
-                    (direction === 'from_phone' && fromPhoneSuccess);
+      // Determine overall success
+      if (direction === 'both') {
+        syncSuccess = toPhoneSuccess || fromPhoneSuccess; // At least one direction worked
+      } else if (direction === 'to_phone') {
+        syncSuccess = toPhoneSuccess;
+      } else {
+        syncSuccess = fromPhoneSuccess;
+      }
     } catch (error) {
       console.error('[CalendarSync] Sync error:', error);
-      toast.error(
-        language === 'ar'
-          ? 'حدث خطأ أثناء المزامنة'
-          : 'Error during sync'
-      );
+      errorMessage = String(error);
     } finally {
       setIsSyncing(false);
     }
@@ -653,8 +657,25 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
         from_phone: language === 'ar' ? 'تمت مزامنة التقويم من الهاتف' : 'Calendar synced from phone'
       };
       toast.success(msg[direction]);
+    } else {
+      // Show specific error message
+      const isInApp = typeof (window as any).natively !== 'undefined';
+      if (!isInApp) {
+        toast.error(
+          language === 'ar' 
+            ? 'مزامنة التقويم متاحة فقط في تطبيق الهاتف' 
+            : 'Calendar sync is only available in the mobile app'
+        );
+      } else {
+        toast.error(
+          language === 'ar'
+            ? 'فشلت المزامنة. تأكد من منح صلاحيات التقويم'
+            : 'Sync failed. Please grant calendar permissions'
+        );
+      }
+      console.error('[CalendarSync] Sync failed:', errorMessage);
     }
-  }, [language, nativeCalendarAvailable, isSyncing, syncToPhoneCalendar, refreshCalendarData]);
+  }, [language, isSyncing, syncToPhoneCalendar, refreshCalendarData]);
 
   // Handle auto-sync toggle
   const handleAutoSyncToggle = useCallback((enabled: boolean) => {
@@ -735,21 +756,19 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
       <div className="flex flex-col space-y-2 p-3">
         {/* Top bar with sync and date controls */}
         <div className="flex items-center justify-between w-full gap-2">
-          {/* Sync button */}
-          {nativeCalendarAvailable && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => syncCalendars(syncDirection)}
-              disabled={isSyncing}
-              className="flex items-center gap-1 min-w-[90px]"
-            >
-              <RefreshCw className={cn("h-4 w-4", isSyncing && "animate-spin")} />
-              <span>
-                {language === 'ar' ? 'مزامنة' : 'Sync'}
-              </span>
-            </Button>
-          )}
+          {/* Sync button - ALWAYS visible */}
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => syncCalendars(syncDirection)}
+            disabled={isSyncing}
+            className="flex items-center gap-1.5 min-w-[100px] bg-primary text-primary-foreground hover:bg-primary/90"
+          >
+            <RefreshCw className={cn("h-4 w-4", isSyncing && "animate-spin")} />
+            <span className="font-medium">
+              {language === 'ar' ? 'مزامنة' : 'Sync'}
+            </span>
+          </Button>
           
           {/* Date controls */}
           <div className="flex items-center space-x-2">

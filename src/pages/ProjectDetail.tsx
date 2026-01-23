@@ -1318,6 +1318,7 @@ export default function ProjectDetail() {
             userInstructions: customThemeInstructions,
             backendContext: backendContextForCreate || undefined,
             debugContext: debugContext?.getDebugContextForAgent?.(),
+            lang: searchParams.get('lang') || language, // Pass language for content generation
           },
         });
 
