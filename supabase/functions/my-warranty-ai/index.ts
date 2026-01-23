@@ -408,6 +408,15 @@ serve(async (req) => {
           cleanJson = cleanJson.slice(0, -3);
         }
         cleanJson = cleanJson.trim();
+        
+        // Sanitize control characters that break JSON parsing
+        cleanJson = cleanJson
+          .replace(/[\x00-\x1F\x7F]/g, ' ')  // Replace control chars with space
+          .replace(/\r\n/g, '\\n')           // Escape CRLF
+          .replace(/\r/g, '\\n')             // Escape CR
+          .replace(/\n/g, '\\n')             // Escape LF in string values
+          .replace(/\t/g, ' ')               // Replace tabs with space
+          .replace(/\\n\\n+/g, '\\n');       // Collapse multiple newlines
 
         const extracted: ExtractedWarranty = JSON.parse(cleanJson);
         console.log(`[my-warranty-ai] Extraction complete: ${extracted.title}`);

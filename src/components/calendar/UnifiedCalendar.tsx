@@ -858,20 +858,6 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
               {t("today", language)}
             </Button>
 
-            {nativeCalendarAvailable && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => syncCalendars(syncDirection)}
-                disabled={isSyncing}
-                className="flex items-center gap-1"
-              >
-                <RefreshCw className={cn("h-4 w-4", isSyncing && "animate-spin")} />
-                <span>
-                  {language === 'ar' ? 'مزامنة' : 'Sync'}
-                </span>
-              </Button>
-            )}
             <Button 
               variant="outline" 
               size="icon" 

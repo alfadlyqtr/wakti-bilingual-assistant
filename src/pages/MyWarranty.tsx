@@ -2439,25 +2439,7 @@ const MyWarranty: React.FC = () => {
                 </button>
               </div>
 
-              {/* Analyze Button */}
-              {(newItem.image_url || newItem.additional_images.length > 0) && (
-                <Button
-                  onClick={handleAnalyzeDocument}
-                  disabled={isAnalyzing}
-                  className="w-full h-12 rounded-xl btn-enhanced text-white font-bold text-base flex items-center justify-center gap-2"
-                >
-                  {isAnalyzing ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      <span>{isRTL ? 'جاري التحليل...' : 'Analyzing...'}</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>{isRTL ? 'تحليل المستند' : 'Analyze Document'}</span>
-                    </>
-                  )}
-                </Button>
-              )}
+              {/* Analyze button moved to bottom of preview section */}
             </div>
 
             {/* Hidden file inputs */}
@@ -2563,12 +2545,20 @@ const MyWarranty: React.FC = () => {
                   {/* Add More Button */}
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="relative aspect-[3/4] rounded-xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-2 bg-white/5"
+                    className="
+                      relative aspect-[3/4] rounded-xl 
+                      border-2 border-dashed border-emerald-500/30
+                      flex flex-col items-center justify-center gap-2 
+                      bg-gradient-to-br from-emerald-500/10 to-blue-500/10
+                      hover:from-emerald-500/20 hover:to-blue-500/20
+                      active:from-emerald-500/30 active:to-blue-500/30
+                      transition-all duration-300 active:scale-95
+                    "
                   >
-                    <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center">
-                      <Plus className="w-4 h-4 text-muted-foreground" />
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-blue-500 flex items-center justify-center shadow-lg">
+                      <Plus className="w-5 h-5 text-white" />
                     </div>
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase">{isRTL ? 'إضافة' : 'Add'}</span>
+                    <span className="text-xs font-bold text-emerald-400 uppercase">{isRTL ? 'إضافة' : 'ADD'}</span>
                   </button>
                 </div>
 
@@ -3380,7 +3370,8 @@ const MyWarranty: React.FC = () => {
   // Main render
   return (
     <div
-      className="h-full w-full bg-background overflow-x-hidden overflow-y-auto relative pt-safe"
+      className="h-full w-full bg-background overflow-x-hidden overflow-y-auto relative"
+      style={{ paddingTop: 'var(--app-header-h, 64px)' }}
       dir={isRTL ? 'rtl' : 'ltr'}
     >
       <div className="flex flex-col h-full w-full max-w-full">
