@@ -755,18 +755,17 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
         <div className="flex items-center justify-between w-full gap-2">
           {/* Sync button - ALWAYS visible */}
           <Button
+            type="button"
             variant="default"
             size="sm"
-            onClick={(e) => {
+            onPointerDown={(e) => {
               e.stopPropagation();
-              e.preventDefault();
-              console.log('[CalendarSync] Sync button clicked!');
+              if (isSyncing) return;
+              toast.info(language === 'ar' ? 'جاري المزامنة...' : 'Syncing...');
               syncCalendars(syncDirection);
             }}
-            onTouchStart={(e) => e.stopPropagation()}
-            onTouchEnd={(e) => e.stopPropagation()}
             disabled={isSyncing}
-            className="flex items-center gap-1.5 min-w-[100px] bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95 touch-manipulation z-50"
+            className="flex items-center gap-1.5 min-w-[100px] bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95"
           >
             <RefreshCw className={cn("h-4 w-4", isSyncing && "animate-spin")} />
             <span className="font-medium">
@@ -881,6 +880,7 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
               {t("today", language)}
             </Button>
 
+            {/* Floating Add Button */}
             <Button 
               variant="outline" 
               size="icon" 
@@ -892,6 +892,21 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
               className="fixed bottom-24 right-4 z-10 rounded-full shadow-lg h-12 w-12 bg-primary text-primary-foreground hover:bg-primary/90"
             >
               <Plus className="h-6 w-6" />
+            </Button>
+            
+            {/* Floating Sync Button - positioned on left side */}
+            <Button 
+              variant="outline" 
+              size="icon" 
+              onClick={() => {
+                toast.info(language === 'ar' ? 'جاري المزامنة...' : 'Syncing...');
+                syncCalendars(syncDirection);
+              }}
+              disabled={isSyncing}
+              title={language === 'ar' ? 'مزامنة التقويم' : 'Sync Calendar'}
+              className="fixed bottom-24 left-4 z-10 rounded-full shadow-lg h-12 w-12 bg-blue-600 text-white hover:bg-blue-700"
+            >
+              <RefreshCw className={cn("h-6 w-6", isSyncing && "animate-spin")} />
             </Button>
           </div>
         </div>

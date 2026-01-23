@@ -850,6 +850,9 @@ const MyWarranty: React.FC = () => {
     const files = event.target.files;
     if (!files || files.length === 0 || !user) return;
 
+    // Reset file input to allow re-selecting same file
+    event.target.value = '';
+
     // Show uploading indicator
     setIsAnalyzing(true);
     setViewMode('add');
@@ -875,23 +878,32 @@ const MyWarranty: React.FC = () => {
         newImages.push(urlData.publicUrl);
       }
 
+      // Create object URLs for immediate preview
+      const objectUrls = newImages.map(url => {
+        // If already a blob URL, use as is
+        if (url.startsWith('blob:')) return url;
+        // Otherwise create a new object URL
+        return URL.createObjectURL(new Blob([url], { type: 'image/jpeg' }));
+      });
+
       setNewItem(prev => {
-        // Always add new images to additional_images
-        const updatedImages = [...prev.additional_images, ...newImages];
-        
-        // If no primary image, use first one
-        const primaryImage = prev.image_url || newImages[0];
-        
-        // Create preview URLs for all images
-        const allImages = [primaryImage, ...updatedImages].filter(Boolean);
-        
+        const updatedImages = [...prev.additional_images];
+        let primaryImage = prev.image_url;
+
+        // Handle first image vs additional images
+        if (!primaryImage) {
+          primaryImage = objectUrls[0];
+          updatedImages.push(...objectUrls.slice(1));
+        } else {
+          updatedImages.push(...objectUrls);
+        }
+
         return {
           ...prev,
           image_url: primaryImage,
           receipt_url: primaryImage,
           additional_images: updatedImages,
-          file_type: files[0].type.includes('pdf') ? 'pdf' : 'image',
-          preview_urls: allImages // Add preview URLs
+          file_type: files[0].type.includes('pdf') ? 'pdf' : 'image'
         };
       });
 
@@ -2519,6 +2531,10 @@ const MyWarranty: React.FC = () => {
                         src={newItem.image_url} 
                         alt="Front" 
                         className="w-full h-full object-cover"
+                        onError={(e) => {
+                          console.error('Image load error:', newItem.image_url);
+                          e.currentTarget.src = newItem.image_url;
+                        }}
                       />
                       <div className="absolute top-2 left-2 bg-blue-500/90 backdrop-blur-sm px-2 py-1 rounded-lg">
                         <span className="text-[10px] font-bold text-white">
