@@ -850,6 +850,12 @@ const MyWarranty: React.FC = () => {
     const files = event.target.files;
     if (!files || files.length === 0 || !user) return;
 
+    // IMPORTANT: Copy file data BEFORE resetting input
+    const fileList = Array.from(files);
+    const firstFileType = fileList[0]?.type || '';
+    const isPdf = firstFileType.includes('pdf');
+    const fileCount = fileList.length;
+
     // Reset file input to allow re-selecting same file
     event.target.value = '';
 
@@ -860,8 +866,8 @@ const MyWarranty: React.FC = () => {
     try {
       const newImages: string[] = [];
 
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
+      for (let i = 0; i < fileList.length; i++) {
+        const file = fileList[i];
         
         const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
         const fileName = `${user.id}/${Date.now()}_${i}_${sanitizedName}`;
@@ -896,7 +902,7 @@ const MyWarranty: React.FC = () => {
           image_url: primaryImage,
           receipt_url: primaryImage,
           additional_images: updatedImages,
-          file_type: files[0].type.includes('pdf') ? 'pdf' : 'image'
+          file_type: isPdf ? 'pdf' : 'image'
         };
       });
 
@@ -904,8 +910,8 @@ const MyWarranty: React.FC = () => {
       toast({
         title: isRTL ? 'تم رفع الصور' : 'Photos Uploaded',
         description: isRTL 
-          ? `تم رفع ${files.length} صورة بنجاح. ${files.length === 1 ? 'يمكنك إضافة المزيد من الصور أو الضغط على "تحليل" للمتابعة.' : 'يمكنك إضافة المزيد من الصور أو الضغط على "تحليل" للمتابعة.'}` 
-          : `${files.length} photo${files.length > 1 ? 's' : ''} uploaded successfully. ${files.length === 1 ? 'You can add more photos or click "Analyze" to continue.' : 'You can add more photos or click "Analyze" to continue.'}`,
+          ? `تم رفع ${fileCount} صورة بنجاح. يمكنك إضافة المزيد من الصور أو الضغط على "تحليل" للمتابعة.` 
+          : `${fileCount} photo${fileCount > 1 ? 's' : ''} uploaded successfully. You can add more photos or click "Analyze" to continue.`,
       });
 
     } catch (error) {
