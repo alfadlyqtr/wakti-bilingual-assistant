@@ -403,7 +403,7 @@ serve(async (req) => {
 
     if (mode === "extract") {
       try {
-        console.log(`[my-warranty-ai] Parsing extracted text...`);
+        console.log(`[my-warranty-ai] Raw response sample:`, textContent.substring(0, 200) + "...");
         let cleanJson = textContent.trim();
         
         // Remove markdown code blocks if present
@@ -416,15 +416,18 @@ serve(async (req) => {
         if (cleanJson.endsWith("```")) {
           cleanJson = cleanJson.slice(0, -3);
         }
-        cleanJson = cleanJson.trim();
         
-        // Sanitize control characters that break JSON parsing
+        // Aggressive JSON cleanup
         cleanJson = cleanJson
-          .replace(/[\x00-\x1F\x7F]/g, ' ')  // Replace control chars with space
-          .replace(/\r\n/g, '\\n')           // Escape CRLF
-          .replace(/\r/g, '\\n')             // Escape CR
-          .replace(/\n/g, '\\n')             // Escape LF in string values
-          .replace(/\t/g, ' ')               // Replace tabs with space
+          .trim()
+          // Remove control characters
+          .replace(/[\u0000-\u001F\u007F-\u009F]/g, "")
+          // Fix escaped quotes
+          .replace(/\\["\']/g, "\"")
+          // Fix bad escapes
+          .replace(/([^\\])\\([^"\\bfnrtu])/g, "$1$2")
+          // Normalize whitespace
+          .replace(/\s+/g, " ")
           .replace(/\\n\\n+/g, '\\n');       // Collapse multiple newlines
 
         const extracted: ExtractedWarranty = JSON.parse(cleanJson);
