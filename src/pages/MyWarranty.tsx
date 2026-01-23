@@ -2512,10 +2512,7 @@ const MyWarranty: React.FC = () => {
                         src={newItem.image_url} 
                         alt="Front" 
                         className="w-full h-full object-cover"
-                        onError={(e) => {
-                          console.error('Image load error:', newItem.image_url);
-                          e.currentTarget.src = newItem.image_url;
-                        }}
+                        crossOrigin="anonymous"
                       />
                       <div className="absolute top-2 left-2 bg-blue-500/90 backdrop-blur-sm px-2 py-1 rounded-lg">
                         <span className="text-[10px] font-bold text-white">
@@ -2544,6 +2541,7 @@ const MyWarranty: React.FC = () => {
                         src={img} 
                         alt={`Page ${idx + 2}`} 
                         className="w-full h-full object-cover"
+                        crossOrigin="anonymous"
                       />
                       <div className="absolute top-2 left-2 bg-white/10 backdrop-blur-sm px-2 py-1 rounded-lg">
                         <span className="text-[10px] font-bold text-white">

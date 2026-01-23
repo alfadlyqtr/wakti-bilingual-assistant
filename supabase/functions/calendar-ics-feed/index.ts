@@ -43,6 +43,8 @@ serve(async (req) => {
     const userId = url.searchParams.get("user_id");
     const token = url.searchParams.get("token");
 
+    console.log('Request received:', { userId, token });
+
     if (!userId || !token) {
       return new Response("Missing user_id or token", { 
         status: 400,
@@ -62,12 +64,20 @@ serve(async (req) => {
       .eq("id", userId)
       .single();
 
+    console.log('Profile lookup:', { found: !!profile, error: profileError });
+
     if (profileError || !profile) {
       return new Response("User not found", { 
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "text/plain" }
       });
     }
+
+    console.log('Token comparison:', { 
+      received: token, 
+      stored: profile.calendar_feed_token,
+      match: profile.calendar_feed_token === token 
+    });
 
     if (profile.calendar_feed_token !== token) {
       return new Response("Invalid token", { 

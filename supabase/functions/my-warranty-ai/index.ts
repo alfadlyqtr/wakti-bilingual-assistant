@@ -331,20 +331,30 @@ serve(async (req) => {
         throw new Error("No document provided for extraction");
       }
 
-      // Helper to detect MIME type from base64 data
+      // Helper to detect and validate MIME type from base64 data
       function detectMimeType(base64Data: string): string {
-        // Check magic bytes in base64
-        if (base64Data.startsWith('/9j/')) return 'image/jpeg';
-        if (base64Data.startsWith('iVBORw')) return 'image/png';
-        if (base64Data.startsWith('R0lGOD')) return 'image/gif';
-        if (base64Data.startsWith('UklGR')) return 'image/webp';
-        if (base64Data.startsWith('JVBERi')) return 'application/pdf';
-        // Default to jpeg for images
-        return mimeType || 'image/jpeg';
+        // Trim whitespace and validate base64
+        const cleanData = base64Data.trim();
+        
+        // Check magic bytes in base64 - Gemini supports: image/png, image/jpeg, image/webp, image/heic, image/heif
+        if (cleanData.startsWith('/9j/') || cleanData.startsWith('/9j')) return 'image/jpeg';
+        if (cleanData.startsWith('iVBORw0KGgo') || cleanData.startsWith('iVBORw')) return 'image/png';
+        if (cleanData.startsWith('UklGR')) return 'image/webp';
+        if (cleanData.startsWith('AAAAIGZ0eXBoZWlj') || cleanData.startsWith('AAA')) return 'image/heic';
+        if (cleanData.startsWith('JVBERi')) return 'application/pdf';
+        
+        // Default to jpeg for unknown image formats
+        console.log(`[my-warranty-ai] Unknown format, defaulting to jpeg. Prefix: ${cleanData.substring(0, 30)}`);
+        return 'image/jpeg';
+      }
+
+      // Validate and clean base64 data
+      function cleanBase64(base64Data: string): string {
+        return base64Data.trim().replace(/\s/g, '');
       }
 
       const firstImageMime = detectMimeType(imageArray[0]);
-      const isDocument = firstImageMime === "application/pdf" || mimeType === "application/msword" || mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+      const isDocument = firstImageMime === "application/pdf";
 
       console.log(`[my-warranty-ai] Preparing Gemini request. Detected Type: ${firstImageMime}, Provided mimeType: ${mimeType}, Pages: ${imageArray.length}`);
 
@@ -354,15 +364,20 @@ serve(async (req) => {
       ];
       
       for (let i = 0; i < imageArray.length; i++) {
-        // Detect MIME type for each image individually
-        const imageMime = detectMimeType(imageArray[i]);
-        console.log(`[my-warranty-ai] Image ${i + 1} detected MIME: ${imageMime}, base64 prefix: ${imageArray[i].substring(0, 20)}...`);
+        // Clean and validate base64 data
+        const cleanedData = cleanBase64(imageArray[i]);
+        const imageMime = detectMimeType(cleanedData);
+        
+        console.log(`[my-warranty-ai] Image ${i + 1}:`);
+        console.log(`  - Detected MIME: ${imageMime}`);
+        console.log(`  - Base64 length: ${cleanedData.length}`);
+        console.log(`  - Base64 prefix: ${cleanedData.substring(0, 30)}...`);
         
         parts.push({ text: `\n--- Page ${i + 1} of ${imageArray.length} ---` });
         parts.push({
           inline_data: {
             mime_type: imageMime,
-            data: imageArray[i],
+            data: cleanedData,
           },
         });
       }
