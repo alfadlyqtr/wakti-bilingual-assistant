@@ -151,13 +151,19 @@ serve(async (req) => {
       .gte("event_date", threeMonthsAgo.toISOString().split('T')[0])
       .lte("event_date", oneYearFromNow.toISOString().split('T')[0]);
 
-    // Fetch events from events table
+    // Fetch events from events table (uses organizer_id and start_time)
     const { data: manualEntries } = await supabase
       .from("events")
       .select("*")
-      .eq("user_id", userId)
-      .gte("event_date", threeMonthsAgo.toISOString())
-      .lte("event_date", oneYearFromNow.toISOString());
+      .eq("organizer_id", userId)
+      .gte("start_time", threeMonthsAgo.toISOString())
+      .lte("start_time", oneYearFromNow.toISOString());
+
+    // Fetch journal entries
+    const { data: journalEntries } = await supabase
+      .from("journal_calendar_view")
+      .select("*")
+      .eq("user_id", userId);
 
     // Build ICS content
     const events: string[] = [];
@@ -245,13 +251,12 @@ END:VEVENT`);
       }
     }
 
-    // Add events from events table (uses event_date, not start_date)
+    // Add events from events table (uses start_time timestamp)
     if (manualEntries) {
       for (const entry of manualEntries) {
-        if (!entry.event_date) continue;
-        const startDate = new Date(entry.event_date);
-        // Events table might have start_time and end_time
-        const endDate = entry.end_time ? new Date(entry.event_date + 'T' + entry.end_time) : new Date(startDate.getTime() + 60 * 60 * 1000);
+        if (!entry.start_time) continue;
+        const startDate = new Date(entry.start_time);
+        const endDate = entry.end_time ? new Date(entry.end_time) : new Date(startDate.getTime() + 60 * 60 * 1000);
         const uid = generateUID(entry.id, "event");
         
         events.push(`BEGIN:VEVENT
@@ -262,6 +267,30 @@ DTEND:${formatDateToICS(endDate)}
 SUMMARY:${escapeICS(entry.title || 'Event')}
 DESCRIPTION:${escapeICS(entry.description || '')}
 CATEGORIES:EVENT
+END:VEVENT`);
+      }
+    }
+
+    // Add journal entries as all-day events
+    if (journalEntries) {
+      for (const journal of journalEntries) {
+        if (!journal.date) continue;
+        const journalDate = new Date(journal.date);
+        const uid = generateUID(journal.date + '-' + userId, "journal");
+        
+        const moodEmoji = journal.mood_value === 5 ? '😊' : 
+                         journal.mood_value === 4 ? '🙂' : 
+                         journal.mood_value === 3 ? '😐' : 
+                         journal.mood_value === 2 ? '😔' : '😢';
+        
+        events.push(`BEGIN:VEVENT
+UID:${uid}
+DTSTAMP:${formatDateToICS(now)}
+DTSTART;VALUE=DATE:${formatDateOnlyToICS(journalDate)}
+DTEND;VALUE=DATE:${formatDateOnlyToICS(new Date(journalDate.getTime() + 24 * 60 * 60 * 1000))}
+SUMMARY:${moodEmoji} Journal Entry
+DESCRIPTION:Mood: ${journal.mood_value}/5
+CATEGORIES:JOURNAL
 END:VEVENT`);
       }
     }
