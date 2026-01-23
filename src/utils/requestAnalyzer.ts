@@ -108,8 +108,9 @@ const FEATURE_PATTERNS: Record<FeatureType, {
   },
   media: {
     patterns: [
-      /\b(gallery|photo|image|picture)\s*(upload|section|page)?/i,
-      /\b(upload|show)\s*(photo|image|picture|work)/i,
+      // Only match BUILD requests, not VIEW requests
+      /\b(add|create|build|make)\s*(gallery|photo|image|picture)\s*(upload|section|page|component)/i,
+      /\b(add|create|build|make)\s*(upload|dropzone)\s*(component|section|area)/i,
       /\bرفع\s*(صور|ملف)/i,
     ],
     priority: 8,

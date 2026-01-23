@@ -11,10 +11,8 @@ import {
   Shield, Plus, SortAsc, Camera, Upload, X, 
   ChevronLeft, Trash2, FileText, MessageCircle, Calendar,
   Tag, Clock, CheckCircle, AlertTriangle, XCircle, Loader2,
-  Edit2, ExternalLink, CreditCard, User, FolderOpen, ChevronDown, Phone, Mail, Globe, MapPin, Link2, Send
+  Edit2, ExternalLink, CreditCard, User, FolderOpen, ChevronDown, Phone, Mail, Globe, MapPin, Link2, Send, ArrowLeft
 } from 'lucide-react';
-import { ArrowLeft, Camera, CreditCard, ExternalLink, FileText, FolderOpen, MessageCircle, Plus, Send, Shield, User, X } from 'lucide-react';
-import { ScannerOverlay } from '../components/ScannerOverlay';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -743,7 +741,6 @@ const MyWarranty: React.FC = () => {
   const [showCelebration, setShowCelebration] = useState(false);
   const [isLoadingCard, setIsLoadingCard] = useState(true);
   const [cardInnerTab, setCardInnerTab] = useState<'mycard' | 'collected'>('mycard');
-  const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [collectedCards, setCollectedCards] = useState<any[]>([]);
   
   // Get current active card
@@ -1332,30 +1329,9 @@ const MyWarranty: React.FC = () => {
   // Render List View
   const renderWarrantiesTab = () => (
     <div className="flex flex-col h-full w-full overflow-x-hidden">
-      <div className="px-4 pt-4 pb-3 solid-bg w-full overflow-x-hidden">
-        {/* Hero Section - Beautiful intro */}
-        <div className="relative mb-6 p-5 rounded-2xl overflow-hidden bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-emerald-500/10 border border-white/10 w-full">
-          {/* Decorative elements */}
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/20 to-transparent rounded-full blur-2xl" />
-          <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-emerald-500/20 to-transparent rounded-full blur-2xl" />
-          
-          <div className="relative z-10 flex flex-wrap gap-2">
-            <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-blue-500/15 text-blue-400 border border-blue-500/20 whitespace-nowrap">
-              🪪 {t.docsFeature1}
-            </span>
-            <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 whitespace-nowrap">
-              🛡️ {t.docsFeature2}
-            </span>
-            <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-purple-500/15 text-purple-400 border border-purple-500/20 whitespace-nowrap">
-              📋 {t.docsFeature3}
-            </span>
-            <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-orange-500/15 text-orange-400 border border-orange-500/20 whitespace-nowrap">
-              📝 {t.docsFeature4}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 mb-4 overflow-x-auto scrollbar-hide py-1 w-full no-scrollbar">
+      <div className="px-4 pt-3 pb-3 w-full overflow-x-hidden">
+        {/* Filter Row */}
+        <div className="flex items-center gap-2 mb-3 overflow-x-auto scrollbar-hide py-1 w-full no-scrollbar">
           {/* Plus button moved to the filter row */}
           {viewMode !== 'add' && viewMode !== 'detail' && viewMode !== 'ask' && mainTab === 'docs' && activeTab === 'warranties' && warranties.length > 0 && (
             <button
@@ -2128,34 +2104,42 @@ const MyWarranty: React.FC = () => {
 
   const renderDocsTabContent = () => (
     <div className="flex flex-col h-full w-full overflow-x-hidden">
-      <div className="px-4 pt-2 pb-2 w-full">
-        <div className="flex items-center gap-2 w-full">
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'warranties' | 'ask')} className="flex-1">
-            <TabsList className="bg-white/5 border border-white/10 w-full">
-              <TabsTrigger value="warranties">{t.warrantiesTab}</TabsTrigger>
-              <TabsTrigger value="ask">{t.askTab}</TabsTrigger>
-            </TabsList>
-            <TabsContent value="warranties" className="mt-3">
-              {renderWarrantiesTab()}
-            </TabsContent>
-            <TabsContent value="ask" className="mt-3">
-              {renderAskTab()}
-            </TabsContent>
-          </Tabs>
+      {/* Inner Tabs - Documents / Ask Wakti AI */}
+      <div className="px-4 pt-3 pb-2 w-full border-b border-white/5">
+        <div className="flex items-center gap-2 p-1 rounded-xl bg-white/5 border border-white/10">
+          <button
+            onClick={() => setActiveTab('warranties')}
+            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+              activeTab === 'warranties'
+                ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
+                : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+            }`}
+          >
+            {t.warrantiesTab}
+          </button>
+          <button
+            onClick={() => setActiveTab('ask')}
+            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+              activeTab === 'ask'
+                ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
+                : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+            }`}
+          >
+            {t.askTab}
+          </button>
         </div>
+      </div>
+      
+      {/* Tab Content */}
+      <div className="flex-1 overflow-y-auto">
+        {activeTab === 'warranties' && renderWarrantiesTab()}
+        {activeTab === 'ask' && renderAskTab()}
       </div>
     </div>
   );
 
   const renderMainView = () => (
     <div className="flex flex-col h-full w-full overflow-x-hidden">
-      {/* Scanner Overlay */}
-      <ScannerOverlay 
-        isOpen={isScannerOpen}
-        onClose={() => setIsScannerOpen(false)}
-        isRTL={isRTL}
-      />
-
       {/* Main 3-Tab Navigation */}
       <div className="px-4 pt-4 pb-2 solid-bg border-b border-white/10 w-full">
         <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as 'docs' | 'card' | 'cv')}>
@@ -2274,15 +2258,7 @@ const MyWarranty: React.FC = () => {
             {/* Upload Options */}
             <div className="grid grid-cols-2 gap-4 mb-6">
               <button
-                onClick={() => {
-                  // Check if device has camera access
-                  if (!('mediaDevices' in navigator)) {
-                    // Fallback to regular file input
-                    cameraInputRef.current?.click();
-                    return;
-                  }
-                  setIsScannerOpen(true);
-                }}
+                onClick={() => cameraInputRef.current?.click()}
                 className="enhanced-card p-6 flex flex-col items-center gap-3 active:scale-95 transition-transform"
               >
                 <Camera className="w-10 h-10 text-blue-400" />
@@ -2617,11 +2593,7 @@ const MyWarranty: React.FC = () => {
               <h4 className="text-sm font-medium text-foreground">{isRTL ? 'المستند' : 'Document'}</h4>
             </div>
             <div 
-              className="group relative w-full rounded-xl overflow-hidden bg-white/5 border border-white/10 cursor-zoom-in transition-all hover:shadow-xl hover:border-white/20"
-              style={{
-                height: 'var(--preview-height, 200px)',
-                '--preview-height': '200px',
-              }}
+              className="group relative w-full h-[200px] rounded-xl overflow-hidden bg-white/5 border border-white/10 cursor-zoom-in transition-all hover:shadow-xl hover:border-white/20"
               onClick={() => {
                 const img = document.querySelector('.document-preview') as HTMLElement;
                 if (img) {

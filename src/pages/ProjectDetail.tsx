@@ -105,7 +105,8 @@ import {
   getNextWizardFeature,
   getNonWizardFeatures,
   generateStructuredPrompt,
-  createFeatureSummary
+  createFeatureSummary,
+  featureToWizardType
 } from '@/utils/requestAnalyzer';
 import {
   detectChatIntent,
@@ -4175,8 +4176,10 @@ ${fixInstructions}
       // ===== STEP 0: CHECK IF THIS IS A CHAT REQUEST =====
       // Before analyzing as a build request, check if user just wants to chat/use existing features
       const { intent, action } = detectChatIntent(userMessage);
+      console.log('[ProjectDetail] Chat intent detection:', { userMessage, intent, hasAction: !!action });
       
       if (intent !== 'none') {
+        console.log('[ProjectDetail] Chat intent matched! Opening SmartMediaManager...');
         // This is a chat request - handle it directly
         setChatMessages(prev => [...prev, {
           id: `user-${Date.now()}`,
@@ -4193,36 +4196,11 @@ ${fixInstructions}
 
           // Add AI response
           const response = isRTL ? action.response.ar : action.response.en;
-          
-          // Handle async responses
-          if (typeof response === 'function') {
-            // Show loading message
-            const loadingMsg = isRTL ? '🔍 جاري تحليل الصور...' : '🔍 Analyzing images...';
-            setChatMessages(prev => [...prev, {
-              id: `loading-${Date.now()}`,
-              role: 'assistant',
-              content: loadingMsg
-            }]);
-
-            // Get async response
-            response(id || '').then(finalResponse => {
-              setChatMessages(prev => {
-                const filtered = prev.filter(msg => !msg.id.startsWith('loading-'));
-                return [...filtered, {
-                  id: `assistant-${Date.now()}`,
-                  role: 'assistant',
-                  content: finalResponse
-                }];
-              });
-            });
-          } else {
-            // Handle sync responses
-            setChatMessages(prev => [...prev, {
-              id: `assistant-${Date.now()}`,
-              role: 'assistant',
-              content: response
-            }]);
-          }
+          setChatMessages(prev => [...prev, {
+            id: `assistant-${Date.now()}`,
+            role: 'assistant',
+            content: response
+          }]);
         }
         return;
       }

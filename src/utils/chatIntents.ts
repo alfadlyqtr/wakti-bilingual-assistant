@@ -1,20 +1,7 @@
-import { supabase } from '@/integrations/supabase/client';
-
 /**
  * Chat Intents - Detects when the user just wants to chat or use existing features
  * instead of always trying to build/plan something new
  */
-
-type ResponseFn = (projectId: string) => Promise<string>;
-
-interface ChatAction {
-  type: 'navigate' | 'open_modal' | 'chat_response';
-  payload?: any;
-  response: {
-    en: string | ResponseFn;
-    ar: string | ResponseFn;
-  };
-}
 
 export type ChatIntent = 
   | 'view_images'     // "Show me images"
@@ -25,7 +12,7 @@ export type ChatIntent =
   | 'view_bookings'   // "Show appointments"
   | 'none';           // No chat intent detected
 
-interface ChatAction {
+export interface ChatAction {
   type: 'navigate' | 'open_modal' | 'chat_response';
   payload?: any;
   response: {
@@ -41,7 +28,7 @@ const CHAT_PATTERNS: Record<Exclude<ChatIntent, 'none'>, {
 }> = {
   view_images: {
     patterns: [
-      /\b(show|see|view|list|what)\s*(all\s*)?(the\s*)?(images?|photos?|pictures?|gallery)\b/i,
+      /\b(show|see|view|list|what)\s*(me\s*)?(all\s*)?(the\s*)?(images?|photos?|pictures?|gallery)\b/i,
       /\b(images?|photos?|pictures?|gallery)\s*(on|in|of)\s*(the|this)?\s*(site|page|website)\b/i,
     ],
     action: {
@@ -51,70 +38,8 @@ const CHAT_PATTERNS: Record<Exclude<ChatIntent, 'none'>, {
         props: { initialTab: 'site' }
       },
       response: {
-        en: async (projectId: string) => {
-          const { data: images } = await supabase
-            .from('project_images')
-            .select('location, source')
-            .eq('project_id', projectId);
-
-          if (!images?.length) {
-            return '🖼️ I don\'t see any images on your site yet. Would you like to:\n• Search stock photos\n• Upload your own images\n• Add placeholder images';
-          }
-
-          // Group by location
-          const byLocation = images.reduce((acc, img) => {
-            acc[img.location] = (acc[img.location] || 0) + 1;
-            return acc;
-          }, {} as Record<string, number>);
-
-          // Count by source
-          const bySource = images.reduce((acc, img) => {
-            acc[img.source] = (acc[img.source] || 0) + 1;
-            return acc;
-          }, {} as Record<string, number>);
-
-          const locationList = Object.entries(byLocation)
-            .map(([loc, count]) => `• ${count} in ${loc}`)
-            .join('\n');
-
-          return `🖼️ Found ${images.length} images on your site:\n${locationList}\n\nSources:\n` +
-            (bySource.site ? `• ${bySource.site} from your site\n` : '') +
-            (bySource.freepik ? `• ${bySource.freepik} from Freepik\n` : '') +
-            (bySource.placeholder ? `• ${bySource.placeholder} placeholders\n` : '') +
-            '\nClick any image to view, download, or copy its URL';
-        },
-        ar: async (projectId: string) => {
-          const { data: images } = await supabase
-            .from('project_images')
-            .select('location, source')
-            .eq('project_id', projectId);
-
-          if (!images?.length) {
-            return '🖼️ لم أجد أي صور في موقعك بعد. هل تريد:\n• البحث عن صور مجانية\n• رفع صورك الخاصة\n• إضافة صور مؤقتة';
-          }
-
-          // Group by location
-          const byLocation = images.reduce((acc, img) => {
-            acc[img.location] = (acc[img.location] || 0) + 1;
-            return acc;
-          }, {} as Record<string, number>);
-
-          // Count by source
-          const bySource = images.reduce((acc, img) => {
-            acc[img.source] = (acc[img.source] || 0) + 1;
-            return acc;
-          }, {} as Record<string, number>);
-
-          const locationList = Object.entries(byLocation)
-            .map(([loc, count]) => `• ${count} في ${loc}`)
-            .join('\n');
-
-          return `🖼️ وجدت ${images.length} صورة في موقعك:\n${locationList}\n\nالمصادر:\n` +
-            (bySource.site ? `• ${bySource.site} من موقعك\n` : '') +
-            (bySource.freepik ? `• ${bySource.freepik} من Freepik\n` : '') +
-            (bySource.placeholder ? `• ${bySource.placeholder} صور مؤقتة\n` : '') +
-            '\nانقر على أي صورة للعرض أو التحميل أو نسخ الرابط';
-        }
+        en: '🖼️ Here are all the images on your site!\n\nYou can:\n• Click any image to view full size\n• Download or copy the URL\n• Replace with stock photos or upload new ones',
+        ar: '🖼️ إليك جميع الصور في موقعك!\n\nيمكنك:\n• النقر على أي صورة لعرضها بالحجم الكامل\n• تحميل أو نسخ الرابط\n• استبدالها بصور مجانية أو رفع صور جديدة'
       }
     }
   },
@@ -203,11 +128,15 @@ export function detectChatIntent(message: string): {
   action: ChatAction | null;
 } {
   const lowerMessage = message.toLowerCase();
+  console.log('[chatIntents] Checking message:', lowerMessage);
 
   // Check each chat intent
   for (const [intent, config] of Object.entries(CHAT_PATTERNS)) {
     for (const pattern of config.patterns) {
-      if (pattern.test(lowerMessage)) {
+      const matches = pattern.test(lowerMessage);
+      console.log('[chatIntents] Pattern:', pattern.toString(), 'matches:', matches);
+      if (matches) {
+        console.log('[chatIntents] MATCHED intent:', intent);
         return {
           intent: intent as ChatIntent,
           action: config.action
@@ -216,6 +145,7 @@ export function detectChatIntent(message: string): {
     }
   }
 
+  console.log('[chatIntents] No intent matched');
   // No chat intent found
   return {
     intent: 'none',
