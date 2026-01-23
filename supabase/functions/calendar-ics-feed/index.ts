@@ -55,34 +55,70 @@ serve(async (req) => {
     // Create Supabase client
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    console.log('Environment check:', { 
+      hasUrl: !!supabaseUrl, 
+      hasKey: !!supabaseKey,
+      urlLength: supabaseUrl?.length,
+      keyLength: supabaseKey?.length
+    });
+    
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    });
 
     // Verify token
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("calendar_feed_token, full_name")
+      .select("calendar_feed_token")
       .eq("id", userId)
       .single();
 
-    console.log('Profile lookup:', { found: !!profile, error: profileError });
+    console.log('Profile lookup:', { 
+      found: !!profile, 
+      error: profileError,
+      errorMessage: profileError?.message,
+      errorDetails: profileError?.details,
+      errorHint: profileError?.hint
+    });
 
     if (profileError || !profile) {
-      return new Response("User not found", { 
+      return new Response(JSON.stringify({
+        error: "User not found",
+        debug: {
+          profileError: profileError?.message,
+          details: profileError?.details,
+          hint: profileError?.hint
+        }
+      }), { 
         status: 404,
-        headers: { ...corsHeaders, "Content-Type": "text/plain" }
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
     console.log('Token comparison:', { 
-      received: token, 
+      received: token,
+      receivedLength: token?.length,
       stored: profile.calendar_feed_token,
+      storedLength: profile.calendar_feed_token?.length,
       match: profile.calendar_feed_token === token 
     });
 
     if (profile.calendar_feed_token !== token) {
-      return new Response("Invalid token", { 
+      return new Response(JSON.stringify({
+        error: "Invalid token",
+        debug: {
+          receivedLength: token?.length,
+          storedLength: profile.calendar_feed_token?.length,
+          receivedFirst10: token?.substring(0, 10),
+          storedFirst10: profile.calendar_feed_token?.substring(0, 10)
+        }
+      }), { 
         status: 401,
-        headers: { ...corsHeaders, "Content-Type": "text/plain" }
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
