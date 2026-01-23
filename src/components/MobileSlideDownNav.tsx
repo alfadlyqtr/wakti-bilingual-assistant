@@ -120,7 +120,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
     {
       name: language === 'ar' ? 'الحيوية' : 'Vitality',
       path: '/fitness',
-      icon: 'heart-pulse',
+      icon: 'wakti',
       colorClass: 'text-rose-500',
     },
     {
@@ -174,7 +174,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
     mic: Mic,
     pen: PenTool,
     gamepad: Gamepad2,
-    'heart-pulse': WaktiIcon,
+    'wakti': WaktiIcon,
     'notebook-pen': NotebookPen,
     music: Music,
     'audio-lines': AudioLines,
