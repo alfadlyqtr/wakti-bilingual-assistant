@@ -749,9 +749,6 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     <div 
       className="flex flex-col h-full w-full overflow-hidden" 
       ref={containerRef}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
     >
       <div className="flex flex-col space-y-2 p-3">
         {/* Top bar with sync and date controls */}
@@ -760,9 +757,16 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
           <Button
             variant="default"
             size="sm"
-            onClick={() => syncCalendars(syncDirection)}
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              console.log('[CalendarSync] Sync button clicked!');
+              syncCalendars(syncDirection);
+            }}
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
             disabled={isSyncing}
-            className="flex items-center gap-1.5 min-w-[100px] bg-primary text-primary-foreground hover:bg-primary/90"
+            className="flex items-center gap-1.5 min-w-[100px] bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95 touch-manipulation z-50"
           >
             <RefreshCw className={cn("h-4 w-4", isSyncing && "animate-spin")} />
             <span className="font-medium">
@@ -969,15 +973,21 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
         )}
       </div>
 
-      <CalendarGrid
-        currentDate={currentDate}
-        selectedDate={selectedDate}
-        calendarEntries={calendarEntries}
-        view={view}
-        onDayClick={handleDayClick}
-        language={language}
-        locale={locale}
-      />
+      <div
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        <CalendarGrid
+          currentDate={currentDate}
+          selectedDate={selectedDate}
+          calendarEntries={calendarEntries}
+          view={view}
+          onDayClick={handleDayClick}
+          language={language}
+          locale={locale}
+        />
+      </div>
 
       
 

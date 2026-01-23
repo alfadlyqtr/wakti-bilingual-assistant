@@ -81,9 +81,10 @@ export function SmartMediaManager({
   const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Selection State
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  // Selection State - support multiple selection
+  const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [isDownloadingStock, setIsDownloadingStock] = useState(false);
 
   // Extract images from generated files on mount
   useEffect(() => {
@@ -447,11 +448,17 @@ export function SmartMediaManager({
                     key={idx}
                     className={cn(
                       "group relative rounded-lg overflow-hidden border transition-all cursor-pointer",
-                      selectedImage === img.src 
+                      selectedImages.includes(img.src) 
                         ? "ring-2 ring-primary border-primary" 
                         : "border-border hover:border-primary/50"
                     )}
-                    onClick={() => setSelectedImage(img.src)}
+                    onClick={() => {
+                      setSelectedImages(prev => 
+                        prev.includes(img.src) 
+                          ? prev.filter(url => url !== img.src)
+                          : [...prev, img.src]
+                      );
+                    }}
                   >
                     <div className="aspect-video bg-muted">
                       <img 
@@ -467,7 +474,7 @@ export function SmartMediaManager({
                       <p className="text-[10px] text-white font-medium truncate">{img.alt}</p>
                       <p className="text-[9px] text-white/70">{img.location}</p>
                     </div>
-                    {selectedImage === img.src && (
+                    {selectedImages.includes(img.src) && (
                       <div className="absolute top-2 right-2 p-1 rounded-full bg-primary">
                         <Check className="h-3 w-3 text-white" />
                       </div>
@@ -532,36 +539,46 @@ export function SmartMediaManager({
             ) : stockPhotos.length > 0 ? (
               <>
                 <div className="grid grid-cols-2 gap-3">
-                  {stockPhotos.map((photo) => (
-                    <div 
-                      key={photo.id}
-                      className={cn(
-                        "group relative rounded-lg overflow-hidden border transition-all cursor-pointer",
-                        selectedImage === photo.image?.source?.url 
-                          ? "ring-2 ring-primary border-primary" 
-                          : "border-border hover:border-primary/50"
-                      )}
-                      onClick={() => setSelectedImage(photo.image?.source?.url || '')}
-                    >
-                      <div className="aspect-video bg-muted">
-                        <img 
-                          src={photo.image?.source?.url || ''} 
-                          alt={photo.title}
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                        />
-                      </div>
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2">
-                        <p className="text-[10px] text-white font-medium truncate">{photo.title}</p>
-                        <p className="text-[9px] text-white/70">Freepik</p>
-                      </div>
-                      {selectedImage === photo.image?.source?.url && (
-                        <div className="absolute top-2 right-2 p-1 rounded-full bg-primary">
-                          <Check className="h-3 w-3 text-white" />
+                  {stockPhotos.map((photo) => {
+                    const photoUrl = photo.image?.source?.url || '';
+                    return (
+                      <div 
+                        key={photo.id}
+                        className={cn(
+                          "group relative rounded-lg overflow-hidden border transition-all cursor-pointer",
+                          selectedImages.includes(photoUrl) 
+                            ? "ring-2 ring-primary border-primary" 
+                            : "border-border hover:border-primary/50"
+                        )}
+                        onClick={() => {
+                          if (!photoUrl) return;
+                          setSelectedImages(prev => 
+                            prev.includes(photoUrl) 
+                              ? prev.filter(url => url !== photoUrl)
+                              : [...prev, photoUrl]
+                          );
+                        }}
+                      >
+                        <div className="aspect-video bg-muted">
+                          <img 
+                            src={photoUrl} 
+                            alt={photo.title}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
                         </div>
-                      )}
-                    </div>
-                  ))}
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2">
+                          <p className="text-[10px] text-white font-medium truncate">{photo.title}</p>
+                          <p className="text-[9px] text-white/70">Freepik</p>
+                        </div>
+                        {selectedImages.includes(photoUrl) && (
+                          <div className="absolute top-2 right-2 p-1 rounded-full bg-primary">
+                            <Check className="h-3 w-3 text-white" />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* Pagination */}
@@ -656,11 +673,17 @@ export function SmartMediaManager({
                       key={img.id}
                       className={cn(
                         "group relative rounded-lg overflow-hidden border transition-all cursor-pointer",
-                        selectedImage === img.url 
+                        selectedImages.includes(img.url) 
                           ? "ring-2 ring-primary border-primary" 
                           : "border-border hover:border-primary/50"
                       )}
-                      onClick={() => setSelectedImage(img.url)}
+                      onClick={() => {
+                        setSelectedImages(prev => 
+                          prev.includes(img.url) 
+                            ? prev.filter(url => url !== img.url)
+                            : [...prev, img.url]
+                        );
+                      }}
                     >
                       <div className="aspect-square bg-muted">
                         <img 
@@ -685,7 +708,7 @@ export function SmartMediaManager({
                           <Trash2 className="h-3 w-3 text-white" />
                         </button>
                       </div>
-                      {selectedImage === img.url && (
+                      {selectedImages.includes(img.url) && (
                         <div className="absolute top-1 right-1 p-0.5 rounded-full bg-primary">
                           <Check className="h-2.5 w-2.5 text-white" />
                         </div>
@@ -710,11 +733,11 @@ export function SmartMediaManager({
         </Button>
         
         <div className="flex items-center gap-2">
-          {selectedImage && (
+          {selectedImages.length === 1 && (
             <Button
               variant="outline"
               size="sm"
-              onClick={() => copyImageUrl(selectedImage)}
+              onClick={() => copyImageUrl(selectedImages[0])}
               className="text-xs"
             >
               <Copy className="h-3 w-3 mr-1" />
@@ -723,18 +746,25 @@ export function SmartMediaManager({
           )}
           <Button
             size="sm"
-            disabled={!selectedImage}
-            onClick={() => {
-              if (selectedImage) {
-                onInsertImage(selectedImage, 'Image');
-                toast.success(isRTLMode ? '✨ تم إدراج الصورة!' : '✨ Image inserted!');
+            disabled={selectedImages.length === 0 || isDownloadingStock}
+            onClick={async () => {
+              if (selectedImages.length > 0) {
+                // Insert all selected images
+                for (const imgUrl of selectedImages) {
+                  onInsertImage(imgUrl, 'Image');
+                }
+                toast.success(isRTLMode ? `✨ تم إدراج ${selectedImages.length} صورة!` : `✨ ${selectedImages.length} image(s) inserted!`);
                 onClose();
               }
             }}
             className="text-xs bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
           >
-            <Plus className="h-3 w-3 mr-1" />
-            {isRTLMode ? 'إدراج في الموقع' : 'Insert to Site'}
+            {isDownloadingStock ? (
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+            ) : (
+              <Plus className="h-3 w-3 mr-1" />
+            )}
+            {isRTLMode ? `إدراج (${selectedImages.length})` : `Insert (${selectedImages.length})`}
           </Button>
         </div>
       </div>

@@ -637,7 +637,9 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
           // Skeleton Loading
           "react-loading-skeleton": "^3.4.0",
           // Color Picker
-          "react-colorful": "^5.6.1"
+          "react-colorful": "^5.6.1",
+          // Intersection Observer
+          "react-intersection-observer": "^9.10.2"
         }
       }}
       style={{ height: '100%', width: '100%' }}

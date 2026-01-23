@@ -8213,6 +8213,7 @@ ${fixInstructions}
                       onDownload={downloadProject}
                       onPublish={openPublishModal}
                       isPublishing={publishing}
+                      isRTL={isRTL}
                       onElementSelect={(ref, elementInfo) => {
                         if (elementInfo) {
                           setSelectedElementInfo(elementInfo);

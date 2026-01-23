@@ -117,10 +117,10 @@ function EnhancedProjectLoader({ isRTL = false }) {
     <div className="absolute inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center">
       {/* Main content area */}
       <div className="w-full max-w-md mx-auto px-4">
-        {/* Progress bar */}
-        <div className="w-full h-1 bg-gray-800 rounded-full mb-8 overflow-hidden">
+        {/* Progress bar - single continuous bar without gaps */}
+        <div className="w-full h-1 bg-gray-800 rounded-full mb-8 overflow-hidden relative">
           <div 
-            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-300 ease-linear" 
+            className="absolute inset-y-0 left-0 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full" 
             style={{ width: `${progressBar}%` }}
           />
         </div>

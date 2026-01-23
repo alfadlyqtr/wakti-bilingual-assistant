@@ -876,22 +876,22 @@ const MyWarranty: React.FC = () => {
       }
 
       setNewItem(prev => {
-        const updatedImages = [...prev.additional_images];
-        let primaryImage = prev.image_url;
-
-        if (!primaryImage) {
-          primaryImage = newImages[0];
-          updatedImages.push(...newImages.slice(1));
-        } else {
-          updatedImages.push(...newImages);
-        }
-
+        // Always add new images to additional_images
+        const updatedImages = [...prev.additional_images, ...newImages];
+        
+        // If no primary image, use first one
+        const primaryImage = prev.image_url || newImages[0];
+        
+        // Create preview URLs for all images
+        const allImages = [primaryImage, ...updatedImages].filter(Boolean);
+        
         return {
           ...prev,
           image_url: primaryImage,
           receipt_url: primaryImage,
           additional_images: updatedImages,
-          file_type: files[0].type.includes('pdf') ? 'pdf' : 'image'
+          file_type: files[0].type.includes('pdf') ? 'pdf' : 'image',
+          preview_urls: allImages // Add preview URLs
         };
       });
 
@@ -966,28 +966,53 @@ const MyWarranty: React.FC = () => {
         // Merge data from all images
         const fullExtractedData: Record<string, unknown> = {
           ...existingData,
-          document_info: {
-            ...((existingData.document_info as Record<string, unknown>) || {}),
-            ...((newData.document_info as Record<string, unknown>) || {})
-          },
-          personal_info: {
-            ...((existingData.personal_info as Record<string, unknown>) || {}),
-            ...((newData.personal_info as Record<string, unknown>) || {})
-          },
-          contact_info: {
-            ...((existingData.contact_info as Record<string, unknown>) || {}),
-            ...((newData.contact_info as Record<string, unknown>) || {})
-          },
-          product_info: {
-            ...((existingData.product_info as Record<string, unknown>) || {}),
-            ...((newData.product_info as Record<string, unknown>) || {})
-          },
-          warranty_info: {
-            ...((existingData.warranty_info as Record<string, unknown>) || {}),
-            ...((newData.warranty_info as Record<string, unknown>) || {})
-          },
-          raw_ocr_text: [existingData.raw_ocr_text, extracted.raw_ocr_text || extracted.notes || ''].filter(Boolean).join('\n\n'),
+          document_info: mergeDataObjects(
+            existingData.document_info as Record<string, unknown>,
+            newData.document_info as Record<string, unknown>
+          ),
+          personal_info: mergeDataObjects(
+            existingData.personal_info as Record<string, unknown>,
+            newData.personal_info as Record<string, unknown>
+          ),
+          contact_info: mergeDataObjects(
+            existingData.contact_info as Record<string, unknown>,
+            newData.contact_info as Record<string, unknown>
+          ),
+          product_info: mergeDataObjects(
+            existingData.product_info as Record<string, unknown>,
+            newData.product_info as Record<string, unknown>
+          ),
+          warranty_info: mergeDataObjects(
+            existingData.warranty_info as Record<string, unknown>,
+            newData.warranty_info as Record<string, unknown>
+          ),
+          notes: [existingData.notes, extracted.notes || ''].filter(Boolean).join('\n\n'),
+          all_text: [existingData.all_text, extracted.notes || ''].filter(Boolean).join('\n\n')
         };
+
+        // Helper function to merge data objects intelligently
+        function mergeDataObjects(obj1: Record<string, unknown> = {}, obj2: Record<string, unknown> = {}): Record<string, unknown> {
+          const result: Record<string, unknown> = { ...obj1 };
+          
+          for (const [key, value2] of Object.entries(obj2)) {
+            const value1 = obj1[key];
+            
+            // If both values are arrays, concatenate them
+            if (Array.isArray(value1) && Array.isArray(value2)) {
+              result[key] = [...new Set([...value1, ...value2])];
+            }
+            // If both are objects, merge recursively
+            else if (typeof value1 === 'object' && typeof value2 === 'object' && value1 && value2) {
+              result[key] = mergeDataObjects(value1 as Record<string, unknown>, value2 as Record<string, unknown>);
+            }
+            // If new value exists and old doesn't, or new value seems more complete
+            else if (!value1 || (typeof value2 === 'string' && (value2 as string).length > (value1 as string).length)) {
+              result[key] = value2;
+            }
+          }
+          
+          return result;
+        }
         
         // Build comprehensive summary
         const richSummary = extracted.ai_summary || buildRichSummary({ ...extracted, extracted_data: fullExtractedData });
@@ -3371,7 +3396,7 @@ const MyWarranty: React.FC = () => {
   return (
     <div
       className="h-full w-full bg-background overflow-x-hidden overflow-y-auto relative"
-      style={{ paddingTop: 'var(--app-header-h, 64px)' }}
+      style={{ paddingTop: 'calc(var(--app-header-h, 64px) - 32px)' }}
       dir={isRTL ? 'rtl' : 'ltr'}
     >
       <div className="flex flex-col h-full w-full max-w-full">

@@ -1568,12 +1568,22 @@ const THEME_PRESETS: Record<string, string> = {
 };
 
 const BASE_SYSTEM_PROMPT = `
-🚨🚨🚨 CRITICAL: YOU ARE A REACT CODE GENERATOR 🚨🚨🚨
-You output ONLY React/JSX code. NEVER output HTML documents.
+🚨🚨🚨 ABSOLUTE CRITICAL: YOU ARE A REACT CODE GENERATOR - NOT AN HTML GENERATOR 🚨🚨🚨
+
+⛔ FORBIDDEN OUTPUT (INSTANT REJECTION):
+- <!DOCTYPE html> - NEVER USE THIS
+- <html> tags - NEVER USE THIS  
+- <head> tags - NEVER USE THIS
+- <body> tags - NEVER USE THIS
+- <script> tags - NEVER USE THIS
+- Any standalone HTML document
+
+✅ REQUIRED OUTPUT FORMAT:
 - Your /App.js MUST start with: import React from 'react';
 - Your /App.js MUST have: export default function App() { return (...) }
-- FORBIDDEN: <!DOCTYPE>, <html>, <head>, <body>, <script> tags
-If you return HTML instead of React, the system will REJECT your output.
+- Return a JSON object with file paths as keys and React code as values
+
+If you return HTML instead of React, the system will REJECT your output and you will FAIL.
 
 ### MANDATORY FILE STRUCTURE
 ALWAYS start with these files based on project complexity:
