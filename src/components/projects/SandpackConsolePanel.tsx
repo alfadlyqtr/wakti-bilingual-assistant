@@ -27,8 +27,17 @@ export function SandpackConsolePanel({ isOpen, onToggle, maxHeight = 200 }: Sand
   // Listen for console messages from the preview iframe
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'console' && event.data?.log) {
-        const { method, data } = event.data.log;
+      // CRITICAL: Clone event.data to avoid readonly property errors
+      // Sandpack freezes event.data in some cases
+      let eventData: any;
+      try {
+        eventData = event.data ? JSON.parse(JSON.stringify(event.data)) : {};
+      } catch (e) {
+        eventData = {};
+      }
+      
+      if (eventData?.type === 'console' && eventData?.log) {
+        const { method, data } = eventData.log;
         const newLog: ConsoleLog = {
           id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
           method: method || 'log',

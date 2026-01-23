@@ -814,6 +814,16 @@ const MyWarranty: React.FC = () => {
     const parts: string[] = [];
     const ed = (extracted.extracted_data || {}) as Record<string, unknown>;
     
+    // Always start with document type
+    parts.push('This is a Document.');
+    
+    // Add core document details
+    if (ed.document_info) {
+      const docInfo = ed.document_info as Record<string, unknown>;
+      if (docInfo.document_type) parts.push(`Type: ${docInfo.document_type}.`);
+      if (docInfo.issuer) parts.push(`Issued by ${docInfo.issuer}.`);
+    }
+    
     if (extracted.title) parts.push(`📄 ${extracted.title}`);
     if (extracted.provider) parts.push(`🏢 Issued by ${extracted.provider}`);
     const holder = (ed.personal_info as any)?.full_name || ed.holder_name || ed.insured_name || ed.full_name;
@@ -909,7 +919,8 @@ const MyWarranty: React.FC = () => {
 
   // Handle manual analyze (Send button)
   const handleAnalyzeDocument = async () => {
-    if (!user || !newItem.image_url) return;
+    // Check if we have any images to analyze
+    if (!user || (!newItem.image_url && newItem.additional_images.length === 0)) return;
     
     setIsAnalyzing(true);
     
@@ -947,12 +958,58 @@ const MyWarranty: React.FC = () => {
       
       if (aiData?.success && aiData?.data) {
         const extracted = aiData.data;
+        
+        // Merge existing and new extracted data
+        const existingData = newItem.extracted_data || {};
+        const newData = extracted.extracted_data || {};
+        
+        // Merge data from all images
         const fullExtractedData: Record<string, unknown> = {
-          ...(extracted.extracted_data || {}),
-          raw_ocr_text: extracted.raw_ocr_text || extracted.notes || '',
+          ...existingData,
+          document_info: {
+            ...((existingData.document_info as Record<string, unknown>) || {}),
+            ...((newData.document_info as Record<string, unknown>) || {})
+          },
+          personal_info: {
+            ...((existingData.personal_info as Record<string, unknown>) || {}),
+            ...((newData.personal_info as Record<string, unknown>) || {})
+          },
+          contact_info: {
+            ...((existingData.contact_info as Record<string, unknown>) || {}),
+            ...((newData.contact_info as Record<string, unknown>) || {})
+          },
+          product_info: {
+            ...((existingData.product_info as Record<string, unknown>) || {}),
+            ...((newData.product_info as Record<string, unknown>) || {})
+          },
+          warranty_info: {
+            ...((existingData.warranty_info as Record<string, unknown>) || {}),
+            ...((newData.warranty_info as Record<string, unknown>) || {})
+          },
+          raw_ocr_text: [existingData.raw_ocr_text, extracted.raw_ocr_text || extracted.notes || ''].filter(Boolean).join('\n\n'),
         };
-        const richSummary = extracted.ai_summary || buildRichSummary(extracted);
+        
+        // Build comprehensive summary
+        const richSummary = extracted.ai_summary || buildRichSummary({ ...extracted, extracted_data: fullExtractedData });
 
+        // Update state with new data
+        const updatedItem = {
+          ...newItem,
+          title: extracted.title || newItem.title,
+          provider: extracted.provider || newItem.provider,
+          category: extracted.category || newItem.category,
+          purchase_date: extracted.purchase_date || newItem.purchase_date,
+          expiry_date: extracted.expiry_date || newItem.expiry_date,
+          ref_number: extracted.ref_number || newItem.ref_number,
+          support_contact: extracted.support_contact || newItem.support_contact,
+          extracted_data: fullExtractedData,
+          ai_summary: richSummary,
+        };
+
+        // Auto-save after successful analysis
+        await handleSave(updatedItem);
+
+        // Update UI state
         setNewItem(prev => ({
           ...prev,
           title: extracted.title || prev.title,
@@ -979,10 +1036,14 @@ const MyWarranty: React.FC = () => {
   };
 
   // Handle Save
-  const handleSave = async () => {
-    if (!user || !newItem.title) return;
+  const handleSave = async (itemToSave = newItem) => {
+    if (!user || !itemToSave.title) return;
 
     try {
+      // Start loading
+      setIsLoading(true);
+      // Set view mode to list immediately to prevent double-save
+      setViewMode('list');
       const parsedTags = newTagsInput
         .split(',')
         .map((t) => t.trim())
@@ -1371,11 +1432,22 @@ const MyWarranty: React.FC = () => {
             <button
               type="button"
               onClick={() => setViewMode('add')}
-              className="h-9 px-3 rounded-full btn-enhanced flex items-center justify-center gap-1.5 active:scale-95 transition shrink-0 shadow-lg"
+              className="
+                h-9 px-3 rounded-full shrink-0
+                bg-gradient-to-r from-emerald-500 to-blue-500
+                hover:from-emerald-400 hover:to-blue-400
+                active:from-emerald-600 active:to-blue-600
+                flex items-center justify-center gap-1.5
+                shadow-[0_4px_16px_-4px_rgba(16,185,129,0.5)]
+                hover:shadow-[0_6px_20px_-4px_rgba(16,185,129,0.6)]
+                active:shadow-[0_2px_8px_-2px_rgba(16,185,129,0.4)]
+                transition-all duration-300 active:scale-95
+                border border-emerald-400/30
+              "
               aria-label={t.addNew}
             >
-              <Plus className="w-4 h-4 text-white" />
-              <span className="text-xs font-bold text-white">{t.addNew}</span>
+              <Plus className="w-4 h-4 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)]" />
+              <span className="text-xs font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)]">{t.addNew}</span>
             </button>
           )}
           <div className="w-px h-6 bg-white/10 shrink-0 mx-1" />
@@ -1467,10 +1539,21 @@ const MyWarranty: React.FC = () => {
             <button
               type="button"
               onClick={() => setViewMode('add')}
-              className="mt-6 w-16 h-16 rounded-full btn-enhanced flex items-center justify-center active:scale-95 transition"
+              className="
+                mt-6 w-16 h-16 rounded-full
+                bg-gradient-to-br from-emerald-500 to-blue-500
+                hover:from-emerald-400 hover:to-blue-400
+                active:from-emerald-600 active:to-blue-600
+                flex items-center justify-center
+                shadow-[0_8px_32px_-8px_rgba(16,185,129,0.5)]
+                hover:shadow-[0_12px_40px_-8px_rgba(16,185,129,0.6)]
+                active:shadow-[0_4px_16px_-4px_rgba(16,185,129,0.4)]
+                transition-all duration-300 active:scale-95
+                border border-emerald-400/30
+              "
               aria-label={t.addNew}
             >
-              <Plus className="w-7 h-7 text-white" />
+              <Plus className="w-7 h-7 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]" />
             </button>
           </div>
         ) : filteredWarrantiesByTag.length === 0 ? (
@@ -1584,13 +1667,34 @@ const MyWarranty: React.FC = () => {
             <h3 className="text-lg font-semibold text-foreground mb-2">{t.askEmptyHint}</h3>
             <div className="space-y-2 mt-4 w-full max-w-sm">
               {[t.askExample1, t.askExample2, t.askExample3].map((example, i) => (
-                <button
-                  key={i}
-                  onClick={() => setAskQuestion(example)}
-                  className="w-full p-3 rounded-xl bg-gradient-to-r from-white/5 to-white/[0.02] border border-white/10 text-sm text-muted-foreground hover:border-blue-500/30 hover:bg-blue-500/5 transition-all text-left active:scale-[0.98]"
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setViewMode('list')}
+                  className="
+                    group flex items-center gap-2 h-10 pl-1 pr-4 rounded-full
+                    bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent
+                    hover:from-emerald-500/20 hover:via-emerald-500/10 hover:to-transparent
+                    border border-white/20 hover:border-white/30
+                    transition-all duration-300 active:scale-95
+                    shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)]
+                    hover:shadow-[0_8px_25px_-5px_rgba(0,0,0,0.2)]
+                    dark:shadow-[0_4px_20px_-4px_rgba(0,0,0,0.5)]
+                    dark:hover:shadow-[0_8px_25px_-5px_rgba(0,0,0,0.7)]
+                  "
                 >
-                  <span className="text-blue-400 mr-2">→</span> {example}
-                </button>
+                  <div className="
+                    w-8 h-8 rounded-full 
+                    bg-gradient-to-br from-emerald-500 to-emerald-600
+                    flex items-center justify-center
+                    shadow-[0_2px_8px_-2px_rgba(16,185,129,0.5)]
+                    group-hover:shadow-[0_4px_12px_-2px_rgba(16,185,129,0.7)]
+                    transition-all duration-300
+                  ">
+                    <ChevronLeft className="w-4 h-4 text-white" />
+                  </div>
+                  <span className="text-sm text-muted-foreground">{t.back}</span>
+                </Button>
               ))}
             </div>
           </div>
@@ -2207,32 +2311,54 @@ const MyWarranty: React.FC = () => {
   const renderAddView = () => (
     <div className="flex flex-col h-full w-full overflow-x-hidden" dir="ltr">
       {/* Header - Always LTR layout, back button always on left */}
-      <div className="flex items-center gap-3 px-4 py-4 border-b border-white/10 w-full">
-        <Button variant="ghost" size="sm" onClick={() => {
-          // Clear form when going back
-          setNewItem({
-            title: '',
-            provider: '',
-            category: '',
-            purchase_date: '',
-            warranty_period: '',
-            expiry_date: '',
-            ref_number: '',
-            support_contact: '',
-            image_url: '',
-            receipt_url: '',
-            additional_images: [],
-            file_type: '',
-            extracted_data: {},
-            ai_summary: '',
-          });
-          setNewTagsInput('');
-          // Reset file inputs
-          if (cameraInputRef.current) cameraInputRef.current.value = '';
-          if (fileInputRef.current) fileInputRef.current.value = '';
-          setViewMode('list');
-        }} className="h-10 px-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all active:scale-95 flex items-center justify-center">
-          <span className="text-sm font-medium">{t.back}</span>
+      <div className="flex items-center justify-between px-4 py-4 border-b border-white/10 w-full">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            // Clear form when going back
+            setNewItem({
+              title: '',
+              provider: '',
+              category: '',
+              purchase_date: '',
+              warranty_period: '',
+              expiry_date: '',
+              ref_number: '',
+              support_contact: '',
+              image_url: '',
+              receipt_url: '',
+              raw_ocr_text: '',
+              extracted_data: {},
+              ai_summary: '',
+              additional_images: [],
+              file_type: '',
+            });
+            setViewMode('list');
+          }}
+          className="
+            group flex items-center gap-2 h-10 pl-1 pr-4 rounded-full
+            bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent
+            hover:from-emerald-500/20 hover:via-emerald-500/10 hover:to-transparent
+            border border-white/20 hover:border-white/30
+            transition-all duration-300 active:scale-95
+            shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)]
+            hover:shadow-[0_8px_25px_-5px_rgba(0,0,0,0.2)]
+            dark:shadow-[0_4px_20px_-4px_rgba(0,0,0,0.5)]
+            dark:hover:shadow-[0_8px_25px_-5px_rgba(0,0,0,0.7)]
+          "
+        >
+          <div className="
+            w-8 h-8 rounded-full 
+            bg-gradient-to-br from-emerald-500 to-emerald-600
+            flex items-center justify-center
+            shadow-[0_2px_8px_-2px_rgba(16,185,129,0.5)]
+            group-hover:shadow-[0_4px_12px_-2px_rgba(16,185,129,0.7)]
+            transition-all duration-300
+          ">
+            <ChevronLeft className="w-4 h-4 text-white" />
+          </div>
+          <span className="text-sm font-medium tracking-wide">{t.back}</span>
         </Button>
         <h1 className="text-xl font-bold text-foreground flex-1" dir={isRTL ? 'rtl' : 'ltr'}>{t.addNew}</h1>
       </div>
@@ -2665,43 +2791,13 @@ const MyWarranty: React.FC = () => {
         )}
       </div>
 
-      {/* Save Button - Only show if we have extracted data */}
-      {!isAnalyzing && newItem.extracted_data && Object.keys(newItem.extracted_data).length > 0 && (
+      {/* Show analyzing state */}
+      {isAnalyzing && (
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-xl border-t border-white/10 pb-safe">
-          <Button
-            className="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white font-bold py-3 flex items-center justify-center gap-2"
-            onClick={async () => {
-              await handleSave();
-              // Clear form after successful save
-              setNewItem({
-                title: '',
-                provider: '',
-                category: '',
-                purchase_date: '',
-                warranty_period: '',
-                expiry_date: '',
-                ref_number: '',
-                support_contact: '',
-                image_url: '',
-                receipt_url: '',
-                additional_images: [],
-                file_type: '',
-                extracted_data: {},
-                ai_summary: '',
-              });
-              setNewTagsInput('');
-              // Reset file inputs
-              if (cameraInputRef.current) cameraInputRef.current.value = '';
-              if (fileInputRef.current) fileInputRef.current.value = '';
-              // Go back to list
-              setViewMode('list');
-              // Refresh data
-              fetchData();
-            }}
-          >
-            <CheckCircle className="w-5 h-5" />
-            <span>{t.saveFile}</span>
-          </Button>
+          <div className="flex items-center justify-center gap-3">
+            <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
+            <span className="text-sm text-muted-foreground">{isRTL ? 'جاري التحليل...' : 'Analyzing...'}</span>
+          </div>
         </div>
       )}
     </div>
@@ -2793,9 +2889,28 @@ const MyWarranty: React.FC = () => {
             variant="ghost" 
             size="sm" 
             onClick={() => setViewMode('list')}
-            className="flex items-center gap-2 h-10 px-4 rounded-2xl bg-gradient-to-r from-white/10 to-white/5 border border-white/20 hover:border-white/30 hover:from-white/15 hover:to-white/10 transition-all active:scale-95 shadow-lg shadow-black/10"
+            className="
+              group flex items-center gap-2 h-10 pl-1 pr-4 rounded-full
+              bg-gradient-to-r from-blue-500/10 via-purple-500/5 to-transparent
+              hover:from-blue-500/20 hover:via-purple-500/10 hover:to-transparent
+              border border-white/20 hover:border-white/30
+              transition-all duration-300 active:scale-95
+              shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)]
+              hover:shadow-[0_8px_25px_-5px_rgba(0,0,0,0.2)]
+              dark:shadow-[0_4px_20px_-4px_rgba(0,0,0,0.5)]
+              dark:hover:shadow-[0_8px_25px_-5px_rgba(0,0,0,0.7)]
+            "
           >
-            <ChevronLeft className="w-4 h-4" />
+            <div className="
+              w-8 h-8 rounded-full 
+              bg-gradient-to-br from-blue-500 to-purple-500
+              flex items-center justify-center
+              shadow-[0_2px_8px_-2px_rgba(59,130,246,0.5)]
+              group-hover:shadow-[0_4px_12px_-2px_rgba(59,130,246,0.7)]
+              transition-all duration-300
+            ">
+              <ChevronLeft className="w-4 h-4 text-white" />
+            </div>
             <span className="text-sm font-medium tracking-wide">{t.back}</span>
           </Button>
           <h1 className="text-lg font-bold text-foreground text-center flex-1 mx-2 truncate" dir={isRTL ? 'rtl' : 'ltr'}>{selectedItem.product_name}</h1>
@@ -3265,7 +3380,7 @@ const MyWarranty: React.FC = () => {
   // Main render
   return (
     <div
-      className="h-full w-full bg-background overflow-x-hidden overflow-y-auto relative"
+      className="h-full w-full bg-background overflow-x-hidden overflow-y-auto relative pt-safe"
       dir={isRTL ? 'rtl' : 'ltr'}
     >
       <div className="flex flex-col h-full w-full max-w-full">

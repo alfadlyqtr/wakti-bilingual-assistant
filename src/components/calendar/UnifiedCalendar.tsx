@@ -597,26 +597,44 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
 
   // Bidirectional calendar sync - handle both directions
   const syncCalendars = useCallback(async (direction: 'both' | 'to_phone' | 'from_phone' = 'both') => {
+    console.log('[CalendarSync] Starting sync with direction:', direction);
+    
     if (!nativeCalendarAvailable) {
+      console.error('[CalendarSync] Native calendar not available');
       toast.error(language === 'ar' ? 'مزامنة التقويم متاحة فقط في التطبيق' : 'Calendar sync is only available in the app');
+      return;
+    }
+    
+    if (isSyncing) {
+      console.log('[CalendarSync] Sync already in progress, skipping...');
       return;
     }
     
     setIsSyncing(true);
     let syncSuccess = false;
+    let toPhoneSuccess = false;
+    let fromPhoneSuccess = false;
     
     try {
       // Send to phone (Wakti → Phone)
       if (direction === 'both' || direction === 'to_phone') {
+        console.log('[CalendarSync] Syncing TO phone...');
         await syncToPhoneCalendar();
+        toPhoneSuccess = true;
+        console.log('[CalendarSync] Sync TO phone completed');
       }
       
       // Fetch from phone (Phone → Wakti)
       if (direction === 'both' || direction === 'from_phone') {
+        console.log('[CalendarSync] Syncing FROM phone...');
         await refreshCalendarData(); // This includes retrieveCalendarEventsIfSupported
+        fromPhoneSuccess = true;
+        console.log('[CalendarSync] Sync FROM phone completed');
       }
       
-      syncSuccess = true;
+      syncSuccess = (direction === 'both' && toPhoneSuccess && fromPhoneSuccess) ||
+                    (direction === 'to_phone' && toPhoneSuccess) ||
+                    (direction === 'from_phone' && fromPhoneSuccess);
     } catch (error) {
       console.error('[CalendarSync] Sync error:', error);
       toast.error(
@@ -629,13 +647,14 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     }
     
     if (syncSuccess) {
-      toast.success(
-        language === 'ar'
-          ? 'تمت مزامنة التقويم بنجاح'
-          : 'Calendar synced successfully'
-      );
+      const msg = {
+        both: language === 'ar' ? 'تمت مزامنة التقويم بنجاح' : 'Calendar synced successfully',
+        to_phone: language === 'ar' ? 'تمت مزامنة التقويم إلى الهاتف' : 'Calendar synced to phone',
+        from_phone: language === 'ar' ? 'تمت مزامنة التقويم من الهاتف' : 'Calendar synced from phone'
+      };
+      toast.success(msg[direction]);
     }
-  }, [language, nativeCalendarAvailable, syncToPhoneCalendar, refreshCalendarData]);
+  }, [language, nativeCalendarAvailable, isSyncing, syncToPhoneCalendar, refreshCalendarData]);
 
   // Handle auto-sync toggle
   const handleAutoSyncToggle = useCallback((enabled: boolean) => {
@@ -684,10 +703,25 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
 
   // Auto-sync when calendar data changes (if enabled)
   useEffect(() => {
-    if (autoSyncEnabled && nativeCalendarAvailable && calendarEntries.length > 0 && !isSyncing) {
-      console.log('[CalendarSync] Auto-sync triggered');
-      syncCalendars(syncDirection);
-    }
+    let autoSyncTimeout: NodeJS.Timeout;
+    
+    const triggerAutoSync = () => {
+      if (autoSyncEnabled && nativeCalendarAvailable && calendarEntries.length > 0 && !isSyncing) {
+        console.log('[CalendarSync] Auto-sync scheduled');
+        // Debounce auto-sync to prevent multiple rapid syncs
+        clearTimeout(autoSyncTimeout);
+        autoSyncTimeout = setTimeout(() => {
+          console.log('[CalendarSync] Auto-sync executing...');
+          syncCalendars(syncDirection);
+        }, 2000); // Wait 2 seconds after last change
+      }
+    };
+    
+    triggerAutoSync();
+    
+    return () => {
+      clearTimeout(autoSyncTimeout);
+    };
   }, [autoSyncEnabled, nativeCalendarAvailable, calendarEntries.length, syncDirection, syncCalendars, isSyncing]);
 
   return (
@@ -699,8 +733,25 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
       onTouchEnd={handleTouchEnd}
     >
       <div className="flex flex-col space-y-2 p-3">
-        {/* Date selector with dropdowns */}
-        <div className="flex items-center justify-center w-full">
+        {/* Top bar with sync and date controls */}
+        <div className="flex items-center justify-between w-full gap-2">
+          {/* Sync button */}
+          {nativeCalendarAvailable && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => syncCalendars(syncDirection)}
+              disabled={isSyncing}
+              className="flex items-center gap-1 min-w-[90px]"
+            >
+              <RefreshCw className={cn("h-4 w-4", isSyncing && "animate-spin")} />
+              <span>
+                {language === 'ar' ? 'مزامنة' : 'Sync'}
+              </span>
+            </Button>
+          )}
+          
+          {/* Date controls */}
           <div className="flex items-center space-x-2">
             <Button 
               variant="ghost" 
@@ -806,6 +857,21 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
             >
               {t("today", language)}
             </Button>
+
+            {nativeCalendarAvailable && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => syncCalendars(syncDirection)}
+                disabled={isSyncing}
+                className="flex items-center gap-1"
+              >
+                <RefreshCw className={cn("h-4 w-4", isSyncing && "animate-spin")} />
+                <span>
+                  {language === 'ar' ? 'مزامنة' : 'Sync'}
+                </span>
+              </Button>
+            )}
             <Button 
               variant="outline" 
               size="icon" 
@@ -824,88 +890,74 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
         {/* Phone Calendar Sync Section */}
         {nativeCalendarAvailable && (
           <div className="flex flex-col p-3 rounded-lg bg-muted/50 border">
-            <div className="flex items-center justify-between mb-2">
+            {/* Top row with sync button and auto toggle */}
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Smartphone className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm font-medium">
-                  {language === 'ar' ? 'مزامنة تقويم الهاتف' : 'Phone Calendar Sync'}
+                  {language === 'ar' ? 'مزامنة التقويم' : 'Calendar Sync'}
                 </span>
               </div>
               
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 {/* Manual sync button */}
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
                   onClick={() => syncCalendars(syncDirection)}
                   disabled={isSyncing}
-                  className="flex items-center gap-1"
+                  className="flex items-center gap-1 h-8 px-3"
                 >
                   <RefreshCw className={cn("h-4 w-4", isSyncing && "animate-spin")} />
-                  <span className="hidden sm:inline">
+                  <span>
                     {language === 'ar' ? 'مزامنة' : 'Sync'}
                   </span>
                 </Button>
-                
-                {/* Auto-sync toggle */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">
-                    {language === 'ar' ? 'تلقائي' : 'Auto'}
-                  </span>
-                  <Switch
-                    checked={autoSyncEnabled}
-                    onCheckedChange={handleAutoSyncToggle}
-                    aria-label={language === 'ar' ? 'المزامنة التلقائية' : 'Auto-sync'}
-                  />
-                </div>
               </div>
             </div>
             
-            {/* Sync direction selector */}
-            <div className="flex items-center justify-between mt-2 gap-3">
-              <div className="flex-shrink-0 text-xs text-muted-foreground">
-                {language === 'ar' ? 'اتجاه المزامنة:' : 'Sync Direction:'}
-              </div>
-              <div className="flex gap-2">
+            {/* Bottom row with direction controls */}
+            <div className="flex items-center justify-between mt-3 gap-2">
+              <div className="flex gap-2 flex-1">
                 <Button 
                   variant={syncDirection === 'both' ? 'default' : 'outline'} 
                   size="sm"
                   onClick={() => handleSyncDirectionChange('both')}
-                  className="flex items-center gap-1 text-xs"
+                  className="flex-1 h-8"
                 >
-                  <RefreshCw className="h-3 w-3" />
-                  <span>
-                    {language === 'ar' ? 'ثنائي' : 'Both'}
-                  </span>
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                  {language === 'ar' ? 'ثنائي' : 'Both'}
                 </Button>
                 
                 <Button 
                   variant={syncDirection === 'to_phone' ? 'default' : 'outline'} 
                   size="sm"
                   onClick={() => handleSyncDirectionChange('to_phone')}
-                  className="flex items-center gap-1 text-xs"
+                  className="flex-1 h-8"
                 >
-                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 5l7 7-7 7M5 12h14"/>
-                  </svg>
-                  <span>
-                    {language === 'ar' ? 'إلى الهاتف' : 'To Phone'}
-                  </span>
+                  → {language === 'ar' ? 'إلى' : 'To'}
                 </Button>
                 
                 <Button 
                   variant={syncDirection === 'from_phone' ? 'default' : 'outline'} 
                   size="sm"
                   onClick={() => handleSyncDirectionChange('from_phone')}
-                  className="flex items-center gap-1 text-xs"
+                  className="flex-1 h-8"
                 >
-                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 19l-7-7 7-7M19 12H5"/>
-                  </svg>
-                  <span>
-                    {language === 'ar' ? 'من الهاتف' : 'From Phone'}
-                  </span>
+                  ← {language === 'ar' ? 'من' : 'From'}
                 </Button>
+              </div>
+              
+              {/* Auto-sync toggle */}
+              <div className="flex items-center gap-2 ml-2">
+                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                  {language === 'ar' ? 'تلقائي' : 'Auto'}
+                </span>
+                <Switch
+                  checked={autoSyncEnabled}
+                  onCheckedChange={handleAutoSyncToggle}
+                  aria-label={language === 'ar' ? 'المزامنة التلقائية' : 'Auto-sync'}
+                />
               </div>
             </div>
           </div>

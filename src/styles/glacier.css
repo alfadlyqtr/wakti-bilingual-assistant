@@ -1,0 +1,168 @@
+/* 
+ * Glacier Cuts Theme
+ * Modern, minimal styling with a focus on clean typography and ample whitespace
+ */
+
+.glacier-header {
+  background-color: #2F323A;
+  color: white;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  padding: 1rem;
+}
+
+.glacier-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 80rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.glacier-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+}
+
+.glacier-nav-link {
+  color: rgba(255, 255, 255, 0.9);
+  transition: color 0.2s ease;
+}
+
+.glacier-nav-link:hover {
+  color: rgba(255, 255, 255, 1);
+}
+
+.glacier-hero {
+  min-height: 80vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #2F323A 0%, #1F2124 100%);
+}
+
+.glacier-hero-content {
+  text-align: center;
+  color: white;
+  max-width: 56rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.glacier-title {
+  font-size: 2.25rem;
+  line-height: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+  font-family: var(--font-heading);
+}
+
+@media (min-width: 768px) {
+  .glacier-title {
+    font-size: 3.75rem;
+    line-height: 1;
+  }
+}
+
+.glacier-subtitle {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 2rem;
+}
+
+@media (min-width: 768px) {
+  .glacier-subtitle {
+    font-size: 1.5rem;
+    line-height: 2rem;
+  }
+}
+
+.glacier-button {
+  padding: 0.75rem 2rem;
+  background-color: #3B82F6;
+  color: white;
+  border-radius: 0.375rem;
+  transition: all 0.2s ease;
+  transform: scale(1);
+}
+
+.glacier-button:hover {
+  background-color: #2563EB;
+  transform: scale(1.05);
+}
+
+.glacier-button:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px #3B82F6, 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+/* Grid Layout */
+.glacier-grid {
+  display: grid;
+  grid-template-columns: repeat(1, 1fr);
+  gap: 2rem;
+  max-width: 80rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 4rem 1rem;
+}
+
+@media (min-width: 768px) {
+  .glacier-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .glacier-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Cards */
+.glacier-card {
+  background-color: rgba(255, 255, 255, 0.05);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  transition: all 0.2s ease;
+}
+
+.glacier-card:hover {
+  transform: scale(1.02);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+              0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Images */
+.glacier-image {
+  border-radius: 0.5rem;
+  object-fit: cover;
+  width: 100%;
+  height: 100%;
+}
+
+/* Animations */
+@keyframes glacierFadeIn {
+  from { 
+    opacity: 0; 
+    transform: translateY(20px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+.glacier-animate-fade-in {
+  animation: glacierFadeIn 0.6s ease-out forwards;
+}

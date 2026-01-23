@@ -41,16 +41,25 @@ export const SandpackErrorListener = ({ onErrorDetected }: ErrorListenerProps) =
   // Listen for messages from the preview iframe (console errors, React errors)
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
+      // CRITICAL: Clone event.data to avoid readonly property errors
+      // Sandpack freezes event.data in some cases
+      let data: any;
+      try {
+        data = event.data ? JSON.parse(JSON.stringify(event.data)) : {};
+      } catch (e) {
+        data = {};
+      }
+      
       // Capture ALL console messages for agent mode (not just errors)
-      if (event.data?.type === 'console' && event.data?.log) {
-        const method = event.data.log.method || 'log';
-        const message = event.data.log.data?.join(' ') || 'Unknown console message';
+      if (data?.type === 'console' && data?.log) {
+        const method = data.log.method || 'log';
+        const message = data.log.data?.join(' ') || 'Unknown console message';
         
         if (debugContext) {
           debugContext.captureConsoleLog({
             level: method === 'error' ? 'error' : method === 'warn' ? 'warn' : method === 'info' ? 'info' : 'log',
             message: message,
-            args: event.data.log.data
+            args: data.log.data
           });
         }
         
@@ -61,8 +70,8 @@ export const SandpackErrorListener = ({ onErrorDetected }: ErrorListenerProps) =
       }
       
       // React error boundary errors from our injected script
-      if (event.data?.type === 'WAKTI_REACT_ERROR') {
-        const { message, stack, componentStack } = event.data.payload || {};
+      if (data?.type === 'WAKTI_REACT_ERROR') {
+        const { message, stack, componentStack } = data.payload || {};
         
         if (debugContext && message) {
           debugContext.captureError({
@@ -80,8 +89,8 @@ export const SandpackErrorListener = ({ onErrorDetected }: ErrorListenerProps) =
       }
       
       // Network errors from the preview
-      if (event.data?.type === 'WAKTI_NETWORK_ERROR') {
-        const { url, method, status, statusText, responseBody } = event.data.payload || {};
+      if (data?.type === 'WAKTI_NETWORK_ERROR') {
+        const { url, method, status, statusText, responseBody } = data.payload || {};
         
         if (debugContext && url) {
           debugContext.captureNetworkError({

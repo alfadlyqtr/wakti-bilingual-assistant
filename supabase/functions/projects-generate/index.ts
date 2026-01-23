@@ -2525,7 +2525,10 @@ serve(async (req: Request) => {
   if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405, headers: corsHeaders });
 
   const userId = getUserIdFromRequest(req);
-  if (!userId) return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  if (!userId) {
+    const createResponseEarly = (data: any, status = 200) => new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return createResponseEarly({ ok: false, error: "Unauthorized" }, 401);
+  }
 
   try {
     const body: RequestBody = await req.json();
@@ -2536,20 +2539,32 @@ serve(async (req: Request) => {
     const userAuthHeader = req.headers.get("Authorization") || req.headers.get("authorization");
     const supabase = getAdminClient(userAuthHeader);
 
+    // Helper to create consistent responses
+    const createResponse = (data: any, status = 200) => {
+      return new Response(JSON.stringify(data), { 
+        status,
+        headers: { 
+          ...corsHeaders, 
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store, no-cache, must-revalidate"
+        }
+      });
+    };
+
     if (action === 'status') {
-      if (!jobId) return new Response(JSON.stringify({ ok: false, error: 'Missing jobId' }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      if (!jobId) return createResponse({ ok: false, error: 'Missing jobId' }, 400);
       const { data, error } = await supabase
         .from('project_generation_jobs')
         .select('id, project_id, status, mode, error, result_summary, created_at, updated_at')
         .eq('id', jobId)
         .maybeSingle();
       if (error) throw new Error(`DB_JOB_STATUS_FAILED: ${error.message}`);
-      if (!data) return new Response(JSON.stringify({ ok: false, error: 'Job not found' }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      return new Response(JSON.stringify({ ok: true, job: data }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      if (!data) return createResponse({ ok: false, error: 'Job not found' }, 404);
+      return createResponse({ ok: true, job: data });
     }
 
     if (action === 'get_files') {
-      if (!projectId) return new Response(JSON.stringify({ ok: false, error: 'Missing projectId' }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      if (!projectId) return createResponse({ ok: false, error: 'Missing projectId' }, 400);
       await assertProjectOwnership(supabase, projectId, userId);
       const { data, error } = await supabase
         .from('project_files')
@@ -2560,7 +2575,7 @@ serve(async (req: Request) => {
       for (const row of data || []) {
         files[normalizeFilePath(row.path)] = row.content;
       }
-      return new Response(JSON.stringify({ ok: true, files }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return createResponse({ ok: true, files });
     }
 
     // ========================================================================
@@ -2970,14 +2985,14 @@ ${filesStr}`;
           
           if (jsonType === 'asset_picker') {
             // Return asset_picker for frontend to show selection UI
-            return new Response(JSON.stringify({ 
+            return createResponse({ 
               ok: true, 
               assetPicker: parsed,
               mode: 'asset_picker',
               creditUsage: chatCreditUsage
-            }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            });
           } else {
-            return new Response(JSON.stringify({ ok: true, plan: extractedJson, mode: 'plan', creditUsage: chatCreditUsage }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            return createResponse({ ok: true, plan: extractedJson, mode: 'plan', creditUsage: chatCreditUsage });
           }
         } catch {
           // Invalid JSON, return as regular message
@@ -2986,7 +3001,7 @@ ${filesStr}`;
       }
       
       // Return as regular chat message with credit usage
-      return new Response(JSON.stringify({ ok: true, message: answer, creditUsage: chatCreditUsage }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return createResponse({ ok: true, message: answer, creditUsage: chatCreditUsage });
     }
 
     // ========================================================================
@@ -2996,10 +3011,10 @@ ${filesStr}`;
       const agentStartTime = Date.now(); // Track duration for AI logging
       
       if (!projectId) {
-        return new Response(JSON.stringify({ ok: false, error: 'Missing projectId' }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return createResponse({ ok: false, error: 'Missing projectId' }, 400);
       }
       if (!prompt) {
-        return new Response(JSON.stringify({ ok: false, error: 'Missing prompt' }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return createResponse({ ok: false, error: 'Missing prompt' }, 400);
       }
       
       await assertProjectOwnership(supabase, projectId, userId);
@@ -3120,7 +3135,7 @@ REMEMBER: You have ONE SHOT. Read first, then fix correctly.`;
           const fixerDuration = Date.now() - agentStartTime;
           
           if (fixerTaskComplete) {
-            return new Response(JSON.stringify({
+            return createResponse({
               ok: true,
               mode: 'agent',
               fixerMode: true,
@@ -3130,10 +3145,10 @@ REMEMBER: You have ONE SHOT. Read first, then fix correctly.`;
                 toolCalls: fixerToolCallsLog.map(tc => ({ tool: tc.tool, success: tc.result?.success !== false }))
               },
               duration: fixerDuration
-            }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            });
           } else {
             // Fixer also failed
-            return new Response(JSON.stringify({
+            return createResponse({
               ok: false,
               mode: 'agent',
               fixerMode: true,
@@ -3141,17 +3156,17 @@ REMEMBER: You have ONE SHOT. Read first, then fix correctly.`;
               error: 'The Fixer (Claude Opus 4) was unable to fix the error. Recovery options should be shown.',
               toolCalls: fixerToolCallsLog.map(tc => ({ tool: tc.tool, success: tc.result?.success !== false })),
               duration: fixerDuration
-            }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            });
           }
         } catch (fixerError) {
           console.error(`[THE FIXER] Error:`, fixerError);
-          return new Response(JSON.stringify({
+          return createResponse({
             ok: false,
             mode: 'agent',
             fixerMode: true,
             fixerFailed: true,
             error: `The Fixer encountered an error: ${fixerError instanceof Error ? fixerError.message : 'Unknown error'}`
-          }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }, 500);
         }
       }
       
@@ -4331,7 +4346,7 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
       if (meaningfulToolCalls.length === 0) {
         console.error(`[Agent Mode] 🔒 SAFETY BLOCK: Agent completed with ZERO meaningful tool calls!`);
         console.error(`[Agent Mode] All calls: ${toolCallsLog.map(tc => tc.tool).join(', ')}`);
-        return new Response(JSON.stringify({
+        return createResponse({
           ok: true,
           mode: 'agent',
           result: {
@@ -4340,7 +4355,7 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
             filesChanged: [],
             error: 'NO_TOOL_CALLS'
           }
-        }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 });
+        });
       }
       
       // ========================================================================
@@ -4374,7 +4389,7 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
             }
           }
           
-          return new Response(JSON.stringify({
+          return createResponse({
             ok: true,
             mode: 'agent',
             result: {
@@ -4388,7 +4403,7 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
               filesChanged: [],
               summary: 'Clarification needed'
             }
-          }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 });
+          });
         }
       }
       
@@ -4553,19 +4568,19 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
       
       console.log(`[Agent Mode] Completed. Files changed: ${result.filesChanged.join(', ')}`);
       
-      return new Response(JSON.stringify({ 
+      return createResponse({ 
         ok: true, 
         mode: 'agent',
         result,
         creditUsage: agentCreditUsage
-      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      });
     }
 
     // PLAN MODE: Propose changes without executing (Lovable-style)
     // Now with SMART MODEL SELECTION and CREDIT LOGGING
     if (mode === 'plan') {
       if (!projectId) {
-        return new Response(JSON.stringify({ ok: false, error: 'Missing projectId' }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return createResponse({ ok: false, error: 'Missing projectId' }, 400);
       }
       
       try {
@@ -4593,10 +4608,10 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
         
         console.log(`[Plan Mode] Plan generated, length: ${plan.length}`);
         
-        return new Response(JSON.stringify({ ok: true, plan, mode: 'plan', creditUsage: planCreditUsage }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return createResponse({ ok: true, plan, mode: 'plan', creditUsage: planCreditUsage });
       } catch (planError: any) {
         console.error(`[Plan Mode] Error: ${planError.message}`);
-        return new Response(JSON.stringify({ ok: false, error: planError.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return createResponse({ ok: false, error: planError.message }, 500);
       }
     }
 
@@ -4607,10 +4622,10 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
     // ========================================================================
     if (mode === 'execute') {
       if (!projectId) {
-        return new Response(JSON.stringify({ ok: false, error: 'Missing projectId' }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return createResponse({ ok: false, error: 'Missing projectId' }, 400);
       }
       if (!planToExecute) {
-        return new Response(JSON.stringify({ ok: false, error: 'Missing planToExecute' }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return createResponse({ ok: false, error: 'Missing planToExecute' }, 400);
       }
       await assertProjectOwnership(supabase, projectId, userId);
       
@@ -4810,7 +4825,7 @@ Call task_complete when finished.`;
           error: null 
         });
         
-        return new Response(JSON.stringify({ 
+        return createResponse({ 
           ok: true, 
           jobId: job.id, 
           status: 'succeeded', 
@@ -4819,22 +4834,22 @@ Call task_complete when finished.`;
           summary: execTaskCompleteResult?.summary || 'Plan executed',
           toolCalls: execToolCallsLog.length,
           creditUsage: execCreditUsage 
-        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        });
         
       } catch (innerErr) {
         const innerMsg = innerErr instanceof Error ? innerErr.message : String(innerErr);
         console.error(`[Execute Mode V2] Error: ${innerMsg}`);
         await updateJob(supabase, job.id, { status: 'failed', error: innerMsg, result_summary: null });
-        return new Response(JSON.stringify({ ok: false, jobId: job.id, error: innerMsg }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return createResponse({ ok: false, jobId: job.id, error: innerMsg }, 500);
       }
     }
 
     // CREATE and EDIT modes require projectId and prompt
     if (!projectId) {
-      return new Response(JSON.stringify({ ok: false, error: 'Missing projectId' }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return createResponse({ ok: false, error: 'Missing projectId' }, 400);
     }
     if (!prompt) {
-      return new Response(JSON.stringify({ ok: false, error: 'Missing prompt' }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return createResponse({ ok: false, error: 'Missing prompt' }, 400);
     }
 
     await assertProjectOwnership(supabase, projectId, userId);
@@ -4946,7 +4961,7 @@ Return ONLY the JSON object. No explanation.`;
 
         await replaceProjectFiles(supabase, projectId, files);
         await updateJob(supabase, job.id, { status: 'succeeded', result_summary: summary || 'Created.', error: null });
-        return new Response(JSON.stringify({ ok: true, jobId: job.id, status: 'succeeded', cssWarnings, usesBackend }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return createResponse({ ok: true, jobId: job.id, status: 'succeeded', cssWarnings, usesBackend });
       }
 
       // EDIT MODE: Full file rewrite (NO PATCHES)
@@ -5050,7 +5065,7 @@ Return ONLY the JSON object. No explanation.`;
       const changedFilesList = Object.keys(finalFilesToUpsert);
       
       await updateJob(supabase, job.id, { status: 'succeeded', result_summary: result.summary || 'Updated.', error: null });
-      return new Response(JSON.stringify({ 
+      return createResponse({ 
         ok: true, 
         jobId: job.id, 
         status: 'succeeded', 
@@ -5058,7 +5073,7 @@ Return ONLY the JSON object. No explanation.`;
         summary: result.summary,
         cssWarnings,
         usesBackend
-      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      });
 
     } catch (innerErr) {
       const innerMsg = innerErr instanceof Error ? innerErr.message : String(innerErr);
@@ -5067,12 +5082,15 @@ Return ONLY the JSON object. No explanation.`;
       } catch (e) {
         console.error('[projects-generate] Failed to mark job failed:', e);
       }
-      return new Response(JSON.stringify({ ok: false, jobId: job.id, error: innerMsg }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return createResponse({ ok: false, jobId: job.id, error: innerMsg }, 500);
     }
 
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error("[Fatal Error]", errMsg);
-    return new Response(JSON.stringify({ ok: false, error: errMsg }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ ok: false, error: errMsg }), { 
+      status: 500, 
+      headers: { ...corsHeaders, "Content-Type": "application/json" } 
+    });
   }
 });

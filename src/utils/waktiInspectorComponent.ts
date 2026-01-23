@@ -71,7 +71,15 @@ function WaktiInspector() {
   // Listen for messages from parent
   React.useEffect(() => {
     const handleMessage = (event) => {
-      const { type, enabled } = event.data || {};
+      // CRITICAL: Clone event.data to avoid readonly property errors
+      // Sandpack freezes event.data in some cases
+      let data;
+      try {
+        data = event.data ? JSON.parse(JSON.stringify(event.data)) : {};
+      } catch (e) {
+        data = {};
+      }
+      const { type, enabled } = data;
       
       if (type === 'WAKTI_TOGGLE_INSPECT') {
         console.log('[WaktiInspector] Toggle inspect mode:', enabled);

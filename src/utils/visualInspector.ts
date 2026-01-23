@@ -45,8 +45,16 @@ export const INSPECTOR_SCRIPT = `
 
   // 2. Listen for messages from Wakti parent
   window.addEventListener('message', (event) => {
-    if (event.data.type === 'WAKTI_TOGGLE_INSPECT') {
-      isInspectMode = event.data.enabled;
+    // Clone event.data to avoid readonly property errors
+    let data;
+    try {
+      data = event.data ? JSON.parse(JSON.stringify(event.data)) : {};
+    } catch (e) {
+      data = {};
+    }
+    
+    if (data.type === 'WAKTI_TOGGLE_INSPECT') {
+      isInspectMode = data.enabled;
       console.log('[Wakti Inspector] Inspect mode:', isInspectMode);
       
       // Send acknowledgment back to parent
@@ -61,7 +69,7 @@ export const INSPECTOR_SCRIPT = `
       }
     }
     // Ping/pong for debugging connection
-    if (event.data.type === 'WAKTI_INSPECTOR_PING') {
+    if (data.type === 'WAKTI_INSPECTOR_PING') {
       window.parent.postMessage({ type: 'WAKTI_INSPECTOR_PONG' }, '*');
     }
   });

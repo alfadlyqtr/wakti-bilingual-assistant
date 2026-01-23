@@ -150,37 +150,74 @@ function getInstance(): any | null {
       return null;
     }
     
+    // Wait for Natively SDK to be ready
+    if (!(window as any).__nativelyReady) {
+      console.log('[NativelyCalendar] Waiting for Natively SDK to be ready...');
+      return null;
+    }
+    
     // Check if we're in a Natively app context
     const natively = (window as any).natively;
     const isNativeApp = natively?.isNativeApp === true || natively?.isIOSApp === true || natively?.isAndroidApp === true;
     
-    console.log('[NativelyCalendar] Checking SDK availability:', {
-      hasNatively: !!natively,
-      isNativeApp,
-      hasNativelyCalendar: typeof (window as any).NativelyCalendar !== 'undefined',
-      nativelyReady: (window as any).__nativelyReady,
-    });
-    
-    const Ctor = (window as any).NativelyCalendar;
-    if (!Ctor) {
-      console.log('[NativelyCalendar] NativelyCalendar class not found on window - not in Natively app');
-      // Log what IS available on window for debugging
-      const nativelyKeys = Object.keys(window).filter(k => k.toLowerCase().includes('natively') || k.toLowerCase().includes('native') || k.toLowerCase().includes('calendar'));
-      if (nativelyKeys.length > 0) {
-        console.log('[NativelyCalendar] Found Native/Calendar-related keys on window:', nativelyKeys.slice(0, 20));
-      }
+    if (!isNativeApp) {
+      console.log('[NativelyCalendar] Not in Natively app context');
       return null;
     }
-    console.log('[NativelyCalendar] SDK found, creating instance...');
-    const instance = new Ctor();
-    console.log('[NativelyCalendar] Instance created. Methods available:', {
-      hasRetrieveCalendars: typeof instance.retrieveCalendars === 'function',
-      hasCreateCalendarEvent: typeof instance.createCalendarEvent === 'function',
-      hasCreateCalendar: typeof instance.createCalendar === 'function'
-    });
-    return instance;
+    
+    // Try to get calendar instance
+    let calendarInstance = null;
+    
+    // First try NativelyCalendar class
+    const Ctor = (window as any).NativelyCalendar;
+    if (Ctor) {
+      try {
+        calendarInstance = new Ctor();
+        console.log('[NativelyCalendar] Created instance from NativelyCalendar class');
+      } catch (e) {
+        console.warn('[NativelyCalendar] Failed to create instance from class:', e);
+      }
+    }
+    
+    // If that fails, try direct calendar property
+    if (!calendarInstance) {
+      calendarInstance = natively?.calendar || (window as any).nativeCalendar;
+      if (calendarInstance) {
+        console.log('[NativelyCalendar] Using direct calendar instance');
+      }
+    }
+    
+    // If we have an instance, verify required methods
+    if (calendarInstance) {
+      const methods = {
+        retrieveCalendars: typeof calendarInstance.retrieveCalendars === 'function',
+        createCalendarEvent: typeof calendarInstance.createCalendarEvent === 'function',
+        createCalendar: typeof calendarInstance.createCalendar === 'function'
+      };
+      
+      console.log('[NativelyCalendar] Instance methods available:', methods);
+      
+      // Must have at least retrieveCalendars and createCalendarEvent
+      if (methods.retrieveCalendars && methods.createCalendarEvent) {
+        return calendarInstance;
+      } else {
+        console.warn('[NativelyCalendar] Instance missing required methods');
+      }
+    }
+    
+    // Log available properties for debugging
+    const nativelyKeys = Object.keys(window).filter(k => 
+      k.toLowerCase().includes('natively') || 
+      k.toLowerCase().includes('native') || 
+      k.toLowerCase().includes('calendar')
+    );
+    if (nativelyKeys.length > 0) {
+      console.log('[NativelyCalendar] Available native/calendar keys:', nativelyKeys.slice(0, 20));
+    }
+    
+    return null;
   } catch (err) {
-    console.error('[NativelyCalendar] Error creating instance:', err);
+    console.error('[NativelyCalendar] Error getting calendar instance:', err);
     return null;
   }
 }
@@ -383,17 +420,46 @@ export function createCalendarEvent(
 }
 
 /**
- * Format a Date object to ISO 8601 string for Natively Calendar
+ * Format a Date object for Natively Calendar
+ * Tries multiple formats in order of preference
  */
 export function formatDateForNatively(date: Date): string {
   const pad = (n: number) => n.toString().padStart(2, '0');
-  const year = date.getFullYear();
-  const month = pad(date.getMonth() + 1);
-  const day = pad(date.getDate());
-  const hours = pad(date.getHours());
-  const minutes = pad(date.getMinutes());
-  const seconds = pad(date.getSeconds());
-  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}.000`;
+  
+  // Try to detect if we're in iOS or Android context
+  const natively = (window as any)?.natively;
+  const isIOS = natively?.isIOSApp === true;
+  const isAndroid = natively?.isAndroidApp === true;
+  
+  if (isIOS) {
+    // iOS prefers ISO format
+    return date.toISOString();
+  } else if (isAndroid) {
+    // Android prefers yyyy-MM-dd HH:mm:ss.SSS format
+    const year = date.getFullYear();
+    const month = pad(date.getMonth() + 1);
+    const day = pad(date.getDate());
+    const hours = pad(date.getHours());
+    const minutes = pad(date.getMinutes());
+    const seconds = pad(date.getSeconds());
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}.000`;
+  } else {
+    // Fallback - try both formats
+    try {
+      // First try ISO
+      const isoStr = date.toISOString();
+      if (isoStr) return isoStr;
+    } catch {}
+    
+    // Fallback to yyyy-MM-dd HH:mm:ss.SSS
+    const year = date.getFullYear();
+    const month = pad(date.getMonth() + 1);
+    const day = pad(date.getDate());
+    const hours = pad(date.getHours());
+    const minutes = pad(date.getMinutes());
+    const seconds = pad(date.getSeconds());
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}.000`;
+  }
 }
 
 /**
