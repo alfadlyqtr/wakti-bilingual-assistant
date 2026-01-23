@@ -38,7 +38,13 @@ interface ExtractedWarranty {
   warranty_terms?: string;
 }
 
-const EXTRACTION_PROMPT = `You are Wakti's Document Intelligence Engine. Analyze this document and extract key information as a clean, well-formatted JSON response.
+const EXTRACTION_PROMPT = `You are Wakti's Document Intelligence Engine. Analyze ALL provided images/pages as a single document set and extract key information as a clean, well-formatted JSON response.
+
+For multi-page documents (including PDF/Word):
+- Treat front/back or consecutive pages as complementary information
+- Merge data from all pages into a single coherent response
+- Use later pages to enhance/complete information from earlier pages
+- For terms & conditions pages, extract key warranty terms into warranty_info
 
 Focus on extracting these critical fields:
 1. title: Clear descriptive title (e.g., "LuLu iPhone 12 Pro Max Purchase Receipt")
@@ -326,18 +332,21 @@ serve(async (req) => {
       }
 
       const documentMimeType = mimeType || (pdfBase64 ? "application/pdf" : "image/jpeg");
+      const isDocument = documentMimeType === "application/pdf" || documentMimeType === "application/msword" || documentMimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-      console.log(`[my-warranty-ai] Preparing Gemini request. Mime: ${documentMimeType}, Images: ${imageArray.length}`);
+      console.log(`[my-warranty-ai] Preparing Gemini request. Type: ${documentMimeType}, Pages: ${imageArray.length}`);
 
       const parts: Array<{ text?: string; inline_data?: { mime_type: string; data: string } }> = [
-        { text: EXTRACTION_PROMPT }
+        { text: EXTRACTION_PROMPT },
+        { text: `Document Type: ${isDocument ? 'Multi-page document' : 'Image(s)'}, Total Pages: ${imageArray.length}` }
       ];
       
-      for (const imgData of imageArray) {
+      for (let i = 0; i < imageArray.length; i++) {
+        parts.push({ text: `\n--- Page ${i + 1} of ${imageArray.length} ---` });
         parts.push({
           inline_data: {
             mime_type: documentMimeType,
-            data: imgData,
+            data: imageArray[i],
           },
         });
       }
