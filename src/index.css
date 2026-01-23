@@ -27,7 +27,8 @@
 }
 
 .document-preview.expanded {
-  transform: scale(1.75);
+  -webkit-transform: scale(0.95);
+  transform: scale(0.95);
   z-index: 50;
 }
 
@@ -1063,6 +1064,7 @@ body.wakti-ai-page main {
   inset: 0;
   z-index: 1000;
   background: rgba(0, 0, 0, 0.3);
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
 

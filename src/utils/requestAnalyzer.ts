@@ -153,9 +153,20 @@ const BUSINESS_PATTERNS: { pattern: RegExp; type: string }[] = [
 /**
  * Analyzes a user prompt and extracts all requested features
  */
+// Simple patterns to detect customization/info requests vs build requests
+const CUSTOMIZATION_PATTERNS = [
+  /\b(change|make|set|update)\s*(the\s*)?(color|style|appearance)\b/i,
+  /\b(blue|red|green|yellow|purple|orange)\s*(color|background|text)\b/i,
+  /\b(when\s*empty|when\s*full|has\s*items)\b/i,
+  /\b(how\s*many|show\s*me|list|view|display)\b/i
+];
+
 export function analyzeRequest(prompt: string): AnalyzedRequest {
   const features: DetectedFeature[] = [];
   const lowerPrompt = prompt.toLowerCase();
+  
+  // First, check if this is just a customization/info request
+  const isCustomization = CUSTOMIZATION_PATTERNS.some(pattern => pattern.test(lowerPrompt));
   
   // Detect business type
   let businessType = 'business';
@@ -191,6 +202,20 @@ export function analyzeRequest(prompt: string): AnalyzedRequest {
   // Sort by priority
   features.sort((a, b) => a.priority - b.priority);
   
+  // If it's a customization request, don't trigger wizards
+  if (isCustomization) {
+    console.log('[requestAnalyzer] Detected customization request:', lowerPrompt);
+    return {
+      originalPrompt: prompt,
+      businessType,
+      features: [], // No features needed for customization
+      totalFeatures: 0,
+      currentFeatureIndex: 0,
+      isMultiFeature: false,
+    };
+  }
+
+  // Otherwise return normal analysis
   return {
     originalPrompt: prompt,
     businessType,

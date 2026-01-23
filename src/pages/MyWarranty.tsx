@@ -11,7 +11,8 @@ import {
   Shield, Plus, SortAsc, Camera, Upload, X, 
   ChevronLeft, Trash2, FileText, MessageCircle, Calendar,
   Tag, Clock, CheckCircle, AlertTriangle, XCircle, Loader2,
-  Edit2, ExternalLink, CreditCard, User, FolderOpen, ChevronDown, Phone, Mail, Globe, MapPin, Link2, Send, ArrowLeft
+  Edit2, ExternalLink, CreditCard, User, FolderOpen, ChevronDown, Phone, Mail, Globe, MapPin, Link2, Send, ArrowLeft,
+  Store, Hash, Receipt, Package
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +20,17 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
 import { format, differenceInDays, differenceInMonths, parseISO, addMonths } from 'date-fns';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface WarrantyCategory {
   id: string;
@@ -828,26 +840,16 @@ const MyWarranty: React.FC = () => {
     const files = event.target.files;
     if (!files || files.length === 0 || !user) return;
 
+    // Show uploading indicator
     setIsAnalyzing(true);
     setViewMode('add');
-
+    
     try {
       const newImages: string[] = [];
-      const base64Images: string[] = [];
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         
-        const base64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => {
-            const result = reader.result as string;
-            resolve(result.split(',')[1]);
-          };
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-
         const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
         const fileName = `${user.id}/${Date.now()}_${i}_${sanitizedName}`;
         const { error: uploadError } = await supabase.storage
@@ -861,7 +863,6 @@ const MyWarranty: React.FC = () => {
           .getPublicUrl(fileName);
         
         newImages.push(urlData.publicUrl);
-        base64Images.push(base64);
       }
 
       setNewItem(prev => {
@@ -884,42 +885,19 @@ const MyWarranty: React.FC = () => {
         };
       });
 
-      const { data: aiData, error: aiError } = await supabase.functions.invoke('my-warranty-ai', {
-        body: {
-          mode: 'extract',
-          images: base64Images,
-          mimeType: files[0].type,
-        },
+      // Show success toast with guidance
+      toast({
+        title: isRTL ? 'تم رفع الصور' : 'Photos Uploaded',
+        description: isRTL 
+          ? `تم رفع ${files.length} صورة بنجاح. ${files.length === 1 ? 'يمكنك إضافة المزيد من الصور أو الضغط على "تحليل" للمتابعة.' : 'يمكنك إضافة المزيد من الصور أو الضغط على "تحليل" للمتابعة.'}` 
+          : `${files.length} photo${files.length > 1 ? 's' : ''} uploaded successfully. ${files.length === 1 ? 'You can add more photos or click "Analyze" to continue.' : 'You can add more photos or click "Analyze" to continue.'}`,
       });
 
-      if (aiError) throw aiError;
-      
-      if (aiData?.success && aiData?.data) {
-        const extracted = aiData.data;
-        const fullExtractedData: Record<string, unknown> = {
-          ...(extracted.extracted_data || {}),
-          raw_ocr_text: extracted.raw_ocr_text || extracted.notes || '',
-        };
-        const richSummary = extracted.ai_summary || buildRichSummary(extracted);
-
-        setNewItem(prev => ({
-          ...prev,
-          title: extracted.title || prev.title,
-          provider: extracted.provider || prev.provider,
-          category: extracted.category || prev.category,
-          purchase_date: extracted.purchase_date || prev.purchase_date,
-          expiry_date: extracted.expiry_date || prev.expiry_date,
-          ref_number: extracted.ref_number || prev.ref_number,
-          support_contact: extracted.support_contact || prev.support_contact,
-          extracted_data: fullExtractedData,
-          ai_summary: richSummary,
-        }));
-      }
     } catch (error) {
-      console.error('Upload/Analysis error:', error);
+      console.error('Upload error:', error);
       toast({
         title: isRTL ? 'خطأ' : 'Error',
-        description: isRTL ? 'فشل رفع أو تحليل المستند' : 'Failed to upload or analyze document',
+        description: isRTL ? 'فشل رفع الصور' : 'Failed to upload photos',
         variant: 'destructive',
       });
     } finally {
@@ -1250,14 +1228,70 @@ const MyWarranty: React.FC = () => {
     const isPdf = item.file_type === 'pdf' || rawUrl.toLowerCase().endsWith('.pdf');
 
     return (
-      <div
-        key={item.id}
-        onClick={() => {
-          setSelectedItem(item);
-          setViewMode('detail');
-        }}
-        className="enhanced-card p-4 mb-3 cursor-pointer active:scale-[0.98] transition-transform"
-      >
+      <div key={item.id} className="enhanced-card p-4 mb-3 relative">
+        {/* Action Buttons */}
+        <div className="absolute right-2 top-2 flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 rounded-lg bg-black/40 hover:bg-black/60 text-white border border-white/20 -webkit-backdrop-filter backdrop-blur-sm"
+            onClick={() => {
+              setSelectedItem(item);
+              setViewMode('detail');
+            }}
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 rounded-lg bg-red-500/40 text-white border border-white/20"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent className="bg-background border border-white/10">
+              <AlertDialogHeader>
+                <AlertDialogTitle>{isRTL ? 'حذف المستند' : 'Delete Document'}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {isRTL ? 'هل أنت متأكد من حذف هذا المستند؟ لا يمكن التراجع عن هذا الإجراء.' : 'Are you sure you want to delete this document? This action cannot be undone.'}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{isRTL ? 'إلغاء' : 'Cancel'}</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-red-500 text-white"
+                  onClick={async () => {
+                    const { error } = await supabase
+                      .from('user_warranties')
+                      .delete()
+                      .eq('id', item.id);
+                    
+                    if (error) {
+                      toast({
+                        title: isRTL ? 'خطأ' : 'Error',
+                        description: isRTL ? 'فشل حذف المستند' : 'Failed to delete document',
+                        variant: 'destructive',
+                      });
+                    } else {
+                      toast({
+                        title: isRTL ? 'تم الحذف' : 'Deleted',
+                        description: isRTL ? 'تم حذف المستند بنجاح' : 'Document deleted successfully',
+                      });
+                      fetchData();
+                    }
+                  }}
+                >
+                  {isRTL ? 'حذف' : 'Delete'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+
         <div className="flex gap-4">
           {/* Thumbnail */}
           <div className="w-20 h-20 rounded-xl overflow-hidden bg-white/5 border border-white/10 flex-shrink-0 relative">
@@ -2141,20 +2175,20 @@ const MyWarranty: React.FC = () => {
   const renderMainView = () => (
     <div className="flex flex-col h-full w-full overflow-x-hidden">
       {/* Main 3-Tab Navigation */}
-      <div className="px-4 pt-4 pb-2 solid-bg border-b border-white/10 w-full">
+      <div className="px-4 pt-2 pb-1 solid-bg border-b border-white/10 w-full">
         <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as 'docs' | 'card' | 'cv')}>
-          <TabsList className="w-full bg-white/5 border border-white/10 grid grid-cols-3 h-12">
-            <TabsTrigger value="docs" className="flex flex-col items-center justify-center gap-0.5 py-1">
-              <FolderOpen className="w-4 h-4" />
-              <span className="text-[10px] font-medium">{t.myDocsTab}</span>
+          <TabsList className="w-full bg-white/5 border border-white/10 grid grid-cols-3 h-10">
+            <TabsTrigger value="docs" className="flex flex-col items-center justify-center gap-0.5">
+              <FolderOpen className="w-3.5 h-3.5" />
+              <span className="text-[9px] font-medium leading-none">{t.myDocsTab}</span>
             </TabsTrigger>
-            <TabsTrigger value="card" className="flex flex-col items-center justify-center gap-0.5 py-1">
-              <CreditCard className="w-4 h-4" />
-              <span className="text-[10px] font-medium">{t.myCardTab}</span>
+            <TabsTrigger value="card" className="flex flex-col items-center justify-center gap-0.5">
+              <CreditCard className="w-3.5 h-3.5" />
+              <span className="text-[9px] font-medium leading-none">{t.myCardTab}</span>
             </TabsTrigger>
-            <TabsTrigger value="cv" className="flex flex-col items-center justify-center gap-0.5 py-1">
-              <User className="w-4 h-4" />
-              <span className="text-[10px] font-medium">{t.myCVTab}</span>
+            <TabsTrigger value="cv" className="flex flex-col items-center justify-center gap-0.5">
+              <User className="w-3.5 h-3.5" />
+              <span className="text-[9px] font-medium leading-none">{t.myCVTab}</span>
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -2256,25 +2290,48 @@ const MyWarranty: React.FC = () => {
         ) : (
           <>
             {/* Upload Options */}
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <button
-                onClick={() => cameraInputRef.current?.click()}
-                className="enhanced-card p-6 flex flex-col items-center gap-3 active:scale-95 transition-transform"
-              >
-                <Camera className="w-10 h-10 text-blue-400" />
-                <span className="text-sm font-medium">
-                  {newItem.image_url ? (isRTL ? 'إضافة صورة أخرى' : 'Add Another Photo') : t.snapPhoto}
-                </span>
-              </button>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="enhanced-card p-6 flex flex-col items-center gap-3 active:scale-95 transition-transform"
-              >
-                <Upload className="w-10 h-10 text-green-400" />
-                <span className="text-sm font-medium">
-                  {newItem.image_url ? (isRTL ? 'رفع ملف آخر' : 'Upload Another File') : t.uploadFile}
-                </span>
-              </button>
+            <div className="flex flex-col gap-6 mb-6">
+              {/* Upload Buttons */}
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="enhanced-card p-6 flex flex-col items-center gap-3 active:scale-95 transition-transform"
+                >
+                  <Camera className="w-10 h-10 text-blue-400" />
+                  <span className="text-sm font-medium">
+                    {newItem.image_url ? (isRTL ? 'إضافة صورة أخرى' : 'Add Another Photo') : t.snapPhoto}
+                  </span>
+                </button>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="enhanced-card p-6 flex flex-col items-center gap-3 active:scale-95 transition-transform"
+                >
+                  <Upload className="w-10 h-10 text-green-400" />
+                  <span className="text-sm font-medium">
+                    {newItem.image_url ? (isRTL ? 'رفع ملف آخر' : 'Upload Another File') : t.uploadFile}
+                  </span>
+                </button>
+              </div>
+
+              {/* Analyze Button */}
+              {(newItem.image_url || newItem.additional_images.length > 0) && (
+                <Button
+                  onClick={handleAnalyzeDocument}
+                  disabled={isAnalyzing}
+                  className="w-full h-12 rounded-xl btn-enhanced text-white font-bold text-base flex items-center justify-center gap-2"
+                >
+                  {isAnalyzing ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>{isRTL ? 'جاري التحليل...' : 'Analyzing...'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>{isRTL ? 'تحليل المستند' : 'Analyze Document'}</span>
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
 
             {/* Hidden file inputs */}
@@ -2302,12 +2359,12 @@ const MyWarranty: React.FC = () => {
 
             {/* Document Preview - MULTI-IMAGE GRID */}
             {(newItem.image_url || newItem.additional_images.length > 0) && (
-              <div className="mb-6">
+              <div className="mb-6 bg-white/5 border border-white/10 rounded-xl p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
-                    <span>🖼️</span> {isRTL ? 'المستندات المرفوعة' : 'Uploaded Documents'}
+                    <span>📸</span> {isRTL ? 'الصور المرفوعة' : 'Uploaded Photos'}
                     <span className="text-[10px] font-normal text-muted-foreground bg-white/5 px-2 py-0.5 rounded-full">
-                      {1 + newItem.additional_images.length} {isRTL ? 'ملفات' : 'files'}
+                      {1 + newItem.additional_images.length} {isRTL ? 'صور' : 'photos'}
                     </span>
                   </h4>
                   <Button
@@ -2321,147 +2378,287 @@ const MyWarranty: React.FC = () => {
                   </Button>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                   {/* Primary Image */}
-                  <div className="relative aspect-[3/4] rounded-xl overflow-hidden bg-white/5 border-2 border-blue-500/50 group">
-                    <img 
-                      src={newItem.image_url} 
-                      alt="Front" 
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <span className="text-[10px] font-bold text-white uppercase tracking-widest bg-blue-500 px-2 py-1 rounded">
-                        {isRTL ? 'الأساسية' : 'Primary'}
-                      </span>
+                  {newItem.image_url && (
+                    <div className="relative aspect-[3/4] rounded-xl overflow-hidden bg-white/5 border-2 border-blue-500/50 group">
+                      <img 
+                        src={newItem.image_url} 
+                        alt="Front" 
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute top-2 left-2 bg-blue-500/90 backdrop-blur-sm px-2 py-1 rounded-lg">
+                        <span className="text-[10px] font-bold text-white">
+                          {isRTL ? 'الصفحة الأولى' : 'Front Page'}
+                        </span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="absolute bottom-2 right-2 bg-black/40 hover:bg-black/60 text-white border border-white/20 backdrop-blur-sm"
+                        onClick={() => setNewItem(prev => ({
+                          ...prev,
+                          image_url: '',
+                          receipt_url: prev.additional_images[0] || ''
+                        }))}
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
                     </div>
-                  </div>
+                  )}
 
                   {/* Additional Images */}
                   {newItem.additional_images.map((img, idx) => (
-                    <div key={idx} className="relative aspect-[3/4] rounded-xl overflow-hidden bg-white/5 border border-white/10 group animate-in zoom-in-95 duration-200">
+                    <div key={idx} className="relative aspect-[3/4] rounded-xl overflow-hidden bg-white/5 border border-white/10 animate-in zoom-in-95 duration-200">
                       <img 
                         src={img} 
                         alt={`Page ${idx + 2}`} 
                         className="w-full h-full object-cover"
                       />
-                      <button
+                      <div className="absolute top-2 left-2 bg-white/10 backdrop-blur-sm px-2 py-1 rounded-lg">
+                        <span className="text-[10px] font-bold text-white">
+                          {isRTL ? `الصفحة ${idx + 2}` : `Page ${idx + 2}`}
+                        </span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="absolute bottom-2 right-2 bg-black/40 hover:bg-black/60 text-white border border-white/20 backdrop-blur-sm"
                         onClick={() => setNewItem(prev => ({
                           ...prev,
                           additional_images: prev.additional_images.filter((_, i) => i !== idx)
                         }))}
-                        className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
                       >
                         <X className="w-3 h-3" />
-                      </button>
+                      </Button>
                     </div>
                   ))}
 
-                  {/* Add More Placeholder */}
+                  {/* Add More Button */}
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="relative aspect-[3/4] rounded-xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-2 hover:border-blue-500/50 hover:bg-blue-500/5 transition-all group"
+                    className="relative aspect-[3/4] rounded-xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-2 bg-white/5"
                   >
-                    <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center">
                       <Plus className="w-4 h-4 text-muted-foreground" />
                     </div>
                     <span className="text-[10px] font-bold text-muted-foreground uppercase">{isRTL ? 'إضافة' : 'Add'}</span>
                   </button>
                 </div>
 
-                {/* Send Button */}
+                {/* Send Button - disabled after extraction */}
                 <Button
                   onClick={handleAnalyzeDocument}
-                  disabled={isAnalyzing}
-                  className="w-full mt-4 h-12 rounded-xl btn-enhanced text-white font-bold text-base flex items-center justify-center gap-2"
+                  disabled={isAnalyzing || (newItem.extracted_data && Object.keys(newItem.extracted_data).length > 0)}
+                  className={`w-full mt-4 h-12 rounded-xl font-bold text-base flex items-center justify-center gap-2 ${
+                    newItem.extracted_data && Object.keys(newItem.extracted_data).length > 0
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      : 'btn-enhanced text-white'
+                  }`}
                 >
-                  <Send className="w-5 h-5" />
-                  {isRTL ? 'إرسال للتحليل' : 'Send for Analysis'}
+                  {newItem.extracted_data && Object.keys(newItem.extracted_data).length > 0 ? (
+                    <>
+                      <CheckCircle className="w-5 h-5" />
+                      {isRTL ? 'تم التحليل' : 'Analysis Complete'}
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-5 h-5" />
+                      {isRTL ? 'إرسال للتحليل' : 'Send for Analysis'}
+                    </>
+                  )}
                 </Button>
               </div>
             )}
 
-            {/* AI Extracted Data - Display ALL captured information */}
-            {newItem.extracted_data && Object.keys(newItem.extracted_data).length > 0 && (
-              <div className="space-y-4">
-                <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-500/10 to-blue-500/10 border border-emerald-500/20">
-                  <h4 className="text-sm font-bold text-emerald-400 mb-3 flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4" />
-                    {isRTL ? 'البيانات المستخرجة بالذكاء الاصطناعي' : 'AI Extracted Data'}
-                  </h4>
-                  <div className="space-y-3">
-                    {/* Title */}
-                    {(newItem.extracted_data as any).title && (
-                      <div className="p-3 rounded-lg bg-white/5">
-                        <p className="text-xs text-muted-foreground mb-1">{isRTL ? 'العنوان' : 'Title'}</p>
-                        <p className="text-foreground font-medium">{(newItem.extracted_data as any).title}</p>
-                      </div>
-                    )}
-                    
-                    {/* Provider & Category */}
-                    <div className="grid grid-cols-2 gap-3">
-                      {(newItem.extracted_data as any).provider && (
-                        <div className="p-3 rounded-lg bg-white/5">
-                          <p className="text-xs text-muted-foreground mb-1">{isRTL ? 'المزود' : 'Provider'}</p>
-                          <p className="text-foreground text-sm">{(newItem.extracted_data as any).provider}</p>
-                        </div>
-                      )}
-                      {(newItem.extracted_data as any).category && (
-                        <div className="p-3 rounded-lg bg-white/5">
-                          <p className="text-xs text-muted-foreground mb-1">{isRTL ? 'الفئة' : 'Category'}</p>
-                          <p className="text-foreground text-sm">{(newItem.extracted_data as any).category}</p>
-                        </div>
-                      )}
+            {/* AI Summary Card */}
+            {newItem.ai_summary && (() => {
+              // Clean up ai_summary - ensure it's plain text, not JSON
+              let cleanSummary = newItem.ai_summary;
+              if (cleanSummary && (cleanSummary.trim().startsWith('{') || cleanSummary.trim().startsWith('```') || cleanSummary.includes('"title":'))) {
+                // It's JSON - build a clean summary from extracted fields
+                const parts: string[] = [];
+                if (newItem.title) parts.push(`This is ${newItem.title}.`);
+                if (newItem.provider) parts.push(`Issued by ${newItem.provider}.`);
+                const ed = newItem.extracted_data as Record<string, unknown>;
+                const personalInfo = ed?.personal_info as Record<string, unknown> | undefined;
+                const customerName = personalInfo?.full_name || (ed as any)?.customer_name;
+                if (customerName) parts.push(`For ${customerName}.`);
+                if (newItem.ref_number) parts.push(`Reference: ${newItem.ref_number}.`);
+                const financialInfo = ed?.financial_info as Record<string, unknown> | undefined;
+                const totalAmount = financialInfo?.total_amount || (ed as any)?.total_amount;
+                if (totalAmount) parts.push(`Amount: ${totalAmount}.`);
+                if (newItem.purchase_date) parts.push(`Dated ${newItem.purchase_date}.`);
+                if (newItem.expiry_date) parts.push(`Expires ${newItem.expiry_date}.`);
+                cleanSummary = parts.length > 0 ? parts.join(' ') : 'Document analyzed successfully.';
+              }
+              
+              return (
+                <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-cyan-500/10 border border-blue-500/20 mb-4">
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center shadow-lg">
+                      <FileText className="w-5 h-5 text-white" />
                     </div>
-                    
-                    {/* Ref Number */}
-                    {(newItem.extracted_data as any).ref_number && (
-                      <div className="p-3 rounded-lg bg-white/5">
-                        <p className="text-xs text-muted-foreground mb-1">{isRTL ? 'رقم المرجع' : 'Reference Number'}</p>
-                        <p className="text-foreground text-sm font-mono">{(newItem.extracted_data as any).ref_number}</p>
-                      </div>
-                    )}
-                    
-                    {/* Dates */}
-                    <div className="grid grid-cols-2 gap-3">
-                      {(newItem.extracted_data as any).purchase_date && (
-                        <div className="p-3 rounded-lg bg-white/5">
-                          <p className="text-xs text-muted-foreground mb-1">{isRTL ? 'تاريخ الشراء' : 'Purchase Date'}</p>
-                          <p className="text-foreground text-sm">{(newItem.extracted_data as any).purchase_date}</p>
-                        </div>
-                      )}
-                      {(newItem.extracted_data as any).expiry_date && (
-                        <div className="p-3 rounded-lg bg-white/5">
-                          <p className="text-xs text-muted-foreground mb-1">{isRTL ? 'تاريخ الانتهاء' : 'Expiry Date'}</p>
-                          <p className="text-foreground text-sm">{(newItem.extracted_data as any).expiry_date}</p>
-                        </div>
-                      )}
+                    <div>
+                      <h4 className="text-base font-bold text-foreground">{isRTL ? 'ملخص وقتي' : 'Wakti Summary'}</h4>
+                      <p className="text-xs text-muted-foreground">{isRTL ? 'تحليل بالذكاء الاصطناعي' : 'AI-powered analysis'}</p>
                     </div>
-                    
-                    {/* Warranty Period */}
-                    {(newItem.extracted_data as any).warranty_period && (
-                      <div className="p-3 rounded-lg bg-white/5">
-                        <p className="text-xs text-muted-foreground mb-1">{isRTL ? 'مدة الضمان' : 'Warranty Period'}</p>
-                        <p className="text-foreground text-sm">{(newItem.extracted_data as any).warranty_period}</p>
-                      </div>
-                    )}
-                    
-                    {/* Support Contact */}
-                    {(newItem.extracted_data as any).support_contact && (
-                      <div className="p-3 rounded-lg bg-white/5">
-                        <p className="text-xs text-muted-foreground mb-1">{isRTL ? 'جهة الاتصال' : 'Support Contact'}</p>
-                        <p className="text-foreground text-sm">{(newItem.extracted_data as any).support_contact}</p>
-                      </div>
-                    )}
-                    
-                    {/* Notes - This contains ALL the comprehensive details */}
-                    {(newItem.extracted_data as any).notes && (
-                      <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                        <p className="text-xs text-blue-400 mb-2 font-medium">{isRTL ? 'التفاصيل الكاملة' : 'Complete Details'}</p>
-                        <p className="text-foreground text-sm whitespace-pre-wrap leading-relaxed">{(newItem.extracted_data as any).notes}</p>
-                      </div>
-                    )}
                   </div>
+                  <p className="text-sm text-foreground/90 leading-relaxed">{cleanSummary}</p>
                 </div>
+              );
+            })()}
+
+            {/* AI Extracted Data - Collapsible Category Sections */}
+            {newItem.extracted_data && Object.keys(newItem.extracted_data).length > 0 && (
+              <div className="space-y-3">
+                {(() => {
+                  const ed = newItem.extracted_data as Record<string, unknown>;
+                  
+                  const categoryConfig: Record<string, { icon: string; color: string; labelEn: string; labelAr: string }> = {
+                    document_info: { icon: '📄', color: 'blue', labelEn: 'Document Information', labelAr: 'معلومات المستند' },
+                    personal_info: { icon: '👤', color: 'emerald', labelEn: 'Personal Information', labelAr: 'المعلومات الشخصية' },
+                    contact_info: { icon: '📞', color: 'cyan', labelEn: 'Contact Information', labelAr: 'معلومات الاتصال' },
+                    vehicle_info: { icon: '🚗', color: 'blue', labelEn: 'Vehicle Information', labelAr: 'معلومات المركبة' },
+                    insurance_info: { icon: '🛡️', color: 'purple', labelEn: 'Insurance Details', labelAr: 'تفاصيل التأمين' },
+                    financial_info: { icon: '💰', color: 'amber', labelEn: 'Financial Details', labelAr: 'المعلومات المالية' },
+                    product_info: { icon: '📦', color: 'orange', labelEn: 'Product Information', labelAr: 'معلومات المنتج' },
+                    medical_info: { icon: '🏥', color: 'red', labelEn: 'Medical Information', labelAr: 'المعلومات الطبية' },
+                    property_info: { icon: '🏠', color: 'teal', labelEn: 'Property Information', labelAr: 'معلومات العقار' },
+                    education_info: { icon: '🎓', color: 'indigo', labelEn: 'Education Information', labelAr: 'المعلومات التعليمية' },
+                    employment_info: { icon: '💼', color: 'slate', labelEn: 'Employment Information', labelAr: 'معلومات التوظيف' },
+                    company_info: { icon: '🏢', color: 'violet', labelEn: 'Company Information', labelAr: 'معلومات الشركة' },
+                    additional_info: { icon: '📝', color: 'gray', labelEn: 'Additional Information', labelAr: 'معلومات إضافية' },
+                  };
+
+                  const getColorClasses = (color: string) => ({
+                    bg: `from-${color}-500/25 via-${color}-500/15 to-transparent`,
+                    text: `text-${color}-500 dark:text-${color}-400`,
+                    border: `border-${color}-500/40`,
+                    iconBg: `bg-${color}-500/20`,
+                  });
+
+                  const hasCategorizedData = Object.keys(categoryConfig).some(cat => 
+                    ed[cat] && typeof ed[cat] === 'object' && Object.keys(ed[cat] as object).length > 0
+                  );
+
+                  if (hasCategorizedData) {
+                    return Object.entries(categoryConfig).map(([categoryKey]) => {
+                      const data = ed[categoryKey];
+                      if (!data || typeof data !== 'object') return null;
+                      
+                      const fields = Object.entries(data as Record<string, unknown>).filter(([, val]) => {
+                        if (!val || val === 'null' || val === '-' || val === '') return false;
+                        return true;
+                      });
+                      
+                      if (fields.length === 0) return null;
+                      
+                      const config = categoryConfig[categoryKey];
+                      const colors = getColorClasses(config.color);
+                      const isCollapsed = collapsedSections[categoryKey];
+                      
+                      return (
+                        <div key={categoryKey} className={`rounded-2xl border transition-all duration-300 overflow-hidden ${isCollapsed ? 'bg-white/5 border-white/10' : `bg-white/[0.08] ${colors.border} shadow-xl`}`}>
+                          <button 
+                            onClick={() => toggleSection(categoryKey)}
+                            className="w-full px-5 py-4 flex items-center justify-between active:scale-[0.99] transition-all duration-200 relative"
+                          >
+                            {!isCollapsed && <div className={`absolute inset-0 bg-gradient-to-r ${colors.bg} opacity-60`} />}
+                            
+                            <div className="flex items-center gap-4 relative z-10">
+                              <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-2xl shadow-lg ${colors.iconBg} border border-white/20`}>
+                                {config.icon}
+                              </div>
+                              <div className="text-left" dir={isRTL ? 'rtl' : 'ltr'}>
+                                <h5 className={`text-sm font-black uppercase tracking-widest ${isCollapsed ? 'text-foreground' : colors.text} transition-colors duration-300`}>
+                                  {isRTL ? config.labelAr : config.labelEn}
+                                </h5>
+                                <p className={`text-[10px] font-bold uppercase tracking-tight ${isCollapsed ? 'text-muted-foreground' : 'text-foreground/70'}`}>
+                                  {fields.length} {fields.length === 1 ? (isRTL ? 'حقل' : 'field') : (isRTL ? 'حقول' : 'fields')}
+                                </p>
+                              </div>
+                            </div>
+                            
+                            <div className={`transition-transform duration-200 ${isCollapsed ? '' : 'rotate-180'}`}>
+                              <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                            </div>
+                          </button>
+                          
+                          {!isCollapsed && (
+                            <div className="p-4 flex flex-wrap gap-2">
+                              {fields.map(([key, val], idx) => {
+                                const label = translateFieldLabel(key, isRTL);
+                                const value = String(val);
+                                const isMonoValue = key.includes('number') || key.includes('_no') || key.includes('_id') || 
+                                                   key.includes('chassis') || key.includes('plate') || key.includes('vin');
+                                
+                                // Get chip color based on field type
+                                let chipColor = 'white';
+                                if (key.includes('date')) chipColor = 'emerald';
+                                else if (key.includes('amount') || key.includes('price')) chipColor = 'amber';
+                                else if (key.includes('number') || key.includes('id')) chipColor = 'purple';
+                                else if (key.includes('type')) chipColor = 'blue';
+                                else if (key.includes('status')) chipColor = 'cyan';
+                                else if (key.includes('name')) chipColor = 'orange';
+                                
+                                return (
+                                  <div 
+                                    key={`${key}-${idx}`} 
+                                    className={`
+                                      group relative flex flex-col gap-0.5 p-3 rounded-xl
+                                      bg-gradient-to-br from-${chipColor}-500/10 via-${chipColor}-500/5 to-transparent
+                                      border border-${chipColor}-500/20 hover:border-${chipColor}-500/30
+                                      transition-all duration-300
+                                    `}
+                                  >
+                                    <div className={`absolute inset-0 bg-gradient-to-br from-${chipColor}-500/5 via-${chipColor}-500/2 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl`} />
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide relative z-10">{label}</p>
+                                    <p className={`text-sm font-semibold text-foreground relative z-10 ${isMonoValue ? 'font-mono text-xs' : ''}`}>
+                                      {value}
+                                    </p>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    });
+                  }
+
+                  // Fallback for non-categorized data
+                  const allFields = Object.entries(ed).filter(([key, val]) => {
+                    if (key === 'user_tags' || key === 'raw_ocr_text') return false;
+                    if (!val || val === 'null' || val === '-' || val === '') return false;
+                    if (typeof val === 'object') return false;
+                    return true;
+                  });
+
+                  if (allFields.length === 0) return null;
+
+                  return (
+                    <div className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
+                      <div className="p-4 grid grid-cols-2 gap-3">
+                        {allFields.map(([key, val], idx) => {
+                          const label = translateFieldLabel(key, isRTL);
+                          const value = String(val);
+                          const isLongValue = value.length > 35;
+                          const isMonoValue = key.includes('number') || key.includes('_no') || key.includes('_id');
+                          
+                          return (
+                            <div key={`${key}-${idx}`} className={isLongValue ? 'col-span-2' : ''}>
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">{label}</p>
+                              <p className={`text-sm font-semibold text-foreground ${isMonoValue ? 'font-mono text-xs' : ''}`}>
+                                {value}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </>
@@ -2566,7 +2763,26 @@ const MyWarranty: React.FC = () => {
     const timeRemaining = getTimeRemaining(selectedItem.expiry_date);
     const dynamicChips = buildDynamicChips(selectedItem);
     const extracted = (selectedItem.extracted_data || {}) as Record<string, unknown>;
-    const aiSummary = selectedItem.ai_summary || (extracted.summary as string) || '';
+    
+    // Clean up ai_summary - ensure it's plain text, not JSON
+    let aiSummary = selectedItem.ai_summary || (extracted.summary as string) || '';
+    if (aiSummary && (aiSummary.trim().startsWith('{') || aiSummary.trim().startsWith('```') || aiSummary.includes('"title":'))) {
+      // It's JSON - build a clean summary from extracted fields
+      const parts: string[] = [];
+      if (selectedItem.product_name) parts.push(`This is ${selectedItem.product_name}.`);
+      if (selectedItem.provider) parts.push(`Issued by ${selectedItem.provider}.`);
+      const personalInfo = extracted.personal_info as Record<string, unknown> | undefined;
+      const customerName = personalInfo?.full_name || (extracted as any).customer_name;
+      if (customerName) parts.push(`For ${customerName}.`);
+      if (selectedItem.ref_number) parts.push(`Reference: ${selectedItem.ref_number}.`);
+      const financialInfo = extracted.financial_info as Record<string, unknown> | undefined;
+      const totalAmount = financialInfo?.total_amount || (extracted as any).total_amount;
+      if (totalAmount) parts.push(`Amount: ${totalAmount}.`);
+      if (selectedItem.purchase_date) parts.push(`Dated ${selectedItem.purchase_date}.`);
+      if (selectedItem.expiry_date) parts.push(`Expires ${selectedItem.expiry_date}.`);
+      aiSummary = parts.length > 0 ? parts.join(' ') : 'Document analyzed successfully.';
+    }
+    
     const userTags = getUserTags(selectedItem);
 
     return (

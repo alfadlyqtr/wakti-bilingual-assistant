@@ -13,7 +13,8 @@ import {
   Bell,
   PinIcon,
   Heart,
-  NotebookPen
+  NotebookPen,
+  Smartphone
 } from "lucide-react";
 import { DrawerClose } from "@/components/ui/drawer";
 import {
@@ -65,13 +66,16 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
   const tasks = dayEntries.filter(entry => entry.type === EntryType.TASK);
   const reminders = dayEntries.filter(entry => entry.type === EntryType.REMINDER);
   const journals = dayEntries.filter(entry => entry.type === EntryType.JOURNAL);
+  const phoneEvents = dayEntries.filter(entry => entry.type === EntryType.PHONE_CALENDAR);
   
   console.log('CalendarAgenda - Grouped entries:', {
     events: events.length,
     maw3dEvents: maw3dEvents.length,
     notes: notes.length,
     tasks: tasks.length,
-    reminders: reminders.length
+    reminders: reminders.length,
+    journals: journals.length,
+    phoneEvents: phoneEvents.length
   });
   
   // Sort function to order alphabetically
@@ -94,6 +98,8 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
         return <Bell className="h-4 w-4 text-red-500" />;
       case EntryType.JOURNAL:
         return <NotebookPen className="h-4 w-4 text-sky-500" />;
+      case EntryType.PHONE_CALENDAR:
+        return <Smartphone className="h-4 w-4 text-black dark:text-white" />;
       default:
         return <PinIcon className="h-4 w-4 text-gray-500" />;
     }
@@ -305,6 +311,25 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
               </div>
             </div>
           )}
+
+          {/* Phone Calendar Events section */}
+          {phoneEvents.length > 0 && (
+            <div>
+              <h3 className="font-medium mb-2 flex items-center gap-2">
+                <Smartphone className="h-4 w-4 text-black dark:text-white" />
+                {language === 'ar' ? 'أحداث الهاتف' : 'Phone Events'} ({phoneEvents.length})
+              </h3>
+              <div className="space-y-1">
+                {phoneEvents.sort(sortEntries).map(event => (
+                  <CompactAgendaItem 
+                    key={event.id}
+                    entry={event}
+                    onClick={() => setSelectedEntry(event)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -332,6 +357,8 @@ const CompactAgendaItem: React.FC<CompactAgendaItemProps> = ({ entry, onClick })
         return "border-l-red-500 hover:bg-red-50 dark:hover:bg-red-950/20";
       case EntryType.JOURNAL:
         return "border-l-sky-500 hover:bg-sky-50 dark:hover:bg-sky-950/20";
+      case EntryType.PHONE_CALENDAR:
+        return "border-l-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800/30";
       default:
         return "border-l-gray-500 hover:bg-gray-50 dark:hover:bg-gray-950/20";
     }
@@ -349,6 +376,10 @@ const CompactAgendaItem: React.FC<CompactAgendaItemProps> = ({ entry, onClick })
         return <CheckSquare className="h-4 w-4 text-green-500" />;
       case EntryType.REMINDER:
         return <Bell className="h-4 w-4 text-red-500" />;
+      case EntryType.JOURNAL:
+        return <NotebookPen className="h-4 w-4 text-sky-500" />;
+      case EntryType.PHONE_CALENDAR:
+        return <Smartphone className="h-4 w-4 text-black dark:text-white" />;
       default:
         return <PinIcon className="h-4 w-4 text-gray-500" />;
     }

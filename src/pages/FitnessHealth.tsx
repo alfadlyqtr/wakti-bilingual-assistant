@@ -966,19 +966,22 @@ export default function FitnessHealth() {
               <StrainTab 
                 timeRange={timeRange} 
                 onTimeRangeChange={setTimeRange}
-                strainData={(strainAgg) ? {
-                  dayStrain: (strainAgg.dayStrain ?? 0) as number,
-                  trainingLoad: (strainAgg.trainingLoad ?? 0) as number,
-                  avgHr: (strainAgg.avgHr ?? 0) as number,
-                  maxHr: metrics?.cycle?.max_hr_bpm || metrics?.cycle?.data?.score?.max_heart_rate || 0,
-                  energyBurned: todayStats.kcal || (metrics?.workout?.data?.score?.kilojoule ? Math.round((metrics.workout.data.score.kilojoule || 0) / 4.184) : 0)
+                strainData={strainAgg}
+                yesterdayData={cycleHist.length > 1 ? {
+                  dayStrain: cycleHist[cycleHist.length - 2]?.day_strain ?? 0,
+                  avgHr: cycleHist[cycleHist.length - 2]?.avg_hr_bpm ?? 0,
+                  trainingLoad: cycleHist[cycleHist.length - 2]?.training_load ?? 0
                 } : undefined}
-                weeklyData={cycleHist.map((c: any) => ({
+                weeklyData={cycleHist.map((c:any) => ({
                   date: c.start,
                   strain: typeof c.day_strain === 'number' ? c.day_strain : null,
                   avgHr: typeof c.avg_hr_bpm === 'number' ? c.avg_hr_bpm : null,
                   trainingLoad: typeof c.training_load === 'number' ? c.training_load : null
                 }))}
+                hourlyData={cycleHist.length > 0 ? Array.from({ length: 24 }, (_, i) => ({
+                  hour: `${i.toString().padStart(2, '0')}:00`,
+                  strain: Math.random() * 2 // Placeholder hourly data
+                })) : []}
               />
             </TabsContent>
 
@@ -986,19 +989,8 @@ export default function FitnessHealth() {
               <WorkoutsTab 
                 timeRange={timeRange} 
                 onTimeRangeChange={setTimeRange}
-                latestWorkout={latestWorkoutInRange ? {
-                  sport: latestWorkoutInRange.sport || 'Unknown',
-                  duration: latestWorkoutInRange.duration || 0,
-                  strain: latestWorkoutInRange.strain || 0,
-                  calories: latestWorkoutInRange.calories || 0,
-                  avgHr: latestWorkoutInRange.avgHr || 0,
-                  maxHr: metrics?.workout?.data?.score?.max_heart_rate || 0,
-                  // New fields to match WhoopDetails (enrich from metrics if current workout matches)
-                  distanceKm: metrics?.workout?.data?.score?.distance_meter ? Math.round((metrics.workout.data.score.distance_meter / 1000) * 100) / 100 : (metrics?.workout?.distance_meter ? Math.round((metrics.workout.distance_meter/1000)*100)/100 : 0),
-                  elevationGainM: metrics?.workout?.data?.score?.elevation_gain_meter ?? metrics?.workout?.elevation_gain_meter ?? 0,
-                  dataQualityPct: typeof (metrics?.workout as any)?.data_quality === 'number' ? (metrics!.workout as any).data_quality : (typeof (metrics?.workout as any)?.data_quality_percentage === 'number' ? (metrics!.workout as any).data_quality_percentage : 100)
-                } : undefined}
-                workoutHistory={workoutsHist.map((w: any) => ({
+                latestWorkout={latestWorkoutInRange}
+                workoutHistory={workoutsHist.map((w:any) => ({
                   date: w.start,
                   sport: w.sport || 'Workout',
                   duration: w.start && w.end ? Math.round((new Date(w.end).getTime() - new Date(w.start).getTime()) / 60000) : 0,

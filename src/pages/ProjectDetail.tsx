@@ -112,6 +112,17 @@ import {
   detectChatIntent,
   ChatIntent
 } from '@/utils/chatIntents';
+import {
+  analyzeIntent,
+  IntentResult,
+  requiresWizard,
+  requiresModal,
+  requiresNavigation,
+  shouldCallAI,
+  getWizardType,
+  getModalType,
+  getResponse
+} from '@/utils/IntentManager';
 import { FreepikService } from '@/services/FreepikService';
 
 // Lovable-style components
@@ -4173,29 +4184,43 @@ ${fixInstructions}
     skipUserMessageSaveRef.current = false;
     
     if (!skipFormWizardDetection) {
-      // ===== STEP 0: CHECK IF THIS IS A CHAT REQUEST =====
-      // Before analyzing as a build request, check if user just wants to chat/use existing features
-      const { intent, action } = detectChatIntent(userMessage);
-      console.log('[ProjectDetail] Chat intent detection:', { userMessage, intent, hasAction: !!action });
-      
-      if (intent !== 'none') {
-        console.log('[ProjectDetail] Chat intent matched! Opening SmartMediaManager...');
-        // This is a chat request - handle it directly
+      // ===== UNIFIED INTENT DETECTION (IntentManager) =====
+      // Single source of truth for all intent detection
+      const intentResult = analyzeIntent(userMessage);
+      console.log('[ProjectDetail] IntentManager result:', {
+        category: intentResult.category,
+        intent: intentResult.intent,
+        action: intentResult.action,
+        confidence: intentResult.confidence
+      });
+
+      // Handle VIEW intents (show images, products, etc.)
+      if (intentResult.category === 'VIEW') {
+        // Add user message
         setChatMessages(prev => [...prev, {
           id: `user-${Date.now()}`,
           role: 'user',
           content: userMessage
         }]);
 
-        if (action) {
-          // Handle the action
-          if (action.type === 'open_modal' && action.payload?.component === 'SmartMediaManager') {
-            setSmartMediaInitialTab(action.payload.props.initialTab);
+        // Handle modal actions (SmartMediaManager)
+        if (requiresModal(intentResult)) {
+          const modalType = getModalType(intentResult);
+          if (modalType === 'SmartMediaManager') {
+            setSmartMediaInitialTab(intentResult.payload.modalProps?.initialTab || 'site');
             setShowSmartMediaManager(true);
           }
+        }
 
-          // Add AI response
-          const response = isRTL ? action.response.ar : action.response.en;
+        // Handle navigation actions
+        if (requiresNavigation(intentResult)) {
+          // Navigation would be handled here if needed
+          console.log('[ProjectDetail] Navigate to:', intentResult.payload.navigateTo);
+        }
+
+        // Add response message
+        const response = getResponse(intentResult, isRTL);
+        if (response) {
           setChatMessages(prev => [...prev, {
             id: `assistant-${Date.now()}`,
             role: 'assistant',
@@ -4205,11 +4230,65 @@ ${fixInstructions}
         return;
       }
 
+      // Handle CUSTOMIZE intents (styling changes) - let AI handle but skip wizards
+      if (intentResult.category === 'CUSTOMIZE') {
+        console.log('[ProjectDetail] Customize request - passing to AI without wizard');
+        // Don't return - let it fall through to AI processing
+        // But skip all wizard detection below
+      }
+
+      // Handle BUILD intents (show wizards)
+      if (intentResult.category === 'BUILD' && requiresWizard(intentResult)) {
+        const wizardType = getWizardType(intentResult);
+        console.log('[ProjectDetail] Build request - showing wizard:', wizardType);
+        
+        // Add user message
+        setChatMessages(prev => [...prev, {
+          id: `user-${Date.now()}`,
+          role: 'user',
+          content: userMessage
+        }]);
+
+        // Show appropriate wizard
+        setPendingFormPrompt(userMessage);
+        if (wizardType === 'booking') setShowBookingWizard(true);
+        else if (wizardType === 'contact') setShowContactWizard(true);
+        else if (wizardType === 'product') setShowProductWizard(true);
+        else if (wizardType === 'auth') setShowAuthWizard(true);
+        else if (wizardType === 'media') setShowMediaWizard(true);
+
+        // Save wizard message to DB
+        const wizardContent = JSON.stringify({
+          type: `${wizardType}_wizard`,
+          prompt: userMessage
+        });
+        const { data: wizardMsg } = await supabase
+          .from('project_chat_messages' as any)
+          .insert({ project_id: id, role: 'assistant', content: wizardContent } as any)
+          .select()
+          .single();
+        
+        if (wizardMsg) {
+          setChatMessages(prev => [...prev, wizardMsg as any]);
+        } else {
+          setChatMessages(prev => [...prev, {
+            id: `${wizardType}-wizard-${Date.now()}`,
+            role: 'assistant',
+            content: wizardContent
+          }]);
+        }
+        return;
+      }
+
+      // Skip old scattered pattern detection if IntentManager already handled it
+      // For CUSTOMIZE requests, skip wizard detection and let AI handle
+      const skipLegacyWizardDetection = intentResult.category === 'CUSTOMIZE';
+
       // ===== STEP 1: MULTI-FEATURE REQUEST ANALYSIS =====
       // If not a chat request, analyze it as a build/edit request
       const analysis = analyzeRequest(userMessage);
       
-      if (analysis.isMultiFeature && analysis.features.length >= 2) {
+      if (!skipLegacyWizardDetection && analysis.isMultiFeature && analysis.features.length >= 2) {
         // This is a complex multi-feature request - handle it intelligently
         console.log('[ProjectDetail] Multi-feature request detected:', analysis);
         
@@ -4271,7 +4350,7 @@ ${fixInstructions}
       const bookingFormAltPatterns = /\b(booking|appointment|reservation|schedule)\s*(form|page|system|popup|modal)\b/i;
       const hasBookingFormRequest = bookingFormPatterns.test(userMessage) || bookingFormAltPatterns.test(userMessage);
       
-      if (hasBookingFormRequest) {
+      if (!skipLegacyWizardDetection && hasBookingFormRequest) {
         setPendingFormPrompt(userMessage);
         setShowBookingWizard(true);
         
@@ -4322,7 +4401,7 @@ ${fixInstructions}
       const contactFormAltPatterns = /\b(contact|inquiry|message|feedback)\s*(form|page|popup|modal)\b/i;
       const hasContactFormRequest = contactFormPatterns.test(userMessage) || contactFormAltPatterns.test(userMessage);
       
-      if (hasContactFormRequest) {
+      if (!skipLegacyWizardDetection && hasContactFormRequest) {
         setPendingFormPrompt(userMessage);
         setShowContactWizard(true);
         
@@ -4372,7 +4451,7 @@ ${fixInstructions}
       const productWizardAltPatterns = /\b(shop|store|e-?commerce|product\s*catalog)\b/i;
       const hasProductWizardRequest = productWizardPatterns.test(userMessage) || productWizardAltPatterns.test(userMessage);
 
-      if (hasProductWizardRequest) {
+      if (!skipLegacyWizardDetection && hasProductWizardRequest) {
         setPendingFormPrompt(userMessage);
         setShowProductWizard(true);
 
@@ -4421,7 +4500,7 @@ ${fixInstructions}
       const authWizardAltPatterns = /\b(login|signup|sign.?up|sign.?in|register|authentication)\s*(page|form|screen)\b/i;
       const hasAuthWizardRequest = authWizardPatterns.test(userMessage) || authWizardAltPatterns.test(userMessage);
 
-      if (hasAuthWizardRequest) {
+      if (!skipLegacyWizardDetection && hasAuthWizardRequest) {
         setPendingFormPrompt(userMessage);
         setShowAuthWizard(true);
 

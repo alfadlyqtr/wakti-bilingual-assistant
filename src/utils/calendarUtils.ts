@@ -152,13 +152,54 @@ export const getCalendarEntries = async (
   if (phoneCalendarEvents && phoneCalendarEvents.length > 0) {
     const phoneEntries: CalendarEntry[] = phoneCalendarEvents
       .filter(event => event.startDate)
-      .map(event => ({
-        id: `phone-${event.id || event.startDate}`,
-        title: event.title,
-        date: event.startDate,
-        type: EntryType.PHONE_CALENDAR,
-        isAllDay: false
-      }));
+      .map(event => {
+        // Parse date properly - handle various formats from phone calendars
+        let dateStr = event.startDate;
+        // Try to extract just the date part if it's an ISO string
+        if (dateStr.includes('T')) {
+          dateStr = dateStr.split('T')[0];
+        }
+        // If format is like "2025-07-10 14:00:00.000" extract date part
+        if (dateStr.includes(' ')) {
+          dateStr = dateStr.split(' ')[0];
+        }
+        
+        // Handle time extraction
+        let timeStr: string | undefined = undefined;
+        if (event.startDate.includes('T')) {
+          const timePart = event.startDate.split('T')[1];
+          if (timePart && timePart.includes(':')) {
+            // Extract HH:MM format
+            timeStr = timePart.substring(0, 5);
+          }
+        } else if (event.startDate.includes(' ')) {
+          const timePart = event.startDate.split(' ')[1];
+          if (timePart && timePart.includes(':')) {
+            // Extract HH:MM format
+            timeStr = timePart.substring(0, 5);
+          }
+        }
+        
+        console.log('Phone calendar event parsed:', {
+          original: event.startDate,
+          parsed: { date: dateStr, time: timeStr },
+          title: event.title
+        });
+        
+        return {
+          id: `phone-${event.id || event.startDate}`,
+          title: event.title,
+          date: dateStr,
+          time: timeStr,
+          type: EntryType.PHONE_CALENDAR,
+          isAllDay: !timeStr
+        };
+      });
+      
+    // Log the parsed phone entries
+    console.log(`Parsed ${phoneEntries.length} phone calendar events:`, 
+      phoneEntries.map(e => ({ title: e.title, date: e.date, time: e.time })));
+      
     entries.push(...phoneEntries);
   }
 

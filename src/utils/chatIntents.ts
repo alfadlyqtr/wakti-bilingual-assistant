@@ -10,6 +10,7 @@ export type ChatIntent =
   | 'view_products'   // "Show me products"
   | 'view_orders'     // "Show my orders"
   | 'view_bookings'   // "Show appointments"
+  | 'customize'       // "Make the cart blue"
   | 'none';           // No chat intent detected
 
 export interface ChatAction {
@@ -101,6 +102,20 @@ const CHAT_PATTERNS: Record<Exclude<ChatIntent, 'none'>, {
       response: {
         en: '📦 Here are all your orders! You can:\n• View order details\n• Track status\n• Manage fulfillment',
         ar: '📦 إليك جميع طلباتك! يمكنك:\n• عرض تفاصيل الطلب\n• تتبع الحالة\n• إدارة التنفيذ'
+      }
+    }
+  },
+  customize: {
+    patterns: [
+      /\b(change|make|set|update)\s*(the\s*)?(color|style|appearance)\b/i,
+      /\b(blue|red|green|yellow|purple|orange)\s*(color|background|text)\b/i,
+      /\b(when\s*empty|when\s*full|has\s*items)\b/i,
+    ],
+    action: {
+      type: 'chat_response',
+      response: {
+        en: "I understand you want to customize this element! Let me help you with the styling.",
+        ar: "أفهم أنك تريد تخصيص هذا العنصر! دعني أساعدك في التصميم."
       }
     }
   },
