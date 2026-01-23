@@ -645,9 +645,17 @@ export default function FitnessHealth() {
   const latestDataDate = useMemo(() => {
     if (!metrics) return null as string | null;
     const dates: Date[] = [];
-    if (metrics.sleep?.start) dates.push(new Date(metrics.sleep.start));
-    if (metrics.cycle?.start) dates.push(new Date(metrics.cycle.start));
-    if (metrics.recovery?.created_at) dates.push(new Date(metrics.recovery.created_at));
+    // Try created_at_ts first for accurate sync time
+    if (metrics.sleep?.created_at_ts) dates.push(new Date(metrics.sleep.created_at_ts));
+    if (metrics.cycle?.created_at_ts) dates.push(new Date(metrics.cycle.created_at_ts));
+    if (metrics.recovery?.created_at_ts) dates.push(new Date(metrics.recovery.created_at_ts));
+    
+    // Fall back to start dates if needed
+    if (dates.length === 0) {
+      if (metrics.sleep?.start) dates.push(new Date(metrics.sleep.start));
+      if (metrics.cycle?.start) dates.push(new Date(metrics.cycle.start));
+      if (metrics.recovery?.created_at) dates.push(new Date(metrics.recovery.created_at));
+    }
     if (!dates.length) return null as string | null;
     const maxDate = dates.reduce((max, d) => (d > max ? d : max), dates[0]);
     return maxDate.toISOString();

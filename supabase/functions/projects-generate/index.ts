@@ -1388,6 +1388,158 @@ async function upsertProjectFiles(supabase: SupabaseAdminClient, projectId: stri
   if (error) throw new Error(`DB_FILES_UPSERT_FAILED: ${error.message}`);
 }
 
+// Pre-fetch images from Freepik and store them in project storage
+const FREEPIK_API_KEY = Deno.env.get('FREEPIK_API_KEY') || 'FPSX97f81d1b76ea19976ac068b75e93ea9d';
+
+interface PreFetchedImage {
+  query: string;
+  url: string;
+  storedUrl: string;
+  filename: string;
+}
+
+async function preFetchAndStoreImages(
+  supabase: SupabaseAdminClient,
+  projectId: string,
+  _userId: string,
+  queries: string[]
+): Promise<PreFetchedImage[]> {
+  const storedImages: PreFetchedImage[] = [];
+  
+  for (const query of queries) {
+    try {
+      // 1. Search Freepik for images
+      const params = new URLSearchParams({
+        locale: 'en-US',
+        page: '1',
+        limit: '2', // Get 2 images per query
+        term: query,
+        'filters[content_type][photo]': '1',
+      });
+      
+      const searchRes = await fetch(`https://api.freepik.com/v1/resources?${params}`, {
+        headers: {
+          'x-freepik-api-key': FREEPIK_API_KEY,
+          'Accept': 'application/json',
+        }
+      });
+      
+      if (!searchRes.ok) {
+        console.warn(`[PreFetch] Freepik search failed for "${query}": ${searchRes.status}`);
+        continue;
+      }
+      
+      const searchData = await searchRes.json();
+      const images = searchData.data || [];
+      
+      for (const img of images.slice(0, 2)) {
+        const imageUrl = img.image?.source?.url;
+        if (!imageUrl) continue;
+        
+        try {
+          // 2. Download the image
+          const imgRes = await fetch(imageUrl);
+          if (!imgRes.ok) continue;
+          
+          const imgBlob = await imgRes.blob();
+          const ext = imageUrl.split('.').pop()?.split('?')[0] || 'jpg';
+          const filename = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${ext}`;
+          const storagePath = `${projectId}/${filename}`;
+          
+          // 3. Upload to Supabase Storage
+          const { error: uploadError } = await supabase.storage
+            .from('project-uploads')
+            .upload(storagePath, imgBlob, {
+              contentType: imgBlob.type || 'image/jpeg',
+              upsert: true
+            });
+          
+          if (uploadError) {
+            console.warn(`[PreFetch] Upload failed for "${query}": ${uploadError.message}`);
+            continue;
+          }
+          
+          // 4. Get public URL
+          const { data: urlData } = supabase.storage
+            .from('project-uploads')
+            .getPublicUrl(storagePath);
+          
+          const storedUrl = urlData?.publicUrl || '';
+          
+          if (storedUrl) {
+            // 5. Save to project_uploads table
+            await supabase
+              .from('project_uploads')
+              .insert({
+                project_id: projectId,
+                filename: filename,
+                storage_path: storagePath,
+                file_type: imgBlob.type || 'image/jpeg',
+                file_size: imgBlob.size,
+              });
+            
+            storedImages.push({
+              query,
+              url: imageUrl,
+              storedUrl,
+              filename
+            });
+            
+            console.log(`[PreFetch] Stored image for "${query}": ${storedUrl}`);
+          }
+        } catch (imgErr) {
+          console.warn(`[PreFetch] Error processing image for "${query}":`, imgErr);
+        }
+      }
+    } catch (err) {
+      console.warn(`[PreFetch] Error fetching images for "${query}":`, err);
+    }
+  }
+  
+  return storedImages;
+}
+
+// Extract image search queries from user prompt
+function extractImageQueries(prompt: string): string[] {
+  const queries: string[] = [];
+  
+  // Extract key entities from prompt
+  const _lowerPrompt = prompt.toLowerCase(); // Used for future pattern matching
+  
+  // Sports teams
+  if (/qatar|qatari|القطري|قطر|العنابي/i.test(prompt)) {
+    queries.push('Qatar national football team', 'Qatar football players maroon jersey');
+  }
+  if (/saudi|السعودية|الأخضر/i.test(prompt)) {
+    queries.push('Saudi Arabia football team', 'Saudi football players green jersey');
+  }
+  
+  // Business types
+  if (/barber|حلاق/i.test(prompt)) {
+    queries.push('barber shop interior', 'haircut styles men');
+  }
+  if (/restaurant|مطعم/i.test(prompt)) {
+    queries.push('restaurant interior', 'food dishes');
+  }
+  if (/gym|fitness|صالة/i.test(prompt)) {
+    queries.push('gym fitness equipment', 'personal training');
+  }
+  if (/salon|صالون/i.test(prompt)) {
+    queries.push('beauty salon interior', 'hair styling');
+  }
+  
+  // Generic fallback based on keywords
+  if (queries.length === 0) {
+    // Extract nouns from prompt (simplified)
+    const words = prompt.split(/\s+/).filter(w => w.length > 4);
+    if (words.length > 0) {
+      queries.push(words.slice(0, 3).join(' '));
+    }
+  }
+  
+  return queries.slice(0, 4); // Max 4 queries to avoid timeout
+}
+
 // Entity facts database for grounding
 const ENTITY_FACTS: Record<string, { name: string; colors: string[]; colorNames: string[]; nicknames?: string[]; keyPlayers?: string[]; achievements?: string[] }> = {
   'qatar': {
@@ -1428,17 +1580,27 @@ const ENTITY_FACTS: Record<string, { name: string; colors: string[]; colorNames:
 function extractThemeFromPrompt(prompt: string): string {
   
   // Check for specific entity mentions
-  if (/qatar|qatari|العنابي/i.test(prompt)) {
+  // Qatar patterns: qatar, qatari, القطري, القطر, قطر, العنابي, منتخب قطر
+  if (/qatar|qatari|القطري|القطر|قطر|العنابي|منتخب\s*قطر/i.test(prompt)) {
     const facts = ENTITY_FACTS.qatar;
-    return `QATAR NATIONAL TEAM THEME - MANDATORY COLORS:
-- Primary: Maroon (#7B252A) - Use for headers, buttons, accents
-- Secondary: White (#FFFFFF) - Use for text, backgrounds
-- Background: Dark slate bg-[#0c0f14] with maroon accents
-- Cards: bg-slate-900/50 with maroon border accents
-- Text: text-white with maroon highlights
-- Use these EXACT colors for the Qatar national team. Team nickname: ${facts.nicknames?.join(', ')}
-- Key players to feature: ${facts.keyPlayers?.join(', ')}
-- Achievement: ${facts.achievements?.[0]}`;
+    return `🚨 QATAR NATIONAL TEAM THEME - MANDATORY COLORS (NON-NEGOTIABLE) 🚨
+⚠️ YOU MUST USE THESE EXACT COLORS - NO EXCEPTIONS:
+- PRIMARY COLOR: Maroon/Burgundy (#7B252A) - MUST be used for headers, buttons, accents, borders
+- SECONDARY COLOR: White (#FFFFFF) - MUST be used for text on maroon backgrounds
+- Background: Dark slate bg-[#0c0f14] with MAROON accents (NOT blue, NOT purple)
+- Cards: bg-slate-900/50 with MAROON border (border-[#7B252A])
+- Buttons: bg-[#7B252A] hover:bg-[#8B353A] text-white
+- Icons/Accents: MAROON (#7B252A) - NOT any other color
+- Text highlights: text-[#7B252A] for emphasis
+
+🏆 QATAR TEAM FACTS (USE IN CONTENT):
+- Team nickname: ${facts.nicknames?.join(', ')} (العنابي - The Maroons)
+- Key players: ${facts.keyPlayers?.join(', ')}
+- Achievement: ${facts.achievements?.[0]}
+- Team colors are MAROON and WHITE - this is their identity
+
+❌ DO NOT USE: Blue, Purple, Green, Orange as primary colors
+✅ ONLY USE: Maroon (#7B252A) and White (#FFFFFF) as the main theme colors`;
   }
   
   if (/saudi|السعودية|الأخضر/i.test(prompt)) {
@@ -1760,20 +1922,34 @@ useEffect(() => {
 <img src={getStaticPlaceholder('haircut', 400, 300)} alt="Haircut" />
 \`\`\`
 
-**IMAGE QUERY EXAMPLES BY BUSINESS TYPE:**
-- Barber shop: "barber shop interior", "haircut styles", "barber chair", "men grooming"
-- Restaurant: "restaurant interior", "food plating", "chef cooking"
-- Fitness: "gym equipment", "personal training", "fitness class"
-- Salon: "beauty salon", "hair styling", "nail art"
-- Real estate: "modern house exterior", "luxury apartment", "home interior"
+**🚨 CRITICAL: IMAGE SEARCH QUERIES MUST MATCH USER'S PROMPT EXACTLY 🚨**
+
+The user's prompt contains SPECIFIC details about what they want. Your image search queries MUST reflect those details:
+
+**EXAMPLES OF CORRECT IMAGE QUERIES:**
+- User asks for "Qatar national football team" → Search: "Qatar national team", "Qatar football maroon jersey", "Al-Annabi football"
+- User asks for "barber shop in Dubai" → Search: "Dubai barber shop", "luxury barber interior", "men grooming Dubai"
+- User asks for "Italian restaurant" → Search: "Italian restaurant interior", "pasta dishes", "Italian chef"
+- User asks for "fitness gym for women" → Search: "women fitness class", "female gym workout", "women personal training"
+
+**❌ WRONG - Generic queries that ignore user context:**
+- User asks for "Qatar football team" but you search "football team" or "soccer players" → WRONG
+- User asks for "luxury spa" but you search "business interior" → WRONG
+
+**✅ CORRECT - Specific queries from user's prompt:**
+- Extract KEY ENTITIES from user's prompt (team names, locations, business types, themes)
+- Use those EXACT entities in your image search queries
+- For sports teams: Include team name, colors, country in search
+- For businesses: Include business type, style, location if mentioned
 
 **STRICT RULES:**
 1. ALWAYS create /utils/stockImages.js FIRST before any component - NO EXCEPTIONS
 2. ALWAYS import and use fetchStockImages, useStockImage, or getStaticPlaceholder for ANY image
-3. Query MUST match the business context (not generic "business" or "team")
+3. Query MUST include SPECIFIC terms from user's prompt (team names, locations, themes)
 4. Use different queries for different sections (hero, about, services, etc.)
 5. Images will ALWAYS show something (placeholder if API fails) - no broken images
 6. NEVER use hardcoded URLs like picsum, unsplash, or via.placeholder
+7. NEVER use generic queries like "team", "business", "people" - BE SPECIFIC to user's request
 
 ### OUTPUT FORMAT:
 Return ONLY a valid JSON object. No markdown fences. No explanation.
@@ -5028,7 +5204,31 @@ Call task_complete when finished.`;
 
       // CREATE MODE: Generate new project from scratch
       if (safeMode === 'create') {
+        // Pre-fetch and store images from Freepik based on user's prompt
+        const imageQueries = extractImageQueries(prompt);
+        let preFetchedImages: PreFetchedImage[] = [];
+        
+        if (imageQueries.length > 0) {
+          console.log(`[Create Mode] Pre-fetching images for queries: ${imageQueries.join(', ')}`);
+          try {
+            preFetchedImages = await preFetchAndStoreImages(supabase, projectId, userId, imageQueries);
+            console.log(`[Create Mode] Pre-fetched ${preFetchedImages.length} images`);
+          } catch (prefetchErr) {
+            console.warn(`[Create Mode] Image pre-fetch failed:`, prefetchErr);
+            // Continue without pre-fetched images
+          }
+        }
+        
         let textPrompt = `CREATE NEW PROJECT.\n\nREQUEST: ${prompt}\n\n${userInstructions || ""}`;
+        
+        // Add pre-fetched images to the prompt so AI uses them directly
+        if (preFetchedImages.length > 0) {
+          const imagesList = preFetchedImages.map((img, i) => 
+            `${i + 1}. "${img.query}" → ${img.storedUrl}`
+          ).join('\n');
+          textPrompt += `\n\n🖼️ PRE-LOADED IMAGES (USE THESE DIRECTLY - DO NOT USE fetchStockImages):\nThese images have been pre-loaded and stored for this project. Use them directly in your code:\n${imagesList}\n\nIMPORTANT: Use these URLs directly in <img src="..."> tags. Do NOT create /utils/stockImages.js or call fetchStockImages() - the images are already available at these URLs.`;
+        }
+        
         if (assets && assets.length > 0) textPrompt += `\n\nUSE THESE ASSETS: ${assets.join(", ")}`;
         if (images && images.length > 0) {
           textPrompt = `SCREENSHOT-TO-CODE: Analyze the attached screenshot(s) and recreate this UI as a React application.\n\n${textPrompt}`;

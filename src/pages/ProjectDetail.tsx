@@ -8555,10 +8555,19 @@ ${fixInstructions}
             initialTab={smartMediaInitialTab}
             isRTL={isRTL}
             onInsertImage={(url, alt) => {
-              // Insert image into the site code
-              const insertPrompt = `Insert this image into the site: ${url}`;
-              setChatInput(insertPrompt);
+              // Insert image into the site code - auto-send the prompt
+              const insertPrompt = isRTL 
+                ? `أضف هذه الصورة إلى الموقع: ${url}\nوصف الصورة: ${alt || 'صورة'}`
+                : `Add this image to the site: ${url}\nImage description: ${alt || 'Image'}`;
               setShowSmartMediaManager(false);
+              // Auto-send the message to trigger AI insertion
+              setChatInput(insertPrompt);
+              requestAnimationFrame(() => {
+                const form = document.querySelector('form[class*="flex items-end gap-2"]') as HTMLFormElement;
+                if (form) {
+                  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                }
+              });
             }}
             onClose={() => setShowSmartMediaManager(false)}
           />

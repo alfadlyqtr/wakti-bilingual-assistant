@@ -188,6 +188,7 @@ const InspectablePreview = ({
       showNavigator={false} 
       showOpenInCodeSandbox={false}
       showSandpackErrorOverlay={false}
+      showRefreshButton={false}
       style={{ height: '100%' }} 
     />
   );
@@ -677,7 +678,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
               {/* RIGHT: PREVIEW */}
               {(viewMode === 'preview') && (
                 <div className="flex-1 h-full min-w-0 relative bg-black overflow-hidden group">
-                  {/* CSS to hide the default Sandpack error screen (the "pink" screen) */}
+                  {/* CSS to hide the default Sandpack error screen and fix scrollbar styling */}
                   <style dangerouslySetInnerHTML={{ __html: `
                     .sp-stack .sp-preview-actions, 
                     .sp-stack .sp-error-message,
@@ -688,6 +689,49 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                     }
                     .sp-preview-container iframe {
                       background-color: transparent !important;
+                    }
+                    /* Hide Sandpack resize handles */
+                    .sp-resize-handler,
+                    .sp-stack > .sp-resize-handler,
+                    [class*="sp-resize"],
+                    [data-resize-handle] {
+                      display: none !important;
+                      width: 0 !important;
+                      height: 0 !important;
+                      opacity: 0 !important;
+                      pointer-events: none !important;
+                    }
+                    /* Hide any vertical dividers/separators */
+                    .sp-layout > .sp-stack + .sp-stack::before,
+                    .sp-layout .sp-separator,
+                    .sp-stack .sp-separator {
+                      display: none !important;
+                    }
+                    /* Hide Sandpack loading spinner/indicator */
+                    .sp-loading,
+                    .sp-cube-wrapper,
+                    .sp-preview-loading,
+                    [class*="sp-loading"],
+                    [class*="sp-cube"],
+                    .sp-overlay {
+                      display: none !important;
+                      opacity: 0 !important;
+                    }
+                    /* Hide refresh button */
+                    .sp-button[title="Refresh"],
+                    button[title="Refresh preview"] {
+                      display: none !important;
+                    }
+                    /* Style scrollbars inside preview to be subtle */
+                    .sp-preview-container::-webkit-scrollbar,
+                    .sp-preview-iframe::-webkit-scrollbar {
+                      width: 6px;
+                      background: transparent;
+                    }
+                    .sp-preview-container::-webkit-scrollbar-thumb,
+                    .sp-preview-iframe::-webkit-scrollbar-thumb {
+                      background: rgba(100, 100, 100, 0.3);
+                      border-radius: 3px;
                     }
                   `}} />
 

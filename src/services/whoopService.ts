@@ -457,18 +457,37 @@ export async function fetchCompactMetrics(forceFresh = false) {
   const userId = await getCurrentUserId();
   if (!userId) return null;
 
+  // Add timestamp to force fresh data
+  const ts = forceFresh ? `?_t=${Date.now()}` : '';
+
   // Fetch ALL available WHOOP data fields - comprehensive extraction
   const [sleepRes, recRes, cycleRes, profileRes, bodyRes] = await Promise.all([
     // SLEEP: Pull ALL sleep fields including score data (latest first)
-    supabase.from("whoop_sleep").select("*").eq("user_id", userId).order("start", { ascending: false }).limit(5),
+    supabase.from("whoop_sleep"+ts).select("*")
+      .eq("user_id", userId)
+      .order('created_at_ts', { ascending: false, nullsFirst: false })
+      .order("start", { ascending: false })
+      .limit(5),
     // RECOVERY: Pull ALL recovery fields including score data (latest first)
-    supabase.from("whoop_recovery").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(1),
+    supabase.from("whoop_recovery"+ts).select("*")
+      .eq("user_id", userId)
+      .order('created_at_ts', { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(1),
     // CYCLE: Pull ALL cycle fields including score data (latest first)
-    supabase.from("whoop_cycles").select("*").eq("user_id", userId).order("start", { ascending: false }).limit(1),
+    supabase.from("whoop_cycles"+ts).select("*")
+      .eq("user_id", userId)
+      .order('created_at_ts', { ascending: false, nullsFirst: false })
+      .order("start", { ascending: false })
+      .limit(1),
     // USER PROFILE: Pull user profile data
-    supabase.from("whoop_user_profiles").select("*").eq("user_id", userId).maybeSingle(),
+    supabase.from("whoop_user_profiles"+ts).select("*")
+      .eq("user_id", userId)
+      .maybeSingle(),
     // USER BODY: Pull body measurements
-    supabase.from("whoop_user_body").select("*").eq("user_id", userId).maybeSingle(),
+    supabase.from("whoop_user_body"+ts).select("*")
+      .eq("user_id", userId)
+      .maybeSingle(),
   ]);
 
   // Choose main sleep: prefer nap=false if present, else longest duration

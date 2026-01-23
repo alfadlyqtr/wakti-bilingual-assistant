@@ -117,10 +117,10 @@ function EnhancedProjectLoader({ isRTL = false }) {
     <div className="absolute inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center">
       {/* Main content area */}
       <div className="w-full max-w-md mx-auto px-4">
-        {/* Progress bar - single continuous bar without gaps */}
-        <div className="w-full h-1 bg-gray-800 rounded-full mb-8 overflow-hidden relative">
+        {/* Progress bar - single continuous bar without gaps, RTL-aware */}
+        <div className="w-full h-1 bg-gray-800 rounded-full mb-8 overflow-hidden relative" dir={isRTL ? 'rtl' : 'ltr'}>
           <div 
-            className="absolute inset-y-0 left-0 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full" 
+            className={`absolute inset-y-0 ${isRTL ? 'right-0' : 'left-0'} bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-300`}
             style={{ width: `${progressBar}%` }}
           />
         </div>
