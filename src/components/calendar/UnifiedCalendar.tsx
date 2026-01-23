@@ -1075,22 +1075,68 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
               </p>
               <div className="flex items-center gap-2">
                 <input
+                  id="calendar-url-input"
                   type="text"
                   readOnly
                   value={getWebcalUrl() || ''}
                   title={language === 'ar' ? 'رابط التقويم' : 'Calendar URL'}
                   aria-label={language === 'ar' ? 'رابط التقويم' : 'Calendar URL'}
                   className="flex-1 px-3 py-2 text-sm bg-white dark:bg-gray-800 rounded-md border truncate"
+                  onFocus={(e) => e.target.select()}
                 />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCopyUrl}
-                  className="shrink-0"
+                <button
+                  type="button"
+                  onClick={() => {
+                    const url = getWebcalUrl();
+                    if (url) {
+                      // Try multiple copy methods
+                      if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(url).then(() => {
+                          setUrlCopied(true);
+                          toast.success(language === 'ar' ? 'تم نسخ الرابط!' : 'URL copied!');
+                          setTimeout(() => setUrlCopied(false), 2000);
+                        }).catch(() => {
+                          // Fallback: select and copy
+                          const input = document.getElementById('calendar-url-input') as HTMLInputElement;
+                          if (input) {
+                            input.select();
+                            document.execCommand('copy');
+                            setUrlCopied(true);
+                            toast.success(language === 'ar' ? 'تم نسخ الرابط!' : 'URL copied!');
+                            setTimeout(() => setUrlCopied(false), 2000);
+                          }
+                        });
+                      } else {
+                        // Fallback for older browsers
+                        const input = document.getElementById('calendar-url-input') as HTMLInputElement;
+                        if (input) {
+                          input.select();
+                          document.execCommand('copy');
+                          setUrlCopied(true);
+                          toast.success(language === 'ar' ? 'تم نسخ الرابط!' : 'URL copied!');
+                          setTimeout(() => setUrlCopied(false), 2000);
+                        }
+                      }
+                    }
+                  }}
+                  style={{
+                    padding: '8px 12px',
+                    backgroundColor: urlCopied ? '#22c55e' : '#f3f4f6',
+                    color: urlCopied ? '#fff' : '#374151',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
                 >
                   {urlCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                </Button>
+                </button>
               </div>
+              <p className="text-xs text-muted-foreground">
+                {language === 'ar' ? 'اضغط على الرابط لتحديده، ثم انسخه' : 'Tap the URL to select it, then copy'}
+              </p>
             </div>
             
             {/* Instructions */}
