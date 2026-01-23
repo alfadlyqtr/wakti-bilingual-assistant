@@ -331,10 +331,22 @@ serve(async (req) => {
         throw new Error("No document provided for extraction");
       }
 
-      const documentMimeType = mimeType || (pdfBase64 ? "application/pdf" : "image/jpeg");
-      const isDocument = documentMimeType === "application/pdf" || documentMimeType === "application/msword" || documentMimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+      // Helper to detect MIME type from base64 data
+      function detectMimeType(base64Data: string): string {
+        // Check magic bytes in base64
+        if (base64Data.startsWith('/9j/')) return 'image/jpeg';
+        if (base64Data.startsWith('iVBORw')) return 'image/png';
+        if (base64Data.startsWith('R0lGOD')) return 'image/gif';
+        if (base64Data.startsWith('UklGR')) return 'image/webp';
+        if (base64Data.startsWith('JVBERi')) return 'application/pdf';
+        // Default to jpeg for images
+        return mimeType || 'image/jpeg';
+      }
 
-      console.log(`[my-warranty-ai] Preparing Gemini request. Type: ${documentMimeType}, Pages: ${imageArray.length}`);
+      const firstImageMime = detectMimeType(imageArray[0]);
+      const isDocument = firstImageMime === "application/pdf" || mimeType === "application/msword" || mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+      console.log(`[my-warranty-ai] Preparing Gemini request. Detected Type: ${firstImageMime}, Provided mimeType: ${mimeType}, Pages: ${imageArray.length}`);
 
       const parts: Array<{ text?: string; inline_data?: { mime_type: string; data: string } }> = [
         { text: EXTRACTION_PROMPT },
@@ -342,10 +354,14 @@ serve(async (req) => {
       ];
       
       for (let i = 0; i < imageArray.length; i++) {
+        // Detect MIME type for each image individually
+        const imageMime = detectMimeType(imageArray[i]);
+        console.log(`[my-warranty-ai] Image ${i + 1} detected MIME: ${imageMime}, base64 prefix: ${imageArray[i].substring(0, 20)}...`);
+        
         parts.push({ text: `\n--- Page ${i + 1} of ${imageArray.length} ---` });
         parts.push({
           inline_data: {
-            mime_type: documentMimeType,
+            mime_type: imageMime,
             data: imageArray[i],
           },
         });

@@ -885,6 +885,8 @@ const MyWarranty: React.FC = () => {
       }
 
       // Use the Supabase public URLs directly for preview
+      console.log('[handleFileSelect] Uploaded images URLs:', newImages);
+      
       setNewItem(prev => {
         const updatedImages = [...prev.additional_images];
         let primaryImage = prev.image_url;
@@ -896,6 +898,8 @@ const MyWarranty: React.FC = () => {
         } else {
           updatedImages.push(...newImages);
         }
+
+        console.log('[handleFileSelect] Setting state:', { primaryImage, updatedImages, isPdf });
 
         return {
           ...prev,
@@ -931,19 +935,39 @@ const MyWarranty: React.FC = () => {
   // Handle manual analyze (Send button)
   const handleAnalyzeDocument = async () => {
     // Check if we have any images to analyze
-    if (!user || (!newItem.image_url && newItem.additional_images.length === 0)) return;
+    if (!user || (!newItem.image_url && newItem.additional_images.length === 0)) {
+      console.error('[handleAnalyzeDocument] No images to analyze:', { image_url: newItem.image_url, additional: newItem.additional_images });
+      toast({
+        title: isRTL ? 'خطأ' : 'Error',
+        description: isRTL ? 'لا توجد صور للتحليل' : 'No images to analyze',
+        variant: 'destructive',
+      });
+      return;
+    }
     
     setIsAnalyzing(true);
     
     try {
-      // Collect all image URLs
-      const allImageUrls = [newItem.image_url, ...newItem.additional_images];
+      // Collect all image URLs - filter out empty strings
+      const allImageUrls = [newItem.image_url, ...newItem.additional_images].filter(url => url && url.trim() !== '');
+      
+      console.log('[handleAnalyzeDocument] Processing URLs:', allImageUrls);
+      
+      if (allImageUrls.length === 0) {
+        throw new Error('No valid image URLs found');
+      }
       
       // Fetch images and convert to base64
       const base64Images: string[] = [];
       for (const url of allImageUrls) {
+        console.log('[handleAnalyzeDocument] Fetching:', url);
         const response = await fetch(url);
+        if (!response.ok) {
+          console.error('[handleAnalyzeDocument] Fetch failed:', response.status, response.statusText);
+          throw new Error(`Failed to fetch image: ${response.status}`);
+        }
         const blob = await response.blob();
+        console.log('[handleAnalyzeDocument] Blob size:', blob.size, 'type:', blob.type);
         const base64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => {
@@ -953,6 +977,7 @@ const MyWarranty: React.FC = () => {
           reader.onerror = reject;
           reader.readAsDataURL(blob);
         });
+        console.log('[handleAnalyzeDocument] Base64 length:', base64.length);
         base64Images.push(base64);
       }
 
