@@ -341,7 +341,7 @@ const ScaledCardPreview: React.FC<{ data: BusinessCardData }> = ({ data }) => {
           className="inline-block"
           style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}
         >
-          <CardPreviewLive data={data} />
+          <CardPreviewLive data={data} isFlipped={false} handleFlip={() => {}} />
         </div>
       </div>
     </div>
@@ -968,56 +968,13 @@ const MyWarranty: React.FC = () => {
         const existingData = newItem.extracted_data || {};
         const newData = extracted.extracted_data || {};
         
-        // Merge data from all images
+        // Simple merge - just spread objects together
         const fullExtractedData: Record<string, unknown> = {
           ...existingData,
-          document_info: mergeDataObjects(
-            existingData.document_info as Record<string, unknown>,
-            newData.document_info as Record<string, unknown>
-          ),
-          personal_info: mergeDataObjects(
-            existingData.personal_info as Record<string, unknown>,
-            newData.personal_info as Record<string, unknown>
-          ),
-          contact_info: mergeDataObjects(
-            existingData.contact_info as Record<string, unknown>,
-            newData.contact_info as Record<string, unknown>
-          ),
-          product_info: mergeDataObjects(
-            existingData.product_info as Record<string, unknown>,
-            newData.product_info as Record<string, unknown>
-          ),
-          warranty_info: mergeDataObjects(
-            existingData.warranty_info as Record<string, unknown>,
-            newData.warranty_info as Record<string, unknown>
-          ),
+          ...newData,
           notes: [existingData.notes, extracted.notes || ''].filter(Boolean).join('\n\n'),
           all_text: [existingData.all_text, extracted.notes || ''].filter(Boolean).join('\n\n')
         };
-
-        // Helper function to merge data objects intelligently
-        function mergeDataObjects(obj1: Record<string, unknown> = {}, obj2: Record<string, unknown> = {}): Record<string, unknown> {
-          const result: Record<string, unknown> = { ...obj1 };
-          
-          for (const [key, value2] of Object.entries(obj2)) {
-            const value1 = obj1[key];
-            
-            // If both values are arrays, concatenate them
-            if (Array.isArray(value1) && Array.isArray(value2)) {
-              result[key] = [...new Set([...value1, ...value2])];
-            }
-            // If both are objects, merge recursively
-            else if (typeof value1 === 'object' && typeof value2 === 'object' && value1 && value2) {
-              result[key] = mergeDataObjects(value1 as Record<string, unknown>, value2 as Record<string, unknown>);
-            }
-            // If new value exists and old doesn't, or new value seems more complete
-            else if (!value1 || (typeof value2 === 'string' && (value2 as string).length > (value1 as string).length)) {
-              result[key] = value2;
-            }
-          }
-          
-          return result;
-        }
         
         // Build comprehensive summary
         const richSummary = extracted.ai_summary || buildRichSummary({ ...extracted, extracted_data: fullExtractedData });

@@ -1030,68 +1030,65 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
         entry={editEntry}
       />
 
-      {/* Subscribe to Calendar Dialog */}
+      {/* Subscribe to Calendar Dialog - iOS Optimized */}
       <Dialog open={showSubscribeDialog} onOpenChange={setShowSubscribeDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-center">
-              {language === 'ar' ? 'مزامنة التقويم مع هاتفك' : 'Sync Calendar to Your Phone'}
+            <DialogTitle className="text-center text-xl">
+              {language === 'ar' ? '📅 مزامنة التقويم' : '📅 Sync Your Calendar'}
             </DialogTitle>
           </DialogHeader>
           
-          <div className="space-y-4 py-4">
-            <p className="text-sm text-muted-foreground text-center">
-              {language === 'ar' 
-                ? 'اشترك في تقويم Wakti لمزامنة المهام والتذكيرات والمواعيد تلقائياً مع تطبيق التقويم على هاتفك.'
-                : 'Subscribe to your Wakti calendar to automatically sync tasks, reminders, and appointments to your phone\'s calendar app.'}
-            </p>
-            
-            {/* Main Subscribe Button */}
-            <Button
-              onClick={handleSubscribeToCalendar}
-              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
-              size="lg"
-            >
-              <CalendarIcon className="h-5 w-5 mr-2" />
-              {language === 'ar' ? 'اشتراك في التقويم' : 'Subscribe to Calendar'}
-            </Button>
-            
-            {/* Copy URL Section */}
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground text-center">
-                {language === 'ar' ? 'أو انسخ الرابط يدوياً:' : 'Or copy the URL manually:'}
+          <div className="space-y-5 py-4">
+            {/* iOS-style explanation */}
+            <div className="text-center space-y-2">
+              <p className="text-sm text-muted-foreground">
+                {language === 'ar' 
+                  ? 'اضغط الزر أدناه وسيفتح تطبيق التقويم تلقائياً'
+                  : 'Tap the button below and your Calendar app will open automatically'}
               </p>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  readOnly
-                  value={getCalendarSubscribeUrl() || ''}
-                  title={language === 'ar' ? 'رابط الاشتراك في التقويم' : 'Calendar subscription URL'}
-                  aria-label={language === 'ar' ? 'رابط الاشتراك في التقويم' : 'Calendar subscription URL'}
-                  className="flex-1 px-3 py-2 text-xs bg-muted rounded-md border truncate"
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCopyUrl}
-                  className="shrink-0"
-                >
-                  {urlCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                </Button>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                {language === 'ar' 
+                  ? 'ثم اضغط "اشتراك" للمزامنة التلقائية'
+                  : 'Then tap "Subscribe" for automatic sync'}
+              </p>
             </div>
             
-            {/* Instructions */}
-            <div className="bg-muted/50 rounded-lg p-3 space-y-2">
-              <p className="text-xs font-medium">
-                {language === 'ar' ? 'كيفية الاشتراك يدوياً:' : 'How to manually subscribe:'}
+            {/* Big iOS-style Subscribe Button */}
+            <Button
+              onClick={handleSubscribeToCalendar}
+              className="w-full h-14 text-lg font-semibold bg-black text-white hover:bg-gray-900 rounded-xl shadow-lg"
+              size="lg"
+            >
+              <svg className="h-6 w-6 mr-3" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M18.71 19.5C17.88 20.74 17 21.95 15.66 21.97C14.32 22 13.89 21.18 12.37 21.18C10.84 21.18 10.37 21.95 9.1 22C7.79 22.05 6.8 20.68 5.96 19.47C4.25 17 2.94 12.45 4.7 9.39C5.57 7.87 7.13 6.91 8.82 6.88C10.1 6.86 11.32 7.75 12.11 7.75C12.89 7.75 14.37 6.68 15.92 6.84C16.57 6.87 18.39 7.1 19.56 8.82C19.47 8.88 17.39 10.1 17.41 12.63C17.44 15.65 20.06 16.66 20.09 16.67C20.06 16.74 19.67 18.11 18.71 19.5ZM13 3.5C13.73 2.67 14.94 2.04 15.94 2C16.07 3.17 15.6 4.35 14.9 5.19C14.21 6.04 13.07 6.7 11.95 6.61C11.8 5.46 12.35 4.26 13 3.5Z"/>
+              </svg>
+              {language === 'ar' ? 'فتح تقويم iPhone' : 'Open iPhone Calendar'}
+            </Button>
+            
+            {/* What happens next */}
+            <div className="bg-blue-50 dark:bg-blue-950/30 rounded-xl p-4 space-y-3">
+              <p className="text-sm font-medium text-center">
+                {language === 'ar' ? 'ماذا سيحدث:' : 'What happens next:'}
               </p>
-              <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
-                <li>{language === 'ar' ? 'انسخ الرابط أعلاه' : 'Copy the URL above'}</li>
-                <li>{language === 'ar' ? 'افتح تطبيق التقويم (Google Calendar, Apple Calendar, Outlook)' : 'Open your calendar app (Google Calendar, Apple Calendar, Outlook)'}</li>
-                <li>{language === 'ar' ? 'ابحث عن "الاشتراك في تقويم" أو "إضافة تقويم بالرابط"' : 'Look for "Subscribe to Calendar" or "Add Calendar by URL"'}</li>
-                <li>{language === 'ar' ? 'الصق الرابط واتبع التعليمات' : 'Paste the URL and follow the prompts'}</li>
-              </ol>
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">1</div>
+                <p className="text-sm text-muted-foreground">
+                  {language === 'ar' ? 'سيفتح تطبيق التقويم تلقائياً' : 'Calendar app opens automatically'}
+                </p>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">2</div>
+                <p className="text-sm text-muted-foreground">
+                  {language === 'ar' ? 'اضغط "اشتراك" في النافذة المنبثقة' : 'Tap "Subscribe" in the popup'}
+                </p>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-green-500 text-white flex items-center justify-center text-xs font-bold">✓</div>
+                <p className="text-sm text-muted-foreground">
+                  {language === 'ar' ? 'تمت المزامنة! ستظهر أحداثك تلقائياً' : 'Done! Your events will sync automatically'}
+                </p>
+              </div>
             </div>
           </div>
         </DialogContent>
