@@ -1002,38 +1002,64 @@ const MyWarranty: React.FC = () => {
     setIsAnalyzing(true);
     
     try {
-      // Collect all image URLs - filter out empty strings
-      const allImageUrls = [newItem.image_url, ...newItem.additional_images].filter(url => url && url.trim() !== '');
-      
-      console.log('[handleAnalyzeDocument] Processing URLs:', allImageUrls);
-      
-      if (allImageUrls.length === 0) {
-        throw new Error('No valid image URLs found');
-      }
-      
-      // Fetch images and convert to base64
+      // Use previewUrls (base64 data URLs) if available - more reliable on mobile
+      // Fall back to fetching from Supabase URLs if previewUrls not available
       const base64Images: string[] = [];
-      for (const url of allImageUrls) {
-        console.log('[handleAnalyzeDocument] Fetching:', url);
-        const response = await fetch(url);
-        if (!response.ok) {
-          console.error('[handleAnalyzeDocument] Fetch failed:', response.status, response.statusText);
-          throw new Error(`Failed to fetch image: ${response.status}`);
+      
+      // Check if we have preview URLs (base64 data URLs from file upload)
+      const allPreviewUrls = [previewUrls.primary, ...previewUrls.additional].filter(url => url && url.trim() !== '');
+      
+      if (allPreviewUrls.length > 0) {
+        console.log('[handleAnalyzeDocument] Using preview URLs (base64):', allPreviewUrls.length);
+        
+        for (const dataUrl of allPreviewUrls) {
+          // Extract base64 from data URL (format: data:image/jpeg;base64,/9j/...)
+          if (dataUrl.includes(',')) {
+            const base64Part = dataUrl.split(',')[1];
+            if (base64Part && base64Part.length > 0) {
+              console.log('[handleAnalyzeDocument] Extracted base64 length:', base64Part.length);
+              base64Images.push(base64Part);
+            }
+          }
         }
-        const blob = await response.blob();
-        console.log('[handleAnalyzeDocument] Blob size:', blob.size, 'type:', blob.type);
-        const base64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => {
-            const result = reader.result as string;
-            resolve(result.split(',')[1]);
-          };
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
-        console.log('[handleAnalyzeDocument] Base64 length:', base64.length);
-        base64Images.push(base64);
+      } else {
+        // Fallback: Fetch from Supabase URLs
+        const allImageUrls = [newItem.image_url, ...newItem.additional_images].filter(url => url && url.trim() !== '');
+        
+        console.log('[handleAnalyzeDocument] Fetching from Supabase URLs:', allImageUrls.length);
+        
+        if (allImageUrls.length === 0) {
+          throw new Error('No valid image URLs found');
+        }
+        
+        for (const url of allImageUrls) {
+          console.log('[handleAnalyzeDocument] Fetching:', url);
+          const response = await fetch(url);
+          if (!response.ok) {
+            console.error('[handleAnalyzeDocument] Fetch failed:', response.status, response.statusText);
+            throw new Error(`Failed to fetch image: ${response.status}`);
+          }
+          const blob = await response.blob();
+          console.log('[handleAnalyzeDocument] Blob size:', blob.size, 'type:', blob.type);
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const result = reader.result as string;
+              resolve(result.split(',')[1]);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+          console.log('[handleAnalyzeDocument] Base64 length:', base64.length);
+          base64Images.push(base64);
+        }
       }
+      
+      if (base64Images.length === 0) {
+        throw new Error('No valid images to analyze');
+      }
+      
+      console.log('[handleAnalyzeDocument] Total images to analyze:', base64Images.length);
 
       const { data: aiData, error: aiError } = await supabase.functions.invoke('my-warranty-ai', {
         body: {

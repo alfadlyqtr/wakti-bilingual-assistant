@@ -102,15 +102,44 @@ Answer concisely in the same language as the question.`;
 
 function detectMimeType(base64Data: string): string {
   const cleanData = base64Data.trim();
+  // JPEG signatures
   if (cleanData.startsWith('/9j/') || cleanData.startsWith('/9j')) return 'image/jpeg';
+  // PNG signature
   if (cleanData.startsWith('iVBORw')) return 'image/png';
+  // WebP signature
   if (cleanData.startsWith('UklGR')) return 'image/webp';
+  // GIF signatures
   if (cleanData.startsWith('R0lGOD')) return 'image/gif';
+  // HEIC/HEIF - these need to be converted, default to jpeg for API compatibility
+  if (cleanData.startsWith('AAAA') || cleanData.startsWith('ftypheic') || cleanData.startsWith('ftypmif1')) {
+    console.log('[my-warranty-ai] Detected HEIC/HEIF format, treating as JPEG for API compatibility');
+    return 'image/jpeg';
+  }
+  // BMP signature
+  if (cleanData.startsWith('Qk')) return 'image/bmp';
+  // Default to JPEG as most compatible
   return 'image/jpeg';
 }
 
 function cleanBase64(base64Data: string): string {
-  return base64Data.trim().replace(/\s/g, '');
+  let cleaned = base64Data.trim();
+  
+  // Remove data URL prefix if present (e.g., "data:image/jpeg;base64,")
+  if (cleaned.includes(',')) {
+    const parts = cleaned.split(',');
+    if (parts.length >= 2 && parts[0].includes('base64')) {
+      cleaned = parts.slice(1).join(',');
+      console.log('[my-warranty-ai] Stripped data URL prefix from base64');
+    }
+  }
+  
+  // Remove any whitespace/newlines
+  cleaned = cleaned.replace(/\s/g, '');
+  
+  // Remove any non-base64 characters that might have slipped in
+  cleaned = cleaned.replace(/[^A-Za-z0-9+/=]/g, '');
+  
+  return cleaned;
 }
 
 function normalizeImageMimeType(mimeType: string): string {

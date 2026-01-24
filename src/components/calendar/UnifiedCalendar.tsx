@@ -855,24 +855,19 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
       <div className="flex flex-col space-y-2 p-3">
         {/* Top bar with sync and date controls */}
         <div className="flex items-center justify-between w-full gap-2">
-          {/* Sync button - always uses Natively SDK sync */}
-          <Button
+          {/* Sync button - input type=button for maximum compatibility */}
+          <input
             type="button"
-            variant="default"
-            size="sm"
-            onClick={() => syncCalendars('both')}
+            value={language === 'ar' ? '🔄 مزامنة' : '🔄 Sync'}
             disabled={isSyncing}
-            className="flex items-center gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95"
-          >
-            {isSyncing ? (
-              <RefreshCw className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-            <span className="font-medium">
-              {language === 'ar' ? 'مزامنة' : 'Sync'}
-            </span>
-          </Button>
+            onClick={() => {
+              console.log('[CalendarSync] INPUT BUTTON CLICKED!');
+              alert('Sync button pressed!'); // Debug alert
+              toast.info(language === 'ar' ? 'جاري المزامنة...' : 'Syncing...');
+              syncCalendars('both');
+            }}
+            className="px-4 py-2 rounded-md text-sm font-medium bg-primary text-primary-foreground disabled:opacity-50"
+          />
           
           {/* Date controls */}
           <div className="flex items-center space-x-2">
