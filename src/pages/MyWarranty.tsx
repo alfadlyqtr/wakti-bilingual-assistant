@@ -842,13 +842,75 @@ const MyWarranty: React.FC = () => {
     if (extracted.purchase_date && extracted.expiry_date) {
       parts.push(`📅 Valid: ${extracted.purchase_date} to ${extracted.expiry_date}`);
     }
-    const fi = ed.financial_info as any;
-    if (fi?.total_amount) {
-      parts.push(`💰 Amount: ${fi.total_amount} ${fi.currency || ''}`);
-    }
-    if (extracted.support_contact) parts.push(`📞 Contact: ${extracted.support_contact}`);
     
     return parts.length > 0 ? parts.join('\n') : 'Document analyzed and saved.';
+  };
+
+  // Optimize image for preview and upload - fixes mobile quality issues
+  const optimizeImage = async (file: File, maxWidth: number = 2048, quality: number = 0.92): Promise<{ optimizedFile: File; previewUrl: string }> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          
+          // Resize if larger than maxWidth while maintaining aspect ratio
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Failed to get canvas context'));
+            return;
+          }
+          
+          // Draw image with high quality
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Convert to blob with quality setting
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                reject(new Error('Failed to create blob'));
+                return;
+              }
+              
+              // Create optimized file
+              const optimizedFile = new File([blob], file.name, {
+                type: 'image/jpeg',
+                lastModified: Date.now(),
+              });
+              
+              // Create preview URL
+              const previewUrl = canvas.toDataURL('image/jpeg', quality);
+              
+              console.log('[optimizeImage] Original size:', file.size, 'Optimized size:', optimizedFile.size, 'Dimensions:', width, 'x', height);
+              
+              resolve({ optimizedFile, previewUrl });
+            },
+            'image/jpeg',
+            quality
+          );
+        };
+        
+        img.onerror = () => reject(new Error('Failed to load image'));
+        img.src = e.target?.result as string;
+      };
+      
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
   };
 
   // Handle file upload
@@ -876,12 +938,34 @@ const MyWarranty: React.FC = () => {
       for (let i = 0; i < fileList.length; i++) {
         const file = fileList[i];
         
-        // Create base64 preview URL for instant preview
-        const previewUrl = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = (e) => resolve(e.target?.result as string);
-          reader.readAsDataURL(file);
-        });
+        let fileToUpload = file;
+        let previewUrl = '';
+        
+        // Optimize images (not PDFs) for better quality and smaller size
+        if (!isPdf && file.type.startsWith('image/')) {
+          try {
+            const optimized = await optimizeImage(file);
+            fileToUpload = optimized.optimizedFile;
+            previewUrl = optimized.previewUrl;
+            console.log('[handleFileSelect] Image optimized for upload and preview');
+          } catch (error) {
+            console.warn('[handleFileSelect] Image optimization failed, using original:', error);
+            // Fallback to original file
+            previewUrl = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onload = (e) => resolve(e.target?.result as string);
+              reader.readAsDataURL(file);
+            });
+          }
+        } else {
+          // For PDFs, just create preview URL
+          previewUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target?.result as string);
+            reader.readAsDataURL(file);
+          });
+        }
+        
         newPreviewUrls.push(previewUrl);
         
         // Upload to Supabase for storage and analysis
@@ -889,7 +973,7 @@ const MyWarranty: React.FC = () => {
         const fileName = `${user.id}/${Date.now()}_${i}_${sanitizedName}`;
         const { error: uploadError } = await supabase.storage
           .from('warranty-docs')
-          .upload(fileName, file);
+          .upload(fileName, fileToUpload);
 
         if (uploadError) throw uploadError;
 
