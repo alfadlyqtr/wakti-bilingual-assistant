@@ -1199,20 +1199,22 @@ class WaktiAIV2ServiceClass {
 
         if (encounteredError) throw new Error(String(encounteredError));
 
-        // Check for reminder in the response and create scheduled reminder
-        // Handle both OFFER (when AI says "I will remind you") and CONFIRM formats
+        // Check for reminder CONFIRMATION in the response and create scheduled reminder
+        // ONLY create reminder on CONFIRM (user said yes), NOT on OFFER (AI is asking)
         try {
           console.log('🔔 REMINDER CHECK: Parsing response for reminder blocks...');
           const reminderData = parseReminderFromResponse(fullResponse);
           console.log('🔔 REMINDER CHECK: Parse result:', reminderData);
-          if (reminderData) {
-            const data = reminderData.data as { scheduled_for?: string; suggested_time?: string; reminder_text?: string; timezone?: string; context?: string };
-            // Use scheduled_for (confirm) or suggested_time (offer)
-            const scheduledTime = data.scheduled_for || data.suggested_time;
-            const reminderText = data.reminder_text || data.context || 'Reminder from Wakti AI';
+          
+          // Only create reminder when AI CONFIRMS (user already said yes)
+          // Do NOT create on OFFER - that's just the AI asking if user wants a reminder
+          if (reminderData && reminderData.type === 'confirm') {
+            const data = reminderData.data as { scheduled_for?: string; reminder_text?: string; timezone?: string };
+            const scheduledTime = data.scheduled_for;
+            const reminderText = data.reminder_text || 'Reminder from Wakti AI';
             
             if (scheduledTime && userId) {
-              console.log('🔔 REMINDER: Creating scheduled reminder', { type: reminderData.type, scheduledTime, reminderText });
+              console.log('🔔 REMINDER: Creating scheduled reminder (user confirmed)', { scheduledTime, reminderText });
               const result = await createScheduledReminder(
                 userId,
                 reminderText,
@@ -1225,6 +1227,8 @@ class WaktiAIV2ServiceClass {
                 console.error('❌ REMINDER: Failed to create reminder', result.error);
               }
             }
+          } else if (reminderData && reminderData.type === 'offer') {
+            console.log('🔔 REMINDER: AI offered reminder, waiting for user confirmation...');
           }
         } catch (reminderErr) {
           console.warn('⚠️ REMINDER: Error processing reminder', reminderErr);
@@ -1466,17 +1470,17 @@ class WaktiAIV2ServiceClass {
 
         if (encounteredError) throw new Error(String(encounteredError));
 
-        // Check for reminder in vision response and create scheduled reminder
-        // Handle both OFFER and CONFIRM formats
+        // Check for reminder CONFIRMATION in vision response and create scheduled reminder
+        // ONLY create reminder on CONFIRM (user said yes), NOT on OFFER
         try {
           const reminderData = parseReminderFromResponse(fullResponse);
-          if (reminderData) {
-            const data = reminderData.data as { scheduled_for?: string; suggested_time?: string; reminder_text?: string; timezone?: string; context?: string };
-            const scheduledTime = data.scheduled_for || data.suggested_time;
-            const reminderText = data.reminder_text || data.context || 'Reminder from Wakti AI';
+          if (reminderData && reminderData.type === 'confirm') {
+            const data = reminderData.data as { scheduled_for?: string; reminder_text?: string; timezone?: string };
+            const scheduledTime = data.scheduled_for;
+            const reminderText = data.reminder_text || 'Reminder from Wakti AI';
             
             if (scheduledTime && userId) {
-              console.log('🔔 REMINDER (Vision): Creating scheduled reminder', { type: reminderData.type, scheduledTime, reminderText });
+              console.log('🔔 REMINDER (Vision): Creating scheduled reminder (user confirmed)', { scheduledTime, reminderText });
               const result = await createScheduledReminder(
                 userId,
                 reminderText,
@@ -1489,6 +1493,8 @@ class WaktiAIV2ServiceClass {
                 console.error('❌ REMINDER (Vision): Failed to create reminder', result.error);
               }
             }
+          } else if (reminderData && reminderData.type === 'offer') {
+            console.log('🔔 REMINDER (Vision): AI offered reminder, waiting for user confirmation...');
           }
         } catch (reminderErr) {
           console.warn('⚠️ REMINDER (Vision): Error processing reminder', reminderErr);
