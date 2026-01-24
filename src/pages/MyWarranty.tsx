@@ -1237,24 +1237,40 @@ const MyWarranty: React.FC = () => {
         additional_images: itemToSave.additional_images,
       };
 
-      const { error } = await (supabase as any).from('user_warranties').insert({
-        user_id: user.id,
-        product_name: itemToSave.title,
-        purchase_date: itemToSave.purchase_date || null,
-        expiry_date: itemToSave.expiry_date || null,
-        warranty_months: itemToSave.warranty_period ? parseInt(itemToSave.warranty_period) : null,
-        notes: itemToSave.ai_summary || null,
-        provider: itemToSave.provider || null,
-        ref_number: itemToSave.ref_number || null,
-        support_contact: itemToSave.support_contact || null,
-        image_url: itemToSave.image_url || null,
-        receipt_url: itemToSave.receipt_url || null,
-        file_type: itemToSave.file_type || null,
-        extracted_data: extractedWithTags,
-        ai_summary: itemToSave.ai_summary || null,
-      });
+      // Save with returning ID to get the new warranty ID for preview caching
+      const { data: newWarrantyData, error } = await (supabase as any)
+        .from('user_warranties')
+        .insert({
+          user_id: user.id,
+          product_name: itemToSave.title,
+          purchase_date: itemToSave.purchase_date || null,
+          expiry_date: itemToSave.expiry_date || null,
+          warranty_months: itemToSave.warranty_period ? parseInt(itemToSave.warranty_period) : null,
+          notes: itemToSave.ai_summary || null,
+          provider: itemToSave.provider || null,
+          ref_number: itemToSave.ref_number || null,
+          support_contact: itemToSave.support_contact || null,
+          image_url: itemToSave.image_url || null,
+          receipt_url: itemToSave.receipt_url || null,
+          file_type: itemToSave.file_type || null,
+          extracted_data: extractedWithTags,
+          ai_summary: itemToSave.ai_summary || null,
+        })
+        .select()
+        .single();
 
       if (error) throw error;
+      
+      // Cache the preview URL in localStorage with the actual warranty ID
+      if (newWarrantyData?.id && previewUrls.primary) {
+        try {
+          const cacheKey = `warranty_preview_${newWarrantyData.id}`;
+          localStorage.setItem(cacheKey, previewUrls.primary);
+          console.log('[handleSave] Cached preview image with key:', cacheKey);
+        } catch (e) {
+          console.warn('[handleSave] Failed to cache preview:', e);
+        }
+      }
 
       toast({
         title: isRTL ? 'نجاح' : 'Success',
@@ -3128,12 +3144,44 @@ const MyWarranty: React.FC = () => {
                 const isPdf = selectedItem.file_type === 'pdf' || rawUrl.toLowerCase().endsWith('.pdf');
                 
                 if (rawUrl && !isPdf) {
+                  // Try to find matching base64 preview URL for better compatibility
+                  const allWarranties = warranties || [];
+                  const currentWarranty = allWarranties.find(w => w.id === selectedItem.id);
+                  
+                  // Default to Supabase URL, but try to find preview in localStorage if available
+                  let imageUrl = rawUrl;
+                  let imageFallbackUrl = '';
+                  
+                  // Check if we have a cached preview URL in localStorage
+                  try {
+                    const cacheKey = `warranty_preview_${selectedItem.id}`;
+                    const cachedPreview = localStorage.getItem(cacheKey);
+                    if (cachedPreview) {
+                      imageUrl = cachedPreview;
+                      console.log('[DetailView] Using cached preview from localStorage');
+                    }
+                  } catch (e) {
+                    console.warn('[DetailView] Error accessing localStorage:', e);
+                  }
+
                   return (
                     <div className="relative w-full h-full">
                       <img 
-                        src={rawUrl} 
-                        alt={selectedItem.product_name} 
-                        className="document-preview w-full h-full object-contain bg-black/20 transition-all duration-300" 
+                        src={imageUrl} 
+                        alt={selectedItem.product_name}
+                        className="document-preview w-full h-full object-contain bg-black/20 transition-all duration-300"
+                        crossOrigin="anonymous"
+                        onLoad={() => console.log('[DetailView] Image loaded successfully from:', imageUrl.substring(0, 30) + '...')}
+                        onError={(e) => {
+                          console.error('[DetailView] Primary image failed to load:', imageUrl.substring(0, 30) + '...');
+                          const imgElement = e.target as HTMLImageElement;
+                          
+                          // If the main URL fails, try the fallback Supabase URL
+                          if (imageUrl !== rawUrl) {
+                            console.log('[DetailView] Trying fallback to Supabase URL');
+                            imgElement.src = rawUrl;
+                          }
+                        }}
                       />
                       {selectedItem.receipt_url && (
                         <Button

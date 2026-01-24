@@ -689,6 +689,142 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     }
   }, [calendarEntries, language]);
 
+  // Helper function to sync events using direct NativelyCalendar SDK
+  const syncEventsToCalendar = (calendar: any, calendarId: string) => {
+    console.log('[DirectSDK] Starting event sync to calendar ID:', calendarId);
+    
+    // Filter entries to sync - all entry types
+    const entriesToSync = calendarEntries.filter(e => 
+      e.date && typeof e.date === 'string' && e.date.length >= 10
+    );
+    
+    console.log('[DirectSDK] Found', entriesToSync.length, 'events to sync');
+    
+    if (entriesToSync.length === 0) {
+      toast.info(
+        language === 'ar' 
+          ? 'لا توجد أحداث للمزامنة' 
+          : 'No events to sync'
+      );
+      setIsSyncing(false);
+      return;
+    }
+    
+    let successCount = 0;
+    let failCount = 0;
+    let totalToProcess = entriesToSync.length;
+    
+    // Get timezone
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    console.log('[DirectSDK] Using timezone:', timezone);
+    
+    // Process each event
+    entriesToSync.forEach((entry, index) => {
+      try {
+        // Parse date safely
+        const datePart = entry.date.split('T')[0];
+        const dateParts = datePart.split('-');
+        
+        if (dateParts.length !== 3) {
+          console.error('[DirectSDK] Invalid date format for entry:', entry.title, entry.date);
+          failCount++;
+          return;
+        }
+        
+        const [year, month, day] = dateParts.map(Number);
+        
+        // Validate parsed numbers
+        if (isNaN(year) || isNaN(month) || isNaN(day)) {
+          console.error('[DirectSDK] Could not parse date numbers for entry:', entry.title, entry.date);
+          failCount++;
+          return;
+        }
+        
+        // Set start and end dates
+        let startDateObj = new Date(year, month - 1, day, 9, 0, 0); // Default to 9 AM
+        
+        // Use time if available
+        if (entry.time && typeof entry.time === 'string') {
+          const timeParts = entry.time.split(':');
+          if (timeParts.length >= 2) {
+            const [hours, minutes] = timeParts.map(Number);
+            startDateObj.setHours(isNaN(hours) ? 9 : hours, isNaN(minutes) ? 0 : minutes, 0, 0);
+          }
+        }
+        
+        // Create end date 1 hour after start
+        let endDateObj = new Date(startDateObj.getTime());
+        endDateObj.setHours(endDateObj.getHours() + 1);
+        
+        // Format to ISO string for NativelyCalendar
+        const startDate = startDateObj.toISOString();
+        const endDate = endDateObj.toISOString();
+        
+        console.log('[DirectSDK] Creating event:', { 
+          title: entry.title, 
+          startDate, 
+          endDate, 
+          calendarId,
+          description: entry.description || ''
+        });
+        
+        // Create event using direct SDK
+        calendar.createCalendarEvent(
+          entry.title,
+          endDate,
+          startDate,
+          timezone,
+          calendarId,
+          entry.description || '',
+          function(result: any) {
+            console.log('[DirectSDK] Create event result:', result);
+            
+            if (result.status === 'SUCCESS') {
+              successCount++;
+              console.log(`[DirectSDK] Event created: ${entry.title}`);
+            } else {
+              failCount++;
+              console.error(`[DirectSDK] Failed to create event: ${entry.title}`, result.error);
+            }
+            
+            // Check if all events are processed
+            if (successCount + failCount === totalToProcess) {
+              // All done
+              setIsSyncing(false);
+              
+              if (successCount > 0) {
+                toast.success(
+                  language === 'ar'
+                    ? `تمت مزامنة ${successCount} من الأحداث بنجاح${failCount > 0 ? ` (فشل ${failCount})` : ''}`
+                    : `Successfully synced ${successCount} events${failCount > 0 ? ` (${failCount} failed)` : ''}`
+                );
+              } else {
+                toast.error(
+                  language === 'ar'
+                    ? 'فشلت مزامنة الأحداث'
+                    : 'Failed to sync events'
+                );
+              }
+            }
+          }
+        );
+      } catch (err) {
+        console.error('[DirectSDK] Error creating event:', err);
+        failCount++;
+        
+        // Check if all events are processed
+        if (successCount + failCount === totalToProcess) {
+          setIsSyncing(false);
+          toast.error(
+            language === 'ar'
+              ? 'حدث خطأ أثناء مزامنة التقويم'
+              : 'Error occurred during calendar sync'
+          );
+        }
+      }
+    });
+  };
+
   // Bidirectional calendar sync - handle both directions
   const syncCalendars = useCallback(async (direction: 'both' | 'to_phone' | 'from_phone' = 'both') => {
     console.log('[CalendarSync] Starting sync with direction:', direction);
@@ -855,16 +991,57 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
       <div className="flex flex-col space-y-2 p-3">
         {/* Top bar with sync and date controls */}
         <div className="flex items-center justify-between w-full gap-2">
-          {/* Sync button - input type=button for maximum compatibility */}
+          {/* Sync button - direct NativelyCalendar SDK call */}
           <input
             type="button"
-            value={language === 'ar' ? '🔄 مزامنة' : '🔄 Sync'}
+            value={language === 'ar' ? '🔄 مزامنة نيتيفلي' : '🔄 Natively Sync'}
             disabled={isSyncing}
             onClick={() => {
-              console.log('[CalendarSync] INPUT BUTTON CLICKED!');
-              alert('Sync button pressed!'); // Debug alert
-              toast.info(language === 'ar' ? 'جاري المزامنة...' : 'Syncing...');
-              syncCalendars('both');
+              console.log('[DirectSDK] Button clicked - initializing NativelyCalendar');
+              try {
+                setIsSyncing(true);
+                toast.info(language === 'ar' ? 'جاري جلب التقويمات...' : 'Fetching calendars...');
+                
+                // Direct SDK call - Use the actual NativelyCalendar constructor as per docs
+                const calendar = new (window as any).NativelyCalendar();
+                
+                // Define callback for retrieveCalendars
+                const retrieveCalendarsCallback = function(resp: any) {
+                  console.log('[DirectSDK] Calendar response:', resp);
+                  
+                  if (resp.status === "SUCCESS" && resp.data && resp.data.length > 0) {
+                    toast.success(language === 'ar' 
+                      ? `تم العثور على ${resp.data.length} تقويمات` 
+                      : `Found ${resp.data.length} calendars`);
+                    
+                    // Find or use first calendar
+                    const waktiCal = resp.data.find((cal: any) => 
+                      (cal.name || '').toLowerCase().includes('wakti')
+                    ) || resp.data[0];
+                    
+                    console.log('[DirectSDK] Using calendar:', waktiCal);
+                    
+                    // Now sync each event
+                    syncEventsToCalendar(calendar, waktiCal.id);
+                  } else {
+                    console.error('[DirectSDK] Error retrieving calendars:', resp.error);
+                    toast.error(language === 'ar' 
+                      ? `خطأ في جلب التقويمات: ${resp.error || 'خطأ غير معروف'}` 
+                      : `Error retrieving calendars: ${resp.error || 'Unknown error'}`);
+                    setIsSyncing(false);
+                  }
+                };
+                
+                // Call retrieveCalendars as per documentation
+                console.log('[DirectSDK] Calling retrieveCalendars');
+                calendar.retrieveCalendars(retrieveCalendarsCallback);
+              } catch (err) {
+                console.error('[DirectSDK] Error initializing NativelyCalendar:', err);
+                toast.error(language === 'ar' 
+                  ? 'خطأ في تهيئة التقويم' 
+                  : 'Error initializing calendar');
+                setIsSyncing(false);
+              }
             }}
             className="px-4 py-2 rounded-md text-sm font-medium bg-primary text-primary-foreground disabled:opacity-50"
           />
