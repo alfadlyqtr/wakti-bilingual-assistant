@@ -2310,11 +2310,74 @@ const CardPreviewLive = ({ data, isFlipped, handleFlip }: CardPreviewLiveProps) 
   ];
 
   const getLinkHref = (link: { type: string; url: string }) => {
-    if (link.type === 'phone') return `tel:${link.url}`;
-    if (link.type === 'email') return `mailto:${link.url}`;
-    if (link.type === 'address') return `https://maps.google.com/?q=${encodeURIComponent(link.url)}`;
-    if (!link.url.startsWith('http')) return `https://${link.url}`;
-    return link.url;
+    const value = link.url?.trim() || '';
+    
+    if (link.type === 'phone') return `tel:${value}`;
+    if (link.type === 'email') return `mailto:${value}`;
+    if (link.type === 'address') return `https://maps.google.com/?q=${encodeURIComponent(value)}`;
+    
+    // WhatsApp - format: wa.me/phonenumber (without + or spaces)
+    if (link.type === 'whatsapp') {
+      const cleanNumber = value.replace(/[^0-9]/g, '');
+      return `https://wa.me/${cleanNumber}`;
+    }
+    
+    // Instagram - format: instagram.com/username (remove @ if present)
+    if (link.type === 'instagram') {
+      const username = value.replace(/^@/, '').replace(/^https?:\/\/(www\.)?instagram\.com\/?/, '');
+      return `https://instagram.com/${username}`;
+    }
+    
+    // Twitter/X - format: x.com/username (remove @ if present)
+    if (link.type === 'twitter') {
+      const username = value.replace(/^@/, '').replace(/^https?:\/\/(www\.)?(twitter|x)\.com\/?/, '');
+      return `https://x.com/${username}`;
+    }
+    
+    // Telegram - format: t.me/username (remove @ if present)
+    if (link.type === 'telegram') {
+      const username = value.replace(/^@/, '').replace(/^https?:\/\/(www\.)?t\.me\/?/, '');
+      return `https://t.me/${username}`;
+    }
+    
+    // LinkedIn - ensure proper URL format
+    if (link.type === 'linkedin') {
+      if (value.startsWith('http')) return value;
+      if (value.includes('linkedin.com')) return `https://${value}`;
+      return `https://linkedin.com/in/${value}`;
+    }
+    
+    // Facebook - ensure proper URL format
+    if (link.type === 'facebook') {
+      if (value.startsWith('http')) return value;
+      if (value.includes('facebook.com')) return `https://${value}`;
+      return `https://facebook.com/${value}`;
+    }
+    
+    // YouTube - ensure proper URL format
+    if (link.type === 'youtube') {
+      if (value.startsWith('http')) return value;
+      if (value.includes('youtube.com')) return `https://${value}`;
+      return `https://youtube.com/${value}`;
+    }
+    
+    // GitHub - ensure proper URL format
+    if (link.type === 'github') {
+      if (value.startsWith('http')) return value;
+      if (value.includes('github.com')) return `https://${value}`;
+      return `https://github.com/${value}`;
+    }
+    
+    // Calendly - ensure proper URL format
+    if (link.type === 'calendly') {
+      if (value.startsWith('http')) return value;
+      if (value.includes('calendly.com')) return `https://${value}`;
+      return `https://calendly.com/${value}`;
+    }
+    
+    // Default: add https if missing
+    if (!value.startsWith('http')) return `https://${value}`;
+    return value;
   };
 
   // Helper to get the OUTER background circle (bigger circle behind the icon)

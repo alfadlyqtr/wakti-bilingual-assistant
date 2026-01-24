@@ -95,6 +95,7 @@ export function stripReminderBlocks(content: string): string {
 
 /**
  * Create a scheduled reminder notification
+ * Immediately schedules a push notification via OneSignal's send_after feature
  */
 export async function createScheduledReminder(
   userId: string,
@@ -103,19 +104,50 @@ export async function createScheduledReminder(
   context?: string
 ): Promise<{ success: boolean; error?: string; id?: string }> {
   try {
-    const scheduledDate = typeof scheduledFor === 'string' ? new Date(scheduledFor) : scheduledFor;
+    let scheduledDate: Date;
+    
+    if (typeof scheduledFor === 'string') {
+      // Check if the string has timezone info (contains + or Z at the end)
+      const hasTimezone = /[Z+\-]\d{0,2}:?\d{0,2}$/.test(scheduledFor) || scheduledFor.endsWith('Z');
+      
+      if (hasTimezone) {
+        // Has timezone - parse directly
+        scheduledDate = new Date(scheduledFor);
+      } else {
+        // No timezone - treat as LOCAL time, not UTC
+        // Append the local timezone offset to make it parse correctly
+        const localDate = new Date(scheduledFor);
+        // Get timezone offset in minutes and convert to hours:minutes format
+        const offsetMinutes = localDate.getTimezoneOffset();
+        const offsetHours = Math.floor(Math.abs(offsetMinutes) / 60);
+        const offsetMins = Math.abs(offsetMinutes) % 60;
+        const offsetSign = offsetMinutes <= 0 ? '+' : '-';
+        const offsetStr = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMins).padStart(2, '0')}`;
+        
+        scheduledDate = new Date(scheduledFor + offsetStr);
+        console.log('[ReminderService] Parsed local time:', scheduledFor, '→', scheduledDate.toISOString());
+      }
+    } else {
+      scheduledDate = scheduledFor;
+    }
     
     // Validate the date
     if (isNaN(scheduledDate.getTime())) {
+      console.error('[ReminderService] Invalid date:', scheduledFor);
       return { success: false, error: 'Invalid scheduled time' };
     }
 
-    // Don't allow reminders in the past
-    if (scheduledDate.getTime() < Date.now()) {
+    // Don't allow reminders more than 1 minute in the past
+    const oneMinuteAgo = Date.now() - 60000;
+    if (scheduledDate.getTime() < oneMinuteAgo) {
+      console.warn('[ReminderService] Reminder time is in the past:', scheduledDate.toISOString(), 'vs now:', new Date().toISOString());
       return { success: false, error: 'Cannot schedule reminder in the past' };
     }
 
-    const { data, error } = await supabase
+    console.log('[ReminderService] Creating reminder for', scheduledDate.toISOString());
+
+    // First, save to notification_history for record keeping
+    const { data: notifData, error: notifError } = await supabase
       .from('notification_history')
       .insert({
         user_id: userId,
@@ -135,13 +167,52 @@ export async function createScheduledReminder(
       .select('id')
       .single();
 
-    if (error) {
-      console.error('[ReminderService] Failed to create reminder:', error);
-      return { success: false, error: error.message };
+    if (notifError) {
+      console.error('[ReminderService] Failed to save reminder to DB:', notifError);
+      return { success: false, error: notifError.message };
     }
 
-    console.log('[ReminderService] ✅ Reminder created:', data?.id, 'for', scheduledDate.toISOString());
-    return { success: true, id: data?.id };
+    const notificationId = notifData?.id;
+    console.log('[ReminderService] Saved to DB with ID:', notificationId);
+
+    // Now schedule the push notification via Edge Function
+    // OneSignal will hold it and deliver at the exact scheduled time
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+
+      const response = await fetch(
+        'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/schedule-reminder-push',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            user_id: userId,
+            reminder_text: reminderText,
+            scheduled_for: scheduledDate.toISOString(),
+            notification_id: notificationId,
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        console.log('[ReminderService] ✅ Push scheduled with OneSignal:', result.onesignal_id);
+        return { success: true, id: notificationId };
+      } else {
+        console.error('[ReminderService] Failed to schedule push:', result.error);
+        // Still return success since the reminder is saved - push just failed
+        return { success: true, id: notificationId, error: `Push scheduling failed: ${result.error}` };
+      }
+    } catch (pushErr) {
+      console.error('[ReminderService] Error calling schedule-reminder-push:', pushErr);
+      // Still return success since the reminder is saved
+      return { success: true, id: notificationId, error: 'Push scheduling failed' };
+    }
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : 'Unknown error';
     console.error('[ReminderService] Error creating reminder:', err);

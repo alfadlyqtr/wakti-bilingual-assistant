@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { supabase, ensurePassport, getCurrentUserId } from '@/integrations/supabase/client';
 import { getNativeLocation, queryNeedsFreshLocation, clearLocationCache } from '@/integrations/natively/locationBridge';
+import { parseReminderFromResponse, createScheduledReminder } from '@/services/ReminderService';
 
 export interface AIMessage {
   id: string;
@@ -1198,6 +1199,37 @@ class WaktiAIV2ServiceClass {
 
         if (encounteredError) throw new Error(String(encounteredError));
 
+        // Check for reminder in the response and create scheduled reminder
+        // Handle both OFFER (when AI says "I will remind you") and CONFIRM formats
+        try {
+          console.log('🔔 REMINDER CHECK: Parsing response for reminder blocks...');
+          const reminderData = parseReminderFromResponse(fullResponse);
+          console.log('🔔 REMINDER CHECK: Parse result:', reminderData);
+          if (reminderData) {
+            const data = reminderData.data as { scheduled_for?: string; suggested_time?: string; reminder_text?: string; timezone?: string; context?: string };
+            // Use scheduled_for (confirm) or suggested_time (offer)
+            const scheduledTime = data.scheduled_for || data.suggested_time;
+            const reminderText = data.reminder_text || data.context || 'Reminder from Wakti AI';
+            
+            if (scheduledTime && userId) {
+              console.log('🔔 REMINDER: Creating scheduled reminder', { type: reminderData.type, scheduledTime, reminderText });
+              const result = await createScheduledReminder(
+                userId,
+                reminderText,
+                scheduledTime,
+                `AI Chat Reminder`
+              );
+              if (result.success) {
+                console.log('✅ REMINDER: Successfully created reminder', result.id);
+              } else {
+                console.error('❌ REMINDER: Failed to create reminder', result.error);
+              }
+            }
+          }
+        } catch (reminderErr) {
+          console.warn('⚠️ REMINDER: Error processing reminder', reminderErr);
+        }
+
         console.log(`✅ FRONTEND BOSS: Streaming completed successfully [${requestId}] (primary=${primary})`);
         return { response: fullResponse, metadata };
       };
@@ -1433,6 +1465,35 @@ class WaktiAIV2ServiceClass {
         }
 
         if (encounteredError) throw new Error(String(encounteredError));
+
+        // Check for reminder in vision response and create scheduled reminder
+        // Handle both OFFER and CONFIRM formats
+        try {
+          const reminderData = parseReminderFromResponse(fullResponse);
+          if (reminderData) {
+            const data = reminderData.data as { scheduled_for?: string; suggested_time?: string; reminder_text?: string; timezone?: string; context?: string };
+            const scheduledTime = data.scheduled_for || data.suggested_time;
+            const reminderText = data.reminder_text || data.context || 'Reminder from Wakti AI';
+            
+            if (scheduledTime && userId) {
+              console.log('🔔 REMINDER (Vision): Creating scheduled reminder', { type: reminderData.type, scheduledTime, reminderText });
+              const result = await createScheduledReminder(
+                userId,
+                reminderText,
+                scheduledTime,
+                `AI Chat Reminder`
+              );
+              if (result.success) {
+                console.log('✅ REMINDER (Vision): Successfully created reminder', result.id);
+              } else {
+                console.error('❌ REMINDER (Vision): Failed to create reminder', result.error);
+              }
+            }
+          }
+        } catch (reminderErr) {
+          console.warn('⚠️ REMINDER (Vision): Error processing reminder', reminderErr);
+        }
+
         return { response: fullResponse, metadata };
       };
 
