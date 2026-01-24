@@ -741,7 +741,18 @@ const MyWarranty: React.FC = () => {
 
   // Ask Wakti state
   const [askQuestion, setAskQuestion] = useState('');
-  const [askMessages, setAskMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const [askMessages, setAskMessages] = useState<Array<{ 
+    role: 'user' | 'assistant'; 
+    content: string;
+    needsClarification?: boolean;
+    clarificationType?: string;
+    options?: Array<{
+      id: string;
+      title: string;
+      subtitle: string;
+      expiry: string | null;
+    }>;
+  }>>([]);
   const [isAsking, setIsAsking] = useState(false);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [docScopeMode, setDocScopeMode] = useState<'auto' | 'manual'>('auto');
@@ -1444,6 +1455,48 @@ const MyWarranty: React.FC = () => {
     scrollToBottom();
   }, [askMessages]);
 
+  // Handle document selection from clarification
+  const handleDocumentSelect = async (docId: string, originalQuestion: string) => {
+    setIsAsking(true);
+    
+    try {
+      const selectedDoc = warranties.find(w => w.id === docId);
+      if (!selectedDoc) throw new Error('Document not found');
+      
+      const ed = selectedDoc.extracted_data || {};
+      const context = `Document: ${selectedDoc.product_name}\nProvider: ${selectedDoc.provider || 'N/A'}\nExpiry: ${selectedDoc.expiry_date || 'N/A'}\nSummary: ${selectedDoc.ai_summary || 'N/A'}\nData: ${JSON.stringify(ed)}`;
+      
+      const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || null;
+      
+      const { data, error } = await supabase.functions.invoke('my-warranty-ai', {
+        body: {
+          mode: 'qa',
+          question: originalQuestion,
+          context,
+          userName,
+          documents: [{
+            id: selectedDoc.id,
+            product_name: selectedDoc.product_name,
+            provider: selectedDoc.provider,
+            category: selectedDoc.category,
+            expiry_date: selectedDoc.expiry_date,
+            ref_number: selectedDoc.ref_number,
+          }],
+        },
+      });
+      
+      if (error) throw error;
+      
+      const answer = data?.answer || (isRTL ? 'عذراً، لم أتمكن من الإجابة.' : 'Sorry, I could not answer that.');
+      setAskMessages((prev) => [...prev, { role: 'assistant', content: answer }]);
+    } catch (error) {
+      console.error('Ask error:', error);
+      setAskMessages((prev) => [...prev, { role: 'assistant', content: isRTL ? 'حدث خطأ. حاول مرة أخرى.' : 'An error occurred. Please try again.' }]);
+    } finally {
+      setIsAsking(false);
+    }
+  };
+
   // Handle Ask Wakti
   const handleAskWakti = async () => {
     if (!askQuestion.trim() || warranties.length === 0) return;
@@ -1475,19 +1528,42 @@ const MyWarranty: React.FC = () => {
       // Get user name from profile if available
       const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || null;
       
+      // Prepare documents array for clarification detection
+      const documentsArray = docsToUse.map(doc => ({
+        id: doc.id,
+        product_name: doc.product_name,
+        provider: doc.provider,
+        category: doc.category,
+        expiry_date: doc.expiry_date,
+        ref_number: doc.ref_number,
+      }));
+      
       const { data, error } = await supabase.functions.invoke('my-warranty-ai', {
         body: {
-          mode: 'ask',
+          mode: 'qa',
           question: userMessage,
           context,
           userName,
+          documents: documentsArray,
         },
       });
       
       if (error) throw error;
       
       const answer = data?.answer || data?.response || (isRTL ? 'عذراً، لم أتمكن من الإجابة.' : 'Sorry, I could not answer that.');
-      setAskMessages((prev) => [...prev, { role: 'assistant', content: answer }]);
+      
+      // Check if response needs clarification
+      if (data?.needsClarification && data?.options) {
+        setAskMessages((prev) => [...prev, { 
+          role: 'assistant', 
+          content: answer,
+          needsClarification: true,
+          clarificationType: data.clarificationType,
+          options: data.options,
+        }]);
+      } else {
+        setAskMessages((prev) => [...prev, { role: 'assistant', content: answer }]);
+      }
     } catch (error) {
       console.error('Ask error:', error);
       setAskMessages((prev) => [...prev, { role: 'assistant', content: isRTL ? 'حدث خطأ. حاول مرة أخرى.' : 'An error occurred. Please try again.' }]);
@@ -1986,6 +2062,30 @@ const MyWarranty: React.FC = () => {
                     <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
                       {message.content}
                     </p>
+                    {message.needsClarification && message.options && (
+                      <div className="mt-4 space-y-2">
+                        {message.options.map((option) => (
+                          <button
+                            key={option.id}
+                            onClick={() => {
+                              const lastUserMessage = askMessages.filter(m => m.role === 'user').pop();
+                              if (lastUserMessage) {
+                                handleDocumentSelect(option.id, lastUserMessage.content);
+                              }
+                            }}
+                            className="w-full text-left p-3 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 transition-colors"
+                          >
+                            <div className="font-medium text-sm text-foreground">{option.title}</div>
+                            <div className="text-xs text-muted-foreground mt-1">{option.subtitle}</div>
+                            {option.expiry && (
+                              <div className="text-xs text-blue-400 mt-1">
+                                {isRTL ? 'ينتهي في' : 'Expires'}: {option.expiry}
+                              </div>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -3651,6 +3751,30 @@ const MyWarranty: React.FC = () => {
                         <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
                           {message.content}
                         </p>
+                        {message.needsClarification && message.options && (
+                          <div className="mt-4 space-y-2">
+                            {message.options.map((option) => (
+                              <button
+                                key={option.id}
+                                onClick={() => {
+                                  const lastUserMessage = askMessages.filter(m => m.role === 'user').pop();
+                                  if (lastUserMessage) {
+                                    handleDocumentSelect(option.id, lastUserMessage.content);
+                                  }
+                                }}
+                                className="w-full text-left p-3 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 transition-colors"
+                              >
+                                <div className="font-medium text-sm text-foreground">{option.title}</div>
+                                <div className="text-xs text-muted-foreground mt-1">{option.subtitle}</div>
+                                {option.expiry && (
+                                  <div className="text-xs text-blue-400 mt-1">
+                                    {isRTL ? 'ينتهي في' : 'Expires'}: {option.expiry}
+                                  </div>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

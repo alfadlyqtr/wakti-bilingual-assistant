@@ -2,11 +2,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import { MessageSquare, Bot, User, Calendar, Clock, CheckCircle, Loader2, Volume2, Copy, VolumeX, ExternalLink, Play, Pause, RotateCcw, Globe, Reply, FileCode, AlertCircle } from 'lucide-react';
+import { MessageSquare, Bot, User, Calendar, Clock, CheckCircle, Loader2, Volume2, Copy, VolumeX, ExternalLink, Play, Pause, RotateCcw, Globe, Reply, FileCode, AlertCircle, Bell } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { AIMessage } from '@/services/WaktiAIV2Service';
 import { TaskConfirmationCard } from './TaskConfirmationCard';
 import { EditableTaskConfirmationCard } from './EditableTaskConfirmationCard';
+import { stripReminderBlocks, parseReminderFromResponse } from '@/services/ReminderService';
 
 import { Badge } from '@/components/ui/badge';
 import { ImageModal } from './ImageModal';
@@ -171,7 +172,9 @@ function SearchMessageCard({
   language: string;
 }) {
   const rawContent = message.content || '';
-  const content = repairMarkdownTables(rawContent);
+  // Strip reminder blocks before displaying
+  const cleanedContent = stripReminderBlocks(rawContent);
+  const content = repairMarkdownTables(cleanedContent);
   const geminiSearchMeta = (message as any)?.metadata?.geminiSearch;
   const sources: SearchSource[] = Array.isArray(geminiSearchMeta?.sources) ? geminiSearchMeta.sources : [];
   const query = (message as any)?.metadata?.searchQuery || '';
@@ -1445,7 +1448,9 @@ export function ChatMessages({
       }
 
       // Apply table repair to all assistant messages (fixes malformed AI tables)
-      const content = repairMarkdownTables(message.content || '');
+      // Also strip reminder blocks so they don't show as raw JSON/HTML comments
+      const cleanedContent = stripReminderBlocks(message.content || '');
+      const content = repairMarkdownTables(cleanedContent);
 
       // Vision JSON renderer (Option B): render structured results if present
       const vjson = (message as any)?.metadata?.visionJson || (message as any)?.metadata?.json;

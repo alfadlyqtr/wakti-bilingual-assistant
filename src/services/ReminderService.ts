@@ -23,34 +23,55 @@ export interface ParsedReminder {
 }
 
 /**
- * Parse AI response content for reminder JSON blocks
+ * Parse AI response content for reminder JSON blocks (HTML comment format)
  */
 export function parseReminderFromResponse(content: string): ParsedReminder | null {
   if (!content) return null;
 
-  // Check for reminder offer block
-  const offerMatch = content.match(/```wakti-reminder\s*([\s\S]*?)```/);
+  // Check for reminder offer block (new HTML comment format)
+  const offerMatch = content.match(/<!--WAKTI_REMINDER_OFFER:([\s\S]*?)-->/);
   if (offerMatch) {
     try {
       const data = JSON.parse(offerMatch[1].trim()) as ReminderOffer;
-      if (data.offer) {
-        return { type: 'offer', data };
-      }
+      return { type: 'offer', data: { ...data, offer: true } };
     } catch (e) {
       console.warn('[ReminderService] Failed to parse reminder offer:', e);
     }
   }
 
-  // Check for reminder confirm block
-  const confirmMatch = content.match(/```wakti-reminder-confirm\s*([\s\S]*?)```/);
+  // Check for reminder confirm block (new HTML comment format)
+  const confirmMatch = content.match(/<!--WAKTI_REMINDER_CONFIRM:([\s\S]*?)-->/);
   if (confirmMatch) {
     try {
       const data = JSON.parse(confirmMatch[1].trim()) as ReminderConfirm;
+      return { type: 'confirm', data: { ...data, confirmed: true } };
+    } catch (e) {
+      console.warn('[ReminderService] Failed to parse reminder confirm:', e);
+    }
+  }
+
+  // Legacy format support (code blocks)
+  const legacyOfferMatch = content.match(/```wakti-reminder\s*([\s\S]*?)```/);
+  if (legacyOfferMatch) {
+    try {
+      const data = JSON.parse(legacyOfferMatch[1].trim()) as ReminderOffer;
+      if (data.offer) {
+        return { type: 'offer', data };
+      }
+    } catch (e) {
+      console.warn('[ReminderService] Failed to parse legacy reminder offer:', e);
+    }
+  }
+
+  const legacyConfirmMatch = content.match(/```wakti-reminder-confirm\s*([\s\S]*?)```/);
+  if (legacyConfirmMatch) {
+    try {
+      const data = JSON.parse(legacyConfirmMatch[1].trim()) as ReminderConfirm;
       if (data.confirmed) {
         return { type: 'confirm', data };
       }
     } catch (e) {
-      console.warn('[ReminderService] Failed to parse reminder confirm:', e);
+      console.warn('[ReminderService] Failed to parse legacy reminder confirm:', e);
     }
   }
 
@@ -63,6 +84,10 @@ export function parseReminderFromResponse(content: string): ParsedReminder | nul
 export function stripReminderBlocks(content: string): string {
   if (!content) return content;
   return content
+    // New HTML comment format (hidden from markdown renderers)
+    .replace(/<!--WAKTI_REMINDER_OFFER:[\s\S]*?-->/g, '')
+    .replace(/<!--WAKTI_REMINDER_CONFIRM:[\s\S]*?-->/g, '')
+    // Legacy code block format
     .replace(/```wakti-reminder\s*[\s\S]*?```/g, '')
     .replace(/```wakti-reminder-confirm\s*[\s\S]*?```/g, '')
     .trim();

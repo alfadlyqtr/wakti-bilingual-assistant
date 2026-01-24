@@ -18,7 +18,17 @@ interface ExtractRequest {
   mimeType?: string;
   question?: string;
   warrantyContext?: string;
+  context?: string;
   language?: "en" | "ar";
+  userName?: string;
+  documents?: Array<{
+    id: string;
+    product_name: string;
+    provider?: string;
+    category?: string;
+    expiry_date?: string;
+    ref_number?: string;
+  }>;
 }
 
 const EXTRACTION_PROMPT = `You are Wakti's Document Intelligence Engine. Analyze ALL provided images/pages thoroughly and extract EVERY piece of information into categorized sections.
@@ -327,8 +337,71 @@ serve(async (req) => {
         throw new Error("No question provided");
       }
 
+      const { documents, context, warrantyContext: legacyContext } = body;
+      const actualContext = context || legacyContext || "No warranty information available";
+
+      // Check for ambiguous questions with multiple similar documents
+      if (documents && documents.length > 1) {
+        // Detect document type from question
+        const questionLower = question.toLowerCase();
+        const docTypeKeywords: Record<string, string[]> = {
+          passport: ['passport', 'جواز'],
+          id: ['id card', 'identity', 'هوية', 'بطاقة'],
+          insurance: ['insurance', 'تأمين'],
+          registration: ['registration', 'تسجيل'],
+          license: ['license', 'رخصة'],
+        };
+
+        let detectedType: string | null = null;
+        for (const [type, keywords] of Object.entries(docTypeKeywords)) {
+          if (keywords.some(kw => questionLower.includes(kw))) {
+            detectedType = type;
+            break;
+          }
+        }
+
+        // Count documents of the same type
+        if (detectedType) {
+          const matchingDocs = documents.filter(doc => {
+            const docName = (doc.product_name || '').toLowerCase();
+            const docCategory = (doc.category || '').toLowerCase();
+            return docName.includes(detectedType) || docCategory.includes(detectedType);
+          });
+
+          // If multiple matching documents and question doesn't specify "all" or "which"
+          if (matchingDocs.length > 1 && 
+              !questionLower.includes('all') && 
+              !questionLower.includes('which') &&
+              !questionLower.includes('كل') &&
+              !questionLower.includes('أي')) {
+            
+            const isArabic = /[\u0600-\u06FF]/.test(question);
+            const clarificationMessage = isArabic
+              ? `لديك ${matchingDocs.length} ${detectedType === 'passport' ? 'جوازات سفر' : 'مستندات'}. أي واحد تقصد؟`
+              : `I found ${matchingDocs.length} ${detectedType}s in your documents. Which one are you asking about?`;
+
+            return new Response(
+              JSON.stringify({
+                success: true,
+                mode: "qa",
+                answer: clarificationMessage,
+                needsClarification: true,
+                clarificationType: detectedType,
+                options: matchingDocs.map(d => ({
+                  id: d.id,
+                  title: d.product_name,
+                  subtitle: `${d.provider || ''} ${d.ref_number ? `(${d.ref_number})` : ''}`.trim() || (isArabic ? 'لا يوجد تفاصيل' : 'No details'),
+                  expiry: d.expiry_date || null,
+                }))
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+        }
+      }
+
       const prompt = QA_PROMPT
-        .replace("{context}", warrantyContext || "No warranty information available")
+        .replace("{context}", actualContext)
         .replace("{question}", question);
 
       // Try Claude first for QA
