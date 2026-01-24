@@ -743,6 +743,7 @@ const MyWarranty: React.FC = () => {
   const [askQuestion, setAskQuestion] = useState('');
   const [askMessages, setAskMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   const [isAsking, setIsAsking] = useState(false);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [docScopeMode, setDocScopeMode] = useState<'auto' | 'manual'>('auto');
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [isScopeOpen, setIsScopeOpen] = useState(false);
@@ -1431,6 +1432,18 @@ const MyWarranty: React.FC = () => {
     return matches.length > 0 ? matches : warranties.slice(0, 3).map((w) => w.id);
   }, [warranties]);
 
+  // Scroll to bottom of messages
+  const scrollToBottom = () => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
+  };
+
+  // Auto-scroll when messages change
+  useEffect(() => {
+    scrollToBottom();
+  }, [askMessages]);
+
   // Handle Ask Wakti
   const handleAskWakti = async () => {
     if (!askQuestion.trim() || warranties.length === 0) return;
@@ -1459,11 +1472,15 @@ const MyWarranty: React.FC = () => {
         return `Document: ${doc.product_name}\nProvider: ${doc.provider || 'N/A'}\nExpiry: ${doc.expiry_date || 'N/A'}\nSummary: ${doc.ai_summary || 'N/A'}\nData: ${JSON.stringify(ed)}`;
       }).join('\n\n---\n\n');
       
+      // Get user name from profile if available
+      const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || null;
+      
       const { data, error } = await supabase.functions.invoke('my-warranty-ai', {
         body: {
           mode: 'ask',
           question: userMessage,
           context,
+          userName,
         },
       });
       
@@ -1854,6 +1871,57 @@ const MyWarranty: React.FC = () => {
         </div>
       </div>
 
+      {/* Selected Document Indicator */}
+      {selectedDocIds.length === 1 && docScopeMode === 'manual' && (
+        <div className="px-4 pt-3">
+          {warranties
+            .filter(doc => doc.id === selectedDocIds[0])
+            .map(doc => {
+              // Selected document card
+              const hasImage = doc.image_url || doc.receipt_url;
+              return (
+                <div key={doc.id} className="p-3 rounded-xl border border-blue-500/30 bg-gradient-to-br from-blue-500/10 to-purple-500/10 mb-3">
+                  <div className="flex items-center gap-3">
+                    {/* Document thumbnail */}
+                    <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-white/10 border border-white/20">
+                      {hasImage ? (
+                        <img 
+                          src={doc.image_url || doc.receipt_url} 
+                          alt={doc.product_name} 
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            // If image fails to load, show document icon
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                            const parent = target.parentElement;
+                            if (parent) {
+                              parent.innerHTML = '<div class="flex items-center justify-center w-full h-full"><svg class="w-6 h-6 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg></div>';
+                            }
+                          }}
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center w-full h-full bg-blue-500/10">
+                          <FileText className="w-6 h-6 text-blue-400" />
+                        </div>
+                      )}
+                    </div>
+                    {/* Document details */}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-semibold text-foreground truncate">
+                        {doc.product_name || (isRTL ? 'بدون عنوان' : 'Untitled')}
+                      </h3>
+                      <p className="text-xs text-blue-400 flex items-center gap-1">
+                        <MessageCircle className="w-3 h-3" />
+                        <span>{isRTL ? 'تسأل عن هذا المستند' : 'Asking about this document'}</span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+      )}
+
       {/* Chat Area */}
       <div className="flex-1 overflow-y-auto px-4 py-4">
         {askMessages.length === 0 ? (
@@ -1866,13 +1934,14 @@ const MyWarranty: React.FC = () => {
             <div className="space-y-2 mt-4 w-full max-w-sm">
               {[t.askExample1, t.askExample2, t.askExample3].map((example, i) => (
                 <Button
+                  key={i}
                   variant="ghost"
                   size="sm"
-                  onClick={() => setViewMode('list')}
+                  onClick={() => setAskQuestion(example)} // Set the question to the example
                   className="
-                    group flex items-center gap-2 h-10 pl-1 pr-4 rounded-full
-                    bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent
-                    hover:from-emerald-500/20 hover:via-emerald-500/10 hover:to-transparent
+                    group flex items-center gap-2 h-10 px-4 rounded-full w-full
+                    bg-gradient-to-r from-blue-500/10 via-purple-500/5 to-transparent
+                    hover:from-blue-500/20 hover:via-purple-500/10 hover:to-transparent
                     border border-white/20 hover:border-white/30
                     transition-all duration-300 active:scale-95
                     shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)]
@@ -1882,16 +1951,16 @@ const MyWarranty: React.FC = () => {
                   "
                 >
                   <div className="
-                    w-8 h-8 rounded-full 
-                    bg-gradient-to-br from-emerald-500 to-emerald-600
+                    w-8 h-8 shrink-0 rounded-full 
+                    bg-gradient-to-br from-blue-500 to-purple-500
                     flex items-center justify-center
-                    shadow-[0_2px_8px_-2px_rgba(16,185,129,0.5)]
-                    group-hover:shadow-[0_4px_12px_-2px_rgba(16,185,129,0.7)]
+                    shadow-[0_2px_8px_-2px_rgba(59,130,246,0.5)]
+                    group-hover:shadow-[0_4px_12px_-2px_rgba(59,130,246,0.7)]
                     transition-all duration-300
                   ">
-                    <ChevronLeft className="w-4 h-4 text-white" />
+                    <MessageCircle className="w-4 h-4 text-white" />
                   </div>
-                  <span className="text-sm text-muted-foreground">{t.back}</span>
+                  <span className="text-sm text-foreground ml-2 truncate text-left">{example}</span>
                 </Button>
               ))}
             </div>
@@ -1899,43 +1968,43 @@ const MyWarranty: React.FC = () => {
         ) : (
           <div className="space-y-4">
             {askMessages.map((message, index) => (
-              <div
-                key={`${message.role}-${index}`}
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                {message.role === 'assistant' && (
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center mr-2 mt-1 flex-shrink-0 shadow-lg shadow-blue-500/20">
-                    <MessageCircle className="w-4 h-4 text-white" />
+              <div key={`${message.role}-${index}`}>
+                {message.role === 'user' ? (
+                  <div className="flex justify-end mb-1">
+                    <div className="bg-blue-500/20 text-foreground px-4 py-2 rounded-xl max-w-[85%]">
+                      <p className="text-sm">{message.content}</p>
+                    </div>
                   </div>
-                )}
-                <div
-                  className={
-                    message.role === 'user'
-                      ? 'max-w-[80%] rounded-2xl rounded-tr-md bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-3 text-sm text-white shadow-lg shadow-blue-500/20'
-                      : 'max-w-[80%] rounded-2xl rounded-tl-md bg-gradient-to-br from-white/10 to-white/5 border border-white/10 px-4 py-3 text-sm text-foreground whitespace-pre-wrap'
-                  }
-                >
-                  {message.content}
-                </div>
-                {message.role === 'user' && (
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center ml-2 mt-1 flex-shrink-0 shadow-lg shadow-emerald-500/20">
-                    <User className="w-4 h-4 text-white" />
+                ) : (
+                  <div className="bg-white/10 dark:bg-white/5 rounded-xl p-4 border border-white/10">
+                    <div className="flex items-center gap-2 mb-3 pb-2 border-b border-white/10">
+                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
+                        <Shield className="w-3 h-3 text-white" />
+                      </div>
+                      <span className="text-xs font-semibold text-foreground">Wakti AI</span>
+                    </div>
+                    <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+                      {message.content}
+                    </p>
                   </div>
                 )}
               </div>
             ))}
             {isAsking && (
-              <div className="flex justify-start">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center mr-2 mt-1 flex-shrink-0 animate-pulse">
-                  <MessageCircle className="w-4 h-4 text-white" />
+              <div className="bg-white/10 dark:bg-white/5 rounded-xl p-4 border border-white/10">
+                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-white/10">
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center animate-pulse">
+                    <Shield className="w-3 h-3 text-white" />
+                  </div>
+                  <span className="text-xs font-semibold text-foreground">Wakti AI</span>
                 </div>
-                <div className="max-w-[80%] rounded-2xl rounded-tl-md bg-gradient-to-br from-white/10 to-white/5 border border-white/10 px-4 py-3 text-sm text-muted-foreground flex items-center gap-3">
+                <div className="flex items-center gap-3">
                   <div className="flex gap-1">
                     <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                     <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                     <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                   </div>
-                  {isRTL ? 'جاري البحث في مستنداتك...' : 'Searching your documents...'}
+                  <span className="text-sm text-muted-foreground">{isRTL ? 'جاري البحث في مستنداتك...' : 'Searching your documents...'}</span>
                 </div>
               </div>
             )}
@@ -2219,27 +2288,6 @@ const MyWarranty: React.FC = () => {
                     }`}>
                       <CreditCard className="w-4 h-4 text-white" />
                     </div>
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">
-                        {card.cardName || (index === 0 ? (isRTL ? 'البطاقة الرئيسية' : 'Primary Card') : (isRTL ? 'البطاقة الثانوية' : 'Secondary Card'))}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {card.firstName} {card.lastName}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setActiveCardSlot(card.cardSlot);
-                        setShowCardBuilder(true);
-                      }}
-                      className="h-8 px-2 rounded-lg"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </Button>
                   </div>
                 </div>
 
@@ -2526,7 +2574,6 @@ const MyWarranty: React.FC = () => {
               support_contact: '',
               image_url: '',
               receipt_url: '',
-              raw_ocr_text: '',
               extracted_data: {},
               ai_summary: '',
               additional_images: [],
@@ -2914,42 +2961,10 @@ const MyWarranty: React.FC = () => {
                                 const isMonoValue = key.includes('number') || key.includes('_no') || key.includes('_id') || 
                                                    key.includes('chassis') || key.includes('plate') || key.includes('vin');
                                 
-                                // Get chip color based on field type
-                                let chipColor = 'white';
-                                if (key.includes('date')) chipColor = 'emerald';
-                                else if (key.includes('amount') || key.includes('price')) chipColor = 'amber';
-                                else if (key.includes('number') || key.includes('id')) chipColor = 'purple';
-                                else if (key.includes('type')) chipColor = 'blue';
-                                else if (key.includes('status')) chipColor = 'cyan';
-                                else if (key.includes('name')) chipColor = 'orange';
-                                
                                 return (
-                                  <div 
-                                    key={`${key}-${idx}`} 
-                                    className="flex flex-col gap-2"
-                                  >
-                                    <div className={`
-                                      inline-flex items-center px-2.5 py-1 rounded-md w-fit
-                                      bg-${chipColor}-500/20
-                                      border border-${chipColor}-500/40
-                                    `}>
-                                      <span className="text-[10px] font-black uppercase tracking-wider text-${chipColor}-400">
-                                        {label}
-                                      </span>
-                                    </div>
-                                    <div className={`
-                                      inline-flex items-center px-3 py-2 rounded-lg
-                                      bg-${chipColor}-500/15 
-                                      border border-${chipColor}-500/30
-                                      shadow-sm
-                                      transition-all duration-200
-                                      hover:bg-${chipColor}-500/20 hover:border-${chipColor}-500/40
-                                      hover:shadow-md
-                                    `}>
-                                      <span className={`text-sm font-bold text-foreground ${isMonoValue ? 'font-mono text-xs' : ''}`}>
-                                        {value}
-                                      </span>
-                                    </div>
+                                  <div key={`${key}-${idx}`} className="px-3 py-1.5 rounded-lg bg-white/10 border border-white/20">
+                                    <span className="text-[10px] text-muted-foreground uppercase">{label}: </span>
+                                    <span className={`text-sm font-medium text-foreground ${isMonoValue ? 'font-mono text-xs' : ''}`}>{value}</span>
                                   </div>
                                 );
                               })}
@@ -3538,14 +3553,23 @@ const MyWarranty: React.FC = () => {
             </Button>
           )}
 
-          {/* Ask Wakti Button */}
+          {/* Ask Wakti AI Button */}
           <Button
             variant="outline"
             className="w-full mb-3 flex items-center justify-center gap-2"
             onClick={() => {
+              // Reset question and messages
               setAskQuestion('');
               setAskMessages([]);
-              setViewMode('ask');
+              
+              // Switch to main view with Ask tab active
+              setViewMode('list');
+              setMainTab('docs');
+              setActiveTab('ask');
+              
+              // Pre-select this document in the scope
+              setDocScopeMode('manual');
+              setSelectedDocIds([selectedItem.id]);
             }}
           >
             <MessageCircle className="w-4 h-4" />
@@ -3581,7 +3605,7 @@ const MyWarranty: React.FC = () => {
       </div>
 
       {/* Scrollable Chat Area */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 w-full" dir={isRTL ? 'rtl' : 'ltr'}>
+      <div className="flex-1 overflow-y-auto px-4 py-4 w-full" ref={messagesContainerRef} dir={isRTL ? 'rtl' : 'ltr'}>
         {selectedItem && (
           <div className="space-y-4">
             {selectedItem.ai_summary && (
@@ -3594,24 +3618,41 @@ const MyWarranty: React.FC = () => {
             {askMessages.length === 0 ? (
               <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-muted-foreground">
                 <div className="font-semibold text-foreground mb-2">{t.askEmptyHint}</div>
-                <ul className="space-y-2">
-                  <li>• {t.askExample1}</li>
-                  <li>• {t.askExample2}</li>
-                  <li>• {t.askExample3}</li>
-                </ul>
+                <div className="space-y-2">
+                  {[t.askExample1, t.askExample2, t.askExample3].map((example, i) => (
+                    <div
+                      key={i}
+                      className="cursor-pointer hover:bg-white/10 rounded-lg p-2 transition-colors"
+                      onClick={() => setAskQuestion(example)}
+                    >
+                      {example}
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {askMessages.map((message, index) => (
-                  <div
-                    key={`${message.role}-${index}`}
-                    className={
-                      message.role === 'user'
-                        ? 'ml-auto max-w-[85%] rounded-2xl bg-blue-500/15 border border-blue-500/30 px-4 py-3 text-sm text-foreground'
-                        : 'mr-auto max-w-[85%] rounded-2xl bg-white/5 border border-white/10 px-4 py-3 text-sm text-foreground'
-                    }
-                  >
-                    {message.content}
+                  <div key={`${message.role}-${index}`}>
+                    {message.role === 'user' ? (
+                      <div className="flex justify-end mb-1">
+                        <div className="bg-blue-500/20 text-foreground px-4 py-2 rounded-xl max-w-[85%]">
+                          <p className="text-sm">{message.content}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-white/10 dark:bg-white/5 rounded-xl p-4 border border-white/10">
+                        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-white/10">
+                          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
+                            <Shield className="w-3 h-3 text-white" />
+                          </div>
+                          <span className="text-xs font-semibold text-foreground">Wakti AI</span>
+                        </div>
+                        <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+                          {message.content}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

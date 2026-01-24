@@ -147,7 +147,7 @@ function normalizeImageMimeType(mimeType: string): string {
   return mimeType;
 }
 
-async function callClaudeVision(content: any[], model: string): Promise<any> {
+async function _callClaudeVision(content: any, model: string): Promise<string> {
   if (!ANTHROPIC_API_KEY) {
     throw new Error("ANTHROPIC_API_KEY not configured");
   }
@@ -209,13 +209,13 @@ async function extractWithFallback(imageArray: string[]): Promise<string> {
     throw new Error("Invalid or empty image array provided");
   }
 
-  console.log(`[my-warranty-ai] Starting extraction with ${imageArray.length} images`);
+  console.log(`[my-warranty-ai] Starting extraction with ${imageArray.length} images using gpt-4o-mini only`);
 
-  // Build content for Claude
-  const claudeContent: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [
-    { type: "text", text: EXTRACTION_PROMPT }
+  // Build content for OpenAI
+  const openaiContent: any[] = [
+    { type: 'text', text: EXTRACTION_PROMPT }
   ];
-  
+
   for (let i = 0; i < imageArray.length; i++) {
     const rawData = imageArray[i];
     if (!rawData || typeof rawData !== 'string') {
@@ -230,85 +230,26 @@ async function extractWithFallback(imageArray: string[]): Promise<string> {
     }
     
     const imageMime = normalizeImageMimeType(detectMimeType(cleanedData));
-    
-    console.log(`[my-warranty-ai] Image ${i + 1}: MIME=${imageMime}, length=${cleanedData.length}`);
-    
-    claudeContent.push({
-      type: "image",
-      source: {
-        type: "base64",
-        media_type: imageMime,
-        data: cleanedData
-      }
-    });
-  }
-
-  // Build content for OpenAI
-  const openaiContent: any[] = [
-    { type: 'text', text: EXTRACTION_PROMPT }
-  ];
-
-  for (let i = 0; i < imageArray.length; i++) {
-    const rawData = imageArray[i];
-    if (!rawData || typeof rawData !== 'string') {
-      console.error(`[my-warranty-ai] Invalid image data at index ${i} for OpenAI`);
-      continue;
-    }
-    
-    const cleanedData = cleanBase64(rawData);
-    if (!cleanedData || cleanedData.length === 0) {
-      console.error(`[my-warranty-ai] Empty image data after cleaning at index ${i} for OpenAI`);
-      continue;
-    }
-    
-    const imageMime = normalizeImageMimeType(detectMimeType(cleanedData));
     const url = `data:${imageMime};base64,${cleanedData}`;
+    console.log(`[my-warranty-ai] Image ${i + 1}: MIME=${imageMime}, length=${cleanedData.length}`);
     openaiContent.push({ type: 'image_url', image_url: { url } });
   }
 
-  // Fallback chain: Claude models first, then OpenAI
-  const claudeModels = [
-    'claude-sonnet-4-20250514',
-    'claude-3-5-sonnet-latest',
-    'claude-3-5-sonnet-20241022',
-    'claude-3-haiku-20240307'
-  ];
-
-  const openaiModels = [
-    'gpt-4o-2024-08-06',
-    'gpt-4o',
-    'gpt-4o-mini'
-  ];
-
-  // Try Claude models
-  for (const model of claudeModels) {
-    try {
-      console.log(`[my-warranty-ai] Trying Claude model: ${model}`);
-      const result = await callClaudeVision(claudeContent, model);
-      if (result) {
-        console.log(`[my-warranty-ai] Success with ${model}`);
-        return result;
-      }
-    } catch (error) {
-      console.error(`[my-warranty-ai] ${model} failed:`, error);
+  // Use only gpt-4o-mini
+  const model = 'gpt-4o-mini';
+  try {
+    console.log(`[my-warranty-ai] Using model: ${model}`);
+    const result = await callOpenAIVision(openaiContent, model);
+    if (result) {
+      console.log(`[my-warranty-ai] Success with ${model}`);
+      return result;
     }
+    throw new Error(`${model} returned empty result`);
+  } catch (error) {
+    console.error(`[my-warranty-ai] ${model} error:`, error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    throw new Error(`AI vision model ${model} failed: ${errorMessage}`);
   }
-
-  // Try OpenAI models
-  for (const model of openaiModels) {
-    try {
-      console.log(`[my-warranty-ai] Trying OpenAI model: ${model}`);
-      const result = await callOpenAIVision(openaiContent, model);
-      if (result) {
-        console.log(`[my-warranty-ai] Success with ${model}`);
-        return result;
-      }
-    } catch (error) {
-      console.error(`[my-warranty-ai] ${model} failed:`, error);
-    }
-  }
-
-  throw new Error("All vision models failed");
 }
 
 serve(async (req) => {

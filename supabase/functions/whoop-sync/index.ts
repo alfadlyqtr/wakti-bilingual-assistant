@@ -2,13 +2,13 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
-const BASE = "https://api.prod.whoop.com/developer/v2";
-const SLEEP_URL = `${BASE}/activity/sleep`;
-const WORKOUT_URL = `${BASE}/activity/workout`;
-const CYCLE_URL = `${BASE}/cycle`;
-const RECOVERY_URL = `${BASE}/recovery`;
-const USER_PROFILE_URL = `${BASE}/user/profile/basic`;
-const USER_BODY_URL = `${BASE}/user/measurement/body`;
+const BASE = "https://api.prod.whoop.com/developer";
+const SLEEP_URL = `${BASE}/v2/activity/sleep`;
+const WORKOUT_URL = `${BASE}/v2/activity/workout`;
+const CYCLE_URL = `${BASE}/v2/cycle`;
+const RECOVERY_URL = `${BASE}/v2/recovery`;
+const USER_PROFILE_URL = `${BASE}/v2/user/profile/basic`;
+const USER_BODY_URL = `${BASE}/v2/user/measurement/body`;
 const TOKEN_URL = "https://api.prod.whoop.com/oauth/oauth2/token";
 
 const corsHeaders = {
@@ -64,6 +64,13 @@ async function fetchCollection(url: string, accessToken: string, params: Record<
       break;
     }
     const json = await res.json();
+    console.log("WHOOP API Response:", {
+      url: url,
+      status: res.status,
+      recordsCount: Array.isArray(json.records) ? json.records.length : 0,
+      hasNextToken: !!(json.next_token || json.nextToken),
+      responseKeys: Object.keys(json)
+    });
     if (Array.isArray(json.records)) {
       // Deduplicate records by id or sleep_id
       for (const record of json.records) {
@@ -241,11 +248,10 @@ serve(async (req: Request) => {
           },
         });
 
-        const [cycles, sleeps, workouts, recoveries, userProfile, userBody] = await Promise.all([
+        const [cycles, sleeps, workouts, userProfile, userBody] = await Promise.all([
           withRetry401(() => fetchCollection(CYCLE_URL, accessToken, { ...commonParams })),
           withRetry401(() => fetchCollection(SLEEP_URL, accessToken, { ...commonParams })),
           withRetry401(() => fetchCollection(WORKOUT_URL, accessToken, { ...commonParams })),
-          withRetry401(() => fetchCollection(RECOVERY_URL, accessToken, { ...commonParams })),
           // Fetch user profile and body measurements (no date params needed)
           withRetry401(async () => {
             const r = await fetch(USER_PROFILE_URL, { headers: { Authorization: `Bearer ${accessToken}` } });
@@ -263,6 +269,91 @@ serve(async (req: Request) => {
             if (!r.ok) return null; return await r.json();
           }),
         ]);
+        // Fetch recovery data - WHOOP v2 API: GET /developer/v2/recovery
+        // Recovery is linked to cycles, not sleep directly
+        let recoveries: any[] = [];
+        
+        // Approach 1: Try bulk recovery endpoint with date range (this is the correct v2 endpoint)
+        try {
+          console.log('whoop-sync: Fetching recovery from:', RECOVERY_URL, 'with params:', commonParams);
+          
+          // Make direct fetch to see raw response
+          const recoveryTestUrl = new URL(RECOVERY_URL);
+          Object.entries(commonParams).forEach(([k, v]) => recoveryTestUrl.searchParams.set(k, v));
+          const testRes = await fetch(recoveryTestUrl.toString(), { 
+            headers: { Authorization: `Bearer ${accessToken}` } 
+          });
+          const rawText = await testRes.text();
+          console.log('whoop-sync: Raw recovery response status:', testRes.status);
+          console.log('whoop-sync: Raw recovery response (first 500 chars):', rawText.substring(0, 500));
+          
+          // Parse the response
+          if (testRes.ok) {
+            try {
+              const json = JSON.parse(rawText);
+              console.log('whoop-sync: Recovery JSON keys:', Object.keys(json));
+              console.log('whoop-sync: Recovery records array?', Array.isArray(json.records), 'length:', json.records?.length);
+              
+              // Check if records exist
+              if (Array.isArray(json.records) && json.records.length > 0) {
+                recoveries = json.records;
+                console.log('whoop-sync: First recovery record:', JSON.stringify(json.records[0]).substring(0, 300));
+              } else if (json.data && Array.isArray(json.data)) {
+                // Some APIs use 'data' instead of 'records'
+                recoveries = json.data;
+                console.log('whoop-sync: Recovery from data array:', json.data.length);
+              } else if (!Array.isArray(json.records) && json.cycle_id) {
+                // Single recovery object
+                recoveries = [json];
+                console.log('whoop-sync: Single recovery object found');
+              }
+            } catch (parseErr) {
+              console.error('whoop-sync: Failed to parse recovery JSON:', parseErr);
+            }
+          }
+        } catch (bulkErr) {
+          console.error('whoop-sync: Bulk recovery fetch error:', bulkErr);
+        }
+        
+        // Approach 2: If bulk failed, try per-cycle recovery endpoint
+        // WHOOP v2 API: GET /developer/v2/cycle/{cycleId}/recovery
+        if (recoveries.length === 0 && cycles.length > 0) {
+          console.log(`whoop-sync: Trying per-cycle recovery endpoint for ${cycles.length} cycles`);
+          for (const cycle of cycles.slice(0, 10)) {
+            try {
+              // WHOOP v2: GET /developer/v2/cycle/{cycleId}/recovery
+              const cycleRecoveryUrl = `${BASE}/v2/cycle/${cycle.id}/recovery`;
+              console.log(`whoop-sync: Fetching recovery from: ${cycleRecoveryUrl}`);
+              const r = await fetch(cycleRecoveryUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+              const responseText = await r.text();
+              console.log(`whoop-sync: Cycle ${cycle.id} recovery response: status ${r.status}, body: ${responseText.substring(0, 300)}`);
+              
+              if (r.ok && responseText) {
+                try {
+                  const recoveryData = JSON.parse(responseText);
+                  console.log(`whoop-sync: Parsed recovery for cycle ${cycle.id}:`, Object.keys(recoveryData));
+                  
+                  // Check if this is valid recovery data
+                  if (recoveryData && (recoveryData.score || recoveryData.recovery_score || recoveryData.cycle_id)) {
+                    recoveries.push({
+                      ...recoveryData,
+                      cycle_id: cycle.id,
+                      sleep_id: recoveryData.sleep_id || recoveryData.sleep?.id
+                    });
+                    console.log(`whoop-sync: Added recovery for cycle ${cycle.id}`);
+                  }
+                } catch (parseErr) {
+                  console.warn(`whoop-sync: Failed to parse recovery JSON for cycle ${cycle.id}:`, parseErr);
+                }
+              }
+            } catch (e) {
+              console.warn(`whoop-sync: Exception fetching cycle recovery ${cycle.id}:`, e);
+            }
+          }
+        }
+        
+        console.log(`whoop-sync: Total recoveries collected: ${recoveries.length}`);
+        
         totalCycles += cycles.length;
         totalSleeps += sleeps.length;
         totalWorkouts += workouts.length;

@@ -4872,6 +4872,7 @@ export type Database = {
         Row: {
           avg_hr_bpm: number | null
           created_at: string
+          created_at_ts: string | null
           data: Json
           day_strain: number | null
           end: string | null
@@ -4883,6 +4884,7 @@ export type Database = {
         Insert: {
           avg_hr_bpm?: number | null
           created_at?: string
+          created_at_ts?: string | null
           data: Json
           day_strain?: number | null
           end?: string | null
@@ -4894,6 +4896,7 @@ export type Database = {
         Update: {
           avg_hr_bpm?: number | null
           created_at?: string
+          created_at_ts?: string | null
           data?: Json
           day_strain?: number | null
           end?: string | null
@@ -4956,6 +4959,7 @@ export type Database = {
       whoop_recovery: {
         Row: {
           created_at: string
+          created_at_ts: string | null
           cycle_id: number | null
           data: Json
           date: string | null
@@ -4967,6 +4971,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          created_at_ts?: string | null
           cycle_id?: number | null
           data: Json
           date?: string | null
@@ -4978,6 +4983,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          created_at_ts?: string | null
           cycle_id?: number | null
           data?: Json
           date?: string | null
@@ -5000,6 +5006,7 @@ export type Database = {
       whoop_sleep: {
         Row: {
           created_at: string
+          created_at_ts: string | null
           data: Json
           duration_sec: number | null
           end: string | null
@@ -5010,6 +5017,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          created_at_ts?: string | null
           data: Json
           duration_sec?: number | null
           end?: string | null
@@ -5020,6 +5028,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          created_at_ts?: string | null
           data?: Json
           duration_sec?: number | null
           end?: string | null
@@ -5105,6 +5114,7 @@ export type Database = {
         Row: {
           avg_hr_bpm: number | null
           created_at: string
+          created_at_ts: string | null
           data: Json
           end: string | null
           id: string
@@ -5116,6 +5126,7 @@ export type Database = {
         Insert: {
           avg_hr_bpm?: number | null
           created_at?: string
+          created_at_ts?: string | null
           data: Json
           end?: string | null
           id: string
@@ -5127,6 +5138,7 @@ export type Database = {
         Update: {
           avg_hr_bpm?: number | null
           created_at?: string
+          created_at_ts?: string | null
           data?: Json
           end?: string | null
           id?: string

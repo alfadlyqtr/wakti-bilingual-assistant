@@ -693,12 +693,22 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
   const syncEventsToCalendar = (calendar: any, calendarId: string) => {
     console.log('[DirectSDK] Starting event sync to calendar ID:', calendarId);
     
-    // Filter entries to sync - all entry types
+    // Filter entries to sync - ALL entry types except PHONE_CALENDAR (those come FROM phone)
     const entriesToSync = calendarEntries.filter(e => 
-      e.date && typeof e.date === 'string' && e.date.length >= 10
+      e.date && 
+      typeof e.date === 'string' && 
+      e.date.length >= 10 &&
+      e.type !== EntryType.PHONE_CALENDAR // Don't sync phone events back to phone
     );
     
+    // Log breakdown by type for debugging
+    const typeBreakdown = entriesToSync.reduce((acc, e) => {
+      acc[e.type] = (acc[e.type] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
     console.log('[DirectSDK] Found', entriesToSync.length, 'events to sync');
+    console.log('[DirectSDK] Type breakdown:', typeBreakdown);
     
     if (entriesToSync.length === 0) {
       toast.info(
@@ -991,50 +1001,63 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
       <div className="flex flex-col space-y-2 p-3">
         {/* Top bar with sync and date controls */}
         <div className="flex items-center justify-between w-full gap-2">
-          {/* Sync button - direct NativelyCalendar SDK call */}
-          <input
+          {/* Sync controls - button and auto-sync toggle */}
+          <div className="flex items-center gap-2">
+            <input
             type="button"
-            value={language === 'ar' ? '🔄 مزامنة نيتيفلي' : '🔄 Natively Sync'}
+            value={language === 'ar' ? 'مزامنة' : 'Sync'}
             disabled={isSyncing}
             onClick={() => {
-              console.log('[DirectSDK] Button clicked - initializing NativelyCalendar');
+              console.log('[DirectSDK] Button clicked - starting BIDIRECTIONAL sync');
               try {
                 setIsSyncing(true);
-                toast.info(language === 'ar' ? 'جاري جلب التقويمات...' : 'Fetching calendars...');
+                toast.info(language === 'ar' ? 'جاري المزامنة...' : 'Syncing...');
                 
                 // Direct SDK call - Use the actual NativelyCalendar constructor as per docs
                 const calendar = new (window as any).NativelyCalendar();
                 
-                // Define callback for retrieveCalendars
-                const retrieveCalendarsCallback = function(resp: any) {
-                  console.log('[DirectSDK] Calendar response:', resp);
-                  
-                  if (resp.status === "SUCCESS" && resp.data && resp.data.length > 0) {
-                    toast.success(language === 'ar' 
-                      ? `تم العثور على ${resp.data.length} تقويمات` 
-                      : `Found ${resp.data.length} calendars`);
+                // STEP 1: First retrieve events FROM phone
+                console.log('[DirectSDK] STEP 1: Retrieving events FROM phone...');
+                calendar.retrieveCalendarEvents(
+                  new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(),
+                  new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+                  function(retrieveResult: any) {
+                    console.log('[DirectSDK] Retrieved events FROM phone:', retrieveResult);
                     
-                    // Find or use first calendar
-                    const waktiCal = resp.data.find((cal: any) => 
-                      (cal.name || '').toLowerCase().includes('wakti')
-                    ) || resp.data[0];
+                    if (retrieveResult.status === 'SUCCESS' && retrieveResult.data) {
+                      const phoneEvents = retrieveResult.data;
+                      console.log(`[DirectSDK] Found ${phoneEvents.length} events on phone`);
+                      toast.success(language === 'ar' 
+                        ? `تم جلب ${phoneEvents.length} حدث من الهاتف` 
+                        : `Retrieved ${phoneEvents.length} events from phone`);
+                      
+                      refreshCalendarData();
+                    } else {
+                      console.warn('[DirectSDK] No events retrieved from phone:', retrieveResult.error);
+                    }
                     
-                    console.log('[DirectSDK] Using calendar:', waktiCal);
-                    
-                    // Now sync each event
-                    syncEventsToCalendar(calendar, waktiCal.id);
-                  } else {
-                    console.error('[DirectSDK] Error retrieving calendars:', resp.error);
-                    toast.error(language === 'ar' 
-                      ? `خطأ في جلب التقويمات: ${resp.error || 'خطأ غير معروف'}` 
-                      : `Error retrieving calendars: ${resp.error || 'Unknown error'}`);
-                    setIsSyncing(false);
+                    // STEP 2: Now get calendars and push events TO phone
+                    console.log('[DirectSDK] STEP 2: Getting calendars to push events TO phone...');
+                    calendar.retrieveCalendars(function(resp: any) {
+                      console.log('[DirectSDK] Calendar response:', resp);
+                      
+                      if (resp.status === "SUCCESS" && resp.data && resp.data.length > 0) {
+                        const waktiCal = resp.data.find((cal: any) => 
+                          (cal.name || '').toLowerCase().includes('wakti')
+                        ) || resp.data[0];
+                        
+                        console.log('[DirectSDK] Using calendar:', waktiCal);
+                        syncEventsToCalendar(calendar, waktiCal.id);
+                      } else {
+                        console.error('[DirectSDK] Error retrieving calendars:', resp.error);
+                        toast.error(language === 'ar' 
+                          ? `خطأ في جلب التقويمات: ${resp.error || 'خطأ غير معروف'}` 
+                          : `Error retrieving calendars: ${resp.error || 'Unknown error'}`);
+                        setIsSyncing(false);
+                      }
+                    });
                   }
-                };
-                
-                // Call retrieveCalendars as per documentation
-                console.log('[DirectSDK] Calling retrieveCalendars');
-                calendar.retrieveCalendars(retrieveCalendarsCallback);
+                );
               } catch (err) {
                 console.error('[DirectSDK] Error initializing NativelyCalendar:', err);
                 toast.error(language === 'ar' 
@@ -1044,7 +1067,20 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
               }
             }}
             className="px-4 py-2 rounded-md text-sm font-medium bg-primary text-primary-foreground disabled:opacity-50"
-          />
+            />
+            
+            {/* Auto-sync toggle */}
+            <div className="flex items-center gap-1.5">
+              <Switch
+                checked={autoSyncEnabled}
+                onCheckedChange={handleAutoSyncToggle}
+                className="scale-75"
+              />
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                {language === 'ar' ? 'تلقائي' : 'Auto'}
+              </span>
+            </div>
+          </div>
           
           {/* Date controls */}
           <div className="flex items-center space-x-2">

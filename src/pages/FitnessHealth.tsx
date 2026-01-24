@@ -672,12 +672,14 @@ export default function FitnessHealth() {
   }, [metrics, sleepStages]);
 
   const todayStats = useMemo(() => {
+    // Convert numeric strings to numbers (PostgreSQL numeric type returns as string via REST API)
+    const toNum = (val: any) => typeof val === 'string' ? parseFloat(val) : (typeof val === 'number' ? val : 0);
     return {
-      recovery: metrics?.recovery?.score ?? metrics?.recovery?.data?.score?.recovery_score ?? 0,
-      hrv: metrics?.recovery?.hrv_ms ?? metrics?.recovery?.data?.score?.hrv_rmssd_milli ?? 0,
-      rhr: metrics?.recovery?.rhr_bpm ?? metrics?.recovery?.data?.score?.resting_heart_rate ?? 0,
-      strain: metrics?.cycle?.day_strain ?? metrics?.cycle?.data?.score?.strain ?? 0,
-      kcal: metrics?.workout?.data?.score?.kilojoule ? Math.round((metrics.workout.data.score.kilojoule || 0) / 4.184) : 0,
+      recovery: toNum(metrics?.recovery?.score ?? metrics?.recovery?.data?.score?.recovery_score ?? 0),
+      hrv: toNum(metrics?.recovery?.hrv_ms ?? metrics?.recovery?.data?.score?.hrv_rmssd_milli ?? 0),
+      rhr: toNum(metrics?.recovery?.rhr_bpm ?? metrics?.recovery?.data?.score?.resting_heart_rate ?? 0),
+      strain: toNum(metrics?.cycle?.day_strain ?? metrics?.cycle?.data?.score?.strain ?? 0),
+      kcal: metrics?.workout?.data?.score?.kilojoule ? Math.round(toNum(metrics.workout.data.score.kilojoule) / 4.184) : 0,
     };
   }, [metrics]);
 

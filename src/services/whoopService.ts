@@ -457,35 +457,32 @@ export async function fetchCompactMetrics(forceFresh = false) {
   const userId = await getCurrentUserId();
   if (!userId) return null;
 
-  // Add timestamp to force fresh data
-  const ts = forceFresh ? `?_t=${Date.now()}` : '';
-
   // Fetch ALL available WHOOP data fields - comprehensive extraction
   const [sleepRes, recRes, cycleRes, profileRes, bodyRes] = await Promise.all([
     // SLEEP: Pull ALL sleep fields including score data (latest first)
-    supabase.from("whoop_sleep"+ts).select("*")
+    supabase.from("whoop_sleep").select("*")
       .eq("user_id", userId)
       .order('created_at_ts', { ascending: false, nullsFirst: false })
       .order("start", { ascending: false })
       .limit(5),
     // RECOVERY: Pull ALL recovery fields including score data (latest first)
-    supabase.from("whoop_recovery"+ts).select("*")
+    supabase.from("whoop_recovery").select("*")
       .eq("user_id", userId)
       .order('created_at_ts', { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .limit(1),
     // CYCLE: Pull ALL cycle fields including score data (latest first)
-    supabase.from("whoop_cycles"+ts).select("*")
+    supabase.from("whoop_cycles").select("*")
       .eq("user_id", userId)
       .order('created_at_ts', { ascending: false, nullsFirst: false })
       .order("start", { ascending: false })
       .limit(1),
     // USER PROFILE: Pull user profile data
-    supabase.from("whoop_user_profiles"+ts).select("*")
+    supabase.from("whoop_user_profiles").select("*")
       .eq("user_id", userId)
       .maybeSingle(),
     // USER BODY: Pull body measurements
-    supabase.from("whoop_user_body"+ts).select("*")
+    supabase.from("whoop_user_body").select("*")
       .eq("user_id", userId)
       .maybeSingle(),
   ]);
@@ -553,10 +550,12 @@ export async function fetchSleepHistory(days = 7, forceFresh = false) {
   if (error || !data) return [];
   const items = [...data].reverse().map((s: any) => {
     const stage = s?.data?.score?.stage_summary || {};
-    const deep = stage.deep_sleep_milli ?? stage.deep_milli ?? 0;
-    const rem = stage.rem_sleep_milli ?? stage.rem_milli ?? 0;
-    const light = stage.light_sleep_milli ?? stage.light_milli ?? 0;
-    const total = (deep + rem + light) || stage.total_in_bed_milli || (s.duration_sec ? s.duration_sec * 1000 : 0);
+    // WHOOP v2 API field names: total_slow_wave_sleep_time_milli, total_rem_sleep_time_milli, total_light_sleep_time_milli
+    const deep = stage.total_slow_wave_sleep_time_milli ?? stage.deep_sleep_milli ?? stage.deep_milli ?? 0;
+    const rem = stage.total_rem_sleep_time_milli ?? stage.rem_sleep_milli ?? stage.rem_milli ?? 0;
+    const light = stage.total_light_sleep_time_milli ?? stage.light_sleep_milli ?? stage.light_milli ?? 0;
+    const awake = stage.total_awake_time_milli ?? 0;
+    const total = (deep + rem + light) || stage.total_in_bed_time_milli || (s.duration_sec ? s.duration_sec * 1000 : 0);
     return {
       start: s.start,
       end: s.end,
@@ -565,6 +564,7 @@ export async function fetchSleepHistory(days = 7, forceFresh = false) {
         deep,
         rem,
         light,
+        awake,
         total
       }
     };
@@ -585,7 +585,13 @@ export async function fetchCycleHistory(days = 7, forceFresh = false) {
     .order('start', { ascending: false })
     .limit(days);
   if (error || !data) return [];
-  return [...data].reverse();
+  // Convert numeric strings to numbers (PostgreSQL numeric type returns as string)
+  return [...data].reverse().map((c: any) => ({
+    ...c,
+    day_strain: typeof c.day_strain === 'string' ? parseFloat(c.day_strain) : c.day_strain,
+    avg_hr_bpm: typeof c.avg_hr_bpm === 'string' ? parseFloat(c.avg_hr_bpm) : c.avg_hr_bpm,
+    training_load: typeof c.training_load === 'string' ? parseFloat(c.training_load) : c.training_load,
+  }));
 }
 
 export async function fetchWorkoutsHistory(days = 14, forceFresh = false) {
@@ -602,15 +608,17 @@ export async function fetchWorkoutsHistory(days = 14, forceFresh = false) {
     .limit(1000);
   if (error || !data) return [];
   const cutoff = Date.now() - days * 86400000;
+  // Convert numeric strings to numbers (PostgreSQL numeric type returns as string)
+  const toNum = (val: any) => typeof val === 'string' ? parseFloat(val) : val;
   return data
     .filter((w: any) => w.start && new Date(w.start).getTime() >= cutoff)
     .map((w: any) => ({
       start: w.start,
       end: w.end,
       sport: w.sport_name || 'Workout',
-      strain: w.strain ?? (w?.data?.score?.strain ?? null),
-      kcal: w?.data?.score?.kilojoule ? Math.round((w.data.score.kilojoule || 0) / 4.184) : null,
-      avg_hr_bpm: w.avg_hr_bpm ?? (w?.data?.score?.average_heart_rate ?? null),
+      strain: toNum(w.strain) ?? toNum(w?.data?.score?.strain) ?? null,
+      kcal: w?.data?.score?.kilojoule ? Math.round(toNum(w.data.score.kilojoule || 0) / 4.184) : null,
+      avg_hr_bpm: toNum(w.avg_hr_bpm) ?? toNum(w?.data?.score?.average_heart_rate) ?? null,
     }))
     .sort((a: any, b: any) => new Date(a.start).getTime() - new Date(b.start).getTime());
 }
