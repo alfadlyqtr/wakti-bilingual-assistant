@@ -707,6 +707,12 @@ const MyWarranty: React.FC = () => {
     ai_summary: '',
   });
 
+  // Separate state for preview URLs (base64 data URLs for instant preview)
+  const [previewUrls, setPreviewUrls] = useState({
+    primary: '',
+    additional: [] as string[]
+  });
+
   const [newTagsInput, setNewTagsInput] = useState('');
   const [detailTagsInput, setDetailTagsInput] = useState('');
   const [docSide, setDocSide] = useState<'front' | 'back' | 'both'>('front'); // Document side selector
@@ -865,10 +871,20 @@ const MyWarranty: React.FC = () => {
     
     try {
       const newImages: string[] = [];
+      const newPreviewUrls: string[] = [];
 
       for (let i = 0; i < fileList.length; i++) {
         const file = fileList[i];
         
+        // Create base64 preview URL for instant preview
+        const previewUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target?.result as string);
+          reader.readAsDataURL(file);
+        });
+        newPreviewUrls.push(previewUrl);
+        
+        // Upload to Supabase for storage and analysis
         const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
         const fileName = `${user.id}/${Date.now()}_${i}_${sanitizedName}`;
         const { error: uploadError } = await supabase.storage
@@ -884,9 +900,33 @@ const MyWarranty: React.FC = () => {
         newImages.push(urlData.publicUrl);
       }
 
-      // Use the Supabase public URLs directly for preview
       console.log('[handleFileSelect] Uploaded images URLs:', newImages);
+      console.log('[handleFileSelect] Preview URLs created:', newPreviewUrls.length);
       
+      // Update preview URLs state
+      setPreviewUrls(prev => {
+        let primaryPreview = prev.primary;
+        const updatedPreviews = [...prev.additional];
+
+        if (!primaryPreview) {
+          primaryPreview = newPreviewUrls[0];
+          updatedPreviews.push(...newPreviewUrls.slice(1));
+        } else {
+          updatedPreviews.push(...newPreviewUrls);
+        }
+
+        console.log('[handleFileSelect] Setting preview URLs:', {
+          primaryPreview: primaryPreview?.substring(0, 50) + '...',
+          additionalCount: updatedPreviews.length
+        });
+
+        return {
+          primary: primaryPreview,
+          additional: updatedPreviews
+        };
+      });
+
+      // Update Supabase URLs state
       setNewItem(prev => {
         const updatedImages = [...prev.additional_images];
         let primaryImage = prev.image_url;
@@ -899,15 +939,29 @@ const MyWarranty: React.FC = () => {
           updatedImages.push(...newImages);
         }
 
-        console.log('[handleFileSelect] Setting state:', { primaryImage, updatedImages, isPdf });
+        console.log('[handleFileSelect] Setting state:', { 
+          primaryImage, 
+          updatedImages, 
+          isPdf,
+          primaryImageLength: primaryImage?.length,
+          updatedImagesCount: updatedImages.length 
+        });
 
-        return {
+        const newState = {
           ...prev,
           image_url: primaryImage,
           receipt_url: primaryImage,
           additional_images: updatedImages,
-          file_type: isPdf ? 'pdf' : 'image'
+          file_type: (isPdf ? 'pdf' : 'image') as '' | 'image' | 'pdf'
         };
+
+        console.log('[handleFileSelect] New state created:', {
+          image_url: newState.image_url,
+          additional_images_count: newState.additional_images.length,
+          file_type: newState.file_type
+        });
+
+        return newState;
       });
 
       // Show success toast with guidance
@@ -1068,26 +1122,26 @@ const MyWarranty: React.FC = () => {
         .filter(Boolean);
 
       const extractedWithTags: Record<string, unknown> = {
-        ...(newItem.extracted_data || {}),
+        ...(itemToSave.extracted_data || {}),
         user_tags: parsedTags,
-        additional_images: newItem.additional_images,
+        additional_images: itemToSave.additional_images,
       };
 
       const { error } = await (supabase as any).from('user_warranties').insert({
         user_id: user.id,
-        product_name: newItem.title,
-        purchase_date: newItem.purchase_date || null,
-        expiry_date: newItem.expiry_date || null,
-        warranty_months: newItem.warranty_period ? parseInt(newItem.warranty_period) : null,
-        notes: newItem.ai_summary || null,
-        provider: newItem.provider || null,
-        ref_number: newItem.ref_number || null,
-        support_contact: newItem.support_contact || null,
-        image_url: newItem.image_url || null,
-        receipt_url: newItem.receipt_url || null,
-        file_type: newItem.file_type || null,
+        product_name: itemToSave.title,
+        purchase_date: itemToSave.purchase_date || null,
+        expiry_date: itemToSave.expiry_date || null,
+        warranty_months: itemToSave.warranty_period ? parseInt(itemToSave.warranty_period) : null,
+        notes: itemToSave.ai_summary || null,
+        provider: itemToSave.provider || null,
+        ref_number: itemToSave.ref_number || null,
+        support_contact: itemToSave.support_contact || null,
+        image_url: itemToSave.image_url || null,
+        receipt_url: itemToSave.receipt_url || null,
+        file_type: itemToSave.file_type || null,
         extracted_data: extractedWithTags,
-        ai_summary: newItem.ai_summary || null,
+        ai_summary: itemToSave.ai_summary || null,
       });
 
       if (error) throw error;
@@ -2497,7 +2551,10 @@ const MyWarranty: React.FC = () => {
                     variant="ghost"
                     size="sm"
                     className="text-xs text-red-400 hover:text-red-300 hover:bg-red-400/10 flex items-center gap-1"
-                    onClick={() => setNewItem(prev => ({ ...prev, image_url: '', receipt_url: '', additional_images: [], file_type: '' }))}
+                    onClick={() => {
+                      setNewItem(prev => ({ ...prev, image_url: '', receipt_url: '', additional_images: [], file_type: '' }));
+                      setPreviewUrls({ primary: '', additional: [] });
+                    }}
                   >
                     <X className="w-3 h-3" />
                     <span>{isRTL ? 'مسح الكل' : 'Clear All'}</span>
@@ -2505,16 +2562,17 @@ const MyWarranty: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                  {/* Primary Image */}
-                  {newItem.image_url && (
-                    <div className="relative aspect-[3/4] rounded-xl overflow-hidden bg-white/5 border-2 border-blue-500/50 group">
+                  {/* Primary Image - use previewUrls.primary (base64) or fallback to newItem.image_url (Supabase URL) */}
+                  {(previewUrls.primary || newItem.image_url) && (
+                    <div className="relative aspect-[3/4] rounded-xl overflow-hidden bg-gradient-to-br from-blue-500/20 to-purple-500/20 border-2 border-blue-500/50 group">
                       <img 
-                        src={newItem.image_url} 
+                        src={previewUrls.primary || newItem.image_url} 
                         alt="Front" 
-                        className="w-full h-full object-cover"
-                        crossOrigin="anonymous"
+                        className="absolute inset-0 w-full h-full object-cover"
+                        onLoad={() => console.log('[Preview] Primary image loaded successfully')}
+                        onError={(e) => console.error('[Preview] Primary image failed to load:', (e.target as HTMLImageElement).src)}
                       />
-                      <div className="absolute top-2 left-2 bg-blue-500/90 backdrop-blur-sm px-2 py-1 rounded-lg">
+                      <div className="absolute top-2 left-2 bg-blue-500/90 backdrop-blur-sm px-2 py-1 rounded-lg z-10">
                         <span className="text-[10px] font-bold text-white">
                           {isRTL ? 'الصفحة الأولى' : 'Front Page'}
                         </span>
@@ -2534,14 +2592,15 @@ const MyWarranty: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Additional Images */}
-                  {newItem.additional_images.map((img, idx) => (
+                  {/* Additional Images - use previewUrls.additional or fallback to newItem.additional_images */}
+                  {(previewUrls.additional.length > 0 ? previewUrls.additional : newItem.additional_images).map((imgUrl, idx) => (
                     <div key={idx} className="relative aspect-[3/4] rounded-xl overflow-hidden bg-white/5 border border-white/10 animate-in zoom-in-95 duration-200">
                       <img 
-                        src={img} 
+                        src={imgUrl} 
                         alt={`Page ${idx + 2}`} 
                         className="w-full h-full object-cover"
-                        crossOrigin="anonymous"
+                        onLoad={() => console.log(`[Preview] Additional image ${idx + 1} loaded successfully`)}
+                        onError={(e) => console.error(`[Preview] Additional image ${idx + 1} failed to load:`, e)}
                       />
                       <div className="absolute top-2 left-2 bg-white/10 backdrop-blur-sm px-2 py-1 rounded-lg">
                         <span className="text-[10px] font-bold text-white">
@@ -2741,18 +2800,30 @@ const MyWarranty: React.FC = () => {
                                 return (
                                   <div 
                                     key={`${key}-${idx}`} 
-                                    className={`
-                                      group relative flex flex-col gap-0.5 p-3 rounded-xl
-                                      bg-gradient-to-br from-${chipColor}-500/10 via-${chipColor}-500/5 to-transparent
-                                      border border-${chipColor}-500/20 hover:border-${chipColor}-500/30
-                                      transition-all duration-300
-                                    `}
+                                    className="flex flex-col gap-2"
                                   >
-                                    <div className={`absolute inset-0 bg-gradient-to-br from-${chipColor}-500/5 via-${chipColor}-500/2 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl`} />
-                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide relative z-10">{label}</p>
-                                    <p className={`text-sm font-semibold text-foreground relative z-10 ${isMonoValue ? 'font-mono text-xs' : ''}`}>
-                                      {value}
-                                    </p>
+                                    <div className={`
+                                      inline-flex items-center px-2.5 py-1 rounded-md w-fit
+                                      bg-${chipColor}-500/20
+                                      border border-${chipColor}-500/40
+                                    `}>
+                                      <span className="text-[10px] font-black uppercase tracking-wider text-${chipColor}-400">
+                                        {label}
+                                      </span>
+                                    </div>
+                                    <div className={`
+                                      inline-flex items-center px-3 py-2 rounded-lg
+                                      bg-${chipColor}-500/15 
+                                      border border-${chipColor}-500/30
+                                      shadow-sm
+                                      transition-all duration-200
+                                      hover:bg-${chipColor}-500/20 hover:border-${chipColor}-500/40
+                                      hover:shadow-md
+                                    `}>
+                                      <span className={`text-sm font-bold text-foreground ${isMonoValue ? 'font-mono text-xs' : ''}`}>
+                                        {value}
+                                      </span>
+                                    </div>
                                   </div>
                                 );
                               })}
@@ -3098,12 +3169,39 @@ const MyWarranty: React.FC = () => {
                         const isMonoValue = key.includes('number') || key.includes('_no') || key.includes('_id') || 
                                            key.includes('chassis') || key.includes('plate') || key.includes('vin');
                         
+                        // Get chip color based on field type
+                        let chipColor = 'white';
+                        if (key.includes('date')) chipColor = 'emerald';
+                        else if (key.includes('amount') || key.includes('price')) chipColor = 'amber';
+                        else if (key.includes('number') || key.includes('id')) chipColor = 'purple';
+                        else if (key.includes('type')) chipColor = 'blue';
+                        else if (key.includes('status')) chipColor = 'cyan';
+                        else if (key.includes('name')) chipColor = 'orange';
+                        
                         return (
-                          <div key={`${key}-${idx}`} className={isLongValue ? 'col-span-2' : ''}>
-                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">{label}</p>
-                            <p className={`text-sm font-semibold text-foreground ${isMonoValue ? 'font-mono text-xs' : ''}`}>
-                              {value}
-                            </p>
+                          <div key={`${key}-${idx}`} className={`flex flex-col gap-2 ${isLongValue ? 'col-span-2' : ''}`}>
+                            <div className={`
+                              inline-flex items-center px-2.5 py-1 rounded-md w-fit
+                              bg-${chipColor}-500/20
+                              border border-${chipColor}-500/40
+                            `}>
+                              <span className="text-[10px] font-black uppercase tracking-wider text-${chipColor}-400">
+                                {label}
+                              </span>
+                            </div>
+                            <div className={`
+                              inline-flex items-center px-3 py-2 rounded-lg
+                              bg-${chipColor}-500/15 
+                              border border-${chipColor}-500/30
+                              shadow-sm
+                              transition-all duration-200
+                              hover:bg-${chipColor}-500/20 hover:border-${chipColor}-500/40
+                              hover:shadow-md
+                            `}>
+                              <span className={`text-sm font-bold text-foreground ${isMonoValue ? 'font-mono text-xs' : ''}`}>
+                                {value}
+                              </span>
+                            </div>
                           </div>
                         );
                       })}

@@ -480,14 +480,18 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
       }
     }
     
-    // Sync tasks, reminders, maw3d events, and project bookings
+    // Sync ALL calendar entry types: Tasks, Reminders, Maw3d, Manual, Journal, Events, Appointments, Project Bookings
     // Filter to only include entries with valid date strings AND not recently synced
     const entriesToSync = calendarEntries.filter(e => 
-      // Filter by entry type
+      // Filter by entry type - include ALL types except PHONE_CALENDAR (those come FROM phone, not TO phone)
       (e.type === EntryType.TASK || 
        e.type === EntryType.REMINDER || 
        e.type === EntryType.MAW3D_EVENT ||
-       e.type === EntryType.PROJECT_BOOKING) &&
+       e.type === EntryType.PROJECT_BOOKING ||
+       e.type === EntryType.EVENT ||
+       e.type === EntryType.APPOINTMENT ||
+       e.type === EntryType.MANUAL_NOTE ||
+       e.type === EntryType.JOURNAL) &&
       // Validate date is present and valid
       e.date && 
       typeof e.date === 'string' &&
@@ -502,8 +506,8 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
       setIsSyncing(false);
       toast.info(
         language === 'ar' 
-          ? 'لا توجد أحداث للمزامنة. أضف مهام أو تذكيرات أو مواعيد أولاً.' 
-          : 'No events to sync. Add tasks, reminders, or maw3d events first.'
+          ? 'لا توجد أحداث جديدة للمزامنة. جميع الأحداث تمت مزامنتها بالفعل.' 
+          : 'No new events to sync. All events are already synced.'
       );
       return;
     }
@@ -752,13 +756,18 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
       toast.success(msg[direction]);
     } else {
       // Show specific error message
-      const isInApp = typeof (window as any).natively !== 'undefined';
+      const isInApp = typeof (window as any).natively !== 'undefined' || 
+                      typeof (window as any).NativelyCalendar !== 'undefined' ||
+                      (window as any).natively?.isNativeApp === true;
       if (!isInApp) {
-        toast.error(
+        // Not in native app - show info and open ICS subscription dialog as fallback
+        toast.info(
           language === 'ar' 
-            ? 'مزامنة التقويم متاحة فقط في تطبيق الهاتف' 
-            : 'Calendar sync is only available in the mobile app'
+            ? 'افتح التطبيق على هاتفك للمزامنة المباشرة، أو استخدم الاشتراك' 
+            : 'Open the app on your phone for direct sync, or use subscription'
         );
+        setShowSubscribeDialog(true);
+        return;
       } else {
         toast.error(
           language === 'ar'
@@ -846,17 +855,22 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
       <div className="flex flex-col space-y-2 p-3">
         {/* Top bar with sync and date controls */}
         <div className="flex items-center justify-between w-full gap-2">
-          {/* Subscribe to Calendar button */}
+          {/* Sync button - always uses Natively SDK sync */}
           <Button
             type="button"
             variant="default"
             size="sm"
-            onClick={() => setShowSubscribeDialog(true)}
-            className="flex items-center gap-1.5 min-w-[100px] bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95"
+            onClick={() => syncCalendars('both')}
+            disabled={isSyncing}
+            className="flex items-center gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95"
           >
-            <CalendarIcon className="h-4 w-4" />
+            {isSyncing ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
             <span className="font-medium">
-              {language === 'ar' ? 'اشتراك' : 'Subscribe'}
+              {language === 'ar' ? 'مزامنة' : 'Sync'}
             </span>
           </Button>
           
