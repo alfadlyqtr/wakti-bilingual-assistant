@@ -214,12 +214,14 @@ async function callOpenAIVision(content: any[], model: string): Promise<any> {
   return result.choices?.[0]?.message?.content;
 }
 
-async function extractWithFallback(imageArray: string[]): Promise<string> {
+async function extractWithFallback(imageArray: string[], mimeType?: string): Promise<string> {
   if (!imageArray || !Array.isArray(imageArray) || imageArray.length === 0) {
     throw new Error("Invalid or empty image array provided");
   }
 
-  console.log(`[my-warranty-ai] Starting extraction with ${imageArray.length} images using gpt-4o-mini only`);
+  console.log(`[my-warranty-ai] Starting extraction with ${imageArray.length} items using gpt-4o-mini only, mimeType: ${mimeType || 'auto-detect'}`);
+  
+  // Note: PDFs should be converted to images on the client side before sending here
 
   // Build content for OpenAI
   const openaiContent: any[] = [
@@ -274,13 +276,22 @@ serve(async (req) => {
     console.log(`[my-warranty-ai] Mode: ${mode}, images count: ${images?.length || 0}`);
 
     if (mode === "extract") {
+      const { mimeType } = body;
+      
+      // Check if PDF - OpenAI Vision API doesn't support PDFs directly
+      if (mimeType === 'application/pdf') {
+        console.log('[my-warranty-ai] PDF detected - OpenAI Vision API does not support PDFs directly');
+        // For PDFs, we'll try to process anyway but warn that results may vary
+        // In the future, we could add PDF.js conversion or use a different API
+      }
+      
       const imageArray = images && images.length > 0 ? images : (imageBase64 ? [imageBase64] : (pdfBase64 ? [pdfBase64] : []));
       
       if (imageArray.length === 0) {
         throw new Error("No document provided for extraction");
       }
 
-      const textContent = await extractWithFallback(imageArray);
+      const textContent = await extractWithFallback(imageArray, mimeType);
 
       if (!textContent) {
         throw new Error("No response from AI models");

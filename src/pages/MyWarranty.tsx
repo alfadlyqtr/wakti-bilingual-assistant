@@ -942,6 +942,16 @@ const MyWarranty: React.FC = () => {
     // Show uploading indicator
     setIsAnalyzing(true);
     setViewMode('add');
+
+    // If PDF, show a note that we'll convert it
+    if (isPdf) {
+      toast({
+        title: isRTL ? 'جاري معالجة PDF' : 'Processing PDF',
+        description: isRTL 
+          ? 'جاري تحويل PDF إلى صورة للتحليل...' 
+          : 'Converting PDF to image for analysis...',
+      });
+    }
     
     try {
       const newImages: string[] = [];
@@ -953,8 +963,165 @@ const MyWarranty: React.FC = () => {
         let fileToUpload = file;
         let previewUrl = '';
         
-        // Optimize images (not PDFs) for better quality and smaller size
-        if (!isPdf && file.type.startsWith('image/')) {
+        // Handle PDF files - convert to image using PDF.js
+        if (isPdf && file.type.includes('pdf')) {
+          try {
+            console.log('[handleFileSelect] Converting PDF to image...');
+            
+            // Load PDF.js from CDN if not already loaded
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            let pdfjsLib = (window as any).pdfjsLib;
+            
+            if (!pdfjsLib) {
+              await new Promise<void>((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+                script.onload = () => {
+                  console.log('[handleFileSelect] PDF.js loaded successfully');
+                  resolve();
+                };
+                script.onerror = (e) => {
+                  console.error('[handleFileSelect] Failed to load PDF.js:', e);
+                  reject(new Error('Failed to load PDF.js'));
+                };
+                document.head.appendChild(script);
+              });
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              pdfjsLib = (window as any).pdfjsLib;
+            }
+            
+            if (!pdfjsLib) {
+              throw new Error('PDF.js library not available');
+            }
+            
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            
+            // Read PDF file as array buffer
+            const arrayBuffer = await file.arrayBuffer();
+            console.log('[handleFileSelect] PDF arrayBuffer size:', arrayBuffer.byteLength);
+            
+            const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+            const pdf = await loadingTask.promise;
+            console.log('[handleFileSelect] PDF loaded, pages:', pdf.numPages);
+            
+            // Get first page
+            const page = await pdf.getPage(1);
+            const scale = 2; // Higher scale for better quality
+            const viewport = page.getViewport({ scale });
+            console.log('[handleFileSelect] PDF viewport:', viewport.width, 'x', viewport.height);
+            
+            // Create canvas and render PDF page
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            if (!context) {
+              throw new Error('Failed to get canvas context');
+            }
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            
+            const renderContext = {
+              canvasContext: context,
+              viewport: viewport
+            };
+            
+            await page.render(renderContext).promise;
+            console.log('[handleFileSelect] PDF page rendered to canvas');
+            
+            // Convert canvas to image
+            const imageDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+            console.log('[handleFileSelect] Image data URL length:', imageDataUrl.length);
+            
+            if (imageDataUrl.length < 100) {
+              throw new Error('Generated image is too small');
+            }
+            
+            previewUrl = imageDataUrl;
+            
+            // Create a file from the image for upload
+            const base64Data = imageDataUrl.split(',')[1];
+            const binaryString = atob(base64Data);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let j = 0; j < binaryString.length; j++) {
+              bytes[j] = binaryString.charCodeAt(j);
+            }
+            const blob = new Blob([bytes], { type: 'image/jpeg' });
+            fileToUpload = new File([blob], file.name.replace('.pdf', '.jpg'), { type: 'image/jpeg' });
+            
+            console.log('[handleFileSelect] PDF converted to image successfully, file size:', fileToUpload.size);
+          } catch (pdfError) {
+            console.error('[handleFileSelect] PDF conversion failed:', pdfError);
+            toast({
+              title: isRTL ? 'خطأ في تحويل PDF' : 'PDF Conversion Error',
+              description: isRTL 
+                ? 'فشل تحويل PDF. يرجى التقاط صورة للمستند بدلاً من ذلك.' 
+                : 'Failed to convert PDF. Please take a photo of the document instead.',
+              variant: 'destructive',
+            });
+            setIsAnalyzing(false);
+            return;
+          }
+        } else if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+          // Handle .txt files - create an image from the text content
+          try {
+            console.log('[handleFileSelect] Processing text file...');
+            const textContent = await file.text();
+            
+            // Create a canvas with the text content
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            if (!context) throw new Error('Failed to get canvas context');
+            
+            // Set canvas size
+            canvas.width = 800;
+            canvas.height = 1200;
+            
+            // White background
+            context.fillStyle = '#ffffff';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw text
+            context.fillStyle = '#000000';
+            context.font = '14px monospace';
+            const lines = textContent.split('\n');
+            const lineHeight = 18;
+            let y = 30;
+            for (const line of lines) {
+              if (y > canvas.height - 30) break;
+              context.fillText(line.substring(0, 100), 20, y);
+              y += lineHeight;
+            }
+            
+            const imageDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+            previewUrl = imageDataUrl;
+            
+            // Create file from canvas
+            const base64Data = imageDataUrl.split(',')[1];
+            const binaryString = atob(base64Data);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let j = 0; j < binaryString.length; j++) {
+              bytes[j] = binaryString.charCodeAt(j);
+            }
+            const blob = new Blob([bytes], { type: 'image/jpeg' });
+            fileToUpload = new File([blob], file.name.replace('.txt', '.jpg'), { type: 'image/jpeg' });
+            
+            console.log('[handleFileSelect] Text file converted to image');
+          } catch (txtError) {
+            console.error('[handleFileSelect] Text file processing failed:', txtError);
+            previewUrl = 'TXT_PLACEHOLDER';
+          }
+        } else if (file.type.includes('word') || file.name.endsWith('.doc') || file.name.endsWith('.docx')) {
+          // Handle .doc/.docx files - show message that they need to be converted
+          toast({
+            title: isRTL ? 'ملفات Word غير مدعومة مباشرة' : 'Word Files Not Directly Supported',
+            description: isRTL 
+              ? 'يرجى تحويل ملف Word إلى PDF أو التقاط صورة للمستند.' 
+              : 'Please convert the Word file to PDF or take a photo of the document.',
+            variant: 'destructive',
+          });
+          setIsAnalyzing(false);
+          return;
+        } else if (file.type.startsWith('image/')) {
+          // Optimize images for better quality and smaller size
           try {
             const optimized = await optimizeImage(file);
             fileToUpload = optimized.optimizedFile;
@@ -970,7 +1137,7 @@ const MyWarranty: React.FC = () => {
             });
           }
         } else {
-          // For PDFs, just create preview URL
+          // For other files, just create preview URL
           previewUrl = await new Promise<string>((resolve) => {
             const reader = new FileReader();
             reader.onload = (e) => resolve(e.target?.result as string);
@@ -2802,7 +2969,7 @@ const MyWarranty: React.FC = () => {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*,application/pdf"
+              accept="image/*,application/pdf,text/plain,.txt,.doc,.docx"
               multiple
               className="hidden"
               onChange={(e) => handleFileSelect(e, false)}
@@ -2835,19 +3002,26 @@ const MyWarranty: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                  {/* Primary Image - use previewUrls.primary (base64) or fallback to newItem.image_url (Supabase URL) */}
+                  {/* Primary Image/PDF - use previewUrls.primary (base64) or fallback to newItem.image_url (Supabase URL) */}
                   {(previewUrls.primary || newItem.image_url) && (
                     <div className="relative aspect-[3/4] rounded-xl overflow-hidden bg-gradient-to-br from-blue-500/20 to-purple-500/20 border-2 border-blue-500/50 group">
-                      <img 
-                        src={previewUrls.primary || newItem.image_url} 
-                        alt="Front" 
-                        className="absolute inset-0 w-full h-full object-cover"
-                        onLoad={() => console.log('[Preview] Primary image loaded successfully')}
-                        onError={(e) => console.error('[Preview] Primary image failed to load:', (e.target as HTMLImageElement).src)}
-                      />
+                      {newItem.file_type === 'pdf' ? (
+                        <div className="absolute inset-0 w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-red-500/20 to-orange-500/20">
+                          <FileText className="w-10 h-10 text-red-400" />
+                          <span className="text-xs font-medium text-red-400 mt-2">PDF</span>
+                        </div>
+                      ) : (
+                        <img 
+                          src={previewUrls.primary || newItem.image_url} 
+                          alt="Front" 
+                          className="absolute inset-0 w-full h-full object-cover"
+                          onLoad={() => console.log('[Preview] Primary image loaded successfully')}
+                          onError={(e) => console.error('[Preview] Primary image failed to load:', (e.target as HTMLImageElement).src)}
+                        />
+                      )}
                       <div className="absolute top-2 left-2 bg-blue-500/90 backdrop-blur-sm px-2 py-1 rounded-lg z-10">
                         <span className="text-[10px] font-bold text-white">
-                          {isRTL ? 'الصفحة الأولى' : 'Front Page'}
+                          {newItem.file_type === 'pdf' ? 'PDF' : (isRTL ? 'الصفحة الأولى' : 'Front Page')}
                         </span>
                       </div>
                       <Button
@@ -2857,7 +3031,8 @@ const MyWarranty: React.FC = () => {
                         onClick={() => setNewItem(prev => ({
                           ...prev,
                           image_url: '',
-                          receipt_url: prev.additional_images[0] || ''
+                          receipt_url: prev.additional_images[0] || '',
+                          file_type: ''
                         }))}
                       >
                         <X className="w-3 h-3" />
