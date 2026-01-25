@@ -14,6 +14,102 @@ export type Database = {
   }
   public: {
     Tables: {
+      user_business_cards: {
+        Row: {
+          user_id: string
+          first_name: string
+          last_name: string | null
+          email: string | null
+          phone: string | null
+          company_name: string | null
+          job_title: string | null
+          website: string | null
+          logo_url: string | null
+          profile_photo_url: string | null
+          cover_photo_url: string | null
+          department: string | null
+          headline: string | null
+          address: string | null
+          social_links: Json | null
+          template: string | null
+          primary_color: string | null
+          mosaic_palette_id: string | null
+          mosaic_colors: Json | null
+          professional_colors: Json | null
+          fashion_colors: Json | null
+          minimal_colors: Json | null
+          clean_colors: Json | null
+          logo_position: string | null
+          photo_shape: string | null
+          name_style: Json | null
+          title_style: Json | null
+          company_style: Json | null
+          icon_style: Json | null
+        }
+        Insert: {
+          user_id: string
+          first_name: string
+          last_name?: string | null
+          email?: string | null
+          phone?: string | null
+          company_name?: string | null
+          job_title?: string | null
+          website?: string | null
+          logo_url?: string | null
+          profile_photo_url?: string | null
+          cover_photo_url?: string | null
+          department?: string | null
+          headline?: string | null
+          address?: string | null
+          social_links?: Json | null
+          template?: string | null
+          primary_color?: string | null
+          mosaic_palette_id?: string | null
+          mosaic_colors?: Json | null
+          professional_colors?: Json | null
+          fashion_colors?: Json | null
+          minimal_colors?: Json | null
+          clean_colors?: Json | null
+          logo_position?: string | null
+          photo_shape?: string | null
+          name_style?: Json | null
+          title_style?: Json | null
+          company_style?: Json | null
+          icon_style?: Json | null
+        }
+        Update: {
+          user_id?: string
+          first_name?: string
+          last_name?: string | null
+          email?: string | null
+          phone?: string | null
+          company_name?: string | null
+          job_title?: string | null
+          website?: string | null
+          logo_url?: string | null
+          profile_photo_url?: string | null
+          cover_photo_url?: string | null
+          department?: string | null
+          headline?: string | null
+          address?: string | null
+          social_links?: Json | null
+          template?: string | null
+          primary_color?: string | null
+          mosaic_palette_id?: string | null
+          mosaic_colors?: Json | null
+          professional_colors?: Json | null
+          fashion_colors?: Json | null
+          minimal_colors?: Json | null
+          clean_colors?: Json | null
+          logo_position?: string | null
+          photo_shape?: string | null
+          name_style?: Json | null
+          title_style?: Json | null
+          company_style?: Json | null
+          icon_style?: Json | null
+        }
+        Relationships: []
+      },
       admin_activity_logs: {
         Row: {
           action: string
@@ -1767,8 +1863,6 @@ export type Database = {
           is_read: boolean | null
           push_sent: boolean | null
           push_sent_at: string | null
-          reminder_content: string | null
-          scheduled_for: string | null
           title: string
           type: string
           user_id: string
@@ -1782,8 +1876,6 @@ export type Database = {
           is_read?: boolean | null
           push_sent?: boolean | null
           push_sent_at?: string | null
-          reminder_content?: string | null
-          scheduled_for?: string | null
           title: string
           type: string
           user_id: string
@@ -1797,8 +1889,6 @@ export type Database = {
           is_read?: boolean | null
           push_sent?: boolean | null
           push_sent_at?: string | null
-          reminder_content?: string | null
-          scheduled_for?: string | null
           title?: string
           type?: string
           user_id?: string
@@ -1971,7 +2061,6 @@ export type Database = {
           auto_approve_contacts: boolean | null
           avatar_url: string | null
           billing_start_date: string | null
-          calendar_feed_token: string | null
           city: string | null
           country: string | null
           country_code: string | null
@@ -2009,7 +2098,6 @@ export type Database = {
           auto_approve_contacts?: boolean | null
           avatar_url?: string | null
           billing_start_date?: string | null
-          calendar_feed_token?: string | null
           city?: string | null
           country?: string | null
           country_code?: string | null
@@ -2047,7 +2135,6 @@ export type Database = {
           auto_approve_contacts?: boolean | null
           avatar_url?: string | null
           billing_start_date?: string | null
-          calendar_feed_token?: string | null
           city?: string | null
           country?: string | null
           country_code?: string | null
@@ -2730,50 +2817,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "project_generation_jobs_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      project_images: {
-        Row: {
-          alt_text: string | null
-          created_at: string | null
-          file_path: string | null
-          id: string
-          location: string | null
-          project_id: string | null
-          source: string | null
-          updated_at: string | null
-          url: string
-        }
-        Insert: {
-          alt_text?: string | null
-          created_at?: string | null
-          file_path?: string | null
-          id?: string
-          location?: string | null
-          project_id?: string | null
-          source?: string | null
-          updated_at?: string | null
-          url: string
-        }
-        Update: {
-          alt_text?: string | null
-          created_at?: string | null
-          file_path?: string | null
-          id?: string
-          location?: string | null
-          project_id?: string | null
-          source?: string | null
-          updated_at?: string | null
-          url?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "project_images_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -3807,135 +3850,6 @@ export type Database = {
           updated_at?: string
           user_id?: string
           video_url?: string
-        }
-        Relationships: []
-      }
-      user_business_cards: {
-        Row: {
-          address: string | null
-          card_name: string | null
-          card_slot: number
-          clean_colors: Json | null
-          company_name: string | null
-          company_style: Json | null
-          cover_photo_url: string | null
-          created_at: string | null
-          department: string | null
-          email: string | null
-          fashion_colors: Json | null
-          first_name: string
-          headline: string | null
-          icon_style: Json | null
-          id: string
-          is_public: boolean | null
-          job_title: string | null
-          last_name: string | null
-          logo_position: string | null
-          logo_url: string | null
-          minimal_colors: Json | null
-          mosaic_colors: Json | null
-          mosaic_palette_id: string | null
-          name_style: Json | null
-          phone: string | null
-          photo_shape: string | null
-          primary_color: string | null
-          professional_colors: Json | null
-          profile_photo_url: string | null
-          qr_code_url: string | null
-          secondary_color: string | null
-          share_slug: string
-          social_links: Json | null
-          template: string | null
-          template_id: string | null
-          title_style: Json | null
-          updated_at: string | null
-          user_id: string
-          view_count: number | null
-          website: string | null
-        }
-        Insert: {
-          address?: string | null
-          card_name?: string | null
-          card_slot?: number
-          clean_colors?: Json | null
-          company_name?: string | null
-          company_style?: Json | null
-          cover_photo_url?: string | null
-          created_at?: string | null
-          department?: string | null
-          email?: string | null
-          fashion_colors?: Json | null
-          first_name: string
-          headline?: string | null
-          icon_style?: Json | null
-          id?: string
-          is_public?: boolean | null
-          job_title?: string | null
-          last_name?: string | null
-          logo_position?: string | null
-          logo_url?: string | null
-          minimal_colors?: Json | null
-          mosaic_colors?: Json | null
-          mosaic_palette_id?: string | null
-          name_style?: Json | null
-          phone?: string | null
-          photo_shape?: string | null
-          primary_color?: string | null
-          professional_colors?: Json | null
-          profile_photo_url?: string | null
-          qr_code_url?: string | null
-          secondary_color?: string | null
-          share_slug?: string
-          social_links?: Json | null
-          template?: string | null
-          template_id?: string | null
-          title_style?: Json | null
-          updated_at?: string | null
-          user_id: string
-          view_count?: number | null
-          website?: string | null
-        }
-        Update: {
-          address?: string | null
-          card_name?: string | null
-          card_slot?: number
-          clean_colors?: Json | null
-          company_name?: string | null
-          company_style?: Json | null
-          cover_photo_url?: string | null
-          created_at?: string | null
-          department?: string | null
-          email?: string | null
-          fashion_colors?: Json | null
-          first_name?: string
-          headline?: string | null
-          icon_style?: Json | null
-          id?: string
-          is_public?: boolean | null
-          job_title?: string | null
-          last_name?: string | null
-          logo_position?: string | null
-          logo_url?: string | null
-          minimal_colors?: Json | null
-          mosaic_colors?: Json | null
-          mosaic_palette_id?: string | null
-          name_style?: Json | null
-          phone?: string | null
-          photo_shape?: string | null
-          primary_color?: string | null
-          professional_colors?: Json | null
-          profile_photo_url?: string | null
-          qr_code_url?: string | null
-          secondary_color?: string | null
-          share_slug?: string
-          social_links?: Json | null
-          template?: string | null
-          template_id?: string | null
-          title_style?: Json | null
-          updated_at?: string | null
-          user_id?: string
-          view_count?: number | null
-          website?: string | null
         }
         Relationships: []
       }
@@ -5553,7 +5467,6 @@ export type Database = {
       cleanup_old_conversations: { Args: never; Returns: undefined }
       cleanup_old_messages: { Args: never; Returns: undefined }
       cleanup_user_translations_after_20_days: { Args: never; Returns: number }
-      clear_whoop_cache: { Args: { p_user_id: string }; Returns: undefined }
       create_default_warranty_categories: {
         Args: { p_user_id: string }
         Returns: undefined
@@ -5636,8 +5549,6 @@ export type Database = {
         }
       }
       format_timestamp: { Args: { ts: string }; Returns: string }
-      generate_calendar_feed_token: { Args: never; Returns: string }
-      generate_calendar_token: { Args: never; Returns: string }
       generate_event_short_id: { Args: { event_uuid: string }; Returns: string }
       generate_maw3d_short_id: { Args: never; Returns: string }
       generate_task_short_id: { Args: never; Returns: string }
@@ -5665,43 +5576,6 @@ export type Database = {
           total_users: number
           unconfirmed_accounts: number
           unsubscribed_users: number
-        }[]
-      }
-      get_business_card_by_share_slug: {
-        Args: { p_share_slug: string }
-        Returns: {
-          address: string
-          card_name: string
-          card_slot: number
-          clean_colors: Json
-          company_name: string
-          company_style: Json
-          cover_photo_url: string
-          department: string
-          email: string
-          fashion_colors: Json
-          first_name: string
-          headline: string
-          icon_style: Json
-          job_title: string
-          last_name: string
-          logo_position: string
-          logo_url: string
-          minimal_colors: Json
-          mosaic_colors: Json
-          mosaic_palette_id: string
-          name_style: Json
-          phone: string
-          photo_shape: string
-          primary_color: string
-          professional_colors: Json
-          profile_photo_url: string
-          share_slug: string
-          social_links: Json
-          template: string
-          title_style: Json
-          user_id: string
-          website: string
         }[]
       }
       get_current_user_id: { Args: never; Returns: string }
