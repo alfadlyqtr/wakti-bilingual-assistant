@@ -427,6 +427,7 @@ async function classifySearchIntent(message: string, language: string): Promise<
     const prompt =
       `You are a routing classifier. Decide if the user request needs LIVE or time-sensitive data ` +
       `(weather now/tomorrow, prices, news, scores, flights, open now, nearby availability). ` +
+      `CRITICAL EXCEPTION: If user asks for "current time", "what time is it", or "today's date", return needsSearch: FALSE (system provides this). ` +
       `Return ONLY valid JSON with keys: needsSearch (true/false), confidence (0-1), reason (short).\n` +
       `User language: ${language}.\nUser message: "${message}"`;
 
@@ -911,9 +912,13 @@ CRITICAL OUTPUT FORMAT
 - Paragraph: for conversational replies.
 - Use Markdown links ONLY when a real URL is provided.
 
-TIME CAPABILITY (IMPORTANT)
-- You DO have the user's current local date/time provided below.
-- If the user asks "what time is it" or anything about current time/date, answer using the provided "Current local time".
+TIME CAPABILITY (CRITICAL - NO SEARCH NEEDED)
+- You DO have the user's current local date/time provided below in "Current local time".
+- If the user asks "what time is it", "what's the date", or anything about current time/date:
+  * Answer IMMEDIATELY using the provided "Current local time"
+  * DO NOT trigger a search
+  * DO NOT use google_search tool
+  * This is instant information you already have
 - Do NOT say you can't access real-time time/date.
 
 ${activeTrigger === 'chat' && chatSubmode === 'chat' ? `
@@ -1015,13 +1020,14 @@ Greetings, abdullah — wakto here. Friday, December 26, 2025 — 3:05 PM (Doha 
 CURRENT TIME CONTEXT
 - Current local time: ${localTime}
 
-⏰ CRITICAL TIMEZONE RULES (HIGHEST PRIORITY):
-1. The user's local time is shown above as "Current local time". This IS the user's timezone.
-2. When you find times in OTHER timezones (ET, PT, GMT, UTC, etc.), convert them to the user's local timezone.
-3. If a time is ALREADY in the user's local timezone (e.g., Doha time for a Doha user), DO NOT convert it again.
-4. Format for converted times: Show local time first, then original. Example: "3:00 AM (7:00 PM ET)"
-5. If the source time is already in the user's timezone, just show it once - no conversion needed.
-6. NEVER double-convert. If flight lands at "4:35 AM Doha time" and user is in Doha, just say "4:35 AM" - that IS their local time.
+⏰ TIME HANDLING (CRITICAL):
+1. The user's current time is shown above. Use this as your reference for "now".
+2. When reporting times from external sources (flights, events, schedules):
+   - Show times exactly as they appear in the source data
+   - Do NOT attempt timezone conversions unless explicitly needed
+   - If a time seems wrong, report what the source says without making assumptions
+3. NEVER report an event as "already happened" if its time is AFTER the current time shown above
+4. Always verify: Is this time in the past or future compared to "Current local time"?
 
 🔔 SMART REMINDER DETECTION (PROACTIVE ASSISTANT - HIGH PRIORITY)
 You have the ability to help users set reminders. Be PROACTIVE and SMART about this:
@@ -1050,6 +1056,8 @@ WHEN NOT TO OFFER:
 - Pure information queries with no actionable future component
 - Casual chat without any time-sensitive elements
 - Already offered a reminder for this specific event in the conversation
+- PAST EVENTS (CRITICAL): Never offer reminders for events that have already occurred (e.g., landed flights, past meetings).
+- If an event is in the past, acknowledge it happened but DO NOT offer a reminder.
 
 HOW TO HANDLE TIMING:
 - Ambiguous timing ("when I get home", "later") → Ask: "When do you expect that to be?"
@@ -1580,6 +1588,21 @@ function isWolframQuery(q: string): boolean {
   return false;
 }
 
+// Detect if query is asking for local time/date (which system provides)
+function isTimeQuery(q: string): boolean {
+  try {
+    const s = String(q || '').trim().toLowerCase();
+    if (!s) return false;
+    // English patterns
+    if (/\b(what time|current time|time now|time is it|what('s|s) the time|what date|todays date|date today|what day)\b/.test(s)) return true;
+    // Arabic patterns
+    if (/(كم الساعة|الساعة كم|الوقت الان|ماهو الوقت|تاريخ اليوم|اليوم كم|ايش اليوم|شو الوقت)\b/.test(s)) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 function isWaktiInvolved(q: string) {
   try {
     const s = String(q || '').trim();
@@ -1850,7 +1873,11 @@ serve(async (req) => {
         // Only run search intent gate for regular chat mode (NOT study mode)
         // Study mode should always go straight to Wolfram/AI without search interruption
         // SIMPLIFIED: Only auto-search at very high confidence (0.95+) to keep chat as chat
-        const shouldCheckSearchIntent = activeTrigger === 'chat' && chatSubmode === 'chat' && !isWaktiInvolved(message || '');
+        const shouldCheckSearchIntent = activeTrigger === 'chat' 
+          && chatSubmode === 'chat' 
+          && !isWaktiInvolved(message || '') 
+          && !isTimeQuery(message || '');
+
         if (shouldCheckSearchIntent) {
           try {
             const gate = await classifySearchIntent(message || '', language);
