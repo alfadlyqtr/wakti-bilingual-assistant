@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Wallet, Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { Wallet, Loader2, XCircle } from 'lucide-react';
 
 /**
  * WalletPass Page - Branded loading screen for Apple Wallet pass generation
- * This page shows a nice Wakti-branded UI while downloading the .pkpass file
+ * Opens the .pkpass URL directly so iOS handles it natively with "Add to Wallet"
  */
 export default function WalletPass() {
   const [searchParams] = useSearchParams();
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [status, setStatus] = useState<'loading' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
@@ -21,44 +21,17 @@ export default function WalletPass() {
         return;
       }
 
-      try {
-        // Fetch the .pkpass file from the Edge Function
-        const response = await fetch(
-          `https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-wallet-pass?data=${data}`
-        );
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(errorText || 'Failed to generate pass');
-        }
-
-        // Get the blob
-        const blob = await response.blob();
-        
-        // Create a download link
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'wakti-card.pkpass';
-        
-        // Trigger download - iOS Safari will handle .pkpass and show "Add to Wallet"
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        // Clean up
-        window.URL.revokeObjectURL(url);
-        
-        setStatus('success');
-      } catch (err) {
-        console.error('Wallet pass error:', err);
-        setStatus('error');
-        setErrorMessage(err instanceof Error ? err.message : 'Something went wrong');
-      }
+      // Build the direct URL to the Edge Function
+      // iOS Safari will automatically detect .pkpass content-type and show "Add to Wallet"
+      const passUrl = `https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-wallet-pass?data=${data}`;
+      
+      // Redirect directly to the .pkpass URL
+      // iOS handles application/vnd.apple.pkpass content-type natively
+      window.location.href = passUrl;
     };
 
-    // Small delay to show the loading screen
-    const timer = setTimeout(generatePass, 500);
+    // Small delay to show the loading screen briefly
+    const timer = setTimeout(generatePass, 300);
     return () => clearTimeout(timer);
   }, [searchParams]);
 
@@ -91,27 +64,6 @@ export default function WalletPass() {
             <p className="text-gray-400">
               Adding to Apple Wallet...
             </p>
-          </>
-        )}
-
-        {status === 'success' && (
-          <>
-            <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-4" />
-            <h1 className="text-2xl font-bold text-white mb-2">
-              Card Ready!
-            </h1>
-            <p className="text-gray-400 mb-6">
-              Tap "Add" to save to your Apple Wallet
-            </p>
-            <button
-              onClick={() => window.close()}
-              className="px-6 py-3 rounded-xl text-white font-medium"
-              style={{
-                background: 'linear-gradient(135deg, hsl(210, 100%, 65%) 0%, hsl(280, 70%, 65%) 100%)'
-              }}
-            >
-              Done
-            </button>
           </>
         )}
 
