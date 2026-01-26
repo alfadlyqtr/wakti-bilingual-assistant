@@ -105,6 +105,7 @@ import MusicStudio from "./pages/MusicStudio";
 import MusicShare from "./pages/MusicShare";
 import VideoShare from "./pages/VideoShare";
 import BusinessCardShare from "./pages/BusinessCardShare";
+import WalletPass from "./pages/WalletPass";
 import LettersCreate from "./pages/LettersCreate";
 import LettersWaiting from "./pages/LettersWaiting";
 import LettersJoin from "./pages/LettersJoin";
@@ -209,6 +210,9 @@ function App() {
                 <Route path="/maw3d/:shortId" element={<Maw3dView />} />
                 <Route path="/music/share/:id" element={<MusicShare />} />
                 <Route path="/video/:id" element={<VideoShare />} />
+                
+                {/* Wallet pass branded loading page (public) */}
+                <Route path="/wallet-pass" element={<WalletPass />} />
                 
                 {/* Protected user routes - AuthProvider is mounted once at top level */}
                 <Route path="/dashboard" element={
