@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-// WalletWallet API - Simple pass generation service
+// WalletWallet API for pass generation
 const WALLETWALLET_API_URL = "https://api.walletwallet.dev/api/pkpass";
 const WALLETWALLET_API_KEY = "ww_live_6ddc4463e273c526b6e1a951435df2f2";
 
@@ -70,15 +70,11 @@ serve(async (req) => {
       );
     }
 
-    // Build the pass title and value
     const fullName = `${cardData.firstName} ${cardData.lastName}`;
-    const title = cardData.company ? `${fullName} - ${cardData.company}` : fullName;
-    const label = cardData.jobTitle || "Business Card";
-    const value = cardData.email || cardData.phone || cardData.website || "";
-    
-    // Call WalletWallet API to generate the .pkpass file
-    console.log("Calling WalletWallet API for:", fullName);
-    
+    console.log("Generating wallet pass for:", fullName);
+
+    // Use WalletWallet API with enhanced fields
+    // Note: WalletWallet has limited customization, but we'll maximize what's available
     const walletResponse = await fetch(WALLETWALLET_API_URL, {
       method: "POST",
       headers: {
@@ -88,11 +84,24 @@ serve(async (req) => {
       body: JSON.stringify({
         barcodeValue: cardData.cardUrl,
         barcodeFormat: "QR",
-        title: title.substring(0, 50), // Limit title length
-        label: label.substring(0, 30),
-        value: value.substring(0, 50),
-        colorPreset: "dark", // Wakti dark theme
-        expirationDays: 365
+        // Use white/light theme like Blinq for cleaner look
+        colorPreset: "light",
+        // Primary info
+        title: fullName,
+        // Job title as label
+        label: cardData.jobTitle || "Business Card",
+        // Company as value
+        value: cardData.company || "",
+        // Additional fields shown on pass
+        secondaryLabel: cardData.email ? "EMAIL" : (cardData.phone ? "PHONE" : ""),
+        secondaryValue: cardData.email || cardData.phone || "",
+        // Back of pass info
+        backLabel: "Powered by Wakti AI",
+        backValue: cardData.cardUrl,
+        // Pass validity
+        expirationDays: 365,
+        // Organization name shown at top
+        organizationName: "Wakti AI"
       })
     });
 

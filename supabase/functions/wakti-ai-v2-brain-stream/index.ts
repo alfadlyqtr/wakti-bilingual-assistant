@@ -642,7 +642,7 @@ function buildSearchFollowupContents(
   return contents;
 }
 
-// Chat mode: gemini-2.5-flash with grounding (smooth, fast, conversational)
+// Chat mode: gemini-2.5-flash-lite for speed (smooth, fast, conversational)
 async function streamGemini25FlashGrounded(
   query: string,
   systemInstruction: string,
@@ -650,8 +650,8 @@ async function streamGemini25FlashGrounded(
   onToken: (token: string) => void
 ): Promise<string> {
   const key = getGeminiApiKey();
-  // Use stable gemini-2.5-flash for proper Google Search grounding support
-  const model = 'gemini-2.5-flash';
+  // Use gemini-2.5-flash-lite for fastest chat responses while maintaining quality
+  const model = 'gemini-2.5-flash-lite';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
 
   const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
@@ -659,7 +659,7 @@ async function streamGemini25FlashGrounded(
     if (Array.isArray(recentMessages) && recentMessages.length > 0) {
       const msgs = recentMessages
         .filter((m) => m && typeof m === 'object')
-        .slice(-30)
+        .slice(-20)
         .map((m) => m as Record<string, unknown>);
 
       for (const m of msgs) {
@@ -689,7 +689,7 @@ async function streamGemini25FlashGrounded(
     body.system_instruction = { parts: [{ text: systemInstruction }] };
   }
 
-  console.log('💬 CHAT GROUNDED: Streaming with Gemini 2.5 Flash + google_search...', {
+  console.log('💬 CHAT GROUNDED: Streaming with Gemini 2.5 Flash Lite + google_search...', {
     contentsCount: contents.length,
     firstRole: contents[0]?.role,
     lastRole: contents[contents.length - 1]?.role,
@@ -2054,9 +2054,9 @@ serve(async (req) => {
           { role: 'system', content: systemPrompt }
         ];
 
-        // Add history (Increased from 15 to 30 for better conversation context retention)
+        // Add history (20 messages provides good context while keeping responses fast)
         if (Array.isArray(recentMessages) && recentMessages.length > 0) {
-          const historyMessages = (recentMessages as Array<Record<string, unknown>>).slice(-30);
+          const historyMessages = (recentMessages as Array<Record<string, unknown>>).slice(-20);
           historyMessages.forEach((msg: Record<string, unknown>) => {
             const role = typeof msg.role === 'string' ? msg.role : undefined;
             const content = typeof msg.content === 'string' ? msg.content : '';

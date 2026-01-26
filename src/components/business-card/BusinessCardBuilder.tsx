@@ -1915,27 +1915,17 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
         // Dismiss loading toast
         toast.dismiss(loadingToastId);
         
-        // Check if running in Natively wrapper - use external browser for .pkpass
-        const isNatively = typeof (window as any).natively !== 'undefined' || 
-                          typeof (window as any).Natively !== 'undefined' ||
-                          navigator.userAgent.includes('Natively');
+        // For iOS: Use Safari to handle .pkpass files natively
+        // Safari will automatically show "Add to Wallet" prompt without loading screen
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
         
-        if (isNatively) {
-          // Use Natively's openExternalURL to open in Safari which handles .pkpass properly
-          const natively = (window as any).natively || (window as any).Natively;
-          if (natively?.openExternalURL) {
-            natively.openExternalURL(passUrl);
-            toast.success(isRTL ? 'جارٍ فتح المحفظة...' : 'Opening wallet pass...');
-          } else if (natively?.browser?.openExternalURL) {
-            natively.browser.openExternalURL(passUrl);
-            toast.success(isRTL ? 'جارٍ فتح المحفظة...' : 'Opening wallet pass...');
-          } else {
-            // Fallback: open in new window
-            window.open(passUrl, '_blank');
-            toast.info(isRTL ? 'جارٍ تحميل بطاقة المحفظة...' : 'Downloading wallet pass...');
-          }
+        if (isIOS) {
+          // On iOS, directly navigate to the URL - Safari handles .pkpass natively
+          // This avoids the in-app browser loading screen
+          window.location.href = passUrl;
+          toast.success(isRTL ? 'جارٍ فتح المحفظة...' : 'Opening Apple Wallet...');
         } else {
-          // Standard browser - open in new tab for iOS Safari to handle .pkpass
+          // For non-iOS, open in new tab
           window.open(passUrl, '_blank');
           toast.info(isRTL ? 'جارٍ تحميل بطاقة المحفظة...' : 'Downloading wallet pass...');
         }
