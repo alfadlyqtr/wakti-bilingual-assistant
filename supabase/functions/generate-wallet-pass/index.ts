@@ -59,8 +59,29 @@ serve(async (req) => {
         return new Response("Invalid data parameter", { status: 400 });
       }
     } else {
-      const body = await req.json();
-      cardData = body.cardData;
+      const contentType = req.headers.get("content-type") || "";
+      
+      if (contentType.includes("application/json")) {
+        const body = await req.json();
+        cardData = body.cardData;
+      } else if (contentType.includes("form")) {
+        // Handle form submission (application/x-www-form-urlencoded or multipart/form-data)
+        const formData = await req.formData();
+        const cardDataStr = formData.get("cardData");
+        
+        if (cardDataStr && typeof cardDataStr === "string") {
+          try {
+            cardData = JSON.parse(cardDataStr);
+          } catch (e) {
+            console.error("Failed to parse cardData from form:", e);
+            return new Response("Invalid cardData JSON", { status: 400 });
+          }
+        } else {
+           return new Response("Missing cardData in form", { status: 400 });
+        }
+      } else {
+        return new Response("Unsupported Content-Type", { status: 400 });
+      }
     }
 
     if (!cardData || !cardData.firstName || !cardData.lastName) {

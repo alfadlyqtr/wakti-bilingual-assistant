@@ -1903,31 +1903,40 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
         });
       } else {
         // Fallback to web approach for browser users
-        console.log('Falling back to web approach');
-        // Encode the data as base64 for URL parameter
-        const jsonString = JSON.stringify(cardData);
-        const encodedJson = encodeURIComponent(jsonString);
-        const encodedData = btoa(unescape(encodedJson));
-        
-        // Build the direct URL to the Edge Function
-        const passUrl = `https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-wallet-pass?data=${encodeURIComponent(encodedData)}`;
+        console.log('Falling back to web approach - Using POST Form');
         
         // Dismiss loading toast
         toast.dismiss(loadingToastId);
-        
-        // For iOS: Use Safari to handle .pkpass files natively
-        // Safari will automatically show "Add to Wallet" prompt without loading screen
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-        
-        if (isIOS) {
-          // On iOS, directly navigate to the URL - Safari handles .pkpass natively
-          // This avoids the in-app browser loading screen
-          window.location.href = passUrl;
-          toast.success(isRTL ? 'جارٍ فتح المحفظة...' : 'Opening Apple Wallet...');
-        } else {
-          // For non-iOS, open in new tab
-          window.open(passUrl, '_blank');
-          toast.info(isRTL ? 'جارٍ تحميل بطاقة المحفظة...' : 'Downloading wallet pass...');
+
+        try {
+          // Create a form for POST submission
+          // This avoids URL length limits and encoding issues
+          const form = document.createElement('form');
+          form.method = 'POST';
+          form.action = 'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-wallet-pass';
+          // Open in new tab to avoid navigating away from the app
+          form.target = '_blank';
+          form.style.display = 'none';
+          
+          // Add card data as JSON input
+          const input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = 'cardData';
+          input.value = JSON.stringify(cardData);
+          form.appendChild(input);
+          
+          // Add to document, submit, then remove
+          document.body.appendChild(form);
+          form.submit();
+          
+          // Remove the form after submission
+          setTimeout(() => {
+            document.body.removeChild(form);
+            toast.success(isRTL ? 'جارٍ فتح المحفظة...' : 'Opening Apple Wallet...');
+          }, 1000);
+        } catch (formError) {
+          console.error('Form submission error:', formError);
+          toast.error(isRTL ? 'حدث خطأ. حاول مرة أخرى' : 'Something went wrong. Please try again.');
         }
       }
     } catch (error) {
