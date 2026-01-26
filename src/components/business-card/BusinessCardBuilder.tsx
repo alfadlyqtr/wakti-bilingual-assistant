@@ -1912,23 +1912,33 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
         // Build the direct URL to the Edge Function
         const passUrl = `https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-wallet-pass?data=${encodeURIComponent(encodedData)}`;
         
-        setTimeout(() => {
-          // Remove loading toast before redirecting
-          toast.dismiss(loadingToastId);
-          
-          // For web users, we'll try using a normal anchor tag instead of changing location
-          const link = document.createElement('a');
-          link.href = passUrl;
-          link.setAttribute('download', `${formData.firstName}_${formData.lastName}.pkpass`);
-          link.style.display = 'none';
-          document.body.appendChild(link);
-          link.click();
-          
-          // Add a fallback for Safari
-          setTimeout(() => {
-            window.location.href = passUrl;
-          }, 100);
-        }, 300);
+        // Dismiss loading toast
+        toast.dismiss(loadingToastId);
+        
+        // Check if running in Natively wrapper - use external browser for .pkpass
+        const isNatively = typeof (window as any).natively !== 'undefined' || 
+                          typeof (window as any).Natively !== 'undefined' ||
+                          navigator.userAgent.includes('Natively');
+        
+        if (isNatively) {
+          // Use Natively's openExternalURL to open in Safari which handles .pkpass properly
+          const natively = (window as any).natively || (window as any).Natively;
+          if (natively?.openExternalURL) {
+            natively.openExternalURL(passUrl);
+            toast.success(isRTL ? 'جارٍ فتح المحفظة...' : 'Opening wallet pass...');
+          } else if (natively?.browser?.openExternalURL) {
+            natively.browser.openExternalURL(passUrl);
+            toast.success(isRTL ? 'جارٍ فتح المحفظة...' : 'Opening wallet pass...');
+          } else {
+            // Fallback: open in new window
+            window.open(passUrl, '_blank');
+            toast.info(isRTL ? 'جارٍ تحميل بطاقة المحفظة...' : 'Downloading wallet pass...');
+          }
+        } else {
+          // Standard browser - open in new tab for iOS Safari to handle .pkpass
+          window.open(passUrl, '_blank');
+          toast.info(isRTL ? 'جارٍ تحميل بطاقة المحفظة...' : 'Downloading wallet pass...');
+        }
       }
     } catch (error) {
       console.error('Wallet pass error:', error);
