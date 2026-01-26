@@ -1860,7 +1860,7 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
     }
   };
 
-  const handleAddToWallet = () => {
+  const handleAddToWallet = async () => {
     // Validate required fields
     if (!formData.firstName || !formData.lastName) {
       toast.error(isRTL ? 'يرجى إدخال الاسم الأول والأخير' : 'Please enter first and last name');
@@ -1902,29 +1902,46 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
           }
         });
       } else {
-        // Fallback to web approach for browser users
-        console.log('Falling back to web approach');
-        
-        // Dismiss loading toast
-        toast.dismiss(loadingToastId);
+        // Fallback to web approach - fetch pass invisibly then trigger download
+        console.log('Fetching wallet pass in background');
 
         try {
           // Use simple URL-safe base64 encoding
           const jsonString = JSON.stringify(cardData);
-          // Convert to base64 and make URL-safe
           const base64 = btoa(unescape(encodeURIComponent(jsonString)));
           const urlSafeBase64 = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
           
-          // Use the branded wallet-pass page instead of direct Supabase URL
-          // This shows a nice Wakti-branded loading screen
-          const passUrl = `${window.location.origin}/wallet-pass?data=${urlSafeBase64}`;
+          const passUrl = `https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-wallet-pass?data=${urlSafeBase64}`;
           
-          console.log('Opening branded wallet pass page');
+          // Fetch the .pkpass file in the background (user doesn't see the URL)
+          const response = await fetch(passUrl);
           
-          // Navigate to the branded page
-          window.location.href = passUrl;
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Wallet pass error:', errorText);
+            toast.dismiss(loadingToastId);
+            toast.error(isRTL ? 'فشل في إنشاء البطاقة' : 'Failed to generate pass');
+            return;
+          }
+          
+          // Get the blob
+          const blob = await response.blob();
+          
+          // Create a blob URL (this is a local URL, not the Edge Function URL)
+          const blobUrl = URL.createObjectURL(blob);
+          
+          // Dismiss loading toast before triggering download
+          toast.dismiss(loadingToastId);
+          
+          // Open the blob URL - iOS will detect the .pkpass content type and show "Add to Wallet"
+          window.location.href = blobUrl;
+          
+          // Clean up blob URL after a delay
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+          
         } catch (err) {
           console.error('Wallet pass error:', err);
+          toast.dismiss(loadingToastId);
           toast.error(isRTL ? 'حدث خطأ. حاول مرة أخرى' : 'Something went wrong. Please try again.');
         }
       }
