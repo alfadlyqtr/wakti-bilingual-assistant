@@ -1918,10 +1918,42 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
           // Build the direct URL to the Edge Function
           const passUrl = `https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-wallet-pass?data=${urlSafeBase64}`;
           
-          console.log('Opening wallet pass URL');
+          console.log('Opening wallet pass URL:', passUrl.substring(0, 100) + '...');
           
-          // Open in new window - iOS Safari will handle .pkpass automatically
-          window.open(passUrl, '_blank');
+          // Check if we're in Natively wrapper - need to open in Safari externally
+          const natively = (window as any).natively || (window as any).Natively;
+          const NativelyBrowser = (window as any).NativelyBrowser;
+          
+          if (NativelyBrowser) {
+            // Use NativelyBrowser to open in Safari (external browser)
+            console.log('Using NativelyBrowser.openExternalURL');
+            const browser = new NativelyBrowser();
+            if (browser.openExternalURL) {
+              browser.openExternalURL(passUrl);
+              toast.success(isRTL ? 'جارٍ فتح المحفظة...' : 'Opening Apple Wallet...');
+              return;
+            }
+          }
+          
+          if (natively?.browser?.openExternalURL) {
+            // Alternative Natively API
+            console.log('Using natively.browser.openExternalURL');
+            natively.browser.openExternalURL(passUrl);
+            toast.success(isRTL ? 'جارٍ فتح المحفظة...' : 'Opening Apple Wallet...');
+            return;
+          }
+          
+          if (natively?.openExternalURL) {
+            console.log('Using natively.openExternalURL');
+            natively.openExternalURL(passUrl);
+            toast.success(isRTL ? 'جارٍ فتح المحفظة...' : 'Opening Apple Wallet...');
+            return;
+          }
+          
+          // Standard browser - use window.location.href for iOS Safari to handle .pkpass
+          // This works better than window.open for .pkpass files
+          console.log('Using window.location.href');
+          window.location.href = passUrl;
           
           toast.success(isRTL ? 'جارٍ فتح المحفظة...' : 'Opening Apple Wallet...');
         } catch (err) {

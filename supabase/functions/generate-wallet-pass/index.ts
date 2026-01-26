@@ -1,16 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 // WalletWallet API for pass generation
+// API Docs: https://walletwallet.dev/docs
 const WALLETWALLET_API_URL = "https://api.walletwallet.dev/api/pkpass";
 const WALLETWALLET_API_KEY = "ww_live_6ddc4463e273c526b6e1a951435df2f2";
 
-// CORS headers configured to ensure proper handling on iOS devices
+// CORS headers
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-  "Access-Control-Expose-Headers": "Content-Type, Content-Disposition, Content-Length, Cache-Control, Pragma, Expires",
-  "Access-Control-Allow-Credentials": "true"
 };
 
 interface BusinessCardData {
@@ -22,9 +21,6 @@ interface BusinessCardData {
   jobTitle?: string;
   website?: string;
   cardUrl: string;
-  qrCodeBase64?: string;
-  profilePhotoUrl?: string;
-  logoUrl?: string;
 }
 
 serve(async (req) => {
@@ -35,98 +31,59 @@ serve(async (req) => {
   try {
     let cardData: BusinessCardData;
     
-    // Support both GET (direct URL for iOS) and POST (from frontend)
+    // Support GET with base64 encoded data
     if (req.method === "GET") {
       const url = new URL(req.url);
       const dataParam = url.searchParams.get("data");
       if (!dataParam) {
-        return new Response("Missing data parameter", { status: 400 });
+        return new Response("Missing data parameter", { status: 400, headers: corsHeaders });
       }
       try {
         // Convert URL-safe base64 back to standard base64
         let base64 = dataParam.replace(/-/g, '+').replace(/_/g, '/');
-        // Add padding if needed
-        while (base64.length % 4) {
-          base64 += '=';
-        }
-        
-        // Decode base64 to string
+        while (base64.length % 4) base64 += '=';
         const decoded = atob(base64);
-        // Handle UTF-8 encoding
         const jsonString = decodeURIComponent(escape(decoded));
-        
         cardData = JSON.parse(jsonString);
-        console.log("Successfully decoded card data:", cardData.firstName, cardData.lastName);
+        console.log("Decoded card data for:", cardData.firstName, cardData.lastName);
       } catch (e) {
-        console.error("Failed to decode data:", e);
-        return new Response("Invalid data parameter: " + String(e), { status: 400 });
+        console.error("Decode error:", e);
+        return new Response("Invalid data: " + String(e), { status: 400, headers: corsHeaders });
       }
     } else {
-      const contentType = req.headers.get("content-type") || "";
-      
-      if (contentType.includes("application/json")) {
-        const body = await req.json();
-        cardData = body.cardData;
-      } else if (contentType.includes("form")) {
-        // Handle form submission (application/x-www-form-urlencoded or multipart/form-data)
-        const formData = await req.formData();
-        const cardDataStr = formData.get("cardData");
-        
-        if (cardDataStr && typeof cardDataStr === "string") {
-          try {
-            cardData = JSON.parse(cardDataStr);
-          } catch (e) {
-            console.error("Failed to parse cardData from form:", e);
-            return new Response("Invalid cardData JSON", { status: 400 });
-          }
-        } else {
-           return new Response("Missing cardData in form", { status: 400 });
-        }
-      } else {
-        return new Response("Unsupported Content-Type", { status: 400 });
-      }
+      // POST with JSON body
+      const body = await req.json();
+      cardData = body.cardData || body;
     }
 
-    if (!cardData || !cardData.firstName || !cardData.lastName) {
-      return new Response(
-        JSON.stringify({ error: "Missing required card data" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (!cardData?.firstName || !cardData?.lastName) {
+      return new Response("Missing firstName or lastName", { status: 400, headers: corsHeaders });
     }
 
     const fullName = `${cardData.firstName} ${cardData.lastName}`;
     console.log("Generating wallet pass for:", fullName);
 
-    // Use WalletWallet API with enhanced fields
-    // Note: WalletWallet has limited customization, but we'll maximize what's available
+    // Build request body matching WalletWallet API docs EXACTLY
+    // Only use documented fields: barcodeValue, barcodeFormat, title, label, value, colorPreset, expirationDays
+    const apiBody = {
+      barcodeValue: cardData.cardUrl || `https://wakti.app/card/${cardData.firstName.toLowerCase()}-${cardData.lastName.toLowerCase()}`,
+      barcodeFormat: "QR",
+      title: cardData.company ? `${fullName} - ${cardData.company}` : fullName,
+      label: cardData.jobTitle || "Contact",
+      value: cardData.email || cardData.phone || "",
+      colorPreset: "dark",
+      expirationDays: 365
+    };
+
+    console.log("Calling WalletWallet API with:", JSON.stringify(apiBody));
+
     const walletResponse = await fetch(WALLETWALLET_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${WALLETWALLET_API_KEY}`
       },
-      body: JSON.stringify({
-        barcodeValue: cardData.cardUrl,
-        barcodeFormat: "QR",
-        // Use white/light theme like Blinq for cleaner look
-        colorPreset: "light",
-        // Primary info
-        title: fullName,
-        // Job title as label
-        label: cardData.jobTitle || "Business Card",
-        // Company as value
-        value: cardData.company || "",
-        // Additional fields shown on pass
-        secondaryLabel: cardData.email ? "EMAIL" : (cardData.phone ? "PHONE" : ""),
-        secondaryValue: cardData.email || cardData.phone || "",
-        // Back of pass info
-        backLabel: "Powered by Wakti AI",
-        backValue: cardData.cardUrl,
-        // Pass validity
-        expirationDays: 365,
-        // Organization name shown at top
-        organizationName: "Wakti AI"
-      })
+      body: JSON.stringify(apiBody)
     });
 
     if (!walletResponse.ok) {
