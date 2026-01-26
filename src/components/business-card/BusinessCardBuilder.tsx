@@ -1903,39 +1903,29 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
         });
       } else {
         // Fallback to web approach for browser users
-        console.log('Falling back to web approach - Using POST Form');
+        console.log('Falling back to web approach');
         
         // Dismiss loading toast
         toast.dismiss(loadingToastId);
 
         try {
-          // Create a form for POST submission
-          // This avoids URL length limits and encoding issues
-          const form = document.createElement('form');
-          form.method = 'POST';
-          form.action = 'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-wallet-pass';
-          // Open in new tab to avoid navigating away from the app
-          form.target = '_blank';
-          form.style.display = 'none';
+          // Use simple URL-safe base64 encoding
+          const jsonString = JSON.stringify(cardData);
+          // Convert to base64 and make URL-safe
+          const base64 = btoa(unescape(encodeURIComponent(jsonString)));
+          const urlSafeBase64 = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
           
-          // Add card data as JSON input
-          const input = document.createElement('input');
-          input.type = 'hidden';
-          input.name = 'cardData';
-          input.value = JSON.stringify(cardData);
-          form.appendChild(input);
+          // Build the direct URL to the Edge Function
+          const passUrl = `https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-wallet-pass?data=${urlSafeBase64}`;
           
-          // Add to document, submit, then remove
-          document.body.appendChild(form);
-          form.submit();
+          console.log('Opening wallet pass URL');
           
-          // Remove the form after submission
-          setTimeout(() => {
-            document.body.removeChild(form);
-            toast.success(isRTL ? 'جارٍ فتح المحفظة...' : 'Opening Apple Wallet...');
-          }, 1000);
-        } catch (formError) {
-          console.error('Form submission error:', formError);
+          // Open in new window - iOS Safari will handle .pkpass automatically
+          window.open(passUrl, '_blank');
+          
+          toast.success(isRTL ? 'جارٍ فتح المحفظة...' : 'Opening Apple Wallet...');
+        } catch (err) {
+          console.error('Wallet pass error:', err);
           toast.error(isRTL ? 'حدث خطأ. حاول مرة أخرى' : 'Something went wrong. Please try again.');
         }
       }

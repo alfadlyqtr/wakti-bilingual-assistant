@@ -43,20 +43,23 @@ serve(async (req) => {
         return new Response("Missing data parameter", { status: 400 });
       }
       try {
-        let jsonString;
-        try {
-          const decoded = atob(dataParam);
-          jsonString = decodeURIComponent(escape(decoded));
-        } catch (_decodeErr) {
-          console.log("First decode method failed, trying fallback");
-          const decoded = atob(dataParam.replace(/-/g, '+').replace(/_/g, '/'));
-          jsonString = decoded;
+        // Convert URL-safe base64 back to standard base64
+        let base64 = dataParam.replace(/-/g, '+').replace(/_/g, '/');
+        // Add padding if needed
+        while (base64.length % 4) {
+          base64 += '=';
         }
+        
+        // Decode base64 to string
+        const decoded = atob(base64);
+        // Handle UTF-8 encoding
+        const jsonString = decodeURIComponent(escape(decoded));
+        
         cardData = JSON.parse(jsonString);
         console.log("Successfully decoded card data:", cardData.firstName, cardData.lastName);
       } catch (e) {
         console.error("Failed to decode data:", e);
-        return new Response("Invalid data parameter", { status: 400 });
+        return new Response("Invalid data parameter: " + String(e), { status: 400 });
       }
     } else {
       const contentType = req.headers.get("content-type") || "";
