@@ -1,11 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { decode as base64Decode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
-import { crypto } from "https://deno.land/std@0.168.0/crypto/mod.ts";
-import { JSZip } from "https://deno.land/x/jszip@0.11.0/mod.ts";
-import forge from "npm:node-forge@1.3.1";
+
+// WalletWallet API - Simple pass generation service
+const WALLETWALLET_API_URL = "https://api.walletwallet.dev/api/pkpass";
+const WALLETWALLET_API_KEY = "ww_live_6ddc4463e273c526b6e1a951435df2f2";
 
 // CORS headers configured to ensure proper handling on iOS devices
-// Extended CORS headers to ensure iOS Safari handles the response correctly
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -28,12 +27,6 @@ interface BusinessCardData {
   logoUrl?: string;
 }
 
-const WAKTI_COLORS = {
-  background: "rgb(6, 5, 65)",
-  foreground: "rgb(242, 242, 242)",
-  label: "rgb(133, 131, 132)",
-};
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -50,15 +43,11 @@ serve(async (req) => {
         return new Response("Missing data parameter", { status: 400 });
       }
       try {
-        // Handle URL-safe base64 encoding and properly decode for Unicode
-        // This is more resilient to encoding issues that can occur with btoa/atob
         let jsonString;
         try {
-          // First try the Unicode-safe approach with escape/unescape
           const decoded = atob(dataParam);
           jsonString = decodeURIComponent(escape(decoded));
         } catch (_decodeErr) {
-          // If that fails, try direct base64 decode (fallback)
           console.log("First decode method failed, trying fallback");
           const decoded = atob(dataParam.replace(/-/g, '+').replace(/_/g, '/'));
           jsonString = decoded;
@@ -81,33 +70,58 @@ serve(async (req) => {
       );
     }
 
-    const PASS_TYPE_ID = Deno.env.get("APPLE_PASS_TYPE_ID");
-    const TEAM_ID = Deno.env.get("APPLE_TEAM_ID");
-    const PASS_CERT_BASE64 = Deno.env.get("APPLE_PASS_CERTIFICATE_BASE64");
-    const PASS_CERT_PASSWORD = Deno.env.get("APPLE_PASS_CERTIFICATE_PASSWORD");
-    const WWDR_CERT_BASE64 = Deno.env.get("APPLE_WWDR_CERTIFICATE_BASE64");
+    // Build the pass title and value
+    const fullName = `${cardData.firstName} ${cardData.lastName}`;
+    const title = cardData.company ? `${fullName} - ${cardData.company}` : fullName;
+    const label = cardData.jobTitle || "Business Card";
+    const value = cardData.email || cardData.phone || cardData.website || "";
+    
+    // Call WalletWallet API to generate the .pkpass file
+    console.log("Calling WalletWallet API for:", fullName);
+    
+    const walletResponse = await fetch(WALLETWALLET_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${WALLETWALLET_API_KEY}`
+      },
+      body: JSON.stringify({
+        barcodeValue: cardData.cardUrl,
+        barcodeFormat: "QR",
+        title: title.substring(0, 50), // Limit title length
+        label: label.substring(0, 30),
+        value: value.substring(0, 50),
+        colorPreset: "dark", // Wakti dark theme
+        expirationDays: 365
+      })
+    });
 
-    if (!PASS_TYPE_ID || !TEAM_ID || !PASS_CERT_BASE64 || !WWDR_CERT_BASE64) {
-      console.log("Apple Wallet certificates not configured.");
+    if (!walletResponse.ok) {
+      const errorText = await walletResponse.text();
+      console.error("WalletWallet API error:", walletResponse.status, errorText);
+      
+      let errorMessage = "Failed to generate wallet pass";
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMessage = errorJson.error || errorMessage;
+      } catch {
+        // Use default error message
+      }
+      
       return new Response(
-        JSON.stringify({ error: "certificates_not_configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: errorMessage }),
+        { status: walletResponse.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Generate the .pkpass file
-    const pkpassData = await generatePkpass(cardData, PASS_TYPE_ID, TEAM_ID, PASS_CERT_BASE64, PASS_CERT_PASSWORD || "", WWDR_CERT_BASE64);
-    
-    const filename = `${cardData.firstName}_${cardData.lastName}.pkpass`;
-
-    // Return the .pkpass file directly with proper headers
-    // This is what makes iOS show the native "Add to Wallet" UI
-    // We must use Uint8Array for the body, not ArrayBuffer, to ensure proper iOS handling
+    // Get the .pkpass binary data
+    const pkpassData = await walletResponse.arrayBuffer();
     const uint8Array = new Uint8Array(pkpassData);
     
-    // iOS expects a proper binary response with these exact headers to trigger the native wallet UI
-    // Important: iOS Safari needs exact headers to trigger the native Wallet UI
-    // Return with very specific headers that iOS needs to recognize as a Wallet pass
+    const filename = `${cardData.firstName}_${cardData.lastName}.pkpass`;
+    console.log("Successfully generated pass:", filename, "size:", uint8Array.length);
+
+    // Return the .pkpass file with proper headers for iOS
     return new Response(uint8Array, {
       status: 200,
       headers: {
@@ -115,15 +129,11 @@ serve(async (req) => {
         "Content-Type": "application/vnd.apple.pkpass",
         "Content-Disposition": `attachment; filename="${filename}"`,
         "Content-Length": uint8Array.length.toString(),
-        // Prevent caching to ensure fresh content
         "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
         "Pragma": "no-cache",
         "Expires": "0"
       }
     });
-    
-    // Note: iOS Safari intercepts responses with Content-Type: application/vnd.apple.pkpass
-    // and displays the native "Add to Wallet" UI automatically
 
   } catch (error) {
     console.error("Error generating wallet pass:", error);
@@ -133,319 +143,3 @@ serve(async (req) => {
     );
   }
 });
-
-async function generatePkpass(
-  cardData: BusinessCardData,
-  passTypeId: string,
-  teamId: string,
-  p12Base64: string,
-  p12Password: string,
-  wwdrBase64: string
-): Promise<Uint8Array> {
-  const passJson = createPassJson(cardData, passTypeId, teamId);
-  const zip = new JSZip();
-  
-  const passJsonString = JSON.stringify(passJson, null, 2);
-  zip.addFile("pass.json", new TextEncoder().encode(passJsonString));
-
-  // Create proper PNG icons with Wakti branding
-  const iconData = createColoredPng(29, 29, [6, 5, 65]);
-  const icon2xData = createColoredPng(58, 58, [6, 5, 65]);
-  const icon3xData = createColoredPng(87, 87, [6, 5, 65]);
-  
-  zip.addFile("icon.png", iconData);
-  zip.addFile("icon@2x.png", icon2xData);
-  zip.addFile("icon@3x.png", icon3xData);
-
-  const logoData = createColoredPng(160, 50, [6, 5, 65]);
-  const logo2xData = createColoredPng(320, 100, [6, 5, 65]);
-  
-  zip.addFile("logo.png", logoData);
-  zip.addFile("logo@2x.png", logo2xData);
-
-  // If there's a thumbnail/profile photo URL, we could fetch it here
-  // For now, create a placeholder thumbnail
-  const thumbData = createColoredPng(90, 90, [6, 5, 65]);
-  const thumb2xData = createColoredPng(180, 180, [6, 5, 65]);
-  zip.addFile("thumbnail.png", thumbData);
-  zip.addFile("thumbnail@2x.png", thumb2xData);
-
-  // Build manifest with SHA1 hashes
-  const manifest: Record<string, string> = {};
-  const filesToHash = [
-    { name: "pass.json", data: new TextEncoder().encode(passJsonString) },
-    { name: "icon.png", data: iconData },
-    { name: "icon@2x.png", data: icon2xData },
-    { name: "icon@3x.png", data: icon3xData },
-    { name: "logo.png", data: logoData },
-    { name: "logo@2x.png", data: logo2xData },
-    { name: "thumbnail.png", data: thumbData },
-    { name: "thumbnail@2x.png", data: thumb2xData },
-  ];
-
-  for (const file of filesToHash) {
-    const hash = await crypto.subtle.digest("SHA-1", file.data);
-    manifest[file.name] = Array.from(new Uint8Array(hash))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-  }
-
-  const manifestString = JSON.stringify(manifest);
-  zip.addFile("manifest.json", new TextEncoder().encode(manifestString));
-
-  // Sign the manifest
-  const signature = signManifest(manifestString, p12Base64, p12Password, wwdrBase64);
-  zip.addFile("signature", signature);
-
-  return await zip.generateAsync({ type: "uint8array" });
-}
-
-function signManifest(manifest: string, p12Base64: string, p12Password: string, wwdrBase64: string): Uint8Array {
-  const p12Der = base64Decode(p12Base64);
-  const p12Asn1 = forge.asn1.fromDer(new forge.util.ByteStringBuffer(p12Der));
-  const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, p12Password);
-
-  let key: any = null;
-  let cert: any = null;
-
-  for (const safeContents of p12.safeContents) {
-    for (const safeBag of safeContents.safeBags) {
-      if (safeBag.key) {
-        key = safeBag.key;
-      }
-      if (safeBag.cert) {
-        cert = safeBag.cert;
-      }
-    }
-  }
-
-  if (!key || !cert) {
-    throw new Error("Could not find key or certificate in P12");
-  }
-
-  const wwdrDer = base64Decode(wwdrBase64);
-  const wwdrAsn1 = forge.asn1.fromDer(new forge.util.ByteStringBuffer(wwdrDer));
-  const wwdrCert = forge.pki.certificateFromAsn1(wwdrAsn1);
-
-  const p7 = forge.pkcs7.createSignedData();
-  p7.content = forge.util.createBuffer(manifest, "utf8");
-  p7.addCertificate(cert);
-  p7.addCertificate(wwdrCert);
-  
-  p7.addSigner({
-    key: key,
-    certificate: cert,
-    digestAlgorithm: forge.pki.oids.sha1,
-    authenticatedAttributes: [
-      {
-        type: forge.pki.oids.contentType,
-        value: forge.pki.oids.data
-      },
-      {
-        type: forge.pki.oids.messageDigest,
-        // value will be auto-populated
-      },
-      {
-        type: forge.pki.oids.signingTime,
-        // value will be auto-populated
-      }
-    ]
-  });
-
-  p7.sign({ detached: true });
-
-  const signatureAsn1 = p7.toAsn1();
-  const signatureDer = forge.asn1.toDer(signatureAsn1).getBytes();
-  
-  const signatureBytes = new Uint8Array(signatureDer.length);
-  for (let i = 0; i < signatureDer.length; i++) {
-    signatureBytes[i] = signatureDer.charCodeAt(i);
-  }
-
-  return signatureBytes;
-}
-
-function createPassJson(data: BusinessCardData, passTypeId: string, teamId: string) {
-  const serialNumber = crypto.randomUUID();
-  
-  return {
-    formatVersion: 1,
-    passTypeIdentifier: passTypeId,
-    teamIdentifier: teamId,
-    serialNumber: serialNumber,
-    organizationName: "Wakti AI",
-    description: `${data.firstName} ${data.lastName} - Business Card`,
-    logoText: data.company || "Wakti",
-    foregroundColor: WAKTI_COLORS.foreground,
-    backgroundColor: WAKTI_COLORS.background,
-    labelColor: WAKTI_COLORS.label,
-    generic: {
-      primaryFields: [
-        { key: "name", label: "NAME", value: `${data.firstName} ${data.lastName}` }
-      ],
-      secondaryFields: [
-        { key: "title", label: "TITLE", value: data.jobTitle || "" },
-        { key: "company", label: "COMPANY", value: data.company || "" }
-      ],
-      auxiliaryFields: [
-        { key: "phone", label: "PHONE", value: data.phone || "" },
-        { key: "email", label: "EMAIL", value: data.email || "" }
-      ],
-      backFields: [
-        { key: "website", label: "Website", value: data.website || "" },
-        { key: "cardUrl", label: "Digital Card", value: data.cardUrl }
-      ]
-    },
-    barcodes: [
-      { format: "PKBarcodeFormatQR", message: data.cardUrl, messageEncoding: "iso-8859-1" }
-    ],
-    webServiceURL: "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1",
-    authenticationToken: serialNumber
-  };
-}
-
-// Generate a simple colored PNG image
-// This creates a valid PNG with the specified dimensions and RGB color
-function createColoredPng(width: number, height: number, rgb: [number, number, number]): Uint8Array {
-  // For simplicity, we'll create a minimal valid PNG
-  // Apple Wallet requires proper PNGs but accepts simple solid color images
-  
-  // PNG file structure:
-  // - 8-byte signature
-  // - IHDR chunk (image header)
-  // - IDAT chunk (image data - compressed)
-  // - IEND chunk (image end)
-  
-  const signature = new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
-  
-  // IHDR chunk
-  const ihdrData = new Uint8Array(13);
-  const ihdrView = new DataView(ihdrData.buffer);
-  ihdrView.setUint32(0, width, false);  // width
-  ihdrView.setUint32(4, height, false); // height
-  ihdrData[8] = 8;  // bit depth
-  ihdrData[9] = 2;  // color type (RGB)
-  ihdrData[10] = 0; // compression
-  ihdrData[11] = 0; // filter
-  ihdrData[12] = 0; // interlace
-  
-  const ihdrChunk = createPngChunk("IHDR", ihdrData);
-  
-  // Create raw image data (RGB, no filter)
-  const rawData = new Uint8Array(height * (1 + width * 3));
-  for (let y = 0; y < height; y++) {
-    const rowStart = y * (1 + width * 3);
-    rawData[rowStart] = 0; // filter byte (none)
-    for (let x = 0; x < width; x++) {
-      const pixelStart = rowStart + 1 + x * 3;
-      rawData[pixelStart] = rgb[0];     // R
-      rawData[pixelStart + 1] = rgb[1]; // G
-      rawData[pixelStart + 2] = rgb[2]; // B
-    }
-  }
-  
-  // Compress with deflate (using a simple uncompressed deflate block)
-  const compressedData = deflateUncompressed(rawData);
-  const idatChunk = createPngChunk("IDAT", compressedData);
-  
-  // IEND chunk
-  const iendChunk = createPngChunk("IEND", new Uint8Array(0));
-  
-  // Combine all parts
-  const png = new Uint8Array(signature.length + ihdrChunk.length + idatChunk.length + iendChunk.length);
-  let offset = 0;
-  png.set(signature, offset); offset += signature.length;
-  png.set(ihdrChunk, offset); offset += ihdrChunk.length;
-  png.set(idatChunk, offset); offset += idatChunk.length;
-  png.set(iendChunk, offset);
-  
-  return png;
-}
-
-function createPngChunk(type: string, data: Uint8Array): Uint8Array {
-  const chunk = new Uint8Array(4 + 4 + data.length + 4);
-  const view = new DataView(chunk.buffer);
-  
-  // Length
-  view.setUint32(0, data.length, false);
-  
-  // Type
-  for (let i = 0; i < 4; i++) {
-    chunk[4 + i] = type.charCodeAt(i);
-  }
-  
-  // Data
-  chunk.set(data, 8);
-  
-  // CRC32
-  const crcData = new Uint8Array(4 + data.length);
-  for (let i = 0; i < 4; i++) {
-    crcData[i] = type.charCodeAt(i);
-  }
-  crcData.set(data, 4);
-  const crc = crc32(crcData);
-  view.setUint32(8 + data.length, crc, false);
-  
-  return chunk;
-}
-
-function deflateUncompressed(data: Uint8Array): Uint8Array {
-  // Create uncompressed deflate stream (zlib format)
-  // Header: 0x78 0x01 (deflate, no compression)
-  // Then uncompressed blocks
-  
-  const maxBlockSize = 65535;
-  const numBlocks = Math.ceil(data.length / maxBlockSize);
-  const outputSize = 2 + numBlocks * 5 + data.length + 4; // header + block headers + data + adler32
-  const output = new Uint8Array(outputSize);
-  
-  output[0] = 0x78; // CMF
-  output[1] = 0x01; // FLG (no dict, fastest)
-  
-  let outPos = 2;
-  let inPos = 0;
-  
-  for (let i = 0; i < numBlocks; i++) {
-    const isLast = i === numBlocks - 1;
-    const blockSize = Math.min(maxBlockSize, data.length - inPos);
-    
-    output[outPos++] = isLast ? 0x01 : 0x00; // BFINAL + BTYPE=00 (no compression)
-    output[outPos++] = blockSize & 0xFF;
-    output[outPos++] = (blockSize >> 8) & 0xFF;
-    output[outPos++] = (~blockSize) & 0xFF;
-    output[outPos++] = ((~blockSize) >> 8) & 0xFF;
-    
-    output.set(data.subarray(inPos, inPos + blockSize), outPos);
-    outPos += blockSize;
-    inPos += blockSize;
-  }
-  
-  // Adler-32 checksum
-  const adler = adler32(data);
-  output[outPos++] = (adler >> 24) & 0xFF;
-  output[outPos++] = (adler >> 16) & 0xFF;
-  output[outPos++] = (adler >> 8) & 0xFF;
-  output[outPos++] = adler & 0xFF;
-  
-  return output.subarray(0, outPos);
-}
-
-function crc32(data: Uint8Array): number {
-  let crc = 0xFFFFFFFF;
-  for (let i = 0; i < data.length; i++) {
-    crc ^= data[i];
-    for (let j = 0; j < 8; j++) {
-      crc = (crc >>> 1) ^ (crc & 1 ? 0xEDB88320 : 0);
-    }
-  }
-  return (crc ^ 0xFFFFFFFF) >>> 0;
-}
-
-function adler32(data: Uint8Array): number {
-  let a = 1, b = 0;
-  for (let i = 0; i < data.length; i++) {
-    a = (a + data[i]) % 65521;
-    b = (b + a) % 65521;
-  }
-  return ((b << 16) | a) >>> 0;
-}

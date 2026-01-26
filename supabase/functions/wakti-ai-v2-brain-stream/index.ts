@@ -1056,6 +1056,15 @@ HOW TO HANDLE TIMING:
 - Relative timing ("2 hours before she lands") → Calculate the exact time and confirm
 - Always state the exact time you'll set the reminder for
 
+⚠️ CRITICAL - RELATIVE TIME CALCULATION (MUST FOLLOW):
+When user says "in X minutes" or "in X hours":
+1. Take the CURRENT time from "Current local time" above
+2. ADD X minutes/hours to get the reminder time
+3. VERIFY the result is IN THE FUTURE (after current time)
+4. Example: Current time is 12:04 PM, user says "in 2 minutes" → Reminder = 12:06 PM (NOT 12:02 PM)
+5. NEVER subtract time - always ADD for "in X minutes/hours"
+6. Double-check your math before confirming to the user
+
 REMINDER FORMAT (CRITICAL - DO NOT SHOW RAW JSON TO USER):
 
 FOR PROACTIVE OFFERS (you're suggesting a reminder):
