@@ -189,10 +189,17 @@ function getInstance(): any | null {
     
     // If we have an instance, verify it has the methods we need
     if (calendarInstance) {
-      // Check required methods
+      // Check all possible method names (matching what our wrappers support)
       const methods = {
-        retrieveCalendars: typeof calendarInstance.retrieveCalendars === 'function',
+        // Create methods
         createCalendarEvent: typeof calendarInstance.createCalendarEvent === 'function',
+        addEvent: typeof calendarInstance.addEvent === 'function',
+        createEvent: typeof calendarInstance.createEvent === 'function',
+        saveEvent: typeof calendarInstance.saveEvent === 'function',
+        // Retrieve methods
+        retrieveCalendars: typeof calendarInstance.retrieveCalendars === 'function',
+        retrieveCalendarEvents: typeof calendarInstance.retrieveCalendarEvents === 'function',
+        getCalendarEvents: typeof calendarInstance.getCalendarEvents === 'function',
         retrieveEvents: typeof calendarInstance.retrieveEvents === 'function',
         getEvents: typeof calendarInstance.getEvents === 'function',
         readCalendarEvents: typeof calendarInstance.readCalendarEvents === 'function'
@@ -201,14 +208,17 @@ function getInstance(): any | null {
       console.log('[NativelyCalendar] Available methods:', methods);
       
       // Need at least one way to create events and one way to retrieve them
-      const hasCreateMethod = methods.createCalendarEvent;
-      const hasRetrieveMethod = methods.retrieveEvents || methods.getEvents || methods.readCalendarEvents;
+      const hasCreateMethod = methods.createCalendarEvent || methods.addEvent || methods.createEvent || methods.saveEvent;
+      const hasRetrieveMethod = methods.retrieveCalendarEvents || methods.getCalendarEvents || methods.retrieveEvents || methods.getEvents || methods.readCalendarEvents;
       
-      if (hasCreateMethod && hasRetrieveMethod) {
-        console.log('[NativelyCalendar] Found valid calendar instance with required methods');
+      // Also accept if we have retrieveCalendars (can list calendars = SDK is working)
+      const hasCalendarAccess = methods.retrieveCalendars;
+      
+      if (hasCreateMethod || hasRetrieveMethod || hasCalendarAccess) {
+        console.log('[NativelyCalendar] Found valid calendar instance with available methods');
         return calendarInstance;
       } else {
-        console.warn('[NativelyCalendar] Instance missing required methods. Need both create and retrieve capabilities.');
+        console.warn('[NativelyCalendar] Instance has no recognized calendar methods.');
       }
     }
     

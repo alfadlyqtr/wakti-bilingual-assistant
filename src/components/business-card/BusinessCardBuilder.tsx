@@ -1925,13 +1925,19 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
         const base64 = btoa(unescape(encodeURIComponent(jsonString)));
         const urlSafeBase64 = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
         
-        const passUrl = `https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-wallet-pass?data=${urlSafeBase64}`;
+        // Always use raw=1 to get the .pkpass file directly
+        // Safari handles .pkpass natively and shows "Add to Wallet" prompt
+        const passUrl = `https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-wallet-pass?data=${urlSafeBase64}&raw=1`;
 
-        // If running in Natively app, open in external Safari
-        // Safari handles .pkpass files natively and shows Add to Wallet prompt
+        // If running in Natively app, try to open in external Safari
         if (isNativelyApp()) {
           console.log('Detected Natively app - opening in Safari');
-          openInSafari(passUrl);
+          // Try openInSafari first
+          const opened = openInSafari(passUrl);
+          if (!opened) {
+            // Fallback: direct navigation (will open in-app but at least tries)
+            window.location.href = passUrl;
+          }
         } else {
           // Regular browser - just navigate
           window.location.href = passUrl;
