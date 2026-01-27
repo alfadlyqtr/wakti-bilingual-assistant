@@ -3143,7 +3143,7 @@ END:VCARD`;
 
         {/* Powered by Wakti AI Footer */}
         <a 
-          href="https://apps.apple.com/app/wakti-ai" 
+          href="https://apps.apple.com/us/app/wakti-ai/id6755150700" 
           target="_blank"
           rel="noopener noreferrer"
           className="absolute bottom-6 left-0 right-0 flex flex-col items-center justify-center gap-1 opacity-60 hover:opacity-100 transition-opacity"
