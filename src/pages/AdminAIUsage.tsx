@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Brain, RefreshCw, Search, Filter, Eye, Clock, Zap, AlertCircle, CheckCircle, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,9 @@ import { toast } from "sonner";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
 import { format, subDays, subMonths, startOfDay, endOfDay } from "date-fns";
+import { Grid } from "gridjs-react";
+import { h } from "gridjs";
+import "gridjs/dist/theme/mermaid.css";
 
 interface AILog {
   id: string;
@@ -69,7 +72,7 @@ export default function AdminAIUsage() {
   const [selectedLog, setSelectedLog] = useState<AILog | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
 
-  const LIMIT = 50;
+  const LIMIT = 500;
 
   useEffect(() => {
     loadFilterOptions();
@@ -210,6 +213,63 @@ export default function AdminAIUsage() {
     setSelectedLog(log);
     setShowDetailModal(true);
   };
+
+  const logsById = useMemo(() => {
+    const map = new Map<string, AILog>();
+    for (const l of logs) map.set(l.id, l);
+    return map;
+  }, [logs]);
+
+  const gridColumns = useMemo(() => {
+    return [
+      { name: 'Date', sort: true },
+      { name: 'User', sort: true },
+      { name: 'Function', sort: true },
+      { name: 'Trigger', sort: true },
+      { name: 'Model', sort: true },
+      { name: 'Status', sort: true },
+      { name: 'Tokens', sort: true },
+      { name: 'Duration', sort: true },
+      {
+        name: '',
+        sort: false,
+        formatter: (_: any, row: any) => {
+          const id = row?.cells?.[9]?.data as string | undefined;
+          return h(
+            'button',
+            {
+              className: 'px-2 py-1 text-xs rounded-md border border-white/20 bg-white/5 text-white/80 hover:bg-white/10',
+              onClick: () => {
+                const log = id ? logsById.get(id) : undefined;
+                if (log) openDetail(log);
+              }
+            },
+            'View'
+          );
+        }
+      },
+    ];
+  }, [logsById]);
+
+  const gridData = useMemo(() => {
+    return logs.map((log) => {
+      const created = log.created_at ? new Date(log.created_at) : new Date();
+      const trigger = (log.metadata as any)?.trigger || '';
+      const userLabel = log.user_display_name || log.user_email || log.user_id || '';
+      return [
+        format(created, 'MMM d, HH:mm'),
+        userLabel,
+        log.function_name || '',
+        trigger,
+        log.model || '',
+        log.status || '',
+        Number.isFinite(log.total_tokens) ? String(log.total_tokens) : '',
+        Number.isFinite(log.duration_ms) ? String(log.duration_ms) : '',
+        '',
+        log.id,
+      ];
+    });
+  }, [logs]);
 
   const getStatusBadge = (status: string) => {
     if (status === 'success') {
@@ -570,7 +630,7 @@ export default function AdminAIUsage() {
           <CardHeader>
             <CardTitle className="text-white">AI Logs</CardTitle>
             <CardDescription className="text-white/50">
-              {logs.length} logs loaded {hasMore && '(scroll for more)'}
+              {logs.length} logs loaded
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -582,64 +642,17 @@ export default function AdminAIUsage() {
                 <p>No AI logs found</p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {logs.map((log) => (
-                  <div
-                    key={log.id}
-                    className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/10 hover:border-white/20 transition-colors"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        {getFunctionBadge(log.function_name)}
-                        {log.model && <Badge variant="outline" className="text-xs border-white/30">{log.model}</Badge>}
-                        {getStatusBadge(log.status)}
-                      </div>
-                      {/* Metadata info row */}
-                      {getMetadataInfo(log).length > 0 && (
-                        <div className="flex items-center gap-3 text-xs mb-1">
-                          {getMetadataInfo(log).slice(0, 4).map((info, idx) => (
-                            <span key={idx} className={info.color}>
-                              <span className="text-white/40">{info.label}:</span> {info.value}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      <div className="text-sm text-white/70 truncate">
-                        {log.user_display_name || log.user_email || 'Unknown user'}
-                      </div>
-                      <div className="flex items-center gap-4 text-xs text-white/50 mt-1">
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {format(new Date(log.created_at), 'MMM d, HH:mm')}
-                        </span>
-                        <span>{log.total_tokens.toLocaleString()} tokens</span>
-                        <span>{log.duration_ms}ms</span>
-                        {log.cost_credits > 0 && <span className="text-accent-green">${log.cost_credits.toFixed(5)}</span>}
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => openDetail(log)}
-                      className="text-white/70 hover:text-white"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-
-                {hasMore && (
-                  <div className="text-center pt-4">
-                    <Button
-                      onClick={loadMore}
-                      variant="outline"
-                      disabled={isLoading}
-                      className="bg-white/5 border-white/20"
-                    >
-                      {isLoading ? 'Loading...' : 'Load More'}
-                    </Button>
-                  </div>
-                )}
+              <div className="w-full overflow-x-auto">
+                <Grid
+                  data={gridData}
+                  columns={gridColumns as any}
+                  search={true}
+                  sort={true}
+                  pagination={{ enabled: true, limit: 50 }}
+                  className={{
+                    table: 'w-full',
+                  }}
+                />
               </div>
             )}
           </CardContent>
