@@ -74,6 +74,7 @@ interface BusinessCardData {
   website: string;
   logoUrl: string;
   profilePhotoUrl: string;
+  shareSlug?: string;
   coverPhotoUrl?: string;
   department?: string;
   headline?: string;
@@ -141,6 +142,17 @@ interface BusinessCardBuilderProps {
   initialData: BusinessCardData;
   onSave: (data: BusinessCardData) => void;
   onBack: () => void;
+}
+
+function buildPublicCardUrl(params: {
+  origin: string;
+  shareSlug?: string;
+  firstName: string;
+  lastName: string;
+}): string {
+  const { origin, shareSlug, firstName, lastName } = params;
+  if (shareSlug) return `${origin}/card/${encodeURIComponent(shareSlug)}`;
+  return `${origin}/card/${encodeURIComponent(firstName.toLowerCase())}-${encodeURIComponent(lastName.toLowerCase())}`;
 }
 
 // TRUE Brand SVG Icons with official brand colors
@@ -1871,7 +1883,12 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
     }
 
     try {
-      const cardUrl = `${window.location.origin}/card/${encodeURIComponent(formData.firstName.toLowerCase())}-${encodeURIComponent(formData.lastName.toLowerCase())}`;
+      const cardUrl = buildPublicCardUrl({
+        origin: window.location.origin,
+        shareSlug: (formData as any).shareSlug,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+      });
       
       // Prepare card data for the pass
       const cardData = {
@@ -1928,7 +1945,12 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
 
   const handleSetAsWidget = async () => {
     try {
-      const cardUrl = `${window.location.origin}/card/${encodeURIComponent(formData.firstName.toLowerCase())}-${encodeURIComponent(formData.lastName.toLowerCase())}`;
+      const cardUrl = buildPublicCardUrl({
+        origin: window.location.origin,
+        shareSlug: (formData as any).shareSlug,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+      });
       
       // Check if Natively Widget SDK is available (user is in native app)
       if (isWidgetSupported()) {
@@ -2046,61 +2068,61 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
   };
 
   // Render QR Code Tab
-  const renderQrCodeTab = () => (
-    <div className="space-y-6">
-      <h3 className="text-sm font-semibold text-foreground">{t.yourQrCode}</h3>
-      
-      {/* QR Code Display */}
-      <div className="flex flex-col items-center p-6 rounded-2xl bg-white border border-gray-200">
-        <div ref={qrRef} className="w-48 h-48 bg-gray-100 rounded-xl flex items-center justify-center">
-          <QRCodeSVG 
-            value={`${window.location.origin}/card/${formData.firstName.toLowerCase()}-${formData.lastName.toLowerCase()}`}
-            size={160}
-            level="H"
-            includeMargin={false}
-            imageSettings={{
-              src: "/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png",
-              x: undefined,
-              y: undefined,
-              height: 28,
-              width: 28,
-              excavate: true,
-            }}
-          />
+  const renderQrCodeTab = () => {
+    const cardUrl = buildPublicCardUrl({
+      origin: window.location.origin,
+      shareSlug: (formData as any).shareSlug,
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+    });
+
+    return (
+      <div className="space-y-6">
+        <h3 className="text-sm font-semibold text-foreground">{t.yourQrCode}</h3>
+
+        <div className="flex flex-col items-center p-6 rounded-2xl bg-white border border-gray-200">
+          <div ref={qrRef} className="w-48 h-48 bg-gray-100 rounded-xl flex items-center justify-center">
+            <QRCodeSVG 
+              value={cardUrl}
+              size={160}
+              level="H"
+              includeMargin={false}
+            />
+          </div>
+          <p className="text-sm text-gray-500 mt-4">{t.scanToConnect}</p>
         </div>
-        <p className="text-sm text-gray-500 mt-4">{t.scanToConnect}</p>
+
+        {/* Actions */}
+        <div className="space-y-3">
+          <Button 
+            onClick={handleDownloadQr}
+            className="w-full h-12 bg-gradient-to-r from-blue-500 to-purple-600"
+          >
+            <QrCode className="w-5 h-5 mr-2" />
+            {t.downloadQr}
+          </Button>
+
+          {/* Add to Apple Wallet */}
+          <Button 
+            onClick={handleAddToWallet}
+            className="w-full h-12 bg-black text-white hover:bg-gray-900"
+          >
+            <Smartphone className="w-5 h-5 mr-2" />
+            {isRTL ? 'إضافة إلى المحفظة' : 'Add to Apple Wallet'}
+          </Button>
+
+          {/* Save to Photos for Widget */}
+          <Button 
+            onClick={handleSetAsWidget}
+            className="w-full h-12 bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+          >
+            <LayoutGrid className="w-5 h-5 mr-2" />
+            {isRTL ? 'حفظ للويدجت' : 'Save for Widget'}
+          </Button>
+        </div>
       </div>
-
-      {/* Actions */}
-      <div className="space-y-3">
-        <Button 
-          onClick={handleDownloadQr}
-          className="w-full h-12 bg-gradient-to-r from-blue-500 to-purple-600"
-        >
-          <QrCode className="w-5 h-5 mr-2" />
-          {t.downloadQr}
-        </Button>
-
-        {/* Add to Apple Wallet */}
-        <Button 
-          onClick={handleAddToWallet}
-          className="w-full h-12 bg-black text-white hover:bg-gray-900"
-        >
-          <Smartphone className="w-5 h-5 mr-2" />
-          {isRTL ? 'إضافة إلى المحفظة' : 'Add to Apple Wallet'}
-        </Button>
-
-        {/* Save to Photos for Widget */}
-        <Button 
-          onClick={handleSetAsWidget}
-          className="w-full h-12 bg-gradient-to-r from-purple-500 to-pink-500 text-white"
-        >
-          <LayoutGrid className="w-5 h-5 mr-2" />
-          {isRTL ? 'حفظ للويدجت' : 'Save for Widget'}
-        </Button>
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div
@@ -2981,7 +3003,12 @@ const CardPreviewLive = ({ data, isFlipped, handleFlip, handleAddToWallet }: Car
 
   const renderBack = () => {
     // Construct the shareable URL (placeholder for now, should be the actual public URL)
-    const cardUrl = `${window.location.origin}/card/${data.firstName.toLowerCase()}-${data.lastName.toLowerCase()}`;
+    const cardUrl = buildPublicCardUrl({
+      origin: window.location.origin,
+      shareSlug: (data as any).shareSlug,
+      firstName: data.firstName,
+      lastName: data.lastName,
+    });
 
     const downloadVCard = () => {
       // Map social links to vCard fields
