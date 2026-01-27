@@ -231,35 +231,39 @@ export default function BusinessCardShare() {
           handleAddToWallet={() => {}}
         />
         
-        {/* Curved arrow pointing to flip button with hint text */}
+        {/* Curved arrow pointing UP to flip button with hint text */}
         {!isFlipped && (
-          <div className="absolute bottom-4 right-4 flex flex-col items-end animate-pulse">
-            {/* Curved arrow SVG pointing up-left toward the flip button */}
+          <div className="absolute bottom-4 right-4 flex flex-col items-center animate-pulse">
+            {/* Curved arrow SVG pointing UP toward the flip button */}
             <svg
-              width="80"
-              height="60"
-              viewBox="0 0 80 60"
+              width="60"
+              height="80"
+              viewBox="0 0 60 80"
               fill="none"
-              className="text-primary -mb-2 mr-8"
+              className="text-primary mb-1"
             >
+              {/* Arrow head pointing up */}
               <path
-                d="M70 55 C 60 40, 40 30, 20 15"
+                d="M30 5 L 24 15 M30 5 L 36 15"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+              />
+              {/* Curved line going down */}
+              <path
+                d="M30 5 C 30 25, 35 45, 30 70"
                 stroke="currentColor"
                 strokeWidth="2"
                 strokeLinecap="round"
                 fill="none"
               />
-              {/* Arrow head */}
-              <path
-                d="M20 15 L 25 22 M 20 15 L 28 13"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
             </svg>
-            <span className="text-sm font-medium text-primary bg-white/80 dark:bg-black/50 px-3 py-1.5 rounded-full shadow-sm border border-primary/20">
+            <button
+              onClick={() => setIsFlipped(true)}
+              className="text-sm font-medium text-primary bg-white/90 dark:bg-black/60 px-4 py-2 rounded-full shadow-md border border-primary/30 hover:bg-primary hover:text-white transition-colors cursor-pointer active:scale-95"
+            >
               Flip to add as contact
-            </span>
+            </button>
           </div>
         )}
       </div>
