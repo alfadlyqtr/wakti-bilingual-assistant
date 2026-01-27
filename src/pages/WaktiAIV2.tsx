@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, AIMessage } from '@/services/WaktiAIV2Service';
+import { SavedConversationsService } from '@/services/SavedConversationsService';
 import { EnhancedFrontendMemory, ConversationMetadata } from '@/services/EnhancedFrontendMemory';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { supabase } from '@/integrations/supabase/client';
@@ -100,17 +101,6 @@ const WaktiAIV2 = () => {
     setArchivedConversations(Array.isArray(archived) ? archived : []);
   }, []);
 
-  const handleClearChat = useCallback(() => {
-    if (currentConversationId && sessionMessages.length > 0) {
-      EnhancedFrontendMemory.archiveCurrentConversation(sessionMessages, currentConversationId);
-    }
-    const newId = EnhancedFrontendMemory.startNewConversation([], null);
-    setSessionMessages([]);
-    setCurrentConversationId(newId);
-    setIsNewConversation(true);
-    handleRefreshConversations();
-  }, [currentConversationId, sessionMessages, handleRefreshConversations]);
-
   // When the active mode changes, clear loading state but DON'T abort
   // Aborting here causes "signal is aborted without reason" errors
   // because the mode change happens BEFORE handleSendMessage creates the new controller
@@ -198,7 +188,20 @@ const WaktiAIV2 = () => {
     return () => window.removeEventListener('wakti-chat-input-resized', handler as EventListener);
   }, []);
 
-  const handleSelectConversation = useCallback((id: string) => {
+  const isCloudConversationId = (id?: string | null) => Boolean(id && !id.startsWith('frontend-conv-'));
+
+  const autoSaveCloudConversation = useCallback(async () => {
+    if (!currentConversationId || sessionMessages.length === 0) return;
+    if (!isCloudConversationId(currentConversationId)) return;
+    try {
+      await SavedConversationsService.saveCurrentConversation(sessionMessages, currentConversationId);
+    } catch (error) {
+      console.warn('Auto-save cloud conversation failed:', error);
+    }
+  }, [currentConversationId, sessionMessages]);
+
+  const handleSelectConversation = useCallback(async (id: string) => {
+    await autoSaveCloudConversation();
     if (currentConversationId && sessionMessages.length > 0) {
       EnhancedFrontendMemory.archiveCurrentConversation(sessionMessages, currentConversationId);
     }
@@ -211,7 +214,19 @@ const WaktiAIV2 = () => {
     }
     handleRefreshConversations();
     setShowConversations(false);
-  }, [currentConversationId, sessionMessages, handleRefreshConversations]);
+  }, [autoSaveCloudConversation, currentConversationId, sessionMessages, handleRefreshConversations]);
+
+  const handleClearChat = useCallback(async () => {
+    await autoSaveCloudConversation();
+    if (currentConversationId && sessionMessages.length > 0) {
+      EnhancedFrontendMemory.archiveCurrentConversation(sessionMessages, currentConversationId);
+    }
+    const newId = EnhancedFrontendMemory.startNewConversation([], null);
+    setSessionMessages([]);
+    setCurrentConversationId(newId);
+    setIsNewConversation(true);
+    handleRefreshConversations();
+  }, [autoSaveCloudConversation, currentConversationId, sessionMessages, handleRefreshConversations]);
 
   const handleDeleteConversation = useCallback((id: string) => {
     EnhancedFrontendMemory.deleteArchivedConversation(id);
@@ -721,21 +736,6 @@ const WaktiAIV2 = () => {
       // and provide a smoother UX (user usually wants to chat about the result)
       if (trigger === 'vision') {
         visionInFlightRef.current = false;
-        setActiveTrigger('chat');
-        setChatSubmode('chat'); // Reset to regular chat (not study)
-        console.log('🔄 AUTO-SWITCH: Vision complete → Chat mode');
-      } else if (trigger === 'search') {
-        // After search completes, switch back to chat
-        // User can manually re-enter search if needed
-        setActiveTrigger('chat');
-        setChatSubmode('chat'); // Reset to regular chat (not study)
-        console.log('🔄 AUTO-SWITCH: Search complete → Chat mode');
-      } else if (trigger === 'image' && imageMode !== 'draw-after-bg') {
-        // After image generation (non-draw), switch back to chat
-        // Draw mode stays as-is since it's a creative session
-        setActiveTrigger('chat');
-        setChatSubmode('chat'); // Reset to regular chat (not study)
-        console.log('🔄 AUTO-SWITCH: Image complete → Chat mode');
       }
       // Study mode only persists when user explicitly stays in chat trigger
     }

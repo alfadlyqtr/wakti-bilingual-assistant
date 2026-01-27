@@ -576,6 +576,7 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
             data={formData} 
             isFlipped={isPreviewFlipped} 
             handleFlip={() => setIsPreviewFlipped(!isPreviewFlipped)}
+            handleAddToWallet={handleAddToWallet}
           />
         </div>
       </div>
@@ -1175,6 +1176,7 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
             data={formData} 
             isFlipped={isPreviewFlipped} 
             handleFlip={() => setIsPreviewFlipped(!isPreviewFlipped)}
+            handleAddToWallet={handleAddToWallet}
           />
         </div>
       </div>
@@ -1861,6 +1863,7 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
   };
 
   const handleAddToWallet = async () => {
+    console.log("handleAddToWallet called");
     // Validate required fields
     if (!formData.firstName || !formData.lastName) {
       toast.error(isRTL ? 'يرجى إدخال الاسم الأول والأخير' : 'Please enter first and last name');
@@ -2245,9 +2248,10 @@ interface CardPreviewLiveProps {
   data: BusinessCardData;
   isFlipped: boolean;
   handleFlip: () => void;
+  handleAddToWallet: () => void;
 }
 
-const CardPreviewLive = ({ data, isFlipped, handleFlip }: CardPreviewLiveProps) => {
+const CardPreviewLive = ({ data, isFlipped, handleFlip, handleAddToWallet }: CardPreviewLiveProps) => {
   const template = CARD_TEMPLATES.find(t => t.id === data.template) || CARD_TEMPLATES[0];
   const mosaicPalette = MOSAIC_PALETTES.find(p => p.id === (data.mosaicPaletteId || 'rose')) || MOSAIC_PALETTES[0];
   const mosaicColors = {
@@ -3034,12 +3038,6 @@ END:VCARD`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    };
-
-    const handleAddToWallet = () => {
-      toast.info("Generating your Apple Wallet pass...", {
-        description: "This will add the card to your personal Apple Wallet for offline sharing."
-      });
     };
 
     const handleSetAsWidget = () => {

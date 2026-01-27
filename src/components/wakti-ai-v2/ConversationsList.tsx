@@ -332,15 +332,14 @@ export function ConversationsList({
                               timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
                             }));
                             
-                            // Create a new local conversation ID for this cloud conversation
+                            // Use the original cloud conversation ID to keep updates tied to the same record
                             const { EnhancedFrontendMemory } = await import('@/services/EnhancedFrontendMemory');
-                            const localConvId = `cloud-${c.id}`;
                             
                             // IMPORTANT: Archive it first so handleSelectConversation can find it
-                            EnhancedFrontendMemory.archiveCurrentConversation(convertedMessages, localConvId);
+                            EnhancedFrontendMemory.archiveCurrentConversation(convertedMessages, c.id);
                             
                             // Now use the existing handler to load it (it will find it in archived conversations)
-                            onSelectConversation(localConvId);
+                            onSelectConversation(c.id);
                             
                             // Close the drawer after selection
                             onClose?.();

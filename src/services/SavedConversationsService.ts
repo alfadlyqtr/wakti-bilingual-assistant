@@ -44,14 +44,15 @@ export const SavedConversationsService = {
 
     const { data, error } = await supabase
       .from('ai_saved_conversations')
-      .insert({
+      .upsert({
+        id: conversationId || undefined,
         user_id: user.id,
         title,
         messages: normalized,
         message_count: normalized.length,
         last_message_at: lastMessageAt,
         // Optional: source_conversation_id could be added in schema later
-      })
+      }, { onConflict: 'id' })
       .select('*')
       .single();
 
