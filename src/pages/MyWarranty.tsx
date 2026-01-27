@@ -686,7 +686,8 @@ const MyWarranty: React.FC = () => {
     if (typeof window === 'undefined') return 'https://wakti.ai';
     const origin = window.location.origin;
     if (origin.includes('localhost') || origin.includes('127.0.0.1')) return 'https://wakti.ai';
-    return origin;
+    // Always use wakti.ai for public card URLs
+    return 'https://wakti.ai';
   }, []);
 
   const [viewMode, setViewMode] = useState<ViewMode>('list');
@@ -4172,7 +4173,7 @@ const MyWarranty: React.FC = () => {
                 <Input
                   value={manualScanValue}
                   onChange={(e) => setManualScanValue(e.target.value)}
-                  placeholder={isRTL ? 'https://wakti.qa/card/...' : 'https://wakti.qa/card/...'}
+                  placeholder={isRTL ? 'https://wakti.ai/card/...' : 'https://wakti.ai/card/...'}
                   className="bg-white/5 border-white/10 rounded-xl"
                 />
                 <Button

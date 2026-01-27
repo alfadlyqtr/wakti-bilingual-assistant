@@ -152,7 +152,7 @@ function buildPublicCardUrl(params: {
 }): string {
   const { origin, shareSlug, firstName, lastName } = params;
   const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
-  const publicOrigin = isLocalhost ? origin : 'https://wakti.qa';
+  const publicOrigin = isLocalhost ? origin : 'https://wakti.ai';
   if (shareSlug) return `${publicOrigin}/card/${encodeURIComponent(shareSlug)}`;
   return `${publicOrigin}/card/${encodeURIComponent(firstName.toLowerCase())}-${encodeURIComponent(lastName.toLowerCase())}`;
 }
