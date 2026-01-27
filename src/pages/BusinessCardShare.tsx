@@ -73,6 +73,38 @@ export default function BusinessCardShare() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isFlipped, setIsFlipped] = useState(false);
+  const [triedDeepLink, setTriedDeepLink] = useState(false);
+
+  // Attempt to open the Wakti app via deep link (only once)
+  // Uses an invisible iframe to avoid navigating away from the page
+  useEffect(() => {
+    if (!shareSlug || triedDeepLink) return;
+    setTriedDeepLink(true);
+
+    // Build the deep link URL
+    const deepLinkUrl = `wakti://card/${encodeURIComponent(shareSlug)}`;
+
+    // Create an invisible iframe to attempt the deep link
+    // This prevents navigating away from the page if the app isn't installed
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = deepLinkUrl;
+    document.body.appendChild(iframe);
+
+    // Clean up iframe after a short delay
+    const cleanup = setTimeout(() => {
+      if (iframe.parentNode) {
+        iframe.parentNode.removeChild(iframe);
+      }
+    }, 2000);
+
+    return () => {
+      clearTimeout(cleanup);
+      if (iframe.parentNode) {
+        iframe.parentNode.removeChild(iframe);
+      }
+    };
+  }, [shareSlug, triedDeepLink]);
 
   useEffect(() => {
     const load = async () => {
