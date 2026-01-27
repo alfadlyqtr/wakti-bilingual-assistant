@@ -786,6 +786,9 @@ const MyWarranty: React.FC = () => {
   const scanStreamRef = useRef<MediaStream | null>(null);
   const scanRafRef = useRef<number | null>(null);
   const scanCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const [isCollectedPreviewOpen, setIsCollectedPreviewOpen] = useState(false);
+  const [collectedPreview, setCollectedPreview] = useState<{ data: BusinessCardData; shareSlug?: string } | null>(null);
   
   // Get current active card
   const businessCard = businessCards.find(c => c.cardSlot === activeCardSlot) || null;
@@ -979,6 +982,43 @@ const MyWarranty: React.FC = () => {
       stopQrScanner();
     }
   }, [handleScanResultValue, isRTL, stopQrScanner]);
+
+  const mapSnapshotToBusinessCardData = useCallback((snapshot: any): BusinessCardData => {
+    const s = snapshot || {};
+    const socialLinksRaw = s.social_links ?? s.socialLinks ?? [];
+    const socialLinks = Array.isArray(socialLinksRaw) ? socialLinksRaw : [];
+
+    return {
+      firstName: s.first_name ?? s.firstName ?? '',
+      lastName: s.last_name ?? s.lastName ?? '',
+      email: s.email ?? '',
+      phone: s.phone ?? '',
+      companyName: s.company_name ?? s.companyName ?? '',
+      jobTitle: s.job_title ?? s.jobTitle ?? '',
+      website: s.website ?? '',
+      logoUrl: s.logo_url ?? s.logoUrl ?? '',
+      profilePhotoUrl: s.profile_photo_url ?? s.profilePhotoUrl ?? '',
+      coverPhotoUrl: s.cover_photo_url ?? s.coverPhotoUrl ?? undefined,
+      department: s.department ?? undefined,
+      headline: s.headline ?? undefined,
+      address: s.address ?? undefined,
+      socialLinks: socialLinks,
+      template: s.template ?? 'geometric',
+      primaryColor: s.primary_color ?? s.primaryColor ?? undefined,
+      mosaicPaletteId: s.mosaic_palette_id ?? s.mosaicPaletteId ?? undefined,
+      mosaicColors: s.mosaic_colors ?? s.mosaicColors ?? undefined,
+      professionalColors: s.professional_colors ?? s.professionalColors ?? undefined,
+      fashionColors: s.fashion_colors ?? s.fashionColors ?? undefined,
+      minimalColors: s.minimal_colors ?? s.minimalColors ?? undefined,
+      cleanColors: s.clean_colors ?? s.cleanColors ?? undefined,
+      logoPosition: s.logo_position ?? s.logoPosition ?? undefined,
+      photoShape: s.photo_shape ?? s.photoShape ?? undefined,
+      nameStyle: s.name_style ?? s.nameStyle ?? undefined,
+      titleStyle: s.title_style ?? s.titleStyle ?? undefined,
+      companyStyle: s.company_style ?? s.companyStyle ?? undefined,
+      iconStyle: s.icon_style ?? s.iconStyle ?? undefined,
+    };
+  }, []);
 
   // Fetch warranties
   const fetchData = useCallback(async () => {
@@ -2724,28 +2764,28 @@ const MyWarranty: React.FC = () => {
           {collectedCards.map((card, index) => (
             <div
               key={index}
-              className="p-4 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-4"
+              className="p-3 rounded-2xl bg-white/5 border border-white/10"
+              role="button"
+              tabIndex={0}
+              aria-label={isRTL ? 'فتح البطاقة' : 'Open card'}
+              title={isRTL ? 'فتح البطاقة' : 'Open card'}
+              onClick={() => {
+                const snapshot = card?.card_snapshot || {};
+                const shareSlug = card?.share_slug || undefined;
+                setCollectedPreview({ data: mapSnapshotToBusinessCardData(snapshot), shareSlug });
+                setIsCollectedPreviewOpen(true);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  const snapshot = card?.card_snapshot || {};
+                  const shareSlug = card?.share_slug || undefined;
+                  setCollectedPreview({ data: mapSnapshotToBusinessCardData(snapshot), shareSlug });
+                  setIsCollectedPreviewOpen(true);
+                }
+              }}
             >
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                <User className="w-6 h-6 text-white" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-foreground">
-                  {(() => {
-                    const s = card?.card_snapshot || {};
-                    const fn = s.first_name || s.firstName || '';
-                    const ln = s.last_name || s.lastName || '';
-                    const full = `${fn} ${ln}`.trim();
-                    return full || (isRTL ? 'بطاقة' : 'Card');
-                  })()}
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  {(() => {
-                    const s = card?.card_snapshot || {};
-                    return s.company_name || s.companyName || s.job_title || s.jobTitle || '';
-                  })()}
-                </p>
-              </div>
+              <ScaledCardPreview data={mapSnapshotToBusinessCardData(card?.card_snapshot || {})} />
             </div>
           ))}
         </div>
@@ -4127,6 +4167,31 @@ const MyWarranty: React.FC = () => {
               </div>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isCollectedPreviewOpen}
+        onOpenChange={(open) => {
+          setIsCollectedPreviewOpen(open);
+          if (!open) setCollectedPreview(null);
+        }}
+      >
+        <DialogContent
+          className="max-w-md w-[92vw] rounded-2xl border border-white/10 bg-gradient-to-b from-background via-background to-purple-500/5 p-4"
+          title={isRTL ? 'البطاقة' : 'Card'}
+          description={isRTL ? 'معاينة البطاقة' : 'Card preview'}
+        >
+          {collectedPreview && (
+            <div className="space-y-3">
+              <CardPreviewLive
+                data={collectedPreview.data}
+                isFlipped={false}
+                handleFlip={() => {}}
+                handleAddToWallet={() => {}}
+              />
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
