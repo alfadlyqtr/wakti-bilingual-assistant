@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Shield, Users, Search, Filter, CheckCircle, XCircle, AlertTriangle, RefreshCw, Smartphone, UserCog, UserX, CreditCard, Calendar, Gift, Clock, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +14,9 @@ import { toast } from "sonner";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
 import { getAdminSession } from "@/utils/adminAuth";
+import { Grid } from "gridjs-react";
+import { h } from "gridjs";
+import "gridjs/dist/theme/mermaid.css";
 
 interface User {
   id: string;
@@ -411,6 +414,138 @@ export default function AdminSubscriptions() {
     return matchesSearch && matchesFilter;
   });
 
+  const usersById = useMemo(() => {
+    const map = new Map<string, User>();
+    for (const u of filteredUsers) map.set(u.id, u);
+    return map;
+  }, [filteredUsers]);
+
+  const openActivationForUser = (user: User) => {
+    setSelectedUser(user);
+    setShowActivationModal(true);
+  };
+
+  const gridColumns = useMemo(() => {
+    return [
+      { name: 'Name', sort: true },
+      { name: 'Email', sort: true },
+      { name: 'Status', sort: true },
+      { name: 'Plan', sort: true },
+      { name: 'Payment', sort: true },
+      { name: 'Next', sort: true },
+      { name: 'Gift', sort: true },
+      { name: 'Trial', sort: true },
+      {
+        name: 'Actions',
+        sort: false,
+        formatter: (_: any, row: any) => {
+          const id = row?.cells?.[9]?.data as string | undefined;
+          const user = id ? usersById.get(id) : undefined;
+          if (!user) return '';
+
+          const isGift = isGiftSubscription(user);
+          const canTrial = !user.is_subscribed;
+
+          return h(
+            'div',
+            { className: 'flex gap-2 flex-wrap items-center' },
+            user.is_subscribed
+              ? h(
+                  'button',
+                  {
+                    className: 'px-2 py-1 text-xs rounded-md border border-red-500/40 text-red-500 bg-background/50 hover:bg-red-500/10',
+                    onClick: (e: any) => {
+                      e?.stopPropagation?.();
+                      handleDeactivateSubscription(user);
+                    },
+                  },
+                  'Deactivate'
+                )
+              : h(
+                  'button',
+                  {
+                    className: 'px-2 py-1 text-xs rounded-md border border-border bg-background/50 hover:bg-accent',
+                    onClick: (e: any) => {
+                      e?.stopPropagation?.();
+                      openActivationForUser(user);
+                    },
+                  },
+                  isGift ? 'Manage' : 'Activate'
+                ),
+            canTrial
+              ? h(
+                  'button',
+                  {
+                    className: 'px-2 py-1 text-xs rounded-md border border-border bg-background/50 hover:bg-accent',
+                    onClick: (e: any) => {
+                      e?.stopPropagation?.();
+                      handleAdjustTrial(user, 'reset');
+                    },
+                  },
+                  'Reset Trial'
+                )
+              : '',
+            canTrial
+              ? h('input', {
+                  className: 'h-8 w-24 rounded border px-2 text-xs bg-background',
+                  type: 'number',
+                  min: 1,
+                  value: trialMinutesInput[user.id] ?? '',
+                  placeholder: 'minutes',
+                  title: 'Extend trial (minutes)',
+                  'aria-label': 'Extend trial minutes',
+                  onClick: (e: any) => e?.stopPropagation?.(),
+                  onInput: (e: any) => {
+                    const value = e?.target?.value ?? '';
+                    setTrialMinutesInput((prev) => ({ ...prev, [user.id]: value }));
+                  },
+                })
+              : '',
+            canTrial
+              ? h(
+                  'button',
+                  {
+                    className: 'px-2 py-1 text-xs rounded-md border border-border bg-background/50 hover:bg-accent',
+                    onClick: (e: any) => {
+                      e?.stopPropagation?.();
+                      handleAdjustTrial(user, 'extend');
+                    },
+                  },
+                  'Extend'
+                )
+              : ''
+          );
+        }
+      },
+      { name: 'ID', hidden: true },
+    ];
+  }, [usersById, trialMinutesInput]);
+
+  const gridData = useMemo(() => {
+    return filteredUsers.map((user) => {
+      const isGift = isGiftSubscription(user);
+      const paymentLabel = getPaymentMethodLabel(user.payment_method, isGift);
+      const nextLabel = user.next_billing_date ? new Date(user.next_billing_date).toLocaleDateString() : '';
+      const plan = user.is_subscribed ? (user.plan_name || 'Active') : '—';
+      const status = user.is_subscribed ? (user.subscription_status || 'active') : 'unsubscribed';
+      const gift = isGift ? (getRemainingGiftTime(user) || 'Gift') : '—';
+      const trial = !user.is_subscribed ? getTrialStatus(user).label : '—';
+
+      return [
+        user.display_name || 'No name',
+        user.email || '',
+        status,
+        plan,
+        paymentLabel,
+        nextLabel,
+        gift,
+        trial,
+        '',
+        user.id,
+      ];
+    });
+  }, [filteredUsers]);
+
   const giftSubscriptionsCount = users.filter(user => isGiftSubscription(user)).length;
 
   if (isLoading) {
@@ -525,224 +660,21 @@ export default function AdminSubscriptions() {
           </div>
         </div>
 
-        {/* Beautiful Subscription Cards */}
+        {/* Subscriptions Table */}
         <div className="grid gap-4">
-          {filteredUsers.map((user) => {
-            const isGift = isGiftSubscription(user);
-            const giftDuration = getGiftDuration(user);
-            const remainingTime = getRemainingGiftTime(user);
-            
-            return (
-              <Card 
-                key={user.id} 
-                className={`enhanced-card cursor-pointer transition-all ${
-                  selectedUser?.id === user.id ? 'ring-2 ring-accent-blue' : ''
-                } ${isGift ? 'border-accent-purple/30 bg-gradient-to-r from-purple-50/50 to-pink-50/50 dark:from-purple-950/20 dark:to-pink-950/20' : ''}`}
-                onClick={() => {
-                  console.log('[DEBUG] User selected:', {
-                    id: user.id,
-                    email: user.email,
-                    is_subscribed: user.is_subscribed,
-                    subscription_status: user.subscription_status
-                  });
-                  setSelectedUser(user);
-                }}
-              >
-                <CardContent className="p-4">
-                  <div className="space-y-3">
-                    {/* User Info Row with Avatar */}
-                    <div className="flex items-center space-x-3">
-                      <div className={`w-10 h-10 ${isGift ? 'bg-gradient-to-r from-purple-500 to-pink-500' : 'bg-gradient-primary'} rounded-full flex items-center justify-center flex-shrink-0`}>
-                        {isGift ? (
-                          <Gift className="w-5 h-5 text-white" />
-                        ) : (
-                          <span className="text-white font-medium text-sm">
-                            {(user.display_name || user.email).charAt(0).toUpperCase()}
-                          </span>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h3 className="font-semibold text-enhanced-heading text-base">
-                          {user.display_name || "No name"}
-                        </h3>
-                        <p className="text-sm text-muted-foreground">{user.email}</p>
-                        <p className="text-xs text-muted-foreground">
-                          Member since: {new Date(user.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        {selectedUser?.id === user.id && (
-                          <Badge className="bg-accent-blue text-xs">Selected</Badge>
-                        )}
-                        {isGift && (
-                          <Badge className="bg-accent-purple text-xs">
-                            <Gift className="w-3 h-3 mr-1" />
-                            Gift
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Subscription Information Grid */}
-                    <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50">
-                      {/* Subscription Status */}
-                      <div className="space-y-2">
-                        <div className="flex items-center space-x-2">
-                          <CheckCircle className="h-3 w-3 text-accent-green flex-shrink-0" />
-                          <span className="text-xs font-medium">Subscription</span>
-                        </div>
-                        <div className="space-y-1">
-                          {user.is_subscribed ? (
-                            <Badge variant="outline" className={`text-xs w-full justify-center ${isGift ? 'border-accent-purple text-accent-purple' : 'border-accent-green text-accent-green'}`}>
-                              {user.plan_name || 'Active'}
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-xs w-full justify-center">
-                              Unsubscribed
-                            </Badge>
-                          )}
-                          {user.subscription_status && (
-                            <Badge variant="secondary" className="text-xs w-full justify-center">
-                              {user.subscription_status}
-                            </Badge>
-                          )}
-                          {isGift && remainingTime && (
-                            <Badge variant="outline" className="text-xs w-full justify-center border-accent-purple text-accent-purple">
-                              {remainingTime}
-                            </Badge>
-                          )}
-                          {!user.is_subscribed && (
-                            (() => {
-                              const t = getTrialStatus(user);
-                              return (
-                                <Badge
-                                  variant={t.expired ? 'destructive' : 'secondary'}
-                                  className={`text-xs w-full justify-center ${t.expired ? '' : 'bg-green-500/10 text-green-700 border-green-500/20'}`}
-                                >
-                                  {t.label}
-                                </Badge>
-                              );
-                            })()
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Payment Method */}
-                      <div className="space-y-2">
-                        <div className="flex items-center space-x-2">
-                          {getPaymentMethodIcon(user.payment_method, isGift)}
-                          <span className="text-xs font-medium">Payment</span>
-                        </div>
-                        <div className="space-y-1">
-                          <Badge 
-                            variant="outline" 
-                            className={`text-xs w-full justify-center border-current ${getPaymentMethodColor(user.payment_method, isGift)}`}
-                          >
-                            {getPaymentMethodLabel(user.payment_method, isGift).split(' ')[0]}
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Billing Information (if subscribed) */}
-                    {user.is_subscribed && (user.next_billing_date || user.billing_start_date) && (
-                      <div className="pt-2 border-t border-border/50">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <Calendar className="h-3 w-3 text-accent-purple" />
-                          <span className="text-xs font-medium">
-                            {isGift ? 'Gift Info' : 'Billing Info'}
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                          {user.billing_start_date && (
-                            <div>
-                              <span className="block">Started:</span>
-                              <span>{new Date(user.billing_start_date).toLocaleDateString()}</span>
-                            </div>
-                          )}
-                          {user.next_billing_date && (
-                            <div>
-                              <span className="block">{isGift ? 'Expires:' : 'Next billing:'}</span>
-                              <span>{new Date(user.next_billing_date).toLocaleDateString()}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Enhanced Action Buttons with Debug Info */}
-                    <div className="flex gap-2 pt-2 border-t border-border/50">
-                      {user.is_subscribed ? (
-                        <Button 
-                          size="sm" 
-                          variant="destructive"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            console.log('[DEBUG] Deactivating subscription for:', user.email);
-                            handleDeactivateSubscription(user);
-                          }}
-                          className="flex-1 text-xs hover:bg-destructive/90"
-                        >
-                          <UserX className="h-3 w-3 mr-1" />
-                          Deactivate
-                        </Button>
-                      ) : (
-                        <Button 
-                          size="sm" 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            console.log('[DEBUG] Opening activation modal for:', {
-                              id: user.id,
-                              email: user.email,
-                              is_subscribed: user.is_subscribed
-                            });
-                            setSelectedUser(user);
-                            setShowActivationModal(true);
-                          }}
-                          className="flex-1 btn-enhanced text-xs hover:shadow-glow"
-                        >
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                          Activate Subscription
-                        </Button>
-                      )}
-                    </div>
-
-                    {/* 24-Hour Trial Management (unsubscribed only) */}
-                    {!user.is_subscribed && (
-                      <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={(e) => { e.stopPropagation(); handleAdjustTrial(user, 'reset'); }}
-                          className="text-xs"
-                        >
-                          <Clock className="h-3 w-3 mr-1" /> Reset Trial
-                        </Button>
-                        <div className="flex gap-2 items-center sm:col-span-2">
-                          <Input
-                            type="number"
-                            min={1}
-                            placeholder="minutes (e.g., 60)"
-                            value={trialMinutesInput[user.id] ?? ''}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => setTrialMinutesInput(prev => ({ ...prev, [user.id]: e.target.value }))}
-                            className="h-8 text-xs"
-                          />
-                          <Button
-                            size="sm"
-                            onClick={(e) => { e.stopPropagation(); handleAdjustTrial(user, 'extend'); }}
-                            className="text-xs"
-                          >
-                            <Plus className="h-3 w-3 mr-1" /> Extend Trial
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+          <Card className="enhanced-card">
+            <CardContent className="p-4">
+              <div className="w-full overflow-x-auto">
+                <Grid
+                  data={gridData}
+                  columns={gridColumns as any}
+                  search={true}
+                  sort={true}
+                  pagination={{ limit: 50 }}
+                />
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {filteredUsers.length === 0 && (

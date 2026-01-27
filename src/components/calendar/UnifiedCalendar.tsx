@@ -969,6 +969,43 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     );
   }, [language]);
 
+  const handleSyncClick = useCallback(async () => {
+    const availableNow = isNativeCalendarAvailable();
+    setNativeCalendarAvailable(availableNow);
+
+    if (!availableNow) {
+      toast.error(
+        language === 'ar'
+          ? 'مزامنة التقويم غير متاحة. تأكد من منح صلاحيات التقويم في إعدادات التطبيق.'
+          : 'Calendar sync is not available. Please ensure calendar permissions are granted in the app settings.'
+      );
+      return;
+    }
+
+    toast.info(language === 'ar' ? 'جاري المزامنة...' : 'Syncing...');
+
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    timeoutId = setTimeout(() => {
+      if (isSyncing) {
+        toast.error(
+          language === 'ar'
+            ? 'انتهت مهلة المزامنة. حاول مرة أخرى وتأكد من صلاحيات التقويم.'
+            : 'Sync timed out. Please try again and confirm calendar permissions.'
+        );
+        setIsSyncing(false);
+      }
+    }, 15000);
+
+    try {
+      await syncCalendars(syncDirection);
+      refreshCalendarData();
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    }
+  }, [language, refreshCalendarData, syncCalendars, syncDirection, isSyncing]);
+
 
   // Auto-sync when calendar data changes (if enabled)
   useEffect(() => {
@@ -1007,65 +1044,7 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
             type="button"
             value={language === 'ar' ? 'مزامنة' : 'Sync'}
             disabled={isSyncing}
-            onClick={() => {
-              console.log('[DirectSDK] Button clicked - starting BIDIRECTIONAL sync');
-              try {
-                setIsSyncing(true);
-                toast.info(language === 'ar' ? 'جاري المزامنة...' : 'Syncing...');
-                
-                // Direct SDK call - Use the actual NativelyCalendar constructor as per docs
-                const calendar = new (window as any).NativelyCalendar();
-                
-                // STEP 1: First retrieve events FROM phone
-                console.log('[DirectSDK] STEP 1: Retrieving events FROM phone...');
-                calendar.retrieveCalendarEvents(
-                  new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(),
-                  new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-                  function(retrieveResult: any) {
-                    console.log('[DirectSDK] Retrieved events FROM phone:', retrieveResult);
-                    
-                    if (retrieveResult.status === 'SUCCESS' && retrieveResult.data) {
-                      const phoneEvents = retrieveResult.data;
-                      console.log(`[DirectSDK] Found ${phoneEvents.length} events on phone`);
-                      toast.success(language === 'ar' 
-                        ? `تم جلب ${phoneEvents.length} حدث من الهاتف` 
-                        : `Retrieved ${phoneEvents.length} events from phone`);
-                      
-                      refreshCalendarData();
-                    } else {
-                      console.warn('[DirectSDK] No events retrieved from phone:', retrieveResult.error);
-                    }
-                    
-                    // STEP 2: Now get calendars and push events TO phone
-                    console.log('[DirectSDK] STEP 2: Getting calendars to push events TO phone...');
-                    calendar.retrieveCalendars(function(resp: any) {
-                      console.log('[DirectSDK] Calendar response:', resp);
-                      
-                      if (resp.status === "SUCCESS" && resp.data && resp.data.length > 0) {
-                        const waktiCal = resp.data.find((cal: any) => 
-                          (cal.name || '').toLowerCase().includes('wakti')
-                        ) || resp.data[0];
-                        
-                        console.log('[DirectSDK] Using calendar:', waktiCal);
-                        syncEventsToCalendar(calendar, waktiCal.id);
-                      } else {
-                        console.error('[DirectSDK] Error retrieving calendars:', resp.error);
-                        toast.error(language === 'ar' 
-                          ? `خطأ في جلب التقويمات: ${resp.error || 'خطأ غير معروف'}` 
-                          : `Error retrieving calendars: ${resp.error || 'Unknown error'}`);
-                        setIsSyncing(false);
-                      }
-                    });
-                  }
-                );
-              } catch (err) {
-                console.error('[DirectSDK] Error initializing NativelyCalendar:', err);
-                toast.error(language === 'ar' 
-                  ? 'خطأ في تهيئة التقويم' 
-                  : 'Error initializing calendar');
-                setIsSyncing(false);
-              }
-            }}
+            onClick={handleSyncClick}
             className="px-4 py-2 rounded-md text-sm font-medium bg-primary text-primary-foreground disabled:opacity-50"
             />
             
@@ -1074,6 +1053,7 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
               <Switch
                 checked={autoSyncEnabled}
                 onCheckedChange={handleAutoSyncToggle}
+                disabled={!nativeCalendarAvailable || isSyncing}
                 className="scale-75"
               />
               <span className="text-xs text-muted-foreground whitespace-nowrap">
