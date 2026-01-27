@@ -192,14 +192,77 @@ export default function BusinessCardShare() {
     );
   }
 
+  const appStoreUrl = 'https://apps.apple.com/us/app/wakti-ai/id6755150700';
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background via-background to-blue-500/5 p-4">
-      <CardPreviewLive
-        data={card as any}
-        isFlipped={isFlipped}
-        handleFlip={() => setIsFlipped((v) => !v)}
-        handleAddToWallet={() => {}}
-      />
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-background via-background to-blue-500/5">
+      {/* Header: Logo left, Powered by Wakti AI center */}
+      <header className="flex items-center justify-between px-4 py-3 relative">
+        {/* Logo top-left */}
+        <a href={appStoreUrl} target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
+          <img
+            src="/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png"
+            alt="Wakti AI"
+            className="w-10 h-10 object-contain"
+          />
+        </a>
+        
+        {/* Powered by Wakti AI - center */}
+        <a
+          href={appStoreUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 border border-white/20 hover:bg-white/20 transition-colors"
+        >
+          <span className="text-xs text-muted-foreground">Powered by</span>
+          <span className="text-sm font-semibold text-primary">Wakti AI</span>
+        </a>
+        
+        {/* Spacer for balance */}
+        <div className="w-10" />
+      </header>
+
+      {/* Card container with flip hint */}
+      <div className="flex-1 flex flex-col items-center justify-center p-4 relative">
+        <CardPreviewLive
+          data={card as any}
+          isFlipped={isFlipped}
+          handleFlip={() => setIsFlipped((v) => !v)}
+          handleAddToWallet={() => {}}
+        />
+        
+        {/* Curved arrow pointing to flip button with hint text */}
+        {!isFlipped && (
+          <div className="absolute bottom-4 right-4 flex flex-col items-end animate-pulse">
+            {/* Curved arrow SVG pointing up-left toward the flip button */}
+            <svg
+              width="80"
+              height="60"
+              viewBox="0 0 80 60"
+              fill="none"
+              className="text-primary -mb-2 mr-8"
+            >
+              <path
+                d="M70 55 C 60 40, 40 30, 20 15"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                fill="none"
+              />
+              {/* Arrow head */}
+              <path
+                d="M20 15 L 25 22 M 20 15 L 28 13"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </svg>
+            <span className="text-sm font-medium text-primary bg-white/80 dark:bg-black/50 px-3 py-1.5 rounded-full shadow-sm border border-primary/20">
+              Flip to add as contact
+            </span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
