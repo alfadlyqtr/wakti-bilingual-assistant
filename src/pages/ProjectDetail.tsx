@@ -2236,30 +2236,8 @@ export default function ProjectDetail() {
 
       console.log('Generated index.html size:', indexHtml.length);
 
-      // Step 3: Deploy to Vercel via projects-publish
-      console.log('Deploying to Vercel via projects-publish...');
-      const { data: publishResult, error: publishError } = await supabase.functions.invoke('projects-publish', {
-        body: {
-          projectName: projectName,
-          projectSlug: finalSubdomain,
-          files: [
-            { path: 'index.html', content: indexHtml }
-          ]
-        }
-      });
-
-      if (publishError) {
-        console.error('Edge function error:', publishError);
-        throw new Error(publishError.message || 'Failed to deploy');
-      }
-
-      if (!publishResult?.ok) {
-        console.error('Publish failed:', publishResult);
-        throw new Error(publishResult?.error || 'Deployment failed');
-      }
-
-      const subdomainUrl = publishResult.url || `https://${finalSubdomain}.wakti.ai`;
-      console.log('Deployed successfully to:', subdomainUrl);
+      const subdomainUrl = `https://${finalSubdomain}.wakti.ai`;
+      console.log('Published (wildcard routing) to:', subdomainUrl);
 
       // Update project in database with the published URL
       const { error: updateError } = await supabase
@@ -2268,12 +2246,21 @@ export default function ProjectDetail() {
           status: 'published',
           published_url: subdomainUrl,
           subdomain: finalSubdomain,
-          deployment_id: publishResult.deploymentId || null,
+          deployment_id: null,
+          bundled_code: JSON.stringify(projectFiles),
           published_at: new Date().toISOString(),
         })
         .eq('id', project.id);
       
       if (updateError) {
+        const pgCode = (updateError as any)?.code;
+        const msg = (updateError as any)?.message || '';
+        if (pgCode === '23505' || msg.toLowerCase().includes('projects_unique_published_subdomain')) {
+          const takenMsg = isRTL ? 'هذا الاسم مستخدم بالفعل' : 'This name is already taken';
+          setSubdomainError(takenMsg);
+          toast.error(takenMsg);
+          return;
+        }
         console.error('Error updating project:', updateError);
         // Don't throw - the site is already deployed, just log the DB error
       }
@@ -2283,7 +2270,7 @@ export default function ProjectDetail() {
         status: 'published',
         published_url: subdomainUrl,
         subdomain: finalSubdomain,
-        deployment_id: publishResult.deploymentId || null,
+        deployment_id: null,
       } : null);
 
       setShowPublishModal(false);
