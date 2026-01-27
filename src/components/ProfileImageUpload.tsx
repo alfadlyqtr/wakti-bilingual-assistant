@@ -18,6 +18,7 @@ export function ProfileImageUpload() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const hasTriedSignedFallbackRef = useRef(false);
+  const [optimisticPreviewUrl, setOptimisticPreviewUrl] = useState<string | null>(null);
 
   // Helper: map MIME type to extension
   const mimeToExt: Record<string, string> = {
@@ -163,6 +164,12 @@ export function ProfileImageUpload() {
     const file = event.target.files?.[0];
     if (!file || !user) return;
 
+    // Optimistic preview immediately (like other app)
+    try {
+      const objectUrl = URL.createObjectURL(file);
+      setOptimisticPreviewUrl(objectUrl);
+    } catch {}
+
     // Validate file type
     if (!file.type.startsWith('image/')) {
       toast.error(language === 'ar' ? 'يرجى اختيار ملف صورة صحيح' : 'Please select a valid image file');
@@ -236,6 +243,9 @@ export function ProfileImageUpload() {
       console.error('Avatar upload error:', error);
       const msg = error?.message ? `: ${error.message}` : '';
       toast.error((language === 'ar' ? 'فشل في تحديث الصورة الشخصية' : 'Failed to update profile picture') + msg);
+
+      // If upload fails, clear optimistic preview to avoid showing a non-saved image
+      setOptimisticPreviewUrl(null);
     } finally {
       setIsUploading(false);
       // Reset file input
@@ -284,6 +294,7 @@ export function ProfileImageUpload() {
 
       // Force immediate avatar refresh - clear local state
       setImmediateAvatarUrl(null);
+      setOptimisticPreviewUrl(null);
       setAvatarKey(Date.now());
       
       // Refresh profile data
@@ -354,6 +365,10 @@ export function ProfileImageUpload() {
   const rawAvatarUrl = (immediateAvatarUrl !== undefined ? immediateAvatarUrl : profile?.avatar_url) || undefined;
   const avatarUrl = getCacheBustedAvatarUrl(rawAvatarUrl?.trim());
 
+  // Prefer optimistic local preview first, then remote URL.
+  // Do not suppress preview due to remote load errors.
+  const resolvedAvatarSrc = optimisticPreviewUrl || (!avatarError && avatarUrl ? avatarUrl : (avatarUrl || undefined));
+
   // Clear immediate override once profile is updated with the new URL
   useEffect(() => {
     if (immediateAvatarUrl !== undefined && profile?.avatar_url === immediateAvatarUrl) {
@@ -366,6 +381,15 @@ export function ProfileImageUpload() {
     setAvatarError(false);
     hasTriedSignedFallbackRef.current = false;
   }, [avatarUrl]);
+
+  // Cleanup optimistic object URL to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (optimisticPreviewUrl) {
+        try { URL.revokeObjectURL(optimisticPreviewUrl); } catch {}
+      }
+    };
+  }, [optimisticPreviewUrl]);
 
   // Listen for avatar updates from other components
   useEffect(() => {
@@ -385,7 +409,7 @@ export function ProfileImageUpload() {
           key={`${profile?.avatar_url || 'no-avatar'}-${avatarKey}`} // Force re-render when avatar changes
         >
           <AvatarImage 
-            src={!avatarError && avatarUrl ? avatarUrl : undefined} 
+            src={resolvedAvatarSrc || undefined} 
             alt={language === 'ar' ? 'الصورة الشخصية' : 'Profile picture'}
             onError={handleAvatarError}
           />

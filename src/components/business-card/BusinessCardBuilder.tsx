@@ -151,8 +151,10 @@ function buildPublicCardUrl(params: {
   lastName: string;
 }): string {
   const { origin, shareSlug, firstName, lastName } = params;
-  if (shareSlug) return `${origin}/card/${encodeURIComponent(shareSlug)}`;
-  return `${origin}/card/${encodeURIComponent(firstName.toLowerCase())}-${encodeURIComponent(lastName.toLowerCase())}`;
+  const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
+  const publicOrigin = isLocalhost ? origin : 'https://wakti.qa';
+  if (shareSlug) return `${publicOrigin}/card/${encodeURIComponent(shareSlug)}`;
+  return `${publicOrigin}/card/${encodeURIComponent(firstName.toLowerCase())}-${encodeURIComponent(lastName.toLowerCase())}`;
 }
 
 // TRUE Brand SVG Icons with official brand colors

@@ -77,6 +77,7 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
   const containerRef = useRef<HTMLDivElement>(null);
   const doubleTapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastTapRef = useRef<number>(0);
+  const lastAutoSyncAtRef = useRef<number>(0);
   
   // Calendar subscription state
   const [calendarFeedToken, setCalendarFeedToken] = useState<string | null>(null);
@@ -1026,14 +1027,21 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
   // Auto-sync when calendar data changes (if enabled)
   useEffect(() => {
     let autoSyncTimeout: NodeJS.Timeout;
+    const ONE_HOUR = 60 * 60 * 1000;
     
     const triggerAutoSync = () => {
       if (autoSyncEnabled && nativeCalendarAvailable && calendarEntries.length > 0 && !isSyncing) {
+        const now = Date.now();
+        if (lastAutoSyncAtRef.current && now - lastAutoSyncAtRef.current < ONE_HOUR) {
+          console.log('[CalendarSync] Auto-sync skipped (cooldown active)');
+          return;
+        }
         console.log('[CalendarSync] Auto-sync scheduled');
         // Debounce auto-sync to prevent multiple rapid syncs
         clearTimeout(autoSyncTimeout);
         autoSyncTimeout = setTimeout(() => {
           console.log('[CalendarSync] Auto-sync executing...');
+          lastAutoSyncAtRef.current = Date.now();
           syncCalendars(syncDirection);
         }, 2000); // Wait 2 seconds after last change
       }
