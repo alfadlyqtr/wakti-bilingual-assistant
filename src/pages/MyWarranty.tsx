@@ -287,7 +287,11 @@ interface BusinessCardData {
   };
 }
 
-const ScaledCardPreview: React.FC<{ data: BusinessCardData }> = ({ data }) => {
+const ScaledCardPreview: React.FC<{
+  data: BusinessCardData;
+  isFlipped: boolean;
+  handleFlip: () => void;
+}> = ({ data, isFlipped, handleFlip }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const scaledRef = useRef<HTMLDivElement>(null);
 
@@ -346,7 +350,7 @@ const ScaledCardPreview: React.FC<{ data: BusinessCardData }> = ({ data }) => {
           className="inline-block"
           style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}
         >
-          <CardPreviewLive data={data} isFlipped={false} handleFlip={() => {}} handleAddToWallet={() => {}} />
+          <CardPreviewLive data={data} isFlipped={isFlipped} handleFlip={handleFlip} handleAddToWallet={() => {}} />
         </div>
       </div>
     </div>
@@ -789,6 +793,9 @@ const MyWarranty: React.FC = () => {
 
   const [isCollectedPreviewOpen, setIsCollectedPreviewOpen] = useState(false);
   const [collectedPreview, setCollectedPreview] = useState<{ data: BusinessCardData; shareSlug?: string } | null>(null);
+  const [isCollectedPreviewFlipped, setIsCollectedPreviewFlipped] = useState(false);
+
+  const [myCardFlippedBySlot, setMyCardFlippedBySlot] = useState<Record<number, boolean>>({});
   
   // Get current active card
   const businessCard = businessCards.find(c => c.cardSlot === activeCardSlot) || null;
@@ -2652,7 +2659,16 @@ const MyWarranty: React.FC = () => {
                   className="p-3 cursor-pointer"
                   onClick={() => setActiveCardSlot(card.cardSlot)}
                 >
-                  <ScaledCardPreview data={card} />
+                  <ScaledCardPreview
+                    data={card}
+                    isFlipped={!!myCardFlippedBySlot[card.cardSlot]}
+                    handleFlip={() =>
+                      setMyCardFlippedBySlot((prev) => ({
+                        ...prev,
+                        [card.cardSlot]: !prev[card.cardSlot],
+                      }))
+                    }
+                  />
                 </div>
 
                 {/* Card Actions */}
@@ -2760,11 +2776,11 @@ const MyWarranty: React.FC = () => {
             {isRTL ? 'مسح بطاقة' : 'Scan a Card'}
           </Button>
         </div>
-        <div className="grid gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {collectedCards.map((card, index) => (
             <div
               key={index}
-              className="p-3 rounded-2xl bg-white/5 border border-white/10"
+              className="p-2 rounded-2xl bg-white/5 border border-white/10"
               role="button"
               tabIndex={0}
               aria-label={isRTL ? 'فتح البطاقة' : 'Open card'}
@@ -2773,6 +2789,7 @@ const MyWarranty: React.FC = () => {
                 const snapshot = card?.card_snapshot || {};
                 const shareSlug = card?.share_slug || undefined;
                 setCollectedPreview({ data: mapSnapshotToBusinessCardData(snapshot), shareSlug });
+                setIsCollectedPreviewFlipped(false);
                 setIsCollectedPreviewOpen(true);
               }}
               onKeyDown={(e) => {
@@ -2781,11 +2798,12 @@ const MyWarranty: React.FC = () => {
                   const snapshot = card?.card_snapshot || {};
                   const shareSlug = card?.share_slug || undefined;
                   setCollectedPreview({ data: mapSnapshotToBusinessCardData(snapshot), shareSlug });
+                  setIsCollectedPreviewFlipped(false);
                   setIsCollectedPreviewOpen(true);
                 }
               }}
             >
-              <ScaledCardPreview data={mapSnapshotToBusinessCardData(card?.card_snapshot || {})} />
+              <CompactCardPreview data={mapSnapshotToBusinessCardData(card?.card_snapshot || {})} />
             </div>
           ))}
         </div>
@@ -4186,8 +4204,8 @@ const MyWarranty: React.FC = () => {
             <div className="space-y-3">
               <CardPreviewLive
                 data={collectedPreview.data}
-                isFlipped={false}
-                handleFlip={() => {}}
+                isFlipped={isCollectedPreviewFlipped}
+                handleFlip={() => setIsCollectedPreviewFlipped((v) => !v)}
                 handleAddToWallet={() => {}}
               />
             </div>
