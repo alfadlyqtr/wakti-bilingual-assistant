@@ -1862,7 +1862,7 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
     }
   };
 
-  const handleAddToWallet = async (targetWindow?: Window | null) => {
+  const handleAddToWallet = async () => {
     // Validate required fields
     if (!formData.firstName || !formData.lastName) {
       toast.error(isRTL ? 'يرجى إدخال الاسم الأول والأخير' : 'Please enter first and last name');
@@ -1870,9 +1870,6 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
     }
 
     try {
-      // Show a loading indicator
-      const loadingToastId = toast.loading(isRTL ? 'جارٍ إنشاء بطاقة المحفظة...' : 'Preparing Apple Wallet pass...');
-      
       const cardUrl = `${window.location.origin}/card/${encodeURIComponent(formData.firstName.toLowerCase())}-${encodeURIComponent(formData.lastName.toLowerCase())}`;
       
       // Prepare card data for the pass
@@ -1893,18 +1890,9 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
       if (isWalletSupported()) {
         // Use the native SDK to add to wallet directly
         console.log('Using Natively Wallet SDK');
+        const loadingToastId = toast.loading(isRTL ? 'جارٍ إنشاء بطاقة المحفظة...' : 'Preparing Apple Wallet pass...');
         addBusinessCardToWallet(cardData, (result) => {
-          // Dismiss loading indicator
           toast.dismiss(loadingToastId);
-
-          if (targetWindow) {
-            try {
-              targetWindow.close();
-            } catch {
-              // ignore
-            }
-          }
-          
           if (result.status === 'SUCCESS') {
             toast.success(isRTL ? 'تمت إضافة البطاقة إلى المحفظة' : 'Card added to Apple Wallet');
           } else {
@@ -1912,51 +1900,19 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
           }
         });
       } else {
-        // Fallback to web approach - fetch pass invisibly then trigger download
-        console.log('Fetching wallet pass in background');
+        // Direct navigation to pkpass URL - simplest approach for iOS webviews
+        // iOS will detect the application/vnd.apple.pkpass content-type and show Add to Wallet
+        console.log('Navigating directly to wallet pass URL');
 
-        try {
-          // Use simple URL-safe base64 encoding
-          const jsonString = JSON.stringify(cardData);
-          const base64 = btoa(unescape(encodeURIComponent(jsonString)));
-          const urlSafeBase64 = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-          
-          const passUrl = `https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-wallet-pass?data=${urlSafeBase64}`;
+        const jsonString = JSON.stringify(cardData);
+        const base64 = btoa(unescape(encodeURIComponent(jsonString)));
+        const urlSafeBase64 = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        
+        const passUrl = `https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-wallet-pass?data=${urlSafeBase64}`;
 
-          // In iOS in-app webviews, fetching a blob and then navigating to a blob URL
-          // is frequently blocked or silently ignored.
-          // Most reliable: navigate the user-gesture-opened window directly to the pkpass URL.
-          const navTarget = targetWindow || window;
-
-          if (targetWindow) {
-            try {
-              targetWindow.document.open();
-              targetWindow.document.write(
-                `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1" /></head><body style="font-family:system-ui;padding:24px;">` +
-                  `<div style="font-size:16px;font-weight:600;margin-bottom:8px;">${
-                    isRTL ? 'جارٍ تجهيز بطاقة المحفظة...' : 'Preparing your Wallet pass...'
-                  }</div>` +
-                  `<div style="font-size:13px;opacity:0.7;">${
-                    isRTL ? 'إذا لم يتم فتح المحفظة خلال لحظات، أغلق هذه الشاشة وحاول مرة أخرى.' : 'If Wallet does not open in a moment, close this screen and try again.'
-                  }</div>` +
-                `</body></html>`
-              );
-              targetWindow.document.close();
-            } catch {
-              // ignore
-            }
-          }
-
-          // Dismiss loading toast before navigation
-          toast.dismiss(loadingToastId);
-
-          (navTarget as any).location.href = passUrl;
-          
-        } catch (err) {
-          console.error('Wallet pass error:', err);
-          toast.dismiss(loadingToastId);
-          toast.error(isRTL ? 'حدث خطأ. حاول مرة أخرى' : 'Something went wrong. Please try again.');
-        }
+        // Navigate current window directly to the pkpass URL
+        // This is the most reliable method in iOS webviews
+        window.location.href = passUrl;
       }
     } catch (error) {
       console.error('Wallet pass error:', error);
@@ -2121,10 +2077,7 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
 
         {/* Add to Apple Wallet */}
         <Button 
-          onClick={() => {
-            const w = window.open('about:blank', '_blank');
-            handleAddToWallet(w);
-          }}
+          onClick={handleAddToWallet}
           className="w-full h-12 bg-black text-white hover:bg-gray-900"
         >
           <Smartphone className="w-5 h-5 mr-2" />
