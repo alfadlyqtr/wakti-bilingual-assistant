@@ -17,6 +17,7 @@ export function ProfileImageUpload() {
   const [avatarError, setAvatarError] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const hasTriedSignedFallbackRef = useRef(false);
 
   // Helper: map MIME type to extension
   const mimeToExt: Record<string, string> = {
@@ -303,9 +304,35 @@ export function ProfileImageUpload() {
     }
   };
 
-  const handleAvatarError = () => {
+  const handleAvatarError = async () => {
     console.log('Avatar image failed to load');
-    setAvatarError(true);
+
+    if (hasTriedSignedFallbackRef.current) {
+      setAvatarError(true);
+      return;
+    }
+
+    const currentUrl = (rawAvatarUrl || '').trim();
+    const path = extractAvatarStoragePath(currentUrl);
+    if (!path) {
+      setAvatarError(true);
+      return;
+    }
+
+    try {
+      hasTriedSignedFallbackRef.current = true;
+      const { data, error } = await supabase.storage.from('avatars').createSignedUrl(path, 60 * 60);
+      if (error || !data?.signedUrl) {
+        setAvatarError(true);
+        return;
+      }
+      setImmediateAvatarUrl(data.signedUrl);
+      setAvatarKey(Date.now());
+      setAvatarError(false);
+    } catch (e) {
+      console.error('Signed avatar fallback failed:', e);
+      setAvatarError(true);
+    }
   };
 
   const getInitials = () => {
@@ -337,6 +364,7 @@ export function ProfileImageUpload() {
   // Reset error when avatar URL changes so new images render after a previous load error
   useEffect(() => {
     setAvatarError(false);
+    hasTriedSignedFallbackRef.current = false;
   }, [avatarUrl]);
 
   // Listen for avatar updates from other components

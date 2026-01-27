@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +34,7 @@ export function DesktopHeader() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   // Local override for immediate avatar display before refetch completes
   const [immediateAvatarUrl, setImmediateAvatarUrl] = useState<string | null | undefined>(undefined);
+  const [hasTriedSignedFallback, setHasTriedSignedFallback] = useState(false);
   
   const handleLogout = async () => {
     await signOut();
@@ -45,6 +47,36 @@ export function DesktopHeader() {
     const timestamp = avatarKey;
     const separator = url.includes('?') ? '&' : '?';
     return `${url}${separator}t=${timestamp}`;
+  };
+
+  const extractAvatarStoragePath = (urlOrPath: string): string | null => {
+    const raw = (urlOrPath || '').trim();
+    if (!raw) return null;
+    const publicPrefix = '/storage/v1/object/public/avatars/';
+    const signedPrefix = '/storage/v1/object/sign/avatars/';
+    const idxPublic = raw.indexOf(publicPrefix);
+    if (idxPublic !== -1) return raw.slice(idxPublic + publicPrefix.length).split('?')[0] || null;
+    const idxSigned = raw.indexOf(signedPrefix);
+    if (idxSigned !== -1) return raw.slice(idxSigned + signedPrefix.length).split('?')[0] || null;
+    if (raw.includes('://')) return null;
+    return raw.split('?')[0] || null;
+  };
+
+  const handleAvatarImageError = async () => {
+    if (hasTriedSignedFallback) return;
+    const baseUrl = immediateAvatarUrl !== undefined ? immediateAvatarUrl : profile?.avatar_url;
+    const currentUrl = (baseUrl || '').trim();
+    const path = extractAvatarStoragePath(currentUrl);
+    if (!path) return;
+    try {
+      setHasTriedSignedFallback(true);
+      const { data, error } = await supabase.storage.from('avatars').createSignedUrl(path, 60 * 60);
+      if (error || !data?.signedUrl) return;
+      setImmediateAvatarUrl(data.signedUrl);
+      setAvatarKey(Date.now());
+    } catch (e) {
+      console.error('Signed avatar fallback failed:', e);
+    }
   };
 
   // Listen for avatar update events to force refresh
@@ -72,6 +104,10 @@ export function DesktopHeader() {
       setImmediateAvatarUrl(undefined);
     }
   }, [profile?.avatar_url, immediateAvatarUrl]);
+
+  useEffect(() => {
+    setHasTriedSignedFallback(false);
+  }, [profile?.avatar_url]);
 
   // Get avatar URL - prefer immediate override, then profile data with cache-busting
   const avatarUrl = immediateAvatarUrl !== undefined 
@@ -251,7 +287,7 @@ export function DesktopHeader() {
                     className="h-full w-full"
                     key={`${profile?.avatar_url || 'no-avatar'}-${avatarKey}`}
                   >
-                    <AvatarImage src={avatarUrl} />
+                    <AvatarImage src={avatarUrl} onError={handleAvatarImageError} />
                     <AvatarFallback className="text-sm">{user?.email ? user.email[0].toUpperCase() : '?'}</AvatarFallback>
                   </Avatar>
                   <UnreadBadge count={unreadTotal} size="sm" className="-right-0.5 -top-0.5" />

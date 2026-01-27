@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LogOut, Settings, MessageSquare, Users, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
+import { supabase } from "@/integrations/supabase/client";
 
 export function UserMenu() {
   const { user, signOut } = useAuth();
@@ -22,6 +23,9 @@ export function UserMenu() {
   const { language } = useTheme();
   const navigate = useNavigate();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [immediateAvatarUrl, setImmediateAvatarUrl] = useState<string | null | undefined>(undefined);
+  const [avatarKey, setAvatarKey] = useState(Date.now());
+  const [hasTriedSignedFallback, setHasTriedSignedFallback] = useState(false);
 
   const handleSignOut = async () => {
     try {
@@ -52,13 +56,49 @@ export function UserMenu() {
   // Add cache-busting to avatar URL to force refresh
   const getCacheBustedAvatarUrl = (url: string | null | undefined) => {
     if (!url) return undefined;
-    const timestamp = Date.now();
+    const timestamp = avatarKey;
     const separator = url.includes('?') ? '&' : '?';
     return `${url}${separator}t=${timestamp}`;
   };
 
-  // Get avatar URL from profile data with cache-busting
-  const avatarUrl = profile?.avatar_url ? getCacheBustedAvatarUrl(profile.avatar_url) : undefined;
+  const extractAvatarStoragePath = (urlOrPath: string): string | null => {
+    const raw = (urlOrPath || '').trim();
+    if (!raw) return null;
+    const publicPrefix = '/storage/v1/object/public/avatars/';
+    const signedPrefix = '/storage/v1/object/sign/avatars/';
+    const idxPublic = raw.indexOf(publicPrefix);
+    if (idxPublic !== -1) return raw.slice(idxPublic + publicPrefix.length).split('?')[0] || null;
+    const idxSigned = raw.indexOf(signedPrefix);
+    if (idxSigned !== -1) return raw.slice(idxSigned + signedPrefix.length).split('?')[0] || null;
+    if (raw.includes('://')) return null;
+    return raw.split('?')[0] || null;
+  };
+
+  const rawAvatarUrl = (immediateAvatarUrl !== undefined ? immediateAvatarUrl : profile?.avatar_url) || undefined;
+  const avatarUrl = rawAvatarUrl ? getCacheBustedAvatarUrl(rawAvatarUrl) : undefined;
+
+  const handleAvatarImageError = async () => {
+    if (hasTriedSignedFallback) return;
+    const currentUrl = (rawAvatarUrl || '').trim();
+    const path = extractAvatarStoragePath(currentUrl);
+    if (!path) return;
+    try {
+      setHasTriedSignedFallback(true);
+      const { data, error } = await supabase.storage.from('avatars').createSignedUrl(path, 60 * 60);
+      if (error || !data?.signedUrl) return;
+      setImmediateAvatarUrl(data.signedUrl);
+      setAvatarKey(Date.now());
+    } catch (e) {
+      console.error('Signed avatar fallback failed:', e);
+    }
+  };
+
+  // Reset fallback attempts when profile url changes
+  useEffect(() => {
+    setHasTriedSignedFallback(false);
+    setImmediateAvatarUrl(undefined);
+    setAvatarKey(Date.now());
+  }, [profile?.avatar_url]);
 
   return (
     <DropdownMenu>
@@ -71,6 +111,7 @@ export function UserMenu() {
             <AvatarImage 
               src={avatarUrl} 
               alt={profile?.display_name || user?.user_metadata?.full_name || "User"}
+              onError={handleAvatarImageError}
             />
             <AvatarFallback className="bg-blue-100 text-blue-700 font-semibold text-xs">
               {getUserInitials()}

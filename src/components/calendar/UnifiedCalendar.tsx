@@ -1039,14 +1039,19 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
         {/* Top bar with sync and date controls */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full gap-2">
           {/* Sync controls - button and auto-sync toggle */}
-          <div className="flex items-center gap-2">
-            <input
-            type="button"
-            value={language === 'ar' ? 'مزامنة' : 'Sync'}
-            disabled={isSyncing}
-            onClick={handleSyncClick}
-            className="px-4 py-2 rounded-md text-sm font-medium bg-primary text-primary-foreground disabled:opacity-50"
-            />
+          <div className="flex items-center gap-2 relative z-50">
+            <button
+              type="button"
+              disabled={isSyncing}
+              onClick={() => {
+                console.log('[SyncButton] CLICKED!');
+                alert('Sync button clicked!');
+                handleSyncClick();
+              }}
+              className="px-4 py-2 rounded-md text-sm font-medium bg-primary text-primary-foreground disabled:opacity-50 cursor-pointer touch-manipulation"
+            >
+              {language === 'ar' ? 'مزامنة' : 'Sync'}
+            </button>
             
             {/* Auto-sync toggle */}
             <div className="flex items-center gap-1.5">

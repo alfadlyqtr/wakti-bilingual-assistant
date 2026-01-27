@@ -39,6 +39,7 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
   const [avatarKey, setAvatarKey] = useState(Date.now());
   // Local override for immediate avatar display before refetch completes
   const [immediateAvatarUrl, setImmediateAvatarUrl] = useState<string | null | undefined>(undefined);
+  const hasTriedSignedFallbackRef = useRef(false);
   
   // Check if we're on the Wakti AI V2 page
   const isWaktiAIPage = location.pathname === '/wakti-ai';
@@ -54,6 +55,35 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
     const timestamp = avatarKey;
     const separator = url.includes('?') ? '&' : '?';
     return `${url}${separator}t=${timestamp}`;
+  };
+
+  const extractAvatarStoragePath = (urlOrPath: string): string | null => {
+    const raw = (urlOrPath || '').trim();
+    if (!raw) return null;
+    const publicPrefix = '/storage/v1/object/public/avatars/';
+    const signedPrefix = '/storage/v1/object/sign/avatars/';
+    const idxPublic = raw.indexOf(publicPrefix);
+    if (idxPublic !== -1) return raw.slice(idxPublic + publicPrefix.length).split('?')[0] || null;
+    const idxSigned = raw.indexOf(signedPrefix);
+    if (idxSigned !== -1) return raw.slice(idxSigned + signedPrefix.length).split('?')[0] || null;
+    if (raw.includes('://')) return null;
+    return raw.split('?')[0] || null;
+  };
+
+  const handleAvatarImageError = async () => {
+    if (hasTriedSignedFallbackRef.current) return;
+    const currentUrl = (rawAvatarUrl || '').trim();
+    const path = extractAvatarStoragePath(currentUrl);
+    if (!path) return;
+    try {
+      hasTriedSignedFallbackRef.current = true;
+      const { data, error } = await supabase.storage.from('avatars').createSignedUrl(path, 60 * 60);
+      if (error || !data?.signedUrl) return;
+      setImmediateAvatarUrl(data.signedUrl);
+      setAvatarKey(Date.now());
+    } catch (e) {
+      console.error('Signed avatar fallback failed:', e);
+    }
   };
 
   // Listen for avatar update events to force refresh
@@ -81,6 +111,10 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
       setImmediateAvatarUrl(undefined);
     }
   }, [profile?.avatar_url, immediateAvatarUrl]);
+
+  useEffect(() => {
+    hasTriedSignedFallbackRef.current = false;
+  }, [profile?.avatar_url]);
 
   const rawAvatarUrl = (immediateAvatarUrl !== undefined ? immediateAvatarUrl : profile?.avatar_url) || undefined;
   const avatarUrl = getCacheBustedAvatarUrl(rawAvatarUrl?.trim());
@@ -344,7 +378,7 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
                     className="h-7 w-7"
                     key={`${profile?.avatar_url || 'no-avatar'}-${avatarKey}`}
                   >
-                    <AvatarImage src={avatarUrl} />
+                    <AvatarImage src={avatarUrl} onError={handleAvatarImageError} />
                     <AvatarFallback className="text-xs" delayMs={profileLoading ? 0 : 600}>
                       {profileLoading ? (
                         <span className="animate-pulse bg-muted-foreground/30 rounded-full w-full h-full" />
