@@ -248,6 +248,7 @@ export default function AdminAIUsage() {
           );
         }
       },
+      { name: 'ID', hidden: true },
     ];
   }, [logsById]);
 

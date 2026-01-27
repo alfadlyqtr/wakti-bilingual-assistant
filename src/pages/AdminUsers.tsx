@@ -313,6 +313,7 @@ export default function AdminUsers() {
           );
         }
       },
+      { name: 'ID', hidden: true },
     ];
   }, [usersById, usageMonth, usageScope]);
 
