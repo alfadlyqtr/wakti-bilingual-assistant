@@ -648,7 +648,7 @@ export default function AdminAIUsage() {
                   columns={gridColumns as any}
                   search={true}
                   sort={true}
-                  pagination={{ enabled: true, limit: 50 }}
+                  pagination={{ limit: 50 }}
                   className={{
                     table: 'w-full',
                   }}

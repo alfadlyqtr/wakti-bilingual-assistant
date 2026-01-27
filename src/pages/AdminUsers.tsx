@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { AdminHeader } from '@/components/admin/AdminHeader';
@@ -11,6 +11,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { AlertTriangle, RefreshCw, Search, Shield, Users, User, Mail, Calendar, Clock, Activity, Crown, CreditCard, CheckCircle, XCircle, Smartphone, Globe, MapPin } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
+import { Grid } from 'gridjs-react';
+import { h } from 'gridjs';
+import 'gridjs/dist/theme/mermaid.css';
 
 interface AdminUser {
   id: string;
@@ -173,6 +176,161 @@ export default function AdminUsers() {
     return matchesSearch;
   });
 
+  const usersById = useMemo(() => {
+    const map = new Map<string, AdminUser>();
+    for (const u of filteredUsers) map.set(u.id, u);
+    return map;
+  }, [filteredUsers]);
+
+  const openDetailsForUser = async (user: AdminUser) => {
+    setSelectedUser(user);
+    setShowDetails(true);
+    setDetailsLoading(true);
+    setUserDetails(null);
+    setFeatureUsage(null);
+    try {
+      const { data, error } = await (supabase as any).rpc('admin_get_user_full_profile', {
+        p_user_id: user.id,
+        p_plan_name: null,
+        p_from: null,
+        p_to: null,
+      });
+      if (error) {
+        console.error('[AdminUsers] Failed to load user details:', error);
+        toast.error(`Failed to load user details: ${error.message}`);
+      } else {
+        setUserDetails(data);
+        try {
+          const { data: fu, error: fue } = await (supabase as any).rpc('admin_get_user_usage', {
+            p_user_id: user.id,
+            p_scope: usageScope,
+            p_month: usageMonth,
+          });
+          if (!fue && Array.isArray(fu)) {
+            setFeatureUsage(fu);
+          } else {
+            setFeatureUsage([]);
+          }
+        } catch (e) {
+          console.error('[AdminUsers] Feature usage fetch error:', e);
+          setFeatureUsage([]);
+        }
+      }
+    } catch (err) {
+      console.error('[AdminUsers] Exception loading user details:', err);
+      toast.error('Error loading user details');
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
+
+  const gridColumns = useMemo(() => {
+    return [
+      { name: 'Name', sort: true },
+      { name: 'Email', sort: true },
+      { name: 'Status', sort: true },
+      { name: 'Subscription', sort: true },
+      { name: 'Created', sort: true },
+      {
+        name: 'Actions',
+        sort: false,
+        formatter: (_: any, row: any) => {
+          const id = row?.cells?.[6]?.data as string | undefined;
+          const user = id ? usersById.get(id) : undefined;
+          if (!user) return '';
+          return h(
+            'div',
+            { className: 'flex gap-2 flex-wrap' },
+            h(
+              'button',
+              {
+                className: 'px-2 py-1 text-xs rounded-md border border-border bg-background/50 hover:bg-accent',
+                onClick: () => openDetailsForUser(user),
+              },
+              'Details'
+            ),
+            h(
+              'button',
+              {
+                className: 'px-2 py-1 text-xs rounded-md border border-border bg-background/50 hover:bg-accent',
+                onClick: async () => {
+                  setIsImpersonating(true);
+                  try {
+                    const reason = `Admin viewing user context from Users page`;
+                    const { data, error } = await (supabase as any).rpc('admin_start_impersonation', {
+                      p_user_id: user.id,
+                      p_reason: reason,
+                    });
+                    if (error) {
+                      console.error('[AdminUsers] Failed to start impersonation:', error);
+                      toast.error(`Failed to log impersonation: ${error.message}`);
+                    } else {
+                      const context = {
+                        userEmail: user.email,
+                        reason,
+                        eventId: data?.event_id,
+                        startedAt: data?.started_at,
+                      };
+                      try {
+                        localStorage.setItem('admin_impersonation_context', JSON.stringify(context));
+                      } catch {
+                        // ignore storage errors
+                      }
+                      toast.success(`Impersonation context started for ${user.email}`);
+                    }
+                  } catch (err) {
+                    console.error('[AdminUsers] Exception starting impersonation:', err);
+                    toast.error('Error starting impersonation context');
+                  } finally {
+                    setIsImpersonating(false);
+                  }
+                },
+              },
+              'Impersonation'
+            ),
+            h(
+              'button',
+              {
+                className: 'px-2 py-1 text-xs rounded-md border border-border bg-background/50 hover:bg-accent',
+                onClick: () => {
+                  setSelectedUser(user);
+                  setShowSuspendConfirm(true);
+                },
+              },
+              user.is_suspended ? 'Unsuspend' : 'Suspend'
+            ),
+            h(
+              'button',
+              {
+                className: 'px-2 py-1 text-xs rounded-md border border-red-500/40 text-red-500 bg-background/50 hover:bg-red-500/10',
+                onClick: () => {
+                  setSelectedUser(user);
+                  setShowDeleteConfirm(true);
+                },
+              },
+              'Delete'
+            )
+          );
+        }
+      },
+    ];
+  }, [usersById, usageMonth, usageScope]);
+
+  const gridData = useMemo(() => {
+    return filteredUsers.map((user) => {
+      const createdAt = user.created_at ? new Date(user.created_at) : new Date();
+      return [
+        user.display_name || '',
+        user.email || '',
+        user.is_suspended ? 'Suspended' : 'Active',
+        user.subscription_status || '',
+        createdAt.toLocaleDateString(),
+        '',
+        user.id,
+      ];
+    });
+  }, [filteredUsers]);
+
   return (
     <div className="min-h-screen bg-background">
       <AdminHeader 
@@ -241,134 +399,24 @@ export default function AdminUsers() {
           </div>
         </div>
 
-        {/* User Cards */}
+        {/* Users Table */}
         <div className="grid gap-4">
           {isLoading ? (
             <div className="text-center py-8">Loading users...</div>
           ) : filteredUsers.length === 0 ? (
             <div className="text-center py-8">No users found</div>
           ) : (
-            filteredUsers.map((user) => (
-              <Card key={user.id} className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-semibold">{user.display_name}</h3>
-                    <p className="text-sm text-muted-foreground">{user.email}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Status: {user.is_suspended ? 'Suspended' : 'Active'}
-                    </p>
-                  </div>
-                  <div className="flex gap-2 flex-wrap justify-end">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={async () => {
-                        setSelectedUser(user);
-                        setShowDetails(true);
-                        setDetailsLoading(true);
-                        setUserDetails(null);
-                        setFeatureUsage(null);
-                        try {
-                          const { data, error } = await (supabase as any).rpc('admin_get_user_full_profile', {
-                            p_user_id: user.id,
-                            p_plan_name: null,
-                            p_from: null,
-                            p_to: null,
-                          });
-                          if (error) {
-                            console.error('[AdminUsers] Failed to load user details:', error);
-                            toast.error(`Failed to load user details: ${error.message}`);
-                          } else {
-                            setUserDetails(data);
-                            try {
-                              const { data: fu, error: fue } = await (supabase as any).rpc('admin_get_user_usage', {
-                                p_user_id: user.id,
-                                p_scope: usageScope,
-                                p_month: usageMonth,
-                              });
-                              if (!fue && Array.isArray(fu)) {
-                                setFeatureUsage(fu);
-                              } else {
-                                setFeatureUsage([]);
-                              }
-                            } catch (e) {
-                              console.error('[AdminUsers] Feature usage fetch error:', e);
-                              setFeatureUsage([]);
-                            }
-                          }
-                        } catch (err) {
-                          console.error('[AdminUsers] Exception loading user details:', err);
-                          toast.error('Error loading user details');
-                        } finally {
-                          setDetailsLoading(false);
-                        }
-                      }}
-                    >
-                      Details
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={isImpersonating}
-                      onClick={async () => {
-                        setIsImpersonating(true);
-                        try {
-                          const reason = `Admin viewing user context from Users page`;
-                          const { data, error } = await (supabase as any).rpc('admin_start_impersonation', {
-                            p_user_id: user.id,
-                            p_reason: reason,
-                          });
-                          if (error) {
-                            console.error('[AdminUsers] Failed to start impersonation:', error);
-                            toast.error(`Failed to log impersonation: ${error.message}`);
-                          } else {
-                            const context = {
-                              userEmail: user.email,
-                              reason,
-                              eventId: data?.event_id,
-                              startedAt: data?.started_at,
-                            };
-                            try {
-                              localStorage.setItem('admin_impersonation_context', JSON.stringify(context));
-                            } catch {
-                              // ignore storage errors
-                            }
-                            toast.success(`Impersonation context started for ${user.email}`);
-                          }
-                        } catch (err) {
-                          console.error('[AdminUsers] Exception starting impersonation:', err);
-                          toast.error('Error starting impersonation context');
-                        } finally {
-                          setIsImpersonating(false);
-                        }
-                      }}
-                    >
-                      Impersonation
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => {
-                        setSelectedUser(user);
-                        setShowSuspendConfirm(true);
-                      }}
-                    >
-                      {user.is_suspended ? 'Unsuspend' : 'Suspend'}
-                    </Button>
-                    <Button 
-                      variant="destructive" 
-                      size="sm"
-                      onClick={() => {
-                        setSelectedUser(user);
-                        setShowDeleteConfirm(true);
-                      }}
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            ))
+            <Card className="p-4">
+              <div className="w-full overflow-x-auto">
+                <Grid
+                  data={gridData}
+                  columns={gridColumns as any}
+                  search={true}
+                  sort={true}
+                  pagination={{ limit: 50 }}
+                />
+              </div>
+            </Card>
           )}
         </div>
       </div>
@@ -650,6 +698,9 @@ export default function AdminUsers() {
                           setFeatureUsage([]);
                         }
                       }}
+                      aria-label="Usage month"
+                      title="Usage month"
+                      placeholder="YYYY-MM"
                       className="h-8 rounded border px-2 text-xs bg-background"
                     />
                   )}
