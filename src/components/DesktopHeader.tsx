@@ -199,16 +199,16 @@ export function DesktopHeader() {
   return (
     <div className="w-full px-6 py-0 transition-all duration-300" dir="ltr">
       <div
-        className="relative bg-background rounded-3xl shadow-2xl h-[var(--desktop-header-h)] flex items-center justify-between px-6 solid-bg mx-2 md:mx-4 lg:mx-6"
+        className="relative bg-background rounded-[2.75rem] shadow-2xl h-[var(--desktop-header-h)] flex items-center justify-between px-6 mx-2 md:mx-4 lg:mx-6"
         style={{
           background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 50%, rgba(255, 255, 255, 0.1) 100%), var(--gradient-background)',
           backdropFilter: 'blur(20px)',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
-          boxShadow: '0 34px 70px -16px rgba(0, 0, 0, 0.34), 0 18px 48px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 14px 48px rgba(99, 102, 241, 0.14)'
+          border: '1px solid rgba(255, 255, 255, 0.28)',
+          boxShadow: '0 28px 56px -12px rgba(0, 0, 0, 0.28), 0 10px 36px rgba(0, 0, 0, 0.14), 0 0 0 1px rgba(255, 255, 255, 0.08), 0 14px 48px rgba(99, 102, 241, 0.14)'
         }}
       >
         {/* Glass reflection overlay */}
-        <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-white/20 via-transparent to-transparent opacity-30 pointer-events-none" />
+        <div className="absolute inset-0 rounded-[2.75rem] bg-gradient-to-br from-white/20 via-transparent to-transparent opacity-30 pointer-events-none" />
         
         <div className="flex items-center gap-3 relative z-10">
           <Link to="/dashboard" className="flex items-center">
@@ -233,10 +233,10 @@ export function DesktopHeader() {
             variant="ghost" 
             size="sm"
             onClick={toggleLanguage}
-            className="rounded-xl h-9 px-3 bg-white/10 dark:bg-white/5 border border-white/20 dark:border-white/10 hover:bg-white/20 dark:hover:bg-white/10 backdrop-blur-sm shadow-lg transition-all duration-300 hover:scale-105"
+            className="rounded-xl h-9 px-3 bg-white/20 dark:bg-white/10 border border-white/30 dark:border-white/20 hover:bg-white/30 dark:hover:bg-white/15 backdrop-blur-sm shadow-xl transition-all duration-300 hover:scale-105"
             aria-label={language === 'en' ? 'Switch to Arabic' : 'Switch to English'}
             style={{
-              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 4px 12px rgba(0, 0, 0, 0.15)'
+              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 6px 18px rgba(0, 0, 0, 0.18)'
             }}
           >
             <span className="text-sm font-medium">
@@ -278,9 +278,9 @@ export function DesktopHeader() {
           {/* User Menu */}
           <DropdownMenu open={userMenuOpen} onOpenChange={setUserMenuOpen}>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-[45px] w-[45px] p-0 rounded-xl relative bg-white/10 dark:bg-white/5 border border-white/20 dark:border-white/10 hover:bg-white/20 dark:hover:bg-white/10 backdrop-blur-sm shadow-lg transition-all duration-300 hover:scale-105"
+              <Button variant="ghost" className="h-[45px] w-[45px] p-0 rounded-xl relative bg-white/20 dark:bg-white/10 border border-white/30 dark:border-white/20 hover:bg-white/30 dark:hover:bg-white/15 backdrop-blur-sm shadow-xl transition-all duration-300 hover:scale-105"
                       style={{
-                        boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 4px 12px rgba(0, 0, 0, 0.15)'
+                        boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 6px 18px rgba(0, 0, 0, 0.18)'
                       }}>
                 <span className="relative">
                   <Avatar 

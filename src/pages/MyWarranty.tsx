@@ -21,6 +21,10 @@ import { toast } from '@/hooks/use-toast';
 import { format, differenceInDays, differenceInMonths, parseISO, addMonths } from 'date-fns';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
+  Dialog,
+  DialogContent,
+} from '@/components/ui/dialog';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -341,7 +345,7 @@ const ScaledCardPreview: React.FC<{ data: BusinessCardData }> = ({ data }) => {
           className="inline-block"
           style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}
         >
-          <CardPreviewLive data={data} isFlipped={false} handleFlip={() => {}} />
+          <CardPreviewLive data={data} isFlipped={false} handleFlip={() => {}} handleAddToWallet={() => {}} />
         </div>
       </div>
     </div>
@@ -772,12 +776,172 @@ const MyWarranty: React.FC = () => {
   const [isLoadingCard, setIsLoadingCard] = useState(true);
   const [cardInnerTab, setCardInnerTab] = useState<'mycard' | 'collected'>('mycard');
   const [collectedCards, setCollectedCards] = useState<any[]>([]);
+
+  const [isScanOpen, setIsScanOpen] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [manualScanValue, setManualScanValue] = useState('');
+  const scanVideoRef = useRef<HTMLVideoElement | null>(null);
+  const scanStreamRef = useRef<MediaStream | null>(null);
+  const scanRafRef = useRef<number | null>(null);
   
   // Get current active card
   const businessCard = businessCards.find(c => c.cardSlot === activeCardSlot) || null;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  const stopQrScanner = useCallback(() => {
+    if (scanRafRef.current) {
+      cancelAnimationFrame(scanRafRef.current);
+      scanRafRef.current = null;
+    }
+    if (scanStreamRef.current) {
+      scanStreamRef.current.getTracks().forEach((t) => t.stop());
+      scanStreamRef.current = null;
+    }
+    const video = scanVideoRef.current;
+    if (video) {
+      try {
+        (video as any).srcObject = null;
+      } catch {}
+    }
+    setIsScanning(false);
+  }, []);
+
+  const extractShareSlugFromValue = useCallback((value: string): string | null => {
+    const raw = (value || '').trim();
+    if (!raw) return null;
+    try {
+      const u = new URL(raw);
+      const parts = u.pathname.split('/').filter(Boolean);
+      const cardIdx = parts.findIndex((p) => p.toLowerCase() === 'card');
+      if (cardIdx >= 0 && parts[cardIdx + 1]) return parts[cardIdx + 1];
+      return null;
+    } catch {
+      // Not a URL; if it's just a slug, accept it
+      if (/^[a-z0-9_-]{6,}$/i.test(raw)) return raw;
+      return null;
+    }
+  }, []);
+
+  const fetchCollectedCards = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data, error } = await (supabase as any)
+        .from('collected_business_cards')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setCollectedCards(Array.isArray(data) ? data : []);
+    } catch {
+      setCollectedCards([]);
+    }
+  }, [user]);
+
+  const saveCollectedByShareSlug = useCallback(async (shareSlug: string) => {
+    if (!user) return;
+    const { data, error } = await (supabase as any)
+      .rpc('get_business_card_by_share_slug', { p_share_slug: shareSlug });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) throw new Error('Card not found');
+
+    const snapshot = row;
+    const ownerUserId = row.user_id || null;
+
+    const { error: upsertError } = await (supabase as any)
+      .from('collected_business_cards')
+      .upsert(
+        {
+          user_id: user.id,
+          share_slug: shareSlug,
+          owner_user_id: ownerUserId,
+          card_snapshot: snapshot,
+        },
+        { onConflict: 'user_id,share_slug' }
+      );
+    if (upsertError) throw upsertError;
+  }, [user]);
+
+  const handleScanResultValue = useCallback(async (value: string) => {
+    const shareSlug = extractShareSlugFromValue(value);
+    if (!shareSlug) {
+      setScanError(isRTL ? 'رمز QR غير صالح' : 'Invalid QR code');
+      return;
+    }
+
+    setScanError(null);
+    setIsScanning(false);
+    stopQrScanner();
+
+    try {
+      await saveCollectedByShareSlug(shareSlug);
+      await fetchCollectedCards();
+      toast({
+        title: isRTL ? 'تم الحفظ' : 'Saved',
+        description: isRTL ? 'تم حفظ البطاقة في المحفوظة' : 'Card saved to Collected',
+      });
+      setIsScanOpen(false);
+      setManualScanValue('');
+    } catch {
+      setScanError(isRTL ? 'تعذر حفظ البطاقة' : 'Failed to save card');
+    }
+  }, [extractShareSlugFromValue, fetchCollectedCards, isRTL, saveCollectedByShareSlug, stopQrScanner]);
+
+  const startQrScanner = useCallback(async () => {
+    setScanError(null);
+
+    if (typeof window === 'undefined') {
+      setScanError(isRTL ? 'غير مدعوم' : 'Not supported');
+      return;
+    }
+
+    const hasDetector = typeof (window as any).BarcodeDetector !== 'undefined';
+    if (!hasDetector) {
+      setScanError(isRTL ? 'جهازك لا يدعم مسح QR مباشرة. استخدم إدخال الرابط.' : 'QR scanning not supported on this device. Use manual link input.');
+      return;
+    }
+
+    try {
+      setIsScanning(true);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      });
+      scanStreamRef.current = stream;
+
+      const video = scanVideoRef.current;
+      if (!video) throw new Error('Video not ready');
+
+      (video as any).srcObject = stream;
+      await video.play();
+
+      const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
+
+      const tick = async () => {
+        try {
+          if (!scanVideoRef.current) return;
+          const results = await detector.detect(scanVideoRef.current);
+          if (results && results.length > 0) {
+            const value = results[0].rawValue || '';
+            if (value) {
+              void handleScanResultValue(value);
+              return;
+            }
+          }
+        } catch {}
+        scanRafRef.current = requestAnimationFrame(() => void tick());
+      };
+
+      scanRafRef.current = requestAnimationFrame(() => void tick());
+    } catch {
+      setIsScanning(false);
+      setScanError(isRTL ? 'لم نتمكن من فتح الكاميرا' : 'Could not open camera');
+      stopQrScanner();
+    }
+  }, [handleScanResultValue, isRTL, stopQrScanner]);
 
   // Fetch warranties
   const fetchData = useCallback(async () => {
@@ -2259,6 +2423,24 @@ const MyWarranty: React.FC = () => {
     fetchBusinessCard();
   }, [fetchBusinessCard]);
 
+  useEffect(() => {
+    fetchCollectedCards();
+  }, [fetchCollectedCards]);
+
+  useEffect(() => {
+    if (!isScanOpen) {
+      stopQrScanner();
+      setScanError(null);
+      setManualScanValue('');
+    }
+  }, [isScanOpen, stopQrScanner]);
+
+  useEffect(() => {
+    if (isScanOpen) {
+      void startQrScanner();
+    }
+  }, [isScanOpen, startQrScanner]);
+
   // Handle builder save
   const handleBuilderSave = async (data: BusinessCardData) => {
     if (!user) return;
@@ -2479,7 +2661,7 @@ const MyWarranty: React.FC = () => {
             variant="outline"
             className="rounded-xl"
             onClick={() => {
-              toast({ title: 'Coming soon', description: 'QR scanner coming soon!' });
+              setIsScanOpen(true);
             }}
           >
             {isRTL ? 'مسح بطاقة' : 'Scan a Card'}
@@ -2491,6 +2673,16 @@ const MyWarranty: React.FC = () => {
     // Show collected cards list
     return (
       <div className="flex flex-col h-full px-4 py-4">
+        <div className="flex items-center justify-end mb-3">
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-xl"
+            onClick={() => setIsScanOpen(true)}
+          >
+            {isRTL ? 'مسح بطاقة' : 'Scan a Card'}
+          </Button>
+        </div>
         <div className="grid gap-3">
           {collectedCards.map((card, index) => (
             <div
@@ -2501,8 +2693,21 @@ const MyWarranty: React.FC = () => {
                 <User className="w-6 h-6 text-white" />
               </div>
               <div className="flex-1">
-                <h3 className="font-semibold text-foreground">{card.name}</h3>
-                <p className="text-sm text-muted-foreground">{card.company}</p>
+                <h3 className="font-semibold text-foreground">
+                  {(() => {
+                    const s = card?.card_snapshot || {};
+                    const fn = s.first_name || s.firstName || '';
+                    const ln = s.last_name || s.lastName || '';
+                    const full = `${fn} ${ln}`.trim();
+                    return full || (isRTL ? 'بطاقة' : 'Card');
+                  })()}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {(() => {
+                    const s = card?.card_snapshot || {};
+                    return s.company_name || s.companyName || s.job_title || s.jobTitle || '';
+                  })()}
+                </p>
               </div>
             </div>
           ))}
@@ -3824,6 +4029,69 @@ const MyWarranty: React.FC = () => {
       <div className="flex flex-col h-full w-full max-w-full">
         {viewMode === 'add' ? renderAddView() : viewMode === 'detail' ? renderDetailView() : viewMode === 'ask' ? renderAskView() : renderMainView()}
       </div>
+
+      <Dialog open={isScanOpen} onOpenChange={setIsScanOpen}>
+        <DialogContent
+          className="max-w-md w-[92vw] rounded-2xl border border-white/10 bg-gradient-to-b from-background via-background to-blue-500/5 p-4"
+          title={isRTL ? 'مسح بطاقة' : 'Scan a Card'}
+          description={isRTL ? 'افتح الكاميرا لمسح QR' : 'Open camera to scan a QR'}
+        >
+          <div className="space-y-3">
+            <div className="text-sm font-semibold text-foreground">
+              {isRTL ? 'امسح رمز QR لبطاقة وقتي' : 'Scan a Wakti business card QR'}
+            </div>
+
+            <div className="rounded-2xl overflow-hidden border border-white/10 bg-black/40">
+              <div className="relative w-full aspect-[3/4]">
+                <video
+                  ref={scanVideoRef}
+                  className="absolute inset-0 w-full h-full object-cover"
+                  muted
+                  playsInline
+                />
+                {!isScanning && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Button
+                      variant="outline"
+                      className="rounded-xl bg-white/5 border-white/10"
+                      onClick={() => void startQrScanner()}
+                    >
+                      {isRTL ? 'تشغيل الكاميرا' : 'Start Camera'}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {scanError && (
+              <div className="text-xs text-red-400 border border-red-500/20 bg-red-500/10 rounded-xl p-2">
+                {scanError}
+              </div>
+            )}
+
+            <div className="pt-1">
+              <div className="text-xs text-muted-foreground mb-2">
+                {isRTL ? 'إذا لم يعمل المسح، الصق رابط البطاقة هنا:' : 'If scanning doesn’t work, paste the card link here:'}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  value={manualScanValue}
+                  onChange={(e) => setManualScanValue(e.target.value)}
+                  placeholder={isRTL ? 'https://wakti.qa/card/...' : 'https://wakti.qa/card/...'}
+                  className="bg-white/5 border-white/10 rounded-xl"
+                />
+                <Button
+                  className="rounded-xl bg-gradient-to-r from-blue-500 to-purple-600"
+                  onClick={() => void handleScanResultValue(manualScanValue)}
+                  disabled={!manualScanValue.trim()}
+                >
+                  {isRTL ? 'حفظ' : 'Save'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Removed floating plus button from bottom center */}
 

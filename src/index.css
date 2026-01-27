@@ -820,14 +820,14 @@ textarea::placeholder {
 .app-layout-desktop header, .app-layout-desktop .header,
 .app-layout-tablet header, .app-layout-tablet .header {
   position: fixed !important;
-  top: 0 !important;
-  left: calc(var(--current-sidebar-width, var(--sidebar-width, 240px)) + 0.5rem) !important; /* Account for dynamic sidebar width */
+  top: 1rem !important;
+  left: calc(var(--current-sidebar-width, var(--sidebar-width, 240px)) + 1rem) !important; /* Match sidebar inset */
   right: 1rem !important;
-  z-index: 100 !important;
+  z-index: 999 !important;
   background-color: transparent !important;
   background: transparent !important;
   height: var(--app-header-h, 56px) !important;
-  width: calc(100% - var(--current-sidebar-width, var(--sidebar-width, 240px)) - 1.5rem) !important; /* Set explicit width */
+  width: calc(100% - var(--current-sidebar-width, var(--sidebar-width, 240px)) - 2rem) !important; /* Match sidebar inset */
 }
 
 /* Ensure the DesktopHeader container itself is fixed */
@@ -842,10 +842,10 @@ textarea::placeholder {
 /* Fixed header styling */
 .fixed-header {
   position: fixed !important;
-  top: 0 !important;
-  z-index: 100 !important;
-  width: calc(100% - var(--current-sidebar-width, var(--sidebar-width, 240px)) - 1.5rem) !important;
-  left: calc(var(--current-sidebar-width, var(--sidebar-width, 240px)) + 0.5rem) !important;
+  top: 1rem !important;
+  z-index: 999 !important;
+  width: calc(100% - var(--current-sidebar-width, var(--sidebar-width, 240px)) - 2rem) !important;
+  left: calc(var(--current-sidebar-width, var(--sidebar-width, 240px)) + 1rem) !important;
   right: 1rem !important;
   pointer-events: auto !important;
   margin: 0 !important;
@@ -854,8 +854,8 @@ textarea::placeholder {
 
 /* Tablet fixed header adjustment */
 .app-layout-tablet .fixed-header {
-  width: calc(100% - var(--current-sidebar-width, var(--sidebar-width, 240px)) - 1.5rem) !important;
-  left: calc(var(--current-sidebar-width, var(--sidebar-width, 240px)) + 0.5rem) !important;
+  width: calc(100% - var(--current-sidebar-width, var(--sidebar-width, 240px)) - 2rem) !important;
+  left: calc(var(--current-sidebar-width, var(--sidebar-width, 240px)) + 1rem) !important;
 }
 
 /* Make containers responsive to screen size */
@@ -1681,11 +1681,7 @@ body.keyboard-visible {
 
 /* FINAL OPAQUE OVERRIDES — ensure header and chat input are solid everywhere */
 .app-layout-mobile header,
-.app-layout-mobile .header,
-.app-layout-desktop header,
-.app-layout-desktop .header,
-.app-layout-tablet header,
-.app-layout-tablet .header {
+.app-layout-mobile .header {
   background: hsl(var(--background)) !important;
   background-color: hsl(var(--background)) !important;
   backdrop-filter: none !important;
