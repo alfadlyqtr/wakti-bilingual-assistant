@@ -1862,8 +1862,7 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
     }
   };
 
-  const handleAddToWallet = async () => {
-    console.log("handleAddToWallet called");
+  const handleAddToWallet = async (targetWindow?: Window | null) => {
     // Validate required fields
     if (!formData.firstName || !formData.lastName) {
       toast.error(isRTL ? 'يرجى إدخال الاسم الأول والأخير' : 'Please enter first and last name');
@@ -1897,6 +1896,14 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
         addBusinessCardToWallet(cardData, (result) => {
           // Dismiss loading indicator
           toast.dismiss(loadingToastId);
+
+          if (targetWindow) {
+            try {
+              targetWindow.close();
+            } catch {
+              // ignore
+            }
+          }
           
           if (result.status === 'SUCCESS') {
             toast.success(isRTL ? 'تمت إضافة البطاقة إلى المحفظة' : 'Card added to Apple Wallet');
@@ -1937,7 +1944,10 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
           toast.dismiss(loadingToastId);
           
           // Open the blob URL - iOS will detect the .pkpass content type and show "Add to Wallet"
-          window.location.href = blobUrl;
+          // In iOS in-app webviews, navigation after async work can be blocked.
+          // We use a window opened during the user tap when available.
+          const navTarget = targetWindow || window;
+          (navTarget as any).location.href = blobUrl;
           
           // Clean up blob URL after a delay
           setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
@@ -2112,8 +2122,8 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
         {/* Add to Apple Wallet */}
         <Button 
           onClick={() => {
-            alert('clicked');
-            handleAddToWallet();
+            const w = window.open('about:blank', '_blank');
+            handleAddToWallet(w);
           }}
           className="w-full h-12 bg-black text-white hover:bg-gray-900"
         >
