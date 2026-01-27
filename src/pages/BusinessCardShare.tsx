@@ -72,6 +72,7 @@ export default function BusinessCardShare() {
   const [card, setCard] = useState<BusinessCardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isFlipped, setIsFlipped] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -161,7 +162,12 @@ export default function BusinessCardShare() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background via-background to-blue-500/5 p-4">
-      <CardPreviewLive data={card as any} />
+      <CardPreviewLive
+        data={card as any}
+        isFlipped={isFlipped}
+        handleFlip={() => setIsFlipped((v) => !v)}
+        handleAddToWallet={() => {}}
+      />
     </div>
   );
 }

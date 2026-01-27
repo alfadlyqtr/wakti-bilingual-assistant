@@ -624,7 +624,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             <div className="relative">
               <AppHeader unreadTotal={unreadData.unreadTotal} />
             </div>
-            <main>
+            <main className="pt-2">
               {content}
             </main>
             <PresenceBeacon />

@@ -29,6 +29,13 @@ export function useUserProfile() {
   const [error, setError] = useState<string | null>(null);
   const IS_DEV = !import.meta.env.PROD;
 
+  const normalizeAvatarUrl = (url: string | null | undefined) => {
+    const raw = (url || '').trim();
+    if (!raw) return null;
+    const normalized = raw.replace(/^(%20)+/i, '').trim();
+    return normalized || null;
+  };
+
   const createProfileIfMissing = async (userId: string) => {
     try {
       if (IS_DEV) console.debug('Creating missing profile for user:', userId);
@@ -110,6 +117,19 @@ export function useUserProfile() {
         }
       } else {
         if (IS_DEV) console.debug('Profile fetched successfully:', data);
+
+        if (data?.avatar_url) {
+          const normalized = normalizeAvatarUrl(data.avatar_url);
+          if (normalized && normalized !== data.avatar_url) {
+            try {
+              await supabase
+                .from('profiles')
+                .update({ avatar_url: normalized })
+                .eq('id', user.id);
+              data.avatar_url = normalized;
+            } catch {}
+          }
+        }
         
         // If profile exists but country is missing, sync from user_metadata
         // This handles the case where the DB trigger didn't include country

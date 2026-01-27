@@ -631,33 +631,9 @@ Apply these styles consistently throughout the entire design.`;
 
     try {
       setGenerating(true);
-      
-      // Step 0: Upload assets if any
+
+      // Step 0: Assets are uploaded AFTER project creation so we can scope them to {userId}/{projectId}
       let assetUrls: string[] = [];
-      if (attachedFiles.length > 0) {
-        setIsUploading(true);
-        for (const file of attachedFiles) {
-          const fileExt = file.name.split('.').pop();
-          const fileName = `${Math.random().toString(36).slice(2)}.${fileExt}`;
-          const filePath = `${user?.id}/${fileName}`;
-
-          const { data, error: uploadError } = await supabase.storage
-            .from('project-assets')
-            .upload(filePath, file);
-
-          if (uploadError) {
-            console.error('Upload error:', uploadError);
-            continue;
-          }
-
-          const { data: { publicUrl } } = supabase.storage
-            .from('project-assets')
-            .getPublicUrl(filePath);
-          
-          assetUrls.push(publicUrl);
-        }
-        setIsUploading(false);
-      }
 
       // Ensure we have a valid session
       const { data: { session } } = await supabase.auth.getSession();
@@ -696,6 +672,47 @@ Apply these styles consistently throughout the entire design.`;
       if (projectError) {
         console.error('Project creation failed:', projectError);
         throw projectError;
+      }
+
+      // Upload assets (scoped to this project) and track them in project_uploads for hard-delete
+      if (attachedFiles.length > 0) {
+        setIsUploading(true);
+        for (const file of attachedFiles) {
+          try {
+            const safeFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+            const storagePath = `${user.id}/${projectData.id}/${Date.now()}-${safeFilename}`;
+
+            const { error: uploadError } = await supabase.storage
+              .from('project-assets')
+              .upload(storagePath, file);
+
+            if (uploadError) {
+              console.error('Upload error:', uploadError);
+              continue;
+            }
+
+            await supabase
+              .from('project_uploads' as any)
+              .insert({
+                project_id: projectData.id,
+                user_id: user.id,
+                bucket_id: 'project-assets',
+                filename: safeFilename,
+                storage_path: storagePath,
+                file_type: file.type,
+                size_bytes: file.size,
+              });
+
+            const { data: { publicUrl } } = supabase.storage
+              .from('project-assets')
+              .getPublicUrl(storagePath);
+
+            assetUrls.push(publicUrl);
+          } catch (err) {
+            console.error('Asset upload error:', err);
+          }
+        }
+        setIsUploading(false);
       }
 
       // Step 2: Create placeholder file
@@ -789,36 +806,12 @@ Apply these styles consistently throughout the entire design.`;
     try {
       setDeleting(projectId);
 
-      // 1. Clean up Storage (project-uploads)
-      // We must clean up storage BEFORE deleting the project because we need the project ID/User ID path
-      if (user?.id) {
-        try {
-          const projectPath = `${user.id}/${projectId}`;
-          const { data: files } = await supabase.storage
-            .from('project-uploads')
-            .list(projectPath);
+      const { data: result, error: hardDeleteError } = await supabase.functions.invoke('projects-hard-delete', {
+        body: { projectId },
+      });
 
-          if (files && files.length > 0) {
-            const paths = files.map(f => `${projectPath}/${f.name}`);
-            const { error: removeError } = await supabase.storage
-              .from('project-uploads')
-              .remove(paths);
-            
-            if (removeError) {
-              console.error('Failed to cleanup storage:', removeError);
-            } else {
-              console.log(`Cleaned up ${files.length} files from storage`);
-            }
-          }
-        } catch (storageErr) {
-          console.error('Storage cleanup exception:', storageErr);
-          // Continue with DB deletion even if storage cleanup fails
-        }
-      }
-
-      // 2. Delete Database Records
-      await (supabase.from('project_files' as any).delete().eq('project_id', projectId) as any);
-      await (supabase.from('projects' as any).delete().eq('id', projectId) as any);
+      if (hardDeleteError) throw hardDeleteError;
+      if (!result?.ok) throw new Error(result?.error || 'Hard delete failed');
       
       setProjects((prev) => prev.filter((p) => p.id !== projectId));
       setDeleteConfirmId(null);

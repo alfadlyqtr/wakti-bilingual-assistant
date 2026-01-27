@@ -2268,6 +2268,7 @@ export default function ProjectDetail() {
           status: 'published',
           published_url: subdomainUrl,
           subdomain: finalSubdomain,
+          deployment_id: publishResult.deploymentId || null,
           published_at: new Date().toISOString(),
         })
         .eq('id', project.id);
@@ -2282,6 +2283,7 @@ export default function ProjectDetail() {
         status: 'published',
         published_url: subdomainUrl,
         subdomain: finalSubdomain,
+        deployment_id: publishResult.deploymentId || null,
       } : null);
 
       setShowPublishModal(false);
@@ -3826,6 +3828,7 @@ ${fixInstructions}
               await supabase.from('project_uploads').insert({
                 project_id: id,
                 user_id: user.id,
+                bucket_id: 'project-uploads',
                 filename: safeFilename,
                 storage_path: storagePath,
                 file_type: img.file.type,

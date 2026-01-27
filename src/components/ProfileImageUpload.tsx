@@ -20,6 +20,11 @@ export function ProfileImageUpload() {
   const hasTriedSignedFallbackRef = useRef(false);
   const [optimisticPreviewUrl, setOptimisticPreviewUrl] = useState<string | null>(null);
 
+  const normalizeAvatarUrl = (url: string) => {
+    const raw = (url || '').trim();
+    return raw.replace(/^(%20)+/i, '').trim();
+  };
+
   // Helper: map MIME type to extension
   const mimeToExt: Record<string, string> = {
     'image/jpeg': 'jpg',
@@ -210,7 +215,7 @@ export function ProfileImageUpload() {
 
       // Store a stable public URL in DB (bucket is public)
       const { data: publicData } = supabase.storage.from('avatars').getPublicUrl(fileName);
-      const cleanUrl = (publicData?.publicUrl || '').trim();
+      const cleanUrl = normalizeAvatarUrl(publicData?.publicUrl || '');
       const { error: updateError } = await supabase
         .from('profiles')
         .update({ 

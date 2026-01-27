@@ -27,7 +27,7 @@ export function TabletLayout({ children }: TabletLayoutProps) {
             <TabletHeader />
           </header>
           {/* Scrollable content area between header and bottom nav - account for elevated header */}
-          <main className="flex-1 overflow-auto w-full p-3 sm:p-4 pt-[calc(var(--tablet-header-h,56px)+1rem)] h-[calc(100vh-var(--tablet-header-h,56px))]">
+          <main className="flex-1 overflow-auto w-full p-3 sm:p-4 pt-[calc(var(--tablet-header-h,56px)+1.5rem)] h-[calc(100vh-var(--tablet-header-h,56px))]">
             <div className="w-full max-w-full h-full">
               {children}
             </div>
