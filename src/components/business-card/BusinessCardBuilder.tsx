@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { isWidgetSupported, setBusinessCardWidget, openWidgetSettings } from "../../integrations/natively/widgetBridge";
 import { isWalletSupported, addBusinessCardToWallet } from "../../integrations/natively/walletBridge";
+import { openInSafari, isNativelyApp } from "../../integrations/natively/browserBridge";
 import { QRCodeSVG } from 'qrcode.react';
 import { 
   ArrowLeft,
@@ -1900,9 +1901,8 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
           }
         });
       } else {
-        // Direct navigation to pkpass URL - simplest approach for iOS webviews
-        // iOS will detect the application/vnd.apple.pkpass content-type and show Add to Wallet
-        console.log('Navigating directly to wallet pass URL');
+        // Web fallback - open in Safari which handles .pkpass files natively
+        console.log('Opening wallet pass URL in Safari');
 
         const jsonString = JSON.stringify(cardData);
         const base64 = btoa(unescape(encodeURIComponent(jsonString)));
@@ -1910,9 +1910,15 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
         
         const passUrl = `https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-wallet-pass?data=${urlSafeBase64}`;
 
-        // Navigate current window directly to the pkpass URL
-        // This is the most reliable method in iOS webviews
-        window.location.href = passUrl;
+        // If running in Natively app, open in external Safari
+        // Safari handles .pkpass files natively and shows Add to Wallet prompt
+        if (isNativelyApp()) {
+          console.log('Detected Natively app - opening in Safari');
+          openInSafari(passUrl);
+        } else {
+          // Regular browser - just navigate
+          window.location.href = passUrl;
+        }
       }
     } catch (error) {
       console.error('Wallet pass error:', error);
