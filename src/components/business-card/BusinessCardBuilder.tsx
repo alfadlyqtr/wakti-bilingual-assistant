@@ -1922,35 +1922,35 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
           const urlSafeBase64 = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
           
           const passUrl = `https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-wallet-pass?data=${urlSafeBase64}`;
-          
-          // Fetch the .pkpass file in the background (user doesn't see the URL)
-          const response = await fetch(passUrl);
-          
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Wallet pass error:', errorText);
-            toast.dismiss(loadingToastId);
-            toast.error(isRTL ? 'فشل في إنشاء البطاقة' : 'Failed to generate pass');
-            return;
-          }
-          
-          // Get the blob
-          const blob = await response.blob();
-          
-          // Create a blob URL (this is a local URL, not the Edge Function URL)
-          const blobUrl = URL.createObjectURL(blob);
-          
-          // Dismiss loading toast before triggering download
-          toast.dismiss(loadingToastId);
-          
-          // Open the blob URL - iOS will detect the .pkpass content type and show "Add to Wallet"
-          // In iOS in-app webviews, navigation after async work can be blocked.
-          // We use a window opened during the user tap when available.
+
+          // In iOS in-app webviews, fetching a blob and then navigating to a blob URL
+          // is frequently blocked or silently ignored.
+          // Most reliable: navigate the user-gesture-opened window directly to the pkpass URL.
           const navTarget = targetWindow || window;
-          (navTarget as any).location.href = blobUrl;
-          
-          // Clean up blob URL after a delay
-          setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+
+          if (targetWindow) {
+            try {
+              targetWindow.document.open();
+              targetWindow.document.write(
+                `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1" /></head><body style="font-family:system-ui;padding:24px;">` +
+                  `<div style="font-size:16px;font-weight:600;margin-bottom:8px;">${
+                    isRTL ? 'جارٍ تجهيز بطاقة المحفظة...' : 'Preparing your Wallet pass...'
+                  }</div>` +
+                  `<div style="font-size:13px;opacity:0.7;">${
+                    isRTL ? 'إذا لم يتم فتح المحفظة خلال لحظات، أغلق هذه الشاشة وحاول مرة أخرى.' : 'If Wallet does not open in a moment, close this screen and try again.'
+                  }</div>` +
+                `</body></html>`
+              );
+              targetWindow.document.close();
+            } catch {
+              // ignore
+            }
+          }
+
+          // Dismiss loading toast before navigation
+          toast.dismiss(loadingToastId);
+
+          (navTarget as any).location.href = passUrl;
           
         } catch (err) {
           console.error('Wallet pass error:', err);
