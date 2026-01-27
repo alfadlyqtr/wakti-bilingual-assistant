@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
 import AdminRoute from "@/components/auth/AdminRoute";
@@ -170,26 +170,6 @@ function App() {
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/reset-success" element={<ResetSuccess />} />
                 <Route path="/contact" element={<ContactUs />} />
-                <Route path="/help" element={
-                  <GiftNotificationProvider>
-                    <AppLayout><Help /></AppLayout>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/fitness" element={
-                  <GiftNotificationProvider>
-                    <AppLayout><FitnessHealth /></AppLayout>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/fitness/callback" element={
-                  <GiftNotificationProvider>
-                    <AppLayout><FitnessWhoopCallback /></AppLayout>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/whoop/callback" element={
-                  <GiftNotificationProvider>
-                    <AppLayout><FitnessWhoopCallback /></AppLayout>
-                  </GiftNotificationProvider>
-                } />
                 <Route path="/privacy-terms" element={<PrivacyTerms />} />
                 <Route path="/account-delete" element={<AccountDelete />} />
                 <Route path="/goodbye" element={<GoodbyeScreen />} />
@@ -214,196 +194,58 @@ function App() {
                 {/* Wallet pass branded loading page (public) */}
                 <Route path="/wallet-pass" element={<WalletPass />} />
                 
-                {/* Protected user routes - AuthProvider is mounted once at top level */}
-                <Route path="/dashboard" element={
+                {/* ============================================================
+                    PROTECTED APP ROUTES - Persistent AppLayout (no remount!)
+                    AppLayout stays mounted, only page content changes via Outlet
+                    ============================================================ */}
+                <Route element={
                   <GiftNotificationProvider>
                     <ErrorBoundary>
-                      <AppLayout><Dashboard /></AppLayout>
+                      <AppLayout />
                     </ErrorBoundary>
                   </GiftNotificationProvider>
-                } />
-                <Route path="/account" element={
-                  <GiftNotificationProvider>
-                    <ErrorBoundary>
-                      <AppLayout><Account /></AppLayout>
-                    </ErrorBoundary>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/settings" element={
-                  <GiftNotificationProvider>
-                    <ErrorBoundary>
-                      <AppLayout><Settings /></AppLayout>
-                    </ErrorBoundary>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/tasks-reminders" element={
-                  <GiftNotificationProvider>
-                    <ErrorBoundary>
-                      <AppLayout><TasksReminders /></AppLayout>
-                    </ErrorBoundary>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/tr" element={
-                  <GiftNotificationProvider>
-                    <ErrorBoundary>
-                      <AppLayout><TasksReminders /></AppLayout>
-                    </ErrorBoundary>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/wakti-ai" element={
-                  <GiftNotificationProvider>
-                    <ErrorBoundary>
-                      <AppLayout><WaktiAi /></AppLayout>
-                    </ErrorBoundary>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/wakti-ai-v2" element={
-                  <GiftNotificationProvider>
-                    <ErrorBoundary>
-                      <AppLayout><WaktiAIV2 /></AppLayout>
-                    </ErrorBoundary>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/calendar" element={
-                  <GiftNotificationProvider>
-                    <ErrorBoundary>
-                      <AppLayout><Calendar /></AppLayout>
-                    </ErrorBoundary>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/journal" element={
-                  <GiftNotificationProvider>
-                    <ErrorBoundary>
-                      <AppLayout><Journal /></AppLayout>
-                    </ErrorBoundary>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/music" element={
-                  <GiftNotificationProvider>
-                    <ErrorBoundary>
-                      <AppLayout><MusicStudio /></AppLayout>
-                    </ErrorBoundary>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/games/letters/create" element={
-                  <GiftNotificationProvider>
-                    <AppLayout><LettersCreate /></AppLayout>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/games/letters/join" element={
-                  <GiftNotificationProvider>
-                    <AppLayout><LettersJoin /></AppLayout>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/games/letters/waiting" element={
-                  <GiftNotificationProvider>
-                    <AppLayout><LettersWaiting /></AppLayout>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/games/letters/play/:code" element={
-                  <GiftNotificationProvider>
-                    <AppLayout><LettersPlay /></AppLayout>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/games/letters/results/:code" element={
-                  <GiftNotificationProvider>
-                    <AppLayout><LettersResults /></AppLayout>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/games" element={
-                  <GiftNotificationProvider>
-                    <AppLayout><Games /></AppLayout>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/contacts" element={
-                  <GiftNotificationProvider>
-                    <ErrorBoundary>
-                      <AppLayout><Contacts /></AppLayout>
-                    </ErrorBoundary>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/contacts/:contactId" element={
-                  <GiftNotificationProvider>
-                    <ErrorBoundary>
-                      <ChatPage />
-                    </ErrorBoundary>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/maw3d" element={
-                  <GiftNotificationProvider>
-                    <AppLayout><Maw3d /></AppLayout>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/maw3d/create" element={
-                  <GiftNotificationProvider>
-                    <AppLayout><Maw3dCreate /></AppLayout>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/maw3d/manage/:id" element={
-                  <GiftNotificationProvider>
-                    <AppLayout><Maw3dManage /></AppLayout>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/maw3d/edit/:id" element={
-                  <GiftNotificationProvider>
-                    <AppLayout><Maw3dEdit /></AppLayout>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/tasjeel" element={
-                  <GiftNotificationProvider>
-                    <AppLayout><Tasjeel /></AppLayout>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/voice-tts" element={
-                  <GiftNotificationProvider>
-                    <AppLayout><VoiceTTS /></AppLayout>
-                  </GiftNotificationProvider>
-                } />
-                {/* Tool pages */}
-                <Route path="/tools/text" element={
-                  <GiftNotificationProvider>
-                    <AppLayout><TextGenerator /></AppLayout>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/tools/text/translation/:id" element={
-                  <GiftNotificationProvider>
-                    <AppLayout><TextTranslationView /></AppLayout>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/tools/voice-studio" element={
-                  <GiftNotificationProvider>
-                    <AppLayout><VoiceStudio /></AppLayout>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/tools/voice" element={
-                  <GiftNotificationProvider>
-                    <AppLayout><VoiceStudio /></AppLayout>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/tools/game" element={
-                  <GiftNotificationProvider>
-                    <AppLayout><GameMode /></AppLayout>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/my-warranty" element={
-                  <GiftNotificationProvider>
-                    <AppLayout><MyWarranty /></AppLayout>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/projects" element={
-                  <GiftNotificationProvider>
-                    <AppLayout><Projects /></AppLayout>
-                  </GiftNotificationProvider>
-                } />
-                <Route path="/projects/:id" element={
-                  <GiftNotificationProvider>
-                    <AppLayout>
-                      <DebugContextProvider>
-                        <ProjectDetail />
-                      </DebugContextProvider>
-                    </AppLayout>
-                  </GiftNotificationProvider>
-                } />
+                }>
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/account" element={<Account />} />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="/tasks-reminders" element={<TasksReminders />} />
+                  <Route path="/tr" element={<TasksReminders />} />
+                  <Route path="/wakti-ai" element={<WaktiAi />} />
+                  <Route path="/wakti-ai-v2" element={<WaktiAIV2 />} />
+                  <Route path="/calendar" element={<Calendar />} />
+                  <Route path="/journal" element={<Journal />} />
+                  <Route path="/music" element={<MusicStudio />} />
+                  <Route path="/games/letters/create" element={<LettersCreate />} />
+                  <Route path="/games/letters/join" element={<LettersJoin />} />
+                  <Route path="/games/letters/waiting" element={<LettersWaiting />} />
+                  <Route path="/games/letters/play/:code" element={<LettersPlay />} />
+                  <Route path="/games/letters/results/:code" element={<LettersResults />} />
+                  <Route path="/games" element={<Games />} />
+                  <Route path="/contacts" element={<Contacts />} />
+                  <Route path="/contacts/:contactId" element={<ChatPage />} />
+                  <Route path="/maw3d" element={<Maw3d />} />
+                  <Route path="/maw3d/create" element={<Maw3dCreate />} />
+                  <Route path="/maw3d/manage/:id" element={<Maw3dManage />} />
+                  <Route path="/maw3d/edit/:id" element={<Maw3dEdit />} />
+                  <Route path="/tasjeel" element={<Tasjeel />} />
+                  <Route path="/voice-tts" element={<VoiceTTS />} />
+                  <Route path="/tools/text" element={<TextGenerator />} />
+                  <Route path="/tools/text/translation/:id" element={<TextTranslationView />} />
+                  <Route path="/tools/voice-studio" element={<VoiceStudio />} />
+                  <Route path="/tools/voice" element={<VoiceStudio />} />
+                  <Route path="/tools/game" element={<GameMode />} />
+                  <Route path="/my-warranty" element={<MyWarranty />} />
+                  <Route path="/projects" element={<Projects />} />
+                  <Route path="/projects/:id" element={
+                    <DebugContextProvider>
+                      <ProjectDetail />
+                    </DebugContextProvider>
+                  } />
+                  <Route path="/help" element={<Help />} />
+                  <Route path="/fitness" element={<FitnessHealth />} />
+                  <Route path="/fitness/callback" element={<FitnessWhoopCallback />} />
+                  <Route path="/whoop/callback" element={<FitnessWhoopCallback />} />
+                </Route>
                 
                 {/* Public preview route for published projects (subdomain rewrite target) */}
                 <Route path="/preview/:subdomain" element={<ProjectPreview />} />

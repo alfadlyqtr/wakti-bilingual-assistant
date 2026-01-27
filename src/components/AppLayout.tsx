@@ -8,7 +8,7 @@ import { useNotificationHistory } from "@/hooks/useNotificationHistory";
 import { useIsMobile, useIsTablet, useIsDesktop } from "@/hooks/use-mobile";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { PresenceBeacon } from "@/components/PresenceBeacon";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -28,7 +28,7 @@ import { Logo3D } from "@/components/Logo3D";
 import { toast } from "sonner";
 
 interface AppLayoutProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
 interface UnreadContextType {
@@ -606,6 +606,9 @@ export function AppLayout({ children }: AppLayoutProps) {
     document.querySelectorAll('[data-aria-hidden="true"]').forEach((el) => el.removeAttribute('data-aria-hidden'));
   }, [location.pathname]);
 
+  // Content: use children if provided (legacy), otherwise use Outlet for nested routes
+  const content = children || <Outlet />;
+
   if (isMobile) {
     return (
       <UnreadContext.Provider value={unreadData}>
@@ -622,7 +625,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               <AppHeader unreadTotal={unreadData.unreadTotal} />
             </div>
             <main>
-              {children}
+              {content}
             </main>
             <PresenceBeacon />
           </div>
@@ -640,7 +643,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         <ProtectedRoute CustomPaywallModal={CustomPaywallModal}>
           <WelcomeTrialPopup />
           <PresenceBeacon />
-          <TabletLayout>{children}</TabletLayout>
+          <TabletLayout>{content}</TabletLayout>
         </ProtectedRoute>
       </UnreadContext.Provider>
     );
@@ -657,7 +660,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       <ProtectedRoute CustomPaywallModal={CustomPaywallModal}>
         <WelcomeTrialPopup />
         <PresenceBeacon />
-        <DesktopLayout>{children}</DesktopLayout>
+        <DesktopLayout>{content}</DesktopLayout>
       </ProtectedRoute>
     </UnreadContext.Provider>
   );

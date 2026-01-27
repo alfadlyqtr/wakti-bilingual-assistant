@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 // WalletWallet API for pass generation
 // API Docs: https://walletwallet.dev/docs
 const WALLETWALLET_API_URL = "https://api.walletwallet.dev/api/pkpass";
-const WALLETWALLET_API_KEY = "ww_live_6ddc4463e273c526b6e1a951435df2f2";
+const WALLETWALLET_API_KEY = Deno.env.get("WALLETWALLET_API_KEY") || "";
 
 // CORS headers
 const corsHeaders = {
@@ -29,6 +29,13 @@ serve(async (req) => {
   }
 
   try {
+    if (!WALLETWALLET_API_KEY) {
+      return new Response(
+        JSON.stringify({ error: "Missing WALLETWALLET_API_KEY server secret" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     let cardData: BusinessCardData;
     
     // Support GET with base64 encoded data
