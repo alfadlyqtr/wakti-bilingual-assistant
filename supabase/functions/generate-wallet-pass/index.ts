@@ -280,11 +280,12 @@ serve(async (req) => {
     const userAgent = (req.headers.get("user-agent") || "").toLowerCase();
     const acceptLang = (req.headers.get("accept-language") || "").toLowerCase();
     const isRTL = acceptLang.includes("ar");
-    const isNatively = userAgent.includes("natively");
+    void userAgent;
 
-    // If opened inside Natively in-app viewer, show a friendly instruction page.
-    // `raw=1` forces the pkpass binary response even in Natively.
-    if (req.method === "GET" && isNatively && !raw) {
+    // Default GET behavior: return a friendly instruction page.
+    // This avoids the blank white screen in in-app viewers that can't render .pkpass.
+    // `raw=1` forces the pkpass binary response.
+    if (req.method === "GET" && !raw) {
       const rawUrl = new URL(url.toString());
       rawUrl.searchParams.set("raw", "1");
 
