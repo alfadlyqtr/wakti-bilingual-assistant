@@ -1000,7 +1000,7 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     >
       <div className="flex flex-col space-y-2 p-3">
         {/* Top bar with sync and date controls */}
-        <div className="flex items-center justify-between w-full gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full gap-2">
           {/* Sync controls - button and auto-sync toggle */}
           <div className="flex items-center gap-2">
             <input
@@ -1083,7 +1083,7 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
           </div>
           
           {/* Date controls */}
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center flex-wrap gap-2">
             <Button 
               variant="ghost" 
               size="icon"
@@ -1093,13 +1093,13 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
               <ChevronLeft className={cn("h-5 w-5", language === 'ar' && "rotate-180")} />
             </Button>
             
-            <div className={cn("flex items-center space-x-1", 
+            <div className={cn("flex items-center gap-1", 
               language === 'ar' ? 'order-1 flex-row-reverse' : 'order-2')}>
               <Select 
                 value={getMonth(currentDate).toString()}
                 onValueChange={handleMonthChange}
               >
-                <SelectTrigger className="w-[130px]">
+                <SelectTrigger className="w-[110px] sm:w-[130px]">
                   <SelectValue>
                     {format(currentDate, 'MMMM', { locale })}
                   </SelectValue>
@@ -1117,7 +1117,7 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
                 value={getYear(currentDate).toString()}
                 onValueChange={handleYearChange}
               >
-                <SelectTrigger className="w-[90px]">
+                <SelectTrigger className="w-[84px] sm:w-[90px]">
                   <SelectValue>
                     {format(currentDate, 'yyyy', { locale })}
                   </SelectValue>
