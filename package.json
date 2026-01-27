@@ -78,6 +78,7 @@
     "input-otp": "^1.2.4",
     "jspdf": "^4.0.0",
     "jspdf-autotable": "^5.0.2",
+    "jsqr": "^1.4.0",
     "lucide-react": "^0.462.0",
     "mammoth": "^1.10.0",
     "next-themes": "^0.3.0",

@@ -204,7 +204,7 @@ export function DesktopHeader() {
           background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 50%, rgba(255, 255, 255, 0.1) 100%), var(--gradient-background)',
           backdropFilter: 'blur(20px)',
           border: '1px solid rgba(255, 255, 255, 0.28)',
-          boxShadow: '0 28px 56px -12px rgba(0, 0, 0, 0.28), 0 10px 36px rgba(0, 0, 0, 0.14), 0 0 0 1px rgba(255, 255, 255, 0.08), 0 14px 48px rgba(99, 102, 241, 0.14)'
+          boxShadow: '0 34px 70px -16px rgba(0, 0, 0, 0.40), 0 16px 46px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(255, 255, 255, 0.08), 0 18px 60px rgba(99, 102, 241, 0.12)'
         }}
       >
         {/* Glass reflection overlay */}

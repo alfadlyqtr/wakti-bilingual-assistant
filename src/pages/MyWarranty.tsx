@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, useLayoutEffect } from 'react';
+import jsQR from 'jsqr';
 import { BusinessCardWizard } from '@/components/business-card/BusinessCardWizard';
 import { BusinessCardBuilder, CardPreviewLive } from '@/components/business-card/BusinessCardBuilder';
 import { CardCreatedCelebration } from '@/components/business-card/CardCreatedCelebration';
@@ -784,6 +785,7 @@ const MyWarranty: React.FC = () => {
   const scanVideoRef = useRef<HTMLVideoElement | null>(null);
   const scanStreamRef = useRef<MediaStream | null>(null);
   const scanRafRef = useRef<number | null>(null);
+  const scanCanvasRef = useRef<HTMLCanvasElement | null>(null);
   
   // Get current active card
   const businessCard = businessCards.find(c => c.cardSlot === activeCardSlot) || null;
@@ -806,6 +808,7 @@ const MyWarranty: React.FC = () => {
         (video as any).srcObject = null;
       } catch {}
     }
+    scanCanvasRef.current = null;
     setIsScanning(false);
   }, []);
 
@@ -898,14 +901,15 @@ const MyWarranty: React.FC = () => {
       return;
     }
 
-    const hasDetector = typeof (window as any).BarcodeDetector !== 'undefined';
-    if (!hasDetector) {
-      setScanError(isRTL ? 'جهازك لا يدعم مسح QR مباشرة. استخدم إدخال الرابط.' : 'QR scanning not supported on this device. Use manual link input.');
-      return;
-    }
-
     try {
       setIsScanning(true);
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setIsScanning(false);
+        setScanError(isRTL ? 'الكاميرا غير مدعومة على هذا الجهاز' : 'Camera is not supported on this device');
+        return;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: 'environment' } },
         audio: false,
@@ -918,17 +922,50 @@ const MyWarranty: React.FC = () => {
       (video as any).srcObject = stream;
       await video.play();
 
-      const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
+      const hasDetector = typeof (window as any).BarcodeDetector !== 'undefined';
+      const detector = hasDetector ? new (window as any).BarcodeDetector({ formats: ['qr_code'] }) : null;
+
+      const ensureCanvas = () => {
+        if (!scanCanvasRef.current) {
+          scanCanvasRef.current = document.createElement('canvas');
+        }
+        const canvas = scanCanvasRef.current;
+        const vw = video.videoWidth || 0;
+        const vh = video.videoHeight || 0;
+        if (canvas && vw > 0 && vh > 0 && (canvas.width !== vw || canvas.height !== vh)) {
+          canvas.width = vw;
+          canvas.height = vh;
+        }
+        return canvas;
+      };
 
       const tick = async () => {
         try {
           if (!scanVideoRef.current) return;
-          const results = await detector.detect(scanVideoRef.current);
-          if (results && results.length > 0) {
-            const value = results[0].rawValue || '';
-            if (value) {
-              void handleScanResultValue(value);
-              return;
+          if (detector) {
+            const results = await detector.detect(scanVideoRef.current);
+            if (results && results.length > 0) {
+              const value = results[0].rawValue || '';
+              if (value) {
+                void handleScanResultValue(value);
+                return;
+              }
+            }
+          } else {
+            const canvas = ensureCanvas();
+            if (!canvas) throw new Error('Canvas not available');
+            const ctx = canvas.getContext('2d', { willReadFrequently: true } as any) as CanvasRenderingContext2D | null;
+            if (!ctx) throw new Error('Canvas context not available');
+            const vw = video.videoWidth || 0;
+            const vh = video.videoHeight || 0;
+            if (vw > 0 && vh > 0) {
+              ctx.drawImage(video, 0, 0, vw, vh);
+              const imageData = ctx.getImageData(0, 0, vw, vh);
+              const code = jsQR(imageData.data, imageData.width, imageData.height);
+              if (code?.data) {
+                void handleScanResultValue(code.data);
+                return;
+              }
             }
           }
         } catch {}
