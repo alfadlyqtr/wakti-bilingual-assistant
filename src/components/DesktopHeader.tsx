@@ -197,7 +197,7 @@ export function DesktopHeader() {
   ];
 
   return (
-    <div className="w-full px-6 py-0 transition-all duration-300 md:mt-1 lg:mt-1" dir="ltr">
+    <div className="w-full px-6 py-0 transition-all duration-300" dir="ltr">
       <div
         className="relative bg-background rounded-3xl shadow-2xl h-[var(--desktop-header-h)] flex items-center justify-between px-6 solid-bg mx-2 md:mx-4 lg:mx-6"
         style={{

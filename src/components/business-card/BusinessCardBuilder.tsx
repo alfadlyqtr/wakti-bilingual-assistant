@@ -3018,17 +3018,64 @@ const CardPreviewLive = ({ data, isFlipped, handleFlip, handleAddToWallet }: Car
       lastName: data.lastName,
     });
 
-    const downloadVCard = () => {
+    const foldVCardLine = (line: string): string => {
+      const limit = 75;
+      if (line.length <= limit) return line;
+      let out = '';
+      let i = 0;
+      while (i < line.length) {
+        const chunk = line.slice(i, i + limit);
+        out += (i === 0 ? chunk : `\r\n ${chunk}`);
+        i += limit;
+      }
+      return out;
+    };
+
+    const normalizeImageToBase64 = async (inputUrl?: string): Promise<{ b64: string; type: 'JPEG' | 'PNG' } | null> => {
+      if (!inputUrl) return null;
+      try {
+        if (inputUrl.startsWith('data:image/')) {
+          const match = inputUrl.match(/^data:image\/(png|jpeg|jpg);base64,(.*)$/i);
+          if (!match) return null;
+          const fmt = match[1].toLowerCase();
+          return { b64: match[2], type: fmt === 'png' ? 'PNG' : 'JPEG' };
+        }
+
+        const res = await fetch(inputUrl, { mode: 'cors' });
+        if (!res.ok) return null;
+        const blob = await res.blob();
+        const mime = (blob.type || '').toLowerCase();
+        const type: 'JPEG' | 'PNG' = mime.includes('png') ? 'PNG' : 'JPEG';
+        const arrayBuffer = await blob.arrayBuffer();
+        const bytes = new Uint8Array(arrayBuffer);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        const b64 = btoa(binary);
+        return { b64, type };
+      } catch {
+        return null;
+      }
+    };
+
+    const downloadVCard = async () => {
       // Map social links to vCard fields
       const socialVCardFields = (data.socialLinks || []).map(link => {
         const type = link.type.toUpperCase();
         return `X-SOCIALPROFILE;TYPE=${type}:${link.url}`;
       }).join('\n');
 
+      const photo = await normalizeImageToBase64(data.profilePhotoUrl);
+      const logo = await normalizeImageToBase64(data.logoUrl);
+
+      const photoLine = photo ? foldVCardLine(`PHOTO;ENCODING=b;TYPE=${photo.type}:${photo.b64}`) : '';
+      const logoLine = logo ? foldVCardLine(`LOGO;ENCODING=b;TYPE=${logo.type}:${logo.b64}`) : '';
+
       const vcard = `BEGIN:VCARD
 VERSION:3.0
 FN:${data.firstName} ${data.lastName}
 N:${data.lastName};${data.firstName};;;
+${photoLine}
+${logoLine}
 EMAIL;TYPE=INTERNET:${data.email}
 TEL;TYPE=CELL:${data.phone}
 ORG:${data.companyName}
@@ -3085,7 +3132,7 @@ END:VCARD`;
           <button 
             onClick={(e) => {
               e.stopPropagation();
-              downloadVCard();
+              void downloadVCard();
             }}
             className="flex items-center justify-center gap-2 px-4 py-2 bg-[#060541] text-white rounded-full text-sm font-medium hover:bg-[#0c0b6b] transition-all active:scale-95 shadow-md"
           >
@@ -3123,11 +3170,11 @@ END:VCARD`;
   const FlipButton = () => (
     <button 
       onClick={handleFlipInternal}
-      className="absolute bottom-2 right-2 z-30 w-6 h-6 bg-white/80 rounded-full shadow-sm flex items-center justify-center text-gray-500 hover:text-[#060541] hover:bg-white transition-all active:scale-90"
+      className="absolute bottom-3 right-3 z-30 w-9 h-9 rounded-full shadow-lg flex items-center justify-center text-white transition-all active:scale-90 bg-gradient-to-br from-[hsl(210_100%_65%)] via-[hsl(280_70%_65%)] to-[hsl(210_100%_65%)] ring-1 ring-white/30"
       aria-label="Flip card"
     >
       <svg 
-        className={`w-3 h-3 transition-transform duration-300 ${isFlipped ? 'rotate-180' : ''}`} 
+        className={`w-4 h-4 transition-transform duration-300 ${isFlipped ? 'rotate-180' : ''}`} 
         viewBox="0 0 24 24" 
         fill="none" 
         stroke="currentColor" 
