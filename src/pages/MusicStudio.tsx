@@ -590,9 +590,13 @@ function SavedVideosTab({ onCreate }: { onCreate: () => void }) {
                     <Button variant="outline" size="sm" className="h-8 px-3" onClick={() => handleTogglePublic(v)}>
                       {v.is_public ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                     </Button>
-                    <Button variant="outline" size="sm" className="h-8 px-3" onClick={() => handleShareSavedVideo(v)}>
-                      <Share2 className="h-3.5 w-3.5" />
-                    </Button>
+                    <button
+                      className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center text-white shadow-md hover:shadow-lg hover:scale-105 active:scale-95 transition-all"
+                      onClick={() => handleShareSavedVideo(v)}
+                      aria-label="Share"
+                    >
+                      <Share2 className="h-4 w-4" />
+                    </button>
                     <Button
                       variant="outline"
                       size="sm"

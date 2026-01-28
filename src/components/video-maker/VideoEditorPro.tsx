@@ -947,8 +947,57 @@ export default function VideoEditorPro() {
         filters: s.filters, kenBurns: s.kenBurns, kenBurnsSpeed: s.kenBurnsSpeed,
       }));
       const primaryAudio = project.audioTracks[0];
-      const blob = await generateVideo({ slides: cfg, audioUrl: primaryAudio?.url || null, audioTrimStart: primaryAudio?.trimStart || 0, audioTrimEnd: primaryAudio?.trimEnd, width: 1080, height: 1920 });
+      let blob = await generateVideo({ slides: cfg, audioUrl: primaryAudio?.url || null, audioTrimStart: primaryAudio?.trimStart || 0, audioTrimEnd: primaryAudio?.trimEnd, width: 1080, height: 1920 });
       if (!blob) throw new Error(canvasError || 'Failed');
+      
+      // iOS: Convert WebM to MP4 before preview (iOS Safari cannot play WebM)
+      const ua = navigator.userAgent || '';
+      const isIOS = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+      const isWebm = blob.type.includes('webm');
+      
+      if (isIOS && isWebm && user) {
+        setGenStatus(language === 'ar' ? 'جاري تحويل الفيديو لـ iOS...' : 'Converting video for iOS...');
+        setGenProgress(92);
+        
+        try {
+          // Upload WebM temporarily
+          const tempFileName = `${user.id}/temp_${Date.now()}.webm`;
+          const { data: tempUp, error: tempUpErr } = await supabase.storage
+            .from('videos')
+            .upload(tempFileName, blob, { contentType: 'video/webm' });
+          
+          if (tempUpErr) throw tempUpErr;
+          
+          // Call server-side conversion
+          const { data: convData, error: convErr } = await supabase.functions.invoke('convert-webm-to-mp4', {
+            body: { storagePath: tempUp?.path || tempFileName, bucket: 'videos' }
+          });
+          
+          if (convErr) throw convErr;
+          
+          if (convData?.signedUrl) {
+            // Download the converted MP4
+            setGenStatus(language === 'ar' ? 'جاري تحميل الفيديو...' : 'Downloading converted video...');
+            setGenProgress(96);
+            
+            const mp4Response = await fetch(convData.signedUrl);
+            if (mp4Response.ok) {
+              const mp4Blob = await mp4Response.blob();
+              blob = new Blob([mp4Blob], { type: 'video/mp4' });
+            }
+          }
+          
+          // Clean up temp WebM file
+          try {
+            await supabase.storage.from('videos').remove([tempFileName]);
+          } catch (_) { /* ignore cleanup errors */ }
+          
+        } catch (convError) {
+          console.warn('[VideoEditorPro] iOS conversion failed, using WebM:', convError);
+          // Continue with WebM - user can still save and it will convert then
+        }
+      }
+      
       setVideoUrl(URL.createObjectURL(blob)); setVideoBlob(blob);
       toast.success(language === 'ar' ? 'تم!' : 'Done!');
     } catch (e) { console.error(e); toast.error(language === 'ar' ? 'فشل' : 'Failed'); } finally { setIsGenerating(false); }

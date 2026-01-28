@@ -210,6 +210,32 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
     setProgress(0);
     setStatus('Preparing your video...');
 
+    // Check MediaRecorder support early
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+    
+    if (typeof MediaRecorder === 'undefined') {
+      setError('Video recording is not supported on this device');
+      setIsLoading(false);
+      return null;
+    }
+
+    // Check if any video format is supported
+    const testFormats = ['video/mp4', 'video/webm', 'video/webm;codecs=vp8', 'video/webm;codecs=vp9'];
+    const hasSupport = testFormats.some(f => MediaRecorder.isTypeSupported(f));
+    
+    if (!hasSupport) {
+      console.warn('[useCanvasVideo] No supported video formats found');
+      // On iOS, MediaRecorder might still work with default format
+      if (!isIOS) {
+        setError('No supported video format found on this device');
+        setIsLoading(false);
+        return null;
+      }
+    }
+
+    console.log('[useCanvasVideo] Starting video generation on', isIOS ? 'iOS' : 'non-iOS', 'device');
+
     try {
       const canvas = document.createElement('canvas');
       canvas.width = width;
@@ -402,8 +428,6 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
       }
 
       // Prefer MP4 on iOS/Safari when supported. Otherwise fall back to WebM.
-      const ua = navigator.userAgent || '';
-      const isIOS = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
       const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
       const preferMp4 = isIOS || isSafari;
 
@@ -417,12 +441,37 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
           ]
         : ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4'];
 
-      let mimeType = preferredMimeTypes.find((t) => MediaRecorder.isTypeSupported(t)) || 'video/webm';
+      let mimeType = preferredMimeTypes.find((t) => MediaRecorder.isTypeSupported(t));
+      
+      // iOS Safari may not report support but still work with empty mimeType
+      if (!mimeType && isIOS) {
+        console.log('[useCanvasVideo] iOS: No explicit format support, trying default MediaRecorder');
+        mimeType = ''; // Let browser choose default
+      } else if (!mimeType) {
+        mimeType = 'video/webm';
+      }
 
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType,
-        videoBitsPerSecond: 6000000,
-      });
+      console.log('[useCanvasVideo] Using mimeType:', mimeType || '(default)');
+
+      let mediaRecorder: MediaRecorder;
+      try {
+        const recorderOptions: MediaRecorderOptions = {
+          videoBitsPerSecond: 6000000,
+        };
+        if (mimeType) {
+          recorderOptions.mimeType = mimeType;
+        }
+        mediaRecorder = new MediaRecorder(stream, recorderOptions);
+      } catch (recErr) {
+        console.error('[useCanvasVideo] MediaRecorder creation failed:', recErr);
+        // Try without options as fallback
+        try {
+          mediaRecorder = new MediaRecorder(stream);
+          console.log('[useCanvasVideo] Fallback MediaRecorder created');
+        } catch (fallbackErr) {
+          throw new Error('Failed to create video recorder on this device');
+        }
+      }
 
       const chunks: Blob[] = [];
       mediaRecorder.ondataavailable = (e) => {

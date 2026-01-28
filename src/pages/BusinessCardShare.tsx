@@ -1,7 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { CardPreviewLive } from '@/components/business-card/BusinessCardBuilder';
+import { isNativelyApp } from '@/integrations/natively/browserBridge';
+import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
+import { toast } from '@/hooks/use-toast';
+import { Check, Download, ArrowLeft } from 'lucide-react';
 
 interface BusinessCardData {
   firstName: string;
@@ -69,11 +74,41 @@ interface BusinessCardData {
 
 export default function BusinessCardShare() {
   const { shareSlug } = useParams<{ shareSlug: string }>();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [card, setCard] = useState<BusinessCardData | null>(null);
+  const [cardOwnerId, setCardOwnerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isFlipped, setIsFlipped] = useState(false);
   const [triedDeepLink, setTriedDeepLink] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+  const [isInApp, setIsInApp] = useState(false);
+
+  // Check if we're inside the Wakti app
+  useEffect(() => {
+    setIsInApp(isNativelyApp());
+  }, []);
+
+  // Check if card is already saved
+  useEffect(() => {
+    const checkIfSaved = async () => {
+      if (!user || !shareSlug || !isInApp) return;
+      try {
+        const { data } = await supabase
+          .from('collected_business_cards')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('share_slug', shareSlug)
+          .maybeSingle();
+        setIsSaved(!!data);
+      } catch {
+        // Ignore
+      }
+    };
+    checkIfSaved();
+  }, [user, shareSlug, isInApp]);
 
   // Attempt to open the Wakti app via deep link (only once)
   // Uses an invisible iframe to avoid navigating away from the page
@@ -163,6 +198,7 @@ export default function BusinessCardShare() {
         };
 
         setCard(mapped);
+        setCardOwnerId(row.user_id || null);
         setLoading(false);
       } catch (e: any) {
         setError('Failed to load card');
@@ -193,6 +229,147 @@ export default function BusinessCardShare() {
   }
 
   const appStoreUrl = 'https://apps.apple.com/us/app/wakti-ai/id6755150700';
+
+  // Save card to collection
+  const handleSaveToCollection = async () => {
+    if (!user || !shareSlug || !card) return;
+    
+    // Don't save your own card
+    if (cardOwnerId === user.id) {
+      toast({
+        title: 'This is your card',
+        description: 'You cannot save your own card to your collection.',
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // Get the full card data for snapshot
+      const { data, error: fetchError } = await (supabase as any)
+        .rpc('get_business_card_by_share_slug', { p_share_slug: shareSlug });
+      
+      if (fetchError) throw fetchError;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) throw new Error('Card not found');
+
+      const { error: upsertError } = await supabase
+        .from('collected_business_cards')
+        .upsert(
+          {
+            user_id: user.id,
+            share_slug: shareSlug,
+            owner_user_id: cardOwnerId,
+            card_snapshot: row,
+          },
+          { onConflict: 'user_id,share_slug' }
+        );
+      
+      if (upsertError) throw upsertError;
+
+      setIsSaved(true);
+      toast({
+        title: 'Saved!',
+        description: 'Card added to your collection.',
+      });
+    } catch (err) {
+      console.error('Error saving card:', err);
+      toast({
+        title: 'Error',
+        description: 'Failed to save card. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // If inside Wakti app and user is logged in, show in-app view
+  if (isInApp && user && card && !loading) {
+    const isOwnCard = cardOwnerId === user.id;
+    
+    return (
+      <div className="min-h-screen flex flex-col bg-gradient-to-b from-background via-background to-blue-500/5">
+        {/* Header */}
+        <header className="flex items-center justify-between px-4 py-3 border-b border-border/50">
+          <button
+            onClick={() => navigate('/my-docs?tab=card&inner=collected')}
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>My Cards</span>
+          </button>
+          <h1 className="text-sm font-semibold text-foreground">Scanned Card</h1>
+          <div className="w-16" /> {/* Spacer for centering */}
+        </header>
+
+        {/* Card Preview */}
+        <div className="flex-1 flex flex-col items-center justify-center px-4 py-6">
+          <div className="drop-shadow-2xl">
+            <CardPreviewLive
+              data={card as any}
+              isFlipped={isFlipped}
+              handleFlip={() => setIsFlipped((v) => !v)}
+              handleAddToWallet={() => {}}
+            />
+          </div>
+
+          {/* Card Owner Info */}
+          <div className="mt-6 text-center">
+            <p className="text-lg font-semibold text-foreground">
+              {card.firstName} {card.lastName}
+            </p>
+            {card.jobTitle && (
+              <p className="text-sm text-muted-foreground">{card.jobTitle}</p>
+            )}
+            {card.companyName && (
+              <p className="text-xs text-muted-foreground/70">{card.companyName}</p>
+            )}
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="px-4 pb-8 space-y-3">
+          {isOwnCard ? (
+            <div className="text-center py-3 px-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
+              <p className="text-sm text-blue-500 font-medium">This is your card</p>
+            </div>
+          ) : isSaved ? (
+            <Button
+              className="w-full h-12 bg-emerald-500 hover:bg-emerald-600 text-white"
+              disabled
+            >
+              <Check className="w-5 h-5 mr-2" />
+              Saved to Collection
+            </Button>
+          ) : (
+            <Button
+              onClick={handleSaveToCollection}
+              disabled={isSaving}
+              className="w-full h-12 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white"
+            >
+              {isSaving ? (
+                <span className="animate-pulse">Saving...</span>
+              ) : (
+                <>
+                  <Download className="w-5 h-5 mr-2" />
+                  Save to Collection
+                </>
+              )}
+            </Button>
+          )}
+
+          <Button
+            variant="outline"
+            className="w-full h-12"
+            onClick={() => navigate('/my-docs?tab=card&inner=collected')}
+          >
+            Go to My Collected Cards
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-background via-background to-blue-500/5">

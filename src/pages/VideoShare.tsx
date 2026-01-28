@@ -5,7 +5,6 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Loader2, Play, ArrowLeft } from 'lucide-react';
-import { toast } from 'sonner';
 
 interface VideoData {
   id: string;
@@ -169,44 +168,14 @@ export default function VideoShare() {
           )}
         </div>
 
-        {video?.storage_path && (
-          <div className="flex justify-end">
-            <Button 
-              size="sm" 
-              variant="outline"
-              onClick={async () => {
-                try {
-                  const { data, error } = await supabase.storage
-                    .from('videos')
-                    .download(video.storage_path!);
-                  if (error) throw error;
-                  const downloadUrl = URL.createObjectURL(data);
-                  const a = document.createElement('a');
-                  a.href = downloadUrl;
-                  a.download = video.storage_path!.split('/').pop() || 'video.mp4';
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-                  URL.revokeObjectURL(downloadUrl);
-                } catch (e) {
-                  console.error('[VideoShare] Download error:', e);
-                  toast.error(language === 'ar' ? 'فشل التحميل' : 'Download failed');
-                }
-              }}
-            >
-              {language === 'ar' ? 'تحميل الفيديو' : 'Download Video'}
-            </Button>
-          </div>
-        )}
-
         {/* Wakti branding */}
         <Card className="p-4 enhanced-card">
           <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
             <div className="flex items-center gap-3">
               <img
-                src="/assets/wakti-eye-soft.svg"
+                src="/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png"
                 alt="Wakti"
-                className="h-10 w-10 shrink-0"
+                className="h-10 w-10 shrink-0 rounded-lg"
               />
               <div className="space-y-1">
               <p className="font-semibold">
@@ -219,11 +188,11 @@ export default function VideoShare() {
               </p>
               </div>
             </div>
-            <Link to="/home" className="shrink-0">
+            <a href="https://apps.apple.com/us/app/wakti-ai/id6755150700" target="_blank" rel="noopener noreferrer" className="shrink-0">
               <Button className="btn-enhanced w-full md:w-auto">
                 {language === 'ar' ? 'ابدأ الآن' : 'Get Started'}
               </Button>
-            </Link>
+            </a>
           </div>
         </Card>
       </main>
