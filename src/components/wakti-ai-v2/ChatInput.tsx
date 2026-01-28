@@ -213,16 +213,21 @@ export function ChatInput({
     return { top, left };
   };
   
-  // Self-contained mobile keyboard detection - scoped to container only
+  // Self-contained mobile keyboard detection
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const isKeyboardMode = (typeof window !== 'undefined' && window.innerWidth < 768) && isKeyboardVisible;
   
-  // Get parent container for scoping changes
-  const containerRef = useRef<HTMLElement | null>(null);
+  // Reference to the chat input container for direct style application
+  const chatInputContainerRef = useRef<HTMLDivElement | null>(null);
+  
+  // Find and store reference to the parent chat-input-container on mount
   useEffect(() => {
+    // Find the parent container by traversing up from inputCardRef
     const el = inputCardRef.current;
     if (el) {
-      containerRef.current = el.closest('.wakti-ai-container') as HTMLElement;
+      const container = el.closest('.chat-input-container') as HTMLDivElement | null;
+      chatInputContainerRef.current = container;
     }
   }, []);
 
@@ -253,7 +258,7 @@ export function ChatInput({
     };
   }, [showQuickModes]);
   
-  // Handle keyboard detection - scope changes to container only
+  // Handle keyboard detection - apply styles directly to the portaled chat input container
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -261,8 +266,8 @@ export function ChatInput({
       const vv = window.visualViewport;
       const vvH = vv?.height ?? window.innerHeight;
       const threshold = 150;
-      const keyboardHeight = window.innerHeight - vvH;
-      const viewportShrank = keyboardHeight > threshold;
+      const kbHeight = window.innerHeight - vvH;
+      const viewportShrank = kbHeight > threshold;
       
       const ae = document.activeElement as HTMLElement | null;
       const isEditableActive = !!ae && (
@@ -273,17 +278,17 @@ export function ChatInput({
       
       const visible = isEditableActive && viewportShrank;
       setIsKeyboardVisible(visible);
+      setKeyboardHeight(visible ? kbHeight : 0);
       
-      // Apply class and keyboard height to closest parent container only, NOT document.body
-      const container = containerRef.current;
+      // Apply styles directly to the chat input container element (since it's portaled to body)
+      const container = chatInputContainerRef.current;
       if (container) {
         if (visible) {
-          container.classList.add('keyboard-visible');
-          // Apply keyboard height as CSS variable for positioning input above keyboard
-          container.style.setProperty('--keyboard-height', `${keyboardHeight}px`);
+          container.style.bottom = `${kbHeight}px`;
+          container.style.paddingBottom = '0px';
         } else {
-          container.classList.remove('keyboard-visible');
-          container.style.setProperty('--keyboard-height', '0px');
+          container.style.bottom = '0px';
+          container.style.paddingBottom = '';
         }
       }
     };
@@ -291,19 +296,23 @@ export function ChatInput({
     const handleFocusIn = (e: FocusEvent) => {
       const t = e.target as HTMLElement;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.getAttribute('contenteditable') === 'true')) {
-        setTimeout(handleKeyboardDetection, 150);
+        // Immediate check + delayed check for iOS keyboard animation
+        handleKeyboardDetection();
+        setTimeout(handleKeyboardDetection, 100);
+        setTimeout(handleKeyboardDetection, 300);
       }
     };
     
     const handleFocusOut = () => {
-      setTimeout(handleKeyboardDetection, 150);
+      setTimeout(handleKeyboardDetection, 100);
     };
 
+    // Use visualViewport for accurate keyboard detection on iOS
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', handleKeyboardDetection);
-    } else {
-      window.addEventListener('resize', handleKeyboardDetection);
+      window.visualViewport.addEventListener('scroll', handleKeyboardDetection);
     }
+    window.addEventListener('resize', handleKeyboardDetection);
     
     document.addEventListener('focusin', handleFocusIn);
     document.addEventListener('focusout', handleFocusOut);
@@ -311,16 +320,11 @@ export function ChatInput({
     return () => {
       if (window.visualViewport) {
         window.visualViewport.removeEventListener('resize', handleKeyboardDetection);
-      } else {
-        window.removeEventListener('resize', handleKeyboardDetection);
+        window.visualViewport.removeEventListener('scroll', handleKeyboardDetection);
       }
+      window.removeEventListener('resize', handleKeyboardDetection);
       document.removeEventListener('focusin', handleFocusIn);
       document.removeEventListener('focusout', handleFocusOut);
-      
-      // Clean up keyboard-visible class from container when component unmounts
-      if (containerRef.current) {
-        containerRef.current.classList.remove('keyboard-visible');
-      }
     };
   }, []);
   

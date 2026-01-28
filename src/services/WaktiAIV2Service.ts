@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { supabase, ensurePassport, getCurrentUserId } from '@/integrations/supabase/client';
 import { getNativeLocation, queryNeedsFreshLocation, clearLocationCache } from '@/integrations/natively/locationBridge';
-import { parseReminderFromResponse, createScheduledReminder } from '@/services/ReminderService';
+import { parseReminderFromResponse, createScheduledReminder, cancelRecentPendingReminders } from '@/services/ReminderService';
 
 export interface AIMessage {
   id: string;
@@ -1209,12 +1209,22 @@ class WaktiAIV2ServiceClass {
           // Only create reminder when AI CONFIRMS (user already said yes)
           // Do NOT create on OFFER - that's just the AI asking if user wants a reminder
           if (reminderData && reminderData.type === 'confirm') {
-            const data = reminderData.data as { scheduled_for?: string; reminder_text?: string; timezone?: string };
+            const data = reminderData.data as { scheduled_for?: string; reminder_text?: string; timezone?: string; replaces_previous?: boolean };
             const scheduledTime = data.scheduled_for;
             const reminderText = data.reminder_text || 'Reminder from Wakti AI';
+            const replacesPrevious = data.replaces_previous === true;
             
             if (scheduledTime && userId) {
-              console.log('🔔 REMINDER: Creating scheduled reminder (user confirmed)', { scheduledTime, reminderText });
+              // Only cancel previous reminders if AI explicitly says it's replacing/adjusting one
+              if (replacesPrevious) {
+                console.log('🔔 REMINDER: AI indicated this replaces a previous reminder, cancelling old one...');
+                const cancelledCount = await cancelRecentPendingReminders(userId, 30);
+                if (cancelledCount > 0) {
+                  console.log(`🔔 REMINDER: Cancelled ${cancelledCount} previous reminder(s) - replacing with corrected time`);
+                }
+              }
+              
+              console.log('🔔 REMINDER: Creating scheduled reminder (user confirmed)', { scheduledTime, reminderText, replacesPrevious });
               const result = await createScheduledReminder(
                 userId,
                 reminderText,
@@ -1475,12 +1485,22 @@ class WaktiAIV2ServiceClass {
         try {
           const reminderData = parseReminderFromResponse(fullResponse);
           if (reminderData && reminderData.type === 'confirm') {
-            const data = reminderData.data as { scheduled_for?: string; reminder_text?: string; timezone?: string };
+            const data = reminderData.data as { scheduled_for?: string; reminder_text?: string; timezone?: string; replaces_previous?: boolean };
             const scheduledTime = data.scheduled_for;
             const reminderText = data.reminder_text || 'Reminder from Wakti AI';
+            const replacesPrevious = data.replaces_previous === true;
             
             if (scheduledTime && userId) {
-              console.log('🔔 REMINDER (Vision): Creating scheduled reminder (user confirmed)', { scheduledTime, reminderText });
+              // Only cancel previous reminders if AI explicitly says it's replacing/adjusting one
+              if (replacesPrevious) {
+                console.log('🔔 REMINDER (Vision): AI indicated this replaces a previous reminder, cancelling old one...');
+                const cancelledCount = await cancelRecentPendingReminders(userId, 30);
+                if (cancelledCount > 0) {
+                  console.log(`🔔 REMINDER (Vision): Cancelled ${cancelledCount} previous reminder(s) - replacing with corrected time`);
+                }
+              }
+              
+              console.log('🔔 REMINDER (Vision): Creating scheduled reminder (user confirmed)', { scheduledTime, reminderText, replacesPrevious });
               const result = await createScheduledReminder(
                 userId,
                 reminderText,

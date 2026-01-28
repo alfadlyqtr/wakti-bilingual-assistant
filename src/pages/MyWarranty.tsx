@@ -11,9 +11,9 @@ import ShareButton from '@/components/ui/ShareButton';
 import { 
   Shield, Plus, SortAsc, Camera, Upload, X, 
   ChevronLeft, Trash2, FileText, MessageCircle, Calendar,
-  Tag, Clock, CheckCircle, AlertTriangle, XCircle, Loader2,
+  Tag, Clock, CheckCircle, AlertTriangle, AlertCircle, XCircle, Loader2,
   Edit2, ExternalLink, CreditCard, User, FolderOpen, ChevronDown, Phone, Mail, Globe, MapPin, Link2, Send, ArrowLeft,
-  Store, Hash, Receipt, Package
+  Store, Hash, Receipt, Package, LayoutGrid, List
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -458,6 +458,7 @@ const translations = {
     noCardsCollected: 'No Cards Collected',
     scanOthers: 'Scan other people\'s cards to save them here',
     scanCard: 'Scan a Card',
+    collectedTab: 'Collected',
   },
   ar: {
     title: 'مستنداتي',
@@ -559,6 +560,7 @@ const translations = {
     noCardsCollected: 'لا توجد بطاقات محفوظة',
     scanOthers: 'امسح بطاقات الآخرين لحفظها هنا',
     scanCard: 'مسح بطاقة',
+    collectedTab: 'المحفوظة',
   },
 };
 
@@ -774,7 +776,7 @@ const MyWarranty: React.FC = () => {
   const [documentToView, setDocumentToView] = useState<{ url: string; type: 'image' | 'pdf' } | null>(null);
 
   // Business Card state - supports up to 2 cards
-  const [businessCards, setBusinessCards] = useState<(BusinessCardData & { cardSlot: number; cardName: string; shareSlug?: string })[]>([]);
+  const [businessCards, setBusinessCards] = useState<(BusinessCardData & { cardSlot: number; cardName: string; shareSlug?: string; viewCount?: number })[]>([]);
   const [activeCardSlot, setActiveCardSlot] = useState<number>(1);
   const [showCardWizard, setShowCardWizard] = useState(false);
   const [showCardBuilder, setShowCardBuilder] = useState(false);
@@ -782,6 +784,7 @@ const MyWarranty: React.FC = () => {
   const [isLoadingCard, setIsLoadingCard] = useState(true);
   const [cardInnerTab, setCardInnerTab] = useState<'mycard' | 'collected'>('mycard');
   const [collectedCards, setCollectedCards] = useState<any[]>([]);
+  const [collectedViewMode, setCollectedViewMode] = useState<'grid' | 'list'>('grid');
 
   const [isScanOpen, setIsScanOpen] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
@@ -797,6 +800,8 @@ const MyWarranty: React.FC = () => {
   const [isCollectedPreviewFlipped, setIsCollectedPreviewFlipped] = useState(false);
 
   const [myCardFlippedBySlot, setMyCardFlippedBySlot] = useState<Record<number, boolean>>({});
+  const [showAnalyticsBySlot, setShowAnalyticsBySlot] = useState<Record<number, boolean>>({});
+  const [cardSavesBySlot, setCardSavesBySlot] = useState<Record<string, number>>({});
   
   // Get current active card
   const businessCard = businessCards.find(c => c.cardSlot === activeCardSlot) || null;
@@ -1827,29 +1832,86 @@ const MyWarranty: React.FC = () => {
     const isPdf = item.file_type === 'pdf' || rawUrl.toLowerCase().endsWith('.pdf');
 
     return (
-      <div key={item.id} className="enhanced-card p-4 mb-3 relative">
-        {/* Action Buttons */}
-        <div className="absolute right-2 top-2 flex items-center gap-1">
+      <div 
+        key={item.id} 
+        className="mb-4 rounded-2xl bg-card border border-border overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+      >
+        {/* Card Content */}
+        <div className="p-4 flex gap-4">
+          {/* Thumbnail */}
+          <div className="w-16 h-16 rounded-xl overflow-hidden bg-muted flex-shrink-0">
+            {rawUrl && !isPdf ? (
+              <img 
+                src={rawUrl} 
+                alt={item.product_name} 
+                className="w-full h-full object-cover" 
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+            ) : isPdf ? (
+              <div className="w-full h-full flex items-center justify-center bg-red-500/10">
+                <FileText className="w-6 h-6 text-red-400" />
+              </div>
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <Shield className="w-6 h-6 text-muted-foreground" />
+              </div>
+            )}
+          </div>
+
+          {/* Info */}
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-foreground text-sm leading-tight mb-1 pr-2">
+              {item.product_name}
+            </h3>
+            <p className="text-xs text-muted-foreground mb-2">
+              {item.status === 'expired' ? t.expiredOn : t.willExpireOn}: {item.expiry_date ? format(parseISO(item.expiry_date), 'MM/dd/yy') : '-'}
+            </p>
+            
+            {/* Progress Bar */}
+            {timeRemaining && (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className={`text-xs font-medium ${timeRemaining.textColor}`}>
+                    {timeRemaining.text}
+                  </span>
+                </div>
+                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full ${timeRemaining.color} rounded-full`}
+                    style={{ width: `${timeRemaining.progress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Action Bar - Bottom of card, clean separation */}
+        <div className="px-4 py-2.5 bg-muted/30 border-t border-border flex items-center justify-end gap-2">
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 w-8 rounded-lg bg-black/40 hover:bg-black/60 text-white border border-white/20 -webkit-backdrop-filter backdrop-blur-sm"
+            className="h-8 px-3 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/10"
             onClick={() => {
               setSelectedItem(item);
               setViewMode('detail');
             }}
           >
-            <ExternalLink className="w-3.5 h-3.5" />
+            <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+            {isRTL ? 'فتح' : 'Open'}
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 w-8 rounded-lg bg-red-500/40 text-white border border-white/20"
+                className="h-8 px-3 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
                 onClick={(e) => e.stopPropagation()}
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                {isRTL ? 'حذف' : 'Delete'}
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent className="bg-background border border-white/10">
@@ -1890,71 +1952,6 @@ const MyWarranty: React.FC = () => {
             </AlertDialogContent>
           </AlertDialog>
         </div>
-
-        <div className="flex gap-4">
-          {/* Thumbnail */}
-          <div className="w-20 h-20 rounded-xl overflow-hidden bg-white/5 border border-white/10 flex-shrink-0 relative">
-            {rawUrl && !isPdf ? (
-              <img 
-                src={rawUrl} 
-                alt={item.product_name} 
-                className="document-preview w-full h-full object-contain bg-black/20 transition-all duration-300" 
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
-                }}
-              />
-            ) : isPdf ? (
-              <div className="w-full h-full flex flex-col items-center justify-center bg-red-500/10 gap-1">
-                <FileText className="w-8 h-8 text-red-400/60" />
-                <span className="text-[10px] text-red-400/80 font-medium">PDF</span>
-              </div>
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <Shield className="w-8 h-8 text-foreground/20" />
-              </div>
-            )}
-          </div>
-
-          {/* Info */}
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-foreground truncate">{item.product_name}</h3>
-            <p className="text-sm text-muted-foreground">
-              {item.status === 'expired' ? t.expiredOn : t.willExpireOn}: {item.expiry_date ? format(parseISO(item.expiry_date), 'MM/dd/yy') : '-'}
-            </p>
-
-            {tags.length > 0 && (
-              <div className="mt-2 flex gap-2 overflow-x-auto scrollbar-hide">
-                {tags.slice(0, 3).map((tag) => (
-                  <span key={tag} className="px-2 py-0.5 rounded-full text-xs bg-white/5 border border-white/10 text-foreground/80 whitespace-nowrap">
-                    {tag}
-                  </span>
-                ))}
-                {tags.length > 3 && (
-                  <span className="px-2 py-0.5 rounded-full text-xs bg-white/5 border border-white/10 text-foreground/60 whitespace-nowrap">
-                    +{tags.length - 3}
-                  </span>
-                )}
-              </div>
-            )}
-            
-            {/* Progress Bar */}
-            {timeRemaining && (
-              <div className="mt-2">
-                <div className="flex items-center justify-between mb-1">
-                  <span className={`text-xs font-medium ${timeRemaining.textColor}`}>
-                    {timeRemaining.text}
-                  </span>
-                </div>
-                <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full ${timeRemaining.color} rounded-full transition-all`}
-                    style={{ width: `${timeRemaining.progress}%` }}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
       </div>
     );
   };
@@ -1963,66 +1960,57 @@ const MyWarranty: React.FC = () => {
   const renderWarrantiesTab = () => (
     <div className="flex flex-col h-full w-full overflow-x-hidden">
       <div className="px-4 pt-6 pb-3 w-full overflow-x-hidden">
-        {/* Filter Tabs */}
-        <div className="flex gap-4 px-4 mt-6 mb-4 overflow-x-auto hide-scrollbar">
-          {/* Plus button moved to the filter row */}
+        {/* Filter Row - Luxurious pill buttons */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Add Button */}
           {viewMode !== 'add' && viewMode !== 'detail' && viewMode !== 'ask' && mainTab === 'docs' && activeTab === 'warranties' && warranties.length > 0 && (
-            <button
-              type="button"
+            <Button
               onClick={() => setViewMode('add')}
-              className="
-                h-9 px-3 rounded-full shrink-0
-                bg-gradient-to-r from-emerald-500 to-blue-500
-                hover:from-emerald-400 hover:to-blue-400
-                active:from-emerald-600 active:to-blue-600
-                flex items-center justify-center gap-1.5
-                shadow-[0_4px_16px_-4px_rgba(16,185,129,0.5)]
-                hover:shadow-[0_6px_20px_-4px_rgba(16,185,129,0.6)]
-                active:shadow-[0_2px_8px_-2px_rgba(16,185,129,0.4)]
-                transition-all duration-300 active:scale-95
-                border border-emerald-400/30
-              "
-              aria-label={t.addNew}
+              size="sm"
+              className="h-9 px-4 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-medium shadow-md"
             >
-              <Plus className="w-4 h-4 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)]" />
-              <span className="text-xs font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)]">{t.addNew}</span>
-            </button>
+              <Plus className="w-4 h-4 mr-1.5" />
+              {isRTL ? 'إضافة' : 'Add'}
+            </Button>
           )}
-          <div className="w-px h-6 bg-white/10 shrink-0 mx-1" />
-          <Button
-            type="button"
-            variant={statusFilter === 'all' ? 'default' : 'outline'}
-            className="rounded-full h-9 shrink-0"
-            onClick={() => setStatusFilter('all')}
-          >
-            {t.filterAll}
-          </Button>
-          <Button
-            type="button"
-            variant={statusFilter === 'expiring' ? 'default' : 'outline'}
-            className={
-              'rounded-full h-9 shrink-0 ' +
-              (statusFilter === 'expiring'
-                ? 'bg-orange-500/15 border border-orange-500/30 text-foreground hover:bg-orange-500/20'
-                : '')
-            }
-            onClick={() => setStatusFilter('expiring')}
-          >
-            {t.filterExpiring}
-          </Button>
-          <Button
-            type="button"
-            variant={statusFilter === 'expired' ? 'default' : 'outline'}
-            className={
-              'rounded-full h-9 shrink-0 ' +
-              (statusFilter === 'expired'
-                ? 'bg-red-500/15 border border-red-500/30 text-foreground hover:bg-red-500/20'
-                : '')
-            }
-            onClick={() => setStatusFilter('expired')}
-          >
-            {t.filterExpired}
-          </Button>
+
+          {/* Filter Pills */}
+          <div className="flex items-center gap-1.5 p-1 rounded-full bg-muted/50">
+            <button
+              onClick={() => setStatusFilter('all')}
+              className={`h-8 px-4 rounded-full text-sm font-medium transition-all ${
+                statusFilter === 'all'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              }`}
+            >
+              {isRTL ? 'الكل' : 'All'}
+            </button>
+
+            <button
+              onClick={() => setStatusFilter('expiring')}
+              className={`h-8 px-3 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 ${
+                statusFilter === 'expiring'
+                  ? 'bg-orange-500 text-white shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              }`}
+            >
+              <AlertCircle className="w-3.5 h-3.5" />
+              <span>{isRTL ? 'قريباً' : 'Expiring'}</span>
+            </button>
+
+            <button
+              onClick={() => setStatusFilter('expired')}
+              className={`h-8 px-3 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 ${
+                statusFilter === 'expired'
+                  ? 'bg-red-500 text-white shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              }`}
+            >
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span>{isRTL ? 'منتهية' : 'Expired'}</span>
+            </button>
+          </div>
         </div>
 
         {Object.keys(tagIndex).length > 0 && (
@@ -2489,6 +2477,7 @@ const MyWarranty: React.FC = () => {
           cardSlot: row.card_slot || (index + 1),
           cardName: row.card_name || (index === 0 ? 'Primary Card' : 'Secondary Card'),
           shareSlug: row.share_slug || undefined,
+          viewCount: row.view_count || 0,
         }));
         setBusinessCards(cards as any);
         // Set active slot to first card's slot
@@ -2511,6 +2500,37 @@ const MyWarranty: React.FC = () => {
   useEffect(() => {
     fetchCollectedCards();
   }, [fetchCollectedCards]);
+
+  // Fetch how many times each card has been saved by others
+  useEffect(() => {
+    const fetchCardSaves = async () => {
+      if (!user || businessCards.length === 0) return;
+      
+      try {
+        // Get saves count for each card individually
+        const savesMap: Record<string, number> = {};
+        
+        for (const card of businessCards) {
+          if (!card.shareSlug) continue;
+          
+          const { count, error } = await supabase
+            .from('collected_business_cards')
+            .select('*', { count: 'exact', head: true })
+            .eq('share_slug', card.shareSlug);
+
+          if (!error && count !== null) {
+            savesMap[card.shareSlug] = count;
+          }
+        }
+        
+        setCardSavesBySlot(savesMap);
+      } catch (err) {
+        console.error('Error fetching card saves:', err);
+      }
+    };
+
+    fetchCardSaves();
+  }, [user, businessCards]);
 
   useEffect(() => {
     if (!isScanOpen) {
@@ -2602,33 +2622,23 @@ const MyWarranty: React.FC = () => {
     const cardLimitReached = businessCards.length >= 2;
     const hasCards = businessCards.length > 0;
 
-    return (
-      <div className="flex flex-col h-full bg-gradient-to-b from-background via-background to-blue-500/5 px-4 py-6 overflow-y-auto">
-        {/* Header with stacked cards illustration */}
-        <div className="flex flex-col items-center mb-6">
-          {/* Floating cards illustration - always show */}
-          <div className="relative w-56 h-40 mb-4">
-            {/* Background cards */}
-            <div className="absolute top-3 left-3 w-36 h-24 rounded-2xl bg-gradient-to-br from-orange-400/30 to-pink-500/30 transform -rotate-12 shadow-lg" />
-            <div className="absolute top-1 right-3 w-36 h-24 rounded-2xl bg-gradient-to-br from-emerald-400/30 to-teal-500/30 transform rotate-6 shadow-lg" />
-            {/* Main card */}
-            <div className="absolute top-6 left-1/2 -translate-x-1/2 w-44 h-28 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-2xl shadow-blue-500/30 flex flex-col items-center justify-center p-3">
-              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center mb-1.5">
-                <User className="w-5 h-5 text-white" />
-              </div>
-              <div className="h-1.5 w-20 bg-white/40 rounded-full mb-1" />
-              <div className="h-1 w-14 bg-white/30 rounded-full" />
-            </div>
-          </div>
+    // Calculate total views across all cards
+    const totalViews = businessCards.reduce((sum, card) => sum + (card.viewCount || 0), 0);
 
-          <h1 className="text-xl font-bold text-foreground text-center mb-1">
-            {isRTL ? 'بطاقاتي الرقمية' : 'My Digital Cards'}
-          </h1>
-          <p className="text-sm text-muted-foreground text-center">
-            {isRTL 
-              ? `${businessCards.length} من 2 بطاقات`
-              : `${businessCards.length} of 2 cards`}
-          </p>
+    return (
+      <div className="flex flex-col px-4 py-4 pb-24">
+        {/* Compact Header */}
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-lg font-bold text-foreground">
+              {isRTL ? 'بطاقاتي الرقمية' : 'My Digital Cards'}
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              {isRTL 
+                ? `${businessCards.length} من 2 بطاقات`
+                : `${businessCards.length} of 2 cards`}
+            </p>
+          </div>
         </div>
 
         {/* Cards Grid - Mobile First */}
@@ -2643,7 +2653,7 @@ const MyWarranty: React.FC = () => {
                     : 'border-white/10 hover:border-white/20'
                 }`}
               >
-                {/* Card Header */}
+                {/* Card Header with Analytics Button */}
                 <div className="flex items-center justify-between p-3 bg-white/5">
                   <div className="flex items-center gap-2">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
@@ -2654,7 +2664,40 @@ const MyWarranty: React.FC = () => {
                       <CreditCard className="w-4 h-4 text-white" />
                     </div>
                   </div>
+                  
+                  {/* Per-Card Analytics Button */}
+                  <button
+                    type="button"
+                    aria-label={isRTL ? 'إحصائيات البطاقة' : 'Card analytics'}
+                    title={isRTL ? 'إحصائيات البطاقة' : 'Card analytics'}
+                    onClick={() => setShowAnalyticsBySlot(prev => ({
+                      ...prev,
+                      [card.cardSlot]: !prev[card.cardSlot]
+                    }))}
+                    className="h-8 px-3 rounded-full text-xs font-semibold flex items-center gap-1.5 bg-gradient-to-r from-purple-500/15 to-blue-500/10 hover:from-purple-500/20 hover:to-blue-500/15 text-foreground border border-white/10 shadow-sm transition-all active:scale-95"
+                  >
+                    <ChevronDown className={`w-4 h-4 transition-transform ${showAnalyticsBySlot[card.cardSlot] ? 'rotate-180' : ''}`} />
+                    {isRTL ? 'إحصائيات' : 'Stats'}
+                  </button>
                 </div>
+
+                {/* Per-Card Analytics Panel */}
+                {showAnalyticsBySlot[card.cardSlot] && (
+                  <div className="px-3 pb-3">
+                    <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500/5 via-purple-500/5 to-pink-500/5 border border-white/10">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="text-center p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                          <p className="text-xl font-bold text-blue-500">{card.viewCount || 0}</p>
+                          <p className="text-[10px] text-muted-foreground">{isRTL ? 'مشاهدات' : 'Views'}</p>
+                        </div>
+                        <div className="text-center p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                          <p className="text-xl font-bold text-emerald-500">{card.shareSlug ? (cardSavesBySlot[card.shareSlug] || 0) : 0}</p>
+                          <p className="text-[10px] text-muted-foreground">{isRTL ? 'حفظ' : 'Saves'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div
                   className="p-3 cursor-pointer"
@@ -2735,6 +2778,34 @@ const MyWarranty: React.FC = () => {
     );
   };
 
+  // Delete a collected card
+  const handleDeleteCollectedCard = async (cardId: string) => {
+    if (!user) return;
+    try {
+      const { error } = await supabase
+        .from('collected_business_cards')
+        .delete()
+        .eq('id', cardId)
+        .eq('user_id', user.id);
+      
+      if (error) throw error;
+      
+      // Refresh the list
+      await fetchCollectedCards();
+      toast({
+        title: isRTL ? 'تم الحذف' : 'Deleted',
+        description: isRTL ? 'تم حذف البطاقة من المحفوظة' : 'Card removed from Collected',
+      });
+    } catch (err) {
+      console.error('Error deleting collected card:', err);
+      toast({
+        title: isRTL ? 'خطأ' : 'Error',
+        description: isRTL ? 'تعذر حذف البطاقة' : 'Failed to delete card',
+        variant: 'destructive',
+      });
+    }
+  };
+
   // Render Collected tab (scanned cards from others)
   const renderCollectedContent = () => {
     if (collectedCards.length === 0) {
@@ -2764,50 +2835,221 @@ const MyWarranty: React.FC = () => {
       );
     }
 
-    // Show collected cards list
+    // Show collected cards with header
     return (
       <div className="flex flex-col h-full px-4 py-4">
-        <div className="flex items-center justify-end mb-3">
-          <Button
-            variant="outline"
-            size="sm"
-            className="rounded-xl"
-            onClick={() => setIsScanOpen(true)}
-          >
-            {isRTL ? 'مسح بطاقة' : 'Scan a Card'}
-          </Button>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {collectedCards.map((card, index) => (
-            <div
-              key={index}
-              className="p-2 rounded-2xl bg-white/5 border border-white/10"
-              role="button"
-              tabIndex={0}
-              aria-label={isRTL ? 'فتح البطاقة' : 'Open card'}
-              title={isRTL ? 'فتح البطاقة' : 'Open card'}
-              onClick={() => {
-                const snapshot = card?.card_snapshot || {};
-                const shareSlug = card?.share_slug || undefined;
-                setCollectedPreview({ data: mapSnapshotToBusinessCardData(snapshot), shareSlug });
-                setIsCollectedPreviewFlipped(false);
-                setIsCollectedPreviewOpen(true);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  const snapshot = card?.card_snapshot || {};
-                  const shareSlug = card?.share_slug || undefined;
-                  setCollectedPreview({ data: mapSnapshotToBusinessCardData(snapshot), shareSlug });
-                  setIsCollectedPreviewFlipped(false);
-                  setIsCollectedPreviewOpen(true);
-                }
-              }}
-            >
-              <CompactCardPreview data={mapSnapshotToBusinessCardData(card?.card_snapshot || {})} />
+        {/* Header with count, view toggle, and scan button */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-foreground">
+              {collectedCards.length} {isRTL ? 'بطاقة' : collectedCards.length === 1 ? 'card' : 'cards'}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* View Toggle */}
+            <div className="flex items-center gap-1 p-1 rounded-lg bg-white/5 border border-white/10">
+              <button
+                type="button"
+                onClick={() => setCollectedViewMode('grid')}
+                className={`p-1.5 rounded-md transition-all ${collectedViewMode === 'grid' ? 'bg-blue-500/20 text-blue-400' : 'text-muted-foreground hover:text-foreground'}`}
+                aria-label={isRTL ? 'عرض شبكي' : 'Grid view'}
+                title={isRTL ? 'عرض شبكي' : 'Grid view'}
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setCollectedViewMode('list')}
+                className={`p-1.5 rounded-md transition-all ${collectedViewMode === 'list' ? 'bg-blue-500/20 text-blue-400' : 'text-muted-foreground hover:text-foreground'}`}
+                aria-label={isRTL ? 'عرض قائمة' : 'List view'}
+                title={isRTL ? 'عرض قائمة' : 'List view'}
+              >
+                <List className="w-4 h-4" />
+              </button>
             </div>
-          ))}
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-xl h-8 px-3 text-xs"
+              onClick={() => setIsScanOpen(true)}
+            >
+              <Plus className="w-3.5 h-3.5 mr-1" />
+              {isRTL ? 'مسح' : 'Scan'}
+            </Button>
+          </div>
         </div>
+
+        {/* Grid View */}
+        {collectedViewMode === 'grid' && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 transition-all duration-300">
+            {collectedCards.map((card) => (
+              <div
+                key={card.id}
+                className="relative group p-2 rounded-2xl bg-white/5 border border-white/10 hover:border-white/20 transition-all"
+              >
+                {/* Delete button */}
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <button
+                      type="button"
+                      className="absolute top-1 right-1 z-10 p-1.5 rounded-full bg-red-500/80 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 active:scale-95"
+                      aria-label={isRTL ? 'حذف البطاقة' : 'Delete card'}
+                      title={isRTL ? 'حذف البطاقة' : 'Delete card'}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>{isRTL ? 'حذف البطاقة؟' : 'Delete Card?'}</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {isRTL 
+                          ? 'هل أنت متأكد من حذف هذه البطاقة من المحفوظة؟'
+                          : 'Are you sure you want to remove this card from your collection?'}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>{isRTL ? 'إلغاء' : 'Cancel'}</AlertDialogCancel>
+                      <AlertDialogAction
+                        className="bg-red-500 hover:bg-red-600"
+                        onClick={() => handleDeleteCollectedCard(card.id)}
+                      >
+                        {isRTL ? 'حذف' : 'Delete'}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                
+                <div
+                  role="button"
+                  tabIndex={0}
+                  aria-label={isRTL ? 'فتح البطاقة' : 'Open card'}
+                  title={isRTL ? 'فتح البطاقة' : 'Open card'}
+                  onClick={() => {
+                    const snapshot = card?.card_snapshot || {};
+                    const shareSlug = card?.share_slug || undefined;
+                    setCollectedPreview({ data: mapSnapshotToBusinessCardData(snapshot), shareSlug });
+                    setIsCollectedPreviewFlipped(false);
+                    setIsCollectedPreviewOpen(true);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      const snapshot = card?.card_snapshot || {};
+                      const shareSlug = card?.share_slug || undefined;
+                      setCollectedPreview({ data: mapSnapshotToBusinessCardData(snapshot), shareSlug });
+                      setIsCollectedPreviewFlipped(false);
+                      setIsCollectedPreviewOpen(true);
+                    }
+                  }}
+                >
+                  <CompactCardPreview data={mapSnapshotToBusinessCardData(card?.card_snapshot || {})} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* List View */}
+        {collectedViewMode === 'list' && (
+          <div className="flex flex-col gap-2">
+            {collectedCards.map((card) => {
+              const snapshot = card?.card_snapshot || {};
+              const cardData = mapSnapshotToBusinessCardData(snapshot);
+              return (
+                <div
+                  key={card.id}
+                  className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition-all group"
+                >
+                  {/* Mini card preview or avatar */}
+                  <div 
+                    className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center shrink-0 overflow-hidden cursor-pointer"
+                    onClick={() => {
+                      setCollectedPreview({ data: cardData, shareSlug: card?.share_slug });
+                      setIsCollectedPreviewFlipped(false);
+                      setIsCollectedPreviewOpen(true);
+                    }}
+                  >
+                    {cardData.profilePhotoUrl ? (
+                      <img src={cardData.profilePhotoUrl} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <User className="w-6 h-6 text-blue-400" />
+                    )}
+                  </div>
+                  
+                  {/* Card info */}
+                  <div 
+                    className="flex-1 min-w-0 cursor-pointer"
+                    onClick={() => {
+                      setCollectedPreview({ data: cardData, shareSlug: card?.share_slug });
+                      setIsCollectedPreviewFlipped(false);
+                      setIsCollectedPreviewOpen(true);
+                    }}
+                  >
+                    <p className="text-sm font-semibold text-foreground truncate">
+                      {cardData.firstName} {cardData.lastName}
+                    </p>
+                    {cardData.jobTitle && (
+                      <p className="text-xs text-muted-foreground truncate">{cardData.jobTitle}</p>
+                    )}
+                    {cardData.companyName && (
+                      <p className="text-[10px] text-muted-foreground/70 truncate">{cardData.companyName}</p>
+                    )}
+                  </div>
+                  
+                  {/* Actions */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-all"
+                      aria-label={isRTL ? 'فتح البطاقة' : 'View card'}
+                      title={isRTL ? 'فتح البطاقة' : 'View card'}
+                      onClick={() => {
+                        setCollectedPreview({ data: cardData, shareSlug: card?.share_slug });
+                        setIsCollectedPreviewFlipped(false);
+                        setIsCollectedPreviewOpen(true);
+                      }}
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <button
+                          type="button"
+                          className="p-2 rounded-lg text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-all"
+                          aria-label={isRTL ? 'حذف البطاقة' : 'Delete card'}
+                          title={isRTL ? 'حذف البطاقة' : 'Delete card'}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>{isRTL ? 'حذف البطاقة؟' : 'Delete Card?'}</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            {isRTL 
+                              ? 'هل أنت متأكد من حذف هذه البطاقة من المحفوظة؟'
+                              : 'Are you sure you want to remove this card from your collection?'}
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>{isRTL ? 'إلغاء' : 'Cancel'}</AlertDialogCancel>
+                          <AlertDialogAction
+                            className="bg-red-500 hover:bg-red-600"
+                            onClick={() => handleDeleteCollectedCard(card.id)}
+                          >
+                            {isRTL ? 'حذف' : 'Delete'}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   };
@@ -2836,35 +3078,39 @@ const MyWarranty: React.FC = () => {
     }
 
     return (
-      <div className="flex flex-col h-full">
-        {/* Inner Tab Navigation */}
-        <div className="px-4 pt-2 pb-2">
-          <div className="flex items-center gap-1 p-1 rounded-2xl bg-white/5 border border-white/10">
+      <div className="flex flex-col h-full overflow-hidden">
+        {/* Inner Tab Navigation - Elegant segmented control */}
+        <div className="px-4 pt-3 pb-3 flex-shrink-0">
+          <div className="flex p-1 rounded-full bg-muted/50">
             <button
+              type="button"
               onClick={() => setCardInnerTab('mycard')}
-              className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all ${
+              className={`flex-1 h-10 rounded-full text-sm font-semibold flex items-center justify-center gap-2 transition-all ${
                 cardInnerTab === 'mycard'
-                  ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+                  ? 'bg-primary text-primary-foreground shadow-md'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              {isRTL ? 'بطاقتي' : 'My Card'}
+              <CreditCard className="w-4 h-4" />
+              <span>{t.myCardTab}</span>
             </button>
             <button
+              type="button"
               onClick={() => setCardInnerTab('collected')}
-              className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all ${
+              className={`flex-1 h-10 rounded-full text-sm font-semibold flex items-center justify-center gap-2 transition-all ${
                 cardInnerTab === 'collected'
-                  ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              {isRTL ? 'المحفوظة' : 'Collected'}
+              <FolderOpen className="w-4 h-4" />
+              <span>{t.collectedTab}</span>
             </button>
           </div>
         </div>
 
         {/* Inner Tab Content */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           {cardInnerTab === 'mycard' ? renderMyCardContent() : renderCollectedContent()}
         </div>
       </div>
@@ -2887,28 +3133,30 @@ const MyWarranty: React.FC = () => {
 
   const renderDocsTabContent = () => (
     <div className="flex flex-col h-full w-full overflow-x-hidden">
-      {/* Inner Tabs - Documents / Ask Wakti AI */}
-      <div className="px-4 pt-3 pb-2 w-full border-b border-white/5">
-        <div className="flex items-center gap-2 p-1 rounded-xl bg-white/5 border border-white/10">
+      {/* Inner Tabs - Elegant segmented control */}
+      <div className="px-4 pt-3 pb-3">
+        <div className="flex p-1 rounded-full bg-muted/50">
           <button
             onClick={() => setActiveTab('warranties')}
-            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+            className={`flex-1 h-10 rounded-full text-sm font-semibold flex items-center justify-center gap-2 transition-all ${
               activeTab === 'warranties'
-                ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
-                : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+                ? 'bg-primary text-primary-foreground shadow-md'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            {t.warrantiesTab}
+            <FolderOpen className="w-4 h-4" />
+            <span>{t.warrantiesTab}</span>
           </button>
           <button
             onClick={() => setActiveTab('ask')}
-            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+            className={`flex-1 h-10 rounded-full text-sm font-semibold flex items-center justify-center gap-2 transition-all ${
               activeTab === 'ask'
-                ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
-                : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+                ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            {t.askTab}
+            <MessageCircle className="w-4 h-4" />
+            <span>{t.askTab}</span>
           </button>
         </div>
       </div>
@@ -2922,11 +3170,11 @@ const MyWarranty: React.FC = () => {
   );
 
   const renderMainView = () => (
-    <div className="flex flex-col h-full w-full overflow-x-hidden">
+    <div className="flex flex-col w-full overflow-x-hidden">
       {/* Main 3-Tab Navigation */}
       <div className="px-4 pt-safe pb-2 solid-bg border-b border-white/10 w-full">
         <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as 'docs' | 'card' | 'cv')}>
-          <TabsList className="w-full bg-white/5 border border-white/10 grid grid-cols-3 h-12 mt-2">
+          <TabsList className="justify-center sm:justify-start gap-2 rounded-xl p-1 text-muted-foreground w-full bg-gradient-to-r from-white/8 to-white/5 border border-white/15 backdrop-blur-sm grid grid-cols-3 h-11 mt-2 shadow-inner transition-all duration-300 hover:shadow-md hover:border-white/20">
             <TabsTrigger value="docs" className="flex flex-col items-center justify-center gap-0.5">
               <FolderOpen className="w-3.5 h-3.5" />
               <span className="text-[9px] font-medium leading-none">{t.myDocsTab}</span>
@@ -2944,7 +3192,7 @@ const MyWarranty: React.FC = () => {
       </div>
 
       {/* Tab Content */}
-      <div className="flex-1 overflow-hidden">
+      <div className="w-full">
         {mainTab === 'docs' && renderDocsTabContent()}
         {mainTab === 'card' && renderMyCardTab()}
         {mainTab === 'cv' && renderMyCVTab()}
@@ -3271,7 +3519,7 @@ const MyWarranty: React.FC = () => {
               return (
                 <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-cyan-500/10 border border-blue-500/20 mb-4">
                   <div className="flex items-start gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center shadow-lg">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center shadow-lg">
                       <FileText className="w-5 h-5 text-white" />
                     </div>
                     <div>
@@ -3349,7 +3597,7 @@ const MyWarranty: React.FC = () => {
                                 <h5 className={`text-sm font-black uppercase tracking-widest ${isCollapsed ? 'text-foreground' : colors.text} transition-colors duration-300`}>
                                   {isRTL ? config.labelAr : config.labelEn}
                                 </h5>
-                                <p className={`text-[10px] font-bold uppercase tracking-tight ${isCollapsed ? 'text-muted-foreground' : 'text-foreground/70'}`}>
+                                <p className={`text-[10px] font-black uppercase tracking-tight ${isCollapsed ? 'text-muted-foreground' : 'text-foreground/70'}`}>
                                   {fields.length} {fields.length === 1 ? (isRTL ? 'حقل' : 'field') : (isRTL ? 'حقول' : 'fields')}
                                 </p>
                               </div>
@@ -3365,6 +3613,7 @@ const MyWarranty: React.FC = () => {
                               {fields.map(([key, val], idx) => {
                                 const label = translateFieldLabel(key, isRTL);
                                 const value = String(val);
+                                const isLongValue = value.length > 35;
                                 const isMonoValue = key.includes('number') || key.includes('_no') || key.includes('_id') || 
                                                    key.includes('chassis') || key.includes('plate') || key.includes('vin');
                                 
@@ -3609,11 +3858,11 @@ const MyWarranty: React.FC = () => {
                         <Button
                           variant="ghost"
                           size="sm"
+                          className="absolute top-3 right-3 bg-black/40 hover:bg-black/60 text-white border border-white/20 backdrop-blur-sm"
                           onClick={(e) => {
                             e.stopPropagation();
                             window.open(selectedItem.receipt_url, '_blank');
                           }}
-                          className="absolute top-3 right-3 bg-black/40 hover:bg-black/60 text-white border border-white/20 backdrop-blur-sm"
                         >
                           <ExternalLink className="w-4 h-4 mr-1.5" />
                           {isRTL ? 'فتح' : 'Open'}
@@ -4118,11 +4367,11 @@ const MyWarranty: React.FC = () => {
   // Main render
   return (
     <div
-      className="h-full w-full bg-background overflow-x-hidden overflow-y-auto relative"
+      className="w-full bg-background overflow-x-hidden relative"
       style={{ paddingTop: 'calc(var(--app-header-h, 64px) - 32px)' }}
       dir={isRTL ? 'rtl' : 'ltr'}
     >
-      <div className="flex flex-col h-full w-full max-w-full">
+      <div className="flex flex-col w-full max-w-full">
         {viewMode === 'add' ? renderAddView() : viewMode === 'detail' ? renderDetailView() : viewMode === 'ask' ? renderAskView() : renderMainView()}
       </div>
 

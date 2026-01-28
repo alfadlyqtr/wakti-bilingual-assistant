@@ -274,6 +274,55 @@ export async function cancelReminder(reminderId: string, userId: string): Promis
 }
 
 /**
+ * Cancel recent pending reminders for a user (used when adjusting/replacing a reminder)
+ * This cancels reminders created in the last N minutes to avoid duplicates
+ */
+export async function cancelRecentPendingReminders(userId: string, withinMinutes: number = 30): Promise<number> {
+  try {
+    const cutoffTime = new Date(Date.now() - withinMinutes * 60 * 1000).toISOString();
+    
+    // First get the IDs of reminders to cancel
+    const { data: remindersToCancel, error: fetchError } = await supabase
+      .from('notification_history')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('type', 'ai_reminder')
+      .eq('push_sent', false)
+      .gte('created_at', cutoffTime)
+      .not('scheduled_for', 'is', null);
+
+    if (fetchError) {
+      console.error('[ReminderService] Failed to fetch recent reminders:', fetchError);
+      return 0;
+    }
+
+    if (!remindersToCancel || remindersToCancel.length === 0) {
+      console.log('[ReminderService] No recent pending reminders to cancel');
+      return 0;
+    }
+
+    const idsToCancel = remindersToCancel.map(r => r.id);
+    
+    // Delete them
+    const { error: deleteError } = await supabase
+      .from('notification_history')
+      .delete()
+      .in('id', idsToCancel);
+
+    if (deleteError) {
+      console.error('[ReminderService] Failed to cancel recent reminders:', deleteError);
+      return 0;
+    }
+
+    console.log('[ReminderService] ✅ Cancelled', idsToCancel.length, 'recent pending reminder(s)');
+    return idsToCancel.length;
+  } catch (err) {
+    console.error('[ReminderService] Error cancelling recent reminders:', err);
+    return 0;
+  }
+}
+
+/**
  * Format a date for display
  */
 export function formatReminderTime(date: Date | string, locale = 'en'): string {
@@ -313,5 +362,6 @@ export default {
   createScheduledReminder,
   getPendingReminders,
   cancelReminder,
+  cancelRecentPendingReminders,
   formatReminderTime
 };

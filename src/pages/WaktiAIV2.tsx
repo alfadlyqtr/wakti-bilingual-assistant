@@ -731,6 +731,13 @@ const WaktiAIV2 = () => {
         setChatSubmode('chat');
         console.log('🔄 AUTO-SWITCH: Study used → Chat mode');
       }
+
+      // HARD RULE: Search mode must never persist.
+      // After ANY search request completes, always snap back to Chat mode.
+      if (trigger === 'search') {
+        setActiveTrigger('chat');
+        console.log('🔄 AUTO-SWITCH: Search completed → Chat mode');
+      }
       
       // Auto-switch back to Chat after certain modes to save backend credits
       // and provide a smoother UX (user usually wants to chat about the result)

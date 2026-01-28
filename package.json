@@ -4,17 +4,15 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "predev": "node scripts/copy-ffmpeg-core.mjs && node scripts/copy-cesdk-assets.mjs",
+    "predev": "node scripts/copy-ffmpeg-core.mjs",
     "dev": "vite",
-    "prebuild": "node scripts/copy-ffmpeg-core.mjs && node scripts/copy-cesdk-assets.mjs",
+    "prebuild": "node scripts/copy-ffmpeg-core.mjs",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
-    "@cesdk/cesdk-js": "^1.66.1",
-    "@cesdk/engine": "^1.66.1",
     "@codesandbox/sandpack-react": "^2.20.0",
     "@codesandbox/sandpack-themes": "^2.0.21",
     "@dnd-kit/core": "^6.1.0",

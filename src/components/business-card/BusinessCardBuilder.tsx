@@ -1145,7 +1145,9 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
               className={`w-8 h-8 rounded-full border-2 transition-all hover:scale-110 ${
                 (style?.color || '') === c.color 
                   ? 'border-[hsl(210,100%,65%)] ring-2 ring-[hsl(210,100%,65%)]/30' 
-                  : 'border-[#060541]/20 dark:border-white/20'
+                  : c.id === 'white'
+                    ? 'border-gray-300 dark:border-gray-500 ring-1 ring-inset ring-gray-200 dark:ring-gray-600 shadow-sm'
+                    : 'border-[#060541]/20 dark:border-white/20'
               }`}
               style={{ backgroundColor: c.color || 'transparent' }}
               aria-label={c.label}
@@ -1706,7 +1708,9 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
                     className={`w-8 h-8 rounded-full border-2 transition-all ${
                       (formData.iconStyle?.backgroundColor || '#000000') === bg.color
                         ? 'border-[hsl(142,76%,55%)] scale-110 ring-2 ring-[hsl(142,76%,55%)]/30'
-                        : 'border-white/60 dark:border-white/30'
+                        : bg.id === 'white'
+                          ? 'border-gray-300 dark:border-gray-500 ring-1 ring-inset ring-gray-200 dark:ring-gray-600 shadow-sm'
+                          : 'border-white/60 dark:border-white/30'
                     } ${bg.id === 'transparent' ? 'bg-gradient-to-br from-gray-200 to-gray-400 dark:from-gray-600 dark:to-gray-800' : ''}`}
                     style={{ backgroundColor: bg.id !== 'transparent' ? bg.color : undefined }}
                     title={bg.label}
@@ -2089,12 +2093,20 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
         <h3 className="text-sm font-semibold text-foreground">{t.yourQrCode}</h3>
 
         <div className="flex flex-col items-center p-6 rounded-2xl bg-white border border-gray-200">
-          <div ref={qrRef} className="w-48 h-48 bg-gray-100 rounded-xl flex items-center justify-center">
+          <div ref={qrRef} className="w-48 h-48 bg-white rounded-xl flex items-center justify-center">
             <QRCodeSVG 
               value={cardUrl}
               size={160}
               level="H"
               includeMargin={false}
+              imageSettings={{
+                src: "/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png",
+                x: undefined,
+                y: undefined,
+                height: 28,
+                width: 28,
+                excavate: true,
+              }}
             />
           </div>
           <p className="text-sm text-gray-500 mt-4">{t.scanToConnect}</p>
@@ -2138,24 +2150,24 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
       dir={isRTL ? 'rtl' : 'ltr'}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 pt-4 pb-2">
+      <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-[#060541]/10 dark:border-white/10 bg-gradient-to-r from-[#060541]/5 to-transparent dark:from-white/5 backdrop-blur-sm">
         <button
           type="button"
           onClick={onBack}
-          className="flex items-center gap-1.5 px-3 py-1.5 -ml-2 rounded-xl bg-gradient-to-r from-[#060541]/10 to-[#060541]/5 dark:from-white/10 dark:to-white/5 hover:from-[#060541]/20 hover:to-[#060541]/10 dark:hover:from-white/20 dark:hover:to-white/10 border border-[#060541]/10 dark:border-white/10 transition-all active:scale-95"
+          className="flex items-center gap-2 px-3.5 py-2 -ml-2 rounded-2xl bg-gradient-to-r from-[#060541]/10 to-[#060541]/5 dark:from-white/10 dark:to-white/5 hover:from-[#060541]/15 hover:to-[#060541]/10 dark:hover:from-white/15 dark:hover:to-white/10 border border-[#060541]/10 dark:border-white/10 shadow-sm hover:shadow-md transition-all active:scale-95"
         >
           <ArrowLeft className={`w-4 h-4 ${isRTL ? 'rotate-180' : ''}`} />
           <span className="text-sm font-medium">{isRTL ? 'بطاقاتي' : 'My Cards'}</span>
         </button>
-        <h1 className="text-lg font-bold">{t.builder}</h1>
+        <h1 className="text-lg font-bold text-[#060541] dark:text-white tracking-tight">{t.builder}</h1>
         <div className="flex items-center gap-2">
           {/* Auto-save toggle */}
           <button
             onClick={() => setAutoSaveEnabled(!autoSaveEnabled)}
-            className={`px-2 py-1.5 rounded-lg text-[10px] font-medium transition-all ${
+            className={`px-3 py-2 rounded-2xl text-[10px] font-semibold transition-all border shadow-sm active:scale-95 ${
               autoSaveEnabled
-                ? 'bg-green-500/20 text-green-600 border border-green-500/30'
-                : 'bg-[#060541]/10 dark:bg-white/10 text-[#606062] dark:text-[#858384]'
+                ? 'bg-gradient-to-r from-emerald-500/20 to-teal-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                : 'bg-gradient-to-r from-[#060541]/10 to-[#060541]/5 dark:from-white/10 dark:to-white/5 text-[#606062] dark:text-[#858384] border-[#060541]/10 dark:border-white/10'
             }`}
           >
             {autoSaveEnabled ? (
@@ -2175,7 +2187,7 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
             size="sm"
             onClick={handleSave}
             disabled={isSaving}
-            className="gap-2 px-3 text-xs font-semibold text-white bg-gradient-to-r from-[#060541] via-[hsl(260,70%,25%)] to-[#060541] shadow-[0_0_16px_rgba(6,5,65,0.35)] hover:shadow-[0_0_24px_rgba(6,5,65,0.5)] hover:-translate-y-0.5 active:translate-y-0"
+            className="gap-2 px-3.5 h-10 rounded-2xl text-xs font-semibold text-white bg-gradient-to-r from-[#060541] via-[hsl(260,70%,25%)] to-[#060541] shadow-[0_0_18px_rgba(6,5,65,0.35)] hover:shadow-[0_0_26px_rgba(6,5,65,0.5)] hover:-translate-y-0.5 active:translate-y-0"
           >
             {isSaving ? (
               <>
@@ -2194,7 +2206,7 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
 
       {/* Tab Navigation */}
       <div className="px-4 py-2">
-        <div className="flex items-center gap-1 p-1 rounded-2xl bg-white/5 border border-white/10">
+        <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-gradient-to-r from-white/8 to-white/5 border border-white/10 backdrop-blur-sm shadow-inner">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -2203,9 +2215,9 @@ export const BusinessCardBuilder: React.FC<BusinessCardBuilderProps> = ({
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 flex items-center justify-center gap-2 py-3 px-2 rounded-xl transition-all ${
+                className={`flex-1 flex items-center justify-center gap-2 py-3 px-2 rounded-xl transition-all active:scale-[0.99] ${
                   isActive
-                    ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
+                    ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg shadow-blue-500/20'
                     : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
                 }`}
               >
@@ -2406,8 +2418,16 @@ const CardPreviewLive = ({ data, isFlipped, handleFlip, handleAddToWallet }: Car
     if (!iconStyle.showBackground) {
       return 'transparent';
     }
+    // Handle transparent/none selection
+    if (iconStyle.backgroundColor === 'transparent' || !iconStyle.backgroundColor) {
+      return 'transparent';
+    }
     const opacity = iconStyle.colorIntensity / 100;
     const hex = iconStyle.backgroundColor.replace('#', '');
+    // Validate hex format
+    if (hex.length !== 6 || !/^[0-9A-Fa-f]{6}$/.test(hex)) {
+      return 'transparent';
+    }
     const r = parseInt(hex.substring(0, 2), 16);
     const g = parseInt(hex.substring(2, 4), 16);
     const b = parseInt(hex.substring(4, 6), 16);

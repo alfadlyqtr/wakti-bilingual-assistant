@@ -196,9 +196,8 @@ export default function BusinessCardShare() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-background via-background to-blue-500/5">
-      {/* Header: Logo left, Powered by Wakti AI center */}
-      <header className="flex items-center justify-between px-4 py-3 relative">
-        {/* Logo top-left */}
+      {/* Header: Logo top-left only */}
+      <header className="flex items-center px-4 py-3">
         <a href={appStoreUrl} target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
           <img
             src="/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png"
@@ -206,67 +205,71 @@ export default function BusinessCardShare() {
             className="w-10 h-10 object-contain"
           />
         </a>
-        
-        {/* Powered by Wakti AI - center */}
+      </header>
+
+      {/* Card container - moved up with less padding */}
+      <div className="flex-1 flex flex-col items-center pt-2 px-4 relative">
+        {/* Card + Arrow hint wrapper */}
+        <div className="relative">
+          {/* Card with enhanced 3D shadow effect */}
+          <div className="drop-shadow-2xl" style={{ filter: 'drop-shadow(0 25px 50px rgba(0, 0, 0, 0.35)) drop-shadow(0 10px 20px rgba(99, 102, 241, 0.15))' }}>
+            <CardPreviewLive
+              data={card as any}
+              isFlipped={isFlipped}
+              handleFlip={() => setIsFlipped((v) => !v)}
+              handleAddToWallet={() => {}}
+            />
+          </div>
+          
+          {/* Curveball arrow + chip - shows on both sides with different text */}
+          <div className="absolute -bottom-20 right-0 flex items-start gap-0 animate-pulse">
+            {/* Chip button */}
+            <button
+              onClick={() => setIsFlipped((v) => !v)}
+              className="text-sm font-medium text-primary bg-white/95 dark:bg-black/70 px-4 py-2 rounded-full shadow-lg border border-primary/30 hover:bg-primary hover:text-white transition-colors cursor-pointer active:scale-95"
+            >
+              {isFlipped ? 'Flip to see card' : 'Flip to add as contact'}
+            </button>
+            {/* Curveball arrow - dramatic curve pointing up toward flip button */}
+            <svg
+              width="70"
+              height="80"
+              viewBox="0 0 70 80"
+              fill="none"
+              className="text-primary -ml-2 -mt-12"
+            >
+              {/* Curveball path - sweeping curve like a pitcher's throw */}
+              <path
+                d="M60 75 C 65 55, 55 35, 35 25 C 15 15, 10 10, 15 5"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                fill="none"
+              />
+              {/* Arrow head pointing up-left */}
+              <path
+                d="M15 5 L 22 10 M15 5 L 18 14"
+                stroke="currentColor"
+                strokeWidth="3"
+                strokeLinecap="round"
+              />
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer: Powered by Wakti AI - bottom center */}
+      <footer className="flex justify-center px-4 py-4 pb-6">
         <a
           href={appStoreUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 border border-white/20 hover:bg-white/20 transition-colors"
+          className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/10 border border-white/20 hover:bg-white/20 transition-colors"
         >
           <span className="text-xs text-muted-foreground">Powered by</span>
           <span className="text-sm font-semibold text-primary">Wakti AI</span>
         </a>
-        
-        {/* Spacer for balance */}
-        <div className="w-10" />
-      </header>
-
-      {/* Card container with flip hint */}
-      <div className="flex-1 flex flex-col items-center justify-center p-4 relative">
-        <CardPreviewLive
-          data={card as any}
-          isFlipped={isFlipped}
-          handleFlip={() => setIsFlipped((v) => !v)}
-          handleAddToWallet={() => {}}
-        />
-        
-        {/* Curved arrow pointing UP to flip button with hint text */}
-        {!isFlipped && (
-          <div className="absolute bottom-4 right-4 flex flex-col items-center animate-pulse">
-            {/* Curved arrow SVG pointing UP toward the flip button */}
-            <svg
-              width="60"
-              height="80"
-              viewBox="0 0 60 80"
-              fill="none"
-              className="text-primary mb-1"
-            >
-              {/* Arrow head pointing up */}
-              <path
-                d="M30 5 L 24 15 M30 5 L 36 15"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-              />
-              {/* Curved line going down */}
-              <path
-                d="M30 5 C 30 25, 35 45, 30 70"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                fill="none"
-              />
-            </svg>
-            <button
-              onClick={() => setIsFlipped(true)}
-              className="text-sm font-medium text-primary bg-white/90 dark:bg-black/60 px-4 py-2 rounded-full shadow-md border border-primary/30 hover:bg-primary hover:text-white transition-colors cursor-pointer active:scale-95"
-            >
-              Flip to add as contact
-            </button>
-          </div>
-        )}
-      </div>
+      </footer>
     </div>
   );
 }
