@@ -620,11 +620,11 @@ export function AppLayout({ children }: AppLayoutProps) {
         </style>
         <ProtectedRoute CustomPaywallModal={CustomPaywallModal}>
           <WelcomeTrialPopup />
-          <div className="min-h-screen bg-background">
+          <div className="h-[100dvh] bg-background app-layout-mobile overflow-hidden flex flex-col">
             <div className="relative">
               <AppHeader unreadTotal={unreadData.unreadTotal} />
             </div>
-            <main className="pt-2">
+            <main className="flex-1">
               {content}
             </main>
             <PresenceBeacon />
