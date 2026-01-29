@@ -93,7 +93,7 @@ import { ProductWizard, Product, ProductDisplayConfig } from '@/components/proje
 import { AuthWizard, AuthConfig } from '@/components/projects/AuthWizard';
 import { MediaWizard, MediaConfig } from '@/components/projects/MediaWizard';
 import { SmartMediaManager } from '@/components/projects/SmartMediaManager';
-import { detectWizardType, WizardType } from '@/components/projects/wizards';
+import { detectWizardType, detectWizardTypeAdvanced, isDataAdditionRequest, WizardType } from '@/components/projects/wizards';
 import { ProductFormCard } from '@/components/projects/ProductFormCard';
 import { FeatureSummaryCard } from '@/components/projects/FeatureSummaryCard';
 import { BackendConnectionsSummary } from '@/components/projects/BackendConnectionsSummary';
@@ -314,6 +314,20 @@ export default function ProjectDetail() {
   } | null>(null);
   const [alwaysAllowMigrations, setAlwaysAllowMigrations] = useState(false);
 
+  // Context-aware guidance state - shows helpful hints based on project state
+  const [contextHintDismissed, setContextHintDismissed] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('wakti_coder_hints_dismissed');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+
+  const dismissContextHint = useCallback((hintId: string) => {
+    const updated = [...contextHintDismissed, hintId];
+    setContextHintDismissed(updated);
+    localStorage.setItem('wakti_coder_hints_dismissed', JSON.stringify(updated));
+  }, [contextHintDismissed]);
+
   // Visual Edit Mode undo/redo history
   const visualEditHistory = useEditHistory({ maxHistory: 30 });
 
@@ -517,6 +531,99 @@ export default function ProjectDetail() {
     chatRoomsCount: number;
     commentsCount: number;
   } | null>(null);
+
+  // Calculate project health/completion score
+  const getProjectHealth = useCallback(() => {
+    if (!project) return { score: 0, items: [] };
+    
+    const items: Array<{ label: string; labelAr: string; done: boolean; priority: 'high' | 'medium' | 'low' }> = [];
+    
+    // Check if code exists
+    const hasCode = codeContent && codeContent.length > 200;
+    items.push({ label: 'Code generated', labelAr: 'تم إنشاء الكود', done: hasCode, priority: 'high' });
+    
+    // Check if project has a name (not default)
+    const hasCustomName = project.name && !project.name.includes('Generating') && project.name.length > 3;
+    items.push({ label: 'Project named', labelAr: 'تم تسمية المشروع', done: hasCustomName, priority: 'low' });
+    
+    // Check if backend is enabled
+    const hasBackend = backendContext?.enabled;
+    items.push({ label: 'Backend enabled', labelAr: 'الخادم مفعل', done: !!hasBackend, priority: 'medium' });
+    
+    // Check if shop has products (if it's a shop project)
+    const isShopProject = /shop|store|e-?commerce|product|متجر|منتج/i.test(project.description || codeContent || '');
+    if (isShopProject) {
+      const hasProducts = (backendContext?.productsCount || 0) > 0;
+      items.push({ label: 'Products added', labelAr: 'تم إضافة المنتجات', done: hasProducts, priority: 'high' });
+    }
+    
+    // Check if published
+    const isPublished = project.status === 'published';
+    items.push({ label: 'Published live', labelAr: 'منشور', done: isPublished, priority: 'medium' });
+    
+    // Calculate score
+    const completedCount = items.filter(i => i.done).length;
+    const score = Math.round((completedCount / items.length) * 100);
+    
+    return { score, items };
+  }, [project, codeContent, backendContext]);
+
+  // Determine which context hint to show based on project state
+  const getContextHint = useCallback(() => {
+    if (!project) return null;
+    
+    // First-time user with no code yet
+    if (!codeContent || codeContent.length < 100) {
+      if (contextHintDismissed.includes('first-project')) return null;
+      return {
+        id: 'first-project',
+        icon: '💡',
+        title: isRTL ? 'نصيحة' : 'Tip',
+        message: isRTL 
+          ? 'صف ما تريد بناءه بالتفصيل للحصول على أفضل نتيجة. مثال: "متجر لبيع العبايات مع سلة شراء وصفحة دفع"'
+          : 'Describe what you want to build in detail for best results. Example: "An abaya store with shopping cart and checkout page"',
+        action: null
+      };
+    }
+    
+    // Shop project without products in backend
+    const isShopProject = /shop|store|e-?commerce|product|متجر|منتج/i.test(project.description || '');
+    if (isShopProject && backendContext?.products?.length === 0) {
+      if (contextHintDismissed.includes('add-products')) return null;
+      return {
+        id: 'add-products',
+        icon: '🛍️',
+        title: isRTL ? 'أضف منتجاتك' : 'Add Your Products',
+        message: isRTL 
+          ? 'متجرك جاهز! أضف منتجاتك الحقيقية من الخادم ← المتجر ← المخزون'
+          : 'Your store is ready! Add your real products in Backend → Shop → Inventory',
+        action: {
+          label: isRTL ? 'إضافة منتجات' : 'Add Products',
+          onClick: () => {
+            setMainTab('server');
+            setBackendInitialTab('shop');
+            setBackendInitialShopTab('inventory');
+          }
+        }
+      };
+    }
+    
+    // Project ready but not published
+    if (project.status === 'draft' && codeContent && codeContent.length > 500) {
+      if (contextHintDismissed.includes('publish-ready')) return null;
+      return {
+        id: 'publish-ready',
+        icon: '🚀',
+        title: isRTL ? 'جاهز للنشر' : 'Ready to Publish',
+        message: isRTL 
+          ? 'مشروعك جاهز! انشره ليحصل على رابط عام يمكنك مشاركته'
+          : 'Your project is ready! Publish it to get a public URL you can share',
+        action: null
+      };
+    }
+    
+    return null;
+  }, [project, codeContent, backendContext, contextHintDismissed, isRTL]);
   
   // Self-healing: Runtime error detection with smart auto-fix
   const [crashReport, setCrashReport] = useState<string | null>(null);
@@ -1461,7 +1568,14 @@ export default function ProjectDetail() {
       // Sandpack auto-updates when codeContent changes
       console.log('Code updated - Sandpack will refresh automatically');
       
-      const readyMsg = isRTL ? 'تم إنشاء مشروعك! ✓ يمكنك الآن تعديله أو نشره.' : 'Your project is ready! ✓ You can now edit or publish it.';
+      // Check if this was a shop/store request to show appropriate CTA
+      const isShopProject = /shop|store|e-?commerce|product|متجر|منتج/i.test(prompt);
+      const readyMsg = isShopProject
+        ? (isRTL 
+            ? 'تم إنشاء متجرك! ✓\n\n**الخطوة التالية:** أضف منتجاتك من **الخادم ← المتجر ← المخزون**'
+            : 'Your store is ready! ✓\n\n**Next step:** Add your products in **Backend → Shop → Inventory**')
+        : (isRTL ? 'تم إنشاء مشروعك! ✓ يمكنك الآن تعديله أو نشره.' : 'Your project is ready! ✓ You can now edit or publish it.');
+      
       const { data: readyMsgData } = await supabase
         .from('project_chat_messages' as any)
         .insert({ 
@@ -1482,7 +1596,23 @@ export default function ProjectDetail() {
           snapshot: generatedFilesData
         }]);
       }
-      toast.success(isRTL ? 'تم إنشاء المشروع!' : 'Project created!');
+      
+      // For shop projects, also show a toast with CTA
+      if (isShopProject) {
+        toast.success(isRTL ? 'تم إنشاء المتجر! أضف منتجاتك من الخادم' : 'Store created! Add products in Backend tab', {
+          duration: 5000,
+          action: {
+            label: isRTL ? 'إضافة منتجات' : 'Add Products',
+            onClick: () => {
+              setMainTab('server');
+              setBackendInitialTab('shop');
+              setBackendInitialShopTab('inventory');
+            }
+          }
+        });
+      } else {
+        toast.success(isRTL ? 'تم إنشاء المشروع!' : 'Project created!');
+      }
       
     } catch (err: any) {
       console.error('Generation error:', err);
@@ -4437,54 +4567,20 @@ ${fixInstructions}
         return;
       }
 
-      // PRODUCT/SHOP WIZARD DETECTION - Show wizard for e-commerce/shop requests
+      // PRODUCT/SHOP DETECTION - NO LONGER BLOCKS CREATION
+      // Wizard moved to Backend tab - AI generates the store, user adds products in Backend → Shop
+      // We just detect it to pass context to AI for smarter generation
       const productWizardPatterns = /\b(add|create|build|make|need|want|show|display).*(shop|store|e-?commerce|product\s*(page|grid|list|catalog)|catalog|inventory)\b/i;
       const productWizardAltPatterns = /\b(shop|store|e-?commerce|product\s*catalog)\b/i;
-      const hasProductWizardRequest = productWizardPatterns.test(userMessage) || productWizardAltPatterns.test(userMessage);
-
-      if (!skipLegacyWizardDetection && hasProductWizardRequest) {
-        setPendingFormPrompt(userMessage);
-        setShowProductWizard(true);
-
-        const { data: wizardUserMsg, error: wizardUserErr } = await supabase
-          .from('project_chat_messages' as any)
-          .insert({ project_id: id, role: 'user', content: userMessage } as any)
-          .select()
-          .single();
-
-        if (wizardUserErr) console.error('Error saving user message:', wizardUserErr);
-        if (wizardUserMsg) {
-          setChatMessages(prev => [...prev, wizardUserMsg as any]);
-        } else {
-          setChatMessages(prev => [...prev, {
-            id: `user-${Date.now()}`,
-            role: 'user',
-            content: userMessage
-          }]);
-        }
-
-        const productWizardContent = JSON.stringify({
-          type: 'product_wizard',
-          prompt: userMessage
-        });
-        const { data: productAssistantMsg, error: productAssistantErr } = await supabase
-          .from('project_chat_messages' as any)
-          .insert({ project_id: id, role: 'assistant', content: productWizardContent } as any)
-          .select()
-          .single();
-
-        if (productAssistantErr) console.error('Error saving product wizard message:', productAssistantErr);
-        if (productAssistantMsg) {
-          setChatMessages(prev => [...prev, productAssistantMsg as any]);
-        } else {
-          setChatMessages(prev => [...prev, {
-            id: `product-wizard-${Date.now()}`,
-            role: 'assistant',
-            content: productWizardContent
-          }]);
-        }
-        return;
+      const isShopRequest = productWizardPatterns.test(userMessage) || productWizardAltPatterns.test(userMessage);
+      
+      // Flag for AI context - will be used to show "Add products in Backend" CTA after generation
+      if (isShopRequest) {
+        console.log('[ProductWizard] Shop request detected - AI will generate, user adds products in Backend tab');
       }
+      
+      // NOTE: ProductWizard is now available in Backend → Shop → Inventory tab
+      // User can add products there after their store is generated
 
       // AUTH WIZARD DETECTION - Show wizard for login/signup requests
       const authWizardPatterns = /\b(add|create|build|make|need|want|show|display).*(login|signup|sign.?up|sign.?in|register|auth|authentication)\s*(page|form|screen)?/i;
@@ -5587,12 +5683,29 @@ ${fixInstructions}
     }
   };
 
+  // Enhanced device preview with specific device dimensions
+  const DEVICE_PRESETS = {
+    desktop: { width: '100%', height: '100%', name: 'Desktop', nameAr: 'سطح المكتب' },
+    tablet: { width: '768px', height: '1024px', name: 'iPad', nameAr: 'آيباد' },
+    mobile: { width: '375px', height: '812px', name: 'iPhone', nameAr: 'آيفون' },
+    // Additional presets for more specific testing
+    iphoneSE: { width: '375px', height: '667px', name: 'iPhone SE', nameAr: 'آيفون SE' },
+    iphone14: { width: '390px', height: '844px', name: 'iPhone 14', nameAr: 'آيفون 14' },
+    iphone14Pro: { width: '393px', height: '852px', name: 'iPhone 14 Pro', nameAr: 'آيفون 14 برو' },
+    pixel7: { width: '412px', height: '915px', name: 'Pixel 7', nameAr: 'بيكسل 7' },
+    galaxyS23: { width: '360px', height: '780px', name: 'Galaxy S23', nameAr: 'جالاكسي S23' },
+    ipadMini: { width: '744px', height: '1133px', name: 'iPad Mini', nameAr: 'آيباد ميني' },
+    ipadPro: { width: '1024px', height: '1366px', name: 'iPad Pro', nameAr: 'آيباد برو' },
+  };
+
   const getDeviceWidth = () => {
-    switch (deviceView) {
-      case 'mobile': return '375px';
-      case 'tablet': return '768px';
-      case 'desktop': return '100%';
-    }
+    const preset = DEVICE_PRESETS[deviceView as keyof typeof DEVICE_PRESETS];
+    return preset?.width || '100%';
+  };
+
+  const getDeviceHeight = () => {
+    const preset = DEVICE_PRESETS[deviceView as keyof typeof DEVICE_PRESETS];
+    return preset?.height || '100%';
   };
 
   const deviceOptions = [
@@ -6420,9 +6533,43 @@ ${fixInstructions}
                         <ProductWizard
                           existingProducts={existingProducts}
                           originalPrompt={pendingFormPrompt}
+                          projectId={id}
                           onComplete={async (config, structuredPrompt, newProducts) => {
                             setShowProductWizard(false);
                             setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                            
+                            // 🚀 OPTION C: Save new products directly to backend
+                            if (newProducts && newProducts.length > 0 && id) {
+                              console.log(`[ProductWizard] Saving ${newProducts.length} new products to backend...`);
+                              for (const product of newProducts) {
+                                try {
+                                  const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      projectId: id,
+                                      action: 'collection/products',
+                                      data: {
+                                        name: product.name,
+                                        price: product.price,
+                                        description: product.description,
+                                        category: product.category,
+                                        inStock: product.inStock
+                                      }
+                                    })
+                                  });
+                                  if (response.ok) {
+                                    console.log(`[ProductWizard] ✅ Saved product: ${product.name}`);
+                                  } else {
+                                    console.error(`[ProductWizard] ❌ Failed to save product: ${product.name}`);
+                                  }
+                                } catch (err) {
+                                  console.error(`[ProductWizard] Error saving product:`, err);
+                                }
+                              }
+                              // Refresh backend context to show new products
+                              await fetchBackendContext();
+                            }
                             
                             // Multi-feature queue handling
                             if (analyzedRequest && analyzedRequest.isMultiFeature) {

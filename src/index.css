@@ -356,10 +356,9 @@ textarea::placeholder {
 
   /* Mobile container with vibrant gradient - FIXED SCROLLING */
   .mobile-container {
-    @apply max-w-md w-full mx-auto min-h-screen flex flex-col;
+    @apply max-w-md w-full mx-auto flex flex-col overflow-hidden;
     background: var(--gradient-background);
-    height: auto; /* Changed from 100dvh to auto for Android Chrome scrolling */
-    min-height: 100dvh;
+    height: 100dvh;
   }
 
   .container.keyboard-visible .mobile-container {

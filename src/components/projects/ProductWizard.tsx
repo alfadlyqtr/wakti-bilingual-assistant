@@ -131,38 +131,69 @@ export function ProductWizard({ existingProducts, onComplete, onCancel, onSkipWi
 
     const newlyCreatedProducts = products.filter(p => p.id.startsWith('new_'));
 
-    let prompt = `Build a beautiful e-commerce product display with these EXACT specifications:
+    let prompt = `🛒 E-COMMERCE PRODUCT PAGE - WIZARD CONFIGURATION
 
-PRODUCTS TO DISPLAY:
-${products.length > 0 ? products.map(p => `- ${p.name} ($${p.price}) - ${p.category}${p.description ? `: ${p.description}` : ''}`).join('\n') : 'Fetch products from backend API'}
+## EXACT SPECIFICATIONS (FOLLOW PRECISELY)
 
-LAYOUT:
-- Display style: ${layout === 'grid' ? `Grid layout with ${columns} columns` : layout === 'list' ? 'List layout (vertical cards)' : `Masonry layout with ${columns} columns`}
-- ${showCategories ? 'Include category filter tabs at the top' : 'No category filtering'}
-- ${showPrice ? 'Show product prices prominently' : 'Hide prices'}
-- ${showDescription ? 'Show product descriptions' : 'Hide descriptions'}
-- ${showAddToCart ? 'Include "Add to Cart" button on each product' : 'No add to cart button'}
+### PRODUCTS
+${products.length > 0 ? `User added ${products.length} products:\n${products.map(p => `- "${p.name}" at $${p.price} (${p.category})${p.description ? ` - ${p.description}` : ''}`).join('\n')}` : 'No products added - fetch from backend API'}
 
-DESIGN:
-- Card style: ${cardStyle} (${cardStyle === 'minimal' ? 'clean, no borders' : cardStyle === 'bordered' ? 'subtle border' : 'elevated with shadow'})
-- Border radius: ${borderRadius}
-- Color scheme: ${colorScheme} (use ${colorScheme}-500 for buttons and accents)
-- Product images should use Freepik API with relevant queries
-- Add hover effects on cards (scale, shadow change)
-- Responsive: ${columns} columns on desktop, 2 on tablet, 1 on mobile
+### LAYOUT CONFIGURATION
+- **Display Type:** ${layout === 'grid' ? `Grid with ${columns} columns` : layout === 'list' ? 'Vertical list cards' : `Masonry with ${columns} columns`}
+- **Category Filter:** ${showCategories ? 'YES - Add filter tabs at top' : 'NO - Skip category filtering'}
+- **Show Prices:** ${showPrice ? 'YES - Display prominently' : 'NO - Hide prices'}
+- **Show Descriptions:** ${showDescription ? 'YES - Show product descriptions' : 'NO - Hide descriptions'}
+- **Add to Cart Button:** ${showAddToCart ? 'YES - Include on each product card' : 'NO - View only'}
 
-BACKEND INTEGRATION:
-- Fetch products from: { projectId: "{{PROJECT_ID}}", action: "collection/products" }
-- Add to cart: { projectId: "{{PROJECT_ID}}", action: "cart/add", data: { productId, quantity: 1 } }
-- Show loading skeleton while fetching
-- Handle empty state gracefully
+### DESIGN SPECIFICATIONS
+- **Card Style:** ${cardStyle} (${cardStyle === 'minimal' ? 'clean, no borders' : cardStyle === 'bordered' ? 'subtle border' : 'elevated with shadow'})
+- **Border Radius:** ${borderRadius}
+- **Color Scheme:** ${colorScheme} (use ${colorScheme}-500 for buttons, ${colorScheme}-600 for hover)
+- **Hover Effects:** Scale up slightly, enhance shadow
+- **Responsive:** ${columns} cols desktop → 2 cols tablet → 1 col mobile
 
-CRITICAL - DO NOT:
-- Do NOT hardcode product data (fetch from API)
-- Do NOT create supabaseClient.js
-- Do NOT write any API keys
+### BACKEND API (COPY-PASTE READY)
+\`\`\`javascript
+const BACKEND_URL = 'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api';
+const PROJECT_ID = '{{PROJECT_ID}}'; // Auto-injected
 
-Original request: ${originalPrompt}`;
+// Fetch products
+const fetchProducts = async () => {
+  const res = await fetch(BACKEND_URL + '?projectId=' + PROJECT_ID + '&action=collection/products');
+  const data = await res.json();
+  return data.items || [];
+};
+
+// Add to cart
+const addToCart = async (product) => {
+  const sessionId = localStorage.getItem('cartSession') || 'guest-' + Date.now();
+  localStorage.setItem('cartSession', sessionId);
+  await fetch(BACKEND_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      projectId: PROJECT_ID,
+      action: 'cart/add',
+      data: { sessionId, item: { id: product.id, name: product.data?.name, price: product.data?.price, quantity: 1 } }
+    })
+  });
+};
+\`\`\`
+
+### REQUIRED STATES
+- Loading state with skeleton cards
+- Empty state: "No products available" with CTA to add products
+- Error state with retry button
+
+### CRITICAL RULES
+❌ Do NOT hardcode product data - always fetch from API
+❌ Do NOT create supabaseClient.js
+❌ Do NOT expose any API keys
+✅ Use the exact API patterns above
+✅ Handle loading/empty/error states
+✅ Make it responsive and beautiful
+
+Original user request: ${originalPrompt}`;
 
     onComplete(config, prompt, newlyCreatedProducts.length > 0 ? newlyCreatedProducts : undefined);
   };

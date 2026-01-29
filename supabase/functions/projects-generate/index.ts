@@ -1499,6 +1499,327 @@ async function preFetchAndStoreImages(
   return storedImages;
 }
 
+// ============================================================================
+// 🚀 POST-GENERATION BOOTSTRAPPING: Auto-seed backend data based on generated code
+// ============================================================================
+interface BootstrapResults {
+  productsSeeded: number;
+  servicesSeeded: number;
+  imagesStored: number;
+  collectionsCreated: string[];
+}
+
+async function bootstrapBackendData(
+  supabase: SupabaseAdminClient,
+  projectId: string,
+  userId: string,
+  files: Record<string, string>,
+  prompt: string
+): Promise<BootstrapResults> {
+  const results: BootstrapResults = {
+    productsSeeded: 0,
+    servicesSeeded: 0,
+    imagesStored: 0,
+    collectionsCreated: []
+  };
+
+  const allContent = Object.values(files).join('\n');
+  const lowerPrompt = prompt.toLowerCase();
+
+  try {
+    // 1. DETECT E-COMMERCE: If code references products collection, seed sample products
+    const hasProductsCode = allContent.includes('collection/products') || 
+                            allContent.includes('action: "collection/products"') ||
+                            /products?\s*=/.test(allContent);
+    const isEcommercePrompt = /shop|store|e-?commerce|product|catalog|inventory|متجر|منتج/i.test(lowerPrompt);
+
+    if (hasProductsCode || isEcommercePrompt) {
+      console.log(`[Bootstrap] Detected e-commerce - seeding sample products...`);
+      
+      // Check if products already exist
+      const { data: existingProducts } = await supabase
+        .from('project_collections')
+        .select('id')
+        .eq('project_id', projectId)
+        .eq('collection_name', 'products')
+        .limit(1);
+
+      if (!existingProducts || existingProducts.length === 0) {
+        // Seed 4 sample products based on prompt context
+        const sampleProducts = generateSampleProducts(prompt);
+        
+        for (const product of sampleProducts) {
+          const { error } = await supabase
+            .from('project_collections')
+            .insert({
+              project_id: projectId,
+              user_id: userId,
+              collection_name: 'products',
+              data: product,
+              status: 'active'
+            });
+          
+          if (!error) results.productsSeeded++;
+        }
+        
+        if (results.productsSeeded > 0) {
+          results.collectionsCreated.push('products');
+          console.log(`[Bootstrap] Seeded ${results.productsSeeded} sample products`);
+        }
+      }
+    }
+
+    // 2. DETECT BOOKINGS: If code references services/bookings, seed sample services
+    const hasBookingsCode = allContent.includes('collection/services') || 
+                            allContent.includes('action: "booking/') ||
+                            /services?\s*=/.test(allContent);
+    const isBookingPrompt = /booking|appointment|schedule|reservation|salon|barber|clinic|حجز|موعد/i.test(lowerPrompt);
+
+    if (hasBookingsCode || isBookingPrompt) {
+      console.log(`[Bootstrap] Detected booking system - seeding sample services...`);
+      
+      // Check if services already exist
+      const { data: existingServices } = await supabase
+        .from('project_collections')
+        .select('id')
+        .eq('project_id', projectId)
+        .eq('collection_name', 'services')
+        .limit(1);
+
+      if (!existingServices || existingServices.length === 0) {
+        // Seed sample services based on prompt context
+        const sampleServices = generateSampleServices(prompt);
+        
+        for (const service of sampleServices) {
+          const { error } = await supabase
+            .from('project_collections')
+            .insert({
+              project_id: projectId,
+              user_id: userId,
+              collection_name: 'services',
+              data: service,
+              status: 'active'
+            });
+          
+          if (!error) results.servicesSeeded++;
+        }
+        
+        if (results.servicesSeeded > 0) {
+          results.collectionsCreated.push('services');
+          console.log(`[Bootstrap] Seeded ${results.servicesSeeded} sample services`);
+        }
+      }
+    }
+
+    // 3. STORE FREEPIK IMAGES: Extract image URLs from generated code and store them
+    const freepikUrls = extractFreepikUrls(allContent);
+    if (freepikUrls.length > 0) {
+      console.log(`[Bootstrap] Found ${freepikUrls.length} Freepik image references...`);
+      // Note: Images are fetched at runtime via fetchStockImages, no need to pre-store
+      // But we track them for analytics
+      results.imagesStored = freepikUrls.length;
+    }
+
+  } catch (err) {
+    console.error(`[Bootstrap] Error during bootstrapping:`, err);
+  }
+
+  return results;
+}
+
+// Detect if prompt is in Arabic
+function isArabicPrompt(prompt: string): boolean {
+  const arabicPattern = /[\u0600-\u06FF]/;
+  return arabicPattern.test(prompt);
+}
+
+// Get currency based on prompt language (Arabic = QAR default, English = USD)
+function detectCurrency(prompt: string, lang?: string): string {
+  if (lang === 'ar' || isArabicPrompt(prompt)) return 'QAR';
+  return 'USD';
+}
+
+// Generate sample products based on prompt context - NOW LANGUAGE-AWARE
+function generateSampleProducts(prompt: string, lang?: string): Array<Record<string, unknown>> {
+  const isArabic = lang === 'ar' || isArabicPrompt(prompt);
+  const currency = detectCurrency(prompt, lang);
+  
+  // Detect business type and generate relevant products
+  if (/coffee|cafe|قهوة|كافيه/i.test(prompt)) {
+    return isArabic ? [
+      { name: 'إسبريسو', price: 15, currency, category: 'مشروبات ساخنة', description: 'قهوة غنية ومركزة', inStock: true },
+      { name: 'كابتشينو', price: 20, currency, category: 'مشروبات ساخنة', description: 'إسبريسو مع رغوة الحليب', inStock: true },
+      { name: 'لاتيه مثلج', price: 22, currency, category: 'مشروبات باردة', description: 'إسبريسو بارد مع الحليب', inStock: true },
+      { name: 'كرواسون', price: 12, currency, category: 'معجنات', description: 'كرواسون طازج بالزبدة', inStock: true }
+    ] : [
+      { name: 'Espresso', price: 15, currency, category: 'Hot Drinks', description: 'Rich and bold single shot', inStock: true },
+      { name: 'Cappuccino', price: 20, currency, category: 'Hot Drinks', description: 'Espresso with steamed milk foam', inStock: true },
+      { name: 'Iced Latte', price: 22, currency, category: 'Cold Drinks', description: 'Chilled espresso with cold milk', inStock: true },
+      { name: 'Croissant', price: 12, currency, category: 'Pastries', description: 'Freshly baked butter croissant', inStock: true }
+    ];
+  }
+  
+  // Abaya / Fashion / Clothing
+  if (/abaya|عباية|عبايات|clothing|fashion|ملابس|أزياء/i.test(prompt)) {
+    return isArabic ? [
+      { name: 'عباية سوداء كلاسيك', price: 350, currency, category: 'عبايات', description: 'عباية سوداء أنيقة بقصة كلاسيكية', inStock: true },
+      { name: 'عباية مطرزة', price: 450, currency, category: 'عبايات', description: 'عباية فاخرة بتطريز يدوي', inStock: true },
+      { name: 'عباية كاجوال', price: 280, currency, category: 'عبايات', description: 'عباية يومية مريحة', inStock: true },
+      { name: 'عباية سهرة', price: 650, currency, category: 'مناسبات', description: 'عباية فخمة للمناسبات الخاصة', inStock: true }
+    ] : [
+      { name: 'Classic Black Abaya', price: 350, currency, category: 'Abayas', description: 'Elegant classic cut black abaya', inStock: true },
+      { name: 'Embroidered Abaya', price: 450, currency, category: 'Abayas', description: 'Luxury hand-embroidered abaya', inStock: true },
+      { name: 'Casual Abaya', price: 280, currency, category: 'Abayas', description: 'Comfortable everyday abaya', inStock: true },
+      { name: 'Evening Abaya', price: 650, currency, category: 'Occasions', description: 'Premium abaya for special events', inStock: true }
+    ];
+  }
+  
+  if (/electronics|tech|إلكترونيات|تقنية/i.test(prompt)) {
+    return isArabic ? [
+      { name: 'سماعات لاسلكية', price: 299, currency, category: 'صوتيات', description: 'عزل ضوضاء نشط', inStock: true },
+      { name: 'ساعة ذكية', price: 599, currency, category: 'أجهزة ذكية', description: 'تتبع الصحة والإشعارات', inStock: true },
+      { name: 'شاحن متنقل', price: 149, currency, category: 'إكسسوارات', description: 'سعة 20000 مللي أمبير', inStock: true },
+      { name: 'سماعة بلوتوث', price: 249, currency, category: 'صوتيات', description: 'مقاومة للماء', inStock: true }
+    ] : [
+      { name: 'Wireless Earbuds', price: 299, currency, category: 'Audio', description: 'Active noise cancellation', inStock: true },
+      { name: 'Smart Watch', price: 599, currency, category: 'Wearables', description: 'Health tracking & notifications', inStock: true },
+      { name: 'Portable Charger', price: 149, currency, category: 'Accessories', description: '20000mAh fast charging', inStock: true },
+      { name: 'Bluetooth Speaker', price: 249, currency, category: 'Audio', description: 'Waterproof outdoor speaker', inStock: true }
+    ];
+  }
+
+  // GCC-SPECIFIC INDUSTRIES
+  // Perfume / Oud / Bakhoor
+  if (/perfume|عطر|عطور|oud|عود|bakhoor|بخور|fragrance/i.test(prompt)) {
+    return isArabic ? [
+      { name: 'عود كمبودي فاخر', price: 850, currency, category: 'عود', description: 'عود كمبودي طبيعي 100%', inStock: true },
+      { name: 'دهن العود الملكي', price: 1200, currency, category: 'دهن عود', description: 'دهن عود معتق 10 سنوات', inStock: true },
+      { name: 'بخور الدار', price: 180, currency, category: 'بخور', description: 'بخور فاخر للمنزل', inStock: true },
+      { name: 'عطر مسك أبيض', price: 350, currency, category: 'عطور', description: 'مسك طبيعي نقي', inStock: true }
+    ] : [
+      { name: 'Premium Cambodian Oud', price: 850, currency, category: 'Oud', description: '100% natural Cambodian oud', inStock: true },
+      { name: 'Royal Oud Oil', price: 1200, currency, category: 'Oud Oil', description: '10-year aged oud oil', inStock: true },
+      { name: 'Home Bakhoor', price: 180, currency, category: 'Bakhoor', description: 'Premium home incense', inStock: true },
+      { name: 'White Musk Perfume', price: 350, currency, category: 'Perfumes', description: 'Pure natural musk', inStock: true }
+    ];
+  }
+
+  // Jewelry / Gold
+  if (/jewelry|jewellery|gold|ذهب|مجوهرات|حلي/i.test(prompt)) {
+    return isArabic ? [
+      { name: 'طقم ذهب 21 قيراط', price: 4500, currency, category: 'أطقم', description: 'طقم كامل ذهب عيار 21', inStock: true },
+      { name: 'سلسلة ذهب ناعمة', price: 1200, currency, category: 'سلاسل', description: 'سلسلة ذهب إيطالي', inStock: true },
+      { name: 'خاتم ألماس', price: 8500, currency, category: 'خواتم', description: 'خاتم ألماس طبيعي', inStock: true },
+      { name: 'أسورة ذهب', price: 2800, currency, category: 'أساور', description: 'أسورة ذهب عريضة', inStock: true }
+    ] : [
+      { name: '21K Gold Set', price: 4500, currency, category: 'Sets', description: 'Complete 21K gold set', inStock: true },
+      { name: 'Fine Gold Chain', price: 1200, currency, category: 'Chains', description: 'Italian gold chain', inStock: true },
+      { name: 'Diamond Ring', price: 8500, currency, category: 'Rings', description: 'Natural diamond ring', inStock: true },
+      { name: 'Gold Bangle', price: 2800, currency, category: 'Bangles', description: 'Wide gold bangle', inStock: true }
+    ];
+  }
+
+  // Dates / Arabic Sweets
+  if (/dates|تمر|تمور|sweets|حلويات|baklava|بقلاوة|kunafa|كنافة/i.test(prompt)) {
+    return isArabic ? [
+      { name: 'تمر سكري فاخر', price: 120, currency, category: 'تمور', description: 'تمر سكري سعودي ممتاز', inStock: true },
+      { name: 'تمر محشي لوز', price: 180, currency, category: 'تمور محشية', description: 'تمر محشي باللوز المحمص', inStock: true },
+      { name: 'بقلاوة مشكلة', price: 85, currency, category: 'حلويات', description: 'تشكيلة بقلاوة فاخرة', inStock: true },
+      { name: 'كنافة نابلسية', price: 65, currency, category: 'حلويات', description: 'كنافة بالجبنة الطازجة', inStock: true }
+    ] : [
+      { name: 'Premium Sukkari Dates', price: 120, currency, category: 'Dates', description: 'Premium Saudi Sukkari dates', inStock: true },
+      { name: 'Almond Stuffed Dates', price: 180, currency, category: 'Stuffed Dates', description: 'Dates stuffed with roasted almonds', inStock: true },
+      { name: 'Mixed Baklava', price: 85, currency, category: 'Sweets', description: 'Premium baklava assortment', inStock: true },
+      { name: 'Nabulsi Kunafa', price: 65, currency, category: 'Sweets', description: 'Kunafa with fresh cheese', inStock: true }
+    ];
+  }
+  
+  // Default generic products - language aware
+  return isArabic ? [
+    { name: 'منتج مميز', price: 99, currency, category: 'مميز', description: 'الأكثر مبيعاً لدينا', inStock: true },
+    { name: 'منتج كلاسيكي', price: 79, currency, category: 'شائع', description: 'المفضل لدى العملاء', inStock: true },
+    { name: 'وصل حديثاً', price: 129, currency, category: 'جديد', description: 'أحدث إصداراتنا', inStock: true },
+    { name: 'إصدار خاص', price: 149, currency, category: 'محدود', description: 'إصدار حصري محدود', inStock: true }
+  ] : [
+    { name: 'Premium Product', price: 99, currency, category: 'Featured', description: 'Our best-selling item', inStock: true },
+    { name: 'Classic Item', price: 79, currency, category: 'Popular', description: 'Customer favorite', inStock: true },
+    { name: 'New Arrival', price: 129, currency, category: 'New', description: 'Just launched this season', inStock: true },
+    { name: 'Special Edition', price: 149, currency, category: 'Limited', description: 'Exclusive limited release', inStock: true }
+  ];
+}
+
+// Generate sample services based on prompt context - NOW LANGUAGE-AWARE
+function generateSampleServices(prompt: string, lang?: string): Array<Record<string, unknown>> {
+  const isArabic = lang === 'ar' || isArabicPrompt(prompt);
+  const currency = detectCurrency(prompt, lang);
+  
+  if (/barber|حلاق/i.test(prompt)) {
+    return isArabic ? [
+      { name: 'قص شعر', price: 50, currency, duration: 30, description: 'قصة شعر رجالية كلاسيكية' },
+      { name: 'تهذيب اللحية', price: 30, currency, duration: 15, description: 'تشكيل وتهذيب اللحية' },
+      { name: 'حلاقة بالموس', price: 60, currency, duration: 30, description: 'حلاقة تقليدية بالموس الحاد' },
+      { name: 'باقة كاملة', price: 70, currency, duration: 45, description: 'قص شعر + لحية' }
+    ] : [
+      { name: 'Haircut', price: 50, currency, duration: 30, description: 'Classic men\'s haircut' },
+      { name: 'Beard Trim', price: 30, currency, duration: 15, description: 'Shape and trim beard' },
+      { name: 'Hot Towel Shave', price: 60, currency, duration: 30, description: 'Traditional straight razor shave' },
+      { name: 'Hair & Beard Combo', price: 70, currency, duration: 45, description: 'Full grooming package' }
+    ];
+  }
+  
+  if (/salon|beauty|صالون|تجميل/i.test(prompt)) {
+    return isArabic ? [
+      { name: 'قص وتصفيف', price: 150, currency, duration: 60, description: 'قص وغسيل وتصفيف' },
+      { name: 'صبغة شعر', price: 250, currency, duration: 90, description: 'صبغة كاملة' },
+      { name: 'مانيكير', price: 80, currency, duration: 45, description: 'عناية بالأظافر' },
+      { name: 'تنظيف بشرة', price: 180, currency, duration: 60, description: 'تنظيف عميق للبشرة' }
+    ] : [
+      { name: 'Haircut & Style', price: 150, currency, duration: 60, description: 'Cut, wash, and style' },
+      { name: 'Hair Coloring', price: 250, currency, duration: 90, description: 'Full color treatment' },
+      { name: 'Manicure', price: 80, currency, duration: 45, description: 'Nail care and polish' },
+      { name: 'Facial Treatment', price: 180, currency, duration: 60, description: 'Deep cleansing facial' }
+    ];
+  }
+  
+  if (/clinic|doctor|عيادة|طبيب/i.test(prompt)) {
+    return isArabic ? [
+      { name: 'استشارة', price: 200, currency, duration: 30, description: 'استشارة طبية أولية' },
+      { name: 'متابعة', price: 100, currency, duration: 15, description: 'زيارة متابعة' },
+      { name: 'فحص شامل', price: 500, currency, duration: 60, description: 'فحص صحي شامل' },
+      { name: 'تطعيم', price: 150, currency, duration: 15, description: 'تطعيم قياسي' }
+    ] : [
+      { name: 'Consultation', price: 200, currency, duration: 30, description: 'Initial medical consultation' },
+      { name: 'Follow-up Visit', price: 100, currency, duration: 15, description: 'Progress check appointment' },
+      { name: 'Health Checkup', price: 500, currency, duration: 60, description: 'Comprehensive health screening' },
+      { name: 'Vaccination', price: 150, currency, duration: 15, description: 'Standard immunization' }
+    ];
+  }
+  
+  // Default generic services - language aware
+  return isArabic ? [
+    { name: 'خدمة أساسية', price: 100, currency, duration: 30, description: 'موعد قياسي' },
+    { name: 'خدمة مميزة', price: 200, currency, duration: 60, description: 'جلسة ممتدة' },
+    { name: 'خدمة سريعة', price: 75, currency, duration: 15, description: 'موعد سريع' },
+    { name: 'باقة VIP', price: 350, currency, duration: 90, description: 'تجربة فاخرة كاملة' }
+  ] : [
+    { name: 'Basic Service', price: 100, currency, duration: 30, description: 'Standard appointment' },
+    { name: 'Premium Service', price: 200, currency, duration: 60, description: 'Extended session' },
+    { name: 'Express Service', price: 75, currency, duration: 15, description: 'Quick appointment' },
+    { name: 'VIP Package', price: 350, currency, duration: 90, description: 'Full premium experience' }
+  ];
+}
+
+// Extract Freepik image URLs from generated code
+function extractFreepikUrls(content: string): string[] {
+  const urls: string[] = [];
+  const freepikPattern = /https:\/\/[^"'\s]*freepik[^"'\s]*/gi;
+  const matches = content.match(freepikPattern);
+  if (matches) {
+    urls.push(...matches);
+  }
+  return [...new Set(urls)]; // Remove duplicates
+}
+
 // Extract image search queries from user prompt
 function extractImageQueries(prompt: string): string[] {
   const queries: string[] = [];
@@ -4157,31 +4478,59 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
               knownFiles.add(targetPath);
             }
             
-            // 🔒 MORPH DOCS ENFORCEMENT: MUST read_file BEFORE any edit (morph_edit, search_replace, insert_code)
+            // 🔒 RELAXED MORPH DOCS ENFORCEMENT: Allow multi-file edits if ANY file was read
             // Per Morph docs: "Always read files before editing to understand the structure"
-            // This is the #1 reason for failed edits - AI doesn't know the current file state
-            if (!filesRead.has(targetPath) && !isNewFileCreation && (name === 'morph_edit' || name === 'search_replace' || name === 'insert_code')) {
-              console.error(`[Agent Mode] 🚫 BLOCKED: ${name} on ${targetPath} without reading first!`);
+            // RELAXED: If agent has read at least one file, allow edits to other files in same session
+            // This enables multi-file edits without requiring individual reads for each file
+            const hasReadAnyFile = filesRead.size > 0;
+            const requiresStrictRead = !hasReadAnyFile && !isNewFileCreation && (name === 'morph_edit' || name === 'search_replace' || name === 'insert_code');
+            
+            if (requiresStrictRead) {
+              console.warn(`[Agent Mode] ⚠️ SOFT BLOCK: ${name} on ${targetPath} - no files read yet. Auto-reading...`);
               
-              const toolHint = name === 'morph_edit' 
-                ? `Step 1: read_file("${targetPath}") → Step 2: Understand structure → Step 3: morph_edit with '// ... existing code ...' markers`
-                : name === 'search_replace'
-                ? `Step 1: read_file("${targetPath}") → Step 2: Copy EXACT code → Step 3: search_replace`
-                : `Step 1: read_file("${targetPath}") → Step 2: Find insertion point → Step 3: insert_code`;
+              // 🚀 AUTO-READ: Instead of blocking, automatically read the target file
+              const { data: autoReadData } = await supabase
+                .from('project_files')
+                .select('content')
+                .eq('project_id', projectId)
+                .eq('path', targetPath)
+                .maybeSingle();
               
-              const blockResult = {
-                error: `BLOCKED: Per Morph docs workflow, you MUST read_file("${targetPath}") BEFORE using ${name}. ` +
-                  `This ensures you understand the file structure and have accurate code to work with.`,
-                hint: toolHint,
-                blocked: true,
-                workflow: '🔍 Search → 📖 Read → ✏️ Edit → ✅ Verify'
-              };
+              if (autoReadData?.content) {
+                // Auto-read successful - add to filesRead and cache
+                filesRead.add(targetPath);
+                fileContentCache.set(targetPath, autoReadData.content);
+                console.log(`[Agent Mode] 📖 AUTO-READ: ${targetPath} (${autoReadData.content.length} chars) - proceeding with edit`);
+              } else {
+                // File doesn't exist - block only if not a new file creation
+                console.error(`[Agent Mode] 🚫 BLOCKED: ${name} on ${targetPath} - file not found and no files read`);
+                
+                const blockResult = {
+                  error: `File "${targetPath}" not found. Use list_files to see available files.`,
+                  hint: `Available files: ${[...knownFiles].slice(0, 5).join(', ')}`,
+                  blocked: true
+                };
+                
+                toolCallsLog.push({ tool: name, args, result: blockResult });
+                functionResponses.push({
+                  functionResponse: { name, response: blockResult }
+                });
+                continue;
+              }
+            } else if (!filesRead.has(targetPath) && !isNewFileCreation && hasReadAnyFile) {
+              // Agent has read other files but not this one - auto-read for safety
+              console.log(`[Agent Mode] 📖 AUTO-READ (multi-file): ${targetPath}`);
+              const { data: autoReadData } = await supabase
+                .from('project_files')
+                .select('content')
+                .eq('project_id', projectId)
+                .eq('path', targetPath)
+                .maybeSingle();
               
-              toolCallsLog.push({ tool: name, args, result: blockResult });
-              functionResponses.push({
-                functionResponse: { name, response: blockResult }
-              });
-              continue; // Skip to next function call - force AI to read first
+              if (autoReadData?.content) {
+                filesRead.add(targetPath);
+                fileContentCache.set(targetPath, autoReadData.content);
+              }
             }
             
             // Soft warning for write_file on existing files without reading
@@ -5322,9 +5671,13 @@ Return ONLY the JSON object. No explanation.`;
           features: { forms: true }
         }, { onConflict: 'project_id' });
 
+        // 🚀 POST-GENERATION BOOTSTRAPPING: Auto-seed backend data based on generated code
+        const bootstrapResults = await bootstrapBackendData(supabase, projectId, userId, files, prompt);
+        console.log(`[Create Mode] Bootstrap results:`, bootstrapResults);
+
         await replaceProjectFiles(supabase, projectId, files);
         await updateJob(supabase, job.id, { status: 'succeeded', result_summary: summary || 'Created.', error: null });
-        return createResponse({ ok: true, jobId: job.id, status: 'succeeded', cssWarnings, usesBackend });
+        return createResponse({ ok: true, jobId: job.id, status: 'succeeded', cssWarnings, usesBackend, bootstrapResults });
       }
 
       // EDIT MODE: Full file rewrite (NO PATCHES)

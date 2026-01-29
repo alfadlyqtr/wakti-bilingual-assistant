@@ -18,8 +18,35 @@ export type { MediaConfig } from '../MediaWizard';
 // Wizard type detection utility
 export type WizardType = 'booking' | 'contact' | 'product' | 'auth' | 'media' | 'none';
 
+// Detect if this is an "add more" request vs "create new"
+export interface WizardDetectionResult {
+  type: WizardType;
+  isAddMore: boolean;  // true = adding to existing, false = creating new
+  confidence: 'high' | 'medium' | 'low';
+}
+
 export function detectWizardType(prompt: string): WizardType {
+  return detectWizardTypeAdvanced(prompt).type;
+}
+
+export function detectWizardTypeAdvanced(prompt: string): WizardDetectionResult {
   const lowerPrompt = prompt.toLowerCase();
+  
+  // Detect "add more" patterns
+  const addMorePatterns = [
+    /add\s+(more\s+)?(new\s+)?products?/i,
+    /add\s+(more\s+)?(new\s+)?items?/i,
+    /add\s+(more\s+)?(new\s+)?services?/i,
+    /create\s+(a\s+)?(new\s+)?product/i,
+    /new\s+product/i,
+    /another\s+product/i,
+    /more\s+products/i,
+    /إضافة\s+منتج/i,
+    /منتج\s+جديد/i,
+    /إضافة\s+خدمة/i,
+  ];
+  
+  const isAddMore = addMorePatterns.some(pattern => pattern.test(prompt));
   
   // Booking patterns
   if (
@@ -30,7 +57,7 @@ export function detectWizardType(prompt: string): WizardType {
     lowerPrompt.includes('حجز') ||
     lowerPrompt.includes('موعد')
   ) {
-    return 'booking';
+    return { type: 'booking', isAddMore, confidence: 'high' };
   }
   
   // Contact form patterns
@@ -43,10 +70,10 @@ export function detectWizardType(prompt: string): WizardType {
     lowerPrompt.includes('نموذج اتصال') ||
     lowerPrompt.includes('تواصل معنا')
   ) {
-    return 'contact';
+    return { type: 'contact', isAddMore, confidence: 'high' };
   }
   
-  // E-commerce/Product patterns
+  // E-commerce/Product patterns - ENHANCED for "add more" detection
   if (
     lowerPrompt.includes('product') ||
     lowerPrompt.includes('shop') ||
@@ -59,7 +86,7 @@ export function detectWizardType(prompt: string): WizardType {
     lowerPrompt.includes('متجر') ||
     lowerPrompt.includes('منتج')
   ) {
-    return 'product';
+    return { type: 'product', isAddMore, confidence: 'high' };
   }
   
   // Auth patterns
@@ -74,7 +101,7 @@ export function detectWizardType(prompt: string): WizardType {
     lowerPrompt.includes('تسجيل دخول') ||
     lowerPrompt.includes('تسجيل جديد')
   ) {
-    return 'auth';
+    return { type: 'auth', isAddMore, confidence: 'high' };
   }
   
   // Media/Upload patterns
@@ -88,10 +115,44 @@ export function detectWizardType(prompt: string): WizardType {
     lowerPrompt.includes('رفع ملف') ||
     lowerPrompt.includes('رفع صور')
   ) {
-    return 'media';
+    return { type: 'media', isAddMore, confidence: 'high' };
   }
   
-  return 'none';
+  return { type: 'none', isAddMore: false, confidence: 'low' };
+}
+
+// Check if prompt is specifically about adding data (not UI changes)
+export function isDataAdditionRequest(prompt: string): boolean {
+  const lowerPrompt = prompt.toLowerCase();
+  
+  // Patterns that indicate user wants to ADD DATA, not change UI
+  const dataPatterns = [
+    /add\s+(a\s+)?(new\s+)?product/i,
+    /add\s+(a\s+)?(new\s+)?item/i,
+    /add\s+(a\s+)?(new\s+)?service/i,
+    /create\s+(a\s+)?(new\s+)?product/i,
+    /new\s+product\s+called/i,
+    /add\s+.+\s+for\s+\$?\d+/i,  // "add coffee mug for $25"
+    /add\s+.+\s+at\s+\$?\d+/i,   // "add t-shirt at $50"
+    /إضافة\s+منتج/i,
+    /منتج\s+جديد/i,
+  ];
+  
+  // Patterns that indicate UI changes (not data)
+  const uiPatterns = [
+    /change\s+(the\s+)?layout/i,
+    /update\s+(the\s+)?design/i,
+    /make\s+it\s+\d+\s+columns/i,
+    /change\s+(the\s+)?color/i,
+    /redesign/i,
+    /restyle/i,
+  ];
+  
+  const isDataRequest = dataPatterns.some(p => p.test(prompt));
+  const isUIRequest = uiPatterns.some(p => p.test(prompt));
+  
+  // If it matches data patterns and NOT UI patterns, it's a data request
+  return isDataRequest && !isUIRequest;
 }
 
 // Wizard configuration for pause-and-continue system

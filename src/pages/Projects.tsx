@@ -142,6 +142,58 @@ const PLACEHOLDER_EXAMPLES = [
   { en: 'a math quiz for kids...', ar: 'اختبار رياضيات للأطفال...' },
 ];
 
+// Onboarding Gallery - Visual examples of what can be built
+const PROJECT_EXAMPLES = [
+  { 
+    id: 'ecommerce', 
+    icon: '🛍️', 
+    title: { en: 'Online Store', ar: 'متجر إلكتروني' },
+    desc: { en: 'Sell products with cart & checkout', ar: 'بيع منتجات مع سلة وشراء' },
+    prompt: { en: 'Create an online store for selling abayas with product grid, cart, and checkout', ar: 'أنشئ متجر لبيع العبايات مع عرض المنتجات وسلة الشراء' },
+    color: 'from-pink-500 to-rose-500'
+  },
+  { 
+    id: 'restaurant', 
+    icon: '🍽️', 
+    title: { en: 'Restaurant Menu', ar: 'قائمة مطعم' },
+    desc: { en: 'Digital menu with ordering', ar: 'قائمة رقمية مع الطلب' },
+    prompt: { en: 'Build a restaurant website with digital menu, categories, and online ordering', ar: 'أنشئ موقع مطعم مع قائمة رقمية وفئات وطلب أونلاين' },
+    color: 'from-amber-500 to-orange-500'
+  },
+  { 
+    id: 'portfolio', 
+    icon: '📸', 
+    title: { en: 'Portfolio', ar: 'معرض أعمال' },
+    desc: { en: 'Showcase your work beautifully', ar: 'اعرض أعمالك بشكل جميل' },
+    prompt: { en: 'Create a photography portfolio with gallery, about section, and contact form', ar: 'أنشئ معرض أعمال للتصوير مع معرض صور وقسم عني ونموذج تواصل' },
+    color: 'from-violet-500 to-purple-500'
+  },
+  { 
+    id: 'booking', 
+    icon: '📅', 
+    title: { en: 'Booking System', ar: 'نظام حجز' },
+    desc: { en: 'Appointments & reservations', ar: 'مواعيد وحجوزات' },
+    prompt: { en: 'Build a salon booking website with services, pricing, and appointment scheduling', ar: 'أنشئ موقع حجز صالون مع الخدمات والأسعار وجدولة المواعيد' },
+    color: 'from-emerald-500 to-green-500'
+  },
+  { 
+    id: 'landing', 
+    icon: '🚀', 
+    title: { en: 'Landing Page', ar: 'صفحة هبوط' },
+    desc: { en: 'Convert visitors to customers', ar: 'حوّل الزوار لعملاء' },
+    prompt: { en: 'Create a modern landing page for a fitness app with features, pricing, and signup', ar: 'أنشئ صفحة هبوط عصرية لتطبيق لياقة مع المميزات والأسعار والتسجيل' },
+    color: 'from-blue-500 to-cyan-500'
+  },
+  { 
+    id: 'event', 
+    icon: '🎉', 
+    title: { en: 'Event Page', ar: 'صفحة فعالية' },
+    desc: { en: 'Weddings, parties, conferences', ar: 'أعراس، حفلات، مؤتمرات' },
+    prompt: { en: 'Build a wedding invitation page with countdown, RSVP form, and photo gallery', ar: 'أنشئ صفحة دعوة زفاف مع عداد تنازلي ونموذج حضور ومعرض صور' },
+    color: 'from-fuchsia-500 to-pink-500'
+  },
+];
+
 export default function Projects() {
   const { language, theme } = useTheme();
   const { user } = useAuth();
@@ -1238,6 +1290,44 @@ Apply these styles consistently throughout the entire design.`;
                 ? 'وصلت للحد الأقصى. احذف مشروعًا لإنشاء جديد.'
                 : 'You\'ve reached the limit. Delete a project to create a new one.'}
             </p>
+          )}
+
+          {/* Onboarding Gallery - What can you build? */}
+          {projects.length === 0 && !generating && (
+            <div className="mt-8">
+              <p className="text-sm text-white/70 mb-4 text-center">
+                {isRTL ? '✨ أو اختر نوع المشروع للبدء سريعاً' : '✨ Or pick a project type to get started quickly'}
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {PROJECT_EXAMPLES.map((example) => (
+                  <button
+                    key={example.id}
+                    onClick={() => {
+                      setPrompt(isRTL ? example.prompt.ar : example.prompt.en);
+                    }}
+                    className={cn(
+                      "group relative p-4 rounded-2xl border border-white/20 bg-white/5 backdrop-blur-sm",
+                      "hover:bg-white/10 hover:border-white/40 hover:scale-[1.02] transition-all duration-200",
+                      "text-left"
+                    )}
+                  >
+                    <div className={cn(
+                      "absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-20 transition-opacity",
+                      `bg-gradient-to-br ${example.color}`
+                    )} />
+                    <div className="relative z-10">
+                      <span className="text-2xl mb-2 block">{example.icon}</span>
+                      <h3 className="font-semibold text-white text-sm mb-1">
+                        {isRTL ? example.title.ar : example.title.en}
+                      </h3>
+                      <p className="text-[11px] text-white/60 leading-tight">
+                        {isRTL ? example.desc.ar : example.desc.en}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       </div>

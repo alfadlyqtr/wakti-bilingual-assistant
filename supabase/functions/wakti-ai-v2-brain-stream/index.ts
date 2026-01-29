@@ -2095,7 +2095,44 @@ serve(async (req) => {
           hour12: true
         });
 
-        const systemPrompt = buildSystemPrompt(
+        // Fetch user's active reminders for awareness (just-in-time, lightweight)
+        let activeRemindersContext = '';
+        if (userId) {
+          try {
+            const { data: activeReminders } = await supabaseAdmin
+              .from('notification_history')
+              .select('reminder_content, scheduled_for')
+              .eq('user_id', userId)
+              .eq('type', 'reminder')
+              .eq('push_sent', false)
+              .gt('scheduled_for', new Date().toISOString())
+              .order('scheduled_for', { ascending: true })
+              .limit(5);
+            
+            if (activeReminders && activeReminders.length > 0) {
+              const remindersList = activeReminders.map((r: { reminder_content?: string; scheduled_for?: string }) => {
+                const content = (r.reminder_content || '').slice(0, 80);
+                const time = r.scheduled_for ? new Date(r.scheduled_for).toLocaleString('en-US', {
+                  timeZone: effectiveTimezone,
+                  weekday: 'short',
+                  month: 'short',
+                  day: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  hour12: true
+                }) : 'unknown time';
+                return `- "${content}" at ${time}`;
+              }).join('\n');
+              activeRemindersContext = `\n\n📋 USER'S ACTIVE REMINDERS (DO NOT OFFER DUPLICATES):\n${remindersList}\nIf user already has a reminder for something, acknowledge it instead of offering a new one. Example: "I see you already have a reminder set for the Canadiens game - you're all set!"`;
+              console.log(`🔔 REMINDER AWARENESS: Found ${activeReminders.length} active reminders for user`);
+            }
+          } catch (err) {
+            console.warn('⚠️ Failed to fetch active reminders:', err);
+            // Continue without reminder awareness - not critical
+          }
+        }
+
+        const baseSystemPrompt = buildSystemPrompt(
           language,
           currentDate,
           localTime,
@@ -2103,6 +2140,11 @@ serve(async (req) => {
           effectiveTrigger,
           chatSubmode
         );
+
+        // Append active reminders context if available (lightweight, only when reminders exist)
+        const systemPrompt = activeRemindersContext 
+          ? baseSystemPrompt + activeRemindersContext 
+          : baseSystemPrompt;
 
         const messages = [
           { role: 'system', content: systemPrompt }
