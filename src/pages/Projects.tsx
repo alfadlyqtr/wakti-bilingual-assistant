@@ -143,13 +143,27 @@ const PLACEHOLDER_EXAMPLES = [
 ];
 
 // Onboarding Gallery - Visual examples of what can be built
+// Each template has customizable options for the business/product type
 const PROJECT_EXAMPLES = [
   { 
     id: 'ecommerce', 
     icon: '🛍️', 
     title: { en: 'Online Store', ar: 'متجر إلكتروني' },
     desc: { en: 'Sell products with cart & checkout', ar: 'بيع منتجات مع سلة وشراء' },
-    prompt: { en: 'Create an online store for selling abayas with product grid, cart, and checkout', ar: 'أنشئ متجر لبيع العبايات مع عرض المنتجات وسلة الشراء' },
+    // Template with {PRODUCT} placeholder that gets replaced
+    promptTemplate: { 
+      en: 'Create a modern online store for selling {PRODUCT}. Include: beautiful product grid with images and prices, shopping cart, checkout page, and a clean homepage with featured products section.',
+      ar: 'أنشئ متجر إلكتروني عصري لبيع {PRODUCT}. يشمل: عرض منتجات جميل مع صور وأسعار، سلة تسوق، صفحة دفع، وصفحة رئيسية مع قسم المنتجات المميزة.'
+    },
+    options: [
+      { en: 'Abayas & Fashion', ar: 'عبايات وأزياء' },
+      { en: 'Perfumes & Oud', ar: 'عطور وعود' },
+      { en: 'Jewelry & Gold', ar: 'مجوهرات وذهب' },
+      { en: 'Electronics', ar: 'إلكترونيات' },
+      { en: 'Dates & Sweets', ar: 'تمور وحلويات' },
+      { en: 'Handmade Crafts', ar: 'حرف يدوية' },
+    ],
+    defaultOption: { en: 'Abayas & Fashion', ar: 'عبايات وأزياء' },
     color: 'from-pink-500 to-rose-500'
   },
   { 
@@ -157,7 +171,18 @@ const PROJECT_EXAMPLES = [
     icon: '🍽️', 
     title: { en: 'Restaurant Menu', ar: 'قائمة مطعم' },
     desc: { en: 'Digital menu with ordering', ar: 'قائمة رقمية مع الطلب' },
-    prompt: { en: 'Build a restaurant website with digital menu, categories, and online ordering', ar: 'أنشئ موقع مطعم مع قائمة رقمية وفئات وطلب أونلاين' },
+    promptTemplate: { 
+      en: 'Build a {PRODUCT} website with: digital menu organized by categories, beautiful food photos, prices, online ordering system, and contact/location section.',
+      ar: 'أنشئ موقع {PRODUCT} مع: قائمة رقمية منظمة بالفئات، صور طعام جميلة، أسعار، نظام طلب أونلاين، وقسم التواصل والموقع.'
+    },
+    options: [
+      { en: 'Restaurant', ar: 'مطعم' },
+      { en: 'Cafe & Coffee Shop', ar: 'كافيه ومقهى' },
+      { en: 'Bakery', ar: 'مخبز' },
+      { en: 'Food Truck', ar: 'عربة طعام' },
+      { en: 'Catering Service', ar: 'خدمة تموين' },
+    ],
+    defaultOption: { en: 'Restaurant', ar: 'مطعم' },
     color: 'from-amber-500 to-orange-500'
   },
   { 
@@ -165,7 +190,19 @@ const PROJECT_EXAMPLES = [
     icon: '📸', 
     title: { en: 'Portfolio', ar: 'معرض أعمال' },
     desc: { en: 'Showcase your work beautifully', ar: 'اعرض أعمالك بشكل جميل' },
-    prompt: { en: 'Create a photography portfolio with gallery, about section, and contact form', ar: 'أنشئ معرض أعمال للتصوير مع معرض صور وقسم عني ونموذج تواصل' },
+    promptTemplate: { 
+      en: 'Create a professional {PRODUCT} portfolio website with: stunning gallery/work showcase, about me section, services offered, testimonials, and contact form.',
+      ar: 'أنشئ موقع معرض أعمال احترافي لـ{PRODUCT} مع: معرض أعمال مذهل، قسم عني، الخدمات المقدمة، آراء العملاء، ونموذج تواصل.'
+    },
+    options: [
+      { en: 'Photography', ar: 'تصوير فوتوغرافي' },
+      { en: 'Graphic Design', ar: 'تصميم جرافيك' },
+      { en: 'Web Development', ar: 'تطوير مواقع' },
+      { en: 'Interior Design', ar: 'تصميم داخلي' },
+      { en: 'Art & Illustration', ar: 'فن ورسم' },
+      { en: 'Video Production', ar: 'إنتاج فيديو' },
+    ],
+    defaultOption: { en: 'Photography', ar: 'تصوير فوتوغرافي' },
     color: 'from-violet-500 to-purple-500'
   },
   { 
@@ -173,7 +210,19 @@ const PROJECT_EXAMPLES = [
     icon: '📅', 
     title: { en: 'Booking System', ar: 'نظام حجز' },
     desc: { en: 'Appointments & reservations', ar: 'مواعيد وحجوزات' },
-    prompt: { en: 'Build a salon booking website with services, pricing, and appointment scheduling', ar: 'أنشئ موقع حجز صالون مع الخدمات والأسعار وجدولة المواعيد' },
+    promptTemplate: { 
+      en: 'Build a {PRODUCT} booking website with: list of services with prices and duration, appointment scheduling calendar, staff/team section, and contact information.',
+      ar: 'أنشئ موقع حجز لـ{PRODUCT} مع: قائمة الخدمات بالأسعار والمدة، تقويم جدولة المواعيد، قسم الفريق، ومعلومات التواصل.'
+    },
+    options: [
+      { en: 'Beauty Salon', ar: 'صالون تجميل' },
+      { en: 'Barbershop', ar: 'صالون حلاقة' },
+      { en: 'Spa & Wellness', ar: 'سبا وعافية' },
+      { en: 'Medical Clinic', ar: 'عيادة طبية' },
+      { en: 'Fitness Studio', ar: 'استوديو لياقة' },
+      { en: 'Consulting', ar: 'استشارات' },
+    ],
+    defaultOption: { en: 'Beauty Salon', ar: 'صالون تجميل' },
     color: 'from-emerald-500 to-green-500'
   },
   { 
@@ -181,7 +230,19 @@ const PROJECT_EXAMPLES = [
     icon: '🚀', 
     title: { en: 'Landing Page', ar: 'صفحة هبوط' },
     desc: { en: 'Convert visitors to customers', ar: 'حوّل الزوار لعملاء' },
-    prompt: { en: 'Create a modern landing page for a fitness app with features, pricing, and signup', ar: 'أنشئ صفحة هبوط عصرية لتطبيق لياقة مع المميزات والأسعار والتسجيل' },
+    promptTemplate: { 
+      en: 'Create a high-converting landing page for a {PRODUCT} with: hero section with call-to-action, features/benefits list, pricing plans, testimonials, FAQ section, and signup/contact form.',
+      ar: 'أنشئ صفحة هبوط عالية التحويل لـ{PRODUCT} مع: قسم رئيسي مع زر إجراء، قائمة المميزات والفوائد، خطط الأسعار، آراء العملاء، الأسئلة الشائعة، ونموذج تسجيل/تواصل.'
+    },
+    options: [
+      { en: 'Mobile App', ar: 'تطبيق موبايل' },
+      { en: 'SaaS Product', ar: 'منتج SaaS' },
+      { en: 'Online Course', ar: 'دورة أونلاين' },
+      { en: 'Fitness Program', ar: 'برنامج لياقة' },
+      { en: 'E-book', ar: 'كتاب إلكتروني' },
+      { en: 'Agency Services', ar: 'خدمات وكالة' },
+    ],
+    defaultOption: { en: 'Mobile App', ar: 'تطبيق موبايل' },
     color: 'from-blue-500 to-cyan-500'
   },
   { 
@@ -189,7 +250,19 @@ const PROJECT_EXAMPLES = [
     icon: '🎉', 
     title: { en: 'Event Page', ar: 'صفحة فعالية' },
     desc: { en: 'Weddings, parties, conferences', ar: 'أعراس، حفلات، مؤتمرات' },
-    prompt: { en: 'Build a wedding invitation page with countdown, RSVP form, and photo gallery', ar: 'أنشئ صفحة دعوة زفاف مع عداد تنازلي ونموذج حضور ومعرض صور' },
+    promptTemplate: { 
+      en: 'Build a beautiful {PRODUCT} page with: event details and countdown timer, venue/location with map, RSVP form, photo gallery, schedule/agenda, and contact information.',
+      ar: 'أنشئ صفحة {PRODUCT} جميلة مع: تفاصيل الفعالية وعداد تنازلي، الموقع مع خريطة، نموذج تأكيد الحضور، معرض صور، الجدول الزمني، ومعلومات التواصل.'
+    },
+    options: [
+      { en: 'Wedding Invitation', ar: 'دعوة زفاف' },
+      { en: 'Birthday Party', ar: 'حفلة عيد ميلاد' },
+      { en: 'Conference', ar: 'مؤتمر' },
+      { en: 'Workshop', ar: 'ورشة عمل' },
+      { en: 'Product Launch', ar: 'إطلاق منتج' },
+      { en: 'Graduation', ar: 'حفل تخرج' },
+    ],
+    defaultOption: { en: 'Wedding Invitation', ar: 'دعوة زفاف' },
     color: 'from-fuchsia-500 to-pink-500'
   },
 ];
@@ -214,6 +287,11 @@ export default function Projects() {
   const [togglingBackend, setTogglingBackend] = useState<string | null>(null);
   const [showThemes, setShowThemes] = useState(false);
   const [themeSearch, setThemeSearch] = useState('');
+  
+  // Template selector state - for customizable project type dropdowns
+  const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
+  const [templateSelections, setTemplateSelections] = useState<Record<string, string>>({});
+  const [customTemplateInput, setCustomTemplateInput] = useState('');
   
   // Custom theme creator state
   const [showThemeCreator, setShowThemeCreator] = useState(false);
@@ -1299,34 +1377,132 @@ Apply these styles consistently throughout the entire design.`;
                 {isRTL ? '✨ أو اختر نوع المشروع للبدء سريعاً' : '✨ Or pick a project type to get started quickly'}
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {PROJECT_EXAMPLES.map((example) => (
-                  <button
-                    key={example.id}
-                    onClick={() => {
-                      setPrompt(isRTL ? example.prompt.ar : example.prompt.en);
-                    }}
-                    className={cn(
-                      "group relative p-4 rounded-2xl border border-white/20 bg-white/5 backdrop-blur-sm",
-                      "hover:bg-white/10 hover:border-white/40 hover:scale-[1.02] transition-all duration-200",
-                      "text-left"
-                    )}
-                  >
-                    <div className={cn(
-                      "absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-20 transition-opacity",
-                      `bg-gradient-to-br ${example.color}`
-                    )} />
-                    <div className="relative z-10">
-                      <span className="text-2xl mb-2 block">{example.icon}</span>
-                      <h3 className="font-semibold text-white text-sm mb-1">
-                        {isRTL ? example.title.ar : example.title.en}
-                      </h3>
-                      <p className="text-[11px] text-white/60 leading-tight">
-                        {isRTL ? example.desc.ar : example.desc.en}
-                      </p>
+                {PROJECT_EXAMPLES.map((example) => {
+                  const isActive = activeTemplateId === example.id;
+                  const selectedOption = templateSelections[example.id] || (isRTL ? example.defaultOption.ar : example.defaultOption.en);
+                  
+                  return (
+                    <div key={example.id} className="relative">
+                      <button
+                        onClick={() => {
+                          if (isActive) {
+                            // Already open - close it
+                            setActiveTemplateId(null);
+                          } else {
+                            // Open this template's options
+                            setActiveTemplateId(example.id);
+                            setCustomTemplateInput('');
+                          }
+                        }}
+                        className={cn(
+                          "w-full group relative p-4 rounded-2xl border bg-white/5 backdrop-blur-sm",
+                          "hover:bg-white/10 hover:scale-[1.02] transition-all duration-200",
+                          "text-left",
+                          isActive ? "border-white/50 bg-white/10" : "border-white/20 hover:border-white/40"
+                        )}
+                      >
+                        <div className={cn(
+                          "absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-20 transition-opacity",
+                          `bg-gradient-to-br ${example.color}`
+                        )} />
+                        <div className="relative z-10">
+                          <span className="text-2xl mb-2 block">{example.icon}</span>
+                          <h3 className="font-semibold text-white text-sm mb-1">
+                            {isRTL ? example.title.ar : example.title.en}
+                          </h3>
+                          <p className="text-[11px] text-white/60 leading-tight">
+                            {isRTL ? example.desc.ar : example.desc.en}
+                          </p>
+                          {/* Show selected option as a pill */}
+                          <div className="mt-2 inline-flex items-center gap-1 px-2 py-1 bg-white/10 rounded-full text-[10px] text-white/80">
+                            <span className="truncate max-w-[100px]">{selectedOption}</span>
+                            <ChevronDown className="h-3 w-3 shrink-0" />
+                          </div>
+                        </div>
+                      </button>
+                      
+                      {/* Dropdown for selecting product/business type */}
+                      {isActive && (
+                        <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-zinc-900 border border-white/20 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                          <div className="p-2 border-b border-white/10">
+                            <p className="text-[10px] text-white/50 uppercase tracking-wider px-2 mb-1">
+                              {isRTL ? 'اختر النوع' : 'Select type'}
+                            </p>
+                          </div>
+                          <div className="max-h-[200px] overflow-y-auto">
+                            {example.options.map((option, idx) => (
+                              <button
+                                key={idx}
+                                onClick={() => {
+                                  const optionText = isRTL ? option.ar : option.en;
+                                  setTemplateSelections(prev => ({ ...prev, [example.id]: optionText }));
+                                  // Build the prompt with the selected option
+                                  const template = isRTL ? example.promptTemplate.ar : example.promptTemplate.en;
+                                  const finalPrompt = template.replace('{PRODUCT}', optionText);
+                                  setPrompt(finalPrompt);
+                                  setActiveTemplateId(null);
+                                }}
+                                className="w-full px-3 py-2 text-left text-sm text-white/90 hover:bg-white/10 transition-colors"
+                              >
+                                {isRTL ? option.ar : option.en}
+                              </button>
+                            ))}
+                            {/* Custom option */}
+                            <div className="p-2 border-t border-white/10">
+                              <p className="text-[10px] text-white/50 uppercase tracking-wider px-1 mb-1">
+                                {isRTL ? 'أو اكتب نوعك' : 'Or type your own'}
+                              </p>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  value={customTemplateInput}
+                                  onChange={(e) => setCustomTemplateInput(e.target.value)}
+                                  placeholder={isRTL ? 'مثال: ساعات فاخرة' : 'e.g., Luxury Watches'}
+                                  className="flex-1 px-2 py-1.5 text-sm bg-white/10 border border-white/20 rounded-lg text-white placeholder:text-white/40 focus:outline-none focus:border-white/40"
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && customTemplateInput.trim()) {
+                                      setTemplateSelections(prev => ({ ...prev, [example.id]: customTemplateInput.trim() }));
+                                      const template = isRTL ? example.promptTemplate.ar : example.promptTemplate.en;
+                                      const finalPrompt = template.replace('{PRODUCT}', customTemplateInput.trim());
+                                      setPrompt(finalPrompt);
+                                      setActiveTemplateId(null);
+                                      setCustomTemplateInput('');
+                                    }
+                                  }}
+                                />
+                                <button
+                                  onClick={() => {
+                                    if (customTemplateInput.trim()) {
+                                      setTemplateSelections(prev => ({ ...prev, [example.id]: customTemplateInput.trim() }));
+                                      const template = isRTL ? example.promptTemplate.ar : example.promptTemplate.en;
+                                      const finalPrompt = template.replace('{PRODUCT}', customTemplateInput.trim());
+                                      setPrompt(finalPrompt);
+                                      setActiveTemplateId(null);
+                                      setCustomTemplateInput('');
+                                    }
+                                  }}
+                                  disabled={!customTemplateInput.trim()}
+                                  className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 disabled:bg-white/10 disabled:text-white/30 text-white text-sm font-medium rounded-lg transition-colors"
+                                >
+                                  {isRTL ? 'تم' : 'Go'}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </button>
-                ))}
+                  );
+                })}
               </div>
+              
+              {/* Click outside to close dropdown */}
+              {activeTemplateId && (
+                <div 
+                  className="fixed inset-0 z-40" 
+                  onClick={() => setActiveTemplateId(null)}
+                />
+              )}
             </div>
           )}
         </div>
