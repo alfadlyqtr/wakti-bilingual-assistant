@@ -1293,7 +1293,7 @@ Apply these styles consistently throughout the entire design.`;
           )}
 
           {/* Onboarding Gallery - What can you build? */}
-          {projects.length === 0 && !generating && (
+          {projects.length < MAX_PROJECTS && !generating && (
             <div className="mt-8">
               <p className="text-sm text-white/70 mb-4 text-center">
                 {isRTL ? '✨ أو اختر نوع المشروع للبدء سريعاً' : '✨ Or pick a project type to get started quickly'}

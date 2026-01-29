@@ -212,7 +212,7 @@ export default function Home() {
           </header>
 
           {/* Main Content */}
-          <main className="w-full">
+          <main className="w-full !h-auto !overflow-visible">
             {/* Hero Section */}
             <section className="relative py-20 lg:py-32 px-6 lg:px-8">
               <div className="absolute inset-0 opacity-50"></div>
