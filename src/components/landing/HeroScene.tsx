@@ -3,7 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Logo3D } from "@/components/Logo3D";
 import { ScrollIndicator } from "./ScrollIndicator";
-import { LogIn } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { useTheme } from "@/providers/ThemeProvider";
+import { ArrowRight } from "lucide-react";
 
 interface HeroSceneProps {
   language?: "en" | "ar";
@@ -11,7 +13,12 @@ interface HeroSceneProps {
 
 export function HeroScene({ language = "en" }: HeroSceneProps) {
   const navigate = useNavigate();
+  const { language: currentLang, setLanguage } = useTheme();
   const isArabic = language === "ar";
+
+  const toggleLanguage = () => {
+    setLanguage(currentLang === "en" ? "ar" : "en");
+  };
 
   return (
     <section 
@@ -39,24 +46,38 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
         />
       </div>
 
-      {/* Login Button - Top Right */}
+      {/* Header Bar - Top Right */}
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5, duration: 0.6 }}
-        className="absolute top-6 right-6 z-20"
-        style={{ top: "calc(env(safe-area-inset-top, 0px) + 1.5rem)" }}
+        className="absolute top-4 right-4 z-20 flex items-center gap-2"
+        style={{ top: "calc(env(safe-area-inset-top, 0px) + 1rem)" }}
       >
+        {/* Login Button */}
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
           onClick={() => navigate("/login")}
-          className="text-white/70 hover:text-white hover:bg-white/10 transition-all duration-300 gap-2"
+          className="rounded-full border-white/20 bg-white/5 text-white/80 hover:text-white hover:bg-white/10 hover:border-white/30 transition-all duration-300 gap-1.5 px-4 h-9 backdrop-blur-sm"
         >
-          <LogIn className="h-4 w-4" />
           <span className="text-sm font-light tracking-wide">
             {isArabic ? "دخول" : "Login"}
           </span>
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Button>
+
+        {/* Theme Toggle */}
+        <ThemeToggle />
+
+        {/* Language Switcher */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={toggleLanguage}
+          className="rounded-full text-white/70 hover:text-white hover:bg-white/10 transition-all duration-300 h-9 px-3 font-medium"
+        >
+          {currentLang === "en" ? "العربية" : "English"}
         </Button>
       </motion.div>
 
