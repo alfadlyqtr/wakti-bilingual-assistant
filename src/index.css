@@ -992,9 +992,9 @@ body {
 
 /* 2. DEFAULT LAYOUT: For APP pages that use <main> (Dashboard, etc) - NOT public pages */
 /* Only apply to pages inside AppLayout, not public landing pages */
-.app-layout-mobile main,
-.app-layout-desktop main,
-.app-layout-tablet main {
+
+/* Mobile layout: main is the scroller and needs header/bottom-tabs spacing */
+.app-layout-mobile main {
   overflow-y: auto !important;
   overflow-x: hidden !important;
   -webkit-overflow-scrolling: touch;
@@ -1003,6 +1003,15 @@ body {
   /* Add space for fixed header and bottom nav */
   padding-top: var(--app-header-h) !important;
   padding-bottom: var(--app-bottom-tabs-h) !important;
+}
+
+/* Desktop/Tablet layout: DesktopLayout/TabletLayout handle sizing + top padding in JSX */
+.app-layout-desktop main,
+.app-layout-tablet main {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
 }
 
 /* Wakti AI: use main as scroller but reserve input space */

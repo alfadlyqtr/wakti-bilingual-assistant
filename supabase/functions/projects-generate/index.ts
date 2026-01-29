@@ -405,58 +405,88 @@ function assertNoHtml(path: string, value: string): void {
 
 // ============================================================================
 // UNIVERSAL MODEL CALLER - Supports all Gemini models with dynamic selection
+// Includes exponential backoff for rate limiting (429 errors)
 // ============================================================================
 async function callGeminiWithModel(
   model: string,
   systemPrompt: string,
   userPrompt: string,
-  jsonMode: boolean = true
+  jsonMode: boolean = true,
+  maxRetries: number = 3
 ): Promise<string> {
   const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
   if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
   
   console.log(`[Gemini] Calling model: ${model}`);
 
-  const response = await withTimeout(
-    fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": GEMINI_API_KEY,
-        },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 65536,
-            ...(jsonMode ? { responseMimeType: "application/json" } : {}),
-          },
-          // NOTE: Grounding disabled - causes issues with JSON mode responses
-          // tools: [{ googleSearch: {} }],
-        }),
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (attempt > 0) {
+      // Exponential backoff: 2s, 4s, 8s
+      const backoffMs = Math.pow(2, attempt) * 1000;
+      console.log(`[Gemini] Rate limited, waiting ${backoffMs}ms before retry ${attempt}/${maxRetries}...`);
+      await new Promise(resolve => setTimeout(resolve, backoffMs));
+    }
+    
+    try {
+      const response = await withTimeout(
+        fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-goog-api-key": GEMINI_API_KEY,
+            },
+            body: JSON.stringify({
+              contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+              systemInstruction: { parts: [{ text: systemPrompt }] },
+              generationConfig: {
+                temperature: 0.1,
+                maxOutputTokens: 65536,
+                ...(jsonMode ? { responseMimeType: "application/json" } : {}),
+              },
+            }),
+          }
+        ),
+        300000, // 300 seconds (5 minutes) - Note: Supabase gateway may still timeout at ~150s
+        'GEMINI_25_PRO'
+      );
+
+      // Handle rate limiting with retry
+      if (response.status === 429) {
+        const errorText = await response.text();
+        console.warn(`[Gemini ${model}] Rate limited (429): ${errorText}`);
+        lastError = new Error(`Gemini API rate limited: 429`);
+        continue; // Retry with backoff
       }
-    ),
-    300000, // 300 seconds (5 minutes) - Note: Supabase gateway may still timeout at ~150s
-    'GEMINI_25_PRO'
-  );
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`[Gemini ${model}] HTTP ${response.status}: ${errorText}`);
-    throw new Error(`Gemini API error: ${response.status}`);
-  }
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[Gemini ${model}] HTTP ${response.status}: ${errorText}`);
+        throw new Error(`Gemini API error: ${response.status}`);
+      }
 
-  const data = await response.json();
-  let text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  
-  if (jsonMode) {
-    text = normalizeGeminiResponseText(text);
+      const data = await response.json();
+      let text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      
+      if (jsonMode) {
+        text = normalizeGeminiResponseText(text);
+      }
+      
+      return text;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      // Only retry on rate limit errors, throw immediately for other errors
+      if (!lastError.message.includes('429') && !lastError.message.includes('rate limit')) {
+        throw lastError;
+      }
+    }
   }
   
-  return text;
+  // All retries exhausted
+  throw lastError || new Error('Gemini API call failed after retries');
 }
 
 // Legacy wrapper for backward compatibility - always uses Pro
@@ -1396,6 +1426,7 @@ interface PreFetchedImage {
   url: string;
   storedUrl: string;
   filename: string;
+  uploadId?: string; // ID from project_uploads table for linking to products
 }
 
 async function preFetchAndStoreImages(
@@ -1467,22 +1498,31 @@ async function preFetchAndStoreImages(
           const storedUrl = urlData?.publicUrl || '';
           
           if (storedUrl) {
-            // 5. Save to project_uploads table
-            await supabase
+            // 5. Save to project_uploads table and get the ID for linking
+            const { data: uploadData, error: insertError } = await supabase
               .from('project_uploads')
               .insert({
                 project_id: projectId,
+                user_id: _userId,
                 filename: filename,
                 storage_path: storagePath,
                 file_type: imgBlob.type || 'image/jpeg',
-                file_size: imgBlob.size,
-              });
+                size_bytes: imgBlob.size,
+                bucket_id: 'project-uploads',
+              })
+              .select('id')
+              .single();
+            
+            if (insertError) {
+              console.warn(`[PreFetch] Failed to insert upload record: ${insertError.message}`);
+            }
             
             storedImages.push({
               query,
               url: imageUrl,
               storedUrl,
-              filename
+              filename,
+              uploadId: uploadData?.id
             });
             
             console.log(`[PreFetch] Stored image for "${query}": ${storedUrl}`);
@@ -1514,12 +1554,13 @@ async function bootstrapBackendData(
   projectId: string,
   userId: string,
   files: Record<string, string>,
-  prompt: string
+  prompt: string,
+  preFetchedImages: PreFetchedImage[] = []
 ): Promise<BootstrapResults> {
   const results: BootstrapResults = {
     productsSeeded: 0,
     servicesSeeded: 0,
-    imagesStored: 0,
+    imagesStored: preFetchedImages.length,
     collectionsCreated: []
   };
 
@@ -1534,7 +1575,7 @@ async function bootstrapBackendData(
     const isEcommercePrompt = /shop|store|e-?commerce|product|catalog|inventory|متجر|منتج/i.test(lowerPrompt);
 
     if (hasProductsCode || isEcommercePrompt) {
-      console.log(`[Bootstrap] Detected e-commerce - seeding sample products...`);
+      console.log(`[Bootstrap] Detected e-commerce - seeding sample products with images...`);
       
       // Check if products already exist
       const { data: existingProducts } = await supabase
@@ -1548,23 +1589,60 @@ async function bootstrapBackendData(
         // Seed 4 sample products based on prompt context
         const sampleProducts = generateSampleProducts(prompt);
         
-        for (const product of sampleProducts) {
-          const { error } = await supabase
+        // Assign pre-fetched images to products (round-robin if fewer images than products)
+        for (let i = 0; i < sampleProducts.length; i++) {
+          const product = sampleProducts[i];
+          
+          // Assign an image URL to the product if we have pre-fetched images
+          let assignedImageUrl: string | undefined;
+          let assignedUploadId: string | undefined;
+          
+          if (preFetchedImages.length > 0) {
+            const imageIndex = i % preFetchedImages.length;
+            const img = preFetchedImages[imageIndex];
+            assignedImageUrl = img.storedUrl;
+            assignedUploadId = img.uploadId;
+          }
+          
+          // Add image_url to product data
+          const productWithImage = {
+            ...product,
+            image_url: assignedImageUrl || null
+          };
+          
+          const { data: insertedProduct, error } = await supabase
             .from('project_collections')
             .insert({
               project_id: projectId,
               user_id: userId,
               collection_name: 'products',
-              data: product,
+              data: productWithImage,
               status: 'active'
-            });
+            })
+            .select('id')
+            .single();
           
-          if (!error) results.productsSeeded++;
+          if (!error && insertedProduct) {
+            results.productsSeeded++;
+            
+            // Link the upload to this product via collection_item_id
+            if (assignedUploadId) {
+              await supabase
+                .from('project_uploads')
+                .update({
+                  collection_name: 'products',
+                  collection_item_id: insertedProduct.id
+                })
+                .eq('id', assignedUploadId);
+              
+              console.log(`[Bootstrap] Linked image ${assignedUploadId} to product ${insertedProduct.id}`);
+            }
+          }
         }
         
         if (results.productsSeeded > 0) {
           results.collectionsCreated.push('products');
-          console.log(`[Bootstrap] Seeded ${results.productsSeeded} sample products`);
+          console.log(`[Bootstrap] Seeded ${results.productsSeeded} sample products with ${preFetchedImages.length} images`);
         }
       }
     }
@@ -2402,6 +2480,67 @@ BOOKING UI REQUIREMENTS:
 2. NEVER add supabaseUrl or supabaseAnonKey to frontend code.
 3. ALWAYS use the project-backend-api endpoint for products, items, orders, cart, forms, and data.
 4. If the user asks for a shop/products/items page, fetch via project-backend-api with projectId.
+
+### PART 9: E-COMMERCE / SHOP / PRODUCTS (CRITICAL - FETCH FROM BACKEND)
+🚨 FOR ANY SHOP, STORE, E-COMMERCE, OR PRODUCT CATALOG PROJECT:
+The products are ALREADY seeded in the backend. You MUST fetch them from the API instead of using hardcoded mockData.
+
+**MANDATORY: Fetch products from backend API:**
+\`\`\`jsx
+const BACKEND_URL = "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api";
+
+// In your Shop/Products component:
+const [products, setProducts] = useState([]);
+const [loading, setLoading] = useState(true);
+
+useEffect(() => {
+  const fetchProducts = async () => {
+    try {
+      const res = await fetch(BACKEND_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: '{{PROJECT_ID}}',
+          action: 'collection/products',
+          data: { limit: 50 }
+        })
+      });
+      const data = await res.json();
+      if (data.items) {
+        // Map backend format to component format
+        setProducts(data.items.map(item => ({
+          id: item.id,
+          name: item.data?.name || 'Product',
+          price: item.data?.price || 0,
+          description: item.data?.description || '',
+          category: item.data?.category || 'General',
+          image: item.data?.image_url || getPlaceholder(item.data?.name || 'product'),
+          inStock: item.data?.inStock !== false
+        })));
+      }
+    } catch (err) {
+      console.error('Failed to fetch products:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  fetchProducts();
+}, []);
+
+// Placeholder helper for products without images
+const getPlaceholder = (name, w = 400, h = 400) => {
+  const text = encodeURIComponent(name.split(' ').slice(0, 2).join(' '));
+  return \`https://placehold.co/\${w}x\${h}/1a1a2e/eaeaea?text=\${text}\`;
+};
+\`\`\`
+
+**IMPORTANT FOR E-COMMERCE PROJECTS:**
+1. DO NOT create /utils/mockData.js with hardcoded products
+2. ALWAYS fetch products from the backend API as shown above
+3. Products have image_url in their data - use it for product images
+4. Show loading skeleton while fetching products
+5. Handle empty state if no products returned
+6. The backend already has sample products seeded - they will appear automatically
 `;
 
 // Foundation bricks: pre-configured backend building blocks (not limiting templates)
@@ -3206,6 +3345,27 @@ serve(async (req: Request) => {
         .maybeSingle();
       if (error) throw new Error(`DB_JOB_STATUS_FAILED: ${error.message}`);
       if (!data) return createResponse({ ok: false, error: 'Job not found' }, 404);
+      
+      // STALE JOB DETECTION: If job is "running" but hasn't updated in 8+ minutes, mark it failed
+      if (data.status === 'running') {
+        const updatedAt = new Date(data.updated_at).getTime();
+        const now = Date.now();
+        const staleThresholdMs = 8 * 60 * 1000; // 8 minutes
+        if (now - updatedAt > staleThresholdMs) {
+          console.warn(`[Status] Job ${jobId} is stale (no update for ${Math.round((now - updatedAt) / 1000)}s), marking failed`);
+          await updateJob(supabase, jobId, { 
+            status: 'failed', 
+            error: 'Job stalled - worker may have crashed. Please try again.',
+            result_summary: null 
+          });
+          // Return the updated status
+          return createResponse({ 
+            ok: true, 
+            job: { ...data, status: 'failed', error: 'Job stalled - worker may have crashed. Please try again.' } 
+          });
+        }
+      }
+      
       return createResponse({ ok: true, job: data });
     }
 
@@ -5532,6 +5692,38 @@ Call task_complete when finished.`;
     const safeMode: 'create' | 'edit' = mode === 'edit' ? 'edit' : 'create';
     const job = await createJob(supabase, { projectId, userId, mode: safeMode, prompt });
 
+    // ========================================================================
+    // ASYNC BACKGROUND WORKER: Run generation in background, return immediately
+    // ========================================================================
+    // This prevents the 150s gateway timeout from killing the request
+    // The frontend will poll for status using action: 'status'
+    
+    // Heartbeat helper - updates job every 15 seconds to show it's still alive
+    let heartbeatInterval: number | undefined;
+    const startHeartbeat = (jobId: string) => {
+      heartbeatInterval = setInterval(async () => {
+        try {
+          await supabase
+            .from('project_generation_jobs')
+            .update({ updated_at: new Date().toISOString() })
+            .eq('id', jobId);
+          console.log(`[Heartbeat] Job ${jobId} still running...`);
+        } catch (e) {
+          console.warn(`[Heartbeat] Failed to update:`, e);
+        }
+      }, 15000) as unknown as number;
+    };
+    const stopHeartbeat = () => {
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+    };
+
+    // ========================================================================
+    // BACKGROUND WORKER FUNCTION - runs after we return to client
+    // ========================================================================
+    const runGenerationWorker = async () => {
+      // Start heartbeat immediately
+      startHeartbeat(job.id);
+      
     try {
       // Handle 'user_prompt' theme - extract colors/style from the user's prompt
       let selectedThemeDesc: string;
@@ -5672,12 +5864,15 @@ Return ONLY the JSON object. No explanation.`;
         }, { onConflict: 'project_id' });
 
         // 🚀 POST-GENERATION BOOTSTRAPPING: Auto-seed backend data based on generated code
-        const bootstrapResults = await bootstrapBackendData(supabase, projectId, userId, files, prompt);
+        // Pass pre-fetched images so they can be linked to products
+        const bootstrapResults = await bootstrapBackendData(supabase, projectId, userId, files, prompt, preFetchedImages);
         console.log(`[Create Mode] Bootstrap results:`, bootstrapResults);
 
         await replaceProjectFiles(supabase, projectId, files);
+        stopHeartbeat();
         await updateJob(supabase, job.id, { status: 'succeeded', result_summary: summary || 'Created.', error: null });
-        return createResponse({ ok: true, jobId: job.id, status: 'succeeded', cssWarnings, usesBackend, bootstrapResults });
+        console.log(`[Background Worker] Job ${job.id} CREATE succeeded`);
+        return; // Worker done - job status updated in DB
       }
 
       // EDIT MODE: Full file rewrite (NO PATCHES)
@@ -5780,25 +5975,45 @@ Return ONLY the JSON object. No explanation.`;
       // Include the list of changed files in the response
       const changedFilesList = Object.keys(finalFilesToUpsert);
       
+      stopHeartbeat();
       await updateJob(supabase, job.id, { status: 'succeeded', result_summary: result.summary || 'Updated.', error: null });
-      return createResponse({ 
-        ok: true, 
-        jobId: job.id, 
-        status: 'succeeded', 
-        changedFiles: changedFilesList,
-        summary: result.summary,
-        cssWarnings,
-        usesBackend
-      });
+      console.log(`[Background Worker] Job ${job.id} EDIT succeeded. Changed: ${changedFilesList.join(', ')}`);
+      return; // Worker done - job status updated in DB
 
     } catch (innerErr) {
       const innerMsg = innerErr instanceof Error ? innerErr.message : String(innerErr);
+      stopHeartbeat();
       try {
         await updateJob(supabase, job.id, { status: 'failed', error: innerMsg, result_summary: null });
       } catch (e) {
         console.error('[projects-generate] Failed to mark job failed:', e);
       }
-      return createResponse({ ok: false, jobId: job.id, error: innerMsg }, 500);
+      console.error(`[Background Worker] Job ${job.id} failed: ${innerMsg}`);
+    }
+    }; // End of runGenerationWorker
+
+    // ========================================================================
+    // RUN GENERATION IN BACKGROUND - Return jobId immediately
+    // ========================================================================
+    // The frontend will poll for status using action: 'status'
+    // This prevents the 150s gateway timeout from killing the request
+    
+    console.log(`[Async Mode] Starting background generation for job ${job.id}...`);
+    
+    // Use EdgeRuntime.waitUntil if available, otherwise run synchronously
+    // EdgeRuntime.waitUntil allows the function to return immediately while
+    // the generation continues in the background
+    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) {
+      console.log(`[Async Mode] Using EdgeRuntime.waitUntil for background execution`);
+      EdgeRuntime.waitUntil(runGenerationWorker());
+      // Return immediately with jobId - frontend will poll for status
+      return createResponse({ ok: true, jobId: job.id, status: 'running' });
+    } else {
+      // Fallback: Run synchronously (may timeout on long generations)
+      console.log(`[Sync Mode] EdgeRuntime.waitUntil not available, running synchronously`);
+      await runGenerationWorker();
+      console.log(`[Sync Mode] Generation completed for job ${job.id}`);
+      return createResponse({ ok: true, jobId: job.id, status: 'succeeded' });
     }
 
   } catch (err) {

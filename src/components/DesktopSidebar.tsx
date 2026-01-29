@@ -127,12 +127,20 @@ export function DesktopSidebar() {
         style={{ width: 'calc(var(--current-sidebar-width, 240px) + 0.5rem)', left: 0, right: 'auto' }}
         aria-hidden
       />
-      {/* Blur/dim overlay while sidebar is expanded - blocks interactions behind */}
+      {/* Blur/dim overlay while sidebar is expanded - allows scroll, click to close */}
       {!isCollapsed && (
         <div
           className="hidden md:block fixed inset-y-0 right-0 z-[998] bg-black/50 backdrop-blur-2xl transition-opacity duration-200"
-          style={{ left: 'calc(var(--current-sidebar-width, 240px) + 0.5rem)', backdropFilter: 'blur(16px) saturate(150%)', WebkitBackdropFilter: 'blur(16px) saturate(150%)', backgroundColor: 'rgba(0,0,0,0.45)' }}
+          style={{ left: 'calc(var(--current-sidebar-width, 240px) + 0.5rem)', backdropFilter: 'blur(16px) saturate(150%)', WebkitBackdropFilter: 'blur(16px) saturate(150%)', backgroundColor: 'rgba(0,0,0,0.45)', pointerEvents: 'none' }}
+        />
+      )}
+      {/* Invisible click layer to close sidebar - allows wheel scroll through */}
+      {!isCollapsed && (
+        <div
+          className="hidden md:block fixed inset-y-0 right-0 z-[997]"
+          style={{ left: 'calc(var(--current-sidebar-width, 240px) + 0.5rem)' }}
           onClick={toggleCollapse}
+          onWheel={(e) => e.currentTarget.style.pointerEvents = 'none'}
         />
       )}
       <motion.aside

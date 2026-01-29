@@ -1447,12 +1447,20 @@ export default function ProjectDetail() {
         }
       } catch (fetchErr: any) {
         // Network errors or timeouts - job may still be running in background
+        // Be very lenient here - any network error during a long generation should trigger polling
         const errMsg = fetchErr?.message || '';
-        const isTimeout = errMsg.includes('504') || errMsg.includes('timeout') || errMsg.includes('Gateway') || errMsg.includes('Failed to fetch');
-        if (!isTimeout) {
+        const isNetworkOrTimeout = errMsg.includes('504') || 
+                                   errMsg.includes('timeout') || 
+                                   errMsg.includes('Gateway') || 
+                                   errMsg.includes('Failed to fetch') ||
+                                   errMsg.includes('ERR_FAILED') ||
+                                   errMsg.includes('network') ||
+                                   errMsg.includes('CORS') ||
+                                   errMsg.includes('aborted');
+        if (!isNetworkOrTimeout) {
           throw fetchErr;
         }
-        console.log('[Create Mode] Request failed (likely timeout), will poll for job status...');
+        console.log('[Create Mode] Request failed (likely timeout/network), will poll for job status...', errMsg);
       }
 
       // If we didn't get a jobId, poll for the latest job for this project
@@ -1774,12 +1782,29 @@ export default function ProjectDetail() {
     }
   };
 
-  const pollJobUntilDone = async (jobId: string, timeoutMs: number = 300000): Promise<GenerationJob> => {
-    // Increased timeout to 5 minutes (300s) for complex multi-feature projects
+  const pollJobUntilDone = async (jobId: string, timeoutMs: number = 600000): Promise<GenerationJob> => {
+    // Increased timeout to 10 minutes (600s) for complex multi-feature projects with detailed prompts
     const start = Date.now();
     let pollCount = 0;
+    let consecutiveErrors = 0;
+    const maxConsecutiveErrors = 10; // Only fail after 10 consecutive errors
+    
+    // Progress messages to show user while waiting
+    const progressMessages = isRTL 
+      ? ['جاري التحليل...', 'جاري بناء الهيكل...', 'جاري إنشاء المكونات...', 'جاري تطبيق الأنماط...', 'جاري التحسين...', 'اللمسات الأخيرة...']
+      : ['Analyzing request...', 'Building structure...', 'Creating components...', 'Applying styles...', 'Optimizing...', 'Final touches...'];
+    
     while (Date.now() - start < timeoutMs) {
       pollCount++;
+      
+      // Update progress message periodically
+      if (pollCount % 5 === 0) {
+        const msgIndex = Math.min(Math.floor(pollCount / 10), progressMessages.length - 1);
+        setGenerationSteps(prev => prev.map((s, i) => 
+          i === 2 ? { ...s, label: progressMessages[msgIndex] } : s
+        ));
+      }
+      
       try {
         const res = await supabase.functions.invoke('projects-generate', {
           body: { action: 'status', jobId }
@@ -1787,10 +1812,17 @@ export default function ProjectDetail() {
 
         if (res.error) {
           // Don't fail immediately on status check errors - may be transient
-          console.warn(`[Poll ${pollCount}] Status check error: ${res.error.message}`);
-          await delay(2000);
+          consecutiveErrors++;
+          console.warn(`[Poll ${pollCount}] Status check error (${consecutiveErrors}/${maxConsecutiveErrors}): ${res.error.message}`);
+          if (consecutiveErrors >= maxConsecutiveErrors) {
+            throw new Error(`Too many consecutive errors: ${res.error.message}`);
+          }
+          await delay(3000); // Wait longer on errors
           continue;
         }
+        
+        // Reset error counter on successful response
+        consecutiveErrors = 0;
 
         const job = (res.data?.job || null) as GenerationJob | null;
         if (!job) {
@@ -1805,17 +1837,23 @@ export default function ProjectDetail() {
         }
         if (job.status === 'failed') throw new Error(job.error || 'Generation failed');
 
-        // Job still running
-        console.log(`[Poll ${pollCount}] Job status: ${job.status}, waiting...`);
-        await delay(1500); // Slightly longer delay between polls
+        // Job still running - this is normal, keep polling
+        // Use slower polling to avoid rate limiting (429 errors)
+        const elapsed = Math.round((Date.now() - start) / 1000);
+        console.log(`[Poll ${pollCount}] Job status: ${job.status}, elapsed: ${elapsed}s, waiting...`);
+        await delay(5000); // Poll every 5 seconds (reduced from 2s to avoid rate limiting)
       } catch (pollErr: any) {
-        // Network errors during polling - retry
-        console.warn(`[Poll ${pollCount}] Poll error: ${pollErr.message}, retrying...`);
-        await delay(2000);
+        // Network errors during polling - retry unless too many
+        consecutiveErrors++;
+        console.warn(`[Poll ${pollCount}] Poll error (${consecutiveErrors}/${maxConsecutiveErrors}): ${pollErr.message}`);
+        if (consecutiveErrors >= maxConsecutiveErrors) {
+          throw pollErr;
+        }
+        await delay(8000); // Wait longer on errors (increased from 3s)
       }
     }
 
-    throw new Error('Generation timed out after 5 minutes');
+    throw new Error(isRTL ? 'انتهت مهلة الإنشاء بعد 10 دقائق' : 'Generation timed out after 10 minutes');
   };
 
   const loadFilesFromDb = async (projectId: string): Promise<Record<string, string>> => {
@@ -5748,9 +5786,9 @@ ${fixInstructions}
   }
 
   return (
-    <div className={cn("h-full w-full flex flex-col bg-background overflow-hidden pt-[var(--app-header-h)] md:pt-0", isRTL && "rtl")}>
+    <div className={cn("h-full w-full flex flex-col bg-background overflow-hidden pt-[var(--app-header-h)]", isRTL && "rtl")}>
 
-      {/* 🎉 Celebratory Modal for Project Completion */}
+      {/* Celebratory Modal for Project Completion */}
       {showProjectCompleteModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl p-8 shadow-2xl shadow-indigo-500/30 animate-in zoom-in-95 duration-500 max-w-sm mx-4 text-center">
@@ -5758,6 +5796,7 @@ ${fixInstructions}
               <Check className="w-10 h-10 text-white" />
             </div>
             <h2 className="text-2xl font-bold text-white mb-2">
+              {isRTL ? ' مشروعك جاهز!' : ' Project Ready!'}
               {isRTL ? '🎉 مشروعك جاهز!' : '🎉 Project Ready!'}
             </h2>
             <p className="text-white/80 text-sm">

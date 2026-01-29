@@ -26,8 +26,8 @@ export function TabletLayout({ children }: TabletLayoutProps) {
           <header className="fixed-header">
             <TabletHeader />
           </header>
-          {/* Scrollable content area between header and bottom nav - account for elevated header */}
-          <main className="flex-1 overflow-auto w-full p-3 sm:p-4 pt-[calc(var(--tablet-header-h,56px)+2rem)] h-[calc(100vh-var(--tablet-header-h,56px))]">
+          {/* Scrollable content area - starts below fixed header */}
+          <main className="flex-1 overflow-auto w-full p-3 sm:p-4 mt-[calc(var(--tablet-header-h,56px)+1.5rem)] h-[calc(100vh-var(--tablet-header-h,56px)-1.5rem)]">
             <div className="w-full max-w-full h-full">
               {children}
             </div>
