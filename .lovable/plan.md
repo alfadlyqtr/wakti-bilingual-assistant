@@ -1,166 +1,302 @@
-# Plan: Harden AI Coder Agent Mode
 
-## Problem Statement
-The AI Coder sometimes:
-1. Claims to complete tasks without using any tools
-2. Only forces tool usage when specific keywords are detected
-3. Relies on keyword matching instead of mandatory exploration
+# WAKTI Landing Page Transformation: "The Luxe Mobile Experience"
 
-## Root Cause
-The current enforcement logic in `supabase/functions/projects-generate/index.ts` (lines 2651-2662) only forces tool usage when:
-- It is iteration 0
-- The prompt matches specific edit keywords
-- No tools have been called yet
+## Vision Statement
+Transform the landing page from a traditional website into an immersive, full-screen mobile app onboarding experience that feels like stepping into a luxury boutique. Every pixel should whisper elegance, exclusivity, and premium quality.
 
-This allows the agent to skip tool calls for prompts that do not match the regex pattern.
+## Design Philosophy
+**Minimal. Intentional. Breathtaking.**
+
+Like a Mont Blanc pen emerging from its case, or the first notes of Chanel No. 5, the WAKTI landing page should be an experience, not just a page.
 
 ---
 
-## Implementation Plan
+## Architecture Changes
 
-### Step 1: Force Initial Exploration on EVERY Agent Request
-
-**File:** `supabase/functions/projects-generate/index.ts`
-
-**Location:** Before the agent loop starts (around line 2570)
-
-**Change:** Inject a mandatory "exploration phase" message at the START of every agent conversation:
-
-```typescript
-// BEFORE the agent loop, inject a mandatory exploration instruction
-const mandatoryExplorationPrompt = `
-MANDATORY FIRST STEP: Before making ANY changes, you MUST:
-1. Call list_files to understand the project structure
-2. Call grep_search to find the relevant code for this request
-3. Call read_file on the most likely target file
-
-Do NOT proceed to edit or complete the task until you have explored the codebase.
-`;
-
-// Add this to the initial system/user messages
-messages.push({
-  role: "user",
-  parts: [{ text: mandatoryExplorationPrompt }]
-});
+### Current Structure (Remove)
+```
+Mobile variant:
+- MobileHeader with login button
+- Hero section (cramped)
+- Features carousel (busy)
+- Pricing section (cluttered)
+- Footer
 ```
 
-### Step 2: Block task_complete if No Exploration Happened
+### New Structure (Create)
+```
+Immersive Full-Screen Experience:
+├── Scene 1: The Grand Opening (100vh)
+│   ├── Animated logo video (background)
+│   ├── "WAKTI" title with elegant reveal
+│   ├── Single tagline
+│   └── Golden CTA + subtle scroll indicator
+│
+├── Scene 2-5: Feature Showcases (100vh each)
+│   ├── AI Assistant scene
+│   ├── Tasks & Events scene
+│   ├── Voice & Recording scene
+│   └── Creative Tools scene
+│
+├── Scene 6: The Pricing Moment (100vh)
+│   └── Single elegant card, floating in space
+│
+└── Scene 7: The Invitation (100vh)
+    └── Final CTA with app store badges
+```
 
-**File:** `supabase/functions/projects-generate/index.ts`
+---
 
-**Location:** Inside the `task_complete` handler (around line 2730)
+## Detailed Design Specifications
 
-**Change:** Add a check that blocks completion if ZERO exploration tools were called:
+### Scene 1: The Grand Opening
 
-```typescript
-// Track exploration tools
-const explorationCalls = toolCallsLog.filter(tc => 
-  tc.tool === 'list_files' || tc.tool === 'grep_search' || tc.tool === 'read_file'
-);
+**Layout:**
+- Full viewport height (100dvh)
+- Centered content with generous padding
+- Login button: small, ghost style, top-right corner
 
-// BLOCK: If NO exploration was done at all, reject task_complete
-if (explorationCalls.length === 0) {
-  console.error(`[Agent Mode] BLOCKED: task_complete without ANY exploration!`);
-  functionResponses[functionResponses.length - 1].functionResponse.response = {
-    acknowledged: false,
-    error: 'BLOCKED: You must explore the codebase first. Call list_files or grep_search before completing.',
-    hint: 'Start with list_files to see what files exist, then grep_search to find the target code.'
-  };
-  // Force another iteration
-  continue;
+**Background:**
+- Your existing `/Animated_Logo_Splash_Screen_Creation.mp4` video
+- Cover the full screen with subtle overlay
+- Dark gradient overlay: `linear-gradient(180deg, transparent 0%, rgba(12,15,20,0.7) 100%)`
+
+**Logo Treatment:**
+- Large Logo3D component (maybe even bigger - 120px)
+- Subtle breathing animation (scale 1.0 to 1.02)
+- Soft glow effect in brand gold
+
+**Typography:**
+- "WAKTI" in elegant serif or refined sans-serif
+- Letter-spacing: 0.3em (luxury spacing)
+- Font size: 3rem mobile
+- Gradient text: gold to white
+- No Zap icon cluttering it
+
+**Tagline:**
+- Single line, max 8 words
+- Opacity 0.8 for subtle elegance
+- Font weight: 300 (light, airy)
+
+**CTA Button:**
+- Rounded pill shape
+- Gold gradient background (`#e9ceb0` variants)
+- Dark text (`#060541`)
+- Subtle shadow glow
+- "Begin Your Journey" or "Start Now"
+
+**Scroll Indicator:**
+- Minimal animated chevron at bottom
+- Opacity pulsing animation
+- Disappears on scroll
+
+---
+
+### Scenes 2-5: Feature Showcases
+
+**Layout Concept:**
+Each scene is a full-screen moment with:
+- Large icon or illustration (40% of screen)
+- Feature name in bold
+- 2-line description max
+- Subtle accent color per scene
+
+**Scene 2: AI Assistant**
+- Icon: Bot with soft glow
+- Accent: Blue/Purple gradient
+- Copy: "Your Intelligent Partner" / Brief description
+
+**Scene 3: Tasks & Events**
+- Icon: Calendar with sparkle
+- Accent: Emerald/Teal gradient
+- Copy: "Organize Your Life" / Brief description
+
+**Scene 4: Voice & Recording**
+- Icon: Microphone with waves
+- Accent: Orange/Amber gradient
+- Copy: "Speak Your Mind" / Brief description
+
+**Scene 5: Creative Tools**
+- Icon: Magic wand/Brush
+- Accent: Pink/Purple gradient
+- Copy: "Unleash Creativity" / Brief description
+
+**Animation:**
+- Each scene fades in as user scrolls
+- Icon has subtle floating animation
+- Background shifts color subtly
+
+---
+
+### Scene 6: The Pricing Moment
+
+**Layout:**
+- Full-screen with centered card
+- Dark background with subtle gradient
+- Single pricing card floating in space
+
+**Card Design:**
+- Glassmorphic effect with gold border
+- No cluttered feature tags
+- Clean price display
+- "All Features Included" single line
+- Elegant CTA button
+
+---
+
+### Scene 7: The Invitation
+
+**Layout:**
+- Full screen final CTA
+- App Store / Google Play badges
+- "Join Thousands Already Using WAKTI"
+- Final signup button
+- Minimal footer links at very bottom
+
+---
+
+## Technical Implementation
+
+### New Files to Create:
+1. `src/pages/LandingPage.tsx` - New immersive landing (replaces current Index.tsx mobile variant)
+2. `src/components/landing/LandingScene.tsx` - Reusable full-screen scene component
+3. `src/components/landing/ScrollIndicator.tsx` - Animated scroll hint
+4. `src/components/landing/FeatureShowcase.tsx` - Feature scene template
+
+### CSS Additions:
+```css
+/* Luxury landing page styles */
+.landing-scene {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+
+.luxury-title {
+  letter-spacing: 0.3em;
+  font-weight: 200;
+  text-transform: uppercase;
+}
+
+.gold-glow {
+  text-shadow: 0 0 40px rgba(233, 206, 176, 0.4);
+}
+
+.breathing-animation {
+  animation: breathe 4s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); opacity: 0.95; }
+  50% { transform: scale(1.02); opacity: 1; }
+}
+
+.scroll-snap-container {
+  scroll-snap-type: y mandatory;
+  overflow-y: scroll;
+  height: 100dvh;
+}
+
+.scroll-snap-scene {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
 }
 ```
 
-### Step 3: Remove Keyword Dependency for Force Logic
-
-**File:** `supabase/functions/projects-generate/index.ts`
-
-**Location:** Lines 2651-2662
-
-**Change:** Simplify the force logic to apply to ALL requests, not just detected edit requests:
-
-```typescript
-// OLD: Only forced for detected edit requests
-// const isEditRequest = /\b(change|update|fix|...)\b/i.test(prompt);
-// if (iteration === 0 && isEditRequest && toolCallsLog.length === 0) { ... }
-
-// NEW: Force exploration for ALL agent mode requests
-if (iteration === 0 && toolCallsLog.length === 0) {
-  console.log(`[Agent Mode] FORCING exploration - no tools called on iteration 0`);
-  messages.push({
-    role: "user",
-    parts: [{
-      text: `You MUST use tools before responding. Call list_files first, then grep_search to find relevant code, then read_file on the target. Do NOT respond without using tools.`
-    }]
-  });
-  continue;
-}
-```
-
-### Step 4: Add Minimum Tool Call Threshold
-
-**File:** `supabase/functions/projects-generate/index.ts`
-
-**Location:** After the agent loop completes
-
-**Change:** Add a final safety check that the agent made at least 1 meaningful tool call:
-
-```typescript
-// After loop ends, verify minimum tool usage
-const meaningfulToolCalls = toolCallsLog.filter(tc => 
-  tc.tool !== 'task_complete' && tc.result?.success !== false
-);
-
-if (meaningfulToolCalls.length === 0) {
-  console.error(`[Agent Mode] SAFETY BLOCK: Agent completed with ZERO meaningful tool calls!`);
-  // Return an error instead of success
-  return new Response(JSON.stringify({
-    mode: 'agent',
-    result: {
-      summary: 'The AI Coder failed to explore the codebase. Please try again with a more specific request.',
-      filesChanged: [],
-      error: 'NO_TOOL_CALLS'
-    }
-  }), { headers: corsHeaders, status: 200 });
-}
-```
+### Animation Strategy:
+- Use Framer Motion's `whileInView` for scene reveals
+- Implement scroll-snap for scene-by-scene navigation
+- Subtle parallax on background elements
+- Staggered text reveals (word by word for headings)
 
 ---
 
-## Additional Fix: Sandpack Refresh Race Condition
+## Color Palette Refinement
 
-The investigation revealed that edits ARE persisting to the database but the preview sometimes does not refresh. This is a secondary issue.
+### Primary Moments:
+- Background: `#0c0f14` (deep luxe black)
+- Gold accent: `#e9ceb0` (champagne gold)
+- Text primary: `#f2f2f2` (soft white)
+- Text secondary: `#858384` (muted silver)
 
-**File:** `src/pages/ProjectDetail.tsx`
-
-**Location:** Around line 4009
-
-**Change:** After setting `generatedFiles`, also increment `sandpackKey` to force a full re-mount:
-
-```typescript
-setGeneratedFiles(newFiles);
-setCodeContent(newCode);
-setSandpackKey(prev => prev + 1); // Force Sandpack to fully re-mount
-```
+### Scene Accent Colors:
+- AI Scene: `hsl(260, 70%, 65%)` (royal purple)
+- Tasks Scene: `hsl(160, 80%, 55%)` (emerald)
+- Voice Scene: `hsl(25, 95%, 60%)` (warm amber)
+- Creative Scene: `hsl(320, 75%, 70%)` (rose pink)
 
 ---
 
-## Summary of Changes
+## Typography Hierarchy
 
-| File | Change |
-|------|--------|
-| `supabase/functions/projects-generate/index.ts` | Add mandatory exploration prompt before loop |
-| `supabase/functions/projects-generate/index.ts` | Block task_complete if zero exploration tools called |
-| `supabase/functions/projects-generate/index.ts` | Remove keyword dependency - force exploration for ALL requests |
-| `supabase/functions/projects-generate/index.ts` | Add minimum tool call threshold safety check |
-| `src/pages/ProjectDetail.tsx` | Force Sandpack re-mount after agent edits |
+### Headlines:
+- Font: System UI with enhanced letter-spacing
+- Weight: 200-300 (light and elegant)
+- Size: 2.5rem - 3rem
+- Letter-spacing: 0.15em - 0.3em
+
+### Body Text:
+- Weight: 400
+- Size: 1rem - 1.125rem
+- Line-height: 1.6
+- Opacity: 0.85 for subtlety
+
+### CTA Buttons:
+- Weight: 600
+- Letter-spacing: 0.05em
+- All uppercase for CTAs
 
 ---
 
-## Expected Outcome
+## Mobile-First Specifications
 
-After these changes:
-1. The AI Coder will ALWAYS call at least `list_files` or `grep_search` before doing anything
-2. The agent cannot claim completion without exploring the codebase first
-3. The preview will reliably refresh after edits are applied
-4. No more "Applied" messages without actual visible changes
+### Touch Interactions:
+- Swipe gestures for scene navigation
+- Tap feedback with subtle scale (0.98)
+- No hover states (mobile-only)
+
+### Safe Areas:
+- Respect top notch (env safe-area-inset-top)
+- Bottom navigation clear of home indicator
+
+### Performance:
+- Lazy load scenes below fold
+- Video compression for background
+- Reduced motion media query support
+
+---
+
+## Files to Modify
+
+1. **src/pages/Index.tsx**
+   - Replace mobile variant (lines 279-521) with new immersive experience
+   - Keep desktop variant as-is (or apply similar treatment later)
+
+2. **src/index.css**
+   - Add new luxury landing page CSS classes
+   - Add scroll-snap styles
+   - Add breathing/glow animations
+
+3. **src/components/Logo3D.tsx**
+   - Add larger size option ("xl")
+   - Add breathing animation variant
+
+---
+
+## Summary
+
+This transformation will make WAKTI feel like opening a luxury gift box:
+
+| Current | New |
+|---------|-----|
+| Busy hero section | Cinematic full-screen intro |
+| Cramped feature carousel | Full-page feature scenes |
+| Cluttered pricing | Elegant floating card |
+| Website feeling | Mobile app experience |
+| Information overload | Curated storytelling |
+
+The result: Users will feel they've downloaded something special, exclusive, and premium - exactly the feeling Prada, Chanel, and Mont Blanc evoke.
