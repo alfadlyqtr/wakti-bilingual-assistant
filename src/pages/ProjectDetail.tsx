@@ -955,7 +955,8 @@ export default function ProjectDetail() {
       } else if (data && data.length > 0) {
         console.log('[ProjectDetail] Loaded', data.length, 'chat messages');
         setChatMessages(data as any);
-        const latestCard = [...data].reverse().find((msg: any) => {
+        const typedData = data as unknown as Array<{ id: string; role: string; content: string; snapshot?: string }>;
+        const latestCard = [...typedData].reverse().find((msg) => {
           try {
             const parsed = JSON.parse(msg.content);
             return parsed?.type === 'product_form_card';
@@ -4831,10 +4832,10 @@ ${fixInstructions}
           .select()
           .single();
 
-        if (productAssistantErr) console.error('Error saving product card message:', productAssistantErr);
         if (productAssistantMsg) {
+          const typedMsg = productAssistantMsg as unknown as { id: string };
           setChatMessages(prev => [...prev, productAssistantMsg as any]);
-          setActiveProductCardId(productAssistantMsg.id);
+          setActiveProductCardId(typedMsg.id);
         } else {
           const fallbackId = `product-card-${Date.now()}`;
           setChatMessages(prev => [...prev, {
