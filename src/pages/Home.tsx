@@ -24,6 +24,14 @@ export default function Home() {
     }
   }, [user, navigate]);
 
+  // Add public-page class to body for proper scrolling
+  useEffect(() => {
+    document.body.classList.add('public-page');
+    return () => {
+      document.body.classList.remove('public-page');
+    };
+  }, []);
+
   // Single monthly plan pricing (matches RevenueCat/Natively)
   const MONTHLY_PRICE_QAR = 95;
   const MONTHLY_PRICE_USD = 24.99;

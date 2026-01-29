@@ -1007,6 +1007,14 @@ body.wakti-ai-page main {
   padding-bottom: 0 !important;
 }
 
+/* PUBLIC PAGES (Home, Login, etc): Let body scroll naturally, no fixed main height */
+body.public-page main {
+  height: auto !important;
+  overflow: visible !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
 /* 3. WAKTI AI PAGE LAYOUT: This page is special and does NOT use <main>. */
 .wakti-ai-page-container {
   /* Let <main> be the only scroller. Do not create a nested scroller here. */
