@@ -859,6 +859,63 @@ Apply these styles consistently throughout the entire design.`;
     toast.success(isRTL ? 'تم حذف الثيم' : 'Theme deleted');
   };
 
+  // Build a theme-aware prompt by injecting selected theme's style into the template
+  const buildThemeAwarePrompt = (baseTemplate: string, productType: string): string => {
+    // Replace the product placeholder
+    let finalPrompt = baseTemplate.replace('{PRODUCT}', productType);
+    
+    // Get theme info
+    const presetTheme = THEMES.find(t => t.id === selectedTheme);
+    const customTheme = customThemes.find((t: any) => t.id === selectedTheme);
+    
+    // If a theme is selected (not 'none' or 'user_prompt'), inject theme-specific design direction
+    if (selectedTheme && selectedTheme !== 'none' && selectedTheme !== 'user_prompt') {
+      const themeName = presetTheme?.name || (customTheme as any)?.name || selectedTheme;
+      const themeSettings = presetTheme?.settings;
+      
+      // Build theme design direction
+      let themeDesignNote = '';
+      if (themeSettings) {
+        const styleWords = [];
+        if (themeSettings.fontStyle) styleWords.push(themeSettings.fontStyle);
+        if (themeSettings.shadowStyle && themeSettings.shadowStyle !== 'none') styleWords.push(`${themeSettings.shadowStyle} shadows`);
+        if (themeSettings.borderRadius) styleWords.push(`${themeSettings.borderRadius} corners`);
+        if (themeSettings.layoutStyle) styleWords.push(`${themeSettings.layoutStyle} layout`);
+        if (themeSettings.mood) styleWords.push(`${themeSettings.mood} mood`);
+        
+        themeDesignNote = `\n\nTHEME: Apply "${themeName}" theme style - ${styleWords.join(', ')}. Use the theme's color palette consistently throughout.`;
+      } else {
+        themeDesignNote = `\n\nTHEME: Apply "${themeName}" theme style and color palette consistently throughout.`;
+      }
+      
+      // Insert theme note after the first line (title)
+      const lines = finalPrompt.split('\n');
+      if (lines.length > 1) {
+        lines.splice(1, 0, themeDesignNote);
+        finalPrompt = lines.join('\n');
+      } else {
+        finalPrompt += themeDesignNote;
+      }
+    }
+    
+    // Add responsive/mobile emphasis and backend integration at the end
+    const additionalInstructions = isRTL 
+      ? `\n\nمهم جداً:
+- تصميم متجاوب بالكامل (موبايل أولاً) - يجب أن يعمل بشكل مثالي على جميع الأجهزة
+- أضف زر واتساب عائم للتواصل السريع
+- استخدم صور placeholder من unsplash.com للمنتجات/الخدمات
+- تأكد من دعم اللغة العربية (RTL) بشكل كامل`
+      : `\n\nIMPORTANT:
+- Fully responsive design (mobile-first) - must work perfectly on all devices
+- Add floating WhatsApp button for quick contact
+- Use placeholder images from unsplash.com for products/services
+- Ensure smooth animations and transitions throughout`;
+    
+    finalPrompt += additionalInstructions;
+    
+    return finalPrompt;
+  };
+
   // Get theme instructions for selected theme (works for both custom and preset themes)
   const getSelectedThemeInstructions = (): string => {
     // First check custom themes
@@ -1670,9 +1727,9 @@ Apply these styles consistently throughout the entire design.`;
                                 onClick={() => {
                                   const optionText = isRTL ? option.ar : option.en;
                                   setTemplateSelections(prev => ({ ...prev, [example.id]: optionText }));
-                                  // Build the prompt with the selected option
+                                  // Build theme-aware prompt with selected option
                                   const template = isRTL ? example.promptTemplate.ar : example.promptTemplate.en;
-                                  const finalPrompt = template.replace('{PRODUCT}', optionText);
+                                  const finalPrompt = buildThemeAwarePrompt(template, optionText);
                                   setPrompt(finalPrompt);
                                   setActiveTemplateId(null);
                                 }}
@@ -1697,7 +1754,7 @@ Apply these styles consistently throughout the entire design.`;
                                     if (e.key === 'Enter' && customTemplateInput.trim()) {
                                       setTemplateSelections(prev => ({ ...prev, [example.id]: customTemplateInput.trim() }));
                                       const template = isRTL ? example.promptTemplate.ar : example.promptTemplate.en;
-                                      const finalPrompt = template.replace('{PRODUCT}', customTemplateInput.trim());
+                                      const finalPrompt = buildThemeAwarePrompt(template, customTemplateInput.trim());
                                       setPrompt(finalPrompt);
                                       setActiveTemplateId(null);
                                       setCustomTemplateInput('');
@@ -1709,7 +1766,7 @@ Apply these styles consistently throughout the entire design.`;
                                     if (customTemplateInput.trim()) {
                                       setTemplateSelections(prev => ({ ...prev, [example.id]: customTemplateInput.trim() }));
                                       const template = isRTL ? example.promptTemplate.ar : example.promptTemplate.en;
-                                      const finalPrompt = template.replace('{PRODUCT}', customTemplateInput.trim());
+                                      const finalPrompt = buildThemeAwarePrompt(template, customTemplateInput.trim());
                                       setPrompt(finalPrompt);
                                       setActiveTemplateId(null);
                                       setCustomTemplateInput('');
