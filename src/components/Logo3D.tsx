@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 interface Logo3DProps {
   className?: string;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
   onClick?: () => void;
 }
 
@@ -12,7 +12,8 @@ export function Logo3D({ className, size = "md", onClick }: Logo3DProps) {
   const sizeClasses = {
     sm: "w-10 h-10",
     md: "w-16 h-16",
-    lg: "w-24 h-24"
+    lg: "w-24 h-24",
+    xl: "w-32 h-32"
   };
 
   return (

@@ -2338,3 +2338,87 @@ body.keyboard-visible {
   display: none !important;
   visibility: hidden !important;
 }
+
+/* ============================================
+   LUXURY LANDING PAGE STYLES
+   ============================================ */
+
+/* Body state for landing page */
+body.landing-page {
+  overflow: hidden !important;
+  background: #0c0f14 !important;
+}
+
+body.landing-page #root {
+  background: #0c0f14 !important;
+}
+
+/* Full-screen scene container */
+.landing-scene {
+  height: 100dvh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  background: #0c0f14;
+}
+
+/* Scroll snap container */
+.scroll-snap-container {
+  scroll-snap-type: y mandatory;
+  overflow-y: scroll;
+  height: 100dvh;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Individual scenes snap to start */
+.scroll-snap-scene {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+/* Luxury title typography */
+.luxury-title {
+  letter-spacing: 0.3em;
+  font-weight: 200;
+  text-transform: uppercase;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Gold glow effect */
+.gold-glow {
+  text-shadow: 0 0 40px rgba(233, 206, 176, 0.4);
+  filter: drop-shadow(0 0 20px rgba(233, 206, 176, 0.2));
+}
+
+/* Breathing animation for logo */
+.breathing-animation {
+  animation: breathe 4s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% { 
+    transform: scale(1); 
+    opacity: 0.95;
+    filter: drop-shadow(0 0 20px rgba(233, 206, 176, 0.3));
+  }
+  50% { 
+    transform: scale(1.02); 
+    opacity: 1;
+    filter: drop-shadow(0 0 40px rgba(233, 206, 176, 0.5));
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .breathing-animation {
+    animation: none;
+  }
+  
+  .scroll-snap-container {
+    scroll-snap-type: none;
+  }
+}
