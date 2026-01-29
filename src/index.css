@@ -990,8 +990,11 @@ body {
   min-height: 100% !important;
 }
 
-/* 2. DEFAULT LAYOUT: For all pages that use <main> (e.g., Dashboard) */
-main {
+/* 2. DEFAULT LAYOUT: For APP pages that use <main> (Dashboard, etc) - NOT public pages */
+/* Only apply to pages inside AppLayout, not public landing pages */
+.app-layout-mobile main,
+.app-layout-desktop main,
+.app-layout-tablet main {
   overflow-y: auto !important;
   overflow-x: hidden !important;
   -webkit-overflow-scrolling: touch;
@@ -1008,11 +1011,23 @@ body.wakti-ai-page main {
 }
 
 /* PUBLIC PAGES (Home, Login, etc): Let body scroll naturally, no fixed main height */
-body.public-page main {
+body.public-page main,
+body.public-page .min-h-screen main,
+body.public-page div main {
   height: auto !important;
   overflow: visible !important;
+  overflow-y: visible !important;
   padding-top: 0 !important;
   padding-bottom: 0 !important;
+}
+
+/* Also ensure parent containers don't trap scroll on public pages */
+body.public-page,
+body.public-page #root,
+body.public-page #root > div {
+  overflow: visible !important;
+  overflow-y: visible !important;
+  height: auto !important;
 }
 
 /* 3. WAKTI AI PAGE LAYOUT: This page is special and does NOT use <main>. */
