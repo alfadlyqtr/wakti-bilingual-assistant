@@ -1624,7 +1624,29 @@ export default function ProjectDetail() {
       
     } catch (err: any) {
       console.error('Generation error:', err);
-      const errorMsg = isRTL ? 'عذرًا، حدث خطأ. حاول مرة أخرى.' : 'Sorry, an error occurred. Please try again.';
+      
+      // Mark all steps as error so the task card shows failure state
+      setGenerationSteps(prev => prev.map(s => 
+        s.status === 'loading' || s.status === 'pending' 
+          ? { ...s, status: 'error' as const } 
+          : s
+      ));
+      
+      // Build a more helpful error message based on the error type
+      let errorMsg: string;
+      const errorCode = err.message || '';
+      
+      if (errorCode.includes('MISSING_APP_JS')) {
+        errorMsg = isRTL 
+          ? 'عذرًا، لم يتمكن الذكاء الاصطناعي من إنشاء الكود بشكل صحيح. حاول مرة أخرى بطلب أبسط.'
+          : 'Sorry, the AI couldn\'t generate valid code. Try again with a simpler request.';
+      } else if (errorCode.includes('timed out')) {
+        errorMsg = isRTL
+          ? 'انتهت المهلة. المشروع معقد جدًا - حاول بطلب أبسط.'
+          : 'Generation timed out. The project may be too complex - try a simpler request.';
+      } else {
+        errorMsg = isRTL ? 'عذرًا، حدث خطأ. حاول مرة أخرى.' : 'Sorry, an error occurred. Please try again.';
+      }
       
       const { data: errorMsgData } = await supabase
         .from('project_chat_messages' as any)
@@ -1647,6 +1669,11 @@ export default function ProjectDetail() {
         }]);
       }
       toast.error(err.message || (isRTL ? 'فشل في الإنشاء' : 'Failed to generate'));
+      
+      // Keep the error steps visible for 5 seconds before clearing
+      setTimeout(() => {
+        setGenerationSteps([]);
+      }, 5000);
     } finally {
       setIsGenerating(false);
     }
