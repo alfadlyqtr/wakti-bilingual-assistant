@@ -4827,30 +4827,38 @@ Match the className and innerText to find it in the code.
       }
       
       // 🔍 Analyze edit intent to help AI understand what user wants
-      const editIntent = analyzeEditIntent(enrichedPrompt);
+      // Get all project files for intent analysis
+      const { data: allProjectFiles } = await supabase
+        .from('project_files')
+        .select('path, content')
+        .eq('project_id', projectId);
+      
+      const filesForIntent = (allProjectFiles || []).map(f => ({ path: f.path, content: f.content }));
+      const entryPoint = filesForIntent.find(f => f.path.includes('App.jsx') || f.path.includes('App.tsx'))?.path || '/App.jsx';
+      
+      const editIntent = analyzeEditIntent(enrichedPrompt, filesForIntent, entryPoint);
       console.log(`[Agent Mode] Edit intent: ${editIntent.type} (confidence: ${editIntent.confidence}) - ${editIntent.description}`);
+      console.log(`[Agent Mode] Target files:`, editIntent.targetFiles);
       
       // Build intent guidance based on analysis
       let intentGuidance = '';
       if (editIntent.confidence >= 0.7) {
+        const targetFilesHint = editIntent.targetFiles.length > 0 ? ` → Focus on: ${editIntent.targetFiles.join(', ')}` : '';
         switch (editIntent.type) {
           case 'ADD_FEATURE':
-            intentGuidance = `\n🎯 INTENT: ADD NEW FEATURE${editIntent.targetHint ? ` (${editIntent.targetHint})` : ''}\n→ You'll likely need to CREATE new files or ADD code to existing files.\n`;
+            intentGuidance = `\n🎯 INTENT: ADD NEW FEATURE${targetFilesHint}\n→ You'll likely need to CREATE new files or ADD code to existing files.\n`;
             break;
           case 'FIX_ISSUE':
-            intentGuidance = `\n🎯 INTENT: FIX AN ISSUE\n→ Read the relevant files first, understand the error, then make targeted fixes.\n`;
+            intentGuidance = `\n🎯 INTENT: FIX AN ISSUE${targetFilesHint}\n→ Read the relevant files first, understand the error, then make targeted fixes.\n`;
             break;
           case 'UPDATE_STYLE':
-            intentGuidance = `\n🎯 INTENT: UPDATE STYLING\n→ Look for CSS classes, Tailwind utilities, or style objects to modify.\n`;
+            intentGuidance = `\n🎯 INTENT: UPDATE STYLING${targetFilesHint}\n→ Look for CSS classes, Tailwind utilities, or style objects to modify.\n`;
             break;
           case 'UPDATE_COMPONENT':
-            intentGuidance = `\n🎯 INTENT: UPDATE EXISTING COMPONENT${editIntent.targetHint ? ` (${editIntent.targetHint})` : ''}\n→ Find and read the component file first, then make targeted edits.\n`;
+            intentGuidance = `\n🎯 INTENT: UPDATE EXISTING COMPONENT${targetFilesHint}\n→ Find and read the component file first, then make targeted edits.\n`;
             break;
-          case 'QUESTION':
-            intentGuidance = `\n🎯 INTENT: QUESTION (may not need edits)\n→ User might just be asking for information. Answer first, edit only if needed.\n`;
-            break;
-          case 'FULL_REBUILD':
-            intentGuidance = `\n🎯 INTENT: FULL REBUILD\n→ User wants to start fresh. Create new files from scratch.\n`;
+          case 'REMOVE_ELEMENT':
+            intentGuidance = `\n🎯 INTENT: REMOVE ELEMENT${targetFilesHint}\n→ The system found the file containing this element. Read it, then remove the element.\n`;
             break;
         }
       }

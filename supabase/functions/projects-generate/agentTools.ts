@@ -1282,88 +1282,6 @@ export interface EditIntent {
   description: string;
 }
 
-/**
- * Analyze user prompt to determine what kind of edit they want
- */
-export function analyzeEditIntent(prompt: string): EditIntent {
-  const lower = prompt.toLowerCase();
-  
-  // Question patterns - no edit needed
-  const questionPatterns = [
-    /^(what|how|why|can you explain|tell me|show me|describe)/i,
-    /\?$/,
-    /^(is it|are there|does it|do you)/i
-  ];
-  for (const pattern of questionPatterns) {
-    if (pattern.test(prompt) && !lower.includes('change') && !lower.includes('add') && !lower.includes('fix')) {
-      return { type: 'QUESTION', confidence: 0.8, description: 'User is asking a question, may not need edits' };
-    }
-  }
-  
-  // Full rebuild patterns
-  if (/start\s+over|from\s+scratch|rebuild\s+(the\s+)?app|new\s+app|recreate\s+everything/i.test(lower)) {
-    return { type: 'FULL_REBUILD', confidence: 0.9, description: 'User wants to rebuild the entire app' };
-  }
-  
-  // Add feature patterns
-  const addPatterns = [
-    { pattern: /add\s+(a\s+)?new\s+(\w+)\s+(page|section|feature|component)/i, hint: 'new $2' },
-    { pattern: /create\s+(a\s+)?(\w+)\s+(page|section|feature|component)/i, hint: 'new $2' },
-    { pattern: /add\s+(\w+)\s+to\s+(?:the\s+)?(\w+)/i, hint: '$1 to $2' },
-    { pattern: /add\s+(?:a\s+)?(\w+)\s+(?:component|section|button|link)/i, hint: 'new $1' },
-    { pattern: /include\s+(?:a\s+)?(\w+)/i, hint: '$1' },
-    { pattern: /put\s+(.+?)\s+(?:in|on|to)\s+(?:the\s+)?(\w+)/i, hint: '$1 in $2' },
-  ];
-  for (const { pattern, hint } of addPatterns) {
-    const match = lower.match(pattern);
-    if (match) {
-      const targetHint = hint.replace(/\$(\d)/g, (_, n) => match[parseInt(n)] || '');
-      return { type: 'ADD_FEATURE', confidence: 0.85, targetHint, description: `Add new feature: ${targetHint}` };
-    }
-  }
-  
-  // Fix issue patterns
-  if (/fix\s+(the\s+)?(\w+|error|bug|issue|problem)|resolve\s+(the\s+)?error|debug|repair|broken|not\s+working/i.test(lower)) {
-    return { type: 'FIX_ISSUE', confidence: 0.9, description: 'User wants to fix an issue or error' };
-  }
-  
-  // Style update patterns
-  if (/change\s+(the\s+)?(color|theme|style|styling|css|background|font)|make\s+it\s+(dark|light|blue|red|green|bigger|smaller)|style\s+(the\s+)?(\w+)/i.test(lower)) {
-    return { type: 'UPDATE_STYLE', confidence: 0.85, description: 'User wants to update styling/appearance' };
-  }
-  
-  // Update component patterns
-  const updatePatterns = [
-    /update\s+(the\s+)?(\w+)\s+(component|section|page)/i,
-    /change\s+(the\s+)?(\w+)/i,
-    /modify\s+(the\s+)?(\w+)/i,
-    /edit\s+(the\s+)?(\w+)/i,
-    /remove\s+.*\s+(button|link|text|element|section)/i,
-    /delete\s+.*\s+(button|link|text|element|section)/i,
-    /hide\s+.*\s+(button|link|text|element|section)/i,
-  ];
-  for (const pattern of updatePatterns) {
-    if (pattern.test(lower)) {
-      const match = lower.match(pattern);
-      const targetHint = match ? match[2] || match[1] : undefined;
-      return { type: 'UPDATE_COMPONENT', confidence: 0.8, targetHint, description: `Update existing component: ${targetHint || 'unknown'}` };
-    }
-  }
-  
-  // Refactor patterns
-  if (/refactor|clean\s+up|reorganize|optimize|simplify/i.test(lower)) {
-    return { type: 'REFACTOR', confidence: 0.75, description: 'User wants to refactor/clean up code' };
-  }
-  
-  // Add dependency patterns
-  if (/install\s+(\w+)|add\s+(\w+)\s+(package|library|dependency)|use\s+(\w+)\s+(library|framework)/i.test(lower)) {
-    return { type: 'ADD_DEPENDENCY', confidence: 0.85, description: 'User wants to add a package/dependency' };
-  }
-  
-  // Default - assume it's an update request
-  return { type: 'UNKNOWN', confidence: 0.3, description: 'Could not determine intent - will analyze files' };
-}
-
 // ============================================================================
 // 🔒 POST-EDIT SYNTAX VALIDATION - Catch broken code before saving
 // ============================================================================
@@ -2447,6 +2365,14 @@ export const AGENT_TOOLS = [
     }
   },
   {
+    name: "detect_missing_packages",
+    description: "Scan all project files for external package imports (npm packages). Returns a list of detected packages. Use this after generating code to inform the user which packages are needed. Note: Sandpack auto-fetches packages from CDN, so this is informational only.",
+    parameters: {
+      type: "object",
+      properties: {}
+    }
+  },
+  {
     name: "task_complete",
     description: "MANDATORY: Call this when you have finished the user's request. You MUST call this tool after making changes. Provide a clear summary of what you did and which files were changed.",
     parameters: {
@@ -2508,6 +2434,21 @@ Before doing ANYTHING, classify the request:
 | NEW COMPONENT | Create + Import + Render | "Add a contact form" |
 | BUG FIX | Read error → Minimal fix → Verify | "Fix the broken header" |
 | BACKEND FEATURE | Use existing bricks + API contracts | "Add a shop" |
+| REMOVE ELEMENT | Content search → Read → Delete | "Remove the 'Contact Us' button" |
+
+### 🎯 SMART FILE TARGETING (NEW!)
+
+You now have advanced file targeting capabilities:
+
+1. **Content-Based Search**: When user says "remove the 'Contact Us' button", search ALL files for that exact text
+2. **Component Name Matching**: "update the header" → automatically finds Header.jsx/tsx
+3. **Intent Analysis**: Automatically determines if user wants to UPDATE, ADD, REMOVE, or FIX
+4. **Dependency Tree**: Understand which files import/depend on each other
+
+**How to use:**
+- For edits with quoted text ("remove 'X'"), the system will find the file containing that text
+- For component edits ("change the footer"), it will find Footer.jsx automatically
+- Use `list_files` first to see what's available, then target precisely
 
 ## 📋 THE OATH (NEVER BREAK)
 
@@ -4378,6 +4319,92 @@ export async function executeToolCall(
       };
     }
     
+    case "detect_missing_packages": {
+      // 🔍 PACKAGE DETECTION (from Open Lovable)
+      // Scans project files for external package imports
+      console.log('[Agent] detect_missing_packages: Scanning project files...');
+      
+      try {
+        // Get all project files
+        const { data: files, error: filesError } = await supabase
+          .from('project_files')
+          .select('path, content')
+          .eq('project_id', projectId);
+        
+        if (filesError) {
+          return { error: `Failed to read project files: ${filesError.message}` };
+        }
+        
+        if (!files || files.length === 0) {
+          return { packages: [], message: 'No files to scan' };
+        }
+        
+        // Extract all import statements from the files
+        const imports = new Set<string>();
+        const importRegex = /import\s+(?:(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)\s*,?\s*)*(?:from\s+)?['"]([^'"]+)['"]/g;
+        const requireRegex = /require\s*\(['"]([^'"]+)['"]\)/g;
+        
+        for (const file of files as Array<{ path: string; content: string }>) {
+          // Skip non-JS/JSX/TS/TSX files
+          if (!file.path.match(/\.(jsx?|tsx?)$/)) continue;
+          if (!file.content) continue;
+          
+          // Find ES6 imports
+          let match;
+          while ((match = importRegex.exec(file.content)) !== null) {
+            imports.add(match[1]);
+          }
+          
+          // Find CommonJS requires
+          while ((match = requireRegex.exec(file.content)) !== null) {
+            imports.add(match[1]);
+          }
+        }
+        
+        console.log('[Agent] detect_missing_packages: Found imports:', Array.from(imports));
+        
+        // Filter out relative imports and built-in modules
+        const builtins = ['fs', 'path', 'http', 'https', 'crypto', 'stream', 'util', 'os', 'url', 'querystring', 'child_process', 'events', 'buffer', 'assert', 'zlib'];
+        const packages = Array.from(imports).filter(imp => {
+          // Skip relative imports
+          if (imp.startsWith('.') || imp.startsWith('/')) return false;
+          
+          // Skip built-in Node modules
+          if (builtins.includes(imp)) return false;
+          
+          return true;
+        });
+        
+        // Extract just the package names (without subpaths)
+        const packageNames = packages.map(pkg => {
+          if (pkg.startsWith('@')) {
+            // Scoped package: @scope/package or @scope/package/subpath
+            const parts = pkg.split('/');
+            return parts.slice(0, 2).join('/');
+          } else {
+            // Regular package: package or package/subpath
+            return pkg.split('/')[0];
+          }
+        });
+        
+        // Remove duplicates
+        const uniquePackages = [...new Set(packageNames)];
+        
+        console.log('[Agent] detect_missing_packages: Detected packages:', uniquePackages);
+        
+        return {
+          packages: uniquePackages,
+          count: uniquePackages.length,
+          message: uniquePackages.length > 0 
+            ? `Detected ${uniquePackages.length} external package(s): ${uniquePackages.join(', ')}`
+            : 'No external packages detected'
+        };
+        
+      } catch (err: any) {
+        return { error: `Package detection failed: ${err.message}` };
+      }
+    }
+    
     case "task_complete": {
       // 🔒 HARD BLOCK: If there are runtime errors and no files were edited, REJECT completion
       const hasRuntimeErrors = debugContext.errors && debugContext.errors.length > 0;
@@ -5043,4 +5070,257 @@ function validateImports(code: string, _filePath: string): { valid: boolean; err
   }
   
   return { valid: true };
+}
+
+// ============================================================================
+// 🎯 SMART FILE TARGETING (from Open Lovable)
+// Analyzes user prompts to find the right files to edit
+// ============================================================================
+
+/**
+ * Extract component names from prompt
+ * From open-lovable's edit-intent-analyzer.ts
+ */
+function extractComponentNames(prompt: string): string[] {
+  const words: string[] = [];
+  
+  // Remove common words but keep component-related words
+  const cleanPrompt = prompt
+    .replace(/\b(the|a|an|in|on|to|from|update|change|modify|edit|fix|make)\b/gi, '')
+    .toLowerCase();
+  
+  // Extract potential component names (words that might be components)
+  const matches = cleanPrompt.match(/\b\w+\b/g) || [];
+  
+  for (const match of matches) {
+    if (match.length > 2) { // Skip very short words
+      words.push(match);
+    }
+  }
+  
+  return words;
+}
+
+/**
+ * Find component by searching for content mentioned in the prompt
+ * From open-lovable's edit-intent-analyzer.ts
+ */
+export function findComponentByContent(
+  prompt: string,
+  files: Array<{ path: string; content: string }>
+): string[] {
+  const results: string[] = [];
+  const lowerPrompt = prompt.toLowerCase();
+  
+  console.log('[findComponentByContent] Searching for content in prompt:', prompt);
+  
+  // Extract quoted strings or specific button/link text
+  const quotedStrings = prompt.match(/["']([^"']+)["']/g) || [];
+  const searchTerms: string[] = quotedStrings.map(s => s.replace(/["']/g, ''));
+  
+  // Also look for specific terms after 'remove', 'delete', 'hide'
+  const actionMatch = prompt.match(/(?:remove|delete|hide)\s+(?:the\s+)?(.+?)(?:\s+button|\s+link|\s+text|\s+element|\s+section|$)/i);
+  if (actionMatch) {
+    searchTerms.push(actionMatch[1].trim());
+  }
+  
+  console.log('[findComponentByContent] Search terms:', searchTerms);
+  
+  // If we have search terms, look for them in file contents
+  if (searchTerms.length > 0) {
+    for (const file of files) {
+      // Only search in component files
+      if (!file.path.includes('.jsx') && !file.path.includes('.tsx')) continue;
+      
+      const content = file.content.toLowerCase();
+      
+      for (const term of searchTerms) {
+        if (content.includes(term.toLowerCase())) {
+          console.log(`[findComponentByContent] Found "${term}" in ${file.path}`);
+          results.push(file.path);
+          break; // Only add file once
+        }
+      }
+    }
+  }
+  
+  // Return only the first match to avoid editing multiple files
+  return results.length > 0 ? [results[0]] : [];
+}
+
+/**
+ * Build component dependency tree
+ * From open-lovable's file-parser.ts
+ */
+export function buildComponentTree(files: Array<{ path: string; content: string }>) {
+  const tree: Record<string, {
+    file: string;
+    imports: string[];
+    importedBy: string[];
+    exports: string[];
+  }> = {};
+  
+  // First pass: collect all files and their exports
+  for (const file of files) {
+    const fileName = file.path.split('/').pop()?.replace(/\.(jsx?|tsx?)$/, '') || '';
+    
+    // Extract exports
+    const exports: string[] = [];
+    
+    // Default export
+    if (/export\s+default\s+/m.test(file.content)) {
+      const defaultExportMatch = file.content.match(/export\s+default\s+(?:function\s+)?(\w+)/);
+      if (defaultExportMatch) {
+        exports.push(defaultExportMatch[1]);
+      } else {
+        exports.push(fileName);
+      }
+    }
+    
+    // Named exports
+    const namedExportRegex = /export\s+(?:const|let|var|function|class)\s+(\w+)/g;
+    let match;
+    while ((match = namedExportRegex.exec(file.content)) !== null) {
+      exports.push(match[1]);
+    }
+    
+    tree[file.path] = {
+      file: file.path,
+      imports: [],
+      importedBy: [],
+      exports
+    };
+  }
+  
+  // Second pass: build import relationships
+  for (const file of files) {
+    const importRegex = /import\s+(?:(.+?)\s+from\s+)?['"](.+?)['"]/g;
+    let match;
+    
+    while ((match = importRegex.exec(file.content)) !== null) {
+      const [, importClause, source] = match;
+      
+      // Only track local imports
+      if (source.startsWith('./') || source.startsWith('../') || source.startsWith('@/')) {
+        // Try to resolve the import to a file in our tree
+        for (const targetPath of Object.keys(tree)) {
+          const targetFileName = targetPath.split('/').pop()?.replace(/\.(jsx?|tsx?)$/, '');
+          
+          if (source.includes(targetFileName || '')) {
+            tree[file.path].imports.push(targetPath);
+            tree[targetPath].importedBy.push(file.path);
+            break;
+          }
+        }
+      }
+    }
+  }
+  
+  return tree;
+}
+
+/**
+ * Analyze user prompt to determine edit intent and target files
+ * From open-lovable's edit-intent-analyzer.ts
+ */
+export function analyzeEditIntent(
+  prompt: string,
+  files: Array<{ path: string; content: string }>,
+  entryPoint: string
+): {
+  type: 'UPDATE_COMPONENT' | 'ADD_FEATURE' | 'FIX_ISSUE' | 'UPDATE_STYLE' | 'REMOVE_ELEMENT';
+  targetFiles: string[];
+  confidence: number;
+  description: string;
+} {
+  const lowerPrompt = prompt.toLowerCase();
+  
+  // Pattern 1: Remove/Delete/Hide elements
+  if (lowerPrompt.match(/(?:remove|delete|hide)\s+.*\s+(?:button|link|text|element|section)/i)) {
+    const targets = findComponentByContent(prompt, files);
+    return {
+      type: 'REMOVE_ELEMENT',
+      targetFiles: targets.length > 0 ? targets : [entryPoint],
+      confidence: targets.length > 0 ? 0.9 : 0.5,
+      description: `Remove element from ${targets[0] || entryPoint}`
+    };
+  }
+  
+  // Pattern 2: Update/Change/Modify component
+  if (lowerPrompt.match(/(?:update|change|modify|edit)\s+(?:the\s+)?(\w+)/i)) {
+    const componentWords = extractComponentNames(prompt);
+    const targets: string[] = [];
+    
+    for (const word of componentWords) {
+      for (const file of files) {
+        const fileName = file.path.split('/').pop()?.toLowerCase() || '';
+        if (fileName.includes(word)) {
+          targets.push(file.path);
+          break;
+        }
+      }
+    }
+    
+    return {
+      type: 'UPDATE_COMPONENT',
+      targetFiles: targets.length > 0 ? [targets[0]] : [entryPoint],
+      confidence: targets.length > 0 ? 0.8 : 0.5,
+      description: `Update component: ${targets[0] || entryPoint}`
+    };
+  }
+  
+  // Pattern 3: Add new feature/component
+  if (lowerPrompt.match(/(?:add|create|implement|build)\s+(?:a\s+)?(?:new\s+)?(\w+)/i)) {
+    // Find where to add it
+    const locationMatch = prompt.match(/(?:in|to|on|inside)\s+(?:the\s+)?(\w+)/i);
+    if (locationMatch) {
+      const location = locationMatch[1].toLowerCase();
+      for (const file of files) {
+        const fileName = file.path.split('/').pop()?.toLowerCase() || '';
+        if (fileName.includes(location)) {
+          return {
+            type: 'ADD_FEATURE',
+            targetFiles: [file.path],
+            confidence: 0.8,
+            description: `Add feature to ${file.path}`
+          };
+        }
+      }
+    }
+    
+    return {
+      type: 'ADD_FEATURE',
+      targetFiles: [entryPoint],
+      confidence: 0.6,
+      description: 'Add new feature'
+    };
+  }
+  
+  // Pattern 4: Fix issue/bug
+  if (lowerPrompt.match(/(?:fix|resolve|debug|repair)\s+(?:the\s+)?(\w+)/i)) {
+    return {
+      type: 'FIX_ISSUE',
+      targetFiles: [entryPoint],
+      confidence: 0.7,
+      description: 'Fix issue'
+    };
+  }
+  
+  // Pattern 5: Style changes
+  if (lowerPrompt.match(/(?:change|update)\s+(?:the\s+)?(?:color|theme|style|styling|css)/i)) {
+    return {
+      type: 'UPDATE_STYLE',
+      targetFiles: [entryPoint],
+      confidence: 0.8,
+      description: 'Update styling'
+    };
+  }
+  
+  // Default: general update
+  return {
+    type: 'UPDATE_COMPONENT',
+    targetFiles: [entryPoint],
+    confidence: 0.5,
+    description: 'General update'
+  };
 }
