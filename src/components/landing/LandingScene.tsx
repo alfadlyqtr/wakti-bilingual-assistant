@@ -26,7 +26,7 @@ export const LandingScene = forwardRef<HTMLDivElement, LandingSceneProps>(
           className
         )}
         style={{
-          background: gradient || undefined,
+          backgroundImage: gradient || undefined,
         }}
       >
         {children}

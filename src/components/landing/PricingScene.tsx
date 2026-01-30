@@ -16,7 +16,7 @@ export function PricingScene({ language = "en" }: PricingSceneProps) {
     <LandingScene 
       id="pricing"
       className="bg-[#0c0f14]"
-      gradient="radial-gradient(ellipse 60% 40% at 50% 60%, rgba(233, 206, 176, 0.08) 0%, transparent 70%)"
+      gradient="radial-gradient(ellipse 60% 40% at 50% 60%, rgba(233, 206, 176, 0.05) 0%, rgba(12,15,20,0.92) 55%, #0c0f14 100%)"
     >
       {/* Glassmorphic Card */}
       <motion.div
@@ -33,8 +33,9 @@ export function PricingScene({ language = "en" }: PricingSceneProps) {
         <div 
           className="relative rounded-3xl p-8 backdrop-blur-xl"
           style={{
-            background: "linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)",
-            border: "1px solid rgba(233, 206, 176, 0.2)",
+            background: "linear-gradient(135deg, rgba(12,15,20,0.85) 0%, rgba(12,15,20,0.65) 100%)",
+            border: "1px solid rgba(233, 206, 176, 0.28)",
+            boxShadow: "0 18px 70px rgba(0,0,0,0.65)",
           }}
         >
           {/* Header */}
@@ -57,9 +58,9 @@ export function PricingScene({ language = "en" }: PricingSceneProps) {
               className="flex items-baseline justify-center gap-1"
             >
               <span className="text-5xl font-extralight text-white">95</span>
-              <span className="text-xl text-white/60 font-light">QAR</span>
-              <span className="text-white/40 font-light">/</span>
-              <span className="text-white/40 font-light">{isArabic ? "شهر" : "month"}</span>
+              <span className="text-xl text-white/80 font-light">QAR</span>
+              <span className="text-white/70 font-light">/</span>
+              <span className="text-white/70 font-light">{isArabic ? "شهر" : "month"}</span>
             </motion.div>
 
             <motion.div
@@ -67,7 +68,7 @@ export function PricingScene({ language = "en" }: PricingSceneProps) {
               whileInView={{ opacity: 1 }}
               viewport={{ once: true }}
               transition={{ delay: 0.5 }}
-              className="text-white/40 text-sm mt-2"
+              className="text-white/70 text-sm mt-2"
             >
               ≈ $24.99 USD
             </motion.div>
@@ -118,9 +119,9 @@ export function PricingScene({ language = "en" }: PricingSceneProps) {
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
             transition={{ delay: 0.8 }}
-            className="text-center text-white/40 text-xs mt-4 font-light"
+            className="text-center text-white/70 text-xs mt-4 font-light"
           >
-            {isArabic ? "تجربة مجانية 3 أيام" : "3-day free trial"}
+            {isArabic ? "تطبيق شامل مدعوم بالذكاء الاصطناعي" : "All-in-One AI-Powered App"}
           </motion.p>
         </div>
       </motion.div>

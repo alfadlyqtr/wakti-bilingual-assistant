@@ -26,11 +26,13 @@ import { MobileHeader } from "@/components/MobileHeader";
 import { Footer } from "@/components/Footer";
 import { t } from "@/utils/translations";
 import LandingPage from "./LandingPage";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function Index() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { language, theme } = useTheme();
+  const { isMobile } = useIsMobile();
   
   // Autoplay state for carousels
   const [desktopApi, setDesktopApi] = useState<any>(null);
@@ -277,12 +279,10 @@ export default function Index() {
   return (
     <>
       {/* Mobile Variant - New Immersive Landing */}
-      <div className="block md:hidden">
-        <LandingPage />
-      </div>
+      {isMobile && <LandingPage />}
 
       {/* Desktop/Tablet Variant */}
-      <div className="hidden md:block">
+      {!isMobile && (
         <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-indigo-950/30 dark:via-background dark:to-purple-950/30">
           {/* Header */}
           <header className="sticky top-0 z-10 bg-white/80 dark:bg-background/80 backdrop-blur-sm border-b border-border/50">
@@ -515,13 +515,25 @@ export default function Index() {
                     </div>
                   </div>
                 </motion.div>
+
+                <motion.div
+                  variants={itemVariants}
+                  className="hidden lg:block w-full max-w-5xl mt-10"
+                >
+                  <img
+                    src="/lovable-uploads/sub.jpeg"
+                    alt="Wakti Ai WebSummit"
+                    className="w-full rounded-2xl border border-white/10 shadow-[0_18px_70px_rgba(0,0,0,0.25)]"
+                    loading="lazy"
+                  />
+                </motion.div>
               </div>
             </motion.section>
           </main>
 
           <Footer />
         </div>
-      </div>
+      )}
     </>
   );
 }

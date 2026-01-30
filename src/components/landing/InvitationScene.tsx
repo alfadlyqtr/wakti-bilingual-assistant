@@ -1,15 +1,12 @@
 import { motion } from "framer-motion";
-import { Button } from "@/components/ui/button";
 import { LandingScene } from "./LandingScene";
-import { useNavigate } from "react-router-dom";
-import { ArrowRight } from "lucide-react";
+ 
 
 interface InvitationSceneProps {
   language?: "en" | "ar";
 }
 
 export function InvitationScene({ language = "en" }: InvitationSceneProps) {
-  const navigate = useNavigate();
   const isArabic = language === "ar";
 
   return (
@@ -43,29 +40,6 @@ export function InvitationScene({ language = "en" }: InvitationSceneProps) {
             : "Already enjoying the WAKTI experience"
           }
         </motion.p>
-
-        {/* CTA Button */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6, delay: 0.3 }}
-          className="mb-10"
-        >
-          <Button
-            onClick={() => navigate("/signup")}
-            size="lg"
-            className="px-10 py-7 rounded-full text-base font-semibold tracking-[0.05em] uppercase transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] group"
-            style={{
-              background: "linear-gradient(135deg, #e9ceb0 0%, #d4b896 50%, #e9ceb0 100%)",
-              color: "#060541",
-              boxShadow: "0 8px 40px rgba(233, 206, 176, 0.35)",
-            }}
-          >
-            {isArabic ? "ابدأ رحلتك" : "Begin Your Journey"}
-            <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
-          </Button>
-        </motion.div>
 
         {/* App Store Badges */}
         <motion.div
