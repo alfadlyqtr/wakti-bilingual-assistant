@@ -1414,6 +1414,14 @@ export default function ProjectDetail() {
       // The job still runs in the background, so we poll for the latest job status
       let jobId: string | undefined;
       
+      // Prepare attached images/PDFs for the backend
+      const imagesForBackend = attachedImages.map((img) => {
+        if (img?.pdfDataUrl) {
+          return `[PDF:${img.file.name}]${img.pdfDataUrl}`;
+        }
+        return img.preview;
+      });
+      
       try {
         const startRes = await supabase.functions.invoke('projects-generate', {
           body: {
@@ -1423,6 +1431,7 @@ export default function ProjectDetail() {
             prompt: finalPrompt,
             theme,
             assets,
+            images: imagesForBackend, // Include attached PDFs/images from chat
             userInstructions: customThemeInstructions,
             backendContext: backendContextForCreate || undefined,
             debugContext: debugContext?.getDebugContextForAgent?.(),
