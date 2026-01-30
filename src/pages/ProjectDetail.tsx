@@ -4544,9 +4544,13 @@ ${fixInstructions}
       // Broader pattern to catch more variations
       const bookingFormPatterns = /\b(add|create|build|make|need|want|show|display).*(booking|appointment|schedule|reservation|calendar)\s*(form|page|system|popup|modal|button)?/i;
       const bookingFormAltPatterns = /\b(booking|appointment|reservation|schedule)\s*(form|page|system|popup|modal)\b/i;
-      const hasBookingFormRequest = bookingFormPatterns.test(userMessage) || bookingFormAltPatterns.test(userMessage);
+      const isBookingStyleOrEditRequest = /\b(enhance|improve|redesign|refactor|polish|restyle|ui|ux|look|design|layout|colors?|theme|style|better|clean|modern|update|change)\b|\b(تحسين|تعديل|تطوير|تصميم|شكل|واجهة|مظهر|الوان|ألوان|تخطيط)\b/i.test(userMessage);
+      const isBookingSetupRequest = (bookingFormPatterns.test(userMessage) || bookingFormAltPatterns.test(userMessage)) && !isBookingStyleOrEditRequest;
+      const hasBookingsAlreadySetup = !!backendContext?.hasBookingsSetup;
       
-      if (!skipLegacyWizardDetection && hasBookingFormRequest) {
+      // Option A: only trigger wizard for setup/create requests (not styling/edit)
+      // Option C: never trigger booking wizard if bookings are already configured
+      if (!skipLegacyWizardDetection && isBookingSetupRequest && !hasBookingsAlreadySetup) {
         setPendingFormPrompt(userMessage);
         setShowBookingWizard(true);
         
