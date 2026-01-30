@@ -13,6 +13,7 @@ import {
   Send,
   MessageSquare,
   Image as ImageIcon,
+  FileText,
   ChevronDown,
   Sparkles,
   Eye,
@@ -154,40 +155,62 @@ const PROJECT_EXAMPLES = [
     promptTemplate: { 
       en: `Create a premium online store for {PRODUCT}.
 
-DESIGN: Modern, elegant, mobile-first design with smooth animations. Use a color scheme that matches the product category.
+DESIGN: Modern, elegant e-commerce design with smooth animations. Color scheme matching the product category.
 
-PAGES NEEDED:
-1. Homepage - Hero banner, featured products carousel, categories grid, testimonials
-2. Shop/Products page - Filterable product grid with search, category filters, price sorting
-3. Product detail page - Large images, price, description, add to cart button, related products
-4. Shopping cart - Item list, quantities, subtotal, proceed to checkout
-5. Checkout page - Customer info form, order summary, payment section
+STRUCTURE:
+- Homepage with hero banner, featured products, and category navigation
+- Product browsing with filtering and search
+- Product details with images, pricing, and add-to-cart
+- Shopping cart with quantity management
+- Checkout flow with customer information
+
+SECTIONS:
+1. Hero Banner - Seasonal promotions, featured collection
+2. Categories - Visual category navigation grid
+3. Featured Products - Bestsellers and new arrivals
+4. Product Grid - Filterable by category, price, and attributes
+5. Product Detail - Multiple images, description, variants, add to cart
+6. Cart Sidebar - Quick cart view with item management
+7. Checkout - Customer info, order summary, payment
 
 FEATURES:
-- Responsive design for mobile and desktop
-- Product cards with image, name, price, and quick-add button
-- Shopping cart icon in header showing item count
-- WhatsApp contact button for customer support
+- Product cards with image, name, price, quick-add button
+- Category and price filtering
+- Product image gallery with zoom
+- Shopping cart icon with item count
+- Wishlist functionality
+- Size/color variant selection where applicable
 
-Create 4-6 sample products with realistic names, prices, and placeholder images.`,
+Create 6-8 sample products with realistic names and prices for the {PRODUCT} category.`,
       ar: `أنشئ متجر إلكتروني فاخر لـ{PRODUCT}.
 
-التصميم: تصميم عصري وأنيق، متجاوب مع الموبايل، مع حركات سلسة. استخدم ألوان تناسب نوع المنتجات.
+التصميم: تصميم تجارة إلكترونية عصري وأنيق مع حركات سلسة. ألوان تناسب فئة المنتجات.
 
-الصفحات المطلوبة:
-1. الرئيسية - بانر رئيسي، منتجات مميزة، شبكة الفئات، آراء العملاء
-2. صفحة المنتجات - شبكة منتجات مع بحث وفلترة بالفئة والسعر
-3. صفحة تفاصيل المنتج - صور كبيرة، سعر، وصف، زر إضافة للسلة، منتجات مشابهة
-4. سلة التسوق - قائمة المنتجات، الكميات، المجموع، زر إتمام الشراء
-5. صفحة الدفع - نموذج بيانات العميل، ملخص الطلب، قسم الدفع
+الهيكل:
+- صفحة رئيسية مع بانر، منتجات مميزة، وتنقل الفئات
+- تصفح المنتجات مع فلترة وبحث
+- تفاصيل المنتج مع صور وأسعار وإضافة للسلة
+- سلة تسوق مع إدارة الكميات
+- تدفق الدفع مع معلومات العميل
+
+الأقسام:
+1. البانر الرئيسي - عروض موسمية، مجموعة مميزة
+2. الفئات - شبكة تنقل بصرية للفئات
+3. المنتجات المميزة - الأكثر مبيعاً والوصول الجديد
+4. شبكة المنتجات - قابلة للفلترة بالفئة والسعر والخصائص
+5. تفاصيل المنتج - صور متعددة، وصف، متغيرات، إضافة للسلة
+6. سلة جانبية - عرض سريع للسلة مع إدارة العناصر
+7. الدفع - معلومات العميل، ملخص الطلب، الدفع
 
 المميزات:
-- تصميم متجاوب للموبايل والكمبيوتر
 - بطاقات منتجات مع صورة واسم وسعر وزر إضافة سريع
-- أيقونة سلة في الهيدر تعرض عدد المنتجات
-- زر واتساب للتواصل مع الدعم
+- فلترة بالفئة والسعر
+- معرض صور المنتج مع تكبير
+- أيقونة سلة مع عدد العناصر
+- قائمة المفضلة
+- اختيار المقاس/اللون حيث ينطبق
 
-أنشئ 4-6 منتجات نموذجية بأسماء وأسعار واقعية.`
+أنشئ 6-8 منتجات نموذجية بأسماء وأسعار واقعية لفئة {PRODUCT}.`
     },
     options: [
       { en: 'Abayas & Fashion', ar: 'عبايات وأزياء' },
@@ -196,6 +219,25 @@ Create 4-6 sample products with realistic names, prices, and placeholder images.
       { en: 'Electronics', ar: 'إلكترونيات' },
       { en: 'Dates & Sweets', ar: 'تمور وحلويات' },
       { en: 'Handmade Crafts', ar: 'حرف يدوية' },
+      { en: 'Hair & Beard Products', ar: 'منتجات الشعر واللحية' },
+      { en: 'Skincare & Cosmetics', ar: 'عناية بالبشرة ومستحضرات' },
+      { en: 'Sports & Fitness', ar: 'رياضة ولياقة' },
+      { en: 'Baby & Kids', ar: 'أطفال ورضع' },
+      { en: 'Home & Kitchen', ar: 'المنزل والمطبخ' },
+      { en: 'Gifts & Flowers', ar: 'هدايا وزهور' },
+      { en: 'Pet Supplies', ar: 'مستلزمات الحيوانات' },
+      { en: 'Car Accessories', ar: 'إكسسوارات السيارات' },
+      { en: 'Furniture & Decor', ar: 'أثاث وديكور' },
+      { en: 'Books & Stationery', ar: 'كتب وقرطاسية' },
+      { en: 'Supplements & Vitamins', ar: 'مكملات وفيتامينات' },
+      { en: 'Luxury Watches', ar: 'ساعات فاخرة' },
+      { en: 'Groceries / Mini Mart', ar: 'بقالة / ميني ماركت' },
+      { en: 'Phones & Accessories', ar: 'جوالات وإكسسوارات' },
+      { en: 'Computer & Gaming', ar: 'كمبيوتر وألعاب' },
+      { en: 'Health Pharmacy', ar: 'صيدلية / صحة' },
+      { en: 'Coffee & Specialty Beans', ar: 'قهوة ومحاصيل' },
+      { en: 'Accessories & Bags', ar: 'إكسسوارات وشنط' },
+      { en: 'Traditional / Heritage', ar: 'تراثيات' },
     ],
     defaultOption: { en: 'Abayas & Fashion', ar: 'عبايات وأزياء' },
     color: 'from-pink-500 to-rose-500'
@@ -206,42 +248,72 @@ Create 4-6 sample products with realistic names, prices, and placeholder images.
     title: { en: 'Restaurant Menu', ar: 'قائمة مطعم' },
     desc: { en: 'Digital menu with ordering', ar: 'قائمة رقمية مع الطلب' },
     promptTemplate: { 
-      en: `Create a beautiful digital menu website for a {PRODUCT}.
+      en: `Create an interactive digital menu website for a {PRODUCT}.
 
-DESIGN: Warm, appetizing design with food-focused imagery. Dark or light theme based on the venue style.
+DESIGN: Appetizing design with mouth-watering food imagery. Theme matching the cuisine style.
 
-PAGES NEEDED:
-1. Homepage - Hero with venue photo, about section, featured dishes, opening hours
-2. Menu page - Categories (Appetizers, Mains, Desserts, Drinks), items with photos, descriptions, prices
-3. Order/Cart page - Selected items, quantities, special instructions, order summary
-4. Contact page - Location with map, phone, WhatsApp, opening hours
+STRUCTURE: Single-page menu with category tabs or scrollable sections.
+
+SECTIONS:
+1. Header - Restaurant logo, name, and navigation
+2. Hero - Featured dish or promotion with restaurant ambiance
+3. Menu Categories - Tabbed or scrollable category navigation
+4. Menu Items - Grid/list of dishes organized by category
+5. Item Details - Modal or expandable view with full description
+6. Order Summary - Floating cart or sidebar with selected items
+7. Contact/Location - Address, hours, phone, delivery info
+
+MENU CATEGORIES (customize for {PRODUCT}):
+- Appetizers/Starters
+- Main Courses
+- Sides
+- Desserts
+- Beverages
 
 FEATURES:
-- Menu items organized by category with smooth scrolling
-- Each item shows: photo, name, description, price, dietary icons (vegetarian, spicy, etc.)
-- Add to order button on each item
-- Floating cart button showing order total
-- WhatsApp order button for easy ordering
+- Category tabs or smooth scroll navigation
+- Each dish: photo, name, description, price, dietary icons
+- Spice level indicators where applicable
+- Add to order with quantity selection
+- Special instructions field
+- Floating cart with order total
+- WhatsApp order button
+- Dietary filters (vegetarian, gluten-free, etc.)
 
-Create 8-12 sample menu items across different categories with realistic names and prices.`,
-      ar: `أنشئ موقع قائمة طعام رقمية جميل لـ{PRODUCT}.
+Create 10-15 sample menu items with realistic names and prices for a {PRODUCT}.`,
+      ar: `أنشئ موقع قائمة طعام رقمية تفاعلية لـ{PRODUCT}.
 
-التصميم: تصميم دافئ وشهي مع صور طعام جذابة. ثيم داكن أو فاتح حسب طبيعة المكان.
+التصميم: تصميم شهي مع صور طعام مغرية. ثيم يناسب نوع المطبخ.
 
-الصفحات المطلوبة:
-1. الرئيسية - صورة رئيسية للمكان، قسم عنا، أطباق مميزة، ساعات العمل
-2. صفحة القائمة - فئات (مقبلات، أطباق رئيسية، حلويات، مشروبات)، أصناف مع صور ووصف وأسعار
-3. صفحة الطلب/السلة - الأصناف المختارة، الكميات، ملاحظات خاصة، ملخص الطلب
-4. صفحة التواصل - الموقع مع خريطة، هاتف، واتساب، ساعات العمل
+الهيكل: قائمة صفحة واحدة مع تبويبات فئات أو أقسام قابلة للتمرير.
+
+الأقسام:
+1. الهيدر - شعار المطعم، الاسم، والتنقل
+2. البانر - طبق مميز أو عرض مع أجواء المطعم
+3. فئات القائمة - تنقل بالتبويبات أو التمرير
+4. أصناف القائمة - شبكة/قائمة أطباق منظمة بالفئة
+5. تفاصيل الصنف - نافذة أو عرض موسع مع الوصف الكامل
+6. ملخص الطلب - سلة عائمة أو جانبية مع الأصناف المختارة
+7. التواصل/الموقع - العنوان، الساعات، الهاتف، معلومات التوصيل
+
+فئات القائمة (تخصيص لـ{PRODUCT}):
+- مقبلات
+- أطباق رئيسية
+- إضافات
+- حلويات
+- مشروبات
 
 المميزات:
-- قائمة منظمة بالفئات مع تمرير سلس
-- كل صنف يعرض: صورة، اسم، وصف، سعر، أيقونات (نباتي، حار، إلخ)
-- زر إضافة للطلب على كل صنف
-- زر سلة عائم يعرض مجموع الطلب
-- زر طلب واتساب للطلب السهل
+- تبويبات فئات أو تنقل سلس بالتمرير
+- كل طبق: صورة، اسم، وصف، سعر، أيقونات غذائية
+- مؤشرات مستوى الحرارة حيث ينطبق
+- إضافة للطلب مع اختيار الكمية
+- حقل تعليمات خاصة
+- سلة عائمة مع مجموع الطلب
+- زر طلب واتساب
+- فلاتر غذائية (نباتي، خالي من الجلوتين، إلخ)
 
-أنشئ 8-12 صنف نموذجي في فئات مختلفة بأسماء وأسعار واقعية.`
+أنشئ 10-15 صنف نموذجي بأسماء وأسعار واقعية لـ{PRODUCT}.`
     },
     options: [
       { en: 'Restaurant', ar: 'مطعم' },
@@ -249,6 +321,23 @@ Create 8-12 sample menu items across different categories with realistic names a
       { en: 'Bakery', ar: 'مخبز' },
       { en: 'Food Truck', ar: 'عربة طعام' },
       { en: 'Catering Service', ar: 'خدمة تموين' },
+      { en: 'Fine Dining', ar: 'مطعم فاخر' },
+      { en: 'Fast Food', ar: 'وجبات سريعة' },
+      { en: 'Burger Restaurant', ar: 'مطعم برجر' },
+      { en: 'Pizza Restaurant', ar: 'مطعم بيتزا' },
+      { en: 'Seafood', ar: 'مأكولات بحرية' },
+      { en: 'BBQ & Grill', ar: 'شواء وجريل' },
+      { en: 'Desserts Shop', ar: 'محل حلويات' },
+      { en: 'Ice Cream Shop', ar: 'محل آيس كريم' },
+      { en: 'Juice Bar', ar: 'عصائر' },
+      { en: 'Healthy / Diet Food', ar: 'أكل صحي/دايت' },
+      { en: 'Shawarma', ar: 'شاورما' },
+      { en: 'Arabic / Gulf Cuisine', ar: 'مأكولات عربية/خليجية' },
+      { en: 'Indian Cuisine', ar: 'مأكولات هندية' },
+      { en: 'Italian', ar: 'مأكولات إيطالية' },
+      { en: 'Sushi / Japanese', ar: 'سوشي / ياباني' },
+      { en: 'Breakfast / Brunch', ar: 'فطور / برنش' },
+      { en: 'Tea House', ar: 'بيت شاي' },
     ],
     defaultOption: { en: 'Restaurant', ar: 'مطعم' },
     color: 'from-amber-500 to-orange-500'
@@ -259,46 +348,60 @@ Create 8-12 sample menu items across different categories with realistic names a
     title: { en: 'Portfolio', ar: 'معرض أعمال' },
     desc: { en: 'Showcase your work beautifully', ar: 'اعرض أعمالك بشكل جميل' },
     promptTemplate: { 
-      en: `Create a stunning portfolio website for a {PRODUCT} professional.
+      en: `Create a professional single-page portfolio website for a {PRODUCT}.
 
-DESIGN: Clean, minimal, gallery-focused design that lets the work shine. Use subtle animations and smooth transitions.
+STRUCTURE: Single-page design with smooth scrolling navigation. Fixed header with clickable section links.
 
-PAGES NEEDED:
-1. Homepage - Hero with name/tagline, featured work grid, brief intro, call-to-action
-2. Portfolio/Work page - Filterable gallery grid, project thumbnails, category filters
-3. Project detail page - Full project showcase, multiple images, project description, client info
-4. About page - Professional photo, bio, skills, experience, achievements
-5. Services page - List of services offered with descriptions and pricing
-6. Contact page - Contact form, email, phone, social media links, location
+SECTIONS (all on one page with anchor navigation):
+1. Hero - Professional photo/headshot, name, title/tagline, brief intro
+2. About - Professional summary, career objectives, personal story
+3. Skills - Visual skill bars or charts showing expertise levels by category
+4. Experience - Timeline layout showing work history with key achievements
+5. Portfolio/Work - Grid gallery of projects with filtering, lightbox for full view
+6. Services - What you offer with descriptions (if applicable)
+7. Testimonials - Client/colleague recommendations with photos
+8. Contact - Contact form, email, phone, social media links
 
 FEATURES:
-- Masonry or grid gallery layout
-- Lightbox for viewing full images
-- Smooth hover effects on project cards
-- Social media links (Instagram, Behance, LinkedIn)
-- Downloadable resume/CV option
+- Smooth scroll navigation between sections
+- Fixed header with section links that highlight on scroll
+- "Download CV/Resume" button in hero or about section
+- Skill visualization (progress bars, charts, or icons)
+- Project gallery with category filtering
+- Dark/light mode toggle
+- Social media links (LinkedIn, GitHub, Behance, etc.)
 
-Create 6-8 sample portfolio projects with placeholder images and descriptions.`,
-      ar: `أنشئ موقع معرض أعمال مذهل لمحترف {PRODUCT}.
+DESIGN:
+- Clean, professional typography with clear hierarchy
+- Subtle scroll animations for section transitions
+- Color scheme appropriate for the profession`,
+      ar: `أنشئ موقع بورتفوليو احترافي صفحة واحدة لـ{PRODUCT}.
 
-التصميم: تصميم نظيف وبسيط يركز على المعرض ويبرز الأعمال. استخدم حركات خفيفة وانتقالات سلسة.
+الهيكل: تصميم صفحة واحدة مع تنقل سلس بالتمرير. هيدر ثابت مع روابط أقسام قابلة للنقر.
 
-الصفحات المطلوبة:
-1. الرئيسية - بانر مع الاسم/الشعار، شبكة أعمال مميزة، مقدمة مختصرة، زر إجراء
-2. صفحة الأعمال - معرض قابل للفلترة، صور مصغرة للمشاريع، فلاتر الفئات
-3. صفحة تفاصيل المشروع - عرض كامل للمشروع، صور متعددة، وصف المشروع، معلومات العميل
-4. صفحة عني - صورة احترافية، نبذة، مهارات، خبرات، إنجازات
-5. صفحة الخدمات - قائمة الخدمات المقدمة مع الوصف والأسعار
-6. صفحة التواصل - نموذج تواصل، إيميل، هاتف، روابط السوشيال ميديا، الموقع
+الأقسام (كلها في صفحة واحدة مع تنقل بالروابط):
+1. البانر الرئيسي - صورة احترافية، الاسم، اللقب/الشعار، مقدمة مختصرة
+2. عني - ملخص مهني، أهداف وظيفية، قصة شخصية
+3. المهارات - أشرطة أو رسوم بيانية تعرض مستويات الخبرة حسب الفئة
+4. الخبرات - تخطيط زمني يعرض تاريخ العمل مع الإنجازات الرئيسية
+5. الأعمال - معرض شبكي للمشاريع مع فلترة، عرض كامل للصور
+6. الخدمات - ما تقدمه مع الوصف (إن وجد)
+7. التوصيات - توصيات العملاء/الزملاء مع صور
+8. التواصل - نموذج تواصل، إيميل، هاتف، روابط السوشيال
 
 المميزات:
-- تخطيط معرض شبكي أو ماسوني
-- عرض الصور بالحجم الكامل (لايت بوكس)
-- تأثيرات hover سلسة على بطاقات المشاريع
-- روابط السوشيال ميديا (انستغرام، بيهانس، لينكدإن)
-- خيار تحميل السيرة الذاتية
+- تنقل سلس بالتمرير بين الأقسام
+- هيدر ثابت مع روابط أقسام تتميز عند التمرير
+- زر "تحميل السيرة الذاتية" في البانر أو قسم عني
+- تصور المهارات (أشرطة تقدم، رسوم بيانية، أو أيقونات)
+- معرض مشاريع مع فلترة بالفئة
+- تبديل الوضع الداكن/الفاتح
+- روابط السوشيال ميديا (لينكدإن، جيتهب، بيهانس، إلخ)
 
-أنشئ 6-8 مشاريع نموذجية مع صور ووصف.`
+التصميم:
+- خطوط نظيفة واحترافية مع تسلسل واضح
+- حركات تمرير خفيفة لانتقالات الأقسام
+- ألوان مناسبة للمهنة`
     },
     options: [
       { en: 'Photography', ar: 'تصوير فوتوغرافي' },
@@ -307,6 +410,22 @@ Create 6-8 sample portfolio projects with placeholder images and descriptions.`,
       { en: 'Interior Design', ar: 'تصميم داخلي' },
       { en: 'Art & Illustration', ar: 'فن ورسم' },
       { en: 'Video Production', ar: 'إنتاج فيديو' },
+      { en: 'Web Designer', ar: 'مصمم مواقع' },
+      { en: 'UI/UX Designer', ar: 'مصمم UI/UX' },
+      { en: 'Videographer', ar: 'مصور فيديو' },
+      { en: 'Architect', ar: 'مهندس معماري' },
+      { en: 'Makeup Artist', ar: 'خبيرة مكياج' },
+      { en: 'Fitness Coach', ar: 'مدرب لياقة' },
+      { en: 'Writer / Copywriter', ar: 'كاتب/كاتب محتوى' },
+      { en: 'Developer', ar: 'مطور' },
+      { en: 'Personal Portfolio / CV', ar: 'بورتفوليو شخصي / سيرة ذاتية' },
+      { en: 'Student Portfolio', ar: 'بورتفوليو طالب' },
+      { en: 'Job Seeker Portfolio', ar: 'بورتفوليو باحث عن عمل' },
+      { en: 'Model / Talent', ar: 'عارضة/موهبة' },
+      { en: 'Chef Portfolio', ar: 'بورتفوليو شيف' },
+      { en: 'Makeup & Beauty Artist', ar: 'خبيرة تجميل/مكياج' },
+      { en: 'Freelancer Portfolio', ar: 'بورتفوليو مستقل' },
+      { en: 'Business/Agency Portfolio', ar: 'بورتفوليو شركة/وكالة' },
     ],
     defaultOption: { en: 'Photography', ar: 'تصوير فوتوغرافي' },
     color: 'from-violet-500 to-purple-500'
@@ -317,46 +436,62 @@ Create 6-8 sample portfolio projects with placeholder images and descriptions.`,
     title: { en: 'Booking System', ar: 'نظام حجز' },
     desc: { en: 'Appointments & reservations', ar: 'مواعيد وحجوزات' },
     promptTemplate: { 
-      en: `Create a professional booking website for a {PRODUCT}.
+      en: `Create a professional appointment booking website for a {PRODUCT}.
 
-DESIGN: Clean, trustworthy design with calming colors. Easy-to-use booking flow.
+DESIGN: Clean, trustworthy design with calming colors. Simple, intuitive booking flow.
 
-PAGES NEEDED:
-1. Homepage - Hero with business photo, services overview, team preview, testimonials, call-to-action
-2. Services page - All services with: name, description, duration, price, book now button
-3. Booking page - Service selection, date/time picker, customer info form, confirmation
-4. Team/Staff page - Team members with photos, specialties, and individual booking links
-5. About page - Business story, values, certifications, gallery
-6. Contact page - Location with map, phone, WhatsApp, email, opening hours
+STRUCTURE: Single-page or minimal navigation with focus on booking conversion.
+
+SECTIONS:
+1. Hero - Business name, tagline, main booking CTA
+2. Services - Service cards with name, duration, price, book button
+3. How It Works - Simple 3-step booking process explanation
+4. Team/Staff - Staff members with photos and specialties (if applicable)
+5. Testimonials - Customer reviews with ratings
+6. Location & Hours - Address, map, operating hours
+7. Contact - Phone, WhatsApp, email
+
+BOOKING FLOW:
+1. Select service → 2. Choose date/time → 3. Enter details → 4. Confirm
 
 FEATURES:
-- Service cards showing duration and price clearly
-- Simple date and time slot selection
-- Customer booking form (name, phone, email, notes)
-- Booking confirmation with details
-- WhatsApp button for quick inquiries
+- Service cards with duration and price clearly displayed
+- Calendar date picker with available slots
+- Time slot selection grid
+- Customer form (name, phone, email, notes)
+- Booking confirmation with summary
+- WhatsApp quick inquiry button
+- Staff selection (if multiple providers)
 
-Create 5-8 sample services with realistic names, durations (30min, 45min, 1hr), and prices.`,
-      ar: `أنشئ موقع حجز احترافي لـ{PRODUCT}.
+Create 6-10 sample services with realistic names, durations, and prices for a {PRODUCT}.`,
+      ar: `أنشئ موقع حجز مواعيد احترافي لـ{PRODUCT}.
 
-التصميم: تصميم نظيف وموثوق بألوان مريحة. تجربة حجز سهلة الاستخدام.
+التصميم: تصميم نظيف وموثوق بألوان مريحة. تدفق حجز بسيط وبديهي.
 
-الصفحات المطلوبة:
-1. الرئيسية - بانر مع صورة المكان، نظرة على الخدمات، معاينة الفريق، آراء العملاء، زر إجراء
-2. صفحة الخدمات - جميع الخدمات مع: اسم، وصف، مدة، سعر، زر احجز الآن
-3. صفحة الحجز - اختيار الخدمة، اختيار التاريخ/الوقت، نموذج بيانات العميل، تأكيد
-4. صفحة الفريق - أعضاء الفريق مع صور وتخصصات وروابط حجز فردية
-5. صفحة عنا - قصة المكان، القيم، الشهادات، معرض صور
-6. صفحة التواصل - الموقع مع خريطة، هاتف، واتساب، إيميل، ساعات العمل
+الهيكل: صفحة واحدة أو تنقل بسيط مع التركيز على تحويل الحجز.
+
+الأقسام:
+1. البانر - اسم المكان، شعار، زر حجز رئيسي
+2. الخدمات - بطاقات خدمات مع اسم، مدة، سعر، زر حجز
+3. كيف يعمل - شرح عملية الحجز من 3 خطوات
+4. الفريق - أعضاء الفريق مع صور وتخصصات (إن وجد)
+5. آراء العملاء - تقييمات مع نجوم
+6. الموقع والساعات - العنوان، خريطة، ساعات العمل
+7. التواصل - هاتف، واتساب، إيميل
+
+تدفق الحجز:
+1. اختر الخدمة → 2. اختر التاريخ/الوقت → 3. أدخل البيانات → 4. تأكيد
 
 المميزات:
-- بطاقات خدمات تعرض المدة والسعر بوضوح
-- اختيار بسيط للتاريخ والوقت
-- نموذج حجز العميل (اسم، هاتف، إيميل، ملاحظات)
-- تأكيد الحجز مع التفاصيل
-- زر واتساب للاستفسارات السريعة
+- بطاقات خدمات مع المدة والسعر بوضوح
+- منتقي تاريخ تقويمي مع الأوقات المتاحة
+- شبكة اختيار الوقت
+- نموذج العميل (اسم، هاتف، إيميل، ملاحظات)
+- تأكيد الحجز مع ملخص
+- زر استفسار واتساب سريع
+- اختيار الموظف (إذا تعدد المقدمين)
 
-أنشئ 5-8 خدمات نموذجية بأسماء ومدد (30 دقيقة، 45 دقيقة، ساعة) وأسعار واقعية.`
+أنشئ 6-10 خدمات نموذجية بأسماء ومدد وأسعار واقعية لـ{PRODUCT}.`
     },
     options: [
       { en: 'Beauty Salon', ar: 'صالون تجميل' },
@@ -365,6 +500,20 @@ Create 5-8 sample services with realistic names, durations (30min, 45min, 1hr), 
       { en: 'Medical Clinic', ar: 'عيادة طبية' },
       { en: 'Fitness Studio', ar: 'استوديو لياقة' },
       { en: 'Consulting', ar: 'استشارات' },
+      { en: 'Dentist', ar: 'عيادة أسنان' },
+      { en: 'Personal Trainer', ar: 'مدرب شخصي' },
+      { en: 'Tutor / Lessons', ar: 'مدرس/دروس' },
+      { en: 'Car Wash', ar: 'غسيل سيارات' },
+      { en: 'Home Services', ar: 'خدمات منزلية' },
+      { en: 'Photography Sessions', ar: 'جلسات تصوير' },
+      { en: 'Consultation / Coach', ar: 'استشارة/كوتش' },
+      { en: 'Law Firm / Legal', ar: 'مكتب محاماة' },
+      { en: 'Therapy / Counseling', ar: 'علاج/استشارات نفسية' },
+      { en: 'Pet Grooming', ar: 'عناية بالحيوانات' },
+      { en: 'Repair Services', ar: 'خدمات صيانة' },
+      { en: 'Cleaning Service', ar: 'شركة تنظيف' },
+      { en: 'Massage Therapist', ar: 'جلسات مساج' },
+      { en: 'Nail Salon', ar: 'صالون أظافر' },
     ],
     defaultOption: { en: 'Beauty Salon', ar: 'صالون تجميل' },
     color: 'from-emerald-500 to-green-500'
@@ -375,54 +524,60 @@ Create 5-8 sample services with realistic names, durations (30min, 45min, 1hr), 
     title: { en: 'Landing Page', ar: 'صفحة هبوط' },
     desc: { en: 'Convert visitors to customers', ar: 'حوّل الزوار لعملاء' },
     promptTemplate: { 
-      en: `Create a high-converting landing page for a {PRODUCT}.
+      en: `Create a high-converting single-page landing page for a {PRODUCT}.
 
-DESIGN: Bold, modern, conversion-focused design with strong visual hierarchy. Use contrasting colors for CTAs.
+DESIGN: Bold, modern, conversion-focused. Strong visual hierarchy with contrasting CTA colors.
 
-SECTIONS NEEDED (single page):
-1. Hero - Compelling headline, subheadline, main CTA button, hero image/mockup
-2. Problem/Pain points - What problems does this solve?
-3. Solution/Features - Key features with icons and descriptions (3-6 features)
-4. How it works - Simple 3-4 step process
-5. Benefits - Why choose this? Key benefits with visuals
-6. Pricing - 2-3 pricing tiers with features comparison
-7. Testimonials - 3-4 customer reviews with photos and names
-8. FAQ - 5-6 common questions and answers
-9. Final CTA - Strong call-to-action with signup/contact form
-10. Footer - Links, social media, contact info
+STRUCTURE: Single scrolling page with sticky header navigation.
+
+SECTIONS:
+1. Hero - Compelling headline, subheadline, primary CTA, product image/mockup
+2. Problem - Pain points your audience faces (2-3 points)
+3. Solution - How your product solves these problems
+4. Features - 4-6 key features with icons and brief descriptions
+5. How It Works - 3-4 step process with visuals
+6. Benefits - Why choose this over alternatives
+7. Social Proof - Testimonials, logos, statistics
+8. Pricing - 2-3 tiers with feature comparison (if applicable)
+9. FAQ - 5-6 common questions with expandable answers
+10. Final CTA - Strong closing with signup/contact form
 
 FEATURES:
 - Sticky header with CTA button
-- Smooth scroll navigation
-- Animated sections on scroll
-- Mobile-responsive design
-- Clear, action-oriented buttons
+- Smooth scroll to sections
+- Scroll-triggered animations
+- Trust badges and social proof
+- Mobile-optimized layout
+- Clear, action-oriented CTAs throughout
 
-Use compelling copy and realistic pricing for the product type.`,
-      ar: `أنشئ صفحة هبوط عالية التحويل لـ{PRODUCT}.
+Create compelling copy specific to a {PRODUCT} with realistic details.`,
+      ar: `أنشئ صفحة هبوط واحدة عالية التحويل لـ{PRODUCT}.
 
-التصميم: تصميم جريء وعصري يركز على التحويل مع تسلسل بصري قوي. استخدم ألوان متباينة لأزرار الإجراء.
+التصميم: جريء، عصري، يركز على التحويل. تسلسل بصري قوي مع ألوان CTA متباينة.
 
-الأقسام المطلوبة (صفحة واحدة):
-1. البانر الرئيسي - عنوان جذاب، عنوان فرعي، زر إجراء رئيسي، صورة/موكاب
-2. المشكلة/نقاط الألم - ما المشاكل التي يحلها؟
-3. الحل/المميزات - المميزات الرئيسية مع أيقونات ووصف (3-6 مميزات)
-4. كيف يعمل - عملية بسيطة من 3-4 خطوات
-5. الفوائد - لماذا تختار هذا؟ الفوائد الرئيسية مع صور
-6. الأسعار - 2-3 باقات أسعار مع مقارنة المميزات
-7. آراء العملاء - 3-4 تقييمات مع صور وأسماء
-8. الأسئلة الشائعة - 5-6 أسئلة وأجوبة شائعة
-9. دعوة للإجراء النهائية - زر إجراء قوي مع نموذج تسجيل/تواصل
-10. الفوتر - روابط، سوشيال ميديا، معلومات التواصل
+الهيكل: صفحة تمرير واحدة مع هيدر ثابت للتنقل.
+
+الأقسام:
+1. البانر - عنوان جذاب، عنوان فرعي، CTA رئيسي، صورة/موكاب المنتج
+2. المشكلة - نقاط الألم التي يواجهها جمهورك (2-3 نقاط)
+3. الحل - كيف يحل منتجك هذه المشاكل
+4. المميزات - 4-6 مميزات رئيسية مع أيقونات ووصف مختصر
+5. كيف يعمل - عملية من 3-4 خطوات مع صور
+6. الفوائد - لماذا تختار هذا على البدائل
+7. الإثبات الاجتماعي - شهادات، شعارات، إحصائيات
+8. الأسعار - 2-3 باقات مع مقارنة المميزات (إن وجد)
+9. الأسئلة الشائعة - 5-6 أسئلة شائعة مع إجابات قابلة للتوسيع
+10. CTA النهائي - إغلاق قوي مع نموذج تسجيل/تواصل
 
 المميزات:
-- هيدر ثابت مع زر إجراء
-- تنقل سلس بالتمرير
-- أقسام متحركة عند التمرير
-- تصميم متجاوب للموبايل
-- أزرار واضحة موجهة للإجراء
+- هيدر ثابت مع زر CTA
+- تمرير سلس للأقسام
+- حركات تفعّل بالتمرير
+- شارات ثقة وإثبات اجتماعي
+- تخطيط محسّن للموبايل
+- CTAs واضحة وموجهة للإجراء
 
-استخدم نصوص مقنعة وأسعار واقعية لنوع المنتج.`
+أنشئ نصوص مقنعة خاصة بـ{PRODUCT} مع تفاصيل واقعية.`
     },
     options: [
       { en: 'Mobile App', ar: 'تطبيق موبايل' },
@@ -431,6 +586,23 @@ Use compelling copy and realistic pricing for the product type.`,
       { en: 'Fitness Program', ar: 'برنامج لياقة' },
       { en: 'E-book', ar: 'كتاب إلكتروني' },
       { en: 'Agency Services', ar: 'خدمات وكالة' },
+      { en: 'SaaS / Software', ar: 'SaaS/برمجيات' },
+      { en: 'Restaurant Promo', ar: 'ترويج مطعم' },
+      { en: 'Gym Promo', ar: 'ترويج نادي رياضي' },
+      { en: 'App Download Page', ar: 'صفحة تحميل تطبيق' },
+      { en: 'Course / Webinar', ar: 'دورة/ويبينار' },
+      { en: 'Agency', ar: 'وكالة' },
+      { en: 'Product Launch', ar: 'إطلاق منتج' },
+      { en: 'Newsletter / Waitlist', ar: 'نشرة/قائمة انتظار' },
+      { en: 'Event Promo', ar: 'ترويج فعالية' },
+      { en: 'Service Promo', ar: 'ترويج خدمة' },
+      { en: 'Real Estate Agent', ar: 'وسيط عقاري' },
+      { en: 'Restaurant Opening / Promo', ar: 'افتتاح/ترويج مطعم' },
+      { en: 'Clinic Promo', ar: 'ترويج عيادة' },
+      { en: 'Barbershop Promo', ar: 'ترويج حلاق' },
+      { en: 'Influencer / Creator', ar: 'صانع محتوى' },
+      { en: 'Hiring / Recruitment', ar: 'توظيف' },
+      { en: 'App Pre-Order', ar: 'طلب مسبق لتطبيق' },
     ],
     defaultOption: { en: 'Mobile App', ar: 'تطبيق موبايل' },
     color: 'from-blue-500 to-cyan-500'
@@ -441,52 +613,60 @@ Use compelling copy and realistic pricing for the product type.`,
     title: { en: 'Event Page', ar: 'صفحة فعالية' },
     desc: { en: 'Weddings, parties, conferences', ar: 'أعراس، حفلات، مؤتمرات' },
     promptTemplate: { 
-      en: `Create a beautiful event page for a {PRODUCT}.
+      en: `Create an elegant single-page event website for a {PRODUCT}.
 
-DESIGN: Elegant, celebratory design matching the event type. Use appropriate colors and imagery.
+DESIGN: Celebratory, elegant design matching the event type. Appropriate colors and imagery.
 
-SECTIONS NEEDED (single page):
-1. Hero - Event title, date, beautiful background image, countdown timer
-2. Event details - What, when, where, dress code (if applicable)
-3. The Story/About - Background about the event or couple (for weddings)
-4. Schedule/Agenda - Timeline of the event with times and activities
-5. Venue - Location details with embedded map, directions, parking info
-6. Photo Gallery - Photos related to the event (engagement photos for weddings, past events for conferences)
-7. RSVP Form - Name, email, phone, number of guests, dietary restrictions, message
-8. Gift Registry/Wishlist - (for weddings/parties) or Sponsors (for conferences)
-9. Contact - Organizer contact info, WhatsApp button
+STRUCTURE: Single scrolling page with smooth section navigation.
+
+SECTIONS:
+1. Hero - Event title, date, countdown timer, beautiful background
+2. About/Story - Background about the event (couple story for weddings, event purpose for conferences)
+3. Details - Date, time, venue, dress code, what to expect
+4. Schedule - Timeline of activities with times
+5. Venue - Location with embedded map, directions, parking
+6. Gallery - Related photos (engagement photos, past events, etc.)
+7. RSVP - Guest response form with attendance confirmation
+8. Additional Info - Gift registry, sponsors, or special notes
+9. Contact - Organizer info, WhatsApp button
 
 FEATURES:
-- Live countdown timer to the event
-- Animated sections
-- RSVP form with confirmation message
-- Mobile-friendly design
+- Live countdown timer to event date
+- Smooth scroll navigation
+- RSVP form with guest count and dietary preferences
+- Photo gallery with lightbox
+- Mobile-optimized design
 - Social sharing buttons
+- Add to calendar button
 
-Use placeholder content appropriate for the event type.`,
-      ar: `أنشئ صفحة فعالية جميلة لـ{PRODUCT}.
+Create content appropriate for a {PRODUCT} with realistic details.`,
+      ar: `أنشئ موقع فعالية أنيق صفحة واحدة لـ{PRODUCT}.
 
-التصميم: تصميم أنيق واحتفالي يناسب نوع الفعالية. استخدم ألوان وصور مناسبة.
+التصميم: تصميم احتفالي وأنيق يناسب نوع الفعالية. ألوان وصور مناسبة.
 
-الأقسام المطلوبة (صفحة واحدة):
-1. البانر الرئيسي - عنوان الفعالية، التاريخ، صورة خلفية جميلة، عداد تنازلي
-2. تفاصيل الفعالية - ماذا، متى، أين، الزي (إن وجد)
-3. القصة/عنا - خلفية عن الفعالية أو الزوجين (للأعراس)
-4. الجدول الزمني - جدول الفعالية مع الأوقات والأنشطة
-5. المكان - تفاصيل الموقع مع خريطة مدمجة، الاتجاهات، معلومات المواقف
-6. معرض الصور - صور متعلقة بالفعالية (صور الخطوبة للأعراس، فعاليات سابقة للمؤتمرات)
-7. نموذج تأكيد الحضور - الاسم، الإيميل، الهاتف، عدد الضيوف، قيود غذائية، رسالة
-8. قائمة الهدايا - (للأعراس/الحفلات) أو الرعاة (للمؤتمرات)
+الهيكل: صفحة تمرير واحدة مع تنقل سلس بين الأقسام.
+
+الأقسام:
+1. البانر - عنوان الفعالية، التاريخ، عداد تنازلي، خلفية جميلة
+2. عنا/القصة - خلفية عن الفعالية (قصة الزوجين للأعراس، هدف الفعالية للمؤتمرات)
+3. التفاصيل - التاريخ، الوقت، المكان، الزي، ماذا تتوقع
+4. الجدول - جدول زمني للأنشطة مع الأوقات
+5. المكان - الموقع مع خريطة مدمجة، الاتجاهات، المواقف
+6. المعرض - صور متعلقة (صور الخطوبة، فعاليات سابقة، إلخ)
+7. تأكيد الحضور - نموذج استجابة الضيف مع تأكيد الحضور
+8. معلومات إضافية - قائمة الهدايا، الرعاة، أو ملاحظات خاصة
 9. التواصل - معلومات المنظم، زر واتساب
 
 المميزات:
-- عداد تنازلي حي للفعالية
-- أقسام متحركة
-- نموذج تأكيد حضور مع رسالة تأكيد
-- تصميم متوافق مع الموبايل
-- أزرار مشاركة على السوشيال ميديا
+- عداد تنازلي حي لتاريخ الفعالية
+- تنقل سلس بالتمرير
+- نموذج RSVP مع عدد الضيوف والتفضيلات الغذائية
+- معرض صور مع لايت بوكس
+- تصميم محسّن للموبايل
+- أزرار مشاركة اجتماعية
+- زر إضافة للتقويم
 
-استخدم محتوى مناسب لنوع الفعالية.`
+أنشئ محتوى مناسب لـ{PRODUCT} مع تفاصيل واقعية.`
     },
     options: [
       { en: 'Wedding Invitation', ar: 'دعوة زفاف' },
@@ -495,6 +675,20 @@ Use placeholder content appropriate for the event type.`,
       { en: 'Workshop', ar: 'ورشة عمل' },
       { en: 'Product Launch', ar: 'إطلاق منتج' },
       { en: 'Graduation', ar: 'حفل تخرج' },
+      { en: 'Baby Shower', ar: 'حفل استقبال مولود' },
+      { en: 'Corporate Event', ar: 'فعالية شركة' },
+      { en: 'Ramadan Iftar', ar: 'إفطار رمضان' },
+      { en: 'Eid Gathering', ar: 'تجمع العيد' },
+      { en: 'Concert', ar: 'حفل موسيقي' },
+      { en: 'Exhibition', ar: 'معرض' },
+      { en: 'Sports Event', ar: 'فعالية رياضية' },
+      { en: 'Engagement / Khutbah', ar: 'خطوبة / ملكة' },
+      { en: 'Henna Night', ar: 'ليلة الحناء' },
+      { en: 'School Event', ar: 'فعالية مدرسية' },
+      { en: 'Charity / Fundraiser', ar: 'فعالية خيرية' },
+      { en: 'Community Meetup', ar: 'لقاء مجتمعي' },
+      { en: 'Tournament', ar: 'بطولة' },
+      { en: 'Open House', ar: 'يوم مفتوح' },
     ],
     defaultOption: { en: 'Wedding Invitation', ar: 'دعوة زفاف' },
     color: 'from-fuchsia-500 to-pink-500'
@@ -903,12 +1097,12 @@ Apply these styles consistently throughout the entire design.`;
       ? `\n\nمهم جداً:
 - تصميم متجاوب بالكامل (موبايل أولاً) - يجب أن يعمل بشكل مثالي على جميع الأجهزة
 - أضف زر واتساب عائم للتواصل السريع
-- استخدم صور placeholder من unsplash.com للمنتجات/الخدمات
+- استخدم صور من Freepik للمنتجات/الخدمات (لا تستخدم Unsplash أو picsum أو placeholder.com)
 - تأكد من دعم اللغة العربية (RTL) بشكل كامل`
       : `\n\nIMPORTANT:
 - Fully responsive design (mobile-first) - must work perfectly on all devices
 - Add floating WhatsApp button for quick contact
-- Use placeholder images from unsplash.com for products/services
+- Use Freepik images for products/services (DO NOT use Unsplash, picsum, or placeholder.com)
 - Ensure smooth animations and transitions throughout`;
     
     finalPrompt += additionalInstructions;
@@ -1337,29 +1531,41 @@ Apply these styles consistently throughout the entire design.`;
             {/* Attached Files Preview */}
             {attachedFiles.length > 0 && (
               <div className="px-4 pb-2 flex flex-wrap gap-2">
-                {attachedFiles.map((file, i) => (
-                  <div key={i} className="flex items-center gap-1 px-2 py-1 bg-muted rounded-lg text-xs">
-                    <ImageIcon className="h-3 w-3" />
-                    <span className="max-w-[100px] truncate">{file.name}</span>
-                    <button onClick={() => removeAttachment(i)} className="text-red-500 hover:text-red-600">×</button>
-                  </div>
-                ))}
+                {attachedFiles.map((file, i) => {
+                  // Determine icon based on file type
+                  const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+                  const isDoc = file.type.includes('word') || file.name.toLowerCase().endsWith('.doc') || file.name.toLowerCase().endsWith('.docx');
+                  
+                  return (
+                    <div key={i} className="flex items-center gap-1 px-2 py-1 bg-muted rounded-lg text-xs">
+                      {isPdf ? (
+                        <FileText className="h-3 w-3 text-red-500" />
+                      ) : isDoc ? (
+                        <FileText className="h-3 w-3 text-blue-500" />
+                      ) : (
+                        <ImageIcon className="h-3 w-3" />
+                      )}
+                      <span className="max-w-[100px] truncate">{file.name}</span>
+                      <button onClick={() => removeAttachment(i)} className="text-red-500 hover:text-red-600">×</button>
+                    </div>
+                  );
+                })}
               </div>
             )}
             
             {/* Action Bar */}
             <div className="flex items-center justify-between px-4 py-3 border-t border-border/50 bg-muted/30 relative z-50">
               <div className="flex items-center gap-1">
-                {/* Hidden file input */}
+                {/* Hidden file input - accepts images, PDF, and DOCX */}
                 <input
                   id="projectAssetUpload"
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/*,.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                   multiple
                   onChange={handleFileChange}
                   className="hidden"
-                  title={isRTL ? 'رفع ملفات المشروع' : 'Upload project assets'}
+                  title={isRTL ? 'رفع ملفات (صور، PDF، Word)' : 'Upload files (images, PDF, Word)'}
                 />
                 
                 {/* Attach Button */}

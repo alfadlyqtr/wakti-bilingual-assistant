@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
@@ -295,21 +294,12 @@ export function DesktopHeader() {
               </Button>
             </DropdownMenuTrigger>
 
-            {/* Backdrop overlay when user menu is open */}
-            {userMenuOpen && createPortal(
-              <div 
-                onClick={() => setUserMenuOpen(false)}
-                className="fixed inset-0 z-[980] bg-background/20 backdrop-blur-sm"
-              />,
-              document.body
-            )}
-
             <DropdownMenuContent 
               align="end" 
               side="bottom"
               sideOffset={8}
-              collisionPadding={16}
-              className="z-[1200] min-w-[200px] overflow-hidden rounded-2xl border border-white/30 dark:border-white/10 p-2 backdrop-blur-2xl animate-in fade-in-0 zoom-in-95 slide-in-from-top-2 duration-200"
+              collisionPadding={8}
+              className="z-[1200] w-[200px] max-w-[200px] overflow-hidden rounded-2xl border border-white/30 dark:border-white/10 p-2 backdrop-blur-2xl dropdown-bloom"
               style={{
                 background:
                   theme === 'dark'
@@ -321,48 +311,50 @@ export function DesktopHeader() {
                     : '0 25px 60px -12px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 10px 40px rgba(99, 102, 241, 0.15)'
               }}
             >
-              {/* Glass sheen overlay */}
-              <div
-                className={cn(
-                  "absolute inset-0 rounded-2xl pointer-events-none",
-                  theme === 'dark'
-                    ? 'bg-gradient-to-br from-white/10 via-transparent to-white/5'
-                    : 'bg-gradient-to-br from-white/40 via-transparent to-white/20'
-                )}
-              />
-              
-              <DropdownMenuLabel className="relative z-10 px-3 py-2 text-sm font-semibold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 bg-clip-text text-transparent">
-                {language === 'ar' ? 'الحساب' : 'Account'}
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator className="bg-gradient-to-r from-transparent via-border/50 to-transparent" />
-              {menuItems.map((item, index) => (
-                <DropdownMenuItem 
-                  key={index} 
-                  onClick={item.onClick} 
+              <div className="relative dropdown-bloom-inner">
+                {/* Glass sheen overlay */}
+                <div
                   className={cn(
-                    "relative z-10 flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 group",
-                    item.hoverClass,
-                    "focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500/30",
-                    "animate-in fade-in-0 slide-in-from-top-2"
+                    "absolute inset-0 rounded-2xl pointer-events-none",
+                    theme === 'dark'
+                      ? 'bg-gradient-to-br from-white/10 via-transparent to-white/5'
+                      : 'bg-gradient-to-br from-white/40 via-transparent to-white/20'
                   )}
-                  style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'both' }}
-                  asChild={!!item.href}
-                >
-                  {item.href 
-                    ? (
-                      <Link to={item.href} className="flex items-center gap-3 w-full">
-                        <span className={cn("flex items-center transition-transform duration-200 group-hover:scale-110", item.colorClass)}>{item.icon}</span>
-                        <span className="text-sm font-medium text-foreground/80 group-hover:text-foreground transition-colors">{item.title}</span>
-                      </Link>
-                    ) : (
-                      <span className="flex items-center gap-3 w-full">
-                        <span className={cn("flex items-center transition-transform duration-200 group-hover:scale-110", item.colorClass)}>{item.icon}</span>
-                        <span className="text-sm font-medium text-foreground/80 group-hover:text-foreground transition-colors">{item.title}</span>
-                      </span>
-                    )
-                  }
-                </DropdownMenuItem>
-              ))}
+                />
+                
+                <DropdownMenuLabel className="relative z-10 px-3 py-2 text-sm font-semibold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 bg-clip-text text-transparent">
+                  {language === 'ar' ? 'الحساب' : 'Account'}
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator className="bg-gradient-to-r from-transparent via-border/50 to-transparent" />
+                {menuItems.map((item, index) => (
+                  <DropdownMenuItem 
+                    key={index} 
+                    onClick={item.onClick} 
+                    className={cn(
+                      "relative z-10 flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 group",
+                      item.hoverClass,
+                      "focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500/30",
+                      "dropdown-item-stagger"
+                    )}
+                    style={{ animationDelay: `${150 + index * 80}ms` }}
+                    asChild={!!item.href}
+                  >
+                    {item.href 
+                      ? (
+                        <Link to={item.href} className="flex items-center gap-3 w-full">
+                          <span className={cn("flex items-center transition-transform duration-200 group-hover:scale-110", item.colorClass)}>{item.icon}</span>
+                          <span className="text-sm font-medium text-foreground/80 group-hover:text-foreground transition-colors">{item.title}</span>
+                        </Link>
+                      ) : (
+                        <span className="flex items-center gap-3 w-full">
+                          <span className={cn("flex items-center transition-transform duration-200 group-hover:scale-110", item.colorClass)}>{item.icon}</span>
+                          <span className="text-sm font-medium text-foreground/80 group-hover:text-foreground transition-colors">{item.title}</span>
+                        </span>
+                      )
+                    }
+                  </DropdownMenuItem>
+                ))}
+              </div>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

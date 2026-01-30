@@ -160,7 +160,15 @@
   }
 
   /* RTL layout fix - ensure main content doesn't clip */
-  main, [dir="rtl"], [dir="ltr"] {
+  main {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  /* Keep RTL/LTR children within main from clipping without affecting portaled overlays */
+  main [dir="rtl"],
+  main [dir="ltr"] {
     width: 100%;
     max-width: 100%;
     overflow-x: hidden;
@@ -273,6 +281,47 @@ textarea::placeholder {
     filter: drop-shadow(0 0 14px hsl(210 100% 65% / 0.8));
     transform: scale(1.08);
   }
+}
+
+/* Profile dropdown "flower bloom" animation */
+@keyframes dropdown-bloom {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) translateY(-8px);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02) translateY(2px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes dropdown-item-appear {
+  0% {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.dropdown-bloom {
+  transform-origin: top right;
+}
+
+.dropdown-bloom-inner {
+  animation: dropdown-bloom 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  transform-origin: top right;
+}
+
+.dropdown-item-stagger {
+  opacity: 0;
+  animation: dropdown-item-appear 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
 
 .wakti-wave-bar {

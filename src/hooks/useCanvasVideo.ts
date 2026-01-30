@@ -1,6 +1,4 @@
 import { useState, useCallback, useRef } from 'react';
-import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile } from '@ffmpeg/util';
 
 type TransitionType = 'fade' | 'slide-left' | 'slide-right' | 'zoom-in' | 'zoom-out' | 'wipe-left' | 'wipe-right' | 'dissolve' | 'none';
 type TextAnimation = 'none' | 'fade-in' | 'slide-up' | 'slide-down' | 'zoom-in' | 'typewriter' | 'bounce';
@@ -74,7 +72,7 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
   const [status, setStatus] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const ffmpegRef = useRef<FFmpeg | null>(null);
+  const ffmpegRef = useRef<any>(null);
   const ffmpegLoadedRef = useRef(false);
 
   // Check if FFmpeg/SharedArrayBuffer is available on this device
@@ -105,75 +103,12 @@ export function useCanvasVideo(): UseCanvasVideoReturn {
   }, []);
 
   const convertWebmToMp4 = useCallback(async (webmBlob: Blob): Promise<Blob> => {
-    // On iOS, skip conversion entirely - we'll handle playback differently
-    if (isIOSDevice()) {
-      console.log('[useCanvasVideo] iOS device - skipping conversion, WebM will be handled by UI');
-      return webmBlob;
-    }
-
-    // Skip conversion if FFmpeg won't work reliably
-    if (!canUseFFmpeg()) {
-      console.log('[useCanvasVideo] FFmpeg not available, returning WebM');
-      return webmBlob;
-    }
-
-    try {
-      if (!ffmpegRef.current) {
-        ffmpegRef.current = new FFmpeg();
-      }
-      const ffmpeg = ffmpegRef.current;
-
-      if (!ffmpegLoadedRef.current) {
-        setStatus('Loading video converter...');
-        const coreURL = `${FFMPEG_CORE_URL}/ffmpeg-core.js`;
-        const wasmURL = `${FFMPEG_CORE_URL}/ffmpeg-core.wasm`;
-        
-        const [coreBlob, wasmBlob] = await Promise.all([
-          fetch(coreURL).then(r => r.blob()),
-          fetch(wasmURL).then(r => r.blob()),
-        ]);
-        
-        await ffmpeg.load({
-          coreURL: URL.createObjectURL(coreBlob),
-          wasmURL: URL.createObjectURL(wasmBlob),
-        });
-        ffmpegLoadedRef.current = true;
-      }
-
-      setStatus('Converting to MP4...');
-      
-      const inputData = await fetchFile(webmBlob);
-      await ffmpeg.writeFile('input.webm', inputData);
-      
-      await ffmpeg.exec([
-        '-i', 'input.webm',
-        '-c:v', 'libx264',
-        '-preset', 'fast',
-        '-crf', '23',
-        '-c:a', 'aac',
-        '-b:a', '128k',
-        '-movflags', '+faststart',
-        '-pix_fmt', 'yuv420p',
-        '-y',
-        'output.mp4'
-      ]);
-      
-      const outputData = await ffmpeg.readFile('output.mp4');
-      await ffmpeg.deleteFile('input.webm').catch(() => {});
-      await ffmpeg.deleteFile('output.mp4').catch(() => {});
-      
-      let blobPart: BlobPart;
-      if (outputData instanceof Uint8Array) {
-        blobPart = new Uint8Array(outputData);
-      } else {
-        blobPart = new Uint8Array(outputData as unknown as ArrayBuffer);
-      }
-      
-      return new Blob([blobPart], { type: 'video/mp4' });
-    } catch (e) {
-      console.error('[useCanvasVideo] FFmpeg conversion failed:', e);
-      return webmBlob;
-    }
+    void canUseFFmpeg;
+    void isIOSDevice;
+    void ffmpegRef;
+    void ffmpegLoadedRef;
+    void FFMPEG_CORE_URL;
+    return webmBlob;
   }, [canUseFFmpeg, isIOSDevice]);
 
   const generateVideo = useCallback(async (options: VideoGenerationOptions): Promise<Blob | null> => {

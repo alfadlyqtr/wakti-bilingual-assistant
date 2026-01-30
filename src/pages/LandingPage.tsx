@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -17,6 +17,7 @@ export default function LandingPage() {
   const { user } = useAuth();
   const { language } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
   // Redirect logged-in users to dashboard
   useEffect(() => {
@@ -31,6 +32,21 @@ export default function LandingPage() {
     return () => {
       document.body.classList.remove("landing-page");
     };
+  }, []);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const onScroll = () => {
+      const maxScroll = el.scrollHeight - el.clientHeight;
+      const pct = maxScroll <= 0 ? 0 : el.scrollTop / maxScroll;
+      setShowScrollTop(pct >= 0.25);
+    };
+
+    onScroll();
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
   }, []);
 
   const lang = language as "en" | "ar";
@@ -191,6 +207,19 @@ export default function LandingPage() {
         paddingBottom: "72px",
       }}
     >
+      {showScrollTop && (
+        <button
+          type="button"
+          onClick={() => {
+            containerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+          className="fixed right-4 top-1/2 -translate-y-1/2 z-40 h-12 w-12 rounded-full bg-[#0c0f14]/70 border border-blue-400/25 backdrop-blur-xl text-blue-100 shadow-[0_0_26px_hsla(210,100%,65%,0.45)] transition-all duration-300 hover:shadow-[0_0_34px_hsla(210,100%,65%,0.65)] hover:bg-blue-500/10 active:scale-95"
+          aria-label="Scroll to top"
+        >
+          <span className="block text-lg leading-none">^</span>
+        </button>
+      )}
+
       {/* Scene 1: Hero */}
       <HeroScene language={lang} />
 
@@ -226,6 +255,13 @@ export default function LandingPage() {
               <span className="text-white/40">•</span>
               <Link to="/contact" className="hover:text-white/80 transition-colors">
                 {lang === "ar" ? "تواصل معنا" : "Contact Us"}
+              </Link>
+              <span className="text-white/40">•</span>
+              <Link
+                to="/login"
+                className="rounded-full px-3 py-1 bg-[#0c0f14]/60 text-white/85 border border-blue-400/25 backdrop-blur-xl shadow-[0_0_18px_hsla(210,100%,65%,0.35)] hover:text-white hover:bg-blue-500/10 hover:border-blue-300/40 hover:shadow-[0_0_26px_hsla(210,100%,65%,0.55)] transition-all"
+              >
+                {lang === "ar" ? "تسجيل الدخول" : "Sign in"}
               </Link>
               <span className="text-white/40">•</span>
               <a

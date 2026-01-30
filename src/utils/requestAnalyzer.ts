@@ -161,12 +161,32 @@ const CUSTOMIZATION_PATTERNS = [
   /\b(how\s*many|show\s*me|list|view|display)\b/i
 ];
 
+// Projects that should NEVER trigger product/shop wizards
+const PORTFOLIO_PATTERNS = [
+  /\b(portfolio|cv|resume|personal\s*website|personal\s*site|about\s*me)\b/i,
+  /\b(developer\s*portfolio|designer\s*portfolio|professional\s*portfolio)\b/i,
+];
+
 export function analyzeRequest(prompt: string): AnalyzedRequest {
   const features: DetectedFeature[] = [];
   const lowerPrompt = prompt.toLowerCase();
   
   // First, check if this is just a customization/info request
   const isCustomization = CUSTOMIZATION_PATTERNS.some(pattern => pattern.test(lowerPrompt));
+  
+  // Check if this is a portfolio/CV project - these should NEVER trigger product wizards
+  const isPortfolio = PORTFOLIO_PATTERNS.some(pattern => pattern.test(prompt));
+  if (isPortfolio) {
+    console.log('[requestAnalyzer] Portfolio/CV project detected - skipping all wizards');
+    return {
+      originalPrompt: prompt,
+      businessType: 'portfolio',
+      features: [],
+      totalFeatures: 0,
+      currentFeatureIndex: 0,
+      isMultiFeature: false,
+    };
+  }
   
   // Detect business type
   let businessType = 'business';

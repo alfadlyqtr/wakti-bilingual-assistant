@@ -36,7 +36,6 @@ import {
   Save,
   AlertCircle,
 } from 'lucide-react';
-import VideoEditorPro from '@/components/video-maker/VideoEditorPro';
 import AIVideomaker from '@/components/video-maker/AIVideomaker';
 import { useLocation } from 'react-router-dom';
 
@@ -113,9 +112,9 @@ const handleDownload = async (url: string, filename: string) => {
       window.open(safeUrl, '_blank');
     }
   }
-};
+ };
 
-interface SavedVideo {
+ interface SavedVideo {
   id: string;
   title: string | null;
   thumbnail_url?: string | null;
@@ -127,9 +126,9 @@ interface SavedVideo {
   signedUrl?: string | null;
   thumbnailSignedUrl?: string | null;
   source?: 'user' | 'ai';
-}
+ }
 
-function VideoPlayer({ url, storagePath, language }: { url: string; storagePath?: string | null; language: string }) {
+ function VideoPlayer({ url, storagePath, language }: { url: string; storagePath?: string | null; language: string }) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -140,7 +139,6 @@ function VideoPlayer({ url, storagePath, language }: { url: string; storagePath?
       setLoading(true);
       setError(false);
       try {
-        // Use Supabase download method which handles CORS properly
         if (storagePath) {
           const { data, error: dlError } = await supabase.storage
             .from('videos')
@@ -150,7 +148,6 @@ function VideoPlayer({ url, storagePath, language }: { url: string; storagePath?
           const objectUrl = URL.createObjectURL(data);
           setBlobUrl(objectUrl);
         } else {
-          // Fallback to direct fetch for external URLs
           const res = await fetch(url);
           if (!res.ok) throw new Error('Fetch failed');
           const blob = await res.blob();
@@ -236,9 +233,9 @@ function VideoPlayer({ url, storagePath, language }: { url: string; storagePath?
       </div>
     </div>
   );
-}
+ }
 
-function SavedVideosTab({ onCreate }: { onCreate: () => void }) {
+ function SavedVideosTab({ onCreate }: { onCreate: () => void }) {
   const { language } = useTheme();
   const { user } = useAuth();
 
@@ -639,25 +636,25 @@ function SavedVideosTab({ onCreate }: { onCreate: () => void }) {
       </AlertDialog>
     </div>
   );
-}
+ }
 
 export default function MusicStudio() {
   const { language } = useTheme();
   const [mainTab, setMainTab] = useState<'music' | 'video'>('music');
   const [musicSubTab, setMusicSubTab] = useState<'compose' | 'editor'>('compose');
-  const [videoMode, setVideoMode] = useState<'maker' | 'ai' | 'saved'>('maker');
+  const [videoMode, setVideoMode] = useState<'ai' | 'saved'>('ai');
   const location = useLocation();
 
   useEffect(() => {
     const state = (location.state || {}) as any;
     if (state?.openVideoTab) {
       setMainTab('video');
+      setVideoMode('saved');
     }
   }, [location.state]);
 
   return (
     <div className="w-full max-w-6xl mx-auto p-3 md:p-6 pb-20 md:pb-6 space-y-4">
-      {/* Main tabs: Music | Video */}
       <div className="flex items-center gap-2 border-b border-border pb-3">
         <button
           onClick={() => setMainTab('music')}
@@ -704,17 +701,13 @@ export default function MusicStudio() {
         </>
       )}
 
-      {/* Video Tab Content */}
       {mainTab === 'video' && (
         <>
           <div className="flex items-center justify-between">
-            <h1 className="text-xl md:text-2xl font-bold">{language === 'ar' ? 'صانع الفيديو' : 'Video Maker'}</h1>
+            <h1 className="text-xl md:text-2xl font-bold">{language === 'ar' ? 'الفيديو' : 'Video'}</h1>
             <div />
           </div>
           <nav className="flex gap-2 border-b border-border pb-2 flex-wrap">
-            <Button variant={videoMode === 'maker' ? 'default' : 'outline'} size="sm" onClick={() => setVideoMode('maker')}>
-              {language === 'ar' ? 'صانع الفيديو' : 'Videomaker'}
-            </Button>
             <Button variant={videoMode === 'ai' ? 'default' : 'outline'} size="sm" onClick={() => setVideoMode('ai')}>
               {language === 'ar' ? 'صانع الفيديو بالذكاء' : 'AI Videomaker'}
             </Button>
@@ -723,18 +716,16 @@ export default function MusicStudio() {
             </Button>
           </nav>
 
-          {videoMode === 'maker' ? (
-            <VideoEditorPro />
-          ) : videoMode === 'ai' ? (
+          {videoMode === 'ai' ? (
             <AIVideomaker onSaveSuccess={() => setVideoMode('saved')} />
           ) : (
-            <SavedVideosTab onCreate={() => setVideoMode('maker')} />
+            <SavedVideosTab onCreate={() => setVideoMode('ai')} />
           )}
         </>
       )}
     </div>
   );
-}
+ }
 
 function ComposeTab({ onSaved }: { onSaved?: ()=>void }) {
   const { language } = useTheme();

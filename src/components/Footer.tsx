@@ -25,6 +25,13 @@ export function Footer() {
               {t("contactUs", language)}
             </Link>
             <span className="text-muted-foreground">•</span>
+            <Link
+              to="/login"
+              className="rounded-full px-3 py-1 bg-[#0c0f14]/60 text-white/85 border border-blue-400/25 backdrop-blur-xl shadow-[0_0_18px_hsla(210,100%,65%,0.35)] hover:text-white hover:bg-blue-500/10 hover:border-blue-300/40 hover:shadow-[0_0_26px_hsla(210,100%,65%,0.55)] transition-all"
+            >
+              {language === "ar" ? "تسجيل الدخول" : "Sign in"}
+            </Link>
+            <span className="text-muted-foreground">•</span>
             <a 
               href="https://tmw.qa" 
               target="_blank" 

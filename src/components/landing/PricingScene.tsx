@@ -60,7 +60,7 @@ export function PricingScene({ language = "en" }: PricingSceneProps) {
               <span className="text-5xl font-extralight text-white">95</span>
               <span className="text-xl text-white/80 font-light">QAR</span>
               <span className="text-white/70 font-light">/</span>
-              <span className="text-white/70 font-light">{isArabic ? "شهر" : "month"}</span>
+              <span className="text-white/70 font-light">{isArabic ? "شهرياً" : "monthly"}</span>
             </motion.div>
 
             <motion.div
@@ -70,7 +70,10 @@ export function PricingScene({ language = "en" }: PricingSceneProps) {
               transition={{ delay: 0.5 }}
               className="text-white/70 text-sm mt-2"
             >
-              ≈ $24.99 USD
+              <span className="font-semibold text-white/90">≈ $24.99 USD</span>{" "}
+              <span className="text-[11px] font-light text-white/60">
+                {isArabic ? "شهرياً" : "monthly"}
+              </span>
             </motion.div>
           </div>
 

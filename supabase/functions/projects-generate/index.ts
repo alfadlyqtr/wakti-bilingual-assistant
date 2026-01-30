@@ -215,6 +215,374 @@ declare const Deno: {
   };
 };
 
+// ============================================================================
+// DOCUMENT & VISION PROCESSING - Extract text from PDFs/DOCX, analyze images
+// ============================================================================
+
+interface ProcessedAsset {
+  filename: string;
+  url: string;
+  file_type: string | null;
+  extractedText?: string;  // For PDF/DOCX
+  visionAnalysis?: string; // For images
+}
+
+/**
+ * Extract text from a PDF using pdf-parse via fetch to a public API
+ * For Deno Edge Functions, we use Gemini's native PDF understanding
+ */
+async function extractTextFromPDF(url: string, apiKey: string): Promise<string> {
+  try {
+    console.log(`[PDF Extract] Downloading PDF from: ${url}`);
+    
+    // Download the PDF
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error(`[PDF Extract] Failed to download: ${response.status}`);
+      return '';
+    }
+    
+    const pdfBytes = await response.arrayBuffer();
+    const base64Pdf = btoa(String.fromCharCode(...new Uint8Array(pdfBytes)));
+    
+    console.log(`[PDF Extract] PDF size: ${pdfBytes.byteLength} bytes, sending to Gemini...`);
+    
+    // Use Gemini to extract text from PDF (it has native PDF understanding)
+    const geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              {
+                inline_data: {
+                  mime_type: 'application/pdf',
+                  data: base64Pdf
+                }
+              },
+              {
+                text: `Extract ALL text content from this PDF document. This is a CV/resume or document that the user wants to use as inspiration for their website. 
+                
+Return the extracted text in a clean, structured format. Include:
+- Name and contact information
+- Professional summary/objective
+- Work experience (company, role, dates, responsibilities)
+- Education (institution, degree, dates)
+- Skills and certifications
+- Any other relevant sections
+
+Format it clearly so it can be used to generate a portfolio/CV website.`
+              }
+            ]
+          }],
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 4000
+          }
+        })
+      }
+    );
+    
+    if (!geminiResponse.ok) {
+      console.error(`[PDF Extract] Gemini API error: ${geminiResponse.status}`);
+      return '';
+    }
+    
+    const result = await geminiResponse.json();
+    const extractedText = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    
+    console.log(`[PDF Extract] Extracted ${extractedText.length} characters from PDF`);
+    return extractedText;
+    
+  } catch (error) {
+    console.error('[PDF Extract] Error:', error);
+    return '';
+  }
+}
+
+/**
+ * Extract text from a DOCX file using Gemini's document understanding
+ */
+async function extractTextFromDOCX(url: string, apiKey: string): Promise<string> {
+  try {
+    console.log(`[DOCX Extract] Downloading DOCX from: ${url}`);
+    
+    // Download the DOCX
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error(`[DOCX Extract] Failed to download: ${response.status}`);
+      return '';
+    }
+    
+    const docxBytes = await response.arrayBuffer();
+    const base64Docx = btoa(String.fromCharCode(...new Uint8Array(docxBytes)));
+    
+    console.log(`[DOCX Extract] DOCX size: ${docxBytes.byteLength} bytes, sending to Gemini...`);
+    
+    // Use Gemini to extract text (it can handle DOCX as well)
+    const geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              {
+                inline_data: {
+                  mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                  data: base64Docx
+                }
+              },
+              {
+                text: `Extract ALL text content from this Word document. This is a CV/resume or document that the user wants to use as inspiration for their website.
+
+Return the extracted text in a clean, structured format. Include all sections, headings, and content.`
+              }
+            ]
+          }],
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 4000
+          }
+        })
+      }
+    );
+    
+    if (!geminiResponse.ok) {
+      console.error(`[DOCX Extract] Gemini API error: ${geminiResponse.status}`);
+      return '';
+    }
+    
+    const result = await geminiResponse.json();
+    const extractedText = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    
+    console.log(`[DOCX Extract] Extracted ${extractedText.length} characters from DOCX`);
+    return extractedText;
+    
+  } catch (error) {
+    console.error('[DOCX Extract] Error:', error);
+    return '';
+  }
+}
+
+/**
+ * Analyze an image using Gemini Vision to extract design inspiration
+ */
+async function analyzeImageForInspiration(url: string, apiKey: string): Promise<string> {
+  try {
+    console.log(`[Vision] Analyzing image for inspiration: ${url}`);
+    
+    // Download the image
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error(`[Vision] Failed to download: ${response.status}`);
+      return '';
+    }
+    
+    const imageBytes = await response.arrayBuffer();
+    const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageBytes)));
+    
+    // Determine mime type from URL or response
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    const mimeType = contentType.split(';')[0].trim();
+    
+    console.log(`[Vision] Image size: ${imageBytes.byteLength} bytes, type: ${mimeType}`);
+    
+    // Use Gemini Vision to analyze the image
+    const geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              {
+                inline_data: {
+                  mime_type: mimeType,
+                  data: base64Image
+                }
+              },
+              {
+                text: `Analyze this image as design inspiration for a website. The user uploaded this as a reference.
+
+Describe in detail:
+1. **Visual Style**: Colors, gradients, shadows, overall aesthetic (modern, minimal, bold, elegant, etc.)
+2. **Layout**: How elements are arranged, grid structure, spacing, alignment
+3. **Typography**: Font styles visible (serif, sans-serif, bold, light), text hierarchy
+4. **UI Elements**: Buttons, cards, navigation, icons, any interactive elements
+5. **Mood/Vibe**: What feeling does this design convey?
+6. **Key Design Patterns**: Any notable design patterns or techniques used
+
+If this is a screenshot of a website, describe what sections are visible and how they're designed.
+If this is a logo or brand image, describe the brand identity elements.
+If this is a photo, describe how it could be used in a website design.
+
+Be specific and actionable so the AI can recreate a similar style.`
+              }
+            ]
+          }],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 2000
+          }
+        })
+      }
+    );
+    
+    if (!geminiResponse.ok) {
+      console.error(`[Vision] Gemini API error: ${geminiResponse.status}`);
+      return '';
+    }
+    
+    const result = await geminiResponse.json();
+    const analysis = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    
+    console.log(`[Vision] Generated ${analysis.length} character analysis`);
+    return analysis;
+    
+  } catch (error) {
+    console.error('[Vision] Error:', error);
+    return '';
+  }
+}
+
+/**
+ * Process all uploaded assets - extract text from documents, analyze images
+ */
+/**
+ * Detect if a file is a PDF based on file type, filename, or URL
+ */
+function isPdfFile(fileType: string | null, filename: string, url: string): boolean {
+  const ft = (fileType || '').toLowerCase();
+  const fn = filename.toLowerCase();
+  const urlLower = url.toLowerCase();
+  
+  // Check MIME types
+  if (ft.includes('pdf') || ft === 'application/pdf') return true;
+  
+  // Check filename extension
+  if (fn.endsWith('.pdf')) return true;
+  
+  // Check URL for .pdf extension (before query params)
+  const urlPath = urlLower.split('?')[0];
+  if (urlPath.endsWith('.pdf')) return true;
+  
+  // Check if filename contains pdf (e.g., "resume_pdf" or "cv-pdf")
+  if (fn.includes('pdf') && !fn.includes('image')) return true;
+  
+  return false;
+}
+
+/**
+ * Detect if a file is a Word document based on file type, filename, or URL
+ */
+function isWordFile(fileType: string | null, filename: string, url: string): boolean {
+  const ft = (fileType || '').toLowerCase();
+  const fn = filename.toLowerCase();
+  const urlLower = url.toLowerCase();
+  
+  // Check MIME types
+  if (ft.includes('word') || ft.includes('document') || ft.includes('msword') || ft.includes('officedocument')) return true;
+  if (ft === 'application/msword' || ft === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return true;
+  
+  // Check filename extension
+  if (fn.endsWith('.doc') || fn.endsWith('.docx')) return true;
+  
+  // Check URL for doc/docx extension
+  const urlPath = urlLower.split('?')[0];
+  if (urlPath.endsWith('.doc') || urlPath.endsWith('.docx')) return true;
+  
+  return false;
+}
+
+/**
+ * Detect if a file is an image based on file type, filename, or URL
+ */
+function isImageFile(fileType: string | null, filename: string, url: string): boolean {
+  const ft = (fileType || '').toLowerCase();
+  const fn = filename.toLowerCase();
+  const urlLower = url.toLowerCase();
+  
+  // Check MIME types
+  if (ft.includes('image') || ft.startsWith('image/')) return true;
+  
+  // Check filename extension
+  if (/\.(jpg|jpeg|png|gif|webp|svg|bmp|tiff|ico|heic|heif)$/i.test(fn)) return true;
+  
+  // Check URL for image extension
+  const urlPath = urlLower.split('?')[0];
+  if (/\.(jpg|jpeg|png|gif|webp|svg|bmp|tiff|ico|heic|heif)$/i.test(urlPath)) return true;
+  
+  return false;
+}
+
+async function processUploadedAssets(
+  assets: Array<{ filename: string; url: string; file_type: string | null }>,
+  apiKey: string
+): Promise<{ processedAssets: ProcessedAsset[]; documentContent: string; visionInspirations: string }> {
+  const processedAssets: ProcessedAsset[] = [];
+  let documentContent = '';
+  let visionInspirations = '';
+  
+  console.log(`[Process Assets] Starting to process ${assets.length} assets...`);
+  
+  for (const asset of assets) {
+    const processed: ProcessedAsset = { ...asset };
+    
+    // Log detailed file info for debugging
+    console.log(`[Process Assets] Checking asset: filename="${asset.filename}", file_type="${asset.file_type}", url="${asset.url.substring(0, 100)}..."`);
+    
+    // Check if it's a PDF using robust detection
+    if (isPdfFile(asset.file_type, asset.filename, asset.url)) {
+      console.log(`[Process Assets] ✅ DETECTED AS PDF: ${asset.filename}`);
+      const text = await extractTextFromPDF(asset.url, apiKey);
+      if (text) {
+        processed.extractedText = text;
+        documentContent += `\n\n📄 **CONTENT FROM ${asset.filename}:**\n${text}\n`;
+        console.log(`[Process Assets] ✅ Extracted ${text.length} chars from PDF`);
+      } else {
+        console.log(`[Process Assets] ⚠️ PDF extraction returned empty for ${asset.filename}`);
+      }
+    }
+    // Check if it's a DOCX/DOC using robust detection
+    else if (isWordFile(asset.file_type, asset.filename, asset.url)) {
+      console.log(`[Process Assets] ✅ DETECTED AS WORD DOC: ${asset.filename}`);
+      const text = await extractTextFromDOCX(asset.url, apiKey);
+      if (text) {
+        processed.extractedText = text;
+        documentContent += `\n\n📄 **CONTENT FROM ${asset.filename}:**\n${text}\n`;
+        console.log(`[Process Assets] ✅ Extracted ${text.length} chars from DOCX`);
+      } else {
+        console.log(`[Process Assets] ⚠️ DOCX extraction returned empty for ${asset.filename}`);
+      }
+    }
+    // Check if it's an image using robust detection
+    else if (isImageFile(asset.file_type, asset.filename, asset.url)) {
+      console.log(`[Process Assets] ✅ DETECTED AS IMAGE: ${asset.filename}`);
+      const analysis = await analyzeImageForInspiration(asset.url, apiKey);
+      if (analysis) {
+        processed.visionAnalysis = analysis;
+        visionInspirations += `\n\n🎨 **DESIGN INSPIRATION FROM ${asset.filename}:**\n${analysis}\n`;
+        console.log(`[Process Assets] ✅ Generated ${analysis.length} chars of vision analysis`);
+      } else {
+        console.log(`[Process Assets] ⚠️ Image analysis returned empty for ${asset.filename}`);
+      }
+    } else {
+      console.log(`[Process Assets] ❌ UNKNOWN FILE TYPE - not processed: filename="${asset.filename}", file_type="${asset.file_type}"`);
+    }
+    
+    processedAssets.push(processed);
+  }
+  
+  console.log(`[Process Assets] Completed. Document content: ${documentContent.length} chars, Vision: ${visionInspirations.length} chars`);
+  
+  return { processedAssets, documentContent, visionInspirations };
+}
+
 const allowedOrigins = [
   "https://wakti.qa",
   "https://www.wakti.qa",
@@ -931,7 +1299,9 @@ async function callGeminiFullRewriteEdit(
   userInstructions: string = "",
   images?: string[], // Support for images/PDFs
   uploadedAssets?: UploadedAsset[], // User uploaded assets from backend
-  backendContext?: BackendContext // Backend context for AI awareness
+  backendContext?: BackendContext, // Backend context for AI awareness
+  extractedDocumentContent?: string, // Extracted text from PDFs/DOCX
+  extractedVisionInspirations?: string // Design inspiration from images
 ): Promise<{ files: Record<string, string>; summary: string }> {
   const fileContext = Object.entries(currentFiles || {})
     .map(([path, content]) => `=== FILE: ${path} ===\n${content}`)
@@ -977,7 +1347,9 @@ The user attached a screenshot. I analyzed it and found these text anchors:
       }
     }
     
-    // Process PDFs
+    // Process PDFs - Extract actual content using Gemini
+    const GEMINI_API_KEY_EDIT = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
+    
     for (const imgData of images) {
       if (typeof imgData !== 'string') continue;
       
@@ -986,7 +1358,75 @@ The user attached a screenshot. I analyzed it and found these text anchors:
         const endMarker = imgData.indexOf(']');
         if (endMarker > 0) {
           const pdfName = imgData.substring(5, endMarker);
-          pdfTextContent += `\n\n📄 ATTACHED PDF: ${pdfName}\n(PDF content attached - extract and use relevant information from it)\n`;
+          const pdfBase64Data = imgData.substring(endMarker + 1);
+          
+          // Extract text from PDF using Gemini Vision
+          console.log(`[Edit Mode] 📄 Extracting text from PDF: ${pdfName}`);
+          try {
+            const pdfMatches = pdfBase64Data.match(/^data:([^;]+);base64,(.+)$/);
+            if (pdfMatches && GEMINI_API_KEY_EDIT) {
+              const pdfMimeType = pdfMatches[1];
+              const pdfBase64 = pdfMatches[2];
+              
+              const extractResponse = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`,
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "x-goog-api-key": GEMINI_API_KEY_EDIT,
+                  },
+                  body: JSON.stringify({
+                    contents: [{
+                      role: "user",
+                      parts: [
+                        { inlineData: { mimeType: pdfMimeType, data: pdfBase64 } },
+                        { text: `Extract ALL text content from this PDF document. This appears to be a CV/Resume or important document.
+                        
+Return the COMPLETE text content including:
+- Name and contact information
+- Professional summary/objective
+- Work experience (company names, job titles, dates, responsibilities)
+- Education (degrees, institutions, dates)
+- Skills (technical and soft skills)
+- Certifications, awards, languages
+- Any other relevant information
+
+Format the output clearly with sections. Do NOT summarize - extract the FULL text.` }
+                      ]
+                    }],
+                    generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+                  }),
+                }
+              );
+              
+              if (extractResponse.ok) {
+                const extractData = await extractResponse.json();
+                const extractedText = extractData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                if (extractedText) {
+                  pdfTextContent += `
+
+📄 **EXTRACTED CONTENT FROM ${pdfName}:**
+${extractedText}
+
+🚨 **CRITICAL**: Use this REAL data from the user's document above.
+DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
+                  console.log(`[Edit Mode] ✅ Extracted ${extractedText.length} chars from PDF: ${pdfName}`);
+                } else {
+                  console.log(`[Edit Mode] ⚠️ PDF extraction returned empty for ${pdfName}`);
+                  pdfTextContent += `\n\n📄 ATTACHED PDF: ${pdfName} - Could not extract text.`;
+                }
+              } else {
+                console.error(`[Edit Mode] PDF extraction API error: ${extractResponse.status}`);
+                pdfTextContent += `\n\n📄 ATTACHED PDF: ${pdfName} - Extraction failed.`;
+              }
+            } else {
+              pdfTextContent += `\n\n📄 ATTACHED PDF: ${pdfName} - Please describe the content.`;
+            }
+          } catch (pdfErr) {
+            console.error(`[Edit Mode] PDF extraction error:`, pdfErr);
+            pdfTextContent += `\n\n📄 ATTACHED PDF: ${pdfName} - Extraction error.`;
+          }
         }
       }
     }
@@ -995,12 +1435,36 @@ The user attached a screenshot. I analyzed it and found these text anchors:
     }
   }
   
-  // Build uploaded assets context
-  const uploadedAssetsContext = uploadedAssets && uploadedAssets.length > 0 
+  // Build uploaded assets context with extracted content
+  let uploadedAssetsContext = uploadedAssets && uploadedAssets.length > 0 
     ? `\n\n📁 USER UPLOADED ASSETS (Use these URLs directly in the code):
 ${uploadedAssets.map(a => `- **${a.filename}** (${a.file_type || 'file'}): ${a.url}`).join('\n')}
 When user says "my photo", "my image", "uploaded image", "profile picture", use the appropriate URL from above.\n`
     : '';
+  
+  // Add extracted document content (CV/Resume text, etc.)
+  if (extractedDocumentContent && extractedDocumentContent.trim()) {
+    uploadedAssetsContext += `
+
+📄 **EXTRACTED DOCUMENT CONTENT** (USE THIS DATA TO BUILD THE WEBSITE):
+${extractedDocumentContent}
+
+🚨 **CRITICAL**: The above content was extracted from the user's uploaded document (CV/Resume/etc).
+USE THIS REAL DATA to populate the website - names, experience, skills, education, contact info, etc.
+DO NOT make up fake information. Use EXACTLY what is in the extracted content above.
+`;
+  }
+  
+  // Add vision inspirations from uploaded images
+  if (extractedVisionInspirations && extractedVisionInspirations.trim()) {
+    uploadedAssetsContext += `
+
+🎨 **DESIGN INSPIRATION FROM UPLOADED IMAGES**:
+${extractedVisionInspirations}
+
+Apply the visual style, colors, layout patterns, and design elements described above.
+`;
+  }
 
   // Build backend context section - "BRICK FOUNDATION + LEGO FREEDOM" philosophy
   const backendContextStr = backendContext?.enabled ? `
@@ -2192,6 +2656,39 @@ You are an elite React Expert creating premium UI applications.
 1.  **Frontend-as-Backend**: Create \`/utils/mockData.js\` for data. Use \`useEffect\` with simulated latency for realism.
 2.  **In-Memory CRUD**: Make "Add", "Edit", and "Delete" work in React state.
 3.  **No External Routing**: Use state-based navigation: \`const [page, setPage] = useState('home');\`.
+
+### 🛡️ DEFENSIVE CODING (CRITICAL - PREVENTS RUNTIME CRASHES)
+ALWAYS use defensive patterns to prevent "Cannot read properties of undefined" errors:
+
+1. **Data Access with i18n**: ALWAYS use fallback pattern:
+   \`\`\`jsx
+   const lang = i18n.language?.substring(0, 2) || 'en';
+   const data = portfolioData[lang] || portfolioData.en || {};
+   \`\`\`
+
+2. **Array Operations**: ALWAYS use optional chaining + fallback:
+   \`\`\`jsx
+   {(data?.items || []).map((item, i) => ...)}
+   {(data?.skills || []).map((skill, i) => ...)}
+   \`\`\`
+
+3. **Property Access**: ALWAYS use optional chaining:
+   \`\`\`jsx
+   {data?.name || 'Default Name'}
+   {data?.title || ''}
+   {item?.description || ''}
+   \`\`\`
+
+4. **NEVER do this** (causes crashes):
+   \`\`\`jsx
+   // BAD - will crash if data is undefined
+   {data.name}
+   {data.items.map(...)}
+   
+   // GOOD - safe with fallbacks
+   {data?.name || 'Name'}
+   {(data?.items || []).map(...)}
+   \`\`\`
 
 ### REACT ROUTER RULES (CRITICAL - PREVENTS CRASHES)
 If you MUST use react-router-dom (Link, Route, Routes, useNavigate, useLocation, useParams):
@@ -3431,11 +3928,47 @@ ${i + 1}. ${e.method} ${e.url} → ${e.status} ${e.statusText}
 🚨 **CRITICAL INSTRUCTION**: You MUST fix these errors in your response. The previous code had bugs that broke the preview. Analyze the errors above and ensure your code changes resolve them.
 ` : '';
     
-    // Build uploaded assets section for prompts
-    const uploadedAssetsStr = uploadedAssets.length > 0 
+    // ========================================================================
+    // PROCESS UPLOADED ASSETS - Extract text from PDFs/DOCX, analyze images
+    // ========================================================================
+    let documentContentStr = '';
+    let visionInspirationStr = '';
+    
+    const geminiApiKeyForAssets = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
+    if (uploadedAssets.length > 0 && geminiApiKeyForAssets) {
+      console.log(`[Assets] Processing ${uploadedAssets.length} uploaded assets for content extraction...`);
+      try {
+        const { documentContent, visionInspirations } = await processUploadedAssets(
+          uploadedAssets as Array<{ filename: string; url: string; file_type: string | null }>,
+          geminiApiKeyForAssets
+        );
+        documentContentStr = documentContent;
+        visionInspirationStr = visionInspirations;
+        console.log(`[Assets] Extracted: ${documentContent.length} chars from docs, ${visionInspirations.length} chars from vision`);
+      } catch (err) {
+        console.error('[Assets] Error processing assets:', err);
+      }
+    }
+    
+    // Build uploaded assets section for prompts (kept for reference but now using documentContentStr/visionInspirationStr directly)
+    const _uploadedAssetsStr = uploadedAssets.length > 0 
       ? `\n\n### 📁 USER UPLOADED ASSETS (Available for use in the project)
 These files have been uploaded by the user to their backend storage. You can use them directly in the code:
 ${uploadedAssets.map((a: UploadedAsset, i: number) => `${i + 1}. **${a.filename}** (${a.file_type || 'file'}): \`${a.url}\``).join('\n')}
+${documentContentStr ? `
+
+### 📄 EXTRACTED DOCUMENT CONTENT
+The user uploaded document(s) containing the following content. USE THIS INFORMATION to build their website:
+${documentContentStr}
+
+**IMPORTANT**: Use the extracted content above to populate the website. For CV/resume uploads, use the person's name, experience, skills, education, etc. to create a personalized portfolio.` : ''}
+${visionInspirationStr ? `
+
+### 🎨 DESIGN INSPIRATION FROM UPLOADED IMAGES
+The user uploaded image(s) as design references. FOLLOW THESE DESIGN GUIDELINES:
+${visionInspirationStr}
+
+**IMPORTANT**: Apply the visual style, colors, layout patterns, and design elements described above to create a website that matches the user's inspiration.` : ''}
 
 ${uploadedAssets.length > 1 
   ? `⚠️ IMPORTANT: If the user says "my photo", "my image", "uploaded image" without specifying which one, you MUST ask them to choose by returning this JSON:
@@ -3642,6 +4175,19 @@ Example: <img src="${uploadedAssets[0]?.url}" alt="User image" />` : uploadedAss
 ### 📁 USER UPLOADED ASSETS
 Files available: ${uploadedAssets.map((a: UploadedAsset) => a.filename).join(', ')}
 Remember: If user doesn't specify which file, return asset_picker JSON first!` : ''}
+${documentContentStr ? `
+
+### 📄 EXTRACTED DOCUMENT CONTENT (USE THIS DATA!)
+${documentContentStr}
+
+🚨 **CRITICAL**: Use this REAL data from the user's uploaded document to populate the website.
+DO NOT make up fake information. Use EXACTLY what is in the extracted content above.` : ''}
+${visionInspirationStr ? `
+
+### 🎨 DESIGN INSPIRATION FROM UPLOADED IMAGES
+${visionInspirationStr}
+
+Apply the visual style, colors, and design elements described above.` : ''}
 
 Current project files:
 ${filesStr}`;
@@ -3663,10 +4209,88 @@ ${filesStr}`;
             const endBracket = imgData.indexOf(']');
             if (endBracket > 0) {
               const pdfName = imgData.substring(5, endBracket);
-              // For PDFs, we can't send them to vision API, but we note that a PDF was attached
-              // The user should describe what's in the PDF or we could use a PDF extraction service
-              pdfTextContent += `\n\n📄 USER ATTACHED PDF: "${pdfName}" - Please consider this document was uploaded. If the user mentions "resume", "CV", "document", etc., they're referring to this file.`;
-              console.log(`[Chat Mode] PDF attached: ${pdfName}`);
+              const pdfBase64Data = imgData.substring(endBracket + 1);
+              
+              // Extract text from PDF using Gemini Vision
+              console.log(`[Chat Mode] 📄 Extracting text from PDF: ${pdfName}`);
+              try {
+                // Parse the base64 data URL
+                const pdfMatches = pdfBase64Data.match(/^data:([^;]+);base64,(.+)$/);
+                if (pdfMatches) {
+                  const pdfMimeType = pdfMatches[1];
+                  const pdfBase64 = pdfMatches[2];
+                  
+                  // Use Gemini to extract text from PDF
+                  const extractResponse = await fetch(
+                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`,
+                    {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        "x-goog-api-key": GEMINI_API_KEY,
+                      },
+                      body: JSON.stringify({
+                        contents: [{
+                          role: "user",
+                          parts: [
+                            {
+                              inlineData: {
+                                mimeType: pdfMimeType,
+                                data: pdfBase64
+                              }
+                            },
+                            {
+                              text: `Extract ALL text content from this PDF document. This appears to be a CV/Resume or important document.
+                              
+Return the COMPLETE text content including:
+- Name and contact information
+- Professional summary/objective
+- Work experience (company names, job titles, dates, responsibilities)
+- Education (degrees, institutions, dates)
+- Skills (technical and soft skills)
+- Certifications, awards, languages
+- Any other relevant information
+
+Format the output clearly with sections. Do NOT summarize - extract the FULL text.`
+                            }
+                          ]
+                        }],
+                        generationConfig: {
+                          temperature: 0.1,
+                          maxOutputTokens: 8192,
+                        },
+                      }),
+                    }
+                  );
+                  
+                  if (extractResponse.ok) {
+                    const extractData = await extractResponse.json();
+                    const extractedText = extractData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                    if (extractedText) {
+                      pdfTextContent += `
+
+📄 **EXTRACTED CONTENT FROM ${pdfName}:**
+${extractedText}
+
+🚨 **CRITICAL**: Use this REAL data from the user's document above.
+DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
+                      console.log(`[Chat Mode] ✅ Extracted ${extractedText.length} chars from PDF: ${pdfName}`);
+                    } else {
+                      console.log(`[Chat Mode] ⚠️ PDF extraction returned empty for ${pdfName}`);
+                      pdfTextContent += `\n\n📄 USER ATTACHED PDF: "${pdfName}" - Could not extract text. Please describe the content.`;
+                    }
+                  } else {
+                    console.error(`[Chat Mode] PDF extraction API error: ${extractResponse.status}`);
+                    pdfTextContent += `\n\n📄 USER ATTACHED PDF: "${pdfName}" - Extraction failed. Please describe the content.`;
+                  }
+                } else {
+                  console.log(`[Chat Mode] Could not parse PDF base64 data for ${pdfName}`);
+                  pdfTextContent += `\n\n📄 USER ATTACHED PDF: "${pdfName}" - Please describe the content.`;
+                }
+              } catch (pdfErr) {
+                console.error(`[Chat Mode] PDF extraction error:`, pdfErr);
+                pdfTextContent += `\n\n📄 USER ATTACHED PDF: "${pdfName}" - Extraction error. Please describe the content.`;
+              }
             }
             continue;
           }
@@ -3762,6 +4386,7 @@ ${filesStr}`;
       
       // Check if the response contains a JSON (plan or asset_picker)
       const trimmedAnswer = answer.trim();
+      console.log(`[Chat Mode] Checking response for JSON. Length: ${trimmedAnswer.length}, starts with: ${trimmedAnswer.substring(0, 50)}`);
       
       // Try to extract JSON from response
       let extractedJson: string | null = null;
@@ -3772,25 +4397,48 @@ ${filesStr}`;
         if (trimmedAnswer.includes('"asset_picker"')) {
           extractedJson = trimmedAnswer;
           jsonType = 'asset_picker';
+          console.log(`[Chat Mode] Method 1: Detected asset_picker (direct JSON)`);
         } else if (trimmedAnswer.includes('"plan"')) {
           extractedJson = trimmedAnswer;
           jsonType = 'plan';
+          console.log(`[Chat Mode] Method 1: Detected plan (direct JSON)`);
         }
       }
       
-      // Method 2: Extract JSON from mixed content
+      // Method 2: Extract JSON from mixed content using balanced brace matching
       if (!extractedJson) {
-        // Check for asset_picker first (higher priority)
-        const assetPickerMatch = trimmedAnswer.match(/\{[\s\S]*"type"\s*:\s*"asset_picker"[\s\S]*\}/);
-        if (assetPickerMatch) {
-          extractedJson = assetPickerMatch[0];
-          jsonType = 'asset_picker';
-        } else {
-          // Check for plan
-          const planMatch = trimmedAnswer.match(/\{[\s\S]*"type"\s*:\s*"plan"[\s\S]*\}/);
-          if (planMatch) {
-            extractedJson = planMatch[0];
-            jsonType = 'plan';
+        // Find the first { and try to extract balanced JSON
+        const firstBrace = trimmedAnswer.indexOf('{');
+        if (firstBrace !== -1) {
+          let braceCount = 0;
+          let jsonEnd = -1;
+          for (let i = firstBrace; i < trimmedAnswer.length; i++) {
+            if (trimmedAnswer[i] === '{') braceCount++;
+            else if (trimmedAnswer[i] === '}') {
+              braceCount--;
+              if (braceCount === 0) {
+                jsonEnd = i + 1;
+                break;
+              }
+            }
+          }
+          
+          if (jsonEnd > firstBrace) {
+            const potentialJson = trimmedAnswer.substring(firstBrace, jsonEnd);
+            console.log(`[Chat Mode] Method 2: Found potential JSON from ${firstBrace} to ${jsonEnd}`);
+            
+            // Check what type it is
+            if (potentialJson.includes('"type"')) {
+              if (potentialJson.includes('"asset_picker"')) {
+                extractedJson = potentialJson;
+                jsonType = 'asset_picker';
+                console.log(`[Chat Mode] Method 2: Detected asset_picker`);
+              } else if (potentialJson.includes('"plan"')) {
+                extractedJson = potentialJson;
+                jsonType = 'plan';
+                console.log(`[Chat Mode] Method 2: Detected plan`);
+              }
+            }
           }
         }
       }
@@ -3799,7 +4447,7 @@ ${filesStr}`;
         // Validate it's actually valid JSON before returning
         try {
           const parsed = JSON.parse(extractedJson);
-          console.log(`[Chat Mode] Detected ${jsonType} response`);
+          console.log(`[Chat Mode] ✅ Successfully parsed ${jsonType} JSON`);
           
           if (jsonType === 'asset_picker') {
             // Return asset_picker for frontend to show selection UI
@@ -3812,10 +4460,13 @@ ${filesStr}`;
           } else {
             return createResponse({ ok: true, plan: extractedJson, mode: 'plan', creditUsage: chatCreditUsage });
           }
-        } catch {
+        } catch (parseErr) {
           // Invalid JSON, return as regular message
-          console.log(`[Chat Mode] Failed to parse ${jsonType} JSON`);
+          console.log(`[Chat Mode] ❌ Failed to parse ${jsonType} JSON: ${parseErr}`);
+          console.log(`[Chat Mode] JSON content (first 200): ${extractedJson.substring(0, 200)}`);
         }
+      } else {
+        console.log(`[Chat Mode] No JSON detected, returning as regular message`);
       }
       
       // Return as regular chat message with credit usage
@@ -4204,6 +4855,79 @@ Match the className and innerText to find it in the code.
         }
       }
       
+      // 🔧 FIX: Extract PDF content from images array in AGENT mode
+      let agentPdfExtractedContent = '';
+      if (images && images.length > 0) {
+        const GEMINI_API_KEY_AGENT = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
+        
+        for (const imgData of images) {
+          if (typeof imgData !== 'string') continue;
+          
+          // Check if it's a PDF (marked with [PDF:filename] prefix)
+          if (imgData.startsWith('[PDF:')) {
+            const endBracket = imgData.indexOf(']');
+            if (endBracket > 0) {
+              const pdfName = imgData.substring(5, endBracket);
+              const pdfBase64Data = imgData.substring(endBracket + 1);
+              
+              console.log(`[Agent Mode] 📄 Extracting text from attached PDF: ${pdfName}`);
+              try {
+                const pdfMatches = pdfBase64Data.match(/^data:([^;]+);base64,(.+)$/);
+                if (pdfMatches && GEMINI_API_KEY_AGENT) {
+                  const pdfMimeType = pdfMatches[1];
+                  const pdfBase64 = pdfMatches[2];
+                  
+                  const extractResponse = await fetch(
+                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`,
+                    {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        "x-goog-api-key": GEMINI_API_KEY_AGENT,
+                      },
+                      body: JSON.stringify({
+                        contents: [{
+                          role: "user",
+                          parts: [
+                            { inlineData: { mimeType: pdfMimeType, data: pdfBase64 } },
+                            { text: `Extract ALL text content from this PDF document. This appears to be a CV/Resume or important document.
+                            
+Return the COMPLETE text content including:
+- Name and contact information
+- Professional summary/objective
+- Work experience (company names, job titles, dates, responsibilities)
+- Education (degrees, institutions, dates)
+- Skills (technical and soft skills)
+- Certifications, awards, languages
+- Any other relevant information
+
+Format the output clearly with sections. Do NOT summarize - extract the FULL text.` }
+                          ]
+                        }],
+                        generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+                      }),
+                    }
+                  );
+                  
+                  if (extractResponse.ok) {
+                    const extractData = await extractResponse.json();
+                    const extractedText = extractData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                    if (extractedText) {
+                      agentPdfExtractedContent += `\n\n📄 **EXTRACTED CONTENT FROM ${pdfName}:**\n${extractedText}`;
+                      console.log(`[Agent Mode] ✅ Extracted ${extractedText.length} chars from PDF: ${pdfName}`);
+                    }
+                  } else {
+                    console.error(`[Agent Mode] PDF extraction API error: ${extractResponse.status}`);
+                  }
+                }
+              } catch (pdfErr) {
+                console.error(`[Agent Mode] PDF extraction error:`, pdfErr);
+              }
+            }
+          }
+        }
+      }
+      
       // Prepare the initial user message with FILE LIST ONLY (not content)
       let userMessageContent = `📁 PROJECT FILES (${fileCount} files):
 ${fileList}
@@ -4211,22 +4935,69 @@ ${criticalFilesContext}
 ${intentGuidance}
 ⚠️ IMPORTANT: Use the read_file tool to view file contents before editing.
 Use list_files to see directory structure.
-Use search_replace for targeted edits (preferred) or write_file for new files.
+Use morph_edit for intelligent code fixes (preferred), search_replace for simple replacements, or write_file for new files.
 ${inspectSelectionContext}
 ${screenshotAnchorsContext}
 
 USER REQUEST:
 ${enrichedPrompt}`;
+
+      // Add extracted PDF content to agent prompt
+      if (agentPdfExtractedContent) {
+        userMessageContent += `
+
+📄 **EXTRACTED DOCUMENT CONTENT FROM ATTACHED PDF** (USE THIS DATA):
+${agentPdfExtractedContent}
+
+🚨 **CRITICAL**: The above content was extracted from the user's uploaded PDF (CV/Resume/etc).
+USE THIS REAL DATA to update the website - names, experience, skills, education, contact info, etc.
+DO NOT make up fake information. Use EXACTLY what is in the extracted content above.
+Update mockData.js or the relevant data files with this REAL information.`;
+        console.log(`[Agent Mode] ✅ Added ${agentPdfExtractedContent.length} chars of PDF content to prompt`);
+      }
       
       // Add debug context if there are errors
       if (agentDebugContext.errors.length > 0 || agentDebugContext.networkErrors.length > 0) {
-        userMessageContent += `\n\n🔴 ERRORS DETECTED - YOU MUST FIX THESE:\n`;
+        userMessageContent += `\n\n🚨🚨🚨 CRITICAL: RUNTIME ERRORS DETECTED - YOU MUST FIX THESE! 🚨🚨🚨\n`;
+        userMessageContent += `\n⛔ YOU CANNOT COMPLETE THIS TASK UNTIL THESE ERRORS ARE FIXED.\n`;
+        userMessageContent += `\n📋 REQUIRED STEPS:\n1. Use read_file to see the broken file\n2. Find the exact line causing the error\n3. Use search_replace to fix it\n4. Only then call task_complete\n`;
         
         if (agentDebugContext.errors.length > 0) {
-          userMessageContent += `\n**Runtime Errors:**\n`;
+          userMessageContent += `\n**Runtime Errors (MUST FIX):**\n`;
           agentDebugContext.errors.slice(-5).forEach((e, i) => {
             userMessageContent += `${i + 1}. [${e.type}] ${e.message}\n`;
-            if (e.file) userMessageContent += `   File: ${e.file}${e.line ? `:${e.line}` : ''}\n`;
+            if (e.file) userMessageContent += `   📁 File: ${e.file}${e.line ? `:${e.line}` : ''}\n`;
+            
+            // Extract property name from error message for specific fixes
+            const propMatch = e.message?.match(/reading '(\w+)'/);
+            const propName = propMatch ? propMatch[1] : null;
+            
+            // Add DETAILED step-by-step fix instructions for common errors
+            if (e.message?.includes('Cannot read properties of undefined')) {
+              userMessageContent += `\n   🔧 **EXACT FIX STEPS:**\n`;
+              userMessageContent += `   Step 1: read_file "${e.file || 'the file above'}"\n`;
+              userMessageContent += `   Step 2: Find where "${propName || 'the property'}" is accessed (look for .${propName} or ['${propName}'])\n`;
+              userMessageContent += `   Step 3: The variable BEFORE the dot is undefined. Common causes:\n`;
+              userMessageContent += `      - data[i18n.language] returns undefined → FIX: const lang = i18n.language?.substring(0,2) || 'en'; const data = myData[lang] || myData.en || {};\n`;
+              userMessageContent += `      - props.something is undefined → FIX: Add default: const { something = [] } = props;\n`;
+              userMessageContent += `      - array.map() on undefined → FIX: (array || []).map(...)\n`;
+              userMessageContent += `   Step 4: Use morph_edit to add the null check/fallback (preferred) or search_replace\n`;
+              userMessageContent += `   Step 5: Verify the fix compiles, then task_complete\n`;
+            } else if (e.message?.includes('is not defined')) {
+              const varMatch = e.message?.match(/(\w+) is not defined/);
+              const varName = varMatch ? varMatch[1] : 'variable';
+              userMessageContent += `\n   🔧 **EXACT FIX STEPS:**\n`;
+              userMessageContent += `   Step 1: read_file "${e.file || 'the file above'}"\n`;
+              userMessageContent += `   Step 2: "${varName}" is used but never imported/defined\n`;
+              userMessageContent += `   Step 3: Either add import statement OR define the variable\n`;
+              userMessageContent += `   Step 4: Use morph_edit to add the import at the top of the file\n`;
+            } else if (e.message?.includes('is not a function')) {
+              userMessageContent += `\n   🔧 **EXACT FIX STEPS:**\n`;
+              userMessageContent += `   Step 1: read_file "${e.file || 'the file above'}"\n`;
+              userMessageContent += `   Step 2: Find where the function is called\n`;
+              userMessageContent += `   Step 3: The variable is not a function - check its type/source\n`;
+              userMessageContent += `   Step 4: Use morph_edit to add typeof check: if (typeof fn === 'function') fn()\n`;
+            }
           });
         }
         
@@ -4236,6 +5007,8 @@ ${enrichedPrompt}`;
             userMessageContent += `${i + 1}. ${e.method} ${e.url} → ${e.status} ${e.statusText}\n`;
           });
         }
+        
+        userMessageContent += `\n📋 REQUIRED STEPS:\n1. Read the file(s) with the error\n2. Find the exact line causing the error\n3. Fix it using morph_edit or search_replace\n4. Call task_complete ONLY after fixing\n`;
       }
       
       // Agent conversation loop
@@ -5571,7 +6344,7 @@ Call task_complete when finished.`;
                   generationConfig: {
                     temperature: 0.1, // Lower temp for precise execution
                     maxOutputTokens: 8192,
-                    responseMimeType: "application/json", // Add JSON MIME type for function calling
+                    // NOTE: Do NOT use responseMimeType with function calling - it breaks tool use
                   },
                 }),
               }
@@ -5684,9 +6457,17 @@ Call task_complete when finished.`;
         
       } catch (innerErr) {
         const innerMsg = innerErr instanceof Error ? innerErr.message : String(innerErr);
+        const innerStack = innerErr instanceof Error ? innerErr.stack : '';
         console.error(`[Execute Mode V2] Error: ${innerMsg}`);
+        console.error(`[Execute Mode V2] Stack: ${innerStack}`);
         await updateJob(supabase, job.id, { status: 'failed', error: innerMsg, result_summary: null });
-        return createResponse({ ok: false, jobId: job.id, error: innerMsg }, 500);
+        // Return detailed error for debugging
+        return createResponse({ 
+          ok: false, 
+          jobId: job.id, 
+          error: innerMsg,
+          errorDetails: innerStack?.substring(0, 500) || 'No stack trace'
+        }, 500);
       }
     }
 
@@ -5781,9 +6562,139 @@ Call task_complete when finished.`;
           textPrompt += `\n\n🖼️ PRE-LOADED IMAGES (USE THESE DIRECTLY - DO NOT USE fetchStockImages):\nThese images have been pre-loaded and stored for this project. Use them directly in your code:\n${imagesList}\n\nIMPORTANT: Use these URLs directly in <img src="..."> tags. Do NOT create /utils/stockImages.js or call fetchStockImages() - the images are already available at these URLs.`;
         }
         
+        // Add extracted document content (CV/Resume text, etc.) - CRITICAL FOR PORTFOLIOS
+        console.log(`[Create Mode] Document content available: ${documentContentStr ? documentContentStr.length + ' chars' : 'NONE'}`);
+        console.log(`[Create Mode] Vision inspiration available: ${visionInspirationStr ? visionInspirationStr.length + ' chars' : 'NONE'}`);
+        
+        if (documentContentStr && documentContentStr.trim()) {
+          console.log(`[Create Mode] ✅ INJECTING EXTRACTED DOCUMENT CONTENT INTO PROMPT`);
+          textPrompt += `
+
+📄 **EXTRACTED DOCUMENT CONTENT** (USE THIS DATA TO BUILD THE WEBSITE):
+${documentContentStr}
+
+🚨 **CRITICAL**: The above content was extracted from the user's uploaded document (CV/Resume/etc).
+USE THIS REAL DATA to populate the website - names, experience, skills, education, contact info, etc.
+DO NOT make up fake information. Use EXACTLY what is in the extracted content above.
+If this is a portfolio/CV website, use the person's REAL name, REAL experience, REAL skills from the document.`;
+        }
+        
+        // Add vision inspirations from uploaded images
+        if (visionInspirationStr && visionInspirationStr.trim()) {
+          textPrompt += `
+
+🎨 **DESIGN INSPIRATION FROM UPLOADED IMAGES**:
+${visionInspirationStr}
+
+Apply the visual style, colors, layout patterns, and design elements described above.`;
+        }
+        
+        // Add uploaded asset URLs
+        if (uploadedAssets && uploadedAssets.length > 0) {
+          textPrompt += `
+
+📁 **USER UPLOADED ASSETS** (Use these URLs directly):
+${uploadedAssets.map(a => `- ${a.filename} (${a.file_type || 'file'}): ${a.url}`).join('\n')}
+When user mentions "my photo", "my image", "uploaded image", use the appropriate URL from above.`;
+        }
+        
         if (assets && assets.length > 0) textPrompt += `\n\nUSE THESE ASSETS: ${assets.join(", ")}`;
+        
+        // 🔧 FIX: Extract PDF content from images array (attached PDFs in chat)
+        // This handles PDFs attached via the attach button, not just uploadedAssets
         if (images && images.length > 0) {
-          textPrompt = `SCREENSHOT-TO-CODE: Analyze the attached screenshot(s) and recreate this UI as a React application.\n\n${textPrompt}`;
+          const GEMINI_API_KEY_CREATE = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
+          let hasPdfAttachment = false;
+          let pdfExtractedContent = '';
+          
+          for (const imgData of images) {
+            if (typeof imgData !== 'string') continue;
+            
+            // Check if it's a PDF (marked with [PDF:filename] prefix)
+            if (imgData.startsWith('[PDF:')) {
+              hasPdfAttachment = true;
+              const endBracket = imgData.indexOf(']');
+              if (endBracket > 0) {
+                const pdfName = imgData.substring(5, endBracket);
+                const pdfBase64Data = imgData.substring(endBracket + 1);
+                
+                console.log(`[Create Mode] 📄 Extracting text from attached PDF: ${pdfName}`);
+                try {
+                  const pdfMatches = pdfBase64Data.match(/^data:([^;]+);base64,(.+)$/);
+                  if (pdfMatches && GEMINI_API_KEY_CREATE) {
+                    const pdfMimeType = pdfMatches[1];
+                    const pdfBase64 = pdfMatches[2];
+                    
+                    const extractResponse = await fetch(
+                      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`,
+                      {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          "x-goog-api-key": GEMINI_API_KEY_CREATE,
+                        },
+                        body: JSON.stringify({
+                          contents: [{
+                            role: "user",
+                            parts: [
+                              { inlineData: { mimeType: pdfMimeType, data: pdfBase64 } },
+                              { text: `Extract ALL text content from this PDF document. This appears to be a CV/Resume or important document.
+                              
+Return the COMPLETE text content including:
+- Name and contact information
+- Professional summary/objective
+- Work experience (company names, job titles, dates, responsibilities)
+- Education (degrees, institutions, dates)
+- Skills (technical and soft skills)
+- Certifications, awards, languages
+- Any other relevant information
+
+Format the output clearly with sections. Do NOT summarize - extract the FULL text.` }
+                            ]
+                          }],
+                          generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+                        }),
+                      }
+                    );
+                    
+                    if (extractResponse.ok) {
+                      const extractData = await extractResponse.json();
+                      const extractedText = extractData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                      if (extractedText) {
+                        pdfExtractedContent += `\n\n📄 **EXTRACTED CONTENT FROM ${pdfName}:**\n${extractedText}`;
+                        console.log(`[Create Mode] ✅ Extracted ${extractedText.length} chars from PDF: ${pdfName}`);
+                      } else {
+                        console.log(`[Create Mode] ⚠️ PDF extraction returned empty for ${pdfName}`);
+                      }
+                    } else {
+                      console.error(`[Create Mode] PDF extraction API error: ${extractResponse.status}`);
+                    }
+                  }
+                } catch (pdfErr) {
+                  console.error(`[Create Mode] PDF extraction error:`, pdfErr);
+                }
+              }
+            }
+          }
+          
+          // Add extracted PDF content to prompt
+          if (pdfExtractedContent) {
+            textPrompt += `
+
+📄 **EXTRACTED DOCUMENT CONTENT FROM ATTACHED PDF** (USE THIS DATA TO BUILD THE WEBSITE):
+${pdfExtractedContent}
+
+🚨 **CRITICAL**: The above content was extracted from the user's uploaded PDF (CV/Resume/etc).
+USE THIS REAL DATA to populate the website - names, experience, skills, education, contact info, etc.
+DO NOT make up fake information. Use EXACTLY what is in the extracted content above.
+If this is a portfolio/CV website, use the person's REAL name, REAL experience, REAL skills from the document.`;
+            console.log(`[Create Mode] ✅ Added ${pdfExtractedContent.length} chars of PDF content to prompt`);
+          }
+          
+          // Only add screenshot-to-code prefix if there are actual images (not just PDFs)
+          if (!hasPdfAttachment || images.some(img => typeof img === 'string' && !img.startsWith('[PDF:'))) {
+            textPrompt = `SCREENSHOT-TO-CODE: Analyze the attached screenshot(s) and recreate this UI as a React application.\n\n${textPrompt}`;
+          }
         }
 
         // Use Gemini 2.5 Pro for creation
@@ -5904,9 +6815,9 @@ Return ONLY the JSON object. No explanation.`;
       console.log(`[Edit Mode] Backend enabled: ${backendContext?.enabled || false}`);
       const userPrompt = `${prompt}\n\n${userInstructions || ""}`;
       
-      // USE FULL REWRITE - NO PATCHES (now with image support + uploaded assets + backend context)
+      // USE FULL REWRITE - NO PATCHES (now with image support + uploaded assets + backend context + extracted content)
       const imageArray = Array.isArray(images) ? images as unknown as string[] : undefined;
-      const result = await callGeminiFullRewriteEdit(userPrompt, existingFiles, userInstructions, imageArray, uploadedAssets, backendContext);
+      const result = await callGeminiFullRewriteEdit(userPrompt, existingFiles, userInstructions, imageArray, uploadedAssets, backendContext, documentContentStr, visionInspirationStr);
       const changedFiles = result.files || {};
       
       console.log(`[Edit Mode] Changed files returned: ${Object.keys(changedFiles).join(', ') || 'NONE'}`);

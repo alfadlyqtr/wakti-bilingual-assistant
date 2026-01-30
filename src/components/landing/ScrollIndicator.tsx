@@ -25,10 +25,25 @@ export function ScrollIndicator({ className }: ScrollIndicatorProps) {
         }}
         className="flex flex-col items-center gap-1"
       >
-        <span className="text-xs font-light tracking-[0.2em] uppercase text-white/50">
-          Scroll
+        <span 
+          className="text-sm font-medium tracking-[0.25em] uppercase"
+          style={{
+            background: "linear-gradient(135deg, #e9ceb0 0%, #ffffff 50%, #e9ceb0 100%)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            backgroundClip: "text",
+            textShadow: "0 0 15px rgba(233, 206, 176, 0.6)"
+          }}
+        >
+          SCROLL
         </span>
-        <ChevronDown className="h-5 w-5 text-[#e9ceb0]/70" />
+        <ChevronDown 
+          className="h-6 w-6" 
+          style={{ 
+            color: "#e9ceb0", 
+            filter: "drop-shadow(0 0 8px rgba(233, 206, 176, 0.7))" 
+          }} 
+        />
       </motion.div>
     </motion.div>
   );

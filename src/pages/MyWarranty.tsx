@@ -3,11 +3,15 @@ import jsQR from 'jsqr';
 import { BusinessCardWizard } from '@/components/business-card/BusinessCardWizard';
 import { BusinessCardBuilder, CardPreviewLive } from '@/components/business-card/BusinessCardBuilder';
 import { CardCreatedCelebration } from '@/components/business-card/CardCreatedCelebration';
+import { CVBuilderWizard } from '@/components/cv-builder';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import ShareButton from '@/components/ui/ShareButton';
+import { 
+  scheduleDocExpiryPush, rescheduleDocExpiryPush, findExistingDocExpiryNotification, cancelDocExpiryNotification 
+} from '@/services/DocumentExpiryReminderService';
 import { 
   Shield, Plus, SortAsc, Camera, Upload, X, 
   ChevronLeft, Trash2, FileText, MessageCircle, Calendar,
@@ -730,6 +734,8 @@ const MyWarranty: React.FC = () => {
   const [docSide, setDocSide] = useState<'front' | 'back' | 'both'>('front'); // Document side selector
   const [isEditingTags, setIsEditingTags] = useState(false);
   const [isSavingTags, setIsSavingTags] = useState(false);
+  const [isEditingExpiry, setIsEditingExpiry] = useState(false);
+  const [detailExpiryInput, setDetailExpiryInput] = useState('');
   
   // Collapsible sections state - all collapsed by default
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
@@ -1536,6 +1542,15 @@ const MyWarranty: React.FC = () => {
         }
       }
 
+      if (newWarrantyData?.id && itemToSave.expiry_date) {
+        await scheduleDocExpiryPush({
+          userId: user.id,
+          docId: newWarrantyData.id,
+          docTitle: itemToSave.title,
+          expiryDateIso: itemToSave.expiry_date,
+        });
+      }
+
       toast({
         title: isRTL ? 'نجاح' : 'Success',
         description: isRTL ? 'تم حفظ المستند بنجاح' : 'Document saved successfully',
@@ -1573,6 +1588,17 @@ const MyWarranty: React.FC = () => {
   // Delete warranty
   const handleDelete = async (id: string) => {
     try {
+      if (user) {
+        const existing = await findExistingDocExpiryNotification(user.id, id);
+        if (existing?.id && existing.onesignalId) {
+          await cancelDocExpiryNotification({
+            userId: user.id,
+            notificationId: existing.id,
+            onesignalId: existing.onesignalId,
+          });
+        }
+      }
+
       const { error } = await (supabase as any)
         .from('user_warranties')
         .delete()
@@ -1926,24 +1952,7 @@ const MyWarranty: React.FC = () => {
                 <AlertDialogAction
                   className="bg-red-500 text-white"
                   onClick={async () => {
-                    const { error } = await supabase
-                      .from('user_warranties')
-                      .delete()
-                      .eq('id', item.id);
-                    
-                    if (error) {
-                      toast({
-                        title: isRTL ? 'خطأ' : 'Error',
-                        description: isRTL ? 'فشل حذف المستند' : 'Failed to delete document',
-                        variant: 'destructive',
-                      });
-                    } else {
-                      toast({
-                        title: isRTL ? 'تم الحذف' : 'Deleted',
-                        description: isRTL ? 'تم حذف المستند بنجاح' : 'Document deleted successfully',
-                      });
-                      fetchData();
-                    }
+                    await handleDelete(item.id);
                   }}
                 >
                   {isRTL ? 'حذف' : 'Delete'}
@@ -3117,17 +3126,16 @@ const MyWarranty: React.FC = () => {
     );
   };
 
-  // Render My CV Tab (placeholder)
+  // Render My CV Tab - Full CV Builder
   const renderMyCVTab = () => (
-    <div className="flex flex-col h-full items-center justify-center px-4 py-20">
-      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center mb-6">
-        <User className="w-10 h-10 text-purple-400" />
-      </div>
-      <h2 className="text-xl font-bold text-foreground mb-2">{t.cvTitle}</h2>
-      <p className="text-muted-foreground text-center mb-4">{t.cvDescription}</p>
-      <div className="px-4 py-2 rounded-full bg-white/5 border border-white/10">
-        <span className="text-sm text-muted-foreground">{t.cvComingSoon}</span>
-      </div>
+    <div className="flex flex-col h-[calc(100vh-180px)] w-full">
+      <CVBuilderWizard 
+        onComplete={(data) => {
+          console.log('CV completed:', data);
+          // TODO: Save CV and generate PDF
+        }}
+        onBack={() => setActiveMainTab('docs')}
+      />
     </div>
   );
 
@@ -4179,6 +4187,96 @@ const MyWarranty: React.FC = () => {
                     </span>
                   ))
                 )}
+              </div>
+            )}
+          </div>
+
+          <div className="mb-5">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                {isRTL ? 'تاريخ الانتهاء' : 'Expiry Date'}
+              </h4>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() => {
+                  setDetailExpiryInput(selectedItem.expiry_date ? selectedItem.expiry_date.slice(0, 10) : '');
+                  setIsEditingExpiry(true);
+                }}
+              >
+                {isRTL ? 'تعديل' : 'Edit'}
+              </Button>
+            </div>
+
+            {isEditingExpiry ? (
+              <div className="space-y-2">
+                <Input
+                  type="date"
+                  value={detailExpiryInput}
+                  onChange={(e) => setDetailExpiryInput(e.target.value)}
+                  className="bg-white/5 border-white/10"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => {
+                      setIsEditingExpiry(false);
+                      setDetailExpiryInput('');
+                    }}
+                  >
+                    {t.cancel}
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="flex-1 bg-gradient-to-r from-blue-500 to-cyan-500"
+                    onClick={async () => {
+                      if (!user || !selectedItem) return;
+                      const nextExpiry = detailExpiryInput ? new Date(detailExpiryInput).toISOString() : null;
+                      try {
+                        const { error } = await (supabase as any)
+                          .from('user_warranties')
+                          .update({ expiry_date: nextExpiry })
+                          .eq('id', selectedItem.id);
+
+                        if (error) throw error;
+
+                        setSelectedItem({ ...selectedItem, expiry_date: nextExpiry });
+                        setIsEditingExpiry(false);
+                        setDetailExpiryInput('');
+                        fetchData();
+
+                        if (nextExpiry) {
+                          await rescheduleDocExpiryPush({
+                            userId: user.id,
+                            docId: selectedItem.id,
+                            docTitle: selectedItem.product_name,
+                            expiryDateIso: nextExpiry,
+                          });
+                        } else {
+                          const existing = await findExistingDocExpiryNotification(user.id, selectedItem.id);
+                          if (existing?.id && existing.onesignalId) {
+                            await cancelDocExpiryNotification({
+                              userId: user.id,
+                              notificationId: existing.id,
+                              onesignalId: existing.onesignalId,
+                            });
+                          }
+                        }
+                      } catch (e) {
+                        toast({ title: 'Error', description: 'Failed to save expiry date', variant: 'destructive' });
+                      }
+                    }}
+                  >
+                    {t.save}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                {selectedItem.expiry_date ? format(parseISO(selectedItem.expiry_date), 'MM/dd/yy') : '-'}
               </div>
             )}
           </div>

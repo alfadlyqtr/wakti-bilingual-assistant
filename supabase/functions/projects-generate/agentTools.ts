@@ -4379,10 +4379,50 @@ export async function executeToolCall(
     }
     
     case "task_complete": {
+      // 🔒 HARD BLOCK: If there are runtime errors and no files were edited, REJECT completion
+      const hasRuntimeErrors = debugContext.errors && debugContext.errors.length > 0;
+      const filesChanged = args.filesChanged || [];
+      
+      if (hasRuntimeErrors && filesChanged.length === 0) {
+        console.error(`[Agent] task_complete REJECTED: Runtime errors exist but no files were edited!`);
+        console.error(`[Agent] Errors: ${debugContext.errors.map(e => e.message).join(', ')}`);
+        
+        // Extract specific error info for better guidance
+        const firstError = debugContext.errors[0];
+        const errorFile = firstError?.file || 'unknown file';
+        const errorMsg = firstError?.message || 'unknown error';
+        
+        // Parse the property name from "Cannot read properties of undefined (reading 'name')"
+        const propMatch = errorMsg.match(/reading '(\w+)'/);
+        const propName = propMatch ? propMatch[1] : null;
+        
+        let specificFix = '';
+        if (errorMsg.includes('Cannot read properties of undefined')) {
+          specificFix = `
+EXACT FIX REQUIRED:
+1. Call read_file with path "${errorFile}"
+2. Find where ".${propName || 'property'}" is accessed
+3. The variable BEFORE the dot is undefined
+4. Common fix patterns:
+   - If using i18n: const lang = i18n.language?.substring(0,2) || 'en'; const data = myData[lang] || myData.en || {};
+   - If array: (array || []).map(...)
+   - If object: obj?.property || 'default'
+5. Use morph_edit to apply the fix (it's smarter than search_replace)
+6. Then call task_complete again`;
+        }
+        
+        return { 
+          acknowledged: false,
+          rejected: true,
+          error: `⛔ TASK INCOMPLETE: ${debugContext.errors.length} runtime error(s) must be fixed first!\n\nError: ${errorMsg}\nFile: ${errorFile}\n${specificFix}`,
+          nextAction: `You MUST: 1) read_file "${errorFile}" 2) find the bug 3) morph_edit to fix it 4) task_complete`
+        };
+      }
+      
       return { 
         acknowledged: true,
         summary: args.summary,
-        filesChanged: args.filesChanged || []
+        filesChanged
       };
     }
     

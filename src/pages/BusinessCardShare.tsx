@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { generateVCard, createDownloadableVCard } from '@/utils/vCardGenerator';
 import { supabase } from '@/integrations/supabase/client';
 import { CardPreviewLive } from '@/components/business-card/BusinessCardBuilder';
 import { isNativelyApp } from '@/integrations/natively/browserBridge';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
-import { Check, Download, ArrowLeft } from 'lucide-react';
+import { Check, UserPlus, ArrowLeft, Share2, Download } from 'lucide-react';
 
 interface BusinessCardData {
   firstName: string;
@@ -230,6 +231,46 @@ export default function BusinessCardShare() {
 
   const appStoreUrl = 'https://apps.apple.com/us/app/wakti-ai/id6755150700';
 
+  /**
+   * Handle adding contact to device address book
+   * Works on both iOS and Android
+   */
+  const handleAddToContacts = async () => {
+    if (!card) return;
+    
+    try {
+      const { url, filename } = createDownloadableVCard(card);
+      
+      // Create a temporary link element
+      const downloadLink = document.createElement('a');
+      downloadLink.href = url;
+      downloadLink.download = filename;
+      downloadLink.style.display = 'none';
+      
+      // Add to DOM, click and remove
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      
+      // Clean up
+      setTimeout(() => {
+        document.body.removeChild(downloadLink);
+        URL.revokeObjectURL(url);
+      }, 500);
+
+      toast({
+        title: 'Contact Ready',
+        description: 'The contact file has been created and should open automatically.',
+      });
+    } catch (e) {
+      console.error('Error creating vCard:', e);
+      toast({
+        title: 'Error',
+        description: 'Failed to generate contact information.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   // Save card to collection
   const handleSaveToCollection = async () => {
     if (!user || !shareSlug || !card) return;
@@ -310,7 +351,7 @@ export default function BusinessCardShare() {
               data={card as any}
               isFlipped={isFlipped}
               handleFlip={() => setIsFlipped((v) => !v)}
-              handleAddToWallet={() => {}}
+              handleAddToWallet={handleAddToContacts}
             />
           </div>
 
@@ -394,9 +435,31 @@ export default function BusinessCardShare() {
               data={card as any}
               isFlipped={isFlipped}
               handleFlip={() => setIsFlipped((v) => !v)}
-              handleAddToWallet={() => {}}
+              handleAddToWallet={handleAddToContacts}
             />
           </div>
+          
+          {/* Contact Action Buttons */}
+          {isFlipped && (
+            <div className="mt-6 px-4 flex flex-col w-full space-y-3">
+              <Button
+                className="w-full h-12 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white"
+                onClick={handleAddToContacts}
+              >
+                <UserPlus className="w-5 h-5 mr-2" />
+                Add to Contacts
+              </Button>
+              
+              <Button
+                variant="outline"
+                className="w-full h-12"
+                onClick={() => window.location.href = `mailto:?subject=${encodeURIComponent(`${card?.firstName || ''} ${card?.lastName || ''}'s Contact Information`)}&body=${encodeURIComponent(`${window.location.href}`)}`}
+              >
+                <Share2 className="w-5 h-5 mr-2" />
+                Share via Email
+              </Button>
+            </div>
+          )}
           
           {/* Curveball arrow + chip - shows on both sides with different text */}
           <div className="absolute -bottom-20 right-0 flex items-start gap-0 animate-pulse">
@@ -405,7 +468,7 @@ export default function BusinessCardShare() {
               onClick={() => setIsFlipped((v) => !v)}
               className="text-sm font-medium text-primary bg-white/95 dark:bg-black/70 px-4 py-2 rounded-full shadow-lg border border-primary/30 hover:bg-primary hover:text-white transition-colors cursor-pointer active:scale-95"
             >
-              {isFlipped ? 'Flip to see card' : 'Flip to add as contact'}
+              {isFlipped ? 'Flip to see card' : 'Tap to view actions'}
             </button>
             {/* Curveball arrow - dramatic curve pointing up toward flip button */}
             <svg
@@ -436,7 +499,7 @@ export default function BusinessCardShare() {
       </div>
 
       {/* Footer: Powered by Wakti AI - bottom center */}
-      <footer className="flex justify-center px-4 py-4 pb-6">
+      <footer className="flex justify-center px-4 py-4 pb-6 mt-12">
         <a
           href={appStoreUrl}
           target="_blank"

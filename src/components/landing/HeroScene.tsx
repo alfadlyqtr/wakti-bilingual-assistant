@@ -166,7 +166,7 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
       </div>
 
       {/* Scroll Indicator */}
-      <ScrollIndicator className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10" />
+      <ScrollIndicator className="absolute bottom-32 left-1/2 -translate-x-1/2 z-10" />
     </section>
   );
 }

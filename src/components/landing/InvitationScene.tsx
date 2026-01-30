@@ -1,5 +1,7 @@
 import { motion } from "framer-motion";
 import { LandingScene } from "./LandingScene";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
  
 
 interface InvitationSceneProps {
@@ -7,6 +9,7 @@ interface InvitationSceneProps {
 }
 
 export function InvitationScene({ language = "en" }: InvitationSceneProps) {
+  const navigate = useNavigate();
   const isArabic = language === "ar";
 
   return (
@@ -81,46 +84,25 @@ export function InvitationScene({ language = "en" }: InvitationSceneProps) {
           </a>
         </motion.div>
 
-        {/* Footer Links */}
         <motion.div
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6, delay: 0.5 }}
-          className="flex items-center gap-6 text-white/30 text-xs font-light"
+          className="w-full max-w-xs"
         >
-          <a 
-            href="/privacy-terms" 
-            className="hover:text-white/60 transition-colors"
+          <Button
+            onClick={() => navigate("/login")}
+            className="w-full py-6 rounded-full text-base font-semibold tracking-[0.05em] uppercase transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+            style={{
+              background: "linear-gradient(135deg, #e9ceb0 0%, #d4b896 50%, #e9ceb0 100%)",
+              color: "#060541",
+              boxShadow: "0 10px 40px rgba(233, 206, 176, 0.28)",
+            }}
           >
-            {isArabic ? "الخصوصية" : "Privacy"}
-          </a>
-          <span>•</span>
-          <a 
-            href="/contact" 
-            className="hover:text-white/60 transition-colors"
-          >
-            {isArabic ? "تواصل معنا" : "Contact"}
-          </a>
-          <span>•</span>
-          <a 
-            href="/help" 
-            className="hover:text-white/60 transition-colors"
-          >
-            {isArabic ? "المساعدة" : "Help"}
-          </a>
+            {isArabic ? "تسجيل الدخول" : "Sign in"}
+          </Button>
         </motion.div>
-
-        {/* Copyright */}
-        <motion.p
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6, delay: 0.6 }}
-          className="text-white/20 text-xs mt-6 font-light"
-        >
-          © 2025 WAKTI. All rights reserved.
-        </motion.p>
       </div>
     </LandingScene>
   );
