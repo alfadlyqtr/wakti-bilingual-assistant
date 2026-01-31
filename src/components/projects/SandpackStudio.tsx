@@ -13,7 +13,7 @@ import { CollapsibleFileTree } from "./CollapsibleFileTree";
 import { atomDark } from "@codesandbox/sandpack-themes";
 import { Code2, Eye, FileCode, FileJson, FileType, CheckCircle2, MousePointer2, Monitor, Tablet, Smartphone, ExternalLink, RefreshCw, Download, Upload, Loader2, Settings, Share2, Save, Terminal, PanelLeftClose, PanelLeft } from "lucide-react";
 import { SandpackSkeleton } from '@/pages/ProjectDetail/components/PreviewPanel/SandpackSkeleton';
-import { useIncrementalFileUpdater } from '@/pages/ProjectDetail/hooks/useSandpackFiles';
+import { useIncrementalFileUpdater } from '@/pages/ProjectDetail/hooks/useIncrementalFileUpdater';
 import {
   DropdownMenu,
   DropdownMenuContent,

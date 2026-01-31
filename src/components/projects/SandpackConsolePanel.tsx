@@ -123,9 +123,12 @@ export function SandpackConsolePanel({ isOpen, onToggle, maxHeight = 200 }: Sand
   return (
     <div className="border-t border-white/10 bg-[#0c0f14]">
       {/* Console Header - Always visible */}
-      <button
+      <div
         onClick={onToggle}
-        className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors"
+        className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors cursor-pointer"
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => e.key === 'Enter' && onToggle()}
       >
         <div className="flex items-center gap-2">
           {isOpen ? (
@@ -165,7 +168,7 @@ export function SandpackConsolePanel({ isOpen, onToggle, maxHeight = 200 }: Sand
             <Trash2 className="w-3.5 h-3.5 text-gray-500 hover:text-gray-300" />
           </button>
         )}
-      </button>
+      </div>
 
       {/* Console Content */}
       <AnimatePresence>

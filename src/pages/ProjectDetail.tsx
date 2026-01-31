@@ -71,7 +71,6 @@ import {
   useChatMessages,
   useSandpackFiles,
   useVisualEditMode,
-  useIncrementalFileUpdater,
   useConversationMemory,
   useEditHistory
 } from './ProjectDetail/hooks';
@@ -5848,7 +5847,6 @@ ${fixInstructions}
               <Check className="w-10 h-10 text-white" />
             </div>
             <h2 className="text-2xl font-bold text-white mb-2">
-              {isRTL ? ' مشروعك جاهز!' : ' Project Ready!'}
               {isRTL ? '🎉 مشروعك جاهز!' : '🎉 Project Ready!'}
             </h2>
             <p className="text-white/80 text-sm">
@@ -5912,7 +5910,7 @@ ${fixInstructions}
       </div>
 
       {/* Main Studio Content */}
-      <div className="flex-1 min-h-0 flex overflow-hidden relative">
+      <div className="flex-1 min-h-0 flex overflow-hidden relative h-full">
         {/* Left Panel - Cascade-style Control Center */}
         <div className={cn(
           "flex flex-col border-r transition-all duration-300 relative",
@@ -8425,10 +8423,10 @@ ${fixInstructions}
               </div>
             }>
               {(codeContent || Object.keys(generatedFiles).length > 0) ? (
-                <div className="w-full h-full flex items-center justify-center relative">
+                <div className="w-full h-full relative">
                   <MatrixOverlay isVisible={aiEditing && leftPanelMode === 'code'} />
                   <div className={cn(
-                    "h-full w-full transition-all flex flex-col overflow-hidden",
+                    "h-full w-full transition-all flex flex-col overflow-hidden mx-auto",
                     deviceView === 'desktop' && "max-w-full",
                     deviceView === 'tablet' && "max-w-[768px]",
                     deviceView === 'mobile' && "max-w-[390px]"

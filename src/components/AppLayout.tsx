@@ -622,7 +622,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           <WelcomeTrialPopup />
           <div className="h-[100dvh] bg-background app-layout-mobile overflow-hidden flex flex-col">
             <AppHeader unreadTotal={unreadData.unreadTotal} />
-            <main className="flex-1 pt-[var(--app-header-h)] overflow-hidden">
+            <main className="flex-1 overflow-hidden">
               {content}
             </main>
             <PresenceBeacon />

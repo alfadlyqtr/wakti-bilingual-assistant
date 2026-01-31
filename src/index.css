@@ -110,6 +110,7 @@
     body.project-detail-page main {
       padding-bottom: 0 !important;
       overflow: hidden !important;
+      height: calc(100dvh - var(--app-header-h)) !important;
     }
     body.project-detail-page main > * {
       height: 100% !important;

@@ -1,6 +1,9 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { useSandpack } from '@codesandbox/sandpack-react';
+import { useState, useCallback, useEffect } from 'react';
 import type { GeneratedFiles } from '../types';
+
+// NOTE: useIncrementalFileUpdater has been moved to a separate file
+// (useIncrementalFileUpdater.ts) to prevent module-level useSandpack() calls
+// when this file is imported outside of SandpackProvider context.
 
 interface UseSandpackFilesOptions {
   projectId: string | undefined;
@@ -96,42 +99,5 @@ export function useSandpackFiles({ projectId, files }: UseSandpackFilesOptions):
   };
 }
 
-/**
- * Hook to use inside SandpackProvider for incremental file updates
- * This prevents full re-renders by using sandpack.updateFile() instead of key changes
- */
-export function useIncrementalFileUpdater(files: GeneratedFiles) {
-  const { sandpack } = useSandpack();
-  const prevFilesRef = useRef<GeneratedFiles>({});
-
-  useEffect(() => {
-    // Check for file changes and update incrementally
-    Object.entries(files).forEach(([path, content]) => {
-      if (prevFilesRef.current[path] !== content) {
-        console.log('[IncrementalFileUpdater] Updating file:', path);
-        try {
-          sandpack.updateFile(path, content);
-        } catch (err) {
-          console.error('[IncrementalFileUpdater] Error updating file:', path, err);
-        }
-      }
-    });
-
-    // Check for deleted files
-    Object.keys(prevFilesRef.current).forEach(path => {
-      if (!(path in files)) {
-        console.log('[IncrementalFileUpdater] File removed:', path);
-        try {
-          sandpack.deleteFile(path);
-        } catch (err) {
-          console.error('[IncrementalFileUpdater] Error deleting file:', path, err);
-        }
-      }
-    });
-
-    // Update ref for next comparison
-    prevFilesRef.current = { ...files };
-  }, [files, sandpack]);
-
-  return null;
-}
+// useIncrementalFileUpdater has been moved to ./useIncrementalFileUpdater.ts
+// Import it directly from that file when inside SandpackProvider context.
