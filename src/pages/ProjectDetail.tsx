@@ -8332,8 +8332,8 @@ ${fixInstructions}
           mobileTab === 'chat' ? "hidden md:flex" : "flex w-full",
           "h-full max-h-full overflow-hidden"
         )}>
-          {/* Project Info Bar - Back, Name, Status - FIXED at top */}
-          <div className="flex items-center gap-3 px-4 py-0 h-[56px] bg-gradient-to-r from-zinc-900 to-zinc-900/90 border-b border-white/10 shrink-0 absolute top-0 left-0 right-0 z-[100]">
+          {/* Project Info Bar - Back, Name, Status - STICKY at top */}
+          <div className="flex items-center gap-3 px-4 py-0 h-[56px] bg-gradient-to-r from-zinc-900 to-zinc-900/90 border-b border-white/10 shrink-0 sticky top-0 z-[100]">
             {/* Back button - Enhanced */}
             <button 
               onClick={() => navigate('/projects')} 
@@ -8417,8 +8417,8 @@ ${fixInstructions}
             </div>
           </div>
 
-          {/* Preview/Code Content - Full Height with margin for fixed header - ONLY IFRAME SCROLLS */}
-          <div className="flex-1 min-h-0 sandpack-preview-container relative mt-[56px] overflow-hidden" style={{ height: 'calc(100% - 56px)' }}>
+          {/* Preview/Code Content - Full Height - ONLY IFRAME SCROLLS */}
+          <div className="flex-1 min-h-0 sandpack-preview-container relative overflow-hidden">
             <Suspense fallback={
               <div className="w-full h-full flex items-center justify-center bg-zinc-950 text-white">
                 <Loader2 className="w-10 h-10 animate-spin text-indigo-500" />
