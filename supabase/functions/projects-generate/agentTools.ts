@@ -2448,7 +2448,7 @@ You now have advanced file targeting capabilities:
 **How to use:**
 - For edits with quoted text ("remove 'X'"), the system will find the file containing that text
 - For component edits ("change the footer"), it will find Footer.jsx automatically
-- Use `list_files` first to see what's available, then target precisely
+- Use list_files first to see what's available, then target precisely
 
 ## 📋 THE OATH (NEVER BREAK)
 

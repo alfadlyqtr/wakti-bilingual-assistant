@@ -2931,10 +2931,40 @@ IMPORTANT FORM REQUIREMENTS:
 - formName should describe the form purpose: "contact", "quote", "newsletter", "feedback", "waitlist"
 
 ### PART 8: BOOKING/APPOINTMENT SYSTEM
+🚨 **CRITICAL: Services are ALREADY seeded in the backend. You MUST fetch them from the API - NEVER hardcode services!**
+
 When the user asks for booking, appointments, scheduling (barber, salon, spa, clinic, etc.):
 
 \`\`\`jsx
 const BACKEND_URL = "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api";
+
+// MANDATORY: Fetch services from backend - NEVER hardcode!
+const [services, setServices] = useState([]);
+const [servicesLoading, setServicesLoading] = useState(true);
+
+useEffect(() => {
+  const fetchServices = async () => {
+    try {
+      const res = await fetch(BACKEND_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: '{{PROJECT_ID}}',
+          action: 'collection/services'
+        })
+      });
+      const data = await res.json();
+      if (data.ok && data.items) {
+        setServices(data.items);
+      }
+    } catch (err) {
+      console.error('Failed to fetch services:', err);
+    } finally {
+      setServicesLoading(false);
+    }
+  };
+  fetchServices();
+}, []);
 
 // Booking form state
 const [booking, setBooking] = useState({ 
@@ -2973,11 +3003,35 @@ const handleBooking = async (e) => {
     setLoading(false);
   }
 };
+
+// In your JSX - use fetched services, NOT hardcoded:
+{servicesLoading ? (
+  <p>Loading services...</p>
+) : (
+  <select value={booking.service} onChange={(e) => setBooking({...booking, service: e.target.value})}>
+    <option value="">Select a service</option>
+    {services.map((s) => (
+      <option key={s.id} value={s.data?.name}>{s.data?.name} - {s.data?.duration}min - \${s.data?.price}</option>
+    ))}
+  </select>
+)}
 \`\`\`
 
+🚨 **NEVER DO THIS (hardcoded services):**
+\`\`\`jsx
+// ❌ WRONG - hardcoded services
+const services = [
+  { name: "Consultation", duration: 30, price: 50 },
+  { name: "Deep Dive", duration: 60, price: 100 }
+];
+\`\`\`
+
+✅ **ALWAYS fetch from backend using action: 'collection/services'**
+
 BOOKING UI REQUIREMENTS:
-- Multi-step form: 1) Select Service → 2) Pick Date/Time → 3) Enter Details
-- Show service cards with name, duration, and price
+- FIRST: Fetch services from backend with action: 'collection/services'
+- Multi-step form: 1) Select Service (from backend) → 2) Pick Date/Time → 3) Enter Details
+- Show service cards with name, duration, and price FROM THE BACKEND
 - Date picker with available dates highlighted
 - Time slots grid showing available times
 - Summary panel showing selected service, date, time before confirmation
@@ -4165,7 +4219,15 @@ IF NO (pure question like "what does X do?") → Return markdown
 📝 MARKDOWN FORMAT FOR QUESTIONS:
 Use emojis, **bold**, \`code\`, and bullet points. Be friendly!
 
-⚠️ CRITICAL: For ANY request that implies changing code (and asset_picker doesn't apply), return ONLY the JSON object. No explanations. No "Here's the plan". Just raw JSON starting with { and ending with }.
+🚨 VALID JSON TYPES - ONLY THESE TWO ARE ALLOWED:
+1. "type": "plan" - For code changes (use the format above)
+2. "type": "asset_picker" - ONLY when user has multiple uploaded images and doesn't specify which one
+
+❌ NEVER invent other types like "booking_wizard", "form_wizard", "contact_form", etc.
+❌ NEVER output raw JSON with invented types - the system will show it as broken text to the user
+✅ If user wants to change a form/booking/contact page, use "type": "plan" and provide the code changes
+
+⚠️ CRITICAL: For ANY request that implies changing code (and asset_picker doesn't apply), return ONLY the JSON object with "type": "plan". No explanations. No "Here's the plan". Just raw JSON starting with { and ending with }.
 ${backendContextStr}${uploadedAssets.length === 1 ? `
 
 ### 📁 USER UPLOADED ASSET

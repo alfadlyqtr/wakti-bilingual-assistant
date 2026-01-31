@@ -6,10 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
+import ShareButton from '@/components/ui/ShareButton';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 import {
   ArrowLeft, Upload, User, Briefcase, GraduationCap, Award,
   Plus, X, Trash2, Mail, Phone, MapPin, Linkedin, Globe, FileText,
-  Loader2, Eye, ChevronDown, ChevronUp, ArrowRight, Star, Check, LayoutGrid, List,
+  Loader2, Eye, ChevronDown, ChevronUp, ArrowRight, Star, Check, LayoutGrid, List, Share2, Download,
 } from 'lucide-react';
 
 // ============================================================================
@@ -57,86 +60,152 @@ interface CVTemplate {
   layout: 'sidebar-left' | 'sidebar-right' | 'classic' | 'modern' | 'minimal';
 }
 
+// Background patterns for CV cards
+const CV_BACKGROUNDS = [
+  { id: 'none', name: 'None', pattern: '' },
+  { id: 'dots', name: 'Dots', pattern: `url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='2' cy='2' r='1' fill='%23e5e7eb'/%3E%3C/svg%3E")` },
+  { id: 'grid', name: 'Grid', pattern: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0h40v40H0V0zm1 1v38h38V1H1z' fill='%23e5e7eb' fill-opacity='0.4'/%3E%3C/svg%3E")` },
+  { id: 'lines', name: 'Lines', pattern: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 20h40M20 0v40' stroke='%23e5e7eb' stroke-width='1' fill='none'/%3E%3C/svg%3E")` },
+  { id: 'diagonal', name: 'Diagonal', pattern: `url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 20L20 0' stroke='%23e5e7eb' stroke-width='1' fill='none'/%3E%3C/svg%3E")` },
+  { id: 'hexagons', name: 'Hexagons', pattern: `url("data:image/svg+xml,%3Csvg width='28' height='49' viewBox='0 0 28 49' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5zM3 17.9v12.7l10.99 6.34 11-6.35V17.9l-11-6.34L3 17.9z' fill='%23e5e7eb' fill-opacity='0.4'/%3E%3C/svg%3E")` },
+  { id: 'waves', name: 'Waves', pattern: `url("data:image/svg+xml,%3Csvg width='100' height='20' viewBox='0 0 100 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 10c25 0 25-10 50-10s25 10 50 10' stroke='%23e5e7eb' stroke-width='1' fill='none'/%3E%3C/svg%3E")` },
+  { id: 'circles', name: 'Circles', pattern: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='30' cy='30' r='20' stroke='%23e5e7eb' stroke-width='1' fill='none'/%3E%3C/svg%3E")` },
+  { id: 'triangles', name: 'Triangles', pattern: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 5l15 30H5z' stroke='%23e5e7eb' stroke-width='1' fill='none'/%3E%3C/svg%3E")` },
+  { id: 'squares', name: 'Squares', pattern: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Crect x='10' y='10' width='20' height='20' stroke='%23e5e7eb' stroke-width='1' fill='none'/%3E%3C/svg%3E")` },
+  { id: 'zigzag', name: 'Zigzag', pattern: `url("data:image/svg+xml,%3Csvg width='40' height='12' viewBox='0 0 40 12' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 6l10-6 10 6 10-6 10 6' stroke='%23e5e7eb' stroke-width='1' fill='none'/%3E%3C/svg%3E")` },
+  { id: 'plus', name: 'Plus', pattern: `url("data:image/svg+xml,%3Csvg width='30' height='30' viewBox='0 0 30 30' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M15 5v20M5 15h20' stroke='%23e5e7eb' stroke-width='1' fill='none'/%3E%3C/svg%3E")` },
+];
+
+// Standard color palette for all templates
+const STANDARD_COLORS = [
+  { id: 'blue', primary: '#1e88e5', secondary: '#e3f2fd', accent: '#0d47a1', bg: '#f5f9ff' },
+  { id: 'navy', primary: '#1e3a5f', secondary: '#e8eef4', accent: '#0f2744', bg: '#ffffff' },
+  { id: 'black', primary: '#212121', secondary: '#f5f5f5', accent: '#000000', bg: '#ffffff' },
+  { id: 'purple', primary: '#7c3aed', secondary: '#ede9fe', accent: '#5b21b6', bg: '#faf5ff' },
+  { id: 'violet', primary: '#8b5cf6', secondary: '#f3e8ff', accent: '#7c3aed', bg: '#faf5ff' },
+  { id: 'pink', primary: '#ec4899', secondary: '#fce7f3', accent: '#be185d', bg: '#fdf2f8' },
+  { id: 'rose', primary: '#f43f5e', secondary: '#fff1f2', accent: '#e11d48', bg: '#fff1f2' },
+  { id: 'orange', primary: '#f97316', secondary: '#ffedd5', accent: '#ea580c', bg: '#fff7ed' },
+  { id: 'yellow', primary: '#f59e0b', secondary: '#fef3c7', accent: '#d97706', bg: '#fffbeb' },
+  { id: 'lime', primary: '#84cc16', secondary: '#ecfccb', accent: '#65a30d', bg: '#f7fee7' },
+  { id: 'green', primary: '#10b981', secondary: '#d1fae5', accent: '#059669', bg: '#ecfdf5' },
+  { id: 'teal', primary: '#14b8a6', secondary: '#ccfbf1', accent: '#0d9488', bg: '#f0fdfa' },
+  { id: 'cyan', primary: '#06b6d4', secondary: '#cffafe', accent: '#0891b2', bg: '#ecfeff' },
+];
+
 const CV_TEMPLATES: CVTemplate[] = [
+  // TEMPLATE 1: Sidney - Sidebar Left (Popular)
   {
     id: 'sidney',
     name: 'Sidney',
     nameAr: 'سيدني',
     recommended: true,
     isATS: true,
-    colors: [
-      { id: 'blue', primary: '#1e88e5', secondary: '#e3f2fd', accent: '#0d47a1', bg: '#f5f9ff' },
-      { id: 'black', primary: '#212121', secondary: '#f5f5f5', accent: '#000000', bg: '#ffffff' },
-      { id: 'purple', primary: '#7c3aed', secondary: '#ede9fe', accent: '#5b21b6', bg: '#faf5ff' },
-      { id: 'pink', primary: '#ec4899', secondary: '#fce7f3', accent: '#be185d', bg: '#fdf2f8' },
-      { id: 'yellow', primary: '#f59e0b', secondary: '#fef3c7', accent: '#d97706', bg: '#fffbeb' },
-      { id: 'green', primary: '#10b981', secondary: '#d1fae5', accent: '#059669', bg: '#ecfdf5' },
-      { id: 'teal', primary: '#14b8a6', secondary: '#ccfbf1', accent: '#0d9488', bg: '#f0fdfa' },
-    ],
+    colors: STANDARD_COLORS,
     layout: 'sidebar-left',
   },
+  // TEMPLATE 2: Dallas - Classic Header
   {
     id: 'dallas',
     name: 'Dallas',
     nameAr: 'دالاس',
     isATS: true,
-    colors: [
-      { id: 'blue', primary: '#2563eb', secondary: '#dbeafe', accent: '#1d4ed8', bg: '#ffffff' },
-      { id: 'black', primary: '#171717', secondary: '#f5f5f5', accent: '#000000', bg: '#ffffff' },
-      { id: 'purple', primary: '#8b5cf6', secondary: '#ede9fe', accent: '#6d28d9', bg: '#ffffff' },
-      { id: 'pink', primary: '#f472b6', secondary: '#fce7f3', accent: '#db2777', bg: '#ffffff' },
-      { id: 'yellow', primary: '#eab308', secondary: '#fef9c3', accent: '#ca8a04', bg: '#ffffff' },
-      { id: 'green', primary: '#22c55e', secondary: '#dcfce7', accent: '#16a34a', bg: '#ffffff' },
-      { id: 'teal', primary: '#06b6d4', secondary: '#cffafe', accent: '#0891b2', bg: '#ffffff' },
-    ],
+    colors: STANDARD_COLORS,
     layout: 'classic',
   },
+  // TEMPLATE 3: Valencia - Sidebar Left Professional
   {
     id: 'valencia',
     name: 'Valencia',
     nameAr: 'فالنسيا',
-    colors: [
-      { id: 'navy', primary: '#1e3a5f', secondary: '#e8eef4', accent: '#0f2744', bg: '#ffffff' },
-      { id: 'black', primary: '#1f2937', secondary: '#f3f4f6', accent: '#111827', bg: '#ffffff' },
-      { id: 'purple', primary: '#6366f1', secondary: '#e0e7ff', accent: '#4f46e5', bg: '#ffffff' },
-      { id: 'pink', primary: '#e11d48', secondary: '#ffe4e6', accent: '#be123c', bg: '#ffffff' },
-      { id: 'yellow', primary: '#d97706', secondary: '#fef3c7', accent: '#b45309', bg: '#ffffff' },
-      { id: 'green', primary: '#059669', secondary: '#d1fae5', accent: '#047857', bg: '#ffffff' },
-      { id: 'teal', primary: '#0d9488', secondary: '#ccfbf1', accent: '#0f766e', bg: '#ffffff' },
-    ],
+    colors: STANDARD_COLORS,
     layout: 'sidebar-left',
   },
+  // TEMPLATE 4: Milano - Sidebar Right (Popular)
   {
     id: 'milano',
     name: 'Milano',
     nameAr: 'ميلانو',
     recommended: true,
-    colors: [
-      { id: 'blue', primary: '#3b82f6', secondary: '#eff6ff', accent: '#2563eb', bg: '#ffffff' },
-      { id: 'black', primary: '#18181b', secondary: '#f4f4f5', accent: '#09090b', bg: '#ffffff' },
-      { id: 'purple', primary: '#a855f7', secondary: '#f3e8ff', accent: '#9333ea', bg: '#ffffff' },
-      { id: 'pink', primary: '#f43f5e', secondary: '#fff1f2', accent: '#e11d48', bg: '#ffffff' },
-      { id: 'yellow', primary: '#f59e0b', secondary: '#fffbeb', accent: '#d97706', bg: '#ffffff' },
-      { id: 'green', primary: '#34d399', secondary: '#ecfdf5', accent: '#10b981', bg: '#ffffff' },
-      { id: 'teal', primary: '#2dd4bf', secondary: '#f0fdfa', accent: '#14b8a6', bg: '#ffffff' },
-    ],
+    colors: STANDARD_COLORS,
     layout: 'sidebar-right',
   },
+  // TEMPLATE 5: Helen - Minimal Clean
   {
     id: 'helen',
     name: 'Helen',
     nameAr: 'هيلين',
     isATS: true,
-    colors: [
-      { id: 'blue', primary: '#1d4ed8', secondary: '#dbeafe', accent: '#1e40af', bg: '#ffffff' },
-      { id: 'black', primary: '#27272a', secondary: '#e4e4e7', accent: '#18181b', bg: '#ffffff' },
-      { id: 'purple', primary: '#7c3aed', secondary: '#ede9fe', accent: '#6d28d9', bg: '#ffffff' },
-      { id: 'pink', primary: '#db2777', secondary: '#fce7f3', accent: '#be185d', bg: '#ffffff' },
-      { id: 'yellow', primary: '#ca8a04', secondary: '#fef9c3', accent: '#a16207', bg: '#ffffff' },
-      { id: 'green', primary: '#16a34a', secondary: '#dcfce7', accent: '#15803d', bg: '#ffffff' },
-      { id: 'teal', primary: '#0891b2', secondary: '#cffafe', accent: '#0e7490', bg: '#ffffff' },
-    ],
+    colors: STANDARD_COLORS,
     layout: 'minimal',
+  },
+  // TEMPLATE 6: Skill-Based - Focus on Skills
+  {
+    id: 'skill-based',
+    name: 'Skill-Based',
+    nameAr: 'مهاراتي',
+    colors: STANDARD_COLORS,
+    layout: 'sidebar-left',
+  },
+  // TEMPLATE 7: Minimalist - Simple & Clean
+  {
+    id: 'minimalist',
+    name: 'Minimalist',
+    nameAr: 'بسيط',
+    recommended: true,
+    isATS: true,
+    colors: STANDARD_COLORS,
+    layout: 'minimal',
+  },
+  // TEMPLATE 8: Hybrid - Skills + Experience
+  {
+    id: 'hybrid',
+    name: 'Hybrid',
+    nameAr: 'هجين',
+    colors: STANDARD_COLORS,
+    layout: 'modern',
+  },
+  // TEMPLATE 9: Traditional - Classic Format
+  {
+    id: 'traditional',
+    name: 'Traditional',
+    nameAr: 'تقليدي',
+    isATS: true,
+    colors: STANDARD_COLORS,
+    layout: 'classic',
+  },
+  // TEMPLATE 10: General - Versatile
+  {
+    id: 'general',
+    name: 'General',
+    nameAr: 'عام',
+    colors: STANDARD_COLORS,
+    layout: 'sidebar-left',
+  },
+  // TEMPLATE 11: IT Professional
+  {
+    id: 'it-pro',
+    name: 'IT Pro',
+    nameAr: 'تقني',
+    colors: STANDARD_COLORS,
+    layout: 'sidebar-right',
+  },
+  // TEMPLATE 12: Tech Modern
+  {
+    id: 'tech',
+    name: 'Tech',
+    nameAr: 'تكنولوجي',
+    colors: STANDARD_COLORS,
+    layout: 'modern',
+  },
+  // TEMPLATE 13: Combined - Best of Both
+  {
+    id: 'combined',
+    name: 'Combined',
+    nameAr: 'مدمج',
+    recommended: true,
+    colors: STANDARD_COLORS,
+    layout: 'sidebar-right',
   },
 ];
 
@@ -267,9 +336,10 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
 
   const [isMobile, setIsMobile] = useState(false);
 
-  const [step, setStep] = useState<'templates' | 'method' | 'builder' | 'preview'>('templates');
+  const [step, setStep] = useState<'my-cvs' | 'templates' | 'method' | 'builder' | 'preview'>('my-cvs');
   const [selectedTemplate, setSelectedTemplate] = useState<CVTemplate>(CV_TEMPLATES[0]);
   const [selectedColorIndex, setSelectedColorIndex] = useState(0);
+  const [selectedBgIndex, setSelectedBgIndex] = useState(0);
   const [templateView, setTemplateView] = useState<'grid' | 'list'>('grid');
   const [cvData, setCvData] = useState<CVData>({
     personalInfo: { fullName: '', jobTitle: '', email: user?.email || '', phone: '', location: '', linkedin: '', website: '', summary: '' },
@@ -506,11 +576,13 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
 
   const TemplatePreview: React.FC<{ template: CVTemplate; colorIndex: number; mini?: boolean }> = ({ template, colorIndex, mini }) => {
     const color = template.colors[colorIndex];
-    const scale = mini ? 'scale-[0.30]' : 'scale-[0.52]';
-    
-    if (template.layout === 'sidebar-left') {
+    const scale = mini ? 'scale-[0.28]' : 'scale-[0.42]';
+    const baseClass = `w-[400px] h-[566px] ${scale} origin-top-left bg-white rounded-lg shadow-lg overflow-hidden`;
+
+    // ========== SIDNEY: Classic sidebar left with photo ==========
+    if (template.id === 'sidney') {
       return (
-        <div className={`w-[400px] h-[566px] ${scale} origin-top-left bg-white rounded-lg shadow-lg overflow-hidden flex`}>
+        <div className={`${baseClass} flex`}>
           <div className="w-[140px] h-full p-4 flex flex-col" style={{ backgroundColor: color.primary }}>
             <div className="w-20 h-20 rounded-full bg-white/20 mx-auto mb-4" />
             <div className="text-white text-center mb-4">
@@ -520,76 +592,95 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
             <div className="space-y-2 text-white/80 text-[8px]">
               <div className="flex items-center gap-1"><Mail className="w-2 h-2" />{SAMPLE_DATA.email}</div>
               <div className="flex items-center gap-1"><Phone className="w-2 h-2" />{SAMPLE_DATA.phone}</div>
-              <div className="flex items-center gap-1"><MapPin className="w-2 h-2" />{SAMPLE_DATA.location}</div>
             </div>
             <div className="mt-4">
               <div className="text-white font-bold text-[9px] mb-2">SKILLS</div>
-              <div className="space-y-1">
-                {SAMPLE_DATA.skills.slice(0, 4).map((s, i) => (
-                  <div key={i} className="text-[7px] text-white/90 bg-white/10 px-2 py-0.5 rounded">{s}</div>
-                ))}
-              </div>
+              {SAMPLE_DATA.skills.slice(0, 4).map((s, i) => (
+                <div key={i} className="text-[7px] text-white/90 bg-white/10 px-2 py-0.5 rounded mb-1">{s}</div>
+              ))}
             </div>
           </div>
           <div className="flex-1 p-4" style={{ backgroundColor: color.bg }}>
-            <div className="mb-4">
-              <div className="font-bold text-[10px] mb-1" style={{ color: color.primary }}>SUMMARY</div>
-              <div className="text-[7px] text-gray-600 leading-relaxed">{SAMPLE_DATA.summary}</div>
-            </div>
-            <div className="mb-4">
-              <div className="font-bold text-[10px] mb-2" style={{ color: color.primary }}>WORK EXPERIENCE</div>
-              {SAMPLE_DATA.experience.map((exp, i) => (
-                <div key={i} className="mb-2">
-                  <div className="font-semibold text-[8px]">{exp.position}</div>
-                  <div className="text-[7px] text-gray-500">{exp.company} | {exp.date}</div>
-                </div>
-              ))}
-            </div>
-            <div>
-              <div className="font-bold text-[10px] mb-2" style={{ color: color.primary }}>EDUCATION</div>
-              {SAMPLE_DATA.education.map((edu, i) => (
-                <div key={i}>
-                  <div className="font-semibold text-[8px]">{edu.degree}</div>
-                  <div className="text-[7px] text-gray-500">{edu.school}</div>
-                </div>
-              ))}
-            </div>
+            <div className="font-bold text-[10px] mb-1" style={{ color: color.primary }}>SUMMARY</div>
+            <div className="text-[7px] text-gray-600 mb-3">{SAMPLE_DATA.summary}</div>
+            <div className="font-bold text-[10px] mb-2" style={{ color: color.primary }}>EXPERIENCE</div>
+            {SAMPLE_DATA.experience.map((exp, i) => (
+              <div key={i} className="mb-2">
+                <div className="font-semibold text-[8px]">{exp.position}</div>
+                <div className="text-[7px] text-gray-500">{exp.company}</div>
+              </div>
+            ))}
           </div>
         </div>
       );
     }
 
-    if (template.layout === 'minimal') {
+    // ========== DALLAS: Classic header with colored banner ==========
+    if (template.id === 'dallas') {
       return (
-        <div className={`w-[400px] h-[566px] ${scale} origin-top-left bg-white rounded-lg shadow-lg overflow-hidden p-6`}>
-          <div className="text-center mb-4 pb-4 border-b-2" style={{ borderColor: color.primary }}>
-            <div className="w-16 h-16 rounded-full mx-auto mb-2 bg-gray-200" />
+        <div className={baseClass}>
+          <div className="p-4 text-center" style={{ backgroundColor: color.secondary }}>
             <div className="font-bold text-lg" style={{ color: color.primary }}>{SAMPLE_DATA.name}</div>
-            <div className="text-xs text-gray-500">{SAMPLE_DATA.title}</div>
-            <div className="flex justify-center gap-4 mt-2 text-[7px] text-gray-500">
+            <div className="text-xs text-gray-600">{SAMPLE_DATA.title}</div>
+            <div className="flex justify-center gap-3 mt-2 text-[7px] text-gray-500">
               <span>{SAMPLE_DATA.email}</span>
               <span>{SAMPLE_DATA.phone}</span>
             </div>
           </div>
-          <div className="mb-3">
-            <div className="font-bold text-[9px] mb-1 text-center" style={{ color: color.primary }}>PROFESSIONAL SUMMARY</div>
-            <div className="text-[7px] text-gray-600 text-center">{SAMPLE_DATA.summary}</div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <div className="font-bold text-[9px] mb-2" style={{ color: color.primary }}>EXPERIENCE</div>
-              {SAMPLE_DATA.experience.map((exp, i) => (
-                <div key={i} className="mb-2">
-                  <div className="font-semibold text-[7px]">{exp.position}</div>
-                  <div className="text-[6px] text-gray-500">{exp.company}</div>
-                </div>
+          <div className="p-4">
+            <div className="font-bold text-[9px] border-b pb-1 mb-2" style={{ color: color.primary, borderColor: color.primary }}>SUMMARY</div>
+            <div className="text-[7px] text-gray-600 mb-3">{SAMPLE_DATA.summary}</div>
+            <div className="font-bold text-[9px] border-b pb-1 mb-2" style={{ color: color.primary, borderColor: color.primary }}>EXPERIENCE</div>
+            {SAMPLE_DATA.experience.map((exp, i) => (
+              <div key={i} className="mb-2">
+                <div className="font-semibold text-[8px]">{exp.position}</div>
+                <div className="text-[7px] text-gray-500">{exp.company} | {exp.date}</div>
+              </div>
+            ))}
+            <div className="font-bold text-[9px] border-b pb-1 mb-2" style={{ color: color.primary, borderColor: color.primary }}>SKILLS</div>
+            <div className="flex flex-wrap gap-1">
+              {SAMPLE_DATA.skills.map((s, i) => (
+                <span key={i} className="text-[7px] px-2 py-0.5 rounded-full" style={{ backgroundColor: color.secondary, color: color.primary }}>{s}</span>
               ))}
             </div>
-            <div>
-              <div className="font-bold text-[9px] mb-2" style={{ color: color.primary }}>SKILLS</div>
-              <div className="flex flex-wrap gap-1">
-                {SAMPLE_DATA.skills.map((s, i) => (
-                  <span key={i} className="text-[6px] px-1.5 py-0.5 rounded" style={{ backgroundColor: color.secondary, color: color.primary }}>{s}</span>
+          </div>
+        </div>
+      );
+    }
+
+    // ========== VALENCIA: Two-column with left accent bar ==========
+    if (template.id === 'valencia') {
+      return (
+        <div className={`${baseClass} flex`}>
+          <div className="w-2 h-full" style={{ backgroundColor: color.primary }} />
+          <div className="flex-1 p-4">
+            <div className="flex items-center gap-3 mb-4 pb-3 border-b" style={{ borderColor: color.secondary }}>
+              <div className="w-14 h-14 rounded-full" style={{ backgroundColor: color.secondary }} />
+              <div>
+                <div className="font-bold text-base" style={{ color: color.primary }}>{SAMPLE_DATA.name}</div>
+                <div className="text-[9px] text-gray-500">{SAMPLE_DATA.title}</div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <div className="font-bold text-[9px] mb-2 flex items-center gap-1" style={{ color: color.primary }}>
+                  <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color.primary }} />EXPERIENCE
+                </div>
+                {SAMPLE_DATA.experience.map((exp, i) => (
+                  <div key={i} className="mb-2 pl-2 border-l-2" style={{ borderColor: color.secondary }}>
+                    <div className="font-semibold text-[7px]">{exp.position}</div>
+                    <div className="text-[6px] text-gray-500">{exp.company}</div>
+                  </div>
+                ))}
+              </div>
+              <div>
+                <div className="font-bold text-[9px] mb-2 flex items-center gap-1" style={{ color: color.primary }}>
+                  <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color.primary }} />SKILLS
+                </div>
+                {SAMPLE_DATA.skills.slice(0, 5).map((s, i) => (
+                  <div key={i} className="text-[7px] mb-1 flex items-center gap-1">
+                    <div className="w-1 h-1 rounded-full" style={{ backgroundColor: color.primary }} />{s}
+                  </div>
                 ))}
               </div>
             </div>
@@ -598,9 +689,448 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
       );
     }
 
-    // Classic layout
+    // ========== MILANO: Sidebar right with gradient header ==========
+    if (template.id === 'milano') {
+      return (
+        <div className={`${baseClass} flex`}>
+          <div className="flex-1 p-4">
+            <div className="mb-4">
+              <div className="font-bold text-[10px] mb-1 uppercase tracking-wide" style={{ color: color.primary }}>About Me</div>
+              <div className="text-[7px] text-gray-600">{SAMPLE_DATA.summary}</div>
+            </div>
+            <div className="mb-4">
+              <div className="font-bold text-[10px] mb-2 uppercase tracking-wide" style={{ color: color.primary }}>Work Experience</div>
+              {SAMPLE_DATA.experience.map((exp, i) => (
+                <div key={i} className="mb-2 flex gap-2">
+                  <div className="w-1 rounded-full" style={{ backgroundColor: color.primary }} />
+                  <div>
+                    <div className="font-semibold text-[8px]">{exp.position}</div>
+                    <div className="text-[7px] text-gray-500">{exp.company}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="font-bold text-[10px] mb-2 uppercase tracking-wide" style={{ color: color.primary }}>Education</div>
+            {SAMPLE_DATA.education.map((edu, i) => (
+              <div key={i} className="text-[7px]">
+                <span className="font-semibold">{edu.degree}</span> - {edu.school}
+              </div>
+            ))}
+          </div>
+          <div className="w-[130px] h-full p-3 flex flex-col" style={{ backgroundColor: color.primary }}>
+            <div className="w-16 h-16 rounded-full bg-white/20 mx-auto mb-3" />
+            <div className="text-white text-center mb-3">
+              <div className="font-bold text-[11px]">{SAMPLE_DATA.name}</div>
+              <div className="text-[8px] opacity-80">{SAMPLE_DATA.title}</div>
+            </div>
+            <div className="text-white/80 text-[7px] space-y-1 mb-3">
+              <div>{SAMPLE_DATA.email}</div>
+              <div>{SAMPLE_DATA.phone}</div>
+            </div>
+            <div className="text-white font-bold text-[8px] mb-1">Skills</div>
+            {SAMPLE_DATA.skills.slice(0, 4).map((s, i) => (
+              <div key={i} className="text-[6px] text-white/80 mb-0.5">• {s}</div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ========== HELEN: Minimal centered with thin borders ==========
+    if (template.id === 'helen') {
+      return (
+        <div className={`${baseClass} p-6`}>
+          <div className="text-center mb-4 pb-4 border-b" style={{ borderColor: color.secondary }}>
+            <div className="w-14 h-14 rounded-full mx-auto mb-2" style={{ backgroundColor: color.secondary }} />
+            <div className="font-bold text-lg" style={{ color: color.primary }}>{SAMPLE_DATA.name}</div>
+            <div className="text-[10px] text-gray-500">{SAMPLE_DATA.title}</div>
+            <div className="flex justify-center gap-4 mt-2 text-[7px] text-gray-400">
+              <span>{SAMPLE_DATA.email}</span>
+              <span>{SAMPLE_DATA.phone}</span>
+            </div>
+          </div>
+          <div className="text-center text-[7px] text-gray-600 mb-4">{SAMPLE_DATA.summary}</div>
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <div className="font-bold text-[9px] mb-2 text-center" style={{ color: color.primary }}>Experience</div>
+              {SAMPLE_DATA.experience.map((exp, i) => (
+                <div key={i} className="text-center mb-2">
+                  <div className="font-semibold text-[7px]">{exp.position}</div>
+                  <div className="text-[6px] text-gray-400">{exp.company}</div>
+                </div>
+              ))}
+            </div>
+            <div>
+              <div className="font-bold text-[9px] mb-2 text-center" style={{ color: color.primary }}>Skills</div>
+              <div className="flex flex-wrap justify-center gap-1">
+                {SAMPLE_DATA.skills.map((s, i) => (
+                  <span key={i} className="text-[6px] px-2 py-0.5 rounded-full border" style={{ borderColor: color.primary, color: color.primary }}>{s}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ========== SKILL-BASED: Skills prominent with progress bars ==========
+    if (template.id === 'skill-based') {
+      return (
+        <div className={`${baseClass} flex`}>
+          <div className="w-[150px] h-full p-4" style={{ backgroundColor: color.primary }}>
+            <div className="w-16 h-16 rounded-full bg-white/20 mx-auto mb-3" />
+            <div className="text-white text-center mb-4">
+              <div className="font-bold text-[11px]">{SAMPLE_DATA.name}</div>
+              <div className="text-[8px] opacity-70">{SAMPLE_DATA.title}</div>
+            </div>
+            <div className="text-white font-bold text-[8px] mb-2 flex items-center gap-1">
+              <Star className="w-2 h-2" />HARD SKILLS
+            </div>
+            {SAMPLE_DATA.skills.slice(0, 3).map((s, i) => (
+              <div key={i} className="mb-2">
+                <div className="text-[7px] text-white/90 mb-0.5">{s}</div>
+                <div className="h-1 bg-white/20 rounded-full"><div className="h-1 rounded-full bg-white/60" style={{ width: `${80 - i * 10}%` }} /></div>
+              </div>
+            ))}
+            <div className="text-white font-bold text-[8px] mb-2 mt-3 flex items-center gap-1">
+              <Briefcase className="w-2 h-2" />SOFT SKILLS
+            </div>
+            {SAMPLE_DATA.skills.slice(3, 5).map((s, i) => (
+              <div key={i} className="text-[7px] text-white/80 mb-1">• {s}</div>
+            ))}
+          </div>
+          <div className="flex-1 p-4" style={{ backgroundColor: color.bg }}>
+            <div className="font-bold text-[9px] mb-2 flex items-center gap-1" style={{ color: color.primary }}>
+              <Briefcase className="w-3 h-3" />WORK EXPERIENCE
+            </div>
+            {SAMPLE_DATA.experience.map((exp, i) => (
+              <div key={i} className="mb-3 pl-3 border-l-2" style={{ borderColor: color.primary }}>
+                <div className="font-semibold text-[8px]">{exp.position}</div>
+                <div className="text-[7px] text-gray-500">{exp.company}</div>
+                <div className="text-[6px] text-gray-400">{exp.date}</div>
+              </div>
+            ))}
+            <div className="font-bold text-[9px] mb-2 flex items-center gap-1" style={{ color: color.primary }}>
+              <GraduationCap className="w-3 h-3" />EDUCATION
+            </div>
+            {SAMPLE_DATA.education.map((edu, i) => (
+              <div key={i} className="text-[7px]">
+                <span className="font-semibold">{edu.degree}</span>
+                <div className="text-gray-500">{edu.school}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ========== MINIMALIST: Ultra clean, no colors, just typography ==========
+    if (template.id === 'minimalist') {
+      return (
+        <div className={`${baseClass} p-6`}>
+          <div className="border-b-2 pb-4 mb-4" style={{ borderColor: color.primary }}>
+            <div className="font-bold text-xl" style={{ color: color.primary }}>{SAMPLE_DATA.name}</div>
+            <div className="text-[10px] text-gray-500 uppercase tracking-widest">{SAMPLE_DATA.title}</div>
+            <div className="flex gap-4 mt-2 text-[7px] text-gray-400">
+              <span>{SAMPLE_DATA.email}</span>
+              <span>{SAMPLE_DATA.phone}</span>
+              <span>{SAMPLE_DATA.location}</span>
+            </div>
+          </div>
+          <div className="mb-4">
+            <div className="font-bold text-[9px] uppercase tracking-wide mb-1" style={{ color: color.primary }}>Profile</div>
+            <div className="text-[7px] text-gray-600 leading-relaxed">{SAMPLE_DATA.summary}</div>
+          </div>
+          <div className="mb-4">
+            <div className="font-bold text-[9px] uppercase tracking-wide mb-2" style={{ color: color.primary }}>Experience</div>
+            {SAMPLE_DATA.experience.map((exp, i) => (
+              <div key={i} className="mb-2">
+                <div className="flex justify-between">
+                  <div className="font-semibold text-[8px]">{exp.position}</div>
+                  <div className="text-[7px] text-gray-400">{exp.date}</div>
+                </div>
+                <div className="text-[7px] text-gray-500">{exp.company}</div>
+              </div>
+            ))}
+          </div>
+          <div className="font-bold text-[9px] uppercase tracking-wide mb-2" style={{ color: color.primary }}>Skills</div>
+          <div className="text-[7px] text-gray-600">{SAMPLE_DATA.skills.join(' • ')}</div>
+        </div>
+      );
+    }
+
+    // ========== HYBRID: Two columns with skills sidebar ==========
+    if (template.id === 'hybrid') {
+      return (
+        <div className={baseClass}>
+          <div className="p-3 flex items-center gap-3" style={{ backgroundColor: color.primary }}>
+            <div className="w-12 h-12 rounded-full bg-white/20" />
+            <div className="text-white">
+              <div className="font-bold text-sm">{SAMPLE_DATA.name}</div>
+              <div className="text-[9px] opacity-80">{SAMPLE_DATA.title}</div>
+            </div>
+          </div>
+          <div className="flex">
+            <div className="w-[120px] p-3" style={{ backgroundColor: color.secondary }}>
+              <div className="font-bold text-[8px] mb-2" style={{ color: color.primary }}>HARD SKILLS</div>
+              {SAMPLE_DATA.skills.slice(0, 3).map((s, i) => (
+                <div key={i} className="text-[7px] mb-1" style={{ color: color.accent }}>▸ {s}</div>
+              ))}
+              <div className="font-bold text-[8px] mb-2 mt-3" style={{ color: color.primary }}>SOFT SKILLS</div>
+              {SAMPLE_DATA.skills.slice(3, 5).map((s, i) => (
+                <div key={i} className="text-[7px] mb-1" style={{ color: color.accent }}>▸ {s}</div>
+              ))}
+              <div className="font-bold text-[8px] mb-2 mt-3" style={{ color: color.primary }}>CONTACT</div>
+              <div className="text-[6px] text-gray-600">{SAMPLE_DATA.email}</div>
+              <div className="text-[6px] text-gray-600">{SAMPLE_DATA.phone}</div>
+            </div>
+            <div className="flex-1 p-3">
+              <div className="font-bold text-[9px] mb-2" style={{ color: color.primary }}>WORK EXPERIENCE</div>
+              {SAMPLE_DATA.experience.map((exp, i) => (
+                <div key={i} className="mb-2">
+                  <div className="font-semibold text-[8px]">{exp.position}</div>
+                  <div className="text-[6px] text-gray-500">{exp.company} | {exp.date}</div>
+                </div>
+              ))}
+              <div className="font-bold text-[9px] mb-2 mt-3" style={{ color: color.primary }}>EDUCATION</div>
+              {SAMPLE_DATA.education.map((edu, i) => (
+                <div key={i} className="text-[7px]">{edu.degree} - {edu.school}</div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ========== TRADITIONAL: Classic single column, underlined headers ==========
+    if (template.id === 'traditional') {
+      return (
+        <div className={`${baseClass} p-5`}>
+          <div className="text-center mb-4">
+            <div className="font-bold text-lg">{SAMPLE_DATA.name}</div>
+            <div className="text-[9px] text-gray-500">{SAMPLE_DATA.title}</div>
+            <div className="text-[7px] text-gray-400 mt-1">{SAMPLE_DATA.email} | {SAMPLE_DATA.phone} | {SAMPLE_DATA.location}</div>
+          </div>
+          <div className="mb-3">
+            <div className="font-bold text-[9px] border-b-2 pb-1 mb-2" style={{ borderColor: color.primary, color: color.primary }}>PROFESSIONAL SUMMARY</div>
+            <div className="text-[7px] text-gray-600">{SAMPLE_DATA.summary}</div>
+          </div>
+          <div className="mb-3">
+            <div className="font-bold text-[9px] border-b-2 pb-1 mb-2" style={{ borderColor: color.primary, color: color.primary }}>WORK EXPERIENCE</div>
+            {SAMPLE_DATA.experience.map((exp, i) => (
+              <div key={i} className="mb-2">
+                <div className="flex justify-between">
+                  <div className="font-bold text-[8px]">{exp.position}</div>
+                  <div className="text-[7px] text-gray-400">{exp.date}</div>
+                </div>
+                <div className="text-[7px] text-gray-500 italic">{exp.company}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mb-3">
+            <div className="font-bold text-[9px] border-b-2 pb-1 mb-2" style={{ borderColor: color.primary, color: color.primary }}>EDUCATION</div>
+            {SAMPLE_DATA.education.map((edu, i) => (
+              <div key={i} className="text-[7px]"><span className="font-semibold">{edu.degree}</span> - {edu.school}</div>
+            ))}
+          </div>
+          <div className="font-bold text-[9px] border-b-2 pb-1 mb-2" style={{ borderColor: color.primary, color: color.primary }}>SKILLS</div>
+          <div className="text-[7px] text-gray-600">{SAMPLE_DATA.skills.join(', ')}</div>
+        </div>
+      );
+    }
+
+    // ========== GENERAL: Full-width header with two columns below ==========
+    if (template.id === 'general') {
+      return (
+        <div className={baseClass}>
+          <div className="p-4" style={{ backgroundColor: color.primary }}>
+            <div className="flex items-center gap-3">
+              <div className="w-14 h-14 rounded-lg bg-white/20" />
+              <div className="text-white flex-1">
+                <div className="font-bold text-base">{SAMPLE_DATA.name}</div>
+                <div className="text-[9px] opacity-80">{SAMPLE_DATA.title}</div>
+                <div className="text-[7px] opacity-60 mt-1">{SAMPLE_DATA.summary.slice(0, 80)}...</div>
+              </div>
+            </div>
+          </div>
+          <div className="p-4 grid grid-cols-2 gap-4">
+            <div>
+              <div className="font-bold text-[9px] mb-2 flex items-center gap-1" style={{ color: color.primary }}>
+                <Briefcase className="w-3 h-3" />EXPERIENCE
+              </div>
+              {SAMPLE_DATA.experience.map((exp, i) => (
+                <div key={i} className="mb-2">
+                  <div className="font-semibold text-[8px]">{exp.position}</div>
+                  <div className="text-[6px] text-gray-500">{exp.company}</div>
+                </div>
+              ))}
+              <div className="font-bold text-[9px] mb-2 mt-3 flex items-center gap-1" style={{ color: color.primary }}>
+                <GraduationCap className="w-3 h-3" />EDUCATION
+              </div>
+              {SAMPLE_DATA.education.map((edu, i) => (
+                <div key={i} className="text-[7px]">{edu.degree}</div>
+              ))}
+            </div>
+            <div>
+              <div className="font-bold text-[9px] mb-2 flex items-center gap-1" style={{ color: color.primary }}>
+                <Star className="w-3 h-3" />SKILLS
+              </div>
+              {SAMPLE_DATA.skills.map((s, i) => (
+                <div key={i} className="flex items-center gap-2 mb-1">
+                  <div className="text-[7px] flex-1">{s}</div>
+                  <div className="w-12 h-1 bg-gray-200 rounded-full"><div className="h-1 rounded-full" style={{ backgroundColor: color.primary, width: `${90 - i * 10}%` }} /></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ========== IT PRO: Technical with icons and progress bars ==========
+    if (template.id === 'it-pro') {
+      return (
+        <div className={`${baseClass} flex`}>
+          <div className="flex-1 p-4">
+            <div className="mb-3">
+              <div className="font-bold text-[9px] mb-2 pb-1 border-b flex items-center gap-1" style={{ color: color.primary, borderColor: color.secondary }}>
+                <Briefcase className="w-3 h-3" />WORK EXPERIENCE
+              </div>
+              {SAMPLE_DATA.experience.map((exp, i) => (
+                <div key={i} className="mb-2">
+                  <div className="font-semibold text-[8px]">{exp.position}</div>
+                  <div className="text-[6px] text-gray-500">{exp.company} • {exp.date}</div>
+                </div>
+              ))}
+            </div>
+            <div className="font-bold text-[9px] mb-2 pb-1 border-b flex items-center gap-1" style={{ color: color.primary, borderColor: color.secondary }}>
+              <GraduationCap className="w-3 h-3" />EDUCATION
+            </div>
+            {SAMPLE_DATA.education.map((edu, i) => (
+              <div key={i} className="text-[7px] mb-1">{edu.degree} - {edu.school}</div>
+            ))}
+          </div>
+          <div className="w-[140px] p-3" style={{ backgroundColor: color.secondary }}>
+            <div className="w-14 h-14 rounded-lg mx-auto mb-2" style={{ backgroundColor: color.primary }} />
+            <div className="text-center mb-3">
+              <div className="font-bold text-[10px]" style={{ color: color.primary }}>{SAMPLE_DATA.name}</div>
+              <div className="text-[7px] text-gray-500">{SAMPLE_DATA.title}</div>
+            </div>
+            <div className="font-bold text-[8px] mb-2" style={{ color: color.primary }}>TECHNICAL SKILLS</div>
+            {SAMPLE_DATA.skills.slice(0, 4).map((s, i) => (
+              <div key={i} className="mb-1.5">
+                <div className="text-[6px] text-gray-600 mb-0.5">{s}</div>
+                <div className="h-1.5 bg-white rounded-full"><div className="h-1.5 rounded-full" style={{ backgroundColor: color.primary, width: `${95 - i * 15}%` }} /></div>
+              </div>
+            ))}
+            <div className="font-bold text-[8px] mb-1 mt-3" style={{ color: color.primary }}>CONTACT</div>
+            <div className="text-[6px] text-gray-500">{SAMPLE_DATA.email}</div>
+            <div className="text-[6px] text-gray-500">{SAMPLE_DATA.phone}</div>
+          </div>
+        </div>
+      );
+    }
+
+    // ========== TECH: Modern grid with icons ==========
+    if (template.id === 'tech') {
+      return (
+        <div className={baseClass}>
+          <div className="p-3 flex items-center justify-between" style={{ backgroundColor: color.primary }}>
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 rounded-lg bg-white/20" />
+              <div className="text-white">
+                <div className="font-bold text-[11px]">{SAMPLE_DATA.name}</div>
+                <div className="text-[8px] opacity-70">{SAMPLE_DATA.title}</div>
+              </div>
+            </div>
+            <div className="text-white/70 text-[6px] text-right">
+              <div>{SAMPLE_DATA.email}</div>
+              <div>{SAMPLE_DATA.phone}</div>
+            </div>
+          </div>
+          <div className="p-3">
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              {SAMPLE_DATA.skills.slice(0, 6).map((s, i) => (
+                <div key={i} className="text-center p-1.5 rounded" style={{ backgroundColor: color.secondary }}>
+                  <div className="text-[6px] font-semibold" style={{ color: color.primary }}>{s}</div>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="font-bold text-[8px] mb-2" style={{ color: color.primary }}>EXPERIENCE</div>
+                {SAMPLE_DATA.experience.map((exp, i) => (
+                  <div key={i} className="mb-2 p-1.5 rounded border" style={{ borderColor: color.secondary }}>
+                    <div className="font-semibold text-[7px]">{exp.position}</div>
+                    <div className="text-[6px] text-gray-500">{exp.company}</div>
+                  </div>
+                ))}
+              </div>
+              <div>
+                <div className="font-bold text-[8px] mb-2" style={{ color: color.primary }}>EDUCATION</div>
+                {SAMPLE_DATA.education.map((edu, i) => (
+                  <div key={i} className="mb-2 p-1.5 rounded border" style={{ borderColor: color.secondary }}>
+                    <div className="font-semibold text-[7px]">{edu.degree}</div>
+                    <div className="text-[6px] text-gray-500">{edu.school}</div>
+                  </div>
+                ))}
+                <div className="font-bold text-[8px] mb-1 mt-2" style={{ color: color.primary }}>INTERESTS</div>
+                <div className="text-[6px] text-gray-500">Technology, Innovation, AI</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ========== COMBINED: Split layout with accent bar ==========
+    if (template.id === 'combined') {
+      return (
+        <div className={`${baseClass} flex`}>
+          <div className="w-[160px] p-4" style={{ backgroundColor: color.bg }}>
+            <div className="w-16 h-16 rounded-full mx-auto mb-3" style={{ backgroundColor: color.secondary }} />
+            <div className="text-center mb-4">
+              <div className="font-bold text-[11px]" style={{ color: color.primary }}>{SAMPLE_DATA.name}</div>
+              <div className="text-[8px] text-gray-500">{SAMPLE_DATA.title}</div>
+            </div>
+            <div className="font-bold text-[8px] mb-2" style={{ color: color.primary }}>CONTACT</div>
+            <div className="text-[6px] text-gray-600 mb-3">
+              <div className="mb-1">{SAMPLE_DATA.email}</div>
+              <div className="mb-1">{SAMPLE_DATA.phone}</div>
+              <div>{SAMPLE_DATA.location}</div>
+            </div>
+            <div className="font-bold text-[8px] mb-2" style={{ color: color.primary }}>SKILLS</div>
+            {SAMPLE_DATA.skills.map((s, i) => (
+              <div key={i} className="text-[6px] mb-1 px-2 py-0.5 rounded" style={{ backgroundColor: color.secondary, color: color.accent }}>{s}</div>
+            ))}
+          </div>
+          <div className="w-1" style={{ backgroundColor: color.primary }} />
+          <div className="flex-1 p-4">
+            <div className="font-bold text-[9px] mb-2" style={{ color: color.primary }}>WORK EXPERIENCE</div>
+            {SAMPLE_DATA.experience.map((exp, i) => (
+              <div key={i} className="mb-3">
+                <div className="flex justify-between items-start">
+                  <div className="font-semibold text-[8px]">{exp.position}</div>
+                  <div className="text-[6px] px-1.5 py-0.5 rounded" style={{ backgroundColor: color.secondary, color: color.primary }}>{exp.date}</div>
+                </div>
+                <div className="text-[7px] text-gray-500">{exp.company}</div>
+              </div>
+            ))}
+            <div className="font-bold text-[9px] mb-2 mt-4" style={{ color: color.primary }}>EDUCATION</div>
+            {SAMPLE_DATA.education.map((edu, i) => (
+              <div key={i} className="mb-2">
+                <div className="font-semibold text-[8px]">{edu.degree}</div>
+                <div className="text-[7px] text-gray-500">{edu.school}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ========== FALLBACK: Default classic layout ==========
     return (
-      <div className={`w-[400px] h-[566px] ${scale} origin-top-left bg-white rounded-lg shadow-lg overflow-hidden`}>
+      <div className={baseClass}>
         <div className="p-4 text-center" style={{ backgroundColor: color.secondary }}>
           <div className="font-bold text-lg" style={{ color: color.primary }}>{SAMPLE_DATA.name}</div>
           <div className="text-xs text-gray-600">{SAMPLE_DATA.title}</div>
@@ -650,182 +1180,155 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
   };
 
   // ============================================================================
-  // TEMPLATE SELECTION SCREEN
+  // TEMPLATE SELECTION SCREEN - LUXURY PRADA/CHANEL/DIOR DESIGN
   // ============================================================================
 
   const TemplateSelection = () => (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="shrink-0 px-4 pt-4 pb-3 border-b border-white/10">
-        <div className="flex items-start justify-between gap-3">
+    <div className="flex flex-col h-full bg-gradient-to-br from-background via-background to-purple-950/20">
+      {/* LUXURY HEADER */}
+      <div className="shrink-0 px-8 pt-8 pb-6">
+        <div className="flex items-start justify-between">
           <div>
-            <button onClick={onBack} className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-2">
-              <ArrowLeft className={`w-4 h-4 ${isRTL ? 'rotate-180' : ''}`} />
-              <span className="text-sm">{t.back}</span>
+            {/* Back Button - Premium Luxury */}
+            <button 
+              onClick={() => setStep('my-cvs')} 
+              className="group flex items-center gap-3 mb-6 px-4 py-2.5 rounded-2xl transition-all hover:scale-105 active:scale-95"
+              style={{ 
+                background: 'linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03))',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.1), 0 0 0 1px rgba(255,255,255,0.08)',
+              }}
+            >
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center transition-all" style={{ background: `linear-gradient(135deg, ${currentColor.primary}30, ${currentColor.accent}20)` }}>
+                <ArrowLeft className={`w-4 h-4 ${isRTL ? 'rotate-180' : ''}`} style={{ color: currentColor.primary }} />
+              </div>
+              <span className="text-sm font-semibold text-foreground">{t.back}</span>
             </button>
-            <h1 className="text-2xl font-bold text-foreground">{t.chooseTemplate}</h1>
-            <p className="text-muted-foreground text-sm mt-1">{t.chooseTemplateDesc}</p>
+            
+            {/* Title - Luxury Typography */}
+            <div className="flex items-center gap-4 mb-2">
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-xl" style={{ background: `linear-gradient(135deg, ${currentColor.primary}, ${currentColor.accent})`, boxShadow: `0 8px 32px ${currentColor.primary}40` }}>
+                <FileText className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-black tracking-tight text-foreground">{t.chooseTemplate}</h1>
+                <p className="text-muted-foreground text-sm mt-1">{t.chooseTemplateDesc}</p>
+              </div>
+            </div>
           </div>
 
-          <div className="shrink-0 flex items-center gap-1 p-1 rounded-xl bg-white/5 border border-white/10">
+          {/* View Toggle - Premium Glass */}
+          <div className="flex items-center gap-1 p-1.5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm shadow-lg">
             <button
               type="button"
               onClick={() => setTemplateView('grid')}
-              className={`h-9 w-9 rounded-lg flex items-center justify-center transition-all ${
-                templateView === 'grid' ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground'
+              className={`h-10 w-10 rounded-xl flex items-center justify-center transition-all ${
+                templateView === 'grid' 
+                  ? 'bg-white/15 text-foreground shadow-inner' 
+                  : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
               }`}
               title={isRTL ? 'عرض شبكي' : 'Grid view'}
               aria-label={isRTL ? 'عرض شبكي' : 'Grid view'}
             >
-              <LayoutGrid className="w-4.5 h-4.5" />
+              <LayoutGrid className="w-5 h-5" />
             </button>
             <button
               type="button"
               onClick={() => setTemplateView('list')}
-              className={`h-9 w-9 rounded-lg flex items-center justify-center transition-all ${
-                templateView === 'list' ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground'
+              className={`h-10 w-10 rounded-xl flex items-center justify-center transition-all ${
+                templateView === 'list' 
+                  ? 'bg-white/15 text-foreground shadow-inner' 
+                  : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
               }`}
               title={isRTL ? 'عرض قائمة' : 'List view'}
               aria-label={isRTL ? 'عرض قائمة' : 'List view'}
             >
-              <List className="w-4.5 h-4.5" />
+              <List className="w-5 h-5" />
             </button>
           </div>
         </div>
       </div>
 
-      {/* Templates */}
-      <div className="flex-1 overflow-y-auto px-4 pb-28">
+      {/* TEMPLATES - LUXURY GRID */}
+      <div className="flex-1 overflow-y-auto px-8 pb-32">
         {templateView === 'grid' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
-            {CV_TEMPLATES.map((template) => (
-              <div
-                key={template.id}
-                className={`relative rounded-2xl overflow-hidden border-2 transition-all cursor-pointer ${
-                  selectedTemplate.id === template.id
-                    ? 'border-purple-500 shadow-lg shadow-purple-500/20'
-                    : 'border-white/10 hover:border-white/30'
-                }`}
-                onClick={() => handleTemplateCardClick(template)}
-                aria-label={isRTL ? `اختيار قالب ${template.nameAr}` : `Select template ${template.name}`}
-              >
-                {template.recommended && (
-                  <div className="absolute top-3 right-3 z-10 flex items-center gap-1 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold shadow-lg">
-                    <Star className="w-3 h-3 fill-current" />
-                    {t.recommended}
-                  </div>
-                )}
-
-                <div className="relative bg-gray-100 dark:bg-gray-800 h-[320px] overflow-hidden flex items-start justify-center">
-                  <div className="pt-2">
-                    <TemplatePreview
-                      template={template}
-                      colorIndex={selectedTemplate.id === template.id ? selectedColorIndex : 0}
-                    />
-                  </div>
-
-                  <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
-                  <div className="absolute inset-x-0 bottom-3 flex items-center justify-center">
-                    <div className="px-3 py-1.5 rounded-xl bg-white/10 border border-white/20 text-white text-xs font-semibold">
-                      {t.startWithTemplate}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {CV_TEMPLATES.map((template) => {
+              const isSelected = selectedTemplate.id === template.id;
+              const templateColor = template.colors[isSelected ? selectedColorIndex : 0];
+              
+              return (
+                <div
+                  key={template.id}
+                  className={`relative rounded-3xl overflow-hidden cursor-pointer transition-all duration-300 ${
+                    isSelected
+                      ? 'scale-[1.02] shadow-2xl'
+                      : 'hover:scale-[1.01] hover:shadow-xl'
+                  }`}
+                  style={{ 
+                    background: 'linear-gradient(145deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02))',
+                    boxShadow: isSelected 
+                      ? `0 25px 80px ${templateColor.primary}30, 0 0 0 2px ${templateColor.primary}` 
+                      : '0 15px 50px rgba(0,0,0,0.15), 0 0 0 1px rgba(255,255,255,0.08)',
+                  }}
+                  onClick={() => handleTemplateCardClick(template)}
+                  aria-label={isRTL ? `اختيار قالب ${template.nameAr}` : `Select template ${template.name}`}
+                >
+                  {/* Recommended Badge - Floating Luxury */}
+                  {template.recommended && (
+                    <div className="absolute top-4 right-4 z-20">
+                      <div className="flex items-center gap-1.5 px-4 py-2 rounded-full text-white text-xs font-bold shadow-2xl" style={{ background: 'linear-gradient(135deg, #f59e0b, #ef4444)', boxShadow: '0 8px 24px rgba(245, 158, 11, 0.4)' }}>
+                        <Star className="w-3.5 h-3.5 fill-current" />
+                        {t.recommended}
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  )}
 
-                <div className="p-4 bg-background">
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    <h3 className="font-bold text-lg text-foreground truncate">
-                      {isRTL ? template.nameAr : template.name}
-                    </h3>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="px-2.5 py-1 rounded-full bg-white/10 text-xs font-medium text-muted-foreground flex items-center gap-1">
-                        <Check className="w-3 h-3" />
-                        {t.modern}
-                      </span>
-                      {template.isATS && (
-                        <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-xs font-medium text-emerald-400 flex items-center gap-1">
-                          <Check className="w-3 h-3" />
-                          {t.ats}
-                        </span>
-                      )}
+                  {/* Selection Indicator */}
+                  {isSelected && (
+                    <div className="absolute top-4 left-4 z-20">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-white shadow-xl" style={{ background: `linear-gradient(135deg, ${templateColor.primary}, ${templateColor.accent})` }}>
+                        <Check className="w-5 h-5" />
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {template.colors.map((color, idx) => (
-                      <button
-                        key={color.id}
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          selectTemplate(template);
-                          setSelectedColorIndex(idx);
-                        }}
-                        className={`w-7 h-7 rounded-full transition-all ${
-                          selectedTemplate.id === template.id && selectedColorIndex === idx
-                            ? 'ring-2 ring-offset-2 ring-offset-background ring-purple-500 scale-110'
-                            : 'hover:scale-110'
-                        }`}
-                        style={{ backgroundColor: color.primary }}
-                        title={color.id}
-                        aria-label={color.id}
-                      >
-                        {selectedTemplate.id === template.id && selectedColorIndex === idx && (
-                          <Check className="w-4 h-4 text-white mx-auto" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-3 pt-4">
-            {CV_TEMPLATES.map((template) => (
-              <div
-                key={template.id}
-                className={`rounded-2xl border-2 transition-all cursor-pointer ${
-                  selectedTemplate.id === template.id
-                    ? 'border-purple-500 shadow-lg shadow-purple-500/20'
-                    : 'border-white/10 hover:border-white/30'
-                }`}
-                onClick={() => handleTemplateCardClick(template)}
-              >
-                <div className="p-4 flex items-center gap-4">
-                  <div className="w-[120px] h-[84px] rounded-xl bg-gray-100 dark:bg-gray-800 overflow-hidden flex items-start justify-center shrink-0">
-                    <div className="pt-2">
+                  {/* Template Preview Area with Background Pattern */}
+                  <div 
+                    className="relative h-[300px] overflow-hidden flex items-start justify-center pt-4" 
+                    style={{ 
+                      backgroundColor: '#f8fafc',
+                      backgroundImage: isSelected ? CV_BACKGROUNDS[selectedBgIndex].pattern : '',
+                      backgroundRepeat: 'repeat',
+                    }}
+                  >
+                    <div className="transition-transform duration-300">
                       <TemplatePreview
                         template={template}
-                        colorIndex={selectedTemplate.id === template.id ? selectedColorIndex : 0}
-                        mini
+                        colorIndex={isSelected ? selectedColorIndex : 0}
                       />
                     </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="font-bold text-base text-foreground truncate">{isRTL ? template.nameAr : template.name}</h3>
-                      {template.recommended && (
-                        <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] font-bold">
-                          <Star className="w-3 h-3 fill-current" />
-                          {t.recommended}
-                        </span>
-                      )}
+
+                  {/* Card Footer - Luxury Info */}
+                  <div className="p-5 border-t border-white/5">
+                    {/* Template Name & Badges */}
+                    <div className="flex items-center justify-between gap-3 mb-4">
+                      <h3 className="font-bold text-xl text-foreground tracking-tight">
+                        {isRTL ? template.nameAr : template.name}
+                      </h3>
+                      <div className="flex items-center gap-2">
+                        {template.isATS && (
+                          <span className="px-3 py-1.5 rounded-full text-[11px] font-bold text-emerald-300 flex items-center gap-1" style={{ background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.1))', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+                            <Check className="w-3 h-3" />
+                            ATS
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="px-2 py-1 rounded-full bg-white/10 text-[11px] font-medium text-muted-foreground flex items-center gap-1">
-                        <Check className="w-3 h-3" />
-                        {t.modern}
-                      </span>
-                      {template.isATS && (
-                        <span className="px-2 py-1 rounded-full bg-emerald-500/20 text-[11px] font-medium text-emerald-400 flex items-center gap-1">
-                          <Check className="w-3 h-3" />
-                          {t.ats}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 mt-3 flex-wrap">
-                      {template.colors.slice(0, 7).map((color, idx) => (
+
+                    {/* Color Palette - Premium */}
+                    <div className="flex items-center gap-2 mb-4">
+                      {template.colors.map((color, idx) => (
                         <button
                           key={color.id}
                           type="button"
@@ -834,42 +1337,179 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
                             selectTemplate(template);
                             setSelectedColorIndex(idx);
                           }}
-                          className={`w-6 h-6 rounded-full transition-all ${
-                            selectedTemplate.id === template.id && selectedColorIndex === idx
-                              ? 'ring-2 ring-offset-2 ring-offset-background ring-purple-500 scale-110'
+                          className={`w-8 h-8 rounded-full transition-all duration-200 ${
+                            isSelected && selectedColorIndex === idx
+                              ? 'scale-125 shadow-lg'
                               : 'hover:scale-110'
                           }`}
-                          style={{ backgroundColor: color.primary }}
+                          style={{ 
+                            backgroundColor: color.primary,
+                            boxShadow: isSelected && selectedColorIndex === idx 
+                              ? `0 4px 20px ${color.primary}60, 0 0 0 3px rgba(255,255,255,0.2)` 
+                              : `0 2px 8px ${color.primary}30`
+                          }}
                           title={color.id}
                           aria-label={color.id}
-                        />
+                        >
+                          {isSelected && selectedColorIndex === idx && (
+                            <Check className="w-4 h-4 text-white mx-auto drop-shadow-lg" />
+                          )}
+                        </button>
                       ))}
                     </div>
+
+                    {/* Background Pattern Selector - Only show when selected */}
+                    {isSelected && (
+                      <div className="pt-3 border-t border-white/10">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-medium text-muted-foreground">{isRTL ? 'الخلفية' : 'Background'}</span>
+                          <span className="text-[10px] text-muted-foreground">{selectedBgIndex + 1}/{CV_BACKGROUNDS.length}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {CV_BACKGROUNDS.map((bg, idx) => (
+                            <button
+                              key={bg.id}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedBgIndex(idx);
+                              }}
+                              className={`w-10 h-6 rounded-md border transition-all ${
+                                selectedBgIndex === idx
+                                  ? 'border-2 scale-110'
+                                  : 'border-white/20 hover:border-white/40'
+                              }`}
+                              style={{ 
+                                backgroundColor: '#f8fafc',
+                                backgroundImage: bg.pattern,
+                                backgroundRepeat: 'repeat',
+                                borderColor: selectedBgIndex === idx ? templateColor.primary : undefined,
+                              }}
+                              title={bg.name}
+                              aria-label={bg.name}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
+          </div>
+        ) : (
+          /* LIST VIEW - LUXURY */
+          <div className="space-y-4">
+            {CV_TEMPLATES.map((template) => {
+              const isSelected = selectedTemplate.id === template.id;
+              const templateColor = template.colors[isSelected ? selectedColorIndex : 0];
+              
+              return (
+                <div
+                  key={template.id}
+                  className={`rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 ${
+                    isSelected ? 'shadow-xl' : 'hover:shadow-lg'
+                  }`}
+                  style={{ 
+                    background: 'linear-gradient(145deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))',
+                    boxShadow: isSelected 
+                      ? `0 15px 50px ${templateColor.primary}25, 0 0 0 2px ${templateColor.primary}` 
+                      : '0 8px 30px rgba(0,0,0,0.1), 0 0 0 1px rgba(255,255,255,0.06)',
+                  }}
+                  onClick={() => handleTemplateCardClick(template)}
+                >
+                  <div className="p-5 flex items-center gap-5">
+                    {/* Mini Preview */}
+                    <div className="w-[140px] h-[100px] rounded-xl overflow-hidden flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.05) 100%)' }}>
+                      <TemplatePreview
+                        template={template}
+                        colorIndex={isSelected ? selectedColorIndex : 0}
+                        mini
+                      />
+                    </div>
+                    
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-3">
+                        <h3 className="font-bold text-lg text-foreground">{isRTL ? template.nameAr : template.name}</h3>
+                        {template.recommended && (
+                          <span className="flex items-center gap-1 px-3 py-1 rounded-full text-white text-[10px] font-bold" style={{ background: 'linear-gradient(135deg, #f59e0b, #ef4444)' }}>
+                            <Star className="w-3 h-3 fill-current" />
+                            {t.recommended}
+                          </span>
+                        )}
+                        {template.isATS && (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold text-emerald-300" style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+                            ATS
+                          </span>
+                        )}
+                      </div>
+                      
+                      {/* Colors */}
+                      <div className="flex items-center gap-2">
+                        {template.colors.slice(0, 8).map((color, idx) => (
+                          <button
+                            key={color.id}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              selectTemplate(template);
+                              setSelectedColorIndex(idx);
+                            }}
+                            className={`w-7 h-7 rounded-full transition-all ${
+                              isSelected && selectedColorIndex === idx ? 'scale-125 shadow-lg' : 'hover:scale-110'
+                            }`}
+                            style={{ 
+                              backgroundColor: color.primary,
+                              boxShadow: isSelected && selectedColorIndex === idx 
+                                ? `0 4px 16px ${color.primary}50, 0 0 0 2px rgba(255,255,255,0.2)` 
+                                : `0 2px 6px ${color.primary}25`
+                            }}
+                            title={color.id}
+                            aria-label={color.id}
+                          >
+                            {isSelected && selectedColorIndex === idx && (
+                              <Check className="w-3.5 h-3.5 text-white mx-auto" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Selection Check */}
+                    {isSelected && (
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center text-white shadow-lg shrink-0" style={{ background: `linear-gradient(135deg, ${templateColor.primary}, ${templateColor.accent})` }}>
+                        <Check className="w-5 h-5" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* Sticky CTA */}
-      <div className="fixed bottom-0 left-0 right-0 z-40">
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/95 to-transparent" />
-        <div className="relative px-4 pb-4 pt-3">
-          <div className="max-w-lg mx-auto">
-            <Button
+      {/* STICKY CTA - LUXURY FLOATING */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 pointer-events-none">
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/90 to-transparent h-32" />
+        <div className="relative px-8 pb-8 pt-4 pointer-events-auto">
+          <div className="max-w-2xl mx-auto">
+            <button
               onClick={() => setStep('method')}
-              className="w-full h-14 rounded-2xl text-white font-semibold shadow-lg"
-              style={{ background: 'linear-gradient(135deg, #7c3aed, #ec4899)' }}
+              className="w-full h-16 rounded-2xl text-white font-bold text-lg transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3"
+              style={{ 
+                background: `linear-gradient(135deg, ${currentColor.primary}, ${currentColor.accent})`,
+                boxShadow: `0 20px 60px ${currentColor.primary}50, 0 0 0 1px rgba(255,255,255,0.1) inset`
+              }}
               title={t.startWithTemplate}
             >
-              <span className="truncate">
+              <span>
                 {t.startWithTemplate}
                 {selectedTemplate ? ` — ${isRTL ? selectedTemplate.nameAr : selectedTemplate.name}` : ''}
               </span>
-              <ArrowRight className={`w-5 h-5 ml-2 ${isRTL ? 'rotate-180' : ''}`} />
-            </Button>
+              <ArrowRight className={`w-5 h-5 ${isRTL ? 'rotate-180' : ''}`} />
+            </button>
           </div>
         </div>
       </div>
@@ -1266,6 +1906,9 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
     setBuilderStepKey(next);
   };
 
+  const cvPreviewRef = useRef<HTMLDivElement>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+
   const handleSaveCV = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -1289,9 +1932,59 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
       localStorage.setItem('wakti_saved_cvs', JSON.stringify(savedCVs));
 
       toast({ title: isRTL ? 'تم حفظ السيرة الذاتية بنجاح!' : 'CV saved successfully!' });
+      
+      // Go back to My CVs screen
+      setStep('my-cvs');
     } catch (error) {
       console.error('Error saving CV:', error);
       toast({ title: isRTL ? 'فشل حفظ السيرة الذاتية' : 'Failed to save CV', variant: 'destructive' });
+    }
+  };
+
+  const handleDownloadPDF = async () => {
+    const previewElement = document.getElementById('cv-preview-for-pdf');
+    if (!previewElement) {
+      toast({ title: isRTL ? 'لا يمكن العثور على المعاينة' : 'Cannot find preview', variant: 'destructive' });
+      return;
+    }
+
+    setIsDownloading(true);
+    toast({ title: isRTL ? 'جاري إنشاء PDF...' : 'Generating PDF...' });
+
+    try {
+      const canvas = await html2canvas(previewElement, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+      const imgX = (pdfWidth - imgWidth * ratio) / 2;
+      const imgY = 0;
+
+      pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+      
+      const fileName = `${cvData.personalInfo.fullName || 'CV'}_${new Date().toISOString().split('T')[0]}.pdf`;
+      pdf.save(fileName);
+
+      toast({ title: isRTL ? 'تم تحميل PDF بنجاح!' : 'PDF downloaded successfully!' });
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast({ title: isRTL ? 'فشل إنشاء PDF' : 'Failed to generate PDF', variant: 'destructive' });
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -1299,87 +1992,67 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
     if (builderStepKey === 'personal') return <PersonalDetailsSection />;
     if (builderStepKey === 'contact') return <ContactInfoSection />;
     if (builderStepKey === 'review') {
-      const previewData = {
-        name: cvData.personalInfo.fullName || (isRTL ? 'اسمك هنا' : 'Your Name'),
-        title: cvData.personalInfo.jobTitle || (isRTL ? 'المسمى الوظيفي' : 'Job title'),
-        email: cvData.personalInfo.email || 'email@example.com',
-        phone: cvData.personalInfo.phone || '+1 (555) 000-0000',
-        location: cvData.personalInfo.location || (isRTL ? 'الموقع' : 'Location'),
-        summary: cvData.personalInfo.summary || (isRTL ? 'اكتب ملخصاً قصيراً هنا...' : 'Write a short summary here...'),
-        experience: cvData.experience.length > 0 ? cvData.experience.map(e => ({
-          company: e.company || (isRTL ? 'شركة' : 'Company'),
-          position: e.position || (isRTL ? 'منصب' : 'Position'),
-          date: e.current ? (isRTL ? 'حتى الآن' : 'Present') : (e.endDate || '2024')
-        })) : [{ company: isRTL ? 'شركة' : 'Company', position: isRTL ? 'منصب' : 'Position', date: '2024' }],
-        education: cvData.education.length > 0 ? cvData.education.map(e => ({
-          school: e.institution || (isRTL ? 'مؤسسة' : 'Institution'),
-          degree: e.degree || (isRTL ? 'درجة' : 'Degree'),
-          date: e.endDate || '2024'
-        })) : [{ school: isRTL ? 'مؤسسة' : 'Institution', degree: isRTL ? 'درجة' : 'Degree', date: '2024' }],
-        skills: cvData.skills.length > 0 ? cvData.skills.map(s => s.name).filter(Boolean) : [isRTL ? 'مهارة' : 'Skill']
-      };
-      
       return (
-        <div className="space-y-6 pb-8">
-          {/* Final Review Header */}
-          <div className="text-center pb-6 border-b-2 border-white/10">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4" style={{ background: `linear-gradient(135deg, ${currentColor.primary}, ${currentColor.accent})` }}>
-              <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+        <div className="relative">
+          {/* Content */}
+          <div className="space-y-6 pb-24">
+            {/* Final Review Header */}
+            <div className="text-center pb-6 border-b-2 border-white/10">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4" style={{ background: `linear-gradient(135deg, ${currentColor.primary}, ${currentColor.accent})` }}>
+                <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h3 className="text-3xl font-black text-foreground mb-2">{isRTL ? 'سيرتك الذاتية جاهزة!' : 'Your CV is Ready!'}</h3>
+              <p className="text-muted-foreground">{isRTL ? 'راجع التفاصيل واحفظ أو حمّل سيرتك الذاتية' : 'Review the details and save or download your CV'}</p>
             </div>
-            <h3 className="text-3xl font-black text-foreground mb-2">{isRTL ? 'سيرتك الذاتية جاهزة!' : 'Your CV is Ready!'}</h3>
-            <p className="text-muted-foreground">{isRTL ? 'راجع التفاصيل واحفظ أو حمّل سيرتك الذاتية' : 'Review the details and save or download your CV'}</p>
-          </div>
 
-          {/* Full Preview */}
-          <div className="rounded-3xl border-2 border-white/10 bg-gradient-to-br from-white/[0.05] to-white/[0.02] p-6 overflow-hidden">
-            <div className="flex justify-center">
-              <div className="transform scale-90 origin-top">
-                <TemplatePreviewWithData template={selectedTemplate} colorIndex={selectedColorIndex} data={previewData} />
+            {/* Quick Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-white/[0.08] to-white/[0.04] border border-white/10 text-center">
+                <div className="text-2xl font-black" style={{ color: currentColor.primary }}>{cvData.experience.length}</div>
+                <div className="text-xs text-muted-foreground mt-1">{isRTL ? 'خبرات' : 'Experiences'}</div>
+              </div>
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-white/[0.08] to-white/[0.04] border border-white/10 text-center">
+                <div className="text-2xl font-black" style={{ color: currentColor.primary }}>{cvData.skills.length}</div>
+                <div className="text-xs text-muted-foreground mt-1">{isRTL ? 'مهارات' : 'Skills'}</div>
+              </div>
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-white/[0.08] to-white/[0.04] border border-white/10 text-center">
+                <div className="text-2xl font-black" style={{ color: currentColor.primary }}>{cvData.education.length}</div>
+                <div className="text-xs text-muted-foreground mt-1">{isRTL ? 'شهادات' : 'Education'}</div>
+              </div>
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-white/[0.08] to-white/[0.04] border border-white/10 text-center">
+                <div className="text-2xl font-black" style={{ color: currentColor.primary }}>{Math.round((Object.values(cvData.personalInfo).filter(v => v).length / 8) * 100)}%</div>
+                <div className="text-xs text-muted-foreground mt-1">{isRTL ? 'مكتمل' : 'Complete'}</div>
               </div>
             </div>
-          </div>
 
-          {/* Action Buttons */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
-            <button
-              onClick={handleSaveCV}
-              className="h-14 px-6 rounded-2xl bg-gradient-to-r from-white/10 to-white/5 border-2 border-white/20 text-base font-bold text-foreground hover:from-white/15 hover:to-white/10 transition-all shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 flex items-center justify-center gap-3"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-              </svg>
-              {isRTL ? 'حفظ السيرة الذاتية' : 'Save CV'}
-            </button>
-            <button
-              className="h-14 px-6 rounded-2xl text-white text-base font-bold shadow-xl hover:shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-3"
-              style={{ background: `linear-gradient(135deg, ${currentColor.primary}, ${currentColor.accent})`, boxShadow: `0 8px 24px ${currentColor.primary}40` }}
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              {isRTL ? 'تحميل PDF' : 'Download PDF'}
-            </button>
-          </div>
-
-          {/* Quick Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4">
-            <div className="p-4 rounded-2xl bg-gradient-to-br from-white/[0.08] to-white/[0.04] border border-white/10 text-center">
-              <div className="text-2xl font-black" style={{ color: currentColor.primary }}>{cvData.experience.length}</div>
-              <div className="text-xs text-muted-foreground mt-1">{isRTL ? 'خبرات' : 'Experiences'}</div>
-            </div>
-            <div className="p-4 rounded-2xl bg-gradient-to-br from-white/[0.08] to-white/[0.04] border border-white/10 text-center">
-              <div className="text-2xl font-black" style={{ color: currentColor.primary }}>{cvData.skills.length}</div>
-              <div className="text-xs text-muted-foreground mt-1">{isRTL ? 'مهارات' : 'Skills'}</div>
-            </div>
-            <div className="p-4 rounded-2xl bg-gradient-to-br from-white/[0.08] to-white/[0.04] border border-white/10 text-center">
-              <div className="text-2xl font-black" style={{ color: currentColor.primary }}>{cvData.education.length}</div>
-              <div className="text-xs text-muted-foreground mt-1">{isRTL ? 'شهادات' : 'Education'}</div>
-            </div>
-            <div className="p-4 rounded-2xl bg-gradient-to-br from-white/[0.08] to-white/[0.04] border border-white/10 text-center">
-              <div className="text-2xl font-black" style={{ color: currentColor.primary }}>{Math.round((Object.values(cvData.personalInfo).filter(v => v).length / 8) * 100)}%</div>
-              <div className="text-xs text-muted-foreground mt-1">{isRTL ? 'مكتمل' : 'Complete'}</div>
+            {/* ACTION BUTTONS - 3 buttons: Save, Download, Share */}
+            <div className="grid grid-cols-3 gap-3 pt-4">
+              <button
+                onClick={handleSaveCV}
+                className="h-14 px-3 rounded-2xl text-white text-sm font-bold shadow-xl hover:shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+                style={{ background: `linear-gradient(135deg, #10b981, #059669)`, boxShadow: `0 8px 24px rgba(16, 185, 129, 0.4)` }}
+              >
+                <Check className="w-5 h-5" />
+                {isRTL ? 'حفظ' : 'Save'}
+              </button>
+              <button
+                onClick={handleDownloadPDF}
+                disabled={isDownloading}
+                className="h-14 px-3 rounded-2xl text-white text-sm font-bold shadow-xl hover:shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+                style={{ background: `linear-gradient(135deg, ${currentColor.primary}, ${currentColor.accent})`, boxShadow: `0 8px 24px ${currentColor.primary}40` }}
+              >
+                {isDownloading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
+                {isRTL ? 'PDF' : 'PDF'}
+              </button>
+              <div className="h-14 flex items-center justify-center">
+                <ShareButton 
+                  shareTitle={`${cvData.personalInfo.fullName || 'My'} CV - Created with Wakti`}
+                  shareDescription={`Check out my professional CV: ${cvData.personalInfo.jobTitle || 'Professional'}`}
+                  size="lg"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -1488,7 +2161,9 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
           </div>
         </div>
         <div className="p-5 flex justify-center items-start overflow-y-auto">
-          <TemplatePreviewWithData template={selectedTemplate} colorIndex={selectedColorIndex} data={previewData} />
+          <div id="cv-preview-for-pdf">
+            <TemplatePreviewWithData template={selectedTemplate} colorIndex={selectedColorIndex} data={previewData} />
+          </div>
         </div>
       </div>
     );
@@ -1501,7 +2176,9 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
           <ArrowLeft className={`w-5 h-5 ${isRTL ? 'rotate-180' : ''}`} />
         </button>
         <div className="text-center">
-          <div className="text-lg font-black text-foreground bg-gradient-to-r from-foreground via-foreground to-foreground/70 bg-clip-text">{isRTL ? 'سيرتك الذاتية' : 'Your resume'}</div>
+          <div className="text-lg font-black text-foreground bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
+            {builderSteps.find(s => s.key === builderStepKey)?.label}
+          </div>
           <div className="flex items-center justify-center gap-2 mt-1">
             <div className="text-xs font-semibold text-muted-foreground">{isRTL ? selectedTemplate.nameAr : selectedTemplate.name}</div>
             <div className="w-1 h-1 rounded-full bg-muted-foreground/40" />
@@ -1509,10 +2186,19 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button className="h-11 px-5 rounded-xl bg-gradient-to-r from-white/10 to-white/5 border-2 border-white/20 text-xs font-bold text-foreground hover:from-white/15 hover:to-white/10 transition-all shadow-lg hover:shadow-xl hover:scale-105 active:scale-95" title={isRTL ? 'مشاركة' : 'Share'}>
-            {isRTL ? 'مشاركة' : 'Share'}
-          </button>
-          <button className="h-11 px-5 rounded-xl text-white text-xs font-bold shadow-xl hover:shadow-2xl transition-all hover:scale-105 active:scale-95" style={{ background: `linear-gradient(135deg, ${currentColor.primary}, ${currentColor.accent})`, boxShadow: `0 8px 24px ${currentColor.primary}40` }} title={t.download}>
+          <ShareButton 
+            shareTitle={`${cvData.personalInfo.fullName || 'My'} CV - Created with Wakti`}
+            shareDescription={`Check out my professional CV: ${cvData.personalInfo.jobTitle || 'Professional'}`}
+            size="md"
+          />
+          <button 
+            onClick={handleDownloadPDF}
+            disabled={isDownloading}
+            className="h-11 px-5 rounded-xl text-white text-xs font-bold shadow-xl hover:shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center gap-2 disabled:opacity-50" 
+            style={{ background: `linear-gradient(135deg, ${currentColor.primary}, ${currentColor.accent})`, boxShadow: `0 8px 24px ${currentColor.primary}40` }} 
+            title={t.download}
+          >
+            {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
             {isRTL ? 'تحميل' : 'Download'}
           </button>
         </div>
@@ -1625,7 +2311,7 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
                     </Button>
                   )}
                 </div>
-                <div className="flex-1 overflow-y-auto px-6 pb-6">
+                <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
                   {renderEditor()}
                 </div>
               </div>
@@ -1712,8 +2398,166 @@ export const CVBuilderWizard: React.FC<CVBuilderWizardProps> = ({ onComplete, on
     </div>
   );
 
+  // =========================================================================
+  // SCREEN 0 - MY CVs (View Saved CVs)
+  // =========================================================================
+
+  const MyCVsScreen = () => {
+    const [savedCVs, setSavedCVs] = useState<any[]>([]);
+
+    useEffect(() => {
+      const cvs = JSON.parse(localStorage.getItem('wakti_saved_cvs') || '[]');
+      setSavedCVs(cvs);
+    }, []);
+
+    const loadCV = (cv: any) => {
+      setCvData(cv.data);
+      setSelectedTemplate(CV_TEMPLATES.find(t => t.id === cv.template_id) || CV_TEMPLATES[0]);
+      setSelectedColorIndex(cv.color_index);
+      setStep('builder');
+      toast({ title: isRTL ? 'تم تحميل السيرة الذاتية' : 'CV loaded successfully' });
+    };
+
+    const deleteCV = (index: number) => {
+      const cvs = [...savedCVs];
+      cvs.splice(index, 1);
+      localStorage.setItem('wakti_saved_cvs', JSON.stringify(cvs));
+      setSavedCVs(cvs);
+      toast({ title: isRTL ? 'تم حذف السيرة الذاتية' : 'CV deleted' });
+    };
+
+    return (
+      <div className="flex flex-col h-full bg-gradient-to-br from-background via-background to-purple-900/10">
+        {/* LUXURY HEADER */}
+        <div className="shrink-0 px-8 py-8">
+          <div className="flex items-end justify-between">
+            <div>
+              <div className="flex items-center gap-4 mb-2">
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-2xl" style={{ background: `linear-gradient(135deg, ${currentColor.primary}, ${currentColor.accent})`, boxShadow: `0 8px 32px ${currentColor.primary}50` }}>
+                  <FileText className="w-7 h-7 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-4xl font-black tracking-tight" style={{ background: `linear-gradient(135deg, ${currentColor.primary}, ${currentColor.accent})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                    {isRTL ? 'سيرتي الذاتية' : 'My CVs'}
+                  </h1>
+                  <p className="text-muted-foreground text-sm mt-1">{isRTL ? 'مجموعتك الاحترافية' : 'Your professional collection'}</p>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => setStep('templates')}
+              className="h-14 px-8 rounded-2xl text-white text-base font-bold shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center gap-3"
+              style={{ background: `linear-gradient(135deg, ${currentColor.primary}, ${currentColor.accent})`, boxShadow: `0 12px 40px ${currentColor.primary}50` }}
+            >
+              <Plus className="w-5 h-5" />
+              {isRTL ? 'إنشاء جديد' : 'Create New'}
+            </button>
+          </div>
+        </div>
+
+        {/* CONTENT */}
+        <div className="flex-1 overflow-y-auto px-8 pb-8">
+          {savedCVs.length === 0 ? (
+            /* EMPTY STATE - LUXURY */
+            <div className="flex flex-col items-center justify-center h-full text-center py-20">
+              <div className="relative mb-10">
+                <div className="w-40 h-40 rounded-full flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${currentColor.primary}08, ${currentColor.accent}08)`, border: `2px dashed ${currentColor.primary}30` }}>
+                  <div className="w-28 h-28 rounded-full flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${currentColor.primary}15, ${currentColor.accent}15)` }}>
+                    <FileText className="w-14 h-14" style={{ color: currentColor.primary }} />
+                  </div>
+                </div>
+                <div className="absolute -bottom-2 -right-2 w-12 h-12 rounded-full flex items-center justify-center shadow-xl" style={{ background: `linear-gradient(135deg, ${currentColor.primary}, ${currentColor.accent})` }}>
+                  <Plus className="w-6 h-6 text-white" />
+                </div>
+              </div>
+              <h2 className="text-3xl font-black text-foreground mb-3">{isRTL ? 'ابدأ رحلتك المهنية' : 'Start Your Journey'}</h2>
+              <p className="text-muted-foreground text-lg mb-10 max-w-md leading-relaxed">
+                {isRTL ? 'أنشئ سيرة ذاتية احترافية تبهر أصحاب العمل' : 'Create a stunning CV that impresses employers'}
+              </p>
+              <button
+                onClick={() => setStep('templates')}
+                className="h-16 px-12 rounded-2xl text-white text-lg font-bold shadow-2xl transition-all hover:scale-105 active:scale-95"
+                style={{ background: `linear-gradient(135deg, ${currentColor.primary}, ${currentColor.accent})`, boxShadow: `0 16px 48px ${currentColor.primary}50` }}
+              >
+                {isRTL ? 'إنشاء سيرتي الذاتية' : 'Create My CV'}
+              </button>
+            </div>
+          ) : (
+            /* CV CARDS - LUXURY GRID */
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {savedCVs.map((cv, index) => (
+                <div 
+                  key={index} 
+                  className="relative rounded-3xl overflow-hidden transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  style={{ 
+                    background: `linear-gradient(145deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02))`,
+                    boxShadow: `0 20px 60px rgba(0,0,0,0.15), 0 0 0 1px rgba(255,255,255,0.08)`,
+                  }}
+                >
+                  {/* Card Header with Gradient Accent */}
+                  <div className="h-2" style={{ background: `linear-gradient(90deg, ${currentColor.primary}, ${currentColor.accent})` }} />
+                  
+                  <div className="p-6">
+                    {/* Top Row: Avatar + Delete */}
+                    <div className="flex items-start justify-between mb-5">
+                      <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-xl font-black shadow-lg" style={{ background: `linear-gradient(135deg, ${currentColor.primary}, ${currentColor.accent})` }}>
+                          {(cv.data.personalInfo.fullName || 'CV').charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-bold text-foreground">{cv.data.personalInfo.fullName || (isRTL ? 'سيرة ذاتية' : 'My Resume')}</h3>
+                          <p className="text-sm text-muted-foreground">{cv.data.personalInfo.jobTitle || (isRTL ? 'محترف' : 'Professional')}</p>
+                        </div>
+                      </div>
+                      {/* DELETE BUTTON - ALWAYS VISIBLE */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); deleteCV(index); }}
+                        className="w-10 h-10 rounded-xl flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-all hover:scale-110 active:scale-95"
+                        title={isRTL ? 'حذف' : 'Delete'}
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    {/* Date */}
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground mb-6 px-1">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      {new Date(cv.created_at).toLocaleDateString(isRTL ? 'ar' : 'en', { year: 'numeric', month: 'long', day: 'numeric' })}
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => loadCV(cv)}
+                        className="flex-1 h-12 rounded-xl text-white text-sm font-bold transition-all hover:scale-105 active:scale-95 shadow-lg flex items-center justify-center gap-2"
+                        style={{ background: `linear-gradient(135deg, ${currentColor.primary}, ${currentColor.accent})`, boxShadow: `0 8px 24px ${currentColor.primary}40` }}
+                      >
+                        <Eye className="w-4 h-4" />
+                        {isRTL ? 'فتح' : 'Open'}
+                      </button>
+                      <button
+                        onClick={() => { loadCV(cv); setTimeout(() => handleDownloadPDF(), 500); }}
+                        className="h-12 px-5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-foreground text-sm font-bold transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+                      >
+                        <Download className="w-4 h-4" />
+                        {isRTL ? 'PDF' : 'PDF'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className={`flex flex-col h-full bg-gradient-to-b from-background via-background to-purple-500/5 ${isRTL ? 'rtl' : 'ltr'}`} dir={isRTL ? 'rtl' : 'ltr'}>
+      {step === 'my-cvs' && <MyCVsScreen />}
       {step === 'templates' && <TemplateSelection />}
       {step === 'method' && <CreateMethod />}
       {step === 'builder' && <BuilderV2 />}

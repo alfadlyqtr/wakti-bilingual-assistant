@@ -374,8 +374,12 @@ export default function ProjectDetail() {
       else if (wizardType === 'contact') setShowContactWizard(true);
       
       // Add wizard message to chat
+      // Note: booking/contact need "_form_wizard" suffix, others just "_wizard"
+      const wizardTypeKey = (wizardType === 'booking' || wizardType === 'contact') 
+        ? `${wizardType}_form_wizard` 
+        : `${wizardType}_wizard`;
       const wizardContent = JSON.stringify({
-        type: `${wizardType}_wizard`,
+        type: wizardTypeKey,
         prompt: pendingFormPrompt
       });
       setChatMessages(prev => [...prev, {
@@ -4454,8 +4458,12 @@ ${fixInstructions}
         else if (wizardType === 'media') setShowMediaWizard(true);
 
         // Save wizard message to DB
+        // Note: booking/contact need "_form_wizard" suffix, others just "_wizard"
+        const wizardTypeKey = (wizardType === 'booking' || wizardType === 'contact') 
+          ? `${wizardType}_form_wizard` 
+          : `${wizardType}_wizard`;
         const wizardContent = JSON.stringify({
-          type: `${wizardType}_wizard`,
+          type: wizardTypeKey,
           prompt: userMessage
         });
         const { data: wizardMsg } = await supabase
@@ -5465,6 +5473,9 @@ ${fixInstructions}
           snapshotToSave = beforeSnapshot;
           setGeneratedFiles(newFiles);
           setCodeContent(newCode);
+          
+          // 🔒 FIX: Force Sandpack to fully re-mount after async agent edits to ensure preview updates
+          setSandpackKey(prev => prev + 1);
 
           const changedFilesList: string[] = [];
           for (const [path, content] of Object.entries(newFiles)) {
@@ -6929,8 +6940,12 @@ ${fixInstructions}
                                 else if (wizardType === 'contact') setShowContactWizard(true);
                                 
                                 // Save wizard message to chat
+                                // Note: booking/contact need "_form_wizard" suffix, others just "_wizard"
+                                const wizardTypeKey = (wizardType === 'booking' || wizardType === 'contact') 
+                                  ? `${wizardType}_form_wizard` 
+                                  : `${wizardType}_wizard`;
                                 const wizardContent = JSON.stringify({
-                                  type: `${wizardType}_wizard`,
+                                  type: wizardTypeKey,
                                   prompt: pendingFormPrompt
                                 });
                                 setChatMessages(prev => [...prev, {
