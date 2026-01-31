@@ -8417,8 +8417,8 @@ ${fixInstructions}
             </div>
           </div>
 
-          {/* Preview/Code Content - Full Height with top padding for fixed header - ONLY IFRAME SCROLLS */}
-          <div className="flex-1 min-h-0 sandpack-preview-container relative pt-[56px] pb-0 overflow-hidden">
+          {/* Preview/Code Content - Full Height with margin for fixed header - ONLY IFRAME SCROLLS */}
+          <div className="flex-1 min-h-0 sandpack-preview-container relative mt-[56px] overflow-hidden" style={{ height: 'calc(100% - 56px)' }}>
             <Suspense fallback={
               <div className="w-full h-full flex items-center justify-center bg-zinc-950 text-white">
                 <Loader2 className="w-10 h-10 animate-spin text-indigo-500" />

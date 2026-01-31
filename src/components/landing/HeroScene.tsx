@@ -61,7 +61,7 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5, duration: 0.6 }}
-        className="absolute top-4 right-4 z-20 flex items-center gap-2 rounded-full px-2 py-2 backdrop-blur-xl bg-[#0c0f14]/60 border border-blue-400/25 shadow-[0_0_26px_hsla(210,100%,65%,0.55)]"
+        className="fixed top-4 right-4 z-50 flex items-center gap-2 rounded-full px-2 py-2 backdrop-blur-xl bg-[#0c0f14]/60 border border-blue-400/25 shadow-[0_0_26px_hsla(210,100%,65%,0.55)]"
         style={{ top: "calc(env(safe-area-inset-top, 0px) + 1rem)" }}
       >
         {/* Login Button */}
