@@ -3134,7 +3134,7 @@ const MyWarranty: React.FC = () => {
           console.log('CV completed:', data);
           // TODO: Save CV and generate PDF
         }}
-        onBack={() => setActiveMainTab('docs')}
+        onBack={() => setMainTab('docs')}
       />
     </div>
   );
